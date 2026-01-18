@@ -456,7 +456,7 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
             }
         });
 
-        // Recieve asset pages.
+        // Receive asset pages.
         queue.onTaskMessage<IAssetPageMessage>("asset-page", data => {
             // Only process messages if we're still on the current load operation
             if (loadingDatabasePath.current !== currentDatabasePath) {
@@ -501,6 +501,16 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
                     console.error(err);
                 });
         }
+
+        // Cleanup: shut down queue if component unmounts or database path changes
+        return () => {
+            if (currentQueue.current !== undefined) {
+                console.log(`[useEffect cleanup] Shutting down queue for database: ${loadingDatabasePath.current}`);
+                currentQueue.current.shutdown();
+                currentQueue.current = undefined;
+            }
+            loadingDatabasePath.current = undefined;
+        };
     }, [databasePath]);
 
     const value: IAssetDatabase = {

@@ -84,22 +84,47 @@ export class MockWorkerBackend implements IWorkerBackend {
         }
     }
 
-    onWorkerAvailable(callback: () => void): void {
+    onWorkerAvailable(callback: () => void): () => void {
         this.workerAvailableCallbacks.push(callback);
         // Immediately notify that a worker is available
         callback();
+        return () => {
+            const index = this.workerAvailableCallbacks.indexOf(callback);
+            if (index !== -1) {
+                this.workerAvailableCallbacks.splice(index, 1);
+            }
+        };
     }
 
-    onTaskComplete(callback: WorkerTaskCompletionCallback): void {
+    onTaskComplete(callback: WorkerTaskCompletionCallback): () => void {
         this.completionCallbacks.push(callback);
+        return () => {
+            const index = this.completionCallbacks.indexOf(callback);
+            if (index !== -1) {
+                this.completionCallbacks.splice(index, 1);
+            }
+        };
     }
 
-    onTaskMessage(messageType: string, callback: TaskMessageCallback): void {
-        this.messageCallbacks.push({ messageType, callback });
+    onTaskMessage(messageType: string, callback: TaskMessageCallback): () => void {
+        const entry = { messageType, callback };
+        this.messageCallbacks.push(entry);
+        return () => {
+            const index = this.messageCallbacks.indexOf(entry);
+            if (index !== -1) {
+                this.messageCallbacks.splice(index, 1);
+            }
+        };
     }
 
-    onAnyTaskMessage(callback: TaskMessageCallback): void {
+    onAnyTaskMessage(callback: TaskMessageCallback): () => void {
         this.anyMessageCallbacks.push(callback);
+        return () => {
+            const index = this.anyMessageCallbacks.indexOf(callback);
+            if (index !== -1) {
+                this.anyMessageCallbacks.splice(index, 1);
+            }
+        };
     }
 
     isIdle(): boolean {

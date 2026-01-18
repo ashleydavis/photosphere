@@ -81,30 +81,55 @@ export class WorkerBackendWebSocket implements IWorkerBackend {
     //
     // Registers a callback that will be called when a worker becomes available.
     //
-    onWorkerAvailable(callback: () => void): void {
+    onWorkerAvailable(callback: () => void): () => void {
         this.workerAvailableCallbacks.push(callback);
+        return () => {
+            const index = this.workerAvailableCallbacks.indexOf(callback);
+            if (index !== -1) {
+                this.workerAvailableCallbacks.splice(index, 1);
+            }
+        };
     }
 
     //
     // Registers a callback that will be invoked whenever any task completes (success or failure).
     //
-    onTaskComplete(callback: WorkerTaskCompletionCallback): void {
+    onTaskComplete(callback: WorkerTaskCompletionCallback): () => void {
         this.completionCallbacks.push(callback);
+        return () => {
+            const index = this.completionCallbacks.indexOf(callback);
+            if (index !== -1) {
+                this.completionCallbacks.splice(index, 1);
+            }
+        };
     }
 
     //
     // Registers a callback that will be called when a task sends messages to the client.
     // If messageType is provided, only messages with that type will be passed to the callback.
     //
-    onTaskMessage(messageType: string, callback: TaskMessageCallback): void {
-        this.messageCallbacks.push({ messageType, callback });
+    onTaskMessage(messageType: string, callback: TaskMessageCallback): () => void {
+        const entry = { messageType, callback };
+        this.messageCallbacks.push(entry);
+        return () => {
+            const index = this.messageCallbacks.indexOf(entry);
+            if (index !== -1) {
+                this.messageCallbacks.splice(index, 1);
+            }
+        };
     }
 
     //
     // Registers a callback that will be called for any task message, regardless of type.
     //
-    onAnyTaskMessage(callback: TaskMessageCallback): void {
+    onAnyTaskMessage(callback: TaskMessageCallback): () => void {
         this.anyMessageCallbacks.push(callback);
+        return () => {
+            const index = this.anyMessageCallbacks.indexOf(callback);
+            if (index !== -1) {
+                this.anyMessageCallbacks.splice(index, 1);
+            }
+        };
     }
 
     //

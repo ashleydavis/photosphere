@@ -56,6 +56,11 @@ export interface ITaskMessageData {
 export type TaskMessageCallback = (data: ITaskMessageData) => void | Promise<void>;
 
 //
+// Unsubscribe function type for event listeners.
+//
+export type UnsubscribeFn = () => void;
+
+//
 // Interface for managing workers that can be implmented differently on different platforms.
 //
 export interface IWorkerBackend {
@@ -67,27 +72,31 @@ export interface IWorkerBackend {
 
     //
     // Registers a callback that will be called when a worker becomes available.
+    // Returns an unsubscribe function.
     //
-    onWorkerAvailable(callback: () => void): void;
+    onWorkerAvailable(callback: () => void): UnsubscribeFn;
 
     //
     // Registers a callback that will be called when any task completes (success or failure).
     // Worker backends call this with ITaskResult (without task)
+    // Returns an unsubscribe function.
     //
-    onTaskComplete(callback: WorkerTaskCompletionCallback): void;
+    onTaskComplete(callback: WorkerTaskCompletionCallback): UnsubscribeFn;
 
     //
     // Registers a callback that will be called when a task sends messages to the client.
     // The callback receives the task ID and the message data.
     // Only messages with the specified messageType will be passed to the callback.
+    // Returns an unsubscribe function.
     //
-    onTaskMessage(messageType: string, callback: TaskMessageCallback): void;
+    onTaskMessage(messageType: string, callback: TaskMessageCallback): UnsubscribeFn;
 
     //
     // Registers a callback that will be called for any task message, regardless of type.
     // The callback receives the task ID and the message data.
+    // Returns an unsubscribe function.
     //
-    onAnyTaskMessage(callback: TaskMessageCallback): void;
+    onAnyTaskMessage(callback: TaskMessageCallback): UnsubscribeFn;
 
     //
     // Checks if all workers are idle.

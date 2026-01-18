@@ -1,5 +1,5 @@
 import { ITimestampProvider, IUuidGenerator, log } from "utils";
-import { ITask, ITaskResult, IWorkerBackend, TaskMessageCallback, TaskStatus } from "./worker-backend";
+import { ITask, ITaskResult, IWorkerBackend, TaskMessageCallback, TaskStatus, UnsubscribeFn } from "./worker-backend";
 
 //
 // Task completion callback for users
@@ -60,7 +60,8 @@ export interface ITaskQueue {
     getStatus(): IQueueStatus;
 
     //
-    // Shuts down the task queue and terminates all workers.
+    // Shuts down the task queue and cleans up queue-specific resources.
+    // Note: This does NOT shut down the worker backend.
     //
     shutdown(): void;
 }
@@ -92,6 +93,7 @@ export class TaskQueue implements ITaskQueue {
     private tasksCompleted: number = 0;
     private tasksFailed: number = 0;
     private workerBackend: IWorkerBackend;
+    private unsubscribeFunctions: UnsubscribeFn[] = [];
 
     //
     // Creates a new task queue with the specified number of workers.
@@ -103,15 +105,21 @@ export class TaskQueue implements ITaskQueue {
         this.uuidGenerator = uuidGenerator;
         this.timestampProvider = timestampProvider;
         this.workerBackend = workerBackend;
-        this.workerBackend.onTaskComplete((result: ITaskResult) => {
-            this.notifyCompletionCallbacks(result);
-        });
-        this.workerBackend.onAnyTaskMessage(message => {
-            this.notifyMessageCallbacks(message.taskId, message.message);
-        });
-        this.workerBackend.onWorkerAvailable(() => {
-            this.dispatchNextTask();
-        });
+        this.unsubscribeFunctions.push(
+            this.workerBackend.onTaskComplete((result: ITaskResult) => {
+                this.notifyCompletionCallbacks(result);
+            })
+        );
+        this.unsubscribeFunctions.push(
+            this.workerBackend.onAnyTaskMessage(message => {
+                this.notifyMessageCallbacks(message.taskId, message.message);
+            })
+        );
+        this.unsubscribeFunctions.push(
+            this.workerBackend.onWorkerAvailable(() => {
+                this.dispatchNextTask();
+            })
+        );
     }
 
     //
@@ -313,12 +321,19 @@ export class TaskQueue implements ITaskQueue {
     }
 
     //
-    // Shuts down the task queue and cleans up resources.
-    // Terminates all workers and should be called when the queue is no longer needed.
+    // Shuts down the task queue and cleans up queue-specific resources.
+    // Clears all tasks, pending tasks, and callbacks.
+    // Unsubscribes from worker backend events.
+    // Note: This does NOT shut down the worker backend. Worker backend shutdown
+    // should be handled separately by the code that manages the backend lifecycle.
     //
     shutdown(): void {
-        //todo: factor out.
-        this.workerBackend.shutdown();
+        // Unsubscribe from worker backend events
+        for (const unsubscribe of this.unsubscribeFunctions) {
+            unsubscribe();
+        }
+        this.unsubscribeFunctions = [];
+        
         this.tasks.clear();
         this.pendingTasks = [];
         this.messageCallbacks = [];
