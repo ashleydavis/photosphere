@@ -89,6 +89,11 @@ function __Main({ isMobile = false }: IMainProps) {
     //
     const [numLoaded, setNumLoaded] = useState<number>(0);
 
+    //
+    // Track if the smoke test button was clicked.
+    //
+    const [buttonClicked, setButtonClicked] = useState<boolean>(false);
+
     const { dbs } = useApp();
     const platform = usePlatform();
 
@@ -435,6 +440,24 @@ function __Main({ isMobile = false }: IMainProps) {
                 }}
                 >
                 <div id="content" >
+                    {/* Smoke test button - visible for testing */}
+                    <div style={{ padding: "20px", textAlign: "center" }}>
+                        <button
+                            onClick={() => setButtonClicked(true)}
+                            style={{
+                                padding: "10px 20px",
+                                fontSize: "16px",
+                                cursor: "pointer",
+                            }}
+                        >
+                            Click me
+                        </button>
+                        {buttonClicked && (
+                            <div style={{ marginTop: "10px", fontSize: "16px" }}>
+                                Button was pressed
+                            </div>
+                        )}
+                    </div>
                     <Routes>
                         <Route 
                             path="/cloud/:assetId?" 
