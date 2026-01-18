@@ -144,10 +144,6 @@ jobs:
           sudo apt update
           sudo apt install -y imagemagick ffmpeg tree
 
-      - name: Build frontend
-        working-directory: ./apps/cli
-        run: bun run build-fe-linux
-
       - name: Run write lock smoke tests
         working-directory: ./apps/cli
         run: |
@@ -207,10 +203,6 @@ jobs:
           sudo apt update
           sudo apt install -y imagemagick ffmpeg tree
 
-      - name: Build frontend
-        working-directory: ./apps/cli
-        run: bun run build-fe-linux
-
       - name: Run sync smoke tests
         working-directory: ./apps/cli
         run: |
@@ -248,10 +240,6 @@ jobs:
           echo "Installing ImageMagick, ffmpeg, and tree via apt..."
           sudo apt update
           sudo apt install -y imagemagick ffmpeg tree
-
-      - name: Build frontend
-        working-directory: ./apps/cli
-        run: bun run build-fe-linux
 
       - name: Run smoke tests
         working-directory: ./apps/cli
