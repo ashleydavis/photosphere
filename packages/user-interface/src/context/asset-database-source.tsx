@@ -9,7 +9,7 @@ import { loadAssets as loadAssetsApi } from "api/src/lib/load-assets";
 import axios from "axios";
 import { TaskStatus } from "task-queue";
 import type { ILoadAssetsData, ILoadAssetsResult, IAssetPageMessage } from "api/src/lib/load-assets.types";
-import type { ITaskQueueProvider } from "task-queue";
+import type { ITaskQueueProvider, ITaskQueue } from "task-queue";
 import { usePlatform } from "./platform-context";
 
 //
@@ -57,16 +57,14 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
     const [ isLoading, setIsLoading ] = useState(true);
 
     //
-    // The number of asset loads in progress.
-    // This number can increase when the user changes sets during the initial load, causing
-    // additional database loads to start while the previous ones are still in progress.
+    // The database path currently being loaded (if any).
     //
-    const loadingCount = useRef<number>(0);
+    const loadingDatabasePath = useRef<string | undefined>(undefined);
 
     //
-    // Counts up IDs for each database currently being loaded.
+    // The queue currently being used for loading assets.
     //
-    const loadingId = useRef<number>(0);
+    const currentQueue = useRef<ITaskQueue | undefined>(undefined);
 
     //
     // Set to true while working on something.
@@ -283,6 +281,7 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
         // Call platform.openDatabase which will trigger the platform to show the dialog
         // and send a 'database-opened' event when a file is selected
         await platform.openDatabase();
+
         // The database-opened event will be handled by the useEffect listener
     }
 
@@ -292,6 +291,7 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
     async function openDatabase(dbPath: string): Promise<void> {
         // Directly set the database path to trigger loading
         setDatabasePath(dbPath);
+
         // Add to recent databases and update last database (don't await to avoid blocking)
         platform.addRecentDatabase(dbPath)
             .catch(err => {
@@ -397,17 +397,29 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
         if (!dbPath) {
             throw new Error("Database path is required");
         }
-    
-        setIsLoading(true);
-        loadingCount.current += 1;
-        loadingId.current += 1;
 
-        const latestLoadingId = loadingId.current;
+        // If a load is already in progress for the same database path, just return
+        if (loadingDatabasePath.current === dbPath) {
+            console.log(`[loadAssets] Load already in progress for database: ${dbPath}, skipping`);
+            return;
+        }
+
+        // If a load is in progress for a different database path, cancel it
+        if (currentQueue.current !== undefined) {
+            console.log(`[loadAssets] Cancelling previous load for database: ${loadingDatabasePath.current}`);
+            currentQueue.current.shutdown();
+            currentQueue.current = undefined;
+        }
+    
+        console.log(`[loadAssets] Starting load for database: ${dbPath}`);
+        loadingDatabasePath.current = dbPath;
+        setIsLoading(true);
 
         //
         // Start with no assets.
         // This clears out any existing database of assets.
         //
+        console.log(`[loadAssets] Clearing loadedAssets.current`);
         loadedAssets.current = {};
 
         //
@@ -418,15 +430,13 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
 
         // Create the queue once and reuse it
         const queue = await taskQueueProvider.create();
+        currentQueue.current = queue;
+
+        // Store the database path at the time the queue was created
+        const currentDatabasePath = dbPath;
 
         // Set up listener for task completion before queuing the task
         queue.onTaskComplete<ILoadAssetsData, ILoadAssetsResult>((task, result) => {
-            // Check if this is the latest load operation
-            if (loadingId.current !== latestLoadingId) {
-                //todo: this could be automatic, if the queue is cancelled it shouldn't send messages back.
-                return; // This result is from an older load operation
-            }
-
             if (result.status === TaskStatus.Succeeded) {
                 // Task completed successfully
                 console.log(`Load assets task completed: ${result.outputs?.totalAssets} assets loaded`);
@@ -436,16 +446,20 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
             }
 
             // Mark loading as complete when the task finishes (succeeded or failed)
-            loadingCount.current -= 1;
-            if (loadingCount.current <= 0) {
+            if (loadingDatabasePath.current === currentDatabasePath) {
+                loadingDatabasePath.current = undefined;
+                if (currentQueue.current) {
+                    currentQueue.current.shutdown();
+                    currentQueue.current = undefined;
+                }
                 setIsLoading(false);
             }
         });
 
         // Recieve asset pages.
         queue.onTaskMessage<IAssetPageMessage>("asset-page", data => {
-            // Only process messages if we're still on the latest load operation
-            if (loadingId.current !== latestLoadingId) {
+            // Only process messages if we're still on the current load operation
+            if (loadingDatabasePath.current !== currentDatabasePath) {
                 return;
             }
 
@@ -461,6 +475,7 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
 
     //
     // Listen for database-opened events from platform.
+    // This can result from the user selecting a database from the file dialog.
     //
     useEffect(() => {
         const handleDatabaseOpened = (dbPath: string) => {

@@ -479,14 +479,17 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
         const key = `${assetType}-${assetId}`;
         const existingCacheEntry = assetCache.current.get(key);
         if (existingCacheEntry) {
+            console.log(`[loadAsset] CACHE HIT: ${assetType}:${assetId}`, new Error().stack);
             existingCacheEntry.numRefs += 1;
             return {
                 objectUrl: existingCacheEntry.objectUrl,
             };
         }
 
+        console.log(`[loadAsset] CACHE MISS: ${assetType}:${assetId}`, new Error().stack);
         const assetData = await _loadAsset(assetId, assetType);
         if (!assetData) {
+            console.log(`[loadAsset] NO DATA: ${assetType}:${assetId}`);
             return undefined;
         }
 
@@ -496,6 +499,7 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
             objectUrl, 
         });
 
+        console.log(`[loadAsset] LOADED: ${assetType}:${assetId}`);
         return {
             objectUrl,
         };
