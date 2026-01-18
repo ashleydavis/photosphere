@@ -1,8 +1,0 @@
-name: photosphere
-services:
-- dockerfile_path: Dockerfile
-  github:
-    branch: main
-    deploy_on_push: true
-    repo: ashleydavis/photosphere
-  name: photosphere
