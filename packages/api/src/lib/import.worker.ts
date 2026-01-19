@@ -55,7 +55,7 @@ export interface IImportFileDatabaseData {
 export interface IImportFileResult {
     filesAlreadyAdded: boolean;
     totalSize: number;
-    hashedFile?: {
+    hashedFile: {
         hash: string; // hex string
         lastModified: string; // ISO string
         length: number;
