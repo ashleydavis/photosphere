@@ -172,22 +172,20 @@ export async function addPaths(
                 const taskData = task.data;
                 
                 // Add hash to cache if computation was successful and hash wasn't already in cache
-                if (importResult.hashedFile) {
-                    if (!importResult.hashFromCache) {
-                        localHashCache.addHash(taskData.filePath, {
-                            hash: Buffer.from(importResult.hashedFile.hash, "hex"),
-                            lastModified: new Date(importResult.hashedFile.lastModified),
-                            length: importResult.hashedFile.length,
-                        });
-                        
-                        filesAddedToCache++;
-                        
-                        // Save cache periodically (every 100 files added to cache)
-                        if (filesAddedToCache % 100 === 0) {
-                            // This can fail because workers are constantly loading the hash cache. 
-                            // If it fails we just swallow it, the hash cache remains dirty and we'll try to save again in another 100 files.
-                            await swallowError(() => localHashCache.save()); 
-                        }
+                if (!importResult.hashFromCache) {
+                    localHashCache.addHash(taskData.filePath, {
+                        hash: Buffer.from(importResult.hashedFile.hash, "hex"),
+                        lastModified: new Date(importResult.hashedFile.lastModified),
+                        length: importResult.hashedFile.length,
+                    });
+                    
+                    filesAddedToCache++;
+                    
+                    // Save cache periodically (every 100 files added to cache)
+                    if (filesAddedToCache % 100 === 0) {
+                        // This can fail because workers are constantly loading the hash cache. 
+                        // If it fails we just swallow it, the hash cache remains dirty and we'll try to save again in another 100 files.
+                        await swallowError(() => localHashCache.save()); 
                     }
                 }
                 
