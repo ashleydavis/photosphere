@@ -9,10 +9,9 @@ import { log, retry, sleep } from "utils";
 //
 // Throws when the write lock cannot be acquired.
 //
-export async function acquireWriteLock(metadataStorage: IStorage, sessionId: string): Promise<boolean> {
+export async function acquireWriteLock(metadataStorage: IStorage, sessionId: string, maxAttempts: number = 3): Promise<boolean> {
     
     const lockFilePath = ".db/write.lock";
-    const maxAttempts = 3;
     
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         const haveWriteLock = await metadataStorage.acquireWriteLock(lockFilePath, sessionId);
