@@ -1,4 +1,4 @@
-import { log, retryOrLog, IUuidGenerator, retry, swallowError } from "utils";
+import { log, retryOrLog, IUuidGenerator, retry, swallowError, sleep } from "utils";
 import { HashCache } from "./hash-cache";
 import { scanPaths } from "./file-scanner";
 import { IAddSummary } from "./media-file-database";
@@ -44,11 +44,11 @@ async function processPendingDatabaseUpdates(
         return true;
     }
     
-    if (!await acquireWriteLock(metadataStorage, sessionId)) {
+    if (!await acquireWriteLock(metadataStorage, sessionId, 1)) {
         // Couldn't acquire lock
         return false;
     }
-
+    
     log.verbose(`Have write lock, processing ${itemsToProcess.length} items to update database.`);
     
     try {
@@ -221,8 +221,8 @@ export async function addPaths(
                         pendingDatabaseUpdates = [];
                         const processed = await processPendingDatabaseUpdates(itemsToProcess, metadataStorage, sessionId, metadataCollection, summary, dryRun);
                         if (!processed) {
-                            // Concat just in case new items have been added while we were awaiting.
-                            pendingDatabaseUpdates = pendingDatabaseUpdates.concat(itemsToProcess);                             
+                            // Lock acquisition failed - re-queue items
+                            pendingDatabaseUpdates = pendingDatabaseUpdates.concat(itemsToProcess);
                         }
                     }
                 }                
@@ -270,9 +270,21 @@ export async function addPaths(
         await queue.awaitAllTasks();
         
         // Process any remaining items in the database update queue
-        if (pendingDatabaseUpdates.length > 0) {
-            await processPendingDatabaseUpdates(pendingDatabaseUpdates, metadataStorage, sessionId, metadataCollection, summary, dryRun);
+        // Wait until write lock is free before processing (previous processing should be done by now)
+        if (pendingDatabaseUpdates.length > 0) {           
+            // Wait until write lock is free
+            let lockInfo = await metadataStorage.checkWriteLock(".db/write.lock");
+            while (lockInfo) {
+                await sleep(50);
+                lockInfo = await metadataStorage.checkWriteLock(".db/write.lock");
+            }
+            
+            // Now process the remaining items
+            if (!await processPendingDatabaseUpdates(pendingDatabaseUpdates, metadataStorage, sessionId, metadataCollection, summary, dryRun)) {
+                throw new Error(`Failed to process ${pendingDatabaseUpdates.length} remaining items`);
+            }
         }
+
 
         // Final save of hash cache.
         // We'd like to retry in case of error, but if it fails we just log it and move on.
