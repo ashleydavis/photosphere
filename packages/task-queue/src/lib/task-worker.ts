@@ -42,6 +42,10 @@ async function executeTask(message: WorkerMessage, context: IWorkerContext): Pro
     const { taskId, taskType, data, workingDirectory } = message;
 
     try {
+
+        log.verbose(`Executing task [${taskId}] of type ${taskType} in worker ${context.workerId}`);
+        log.verbose(`Data: ${JSON.stringify(data, null, 2)}`);
+
         // Set task ID for logging prefix
         setWorkerTaskId(taskId);
 
