@@ -29,6 +29,7 @@ export interface IWorkerInput {
 // Common dependencies injected into workers (similar to ICommandContext)
 //
 export interface IWorkerContext {
+    workerId: number;
     uuidGenerator: IUuidGenerator;
     timestampProvider: ITimestampProvider;
     sessionId: string;
@@ -148,6 +149,7 @@ export function initWorkerContext(options: IWorkerInput): IWorkerContext {
     const sessionId = options.sessionId || uuidGenerator.generate();
     
     return {
+        workerId: options.workerId,
         uuidGenerator,
         timestampProvider,
         sessionId,
