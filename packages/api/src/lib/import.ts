@@ -11,6 +11,7 @@ import { IAsset } from "defs";
 import { acquireWriteLock, releaseWriteLock } from "./write-lock";
 import { loadMerkleTree, saveMerkleTree } from "./tree";
 import { addItem } from "merkle-tree";
+import { throttle } from "lodash";
 import * as os from "os";
 import * as path from "path";
 
@@ -122,7 +123,6 @@ async function processPendingDatabaseUpdates(
     }
 }
 
-
 //
 // Adds a list of files or directories to the media file database.
 //
@@ -153,11 +153,61 @@ export async function addPaths(
         totalSize: 0,
         averageSize: 0,
     };
+    // Queue for background import tasks.
     const queue = await taskQueueProvider.create();
+
+    // Counts the number of files added to the cache.
     let filesAddedToCache = 0;
+
+    // Set to true when we're processing the queue, set to false when we're done.
+    // Prevents us from processing the queue twice.
+    let isProcessingQueue = false;
     
-    // Queue for pending database updates
+    // Queue for pending database updates.
     let pendingDatabaseUpdates: IPendingDatabaseUpdate[] = [];
+    
+    // Throttled function to process pending database updates
+    // Execute on trailing edge (after 1s of inactivity)
+    const throttledProcessQueue = throttle(async () => {
+        if (isProcessingQueue) {
+            // Already processing the queue, return.
+            return;
+        }
+
+        if (pendingDatabaseUpdates.length === 0) {
+            // No items to process, return.
+            return;
+        }
+
+        log.verbose(`Processing ${pendingDatabaseUpdates.length} pending database updates.`);
+
+        // Stops this function being called again while we're processing the queue.
+        isProcessingQueue = true;
+
+        try {
+            // Swap the queue with an empty one so we don't process the same items twice.
+            // This operation is atomic and no other JS code will be running at this point.
+            // Swapping this means we can asynchronously add to the queue while we're processing this batch of items.
+            const itemsToProcess = pendingDatabaseUpdates;
+            pendingDatabaseUpdates = [];
+            
+            // Process items (processPendingDatabaseUpdates will handle lock acquisition)
+            const processed = await processPendingDatabaseUpdates(itemsToProcess, metadataStorage, sessionId, metadataCollection, summary, dryRun);
+            if (!processed) {
+                // Lock acquisition failed - re-queue items.
+                // This operation is atomic and no other JS code will be running at this point.
+                pendingDatabaseUpdates = pendingDatabaseUpdates.concat(itemsToProcess);
+            }
+
+            log.verbose(`Processed ${itemsToProcess.length} pending database updates.`);
+        }
+        catch (error: any) {
+            log.exception(` Error processing pending database updates`, error);
+        }
+        finally {
+            isProcessingQueue = false;
+        }
+    }, 1000, { leading: false, trailing: true }); // 1s throttle delay, execute on trailing edge
 
     try {
         //
@@ -171,7 +221,7 @@ export async function addPaths(
                 const importResult = result.outputs!;
                 const taskData = task.data;
                 
-                // Add hash to cache if computation was successful and hash wasn't already in cache
+                // Add hash to cache if computation was successful and hash wasn't already in cache.
                 if (!importResult.hashFromCache) {
                     localHashCache.addHash(taskData.filePath, {
                         hash: Buffer.from(importResult.hashedFile.hash, "hex"),
@@ -181,7 +231,7 @@ export async function addPaths(
                     
                     filesAddedToCache++;
                     
-                    // Save cache periodically (every 100 files added to cache)
+                    // Save cache periodically (every 100 files added to cache).
                     if (filesAddedToCache % 100 === 0) {
                         // This can fail because workers are constantly loading the hash cache. 
                         // If it fails we just swallow it, the hash cache remains dirty and we'll try to save again in another 100 files.
@@ -189,19 +239,18 @@ export async function addPaths(
                     }
                 }
                 
-                // Process results from worker
                 if (importResult.filesAlreadyAdded) {
+                    // File is already in the database, add to summary.
                     log.verbose(`File "${taskData.logicalPath}" is already in the database.`);
                     summary.filesAlreadyAdded++;
                 }
                 else {
-                    // Worker has uploaded files, now queue for database update
-                    // assetData must be present if task completed successfully and filesAlreadyAdded is false
+                    // Worker has uploaded files, now queue for database update.
                     if (!importResult.assetData) {
                         throw new Error(`Missing assetData for file "${taskData.logicalPath}"`);
                     }
                     
-                    // Add to pending database updates queue
+                    // Add to pending database updates queue.
                     pendingDatabaseUpdates.push({
                         assetData: importResult.assetData,
                         logicalPath: taskData.logicalPath,
@@ -210,21 +259,8 @@ export async function addPaths(
 
                     log.verbose(`Added ${taskData.logicalPath} to pending database updates queue.`);
                     
-                    // Try to process the queue if lock is free (non-blocking - if lock can't be acquired, items stay in queue)
-                    const lockInfo = await metadataStorage.checkWriteLock(".db/write.lock");
-                    if (lockInfo) {
-                        log.verbose(`Write lock is held, have ${pendingDatabaseUpdates.length} items queued to update database.`);
-                    }
-                    else {
-                        // Lock is free and we have items - try to process
-                        const itemsToProcess = pendingDatabaseUpdates;
-                        pendingDatabaseUpdates = [];
-                        const processed = await processPendingDatabaseUpdates(itemsToProcess, metadataStorage, sessionId, metadataCollection, summary, dryRun);
-                        if (!processed) {
-                            // Lock acquisition failed - re-queue items
-                            pendingDatabaseUpdates = pendingDatabaseUpdates.concat(itemsToProcess);
-                        }
-                    }
+                    // Trigger throttled queue processing.
+                    throttledProcessQueue();
                 }                
             } 
             else if (result.status === TaskStatus.Failed) {
@@ -243,7 +279,7 @@ export async function addPaths(
         // All files are queued - workers will handle everything: hashing, checking, metadata extraction, uploads, and database updates.
         //
         await scanPaths(paths, async (result) => {
-            // Queue all files for worker processing (workers will handle everything)
+            // Queue all files for worker processing (workers will handle everything).
             queue.addTask("import-file", {
                 filePath: result.filePath, // Use filePath for checking (always a valid file, possibly temp file from zip)
                 fileStat: result.fileStat,
@@ -251,7 +287,7 @@ export async function addPaths(
                 storageDescriptor,
                 hashCacheDir,
                 s3Config,
-                logicalPath: result.logicalPath, // Use logicalPath for display to user
+                logicalPath: result.logicalPath, // Use logicalPath for display to user. This shows the path inside zip files.
                 labels: result.labels,
                 googleApiKey,
                 sessionId,
@@ -264,27 +300,37 @@ export async function addPaths(
             }
         }, { ignorePatterns: [/\.db/] }, sessionTempDir, uuidGenerator);
 
+        log.verbose(`Waiting for all import tasks to complete.`);
+
         //
         // Wait for all tasks to complete.
         //
         await queue.awaitAllTasks();
+
+        log.verbose(`All import tasks completed, flushing throttled queue.`);
         
-        // Process any remaining items in the database update queue
-        // Wait until write lock is free before processing (previous processing should be done by now)
-        if (pendingDatabaseUpdates.length > 0) {           
-            // Wait until write lock is free
-            let lockInfo = await metadataStorage.checkWriteLock(".db/write.lock");
-            while (lockInfo) {
-                await sleep(50);
-                lockInfo = await metadataStorage.checkWriteLock(".db/write.lock");
-            }
-            
-            // Now process the remaining items
-            if (!await processPendingDatabaseUpdates(pendingDatabaseUpdates, metadataStorage, sessionId, metadataCollection, summary, dryRun)) {
-                throw new Error(`Failed to process ${pendingDatabaseUpdates.length} remaining items`);
+        //
+        // Flush the throttled queue then cancel any pending calls.
+        //
+        throttledProcessQueue.flush();
+        throttledProcessQueue.cancel();
+
+        log.verbose(`Waiting for queue processing to complete.`);
+
+        while (isProcessingQueue) {
+            await sleep(100);
+        }
+
+        log.verbose(`Queue processing complete, processing final ${pendingDatabaseUpdates.length} pending database updates.`);
+
+        if (pendingDatabaseUpdates.length !== 0) {
+            const processed = await processPendingDatabaseUpdates(pendingDatabaseUpdates, metadataStorage, sessionId, metadataCollection, summary, dryRun);
+            if (!processed) {
+                log.error(`Failed to process final ${pendingDatabaseUpdates.length} pending database updates.`);
             }
         }
 
+        log.verbose(`All done`);
 
         // Final save of hash cache.
         // We'd like to retry in case of error, but if it fails we just log it and move on.
