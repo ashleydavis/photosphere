@@ -18,4 +18,4 @@ bun run start -- init --db "$TEST_DB_DIR" --yes
 
 echo ""
 echo "Adding files from: $MULTIPLE_IMAGES_DIR"
-bun run start -- add --db "$TEST_DB_DIR" "$MULTIPLE_IMAGES_DIR/" --yes
+bun run start -- add --db "$TEST_DB_DIR" "$MULTIPLE_IMAGES_DIR/" --yes --verbose
