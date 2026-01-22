@@ -13,6 +13,7 @@ import Delete from "@mui/icons-material/Delete";
 import Input from "@mui/joy/Input/Input";
 import { useTheme } from "@mui/joy/styles/ThemeProvider";
 import classNames from "classnames";
+import { useSearch } from "../context/search-context";
 
 export interface INavbarProps {
     //
@@ -20,18 +21,6 @@ export interface INavbarProps {
     //
     sidebarOpen: boolean;
     setSidebarOpen: (open: boolean) => void;
-
-    //
-    // Set to true to open the search input.
-    //
-    openSearch: boolean;
-    setOpenSearch: (open: boolean) => void;
-
-    //
-    // The search currently being typed by the user.
-    //
-    searchInput: string;
-    setSearchInput: (input: string) => void;
 
     //
     // Number of sorted items.
@@ -72,16 +61,6 @@ export interface INavbarProps {
     // Opens the delete confirmation dialog.
     //
     setDeleteConfirmationOpen: (open: boolean) => void;
-
-    //
-    // Commits the search the user has typed in.
-    //
-    onCommitSearch: () => Promise<void>;
-
-    //
-    // Cancels/closes the search.
-    //
-    onCloseSearch: () => Promise<void>;
 }
 
 //
@@ -90,10 +69,6 @@ export interface INavbarProps {
 export function Navbar({
     sidebarOpen,
     setSidebarOpen,
-    openSearch,
-    setOpenSearch,
-    searchInput,
-    setSearchInput,
     sortedItemsCount,
     selectedItemsCount,
     clearMultiSelection,
@@ -102,10 +77,9 @@ export function Navbar({
     dbs,
     onMoveSelectedToDatabase,
     setDeleteConfirmationOpen,
-    onCommitSearch,
-    onCloseSearch,
 }: INavbarProps) {
     const theme = useTheme();
+    const { openSearch, setOpenSearch, searchInput, setSearchInput, onCommitSearch, onCloseSearch } = useSearch();
 
     return (
         <div 
