@@ -17,6 +17,7 @@ import { useSearch } from "../context/search-context";
 import { useGallery } from "../context/gallery-context";
 import { useAssetDatabase } from "../context/asset-database-source";
 import { useApp } from "../context/app-context";
+import { useDeleteConfirmation } from "../context/delete-confirmation-context";
 
 export interface INavbarProps {
     //
@@ -25,10 +26,6 @@ export interface INavbarProps {
     sidebarOpen: boolean;
     setSidebarOpen: (open: boolean) => void;
 
-    //
-    // Opens the delete confirmation dialog.
-    //
-    setDeleteConfirmationOpen: (open: boolean) => void;
 }
 
 //
@@ -37,13 +34,13 @@ export interface INavbarProps {
 export function Navbar({
     sidebarOpen,
     setSidebarOpen,
-    setDeleteConfirmationOpen,
 }: INavbarProps) {
     const theme = useTheme();
     const { openSearch, setOpenSearch, searchInput, setSearchInput, onCommitSearch, onCloseSearch } = useSearch();
     const { sortedItems, selectedItems, clearMultiSelection, moveSelectedToDatabase } = useGallery();
     const { isLoading, databasePath } = useAssetDatabase();
     const { dbs } = useApp();
+    const { setDeleteConfirmationOpen } = useDeleteConfirmation();
 
     const sortedItemsCount = sortedItems().length;
     const selectedItemsCount = selectedItems.size;

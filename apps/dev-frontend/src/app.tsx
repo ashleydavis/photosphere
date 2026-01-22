@@ -5,7 +5,8 @@ import {
     GalleryContextProvider,
     AssetDatabaseProvider,
     GalleryLayoutContextProvider,
-    SearchContextProvider
+    SearchContextProvider,
+    DeleteConfirmationContextProvider
 } from "user-interface";
 import { useWebSocket } from "./lib/use-web-socket";
 import { TaskQueueProviderWebSocket } from "./lib/task-queue-provider-websocket";
@@ -34,11 +35,13 @@ export function App() {
                 <AppContextProvider>
                         <AssetDatabaseProvider taskQueueProvider={taskQueueProvider} restApiUrl="http://localhost:3001">
                             <GalleryContextProvider>
-                                <SearchContextProvider>
-                                    <GalleryLayoutContextProvider>
-                                        <Main />
-                                    </GalleryLayoutContextProvider>
-                                </SearchContextProvider>
+                                <DeleteConfirmationContextProvider>
+                                    <SearchContextProvider>
+                                        <GalleryLayoutContextProvider>
+                                            <Main />
+                                        </GalleryLayoutContextProvider>
+                                    </SearchContextProvider>
+                                </DeleteConfirmationContextProvider>
                             </GalleryContextProvider>
                         </AssetDatabaseProvider>
                 </AppContextProvider>
