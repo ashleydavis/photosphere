@@ -1,4 +1,4 @@
-import React, { ReactNode, createContext, useContext, useState } from "react";
+import React, { ReactNode, createContext, useContext, useEffect, useState } from "react";
 import { useGallery } from "./gallery-context";
 
 export interface ISearchContext {
@@ -43,7 +43,17 @@ export function SearchContextProvider({ children }: ISearchContextProviderProps)
     //
     const [searchInput, setSearchInput] = useState<string>("");
 
-    const { search, clearSearch } = useGallery();
+    const { search, clearSearch, searchText } = useGallery();
+
+    //
+    // Sync searchText from gallery context with search input.
+    //
+    useEffect(() => {
+        if (searchText.length > 0 && !openSearch) {
+            setSearchInput(searchText);
+            setOpenSearch(true);
+        }
+    }, [searchText, openSearch, setSearchInput, setOpenSearch]);
 
     //
     // Commits the search the user has typed in.
