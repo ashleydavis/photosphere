@@ -9,6 +9,7 @@ on:
 
 jobs:
   compile:
+    timeout-minutes: 20
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -26,6 +27,7 @@ jobs:
         run: bun run compile
 
   test:
+    timeout-minutes: 20
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
