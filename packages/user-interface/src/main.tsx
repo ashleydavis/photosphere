@@ -36,7 +36,6 @@ function __Main({ isMobile = false }: IMainProps) {
         sortedItems,
         selectedItems,
         clearMultiSelection,
-        searchText,
     } = useGallery();
 
     const { 
@@ -120,12 +119,6 @@ function __Main({ isMobile = false }: IMainProps) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []); // Only run once on mount
 
-    useEffect(() => {
-        if (searchText.length > 0 && !openSearch) {
-            setSearchInput(searchText);
-            setOpenSearch(true);
-        }
-    }, [searchText, openSearch, setSearchInput, setOpenSearch]);
 
 
     // Show initial message if no database is loaded
