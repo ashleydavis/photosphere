@@ -43,7 +43,6 @@ function __Main({ isMobile = false }: IMainProps) {
         isLoading,
         isWorking,
         databasePath,
-        moveToDatabase, 
         deleteAssets,
         selectAndOpenDatabase,
         openDatabase,
@@ -54,7 +53,7 @@ function __Main({ isMobile = false }: IMainProps) {
     //
     const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
 
-    const { openSearch, setOpenSearch, searchInput, setSearchInput, onCommitSearch, onCloseSearch } = useSearch();
+    const { openSearch, setOpenSearch, setSearchInput } = useSearch();
 
     //
     // Opens the delete confirmation dialog.
@@ -128,12 +127,6 @@ function __Main({ isMobile = false }: IMainProps) {
         }
     }, [searchText, openSearch, setSearchInput, setOpenSearch]);
 
-    //
-    // Moves selected items to the specified database.
-    //
-    async function onMoveSelectedToDatabase(databaseid: string) {
-        await moveToDatabase(Array.from(selectedItems), databaseid);
-    }
 
     // Show initial message if no database is loaded
     if (!databasePath) {
@@ -207,7 +200,6 @@ function __Main({ isMobile = false }: IMainProps) {
                 isLoading={isLoading}
                 databasePath={databasePath}
                 dbs={dbs}
-                onMoveSelectedToDatabase={onMoveSelectedToDatabase}
                 setDeleteConfirmationOpen={setDeleteConfirmationOpen}
             />
 
