@@ -8,7 +8,6 @@ import { usePlatform } from "./context/platform-context";
 import { useAssetDatabase } from "./context/asset-database-source";
 import { useSearch } from "./context/search-context";
 import { FullscreenSpinner } from "./components/full-screen-spinnner";
-import { DeleteConfirmationDialog } from "./components/delete-confirmation-dialog";
 import { CssVarsProvider, useColorScheme } from "@mui/joy/styles/CssVarsProvider";
 import { ModeToggle } from "./components/mode-toggle";
 import { useTheme } from "@mui/joy/styles/ThemeProvider";
@@ -52,11 +51,6 @@ function __Main({ isMobile = false }: IMainProps) {
     const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
 
     const { openSearch } = useSearch();
-
-    //
-    // Opens the delete confirmation dialog.
-    //
-    const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState<boolean>(false);
 
     //
     // Track if the smoke test button was clicked.
@@ -183,7 +177,6 @@ function __Main({ isMobile = false }: IMainProps) {
             <Navbar
                 sidebarOpen={sidebarOpen}
                 setSidebarOpen={setSidebarOpen}
-                setDeleteConfirmationOpen={setDeleteConfirmationOpen}
             />
 
             <Drawer 
@@ -258,16 +251,6 @@ function __Main({ isMobile = false }: IMainProps) {
                 </div>
             </div>
 
-            <DeleteConfirmationDialog
-                open={deleteConfirmationOpen}
-                numItems={selectedItems.size}
-                onCancel={() => setDeleteConfirmationOpen(false)}
-                onDelete={async () => {
-                    await deleteAssets(Array.from(selectedItems.values()));
-                    clearMultiSelection();
-                    setDeleteConfirmationOpen(false);
-                }}
-                />
 
             {isWorking
                 && <FullscreenSpinner />

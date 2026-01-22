@@ -5,7 +5,8 @@ import {
     GalleryContextProvider,
     AssetDatabaseProvider,
     GalleryLayoutContextProvider,
-    SearchContextProvider
+    SearchContextProvider,
+    DeleteConfirmationContextProvider
 } from "user-interface";
 import { TaskQueueProviderElectron } from "./lib/task-queue-provider-electron";
 import { PlatformProviderElectron } from "./lib/platform-provider-electron";
@@ -40,11 +41,13 @@ export function App() {
                 <AppContextProvider>
                     <AssetDatabaseProvider taskQueueProvider={taskQueueProvider} restApiUrl={restApiUrl}>
                         <GalleryContextProvider>
-                            <SearchContextProvider>
-                                <GalleryLayoutContextProvider>
-                                    <Main />
-                                </GalleryLayoutContextProvider>
-                            </SearchContextProvider>
+                            <DeleteConfirmationContextProvider>
+                                <SearchContextProvider>
+                                    <GalleryLayoutContextProvider>
+                                        <Main />
+                                    </GalleryLayoutContextProvider>
+                                </SearchContextProvider>
+                            </DeleteConfirmationContextProvider>
                         </GalleryContextProvider>
                     </AssetDatabaseProvider>
                 </AppContextProvider>
