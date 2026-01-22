@@ -284,6 +284,11 @@ export class WorkerBackendBun implements IWorkerBackend {
             workerEnv.TMPDIR = process.env.TMPDIR;
         }
         
+        // Pass through PATH so workers can find binaries (e.g., ImageMagick in /opt/homebrew/bin on macOS ARM64)
+        if (process.env.PATH) {
+            workerEnv.PATH = process.env.PATH;
+        }
+        
         workerEnv.WORKER_OPTIONS = JSON.stringify(this.workerOptions);
         
         const worker = new Worker("./worker.ts", { env: workerEnv });
@@ -351,6 +356,11 @@ export class WorkerBackendBun implements IWorkerBackend {
         }
         if (process.env.TMPDIR) {
             workerEnv.TMPDIR = process.env.TMPDIR;
+        }
+        
+        // Pass through PATH so workers can find binaries (e.g., ImageMagick in /opt/homebrew/bin on macOS ARM64)
+        if (process.env.PATH) {
+            workerEnv.PATH = process.env.PATH;
         }
         
         workerEnv.WORKER_OPTIONS = JSON.stringify(this.workerOptions);
