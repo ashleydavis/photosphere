@@ -2,6 +2,7 @@ import React, { createContext, ReactNode, useContext, useEffect, useRef, useStat
 import { IGalleryItem } from "../lib/gallery-item";
 import { IItemsUpdate, useGallerySource } from "./gallery-source";
 import { IObservable, Observable } from "../lib/subscription";
+import { useAssetDatabase } from "./asset-database-source";
 import dayjs from "dayjs";
 import { isArray } from "lodash";
 
@@ -223,6 +224,11 @@ export interface IGalleryContext {
     // Gets details of the current sort.
     //
     sorting(): ISortBy;
+
+    //
+    // Moves selected items to the specified database.
+    //
+    moveSelectedToDatabase(databaseid: string): Promise<void>;
 }
 
 const GalleryContext = createContext<IGalleryContext | undefined>(undefined);
@@ -244,6 +250,8 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
         deleteAssets: _deleteAssets,
         getItemById: _getItemById,
     } = useGallerySource();
+
+    const { moveToDatabase } = useAssetDatabase();
 
     //
     // List all loaded items before searching and sorting.
@@ -795,6 +803,13 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
         localStorage.setItem("gallery-sort", sortBy);
     }
 
+    //
+    // Moves selected items to the specified database.
+    //
+    async function moveSelectedToDatabase(databaseid: string): Promise<void> {
+        await moveToDatabase(Array.from(selectedItems), databaseid);
+    }
+
     const value: IGalleryContext = {
         searchText,
         allItems: _allItems,
@@ -827,6 +842,7 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
         sortBy: sortByRef.current,
         setSortBy,
         sorting: () => sortingMap[sortByRef.current],
+        moveSelectedToDatabase,
     };
     
     return (

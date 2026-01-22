@@ -14,6 +14,7 @@ import Input from "@mui/joy/Input/Input";
 import { useTheme } from "@mui/joy/styles/ThemeProvider";
 import classNames from "classnames";
 import { useSearch } from "../context/search-context";
+import { useGallery } from "../context/gallery-context";
 
 export interface INavbarProps {
     //
@@ -53,11 +54,6 @@ export interface INavbarProps {
     dbs: string[];
 
     //
-    // Moves selected items to the specified database.
-    //
-    onMoveSelectedToDatabase: (databaseid: string) => Promise<void>;
-
-    //
     // Opens the delete confirmation dialog.
     //
     setDeleteConfirmationOpen: (open: boolean) => void;
@@ -75,11 +71,11 @@ export function Navbar({
     isLoading,
     databasePath,
     dbs,
-    onMoveSelectedToDatabase,
     setDeleteConfirmationOpen,
 }: INavbarProps) {
     const theme = useTheme();
     const { openSearch, setOpenSearch, searchInput, setSearchInput, onCommitSearch, onCloseSearch } = useSearch();
+    const { moveSelectedToDatabase } = useGallery();
 
     return (
         <div 
@@ -183,7 +179,7 @@ export function Navbar({
                                             return (
                                                 <MenuItem 
                                                     key={dbPath}
-                                                    onClick={() => onMoveSelectedToDatabase(dbPath)}
+                                                    onClick={() => moveSelectedToDatabase(dbPath)}
                                                 >
                                                     {dbPath}                                        
                                                 </MenuItem>
