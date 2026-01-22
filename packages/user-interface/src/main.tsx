@@ -6,6 +6,7 @@ import classNames from "classnames";
 import { useApp } from "./context/app-context";
 import { usePlatform } from "./context/platform-context";
 import { useAssetDatabase } from "./context/asset-database-source";
+import { useSearch } from "./context/search-context";
 import { FullscreenSpinner } from "./components/full-screen-spinnner";
 import { DeleteConfirmationDialog } from "./components/delete-confirmation-dialog";
 import { CssVarsProvider, useColorScheme } from "@mui/joy/styles/CssVarsProvider";
@@ -36,8 +37,6 @@ function __Main({ isMobile = false }: IMainProps) {
         selectedItems,
         clearMultiSelection,
         searchText,
-        search,
-        clearSearch,
     } = useGallery();
 
     const { 
@@ -50,21 +49,12 @@ function __Main({ isMobile = false }: IMainProps) {
         openDatabase,
     } = useAssetDatabase();
 
-
     //
     // Set to true to open the sidebar.
     //
     const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
 
-    // 
-    // Set to true to open the search input.
-    //
-    const [openSearch, setOpenSearch] = useState<boolean>(false);
-    
-    //
-    // The search currently being typed by the user.
-    //
-    const [ searchInput, setSearchInput ] = useState<string>("");
+    const { openSearch, setOpenSearch, searchInput, setSearchInput, onCommitSearch, onCloseSearch } = useSearch();
 
     //
     // Opens the delete confirmation dialog.
@@ -136,30 +126,7 @@ function __Main({ isMobile = false }: IMainProps) {
             setSearchInput(searchText);
             setOpenSearch(true);
         }
-    }, [searchText]);
-
-    //
-    // Opens the search input.
-    //
-    function onOpenSearch(): void {
-    	setOpenSearch(true);
-    }
-
-    //
-    // Commits the search the user has typed in.
-    // 
-    async function onCommitSearch() {
-        await search(searchInput);
-    }
-
-    //
-    // Cancels/closes the search.
-    //
-    async function onCloseSearch() {
-        await clearSearch();
-        setSearchInput("");
-        setOpenSearch(false);
-    }
+    }, [searchText, openSearch, setSearchInput, setOpenSearch]);
 
     //
     // Moves selected items to the specified database.
@@ -234,10 +201,6 @@ function __Main({ isMobile = false }: IMainProps) {
             <Navbar
                 sidebarOpen={sidebarOpen}
                 setSidebarOpen={setSidebarOpen}
-                openSearch={openSearch}
-                setOpenSearch={setOpenSearch}
-                searchInput={searchInput}
-                setSearchInput={setSearchInput}
                 sortedItemsCount={sortedItems().length}
                 selectedItemsCount={selectedItems.size}
                 clearMultiSelection={clearMultiSelection}
@@ -246,8 +209,6 @@ function __Main({ isMobile = false }: IMainProps) {
                 dbs={dbs}
                 onMoveSelectedToDatabase={onMoveSelectedToDatabase}
                 setDeleteConfirmationOpen={setDeleteConfirmationOpen}
-                onCommitSearch={onCommitSearch}
-                onCloseSearch={onCloseSearch}
             />
 
             <Drawer 
@@ -258,7 +219,6 @@ function __Main({ isMobile = false }: IMainProps) {
                     sidebarOpen={sidebarOpen}
                     setSidebarOpen={setSidebarOpen}
                     openDatabase={openDatabase}
-                    onOpenSearch={onOpenSearch}
                     />               
             </Drawer>
 

@@ -17,6 +17,7 @@ import Divider from '@mui/joy/Divider/Divider';
 import { useGalleryLayout } from '../context/gallery-layout-context';
 import { IGalleryLayout } from '../lib/create-layout';
 import { useGallery } from '../context/gallery-context';
+import { useSearch } from '../context/search-context';
 import Slider from '@mui/joy/Slider/Slider';
 import Stack from '@mui/joy/Stack/Stack';
 import dayjs from 'dayjs';
@@ -31,11 +32,6 @@ export interface ISidebarProps {
     // Sets the sidebar open or close.
     //
     setSidebarOpen: (open: boolean) => void;
-
-    //
-    // Opens the search input.
-    //
-    onOpenSearch: () => void;
 
     //
     // Navigates to a database.
@@ -387,7 +383,8 @@ function makeFullMenu(navMenu: IMenuItem[], years: string[], locations: string[]
 //
 // Renders the sidebar for the app.
 //
-export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, openDatabase }: ISidebarProps) {
+export function Sidebar({ sidebarOpen, setSidebarOpen, openDatabase }: ISidebarProps) {
+    const { setOpenSearch } = useSearch();
 
     const { dbs, removeDatabase } = useApp();
     const theme = useTheme();
@@ -468,7 +465,7 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenSearch, openDatabas
                     onClick={() => {
                         setSidebarOpen(false);
                         setTimeout(() => { // Delay the opening of the search input allows it auto focus.
-                            onOpenSearch();
+                            setOpenSearch(true);
                         }, 10);
                     }}
                     >
