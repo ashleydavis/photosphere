@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Route, Routes, NavLink, Navigate } from "react-router-dom";
-import { Spinner } from "./components/spinner";
+import { Route, Routes, Navigate } from "react-router-dom";
 import { GalleryPage } from "./pages/gallery/gallery";
 import { useGallery } from "./context/gallery-context";
 import classNames from "classnames";
@@ -39,8 +38,6 @@ function __Main({ isMobile = false }: IMainProps) {
         searchText,
         search,
         clearSearch,
-        onReset,
-        onNewItems,
     } = useGallery();
 
     const { 
@@ -75,12 +72,6 @@ function __Main({ isMobile = false }: IMainProps) {
     const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState<boolean>(false);
 
     //
-    // Number of assets loaded.
-    // TODO: This might not be needed.
-    //
-    const [numLoaded, setNumLoaded] = useState<number>(0);
-
-    //
     // Track if the smoke test button was clicked.
     //
     const [buttonClicked, setButtonClicked] = useState<boolean>(false);
@@ -111,30 +102,6 @@ function __Main({ isMobile = false }: IMainProps) {
             document.body.classList.remove('mobile', 'desktop');
         };
     }, [isMobile]);
-
-    //
-    // Resets the gallery layout.
-    //
-    useEffect(() => {
-        const subscription = onReset.subscribe(() => {
-            setNumLoaded(sortedItems().length);
-        });
-        return () => {
-            subscription.unsubscribe();            
-        };
-    }, []);
-
-    //
-    // New items added to the gallery.
-    //
-    useEffect(() => {
-        const subscription = onNewItems.subscribe(() => {
-            setNumLoaded(sortedItems().length);
-        });
-        return () => {
-            subscription.unsubscribe();            
-        };
-    }, []);
 
     //
     // Auto-open last database when no database is loaded (only once on initial mount).
