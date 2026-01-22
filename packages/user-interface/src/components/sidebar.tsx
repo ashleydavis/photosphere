@@ -32,11 +32,6 @@ export interface ISidebarProps {
     // Sets the sidebar open or close.
     //
     setSidebarOpen: (open: boolean) => void;
-
-    //
-    // Navigates to a database.
-    //
-    openDatabase: (dbPath: string) => void;
 }
 
 //
@@ -383,8 +378,9 @@ function makeFullMenu(navMenu: IMenuItem[], years: string[], locations: string[]
 //
 // Renders the sidebar for the app.
 //
-export function Sidebar({ sidebarOpen, setSidebarOpen, openDatabase }: ISidebarProps) {
+export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
     const { setOpenSearch } = useSearch();
+    const { openDatabase } = useAssetDatabase();
 
     const { dbs, removeDatabase } = useApp();
     const theme = useTheme();

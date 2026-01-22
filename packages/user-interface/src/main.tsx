@@ -39,7 +39,6 @@ function __Main({ isMobile = false }: IMainProps) {
     } = useGallery();
 
     const { 
-        isLoading,
         isWorking,
         databasePath,
         deleteAssets,
@@ -52,7 +51,7 @@ function __Main({ isMobile = false }: IMainProps) {
     //
     const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
 
-    const { openSearch, setOpenSearch, setSearchInput } = useSearch();
+    const { openSearch } = useSearch();
 
     //
     // Opens the delete confirmation dialog.
@@ -64,7 +63,6 @@ function __Main({ isMobile = false }: IMainProps) {
     //
     const [buttonClicked, setButtonClicked] = useState<boolean>(false);
 
-    const { dbs } = useApp();
     const platform = usePlatform();
 
     const theme = useTheme();
@@ -118,8 +116,6 @@ function __Main({ isMobile = false }: IMainProps) {
         autoOpenLastDatabase();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []); // Only run once on mount
-
-
 
     // Show initial message if no database is loaded
     if (!databasePath) {
@@ -187,12 +183,6 @@ function __Main({ isMobile = false }: IMainProps) {
             <Navbar
                 sidebarOpen={sidebarOpen}
                 setSidebarOpen={setSidebarOpen}
-                sortedItemsCount={sortedItems().length}
-                selectedItemsCount={selectedItems.size}
-                clearMultiSelection={clearMultiSelection}
-                isLoading={isLoading}
-                databasePath={databasePath}
-                dbs={dbs}
                 setDeleteConfirmationOpen={setDeleteConfirmationOpen}
             />
 
@@ -203,7 +193,6 @@ function __Main({ isMobile = false }: IMainProps) {
                 <Sidebar
                     sidebarOpen={sidebarOpen}
                     setSidebarOpen={setSidebarOpen}
-                    openDatabase={openDatabase}
                     />               
             </Drawer>
 
