@@ -41,8 +41,10 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Run tests
-        run: bun run test
+      - name: Run unit tests
+        run: |
+          chmod +x ./run-tests.sh
+          ./run-tests.sh
 
   build:
     needs: [compile, test]
