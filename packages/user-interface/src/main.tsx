@@ -236,6 +236,24 @@ function __Main({ isMobile = false }: IMainProps) {
                     }}
                 >
                     <div className="text-center">
+                        {/* Smoke test button - visible for testing */}
+                        <div style={{ padding: "20px", textAlign: "center" }}>
+                            <button
+                                onClick={() => setButtonClicked(true)}
+                                style={{
+                                    padding: "10px 20px",
+                                    fontSize: "16px",
+                                    cursor: "pointer",
+                                }}
+                            >
+                                Click me
+                            </button>
+                            {buttonClicked && (
+                                <div style={{ marginTop: "10px", fontSize: "16px" }}>
+                                    Button was pressed
+                                </div>
+                            )}
+                        </div>
                         <button
                             onClick={async () => {
                                 await selectAndOpenDatabase();
