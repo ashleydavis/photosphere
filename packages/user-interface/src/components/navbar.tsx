@@ -15,6 +15,8 @@ import { useTheme } from "@mui/joy/styles/ThemeProvider";
 import classNames from "classnames";
 import { useSearch } from "../context/search-context";
 import { useGallery } from "../context/gallery-context";
+import { useAssetDatabase } from "../context/asset-database-source";
+import { useApp } from "../context/app-context";
 
 export interface INavbarProps {
     //
@@ -22,36 +24,6 @@ export interface INavbarProps {
     //
     sidebarOpen: boolean;
     setSidebarOpen: (open: boolean) => void;
-
-    //
-    // Number of sorted items.
-    //
-    sortedItemsCount: number;
-
-    //
-    // Number of selected items.
-    //
-    selectedItemsCount: number;
-
-    //
-    // Clears the multi-selection.
-    //
-    clearMultiSelection: () => void;
-
-    //
-    // True if data is loading.
-    //
-    isLoading: boolean;
-
-    //
-    // Current database path.
-    //
-    databasePath: string | null;
-
-    //
-    // List of all database paths.
-    //
-    dbs: string[];
 
     //
     // Opens the delete confirmation dialog.
@@ -65,17 +37,16 @@ export interface INavbarProps {
 export function Navbar({
     sidebarOpen,
     setSidebarOpen,
-    sortedItemsCount,
-    selectedItemsCount,
-    clearMultiSelection,
-    isLoading,
-    databasePath,
-    dbs,
     setDeleteConfirmationOpen,
 }: INavbarProps) {
     const theme = useTheme();
     const { openSearch, setOpenSearch, searchInput, setSearchInput, onCommitSearch, onCloseSearch } = useSearch();
-    const { moveSelectedToDatabase } = useGallery();
+    const { sortedItems, selectedItems, clearMultiSelection, moveSelectedToDatabase } = useGallery();
+    const { isLoading, databasePath } = useAssetDatabase();
+    const { dbs } = useApp();
+
+    const sortedItemsCount = sortedItems().length;
+    const selectedItemsCount = selectedItems.size;
 
     return (
         <div 
