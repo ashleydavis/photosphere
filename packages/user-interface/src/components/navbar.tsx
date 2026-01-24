@@ -115,23 +115,24 @@ export function Navbar({
                         </div>
                     }
 
-                    <div
-                        className="flex flex-row items-center mr-2 text-xs sm:text-sm"
-                    >
-                        {selectedItemsCount > 0 
-                            && <div className="flex flex-row items-center">
-                                <button
-                                    className="w-6 text-sm"
-                                    onClick={clearMultiSelection}
-                                >
-                                    <i className="fa-solid fa-close"></i>
-                                </button>                                    
-                                {selectedItemsCount} selected
-                            </div>
-                            || <div>{sortedItemsCount} photos</div>
-                        }
-                        
-                    </div>
+                    {databasePath && (
+                        <div
+                            className="flex flex-row items-center mr-2 text-xs sm:text-sm"
+                        >
+                            {selectedItemsCount > 0 
+                                && <div className="flex flex-row items-center">
+                                    <button
+                                        className="w-6 text-sm"
+                                        onClick={clearMultiSelection}
+                                    >
+                                        <i className="fa-solid fa-close"></i>
+                                    </button>
+                                    {selectedItemsCount} selected
+                                </div>
+                                || <div>{sortedItemsCount} photos</div>
+                            }                        
+                        </div>
+                    )}
 
                     {databasePath && (
                         <Dropdown>
