@@ -115,18 +115,21 @@ function __Main({ isMobile = false }: IMainProps) {
     if (!databasePath) {
         return (
             <>
-                <div 
-                    id="navbar" 
-                    className="select-none"
-                    style={{
-                        backgroundColor: theme.palette.background.body,
-                        color: theme.palette.text.primary,
-                    }}
-                >
-                    <div className="flex flex-row items-center pl-4 pt-3 pb-2">
-                        <h1 className="ml-3 sm:ml-4">Photosphere</h1>
-                    </div>
-                </div>
+                <Navbar
+                    sidebarOpen={sidebarOpen}
+                    setSidebarOpen={setSidebarOpen}
+                />
+
+                <Drawer 
+                    open={sidebarOpen} 
+                    onClose={() => setSidebarOpen(false)}
+                    >
+                    <Sidebar
+                        sidebarOpen={sidebarOpen}
+                        setSidebarOpen={setSidebarOpen}
+                        />               
+                </Drawer>
+
                 <div
                     id="main"
                     className="select-none flex items-center justify-center"
