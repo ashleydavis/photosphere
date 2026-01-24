@@ -27,6 +27,11 @@ export interface IAssetDatabase extends IGallerySource {
     setDatabasePath(databasePath: string): void;
 
     //
+    // Closes the current database.
+    //
+    closeDatabase(): void;
+
+    //
     // Moves assets to another database.
     //
     moveToDatabase(assetIds: string[], databasePath: string): Promise<void>;
@@ -299,6 +304,13 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
             });
     }
     
+    //
+    // Closes the current database.
+    //
+    function closeDatabase(): void {
+        setDatabasePath(undefined);
+    }
+    
 
     //
     // Moves assets to another database.
@@ -535,6 +547,7 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
         // Asset database source.
         databasePath,
         setDatabasePath,
+        closeDatabase,
         moveToDatabase,
         selectAndOpenDatabase,
         openDatabase,
