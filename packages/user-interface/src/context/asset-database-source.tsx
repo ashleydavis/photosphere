@@ -309,6 +309,8 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
     //
     async function closeDatabase(): Promise<void> {
         setDatabasePath(undefined);
+        loadedAssets.current = {};
+        onReset.current.invoke();
         await platform.clearLastDatabase();
     }
     
