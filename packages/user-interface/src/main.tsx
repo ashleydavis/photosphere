@@ -52,11 +52,6 @@ function __Main({ isMobile = false }: IMainProps) {
 
     const { openSearch } = useSearch();
 
-    //
-    // Track if the smoke test button was clicked.
-    //
-    const [buttonClicked, setButtonClicked] = useState<boolean>(false);
-
     const platform = usePlatform();
 
     const theme = useTheme();
@@ -111,70 +106,6 @@ function __Main({ isMobile = false }: IMainProps) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []); // Only run once on mount
 
-    // Show initial message if no database is loaded
-    if (!databasePath) {
-        return (
-            <>
-                <Navbar
-                    sidebarOpen={sidebarOpen}
-                    setSidebarOpen={setSidebarOpen}
-                />
-
-                <Drawer 
-                    open={sidebarOpen} 
-                    onClose={() => setSidebarOpen(false)}
-                    >
-                    <Sidebar
-                        sidebarOpen={sidebarOpen}
-                        setSidebarOpen={setSidebarOpen}
-                        />               
-                </Drawer>
-
-                <div
-                    id="main"
-                    className="select-none flex items-center justify-center"
-                    style={{
-                        backgroundColor: theme.palette.background.body,
-                        color: theme.palette.text.primary,
-                        height: "calc(100vh - 60px)",
-                    }}
-                >
-                    <div className="text-center">
-                        {/* Smoke test button - visible for testing */}
-                        <div style={{ padding: "20px", textAlign: "center" }}>
-                            <button
-                                onClick={() => setButtonClicked(true)}
-                                style={{
-                                    padding: "10px 20px",
-                                    fontSize: "16px",
-                                    cursor: "pointer",
-                                }}
-                            >
-                                Click me
-                            </button>
-                            {buttonClicked && (
-                                <div style={{ marginTop: "10px", fontSize: "16px" }}>
-                                    Button was pressed
-                                </div>
-                            )}
-                        </div>
-                        <button
-                            onClick={async () => {
-                                await selectAndOpenDatabase();
-                            }}
-                            className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-                            style={{
-                                backgroundColor: theme.palette.primary[500] || "#3b82f6",
-                            }}
-                        >
-                            Click here to open a database
-                        </button>
-                    </div>
-                </div>
-            </>
-        );
-    }
-   
     return (
         <>
             <Navbar
@@ -201,24 +132,6 @@ function __Main({ isMobile = false }: IMainProps) {
                 }}
                 >
                 <div id="content" >
-                    {/* Smoke test button - visible for testing */}
-                    <div style={{ padding: "20px", textAlign: "center" }}>
-                        <button
-                            onClick={() => setButtonClicked(true)}
-                            style={{
-                                padding: "10px 20px",
-                                fontSize: "16px",
-                                cursor: "pointer",
-                            }}
-                        >
-                            Click me
-                        </button>
-                        {buttonClicked && (
-                            <div style={{ marginTop: "10px", fontSize: "16px" }}>
-                                Button was pressed
-                            </div>
-                        )}
-                    </div>
                     <Routes>
                         {/* TODO: Move to a DatabaseView component. */}
                         <Route 
