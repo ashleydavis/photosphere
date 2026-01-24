@@ -388,6 +388,7 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
         sortedItems.current = [];
         setSelectedItems(new Set<string>());
         setSearchText("");
+        setTime(Date.now());
 
         onReset.current.invoke();
     }
@@ -414,6 +415,8 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
 
         sortedItems.current = applySort(searchedItems.current, sorting);
 
+        setTime(Date.now());
+
         onNewItems.current.invoke(newSearchedItems);
     };
 
@@ -426,6 +429,7 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     // Invokes subscriptions for updated items.
     //
     function _onItemsUpdated(itemUpdated: IItemsUpdate) { 
+        setTime(Date.now());
         onItemsUpdated.current.invoke(itemUpdated);
     }
 
@@ -448,6 +452,7 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
         allItems.current = removeItemsFromArray(allItems.current, itemsRemoved.assetIds);
         searchedItems.current = removeItemsFromArray(searchedItems.current, itemsRemoved.assetIds);
         sortedItems.current = removeItemsFromArray(sortedItems.current, itemsRemoved.assetIds);
+        setTime(Date.now());
 
         onItemsDeleted.current.invoke(itemsRemoved);
     }
