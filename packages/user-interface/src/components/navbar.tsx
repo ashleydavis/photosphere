@@ -48,9 +48,9 @@ export function Navbar({
     //
     // Closes the current database.
     //
-    function onCloseDatabase() {
+    async function onCloseDatabase() {
         clearMultiSelection();
-        closeDatabase();
+        await closeDatabase();
     }
 
     return (

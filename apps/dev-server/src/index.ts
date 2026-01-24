@@ -7,7 +7,7 @@ import { WebSocketServer, type WebSocket } from "ws";
 import { createAssetServer } from "rest-api";
 import { exec } from "child_process";
 import { promisify } from "util";
-import { loadDesktopConfig, addRecentDatabase, removeRecentDatabase, updateLastFolder } from "node-utils";
+import { loadDesktopConfig, addRecentDatabase, removeRecentDatabase, updateLastFolder, clearLastDatabase } from "node-utils";
 import * as path from "path";
 
 const execAsync = promisify(exec);
@@ -111,6 +111,10 @@ wss.on("connection", (ws: WebSocket) => {
             else if (messageData.type === "add-recent-database") {
                 // Handle request to add database to recent list
                 await handleAddRecentDatabase(ws, messageData.databasePath);
+            }
+            else if (messageData.type === "clear-last-database") {
+                // Handle request to clear last database
+                await handleClearLastDatabase(ws);
             }
         }
         catch (error) {
@@ -225,6 +229,25 @@ async function handleAddRecentDatabase(ws: WebSocket, databasePath: string): Pro
         ws.send(JSON.stringify({
             type: "error",
             message: error instanceof Error ? error.message : "Unknown error adding recent database",
+        }));
+    }
+}
+
+//
+// Handles request to clear last database.
+//
+async function handleClearLastDatabase(ws: WebSocket): Promise<void> {
+    try {
+        await clearLastDatabase();
+        ws.send(JSON.stringify({
+            type: "last-database-cleared",
+        }));
+    }
+    catch (error: any) {
+        console.error("Error clearing last database:", error);
+        ws.send(JSON.stringify({
+            type: "error",
+            message: error instanceof Error ? error.message : "Unknown error clearing last database",
         }));
     }
 }

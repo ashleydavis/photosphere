@@ -10,5 +10,6 @@ export interface IElectronAPI {
     getRecentDatabases: () => Promise<string[]>;
     removeDatabase: (databasePath: string) => Promise<void>;
     addRecentDatabase: (databasePath: string) => Promise<void>;
+    clearLastDatabase: () => Promise<void>;
 }
 

@@ -36,6 +36,11 @@ export interface IPlatformContext {
     // Adds a database to the recent databases list and updates last database.
     //
     addRecentDatabase: (databasePath: string) => Promise<void>;
+
+    //
+    // Clears the last database from the config.
+    //
+    clearLastDatabase: () => Promise<void>;
 }
 
 const PlatformContext = createContext<IPlatformContext | undefined>(undefined);

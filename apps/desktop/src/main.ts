@@ -5,7 +5,7 @@ import type { ITask, ITaskQueue, IWorkerBackend } from 'task-queue';
 import { TaskQueue } from 'task-queue';
 import { WorkerBackendElectronMain } from './lib/worker-backend-electron-main';
 import { RandomUuidGenerator, TimestampProvider, logExceptions } from 'utils';
-import { findAvailablePort, loadDesktopConfig, addRecentDatabase, removeRecentDatabase, updateLastFolder } from 'node-utils';
+import { findAvailablePort, loadDesktopConfig, addRecentDatabase, removeRecentDatabase, updateLastFolder, clearLastDatabase } from 'node-utils';
 import type { IWorkerOptions } from './lib/worker-init';
 import type { IRestApiWorkerStopMessage, IRestApiWorkerStartMessage } from './rest-api-worker';
 
@@ -121,7 +121,6 @@ ipcMain.handle('open-file', logExceptions(openDatabase, 'Error opening database'
 // IPC handler for removing a database from recent list
 ipcMain.handle('remove-database', logExceptions(async (event, databasePath: string) => {
     await removeRecentDatabase(databasePath);
-    return { success: true };
 }, 'Error removing database'));
 
 // IPC handler for getting recent databases list
@@ -133,8 +132,12 @@ ipcMain.handle('get-recent-databases', logExceptions(async () => {
 // IPC handler for adding a database to recent list
 ipcMain.handle('add-recent-database', logExceptions(async (event, databasePath: string) => {
     await addRecentDatabase(databasePath);
-    return { success: true };
 }, 'Error adding recent database'));
+
+// IPC handler for clearing the last database
+ipcMain.handle('clear-last-database', logExceptions(async () => {
+    await clearLastDatabase();
+}, 'Error clearing last database'));
 
 //
 // Initializes the worker pool and task queue for background task processing.
