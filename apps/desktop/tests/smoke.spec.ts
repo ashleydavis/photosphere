@@ -8,7 +8,7 @@ const executableName = 'bun-electron-test';
 const productName = 'Bun Electron Test';
 
 test.describe('Smoke Tests', () => {
-  test('should click button and verify "Button clicked" appears', async () => {
+  test('should navigate to About page and verify content', async () => {
     // Determine the built app path based on platform
     const releaseDir = join(__dirname, '../release');
     let executablePath: string;
@@ -101,13 +101,16 @@ test.describe('Smoke Tests', () => {
     // Wait for the page to load
     await window.waitForLoadState('domcontentloaded');
 
-    // Find and click the button
-    const button = window.getByRole('button', { name: /click me/i });
-    await expect(button).toBeVisible();
-    await button.click();
+    // Verify "Photosphere is developed by" text is NOT yet visible
+    await expect(window.getByText('Photosphere is developed by')).not.toBeVisible();
 
-    // Verify "Button was pressed" text appears
-    await expect(window.getByText('Button was pressed')).toBeVisible();
+    // Find and click the About link
+    const aboutLink = window.getByRole('link', { name: /about/i });
+    await expect(aboutLink).toBeVisible();
+    await aboutLink.click();
+
+    // Verify "Photosphere is developed by" text appears
+    await expect(window.getByText('Photosphere is developed by')).toBeVisible();
 
     // Close the app
     await electronApp.close();
