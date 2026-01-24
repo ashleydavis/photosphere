@@ -57,12 +57,17 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         return await electronAPI.addRecentDatabase(databasePath);
     }, [electronAPI]);
 
+    const clearLastDatabase = useCallback(async (): Promise<void> => {
+        return await electronAPI.clearLastDatabase();
+    }, [electronAPI]);
+
     const platformContext: IPlatformContext = {
         openDatabase,
         onDatabaseOpened,
         getRecentDatabases,
         removeDatabase,
         addRecentDatabase,
+        clearLastDatabase,
     };
 
     return (

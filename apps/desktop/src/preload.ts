@@ -26,6 +26,9 @@ const electronAPI: IElectronAPI = {
     addRecentDatabase: (databasePath: string): Promise<void> => {
         return ipcRenderer.invoke('add-recent-database', databasePath);
     },
+    clearLastDatabase: (): Promise<void> => {
+        return ipcRenderer.invoke('clear-last-database');
+    },
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);

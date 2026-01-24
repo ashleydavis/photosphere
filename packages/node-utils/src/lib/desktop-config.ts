@@ -115,6 +115,15 @@ export async function removeRecentDatabase(databasePath: string): Promise<void> 
 }
 
 //
+// Clears the last database that was opened.
+//
+export async function clearLastDatabase(): Promise<void> {
+    const config = await loadDesktopConfig();
+    config.lastDatabase = undefined;
+    await saveDesktopConfig(config);
+}
+
+//
 // Updates the last folder that was opened in the file dialog.
 //
 export async function updateLastFolder(folderPath: string): Promise<void> {
