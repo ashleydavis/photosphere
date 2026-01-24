@@ -10,6 +10,7 @@ import Menu from '@mui/joy/Menu';
 import ListDivider from '@mui/joy/ListDivider';
 import ListSubheader from "@mui/joy/ListSubheader";
 import Delete from "@mui/icons-material/Delete";
+import ExitToApp from "@mui/icons-material/ExitToApp";
 import Input from "@mui/joy/Input/Input";
 import { useTheme } from "@mui/joy/styles/ThemeProvider";
 import classNames from "classnames";
@@ -25,7 +26,6 @@ export interface INavbarProps {
     //
     sidebarOpen: boolean;
     setSidebarOpen: (open: boolean) => void;
-
 }
 
 //
@@ -38,12 +38,20 @@ export function Navbar({
     const theme = useTheme();
     const { openSearch, setOpenSearch, searchInput, setSearchInput, onCommitSearch, onCloseSearch } = useSearch();
     const { sortedItems, selectedItems, clearMultiSelection, moveSelectedToDatabase } = useGallery();
-    const { isLoading, databasePath } = useAssetDatabase();
+    const { isLoading, databasePath, closeDatabase } = useAssetDatabase();
     const { dbs } = useApp();
     const { setDeleteConfirmationOpen } = useDeleteConfirmation();
 
     const sortedItemsCount = sortedItems().length;
     const selectedItemsCount = selectedItems.size;
+
+    //
+    // Closes the current database.
+    //
+    function onCloseDatabase() {
+        clearMultiSelection();
+        closeDatabase();
+    }
 
     return (
         <div 
@@ -125,8 +133,8 @@ export function Navbar({
                         
                     </div>
 
-                    {(selectedItemsCount > 0)
-                        && <Dropdown>
+                    {databasePath && (
+                        <Dropdown>
                             <MenuButton
                                 sx={{
                                     mr: 1,
@@ -161,12 +169,22 @@ export function Navbar({
                                             <Delete />
                                             Delete {selectedItemsCount} assets
                                         </MenuItem>                                        
-                                        <ListDivider />
                                     </>
                                 }                                    
+                                {databasePath && (
+                                    <>
+                                        {selectedItemsCount > 0 && <ListDivider />}
+                                        <MenuItem
+                                            onClick={onCloseDatabase}
+                                        >
+                                            <ExitToApp />
+                                            Close database
+                                        </MenuItem>
+                                    </>
+                                )}
                             </Menu>
                         </Dropdown>
-                    }
+                    )}
                 </div>
 
                 {openSearch
