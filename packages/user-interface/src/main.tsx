@@ -1,9 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Route, Routes, Navigate } from "react-router-dom";
 import { GalleryPage } from "./pages/gallery/gallery";
-import { useGallery } from "./context/gallery-context";
 import classNames from "classnames";
-import { useApp } from "./context/app-context";
 import { usePlatform } from "./context/platform-context";
 import { useAssetDatabase } from "./context/asset-database-source";
 import { useSearch } from "./context/search-context";
@@ -32,16 +30,8 @@ export interface IMainProps {
 function __Main({ isMobile = false }: IMainProps) {
 
     const { 
-        sortedItems,
-        selectedItems,
-        clearMultiSelection,
-    } = useGallery();
-
-    const { 
         isWorking,
         databasePath,
-        deleteAssets,
-        selectAndOpenDatabase,
         openDatabase,
     } = useAssetDatabase();
 
