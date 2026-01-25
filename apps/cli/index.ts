@@ -380,6 +380,7 @@ Resources:
         .option(...destKeyOption)
         .option(...generateKeyOption)
         .option("-p, --path <path>", "Replicate only files matching this path (file or directory)")
+        .option("--partial", "Only copy thumb directory assets. Asset and display files will be lazily copied when needed.")
         .option("--force", "Proceed with replication without confirmation, even if destination database exists, and allow replication between databases with different IDs (THIS IS DANGEROUS, use it carefully, use it rarely)")
         .option(...verboseOption)
         .option(...toolsOption)

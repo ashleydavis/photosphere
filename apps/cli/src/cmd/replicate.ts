@@ -36,6 +36,11 @@ export interface IReplicateCommandOptions extends IBaseCommandOptions {
     // If true, allows replication even if destination has modifications not in source.
     //
     force?: boolean;
+
+    //
+    // If true, only copy thumb directory assets. Asset and display files will be lazily copied when needed.
+    //
+    partial?: boolean;
 }
 
 //
@@ -176,7 +181,8 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
 
     const result = await replicate(sourceAssetStorage, sourceMetadataStorage, sourceBsonDatabase, uuidGenerator, timestampProvider, destAssetStorage, destMetadataStorage, { 
         pathFilter: options.path,
-        force: options.force
+        force: options.force,
+        partial: options.partial
     }, (progress) => {
         const progressMessage = `🔄 ${progress}`;
         writeProgress(progressMessage);
