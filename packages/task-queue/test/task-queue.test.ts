@@ -137,6 +137,41 @@ describe("TaskQueue", () => {
             expect(finalStatus.pending).toBe(0);
             expect(finalStatus.running).toBe(0);
         });
+
+        it("should keep tasks pending when dispatchTask returns false", async () => {
+            // Create a queue with only 1 worker to test the dispatchTask return value behavior
+            const taskTimeout = 600000;
+            const singleWorkerBackend = new MockWorkerBackend(1);
+            const singleWorkerQueue = new TaskQueue(uuidGenerator, timestampProvider, taskTimeout, singleWorkerBackend);
+
+            registerHandler("slow-task", async () => {
+                await new Promise(resolve => setTimeout(resolve, 100));
+                return "done";
+            });
+
+            // Add 3 tasks - with 1 worker, 2 should remain pending
+            const taskId1 = singleWorkerQueue.addTask("slow-task", { id: 1 });
+            const taskId2 = singleWorkerQueue.addTask("slow-task", { id: 2 });
+            const taskId3 = singleWorkerQueue.addTask("slow-task", { id: 3 });
+
+            // Give tasks a moment to be dispatched
+            await new Promise(resolve => setTimeout(resolve, 10));
+
+            const status = singleWorkerQueue.getStatus();
+            // With 1 worker, only 1 task should be running, 2 should be pending
+            expect(status.running).toBe(1);
+            expect(status.pending).toBe(2);
+            expect(status.total).toBe(3);
+
+            // Wait for all tasks to complete
+            await singleWorkerQueue.awaitAllTasks();
+            singleWorkerQueue.shutdown();
+
+            const finalStatus = singleWorkerQueue.getStatus();
+            expect(finalStatus.completed).toBe(3);
+            expect(finalStatus.pending).toBe(0);
+            expect(finalStatus.running).toBe(0);
+        });
     });
 
     describe("parallel execution", () => {
