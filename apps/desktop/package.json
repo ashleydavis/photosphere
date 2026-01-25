@@ -64,7 +64,17 @@
       "target": ["deb", "zip"],
       "maintainer": "ashley@codecapers.com.au",
       "artifactName": "${productName}-${version}-linux-${arch}.${ext}",
-      "executableName": "photosphere"
+      "executableName": "photosphere",
+      "extraFiles": [
+        {
+          "from": "scripts/fix-sandbox.sh",
+          "to": "scripts/fix-sandbox.sh"
+        },
+        {
+          "from": "scripts/README.md",
+          "to": "README.md"
+        }
+      ]
     },
     "deb": {
       "afterInstall": "./scripts/deb-post-install.sh"
