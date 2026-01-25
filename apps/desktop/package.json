@@ -52,16 +52,18 @@
     "mac": {
       "category": "public.app-category.utilities",
       "target": ["dmg", "zip"],
+      "artifactName": "${productName}-${version}-mac-${arch}.${ext}",
       "executableName": "photosphere"
     },
     "win": {
       "target": ["nsis", "zip"],
+      "artifactName": "${productName}-${version}-win-${arch}.${ext}",
       "executableName": "photosphere"
     },
     "linux": {
       "target": ["deb", "zip"],
       "maintainer": "ashley@codecapers.com.au",
-      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "artifactName": "${productName}-${version}-linux-${arch}.${ext}",
       "executableName": "photosphere"
     },
     "deb": {
