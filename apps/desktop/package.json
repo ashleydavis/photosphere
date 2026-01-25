@@ -19,7 +19,8 @@
     "bundle:rest-api-worker": "bun build ./src/rest-api-worker.ts --outdir ./bundle --target node --format cjs",
     "bundle": "bun bundle:main && bun bundle:preload && bun bundle:worker && bun bundle:rest-api-worker",
     "build": "bun run bundle && electron-builder",
-    "test:smoke": "playwright test tests/smoke.spec.ts"
+    "test:smoke": "playwright test tests/smoke.spec.ts",
+    "test:post-install": "bash scripts/test-post-install.sh"
   },
   "dependencies": {
     "task-queue": "workspace:*",
@@ -48,7 +49,6 @@
       "bundle/**/*",
       "package.json"
     ],
-    "afterPack": "./scripts/fix-chrome-sandbox.js",
     "mac": {
       "category": "public.app-category.utilities",
       "target": ["dmg", "zip"],
@@ -63,6 +63,9 @@
       "maintainer": "ashley@codecapers.com.au",
       "artifactName": "${productName}-${version}-${arch}.${ext}",
       "executableName": "photosphere"
+    },
+    "deb": {
+      "afterInstall": "./scripts/deb-post-install.sh"
     }
   }
 }
