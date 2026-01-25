@@ -218,13 +218,13 @@ export class TaskQueue implements ITaskQueue {
         if (this.workerBackend.dispatchTask(task)) {
             // Remove the worker from the queue.
             this.pendingTasks.shift();
-        }
 
-        // Mark task as running and assign to worker
-        task.status = TaskStatus.Running;
-        task.startedAt = this.timestampProvider.dateNow();
-        this.tasksPending--;
-        this.tasksRunning++;
+            // Mark task as running and assign to worker
+            task.status = TaskStatus.Running;
+            task.startedAt = this.timestampProvider.dateNow();
+            this.tasksPending--;
+            this.tasksRunning++;
+        }
     }
 
     //
