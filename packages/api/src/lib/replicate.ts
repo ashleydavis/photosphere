@@ -1,7 +1,7 @@
 
 import { computeHash } from "./hash";
 import { IStorage, StoragePrefixWrapper } from "storage";
-import { retry, FatalError, ITimestampProvider, IUuidGenerator } from "utils";
+import { retry, FatalError, ITimestampProvider, IUuidGenerator, log } from "utils";
 import { IDatabaseMetadata, ProgressCallback, createMediaFileDatabase, loadDatabase, createDatabase } from "./media-file-database";
 import { BsonDatabase } from "bdb";
 import { buildMerkleTree, findDifferingNodes, findMerkleTreeDifferences, getItemInfo, IMerkleTree, MerkleNode, pruneTree, saveTree, upsertItem } from "merkle-tree";
@@ -47,6 +47,11 @@ export interface IReplicateOptions {
     // If true, allows replication even if source and destination have different database IDs.
     //
     force?: boolean;
+
+    //
+    // If true, only copy thumb directory assets. Asset and display files will be lazily copied when needed.
+    //
+    partial?: boolean;
 }
 
 //
@@ -149,7 +154,7 @@ Copied hash: ${copiedHash.toString("hex")}
         //
         // Add or update the file in the destination merkle tree.
         //
-        if (!fileName.startsWith("metadata/")) {
+        if (!fileName.startsWith("metadata/")) { //TODO: Shouldn't needed now. Should be no metadata files in the merkle tree.
             destMerkleTree = upsertItem(destMerkleTree!, {
                 name: fileName,
                 hash: copiedHash,
@@ -179,6 +184,17 @@ Copied hash: ${copiedHash.toString("hex")}
                     
                     // Check if the file matches the filter (exact match or starts with filter + '/')
                     if (fileName !== pathFilter && !fileName.startsWith(pathFilter + '/')) {
+                        return;
+                    }
+                }
+                
+                // In partial mode, only copy thumb directory files and root-level files (like README.md)
+                if (options?.partial) {
+                    const fileName = merkleNode.name.replace(/\\/g, '/');
+                    const isThumbFile = fileName.startsWith('thumb/');
+                    const isRootFile = !fileName.includes('/');
+                    if (!isThumbFile && !isRootFile) {
+                        log.verbose(`Skipped ${fileName} (partial mode, only thumb files and root files are copied)`);
                         return;
                     }
                 }
@@ -529,6 +545,16 @@ export async function replicate(
     //
     if (merkleTree.databaseMetadata) {
         destMerkleTree.databaseMetadata = { ...merkleTree.databaseMetadata };
+    }
+    else {
+        destMerkleTree.databaseMetadata = { filesImported: 0 };
+    }
+    
+    //
+    // Set isPartial flag if partial replication is enabled.
+    //
+    if (options?.partial) {
+        destMerkleTree.databaseMetadata.isPartial = true;
     }
 
     await replicateFiles(

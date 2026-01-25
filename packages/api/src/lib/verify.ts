@@ -157,7 +157,14 @@ export async function verify(storageDescriptor: IStorageDescriptor, metadataStor
                 }
 
                 if (fileResult.status === "removed") {
-                    result.removed.push(fileResult.fileName);
+                    // For partial databases, ignore missing files (they're expected to be missing)
+                    if (!isPartial) {
+                        result.removed.push(fileResult.fileName);
+                    }
+                    else {
+                        // Count as unmodified since missing files are expected in partial databases
+                        result.numUnmodified++;
+                    }
                 }
                 else if (fileResult.status === "modified") {
                     result.modified.push(fileResult.fileName);
@@ -177,6 +184,11 @@ export async function verify(storageDescriptor: IStorageDescriptor, metadataStor
                 result.numFailures++;
             }
         });
+
+        //
+        // Check if database is partial - missing files should be ignored for partial databases
+        //
+        const isPartial = merkleTree.databaseMetadata?.isPartial === true;
 
         //
         // Queue up all verification tasks as quickly as possible.

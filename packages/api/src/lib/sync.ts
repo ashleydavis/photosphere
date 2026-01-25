@@ -121,6 +121,18 @@ async function pushFiles(sourceAssetStorage: IStorage, sourceMetadataStorage: IS
     //
     const copyFile = async (fileName: string, sourceHash: Buffer): Promise<void> => {
         
+        // Check if target database is partial - if so, only copy thumb directory files and root-level files
+        const isTargetPartial = targetMerkleTree?.databaseMetadata?.isPartial === true;
+        if (isTargetPartial) {
+            const normalizedFileName = fileName.replace(/\\/g, '/');
+            const isThumbFile = normalizedFileName.startsWith('thumb/');
+            const isRootFile = !normalizedFileName.includes('/');
+            if (!isThumbFile && !isRootFile) {
+                log.verbose(`Skipped ${fileName} (target database is partial, only thumb files and root files are copied)`);
+                return;
+            }
+        }
+        
         // Check if this asset is in the deleted list
         const assetId = extractAssetId(fileName);
         if (!assetId) {

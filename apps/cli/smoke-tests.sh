@@ -73,6 +73,7 @@ declare -a TEST_TABLE=(
     "sync-delete-asset-reverse:test_sync_delete_asset_reverse:Test sync after deleting asset from copy (reverse)"
     "replicate-deleted-asset:test_replicate_with_deleted_asset:Test replicate database with deleted asset"
     "replicate-unrelated-fail:test_replicate_unrelated_databases_fail:Test replicate fails between unrelated databases"
+    "replicate-partial:test_replicate_partial:Test partial replication (only thumb files)"
 )
 
 # Test table helper functions
@@ -3581,6 +3582,161 @@ test_replicate_unrelated_databases_fail() {
     log_info "Temporary databases preserved for inspection in test directory: $test_dir"
     log_info "  First database: $first_db_dir"
     log_info "  Second database: $second_db_dir"
+    test_passed
+}
+
+test_replicate_partial() {
+    local test_number="$1"
+    print_test_header "$test_number" "PARTIAL REPLICATION (ONLY THUMB FILES)"
+    
+    local replica_dir="$TEST_DB_DIR-partial-replica"
+    log_info "Source database path: $TEST_DB_DIR"
+    log_info "Partial replica database path: $replica_dir"
+    
+    # Clean up any existing partial replica
+    if [ -d "$replica_dir" ]; then
+        log_info "Cleaning up existing partial replica directory"
+        rm -rf "$replica_dir"
+    fi
+    
+    # Count files in source database directories
+    local source_thumb_count=0
+    local source_asset_count=0
+    local source_display_count=0
+    
+    if [ -d "$TEST_DB_DIR/thumb" ]; then
+        source_thumb_count=$(find "$TEST_DB_DIR/thumb" -type f | wc -l)
+    fi
+    if [ -d "$TEST_DB_DIR/asset" ]; then
+        source_asset_count=$(find "$TEST_DB_DIR/asset" -type f | wc -l)
+    fi
+    if [ -d "$TEST_DB_DIR/display" ]; then
+        source_display_count=$(find "$TEST_DB_DIR/display" -type f | wc -l)
+    fi
+    
+    log_info "Source database file counts:"
+    log_info "  Thumb files: $source_thumb_count"
+    log_info "  Asset files: $source_asset_count"
+    log_info "  Display files: $source_display_count"
+    
+    # Run partial replicate command
+    local replicate_output
+    invoke_command "Partial replicate database" "$(get_cli_command) replicate --db $TEST_DB_DIR --dest $replica_dir --partial --yes --force" 0 "replicate_output"
+    
+    # Check if replication was successful
+    expect_output_string "$replicate_output" "Replication completed successfully" "Partial replication completed successfully"
+    
+    # Check that replica was created
+    check_exists "$replica_dir" "Partial replica database directory"
+    check_exists "$replica_dir/.db" "Partial replica metadata directory"
+    check_exists "$replica_dir/.db/tree.dat" "Partial replica tree file"
+    
+    # Count files in partial replica directories
+    local replica_thumb_count=0
+    local replica_asset_count=0
+    local replica_display_count=0
+    
+    if [ -d "$replica_dir/thumb" ]; then
+        replica_thumb_count=$(find "$replica_dir/thumb" -type f | wc -l)
+    fi
+    if [ -d "$replica_dir/asset" ]; then
+        replica_asset_count=$(find "$replica_dir/asset" -type f | wc -l)
+    fi
+    if [ -d "$replica_dir/display" ]; then
+        replica_display_count=$(find "$replica_dir/display" -type f | wc -l)
+    fi
+    
+    log_info "Partial replica file counts:"
+    log_info "  Thumb files: $replica_thumb_count"
+    log_info "  Asset files: $replica_asset_count"
+    log_info "  Display files: $replica_display_count"
+    
+    # Verify only thumb files were copied
+    expect_value "$replica_thumb_count" "$source_thumb_count" "All thumb files should be copied in partial mode"
+    expect_value "$replica_asset_count" "0" "No asset files should be copied in partial mode"
+    expect_value "$replica_display_count" "0" "No display files should be copied in partial mode"
+    
+    # Verify the database passes verification (missing files should be ignored for partial databases)
+    log_info "Verifying partial replica database - missing asset/display files should be ignored"
+    local verify_output
+    invoke_command "Verify partial replica database" "$(get_cli_command) verify --db $replica_dir --yes" 0 "verify_output"
+    
+    # Check that verification shows no removed files (missing files are ignored for partial databases)
+    expect_output_value "$verify_output" "Removed:" "0" "No files should be reported as removed in partial database (missing asset/display files are ignored)"
+    
+    # Verify that the database verification passed (no errors for missing files)
+    expect_output_string "$verify_output" "Database verification passed - all files are intact" "Partial database verification should pass despite missing asset/display files"
+    
+    # Log the verification results for debugging
+    log_info "Verification results for partial replica:"
+    log_info "$verify_output"
+    
+    # Verify original and partial replica have the same database ID
+    log_info "Verifying database IDs match for original and partial replica"
+    local source_id_output
+    local replica_id_output
+    invoke_command "Get source database ID" "$(get_cli_command) database-id --db $TEST_DB_DIR --yes" 0 "source_id_output"
+    invoke_command "Get partial replica database ID" "$(get_cli_command) database-id --db $replica_dir --yes" 0 "replica_id_output"
+    
+    local source_id=$(echo "$source_id_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    local replica_id=$(echo "$replica_id_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    
+    if [ "$source_id" = "$replica_id" ]; then
+        log_success "Database IDs match: $source_id"
+    else
+        log_error "Database IDs do not match"
+        log_error "Source ID: $source_id"
+        log_error "Partial replica ID: $replica_id"
+        exit 1
+    fi
+    
+    # Now test sync - sync should NOT copy asset/display files to partial database
+    log_info "Testing sync to partial database - asset/display files should NOT be copied"
+    
+    # Make a small change to source to trigger sync
+    local test_file="$TEST_FILES_DIR/test.png"
+    if [ -f "$test_file" ]; then
+        # Add a file to source (if not already there)
+        local add_output
+        invoke_command "Add file to source for sync test" "$(get_cli_command) add --db $TEST_DB_DIR $test_file --yes" 0 "add_output" || true
+    fi
+    
+    # Run sync from source to partial replica
+    local sync_output
+    invoke_command "Sync to partial replica" "$(get_cli_command) sync --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "sync_output"
+    
+    # Count files again after sync
+    local replica_thumb_count_after_sync=0
+    local replica_asset_count_after_sync=0
+    local replica_display_count_after_sync=0
+    
+    if [ -d "$replica_dir/thumb" ]; then
+        replica_thumb_count_after_sync=$(find "$replica_dir/thumb" -type f | wc -l)
+    fi
+    if [ -d "$replica_dir/asset" ]; then
+        replica_asset_count_after_sync=$(find "$replica_dir/asset" -type f | wc -l)
+    fi
+    if [ -d "$replica_dir/display" ]; then
+        replica_display_count_after_sync=$(find "$replica_dir/display" -type f | wc -l)
+    fi
+    
+    log_info "Partial replica file counts after sync:"
+    log_info "  Thumb files: $replica_thumb_count_after_sync"
+    log_info "  Asset files: $replica_asset_count_after_sync"
+    log_info "  Display files: $replica_display_count_after_sync"
+    
+    # Verify asset/display files are still not copied after sync
+    expect_value "$replica_asset_count_after_sync" "0" "No asset files should be copied during sync to partial database"
+    expect_value "$replica_display_count_after_sync" "0" "No display files should be copied during sync to partial database"
+    
+    # Thumb files may have increased if new assets were added
+    if [ "$replica_thumb_count_after_sync" -lt "$replica_thumb_count" ]; then
+        log_error "Thumb file count decreased after sync (unexpected)"
+        exit 1
+    fi
+    
+    log_success "Sync correctly skipped asset/display files for partial database"
+    
     test_passed
 }
 

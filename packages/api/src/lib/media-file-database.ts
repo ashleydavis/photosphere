@@ -115,6 +115,8 @@ export interface IDatabaseMetadata {
     filesImported: number;
     // List of asset IDs that have been deleted from the database
     deletedAssetIds?: string[];
+    // If true, this database is a partial copy (only thumb directory assets are present)
+    isPartial?: boolean;
 }
 
 export interface IAddSummary {
