@@ -1,10 +1,10 @@
 {
-  "name": "desktop",
-  "version": "1.0.0",
-  "description": "Bun Electron App",
+  "name": "photosphere",
+  "version": "0.0.1",
+  "description": "Photosphere: Photo and video management",
   "author": {
-    "name": "Your Name",
-    "email": "your.email@example.com"
+    "name": "Ashley Davis",
+    "email": "ashley@codecapers.com.au"
   },
   "homepage": "https://github.com/yourusername/bun-electron",
   "private": true,
@@ -38,8 +38,8 @@
     "@playwright/test": "^1.57.0"
   },
   "build": {
-    "appId": "com.monorepo.electron",
-    "productName": "Bun Electron Test",
+    "appId": "com.codecapers.photosphere",
+    "productName": "Photosphere",
     "electronVersion": "40.0.0",
     "directories": {
       "output": "release"
@@ -48,20 +48,21 @@
       "bundle/**/*",
       "package.json"
     ],
+    "afterPack": "./scripts/fix-chrome-sandbox.js",
     "mac": {
       "category": "public.app-category.utilities",
       "target": ["dmg", "zip"],
-      "executableName": "bun-electron-test"
+      "executableName": "photosphere"
     },
     "win": {
       "target": ["nsis", "zip"],
-      "executableName": "bun-electron-test"
+      "executableName": "photosphere"
     },
     "linux": {
       "target": ["deb", "zip"],
-      "maintainer": "your.email@example.com",
+      "maintainer": "ashley@codecapers.com.au",
       "artifactName": "${productName}-${version}-${arch}.${ext}",
-      "executableName": "bun-electron-test"
+      "executableName": "photosphere"
     }
   }
 }
