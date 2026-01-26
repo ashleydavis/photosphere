@@ -30,13 +30,13 @@ function createMainWindow() {
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
-            preload: join(__dirname, '../bundle/preload.js'),
+            preload: join(app.getAppPath(), 'bundle/preload.js'),
         },
     });
 
     // Load from built frontend (works in both dev and production)
     // Pass restApiUrl as query parameter so the frontend can use it
-    const htmlPath = join(__dirname, '../bundle/frontend/index.html');
+    const htmlPath = join(app.getAppPath(), 'bundle/frontend/index.html');
     const restApiUrl = `http://localhost:${restApiPort}`;
     const fileUrl = `file://${htmlPath}?restApiUrl=${encodeURIComponent(restApiUrl)}`;
     mainWindow.loadURL(fileUrl);
@@ -143,7 +143,7 @@ ipcMain.handle('clear-last-database', logExceptions(async () => {
 // Initializes the worker pool and task queue for background task processing.
 //
 function initWorkers() {
-    const workerPath = join(__dirname, '../bundle/worker.js');
+    const workerPath = join(app.getAppPath(), 'bundle/worker.js');
     const maxWorkers = cpus().length;
     const uuidGenerator = new RandomUuidGenerator();
     const timestampProvider = new TimestampProvider();
@@ -234,7 +234,7 @@ async function initRestApi(): Promise<void> {
         console.log(`Using REST API port: ${port}`);
     }
 
-    const serverPath = join(__dirname, '../bundle/rest-api-worker.js');
+    const serverPath = join(app.getAppPath(), 'bundle/rest-api-worker.js');
 
     // Fork the utility process
     restApiWorker = utilityProcess.fork(serverPath);
