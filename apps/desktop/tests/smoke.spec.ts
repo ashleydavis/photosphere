@@ -3,9 +3,9 @@ import { join } from 'path';
 import { existsSync, readdirSync } from 'fs';
 
 // Executable name - hardcoded in electron-builder config
-const executableName = 'bun-electron-test';
+const executableName = 'photosphere';
 // Product name - used for macOS .app bundle name
-const productName = 'Bun Electron Test';
+const productName = 'Photosphere';
 
 test.describe('Smoke Tests', () => {
   test('should navigate to About page and verify content', async () => {
