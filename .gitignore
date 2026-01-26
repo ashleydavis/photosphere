@@ -44,3 +44,4 @@ packages/adb/src/test/perf/results/
 tmp/
 bundle/
 release/
+apps/desktop/test-results
