@@ -6,7 +6,8 @@
     "name": "Ashley Davis",
     "email": "ashley@codecapers.com.au"
   },
-  "homepage": "https://github.com/yourusername/bun-electron",
+  "homepage": "https://github.com/ashleydavis/photosphere",
+  "license": "MIT",
   "private": true,
   "main": "bundle/main.js",
   "scripts": {
