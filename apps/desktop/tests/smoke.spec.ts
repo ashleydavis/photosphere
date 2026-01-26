@@ -91,8 +91,8 @@ test.describe('Smoke Tests', () => {
         timeout: 30000,
       });
     } catch (error) {
-      console.error('Failed to launch Electron app:', error);
-      throw new Error(`Failed to launch Electron app: ${error}\nExecutable: ${executablePath}\nWorking directory: ${cwd}`);
+      console.error('Failed to launch Photosphere:', error);
+      throw new Error(`Failed to launch Photosphere: ${error}\nExecutable: ${executablePath}\nWorking directory: ${cwd}`);
     }
 
     // Get the first window
