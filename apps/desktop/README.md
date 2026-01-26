@@ -103,6 +103,33 @@ bun run build -- --win
 bun run build -- --linux
 ```
 
+### Windows Build Requirements
+
+On Windows, electron-builder downloads the `winCodeSign` tool which contains macOS files with symbolic links. Windows requires administrator privileges to create symbolic links, which can cause build failures.
+
+**Workaround:** Pre-download and extract the winCodeSign archive to avoid the symlink extraction error:
+
+```powershell
+cd apps/desktop
+bun run setup-electron-builder
+```
+
+Or run directly:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/setup-electron-builder.ps1
+```
+
+This script:
+- Downloads the winCodeSign archive from GitHub
+- Extracts it to the location electron-builder expects (`%LOCALAPPDATA%\electron-builder\Cache\winCodeSign\winCodeSign-2.6.0\`)
+- Skips symlinks during extraction (no admin privileges needed)
+- Only needs to be run once
+
+After running this script, `bun run build` will work without symlink extraction errors. The script is idempotent - it will skip if the cache already exists.
+
+**Note:** This workaround is needed because electron-builder downloads winCodeSign for all Windows builds, regardless of whether code signing is configured. GitHub Actions Windows runners work because they have Developer Mode enabled or run with elevated privileges.
+
 ### Code Signing
 
 Configure code signing in `package.json`:
