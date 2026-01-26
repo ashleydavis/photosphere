@@ -99,11 +99,11 @@ jobs:
 
       - name: Run smoke tests (Linux)
         if: runner.os == 'Linux'
-        run: xvfb-run -a bun run --filter=desktop test:smoke
+        run: xvfb-run -a bun run --filter=photosphere test:smoke
 
       - name: Run smoke tests (Not Linux)
         if: runner.os != 'Linux'
-        run: bun run --filter=desktop test:smoke
+        run: bun run --filter=photosphere test:smoke
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
