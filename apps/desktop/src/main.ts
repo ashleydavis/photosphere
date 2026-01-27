@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, utilityProcess, type UtilityProcess, dialog, Menu, shell } from 'electron';
 import { join, dirname } from 'path';
-import { cpus } from 'os';
+import { cpus, platform, arch, release } from 'os';
+import { existsSync, readdirSync, statSync, readFileSync } from 'fs';
 import type { ITask, ITaskQueue, IWorkerBackend } from 'task-queue';
 import { TaskQueue } from 'task-queue';
 import { WorkerBackendElectronMain } from './lib/worker-backend-electron-main';
@@ -8,6 +9,8 @@ import { RandomUuidGenerator, TimestampProvider, logExceptions } from 'utils';
 import { findAvailablePort, loadDesktopConfig, addRecentDatabase, removeRecentDatabase, updateLastFolder, clearLastDatabase, getTheme, setTheme } from 'node-utils';
 import type { IWorkerOptions } from './lib/worker-init';
 import type { IRestApiWorkerStopMessage, IRestApiWorkerStartMessage } from './rest-api-worker';
+import { FileLoggerElectron } from './lib/file-logger-electron';
+import type { IRendererLogMessage } from 'electron-defs';
 
 // Main application window
 let mainWindow: BrowserWindow | null = null;
@@ -29,6 +32,9 @@ let restApiPort: number | null = null;
 
 // Tracks whether a database is currently open (used for menu state)
 let isDatabaseOpen: boolean = false;
+
+// File logger for writing logs to files
+let fileLogger: FileLoggerElectron | null = null;
 
 //
 // Creates and configures the main browser window for the Electron app.
@@ -64,6 +70,10 @@ async function createMainWindow() {
 }
 
 app.whenReady().then(async () => {
+    // Initialize file logger first so we can log everything
+    fileLogger = await FileLoggerElectron.create(app.getPath('userData'));
+    fileLogger.info('Photosphere Desktop starting...', 'Main');
+    
     // Initialize REST API before creating main window
     await initRestApi();
 
@@ -88,8 +98,12 @@ app.on('window-all-closed', () => {
     }
 });
 
-app.on('before-quit', () => {
+app.on('before-quit', async () => {
     isShuttingDown = true;
+    
+    if (fileLogger) {
+        fileLogger.info('Photosphere Desktop shutting down...', 'Main');
+    }
     
     // Cleanup task queue
     if (taskQueue) {
@@ -111,6 +125,12 @@ app.on('before-quit', () => {
         // Terminate the process
         restApiWorker.kill();
         restApiWorker = null;
+    }
+    
+    // Close file logger last to capture all shutdown logs
+    if (fileLogger) {
+        await fileLogger.close();
+        fileLogger = null;
     }
 });
 
@@ -169,6 +189,19 @@ ipcMain.handle('set-theme', logExceptions(async (event, theme: 'light' | 'dark' 
     }
 }, 'Error setting theme'));
 
+// IPC handler for renderer log messages
+ipcMain.on('renderer-log', (event, message: IRendererLogMessage) => {
+    if (fileLogger) {
+        fileLogger.handleWorkerLogMessage({
+            type: 'log',
+            level: message.level,
+            message: message.message,
+            error: message.error,
+            toolData: message.toolData,
+        }, 'Renderer');
+    }
+});
+
 //
 // Initializes the worker pool and task queue for background task processing.
 //
@@ -209,46 +242,52 @@ function initWorkers() {
 }
 
 //
-// Handles log messages from the REST API worker and forwards them to the main process console.
+// Handles log messages from the REST API worker and forwards them to the file logger and console.
 //
-function handleWorkerLogMessage(message: any): void {
-    const level = message.level;
-    const logMessage = message.message;
-    const error = message.error;
-    const toolData = message.toolData;
+function handleWorkerLogMessage(message: any, source: string = 'REST API'): void {
+    if (fileLogger) {
+        fileLogger.handleWorkerLogMessage(message, source);
+    }
+    else {
+        // Fallback to console if file logger not initialized yet
+        const level = message.level;
+        const logMessage = message.message;
+        const error = message.error;
+        const toolData = message.toolData;
 
-    switch (level) {
-        case 'info':
-            console.log(`[REST API] ${logMessage}`);
-            break;
-        case 'verbose':
-            console.log(`[REST API] ${logMessage}`);
-            break;
-        case 'error':
-            console.error(`[REST API] ${logMessage}`);
-            break;
-        case 'exception':
-            console.error(`[REST API] ${logMessage}`);
-            if (error) {
-                console.error(`[REST API] ${error}`);
-            }
-            break;
-        case 'warn':
-            console.warn(`[REST API] ${logMessage}`);
-            break;
-        case 'debug':
-            console.debug(`[REST API] ${logMessage}`);
-            break;
-        case 'tool':
-            if (toolData) {
-                if (toolData.stdout) {
-                    console.log(`[REST API] == ${logMessage} stdout ==\n${toolData.stdout}`);
+        switch (level) {
+            case 'info':
+                console.log(`[${source}] ${logMessage}`);
+                break;
+            case 'verbose':
+                console.log(`[${source}] ${logMessage}`);
+                break;
+            case 'error':
+                console.error(`[${source}] ${logMessage}`);
+                break;
+            case 'exception':
+                console.error(`[${source}] ${logMessage}`);
+                if (error) {
+                    console.error(`[${source}] ${error}`);
                 }
-                if (toolData.stderr) {
-                    console.log(`[REST API] == ${logMessage} stderr ==\n${toolData.stderr}`);
+                break;
+            case 'warn':
+                console.warn(`[${source}] ${logMessage}`);
+                break;
+            case 'debug':
+                console.debug(`[${source}] ${logMessage}`);
+                break;
+            case 'tool':
+                if (toolData) {
+                    if (toolData.stdout) {
+                        console.log(`[${source}] == ${logMessage} stdout ==\n${toolData.stdout}`);
+                    }
+                    if (toolData.stderr) {
+                        console.log(`[${source}] == ${logMessage} stderr ==\n${toolData.stderr}`);
+                    }
                 }
-            }
-            break;
+                break;
+        }
     }
 }
 
@@ -473,10 +512,6 @@ async function createMenu(): Promise<void> {
 
     // View Menu
     const viewSubmenu: Electron.MenuItemConstructorOptions[] = [
-        { role: 'reload', label: 'Reload' },
-        { role: 'forceReload', label: 'Force Reload' },
-        { role: 'toggleDevTools', label: 'Toggle Developer Tools' },
-        { type: 'separator' },
         {
             label: 'Theme',
             submenu: [
@@ -555,6 +590,18 @@ async function createMenu(): Promise<void> {
         submenu: windowSubmenu,
     });
 
+    // Developer Menu
+    const developerSubmenu: Electron.MenuItemConstructorOptions[] = [
+        { role: 'reload', label: 'Reload' },
+        { role: 'forceReload', label: 'Force Reload' },
+        { role: 'toggleDevTools', label: 'Toggle Developer Tools' },
+    ];
+
+    template.push({
+        label: 'Developer',
+        submenu: developerSubmenu,
+    });
+
     // Help Menu
     const helpSubmenu: Electron.MenuItemConstructorOptions[] = [
         {
@@ -570,6 +617,23 @@ async function createMenu(): Promise<void> {
             label: `Photosphere Help`,
             click: async () => {
                 await shell.openExternal('https://github.com/ashleydavis/photosphere/wiki');
+            },
+        },
+        { type: 'separator' },
+        {
+            label: 'Open Log Directory',
+            click: async () => {
+                if (fileLogger) {
+                    const logsDir = fileLogger.getLogsDirectory();
+                    await shell.openPath(logsDir);
+                }
+            },
+        },
+        { type: 'separator' },
+        {
+            label: 'Report Bug...',
+            click: async () => {
+                await openBugReport();
             },
         },
     ];
@@ -589,5 +653,127 @@ async function createMenu(): Promise<void> {
 //
 async function updateMenu(): Promise<void> {
     await createMenu();
+}
+
+//
+// Gets the path to the latest log file.
+//
+function getLatestLogFile(): string | null {
+    try {
+        const logsDir = fileLogger?.getLogsDirectory();
+        if (!logsDir || !existsSync(logsDir)) {
+            return null;
+        }
+        
+        const logFiles = readdirSync(logsDir)
+            .filter(file => file.startsWith('photosphere-') && file.endsWith('.log') && !file.includes('-errors'))
+            .map(file => ({
+                name: file,
+                path: join(logsDir, file),
+                mtime: statSync(join(logsDir, file)).mtime
+            }))
+            .sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
+        
+        return logFiles.length > 0 ? logFiles[0].path : null;
+    }
+    catch (error) {
+        return null;
+    }
+}
+
+//
+// Gets the header section of a log file (everything up to "--- Log Start ---").
+//
+function getLogHeader(logFilePath: string | null): string {
+    if (!logFilePath || !existsSync(logFilePath)) {
+        return 'No log file available';
+    }
+    
+    try {
+        const logContent = readFileSync(logFilePath, 'utf8');
+        const logStartIndex = logContent.indexOf('--- Log Start ---');
+        
+        if (logStartIndex === -1) {
+            // If no "--- Log Start ---" marker found, return first 50 lines
+            const lines = logContent.split('\n');
+            return lines.slice(0, 50).join('\n');
+        }
+        
+        // Return everything up to (and including) the "--- Log Start ---" line
+        const headerContent = logContent.substring(0, logStartIndex + '--- Log Start ---'.length);
+        return headerContent;
+    }
+    catch (error) {
+        return `Error reading log file: ${error instanceof Error ? error.message : 'Unknown error'}`;
+    }
+}
+
+//
+// Generates the bug report template for GitHub.
+//
+function generateBugReportTemplate(): string {
+    const latestLogFile = getLatestLogFile();
+    const logHeader = getLogHeader(latestLogFile);
+    
+    return `## Bug Description
+<!-- Please describe the bug you encountered -->
+
+## Steps to Reproduce
+1. 
+2. 
+3. 
+
+## Expected Behavior
+<!-- What did you expect to happen? -->
+
+## Actual Behavior
+<!-- What actually happened? -->
+
+## System Information
+- Application: Photosphere Desktop
+- Platform: ${platform()} ${arch()}
+- OS Release: ${release()}
+- Electron: ${process.versions.electron || 'unknown'}
+- Chrome: ${process.versions.chrome || 'unknown'}
+- Node.js: ${process.version}
+
+## Log Header
+\`\`\`
+${logHeader}
+\`\`\`
+
+## Log File
+Please attach the full log file located at:
+\`${latestLogFile || 'No log file available'}\`
+
+You can drag and drop the log file into this issue, or copy and paste its contents into a code block.
+
+## Additional Context
+<!-- Add any other context about the problem here -->
+
+`;
+}
+
+//
+// Creates a GitHub issue URL with the bug report template pre-filled.
+//
+function createGitHubIssueUrl(title: string, body: string): string {
+    const baseUrl = 'https://github.com/ashleydavis/photosphere/issues/new';
+    const params = new URLSearchParams({
+        title: title,
+        body: body,
+        labels: 'bug'
+    });
+    
+    return `${baseUrl}?${params.toString()}`;
+}
+
+//
+// Opens a bug report in the default browser.
+//
+async function openBugReport(): Promise<void> {
+    const template = generateBugReportTemplate();
+    const url = createGitHubIssueUrl('Bug Report', template);
+    await shell.openExternal(url);
 }
 
