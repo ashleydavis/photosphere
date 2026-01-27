@@ -11,13 +11,18 @@ import {
 import { TaskQueueProviderElectron } from "./lib/task-queue-provider-electron";
 import { PlatformProviderElectron } from "./lib/platform-provider-electron";
 import type { IElectronAPI } from "electron-defs";
-import { RandomUuidGenerator, TimestampProvider } from "utils";
+import { RandomUuidGenerator, TimestampProvider, setLog } from "utils";
+import { createRendererLog } from "./lib/renderer-log";
 
 export function App() {
     const electronAPI = typeof window !== 'undefined' ? (window as unknown as { electronAPI: IElectronAPI }).electronAPI : undefined;
     if (!electronAPI) {
         throw new Error('electronAPI not available. desktop-frontend requires Electron.');
     }
+
+    // Initialize renderer logging to forward logs to main process
+    const rendererLog = createRendererLog(electronAPI);
+    setLog(rendererLog);
 
     // Extract query parameters
     const urlParams = new URLSearchParams(window.location.search);

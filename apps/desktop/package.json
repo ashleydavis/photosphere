@@ -31,7 +31,8 @@
     "node-utils": "workspace:*",
     "electron-defs": "workspace:*",
     "serialize-error": "^11.0.0",
-    "rest-api": "workspace:*"
+    "rest-api": "workspace:*",
+    "tools": "workspace:*"
   },
   "devDependencies": {
     "electron": "^40.0.0",

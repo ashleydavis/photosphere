@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { IElectronAPI } from 'electron-defs';
+import type { IElectronAPI, IRendererLogMessage } from 'electron-defs';
 
 // Expose generic task queue API
 const electronAPI: IElectronAPI = {
@@ -34,6 +34,9 @@ const electronAPI: IElectronAPI = {
     },
     setTheme: (theme: 'light' | 'dark' | 'system'): Promise<void> => {
         return ipcRenderer.invoke('set-theme', theme);
+    },
+    log: (message: IRendererLogMessage): void => {
+        ipcRenderer.send('renderer-log', message);
     },
 };
 

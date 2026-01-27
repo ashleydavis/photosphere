@@ -2,20 +2,20 @@ import * as fs from "fs/promises";
 import { ensureDirSync } from "node-utils";
 import path from "path";
 import os from "os";
-import { ILog } from "utils";
-import { registerTerminationCallback } from "node-utils";
+import type { ILog } from "utils";
+import type { IWorkerLogMessage } from "./worker-log-electron";
 import { Image, Video } from "tools";
-import { version } from "./version";
-import { buildMetadata } from "./build-metadata";
 
 //
-// File logger that writes all logs to files in the Photosphere temp directory
+// File logger for Electron main process.
+// Writes all logs to files in the Photosphere logs directory.
+// Similar to the CLI file logger but adapted for Electron.
 //
-export class FileLogger implements ILog {
+export class FileLoggerElectron implements ILog {
     private logFile: string;
     private errorLogFile: string;
+    private logsDir: string;
     private startTime: Date;
-    private command: string;
     private writeQueue: string[] = [];
     private errorWriteQueue: string[] = [];
     private isWriting: boolean = false;
@@ -23,36 +23,29 @@ export class FileLogger implements ILog {
     private isClosed: boolean = false;
     private hasErrors: boolean = false;
     private errorFileHeaderWritten: boolean = false;
-    private consoleLogger: ILog;
     
-    private constructor(consoleLogger: ILog, command: string, logFile: string, errorLogFile: string, startTime: Date) {
-        this.consoleLogger = consoleLogger;
-        this.command = command;
+    private constructor(logsDir: string, logFile: string, errorLogFile: string, startTime: Date) {
+        this.logsDir = logsDir;
         this.logFile = logFile;
         this.errorLogFile = errorLogFile;
         this.startTime = startTime;
-        
-        // Register termination callback to flush logs
-        registerTerminationCallback(async () => {
-            await this.close();
-        });
     }
     
-    static async create(consoleLogger: ILog, command: string): Promise<FileLogger> {
+    static async create(userDataPath: string): Promise<FileLoggerElectron> {
         const startTime = new Date();
         
-        // Create logs directory in Photosphere temp
+        // Create logs directory in Photosphere temp (like CLI) for consistency
         const photosphereTempDir = path.join(os.tmpdir(), 'photosphere');
         const logsDir = path.join(photosphereTempDir, 'logs');
         ensureDirSync(logsDir);
         
         // Create log file with timestamp
         const timestamp = startTime.toISOString().replace(/[:.]/g, '-').slice(0, 19);
-        const logFile = path.join(logsDir, `psi-${timestamp}.log`);
-        const errorLogFile = path.join(logsDir, `psi-${timestamp}-errors.log`);
+        const logFile = path.join(logsDir, `photosphere-${timestamp}.log`);
+        const errorLogFile = path.join(logsDir, `photosphere-${timestamp}-errors.log`);
         
         // Create the logger instance
-        const logger = new FileLogger(consoleLogger, command, logFile, errorLogFile, startTime);
+        const logger = new FileLoggerElectron(logsDir, logFile, errorLogFile, startTime);
         
         // Write initial log headers for both files
         await logger.writeLogHeader();
@@ -64,10 +57,8 @@ export class FileLogger implements ILog {
     private async writeLogHeader(): Promise<void> {
         const lines = [
             '='.repeat(80),
-            `Photosphere CLI Log`,
+            `Photosphere Desktop Log`,
             `Started: ${this.startTime.toISOString()}`,
-            `Command: ${this.command}`,
-            `Working Directory: ${process.cwd()}`,
             '='.repeat(80),
             '',
             '--- System Information ---',
@@ -75,20 +66,14 @@ export class FileLogger implements ILog {
             `Architecture: ${os.arch()}`,
             `OS Release: ${os.release()}`,
             `Node Version: ${process.version}`,
-            '',
-            '--- Photosphere Version ---',
-            version,
-            `Build Commit: ${buildMetadata.commitHash}`,
-            `Build Date: ${buildMetadata.buildDate}`,
-            `Nightly Build: ${buildMetadata.isNightly}`,
+            `Electron Version: ${process.versions.electron || 'unknown'}`,
+            `Chrome Version: ${process.versions.chrome || 'unknown'}`,
             '',
             '--- Tool Versions ---',
             await this.getImageMagickVersion(),
             await this.getFFmpegVersion(),
             await this.getFFprobeVersion(),
             '',
-            `--- Command ---`,
-            process.argv.join(' '),
             '--- Log Start ---',
             ''
         ];
@@ -98,12 +83,10 @@ export class FileLogger implements ILog {
     }
     
     private async writeErrorLogHeader(): Promise<void> {
-        const lines = [
+        const header = [
             '='.repeat(80),
-            `Photosphere CLI Error Log`,
+            `Photosphere Desktop Error Log`,
             `Started: ${this.startTime.toISOString()}`,
-            `Command: ${this.command}`,
-            `Working Directory: ${process.cwd()}`,
             '='.repeat(80),
             '',
             '--- System Information ---',
@@ -111,12 +94,8 @@ export class FileLogger implements ILog {
             `Architecture: ${os.arch()}`,
             `OS Release: ${os.release()}`,
             `Node Version: ${process.version}`,
-            '',
-            '--- Photosphere Version ---',
-            version,
-            `Build Commit: ${buildMetadata.commitHash}`,
-            `Build Date: ${buildMetadata.buildDate}`,
-            `Nightly Build: ${buildMetadata.isNightly}`,
+            `Electron Version: ${process.versions.electron || 'unknown'}`,
+            `Chrome Version: ${process.versions.chrome || 'unknown'}`,
             '',
             '--- Tool Versions ---',
             await this.getImageMagickVersion(),
@@ -127,9 +106,7 @@ export class FileLogger implements ILog {
             '',
             '--- Error Log Start ---',
             ''
-        ];
-        
-        const header = lines.join('\n');
+        ].join('\n');
         await fs.writeFile(this.errorLogFile, header);
         this.errorFileHeaderWritten = true;
     }
@@ -139,10 +116,12 @@ export class FileLogger implements ILog {
             const result = await Image.verifyImageMagick();
             if (result.available) {
                 return `ImageMagick: ${result.version} (${result.type})`;
-            } else {
+            }
+            else {
                 return `ImageMagick: not found`;
             }
-        } catch (error) {
+        }
+        catch (error) {
             return `ImageMagick: error checking version`;
         }
     }
@@ -152,10 +131,12 @@ export class FileLogger implements ILog {
             const result = await Video.verifyFfmpeg();
             if (result.available) {
                 return `FFmpeg: ${result.version}`;
-            } else {
+            }
+            else {
                 return `FFmpeg: not found`;
             }
-        } catch (error) {
+        }
+        catch (error) {
             return `FFmpeg: error checking version`;
         }
     }
@@ -165,21 +146,24 @@ export class FileLogger implements ILog {
             const result = await Video.verifyFfprobe();
             if (result.available) {
                 return `FFprobe: ${result.version}`;
-            } else {
+            }
+            else {
                 return `FFprobe: not found`;
             }
-        } catch (error) {
+        }
+        catch (error) {
             return `FFprobe: error checking version`;
         }
     }
         
-    private writeToFile(level: string, message: string): void {
+    private writeToFile(level: string, message: string, source?: string): void {
         if (this.isClosed) {
             return;
         }
         
         const timestamp = new Date().toISOString();
-        const logEntry = `[${timestamp}] [${level.toUpperCase()}] ${message}\n`;
+        const sourcePrefix = source ? `[${source}] ` : '';
+        const logEntry = `[${timestamp}] [${level.toUpperCase()}] ${sourcePrefix}${message}\n`;
         
         // Add to queue for async writing
         this.writeQueue.push(logEntry);
@@ -201,14 +185,16 @@ export class FileLogger implements ILog {
                 const content = entries.join('');
                 await fs.appendFile(this.logFile, content);
             }
-        } catch (error) {
+        }
+        catch (error) {
             // Silently ignore file write errors - we don't want logging to break the app
-        } finally {
+        }
+        finally {
             this.isWriting = false;
         }
     }
     
-    private writeToErrorFile(level: string, message: string): void {
+    private writeToErrorFile(level: string, message: string, source?: string): void {
         if (this.isClosed) {
             return;
         }
@@ -216,7 +202,8 @@ export class FileLogger implements ILog {
         this.hasErrors = true;
         
         const timestamp = new Date().toISOString();
-        const logEntry = `[${timestamp}] [${level.toUpperCase()}] ${message}\n`;
+        const sourcePrefix = source ? `[${source}] ` : '';
+        const logEntry = `[${timestamp}] [${level.toUpperCase()}] ${sourcePrefix}${message}\n`;
         
         // Add to error queue for async writing
         this.errorWriteQueue.push(logEntry);
@@ -248,51 +235,96 @@ export class FileLogger implements ILog {
     }
     
     get verboseEnabled(): boolean {
-        return this.consoleLogger.verboseEnabled;
+        return false; // Main process doesn't need verbose logging by default
     }
 
-    info(message: string): void {
-        this.writeToFile('info', message);
-        this.consoleLogger.info(message);
+    info(message: string, source?: string): void {
+        this.writeToFile('info', message, source);
+        console.log(source ? `[${source}] ${message}` : message);
     }
     
-    verbose(message: string): void {
-        this.writeToFile('verbose', message);
-        this.consoleLogger.verbose(message);
+    verbose(message: string, source?: string): void {
+        this.writeToFile('verbose', message, source);
     }
     
-    error(message: string): void {
-        this.writeToFile('error', message);
-        this.writeToErrorFile('error', message);
-        this.consoleLogger.error(message);
+    error(message: string, source?: string): void {
+        this.writeToFile('error', message, source);
+        this.writeToErrorFile('error', message, source);
+        console.error(source ? `[${source}] ${message}` : message);
     }
     
-    exception(message: string, error: Error): void {
+    exception(message: string, error: Error, source?: string): void {
         const fullMessage = `${message}\nStack trace: ${error.stack || error.message || error}`;
-        this.writeToFile('exception', fullMessage);
-        this.writeToErrorFile('exception', fullMessage);
-        this.consoleLogger.exception(message, error);
+        this.writeToFile('exception', fullMessage, source);
+        this.writeToErrorFile('exception', fullMessage, source);
+        console.error(source ? `[${source}] ${message}` : message);
+        console.error(error.stack || error.message || error);
     }
     
-    warn(message: string): void {
-        this.writeToFile('warn', message);
-        this.writeToErrorFile('warn', message);
-        this.consoleLogger.warn(message);
+    warn(message: string, source?: string): void {
+        this.writeToFile('warn', message, source);
+        this.writeToErrorFile('warn', message, source);
+        console.warn(source ? `[${source}] ${message}` : message);
     }
     
-    debug(message: string): void {
-        this.writeToFile('debug', message);
-        this.consoleLogger.debug(message);
+    debug(message: string, source?: string): void {
+        this.writeToFile('debug', message, source);
     }
     
-    tool(tool: string, data: { stdout?: string; stderr?: string }): void {
+    tool(tool: string, data: { stdout?: string; stderr?: string }, source?: string): void {
         if (data.stdout) {
-            this.writeToFile('tool', `== ${tool} stdout ==\n${data.stdout}`);
+            this.writeToFile('tool', `== ${tool} stdout ==\n${data.stdout}`, source);
         }
         if (data.stderr) {
-            this.writeToFile('tool', `== ${tool} stderr ==\n${data.stderr}`);
+            this.writeToFile('tool', `== ${tool} stderr ==\n${data.stderr}`, source);
         }
-        this.consoleLogger.tool(tool, data);
+    }
+    
+    //
+    // Handle log message from a worker (utility process or renderer)
+    //
+    handleWorkerLogMessage(message: IWorkerLogMessage, source: string): void {
+        const level = message.level;
+        const logMessage = message.message;
+        const error = message.error;
+        const toolData = message.toolData;
+
+        switch (level) {
+            case 'info':
+                this.info(logMessage, source);
+                break;
+            case 'verbose':
+                this.verbose(logMessage, source);
+                break;
+            case 'error':
+                this.error(logMessage, source);
+                break;
+            case 'exception':
+                this.writeToFile('exception', error ? `${logMessage}\n${error}` : logMessage, source);
+                this.writeToErrorFile('exception', error ? `${logMessage}\n${error}` : logMessage, source);
+                console.error(`[${source}] ${logMessage}`);
+                if (error) {
+                    console.error(`[${source}] ${error}`);
+                }
+                break;
+            case 'warn':
+                this.warn(logMessage, source);
+                break;
+            case 'debug':
+                this.debug(logMessage, source);
+                break;
+            case 'tool':
+                if (toolData) {
+                    this.tool(logMessage, toolData, source);
+                    if (toolData.stdout) {
+                        console.log(`[${source}] == ${logMessage} stdout ==\n${toolData.stdout}`);
+                    }
+                    if (toolData.stderr) {
+                        console.log(`[${source}] == ${logMessage} stderr ==\n${toolData.stderr}`);
+                    }
+                }
+                break;
+        }
     }
     
     //
@@ -332,7 +364,8 @@ export class FileLogger implements ILog {
                 await fs.appendFile(this.logFile, content);
                 this.writeQueue = [];
             }
-        } catch (error) {
+        }
+        catch (error) {
             // Silently ignore file write errors during close
         }
         
@@ -360,14 +393,9 @@ export class FileLogger implements ILog {
                 ].join('\n');
                 await fs.appendFile(this.errorLogFile, errorFooter);
             }
-        } catch (error) {
-            // Silently ignore file write errors during close
         }
-        
-        // Show error file location if errors were logged
-        if (this.hasErrors) {
-            console.log('');
-            console.log(`Errors, warnings, and exceptions were logged to: ${this.errorLogFile}`);
+        catch (error) {
+            // Silently ignore file write errors during close
         }
     }
     
@@ -376,6 +404,13 @@ export class FileLogger implements ILog {
     //
     getLogFilePath(): string {
         return this.logFile;
+    }
+    
+    //
+    // Get the path to the logs directory
+    //
+    getLogsDirectory(): string {
+        return this.logsDir;
     }
     
     //

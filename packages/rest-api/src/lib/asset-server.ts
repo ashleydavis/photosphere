@@ -59,7 +59,7 @@ export async function createAssetServer(options: IAssetServerOptions): Promise<I
     //
     async function loadAssetStream(assetId: string, assetType: string, databasePath: string): Promise<NodeJS.ReadableStream> {
 
-        log.info(`Loading asset stream ${assetId} of type ${assetType} from database ${databasePath}`);
+        // log.info(`Loading asset stream ${assetId} of type ${assetType} from database ${databasePath}`);
         
         // Create storage without encryption
         const { storage: assetStorage } = createStorage(databasePath, undefined, undefined);
@@ -112,7 +112,7 @@ export async function createAssetServer(options: IAssetServerOptions): Promise<I
             return;
         }
 
-        log.info(`Loading asset stream ${assetId} of type ${assetType} from database ${databasePath}`);
+        // log.info(`Loading asset stream ${assetId} of type ${assetType} from database ${databasePath}`);
 
         try {
             const assetStream = await loadAssetStream(assetId, assetType, databasePath);
