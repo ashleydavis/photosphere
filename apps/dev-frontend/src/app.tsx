@@ -19,6 +19,10 @@ export function App() {
         // Wait for WebSocket connection before rendering
         return <div>Connecting...</div>;
     }
+
+    // Extract theme from query parameters, default to system
+    const urlParams = new URLSearchParams(window.location.search);
+    const initialTheme = (urlParams.get('theme') as 'light' | 'dark' | 'system') || 'system';
     
     const uuidGenerator = new RandomUuidGenerator();
     const timestampProvider = new TimestampProvider();
@@ -38,7 +42,7 @@ export function App() {
                                 <DeleteConfirmationContextProvider>
                                     <SearchContextProvider>
                                         <GalleryLayoutContextProvider>
-                                            <Main />
+                                            <Main isMobile={false} initialTheme={initialTheme} />
                                         </GalleryLayoutContextProvider>
                                     </SearchContextProvider>
                                 </DeleteConfirmationContextProvider>

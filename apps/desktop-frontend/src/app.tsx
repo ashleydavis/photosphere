@@ -19,12 +19,13 @@ export function App() {
         throw new Error('electronAPI not available. desktop-frontend requires Electron.');
     }
 
-    // Extract restApiUrl from query parameters
+    // Extract query parameters
     const urlParams = new URLSearchParams(window.location.search);
     const restApiUrl = urlParams.get('restApiUrl');
     if (!restApiUrl) {
         throw new Error('restApiUrl query parameter is required but was not provided.');
     }
+    const initialTheme = (urlParams.get('theme') as 'light' | 'dark' | 'system') || 'system';
 
     const uuidGenerator = new RandomUuidGenerator();
     const timestampProvider = new TimestampProvider();
@@ -44,7 +45,7 @@ export function App() {
                             <DeleteConfirmationContextProvider>
                                 <SearchContextProvider>
                                     <GalleryLayoutContextProvider>
-                                        <Main />
+                                        <Main isMobile={false} initialTheme={initialTheme} />
                                     </GalleryLayoutContextProvider>
                                 </SearchContextProvider>
                             </DeleteConfirmationContextProvider>

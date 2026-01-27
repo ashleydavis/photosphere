@@ -12,7 +12,10 @@ export interface IPlatformProviderWebProps {
 //
 export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps) {
     // Store callbacks for database-opened events
-    const callbacksRef = useRef<Set<(databasePath: string) => void>>(new Set());
+    const openedCallbacksRef = useRef<Set<(databasePath: string) => void>>(new Set());
+    
+    // Store callbacks for database-closed events
+    const closedCallbacksRef = useRef<Set<() => void>>(new Set());
 
     // Set up message listener for database-opened events
     useEffect(() => {
@@ -22,8 +25,14 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
                 
                 if (messageData.type === "database-opened") {
                     // Notify all subscribers
-                    callbacksRef.current.forEach(callback => {
+                    openedCallbacksRef.current.forEach(callback => {
                         callback(messageData.databasePath);
+                    });
+                }
+                else if (messageData.type === "database-closed") {
+                    // Notify all subscribers
+                    closedCallbacksRef.current.forEach(callback => {
+                        callback();
                     });
                 }
             }
@@ -49,11 +58,21 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
 
     const onDatabaseOpened = useCallback((callback: (databasePath: string) => void): (() => void) => {
         // Add callback to set
-        callbacksRef.current.add(callback);
+        openedCallbacksRef.current.add(callback);
 
         // Return unsubscribe function
         return () => {
-            callbacksRef.current.delete(callback);
+            openedCallbacksRef.current.delete(callback);
+        };
+    }, []);
+
+    const onDatabaseClosed = useCallback((callback: () => void): (() => void) => {
+        // Add callback to set
+        closedCallbacksRef.current.add(callback);
+
+        // Return unsubscribe function
+        return () => {
+            closedCallbacksRef.current.delete(callback);
         };
     }, []);
 
@@ -122,7 +141,8 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         });
     }, [ws]);
 
-    const addRecentDatabase = useCallback(async (databasePath: string): Promise<void> => {
+    const notifyDatabaseOpened = useCallback(async (databasePath: string): Promise<void> => {
+        // Add to recent databases for web platform
         return new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
                 reject(new Error("Timeout waiting for adding recent database"));
@@ -155,7 +175,8 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         });
     }, [ws]);
 
-    const clearLastDatabase = useCallback(async (): Promise<void> => {
+    const notifyDatabaseClosed = useCallback(async (): Promise<void> => {
+        // Clear the last database
         return new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
                 reject(new Error("Timeout waiting for clearing last database"));
@@ -187,13 +208,33 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         });
     }, [ws]);
 
+    const getTheme = useCallback(async (): Promise<'light' | 'dark' | 'system'> => {
+        // No-op for web platform, default to system
+        return 'system';
+    }, []);
+
+    const setTheme = useCallback(async (theme: 'light' | 'dark' | 'system'): Promise<void> => {
+        // No-op for web platform
+    }, []);
+
+    const onThemeChanged = useCallback((callback: (theme: 'light' | 'dark' | 'system') => void): (() => void) => {
+        // No-op for web platform
+        return () => {
+            // No-op
+        };
+    }, []);
+
     const platformContext: IPlatformContext = {
         openDatabase,
         onDatabaseOpened,
+        onDatabaseClosed,
         getRecentDatabases,
         removeDatabase,
-        addRecentDatabase,
-        clearLastDatabase,
+        notifyDatabaseOpened,
+        notifyDatabaseClosed,
+        getTheme,
+        setTheme,
+        onThemeChanged,
     };
 
     return (

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useLayoutEffect, useState } from "react";
 import { Route, Routes, Navigate } from "react-router-dom";
 import { GalleryPage } from "./pages/gallery/gallery";
 import classNames from "classnames";
@@ -7,7 +7,6 @@ import { useAssetDatabase } from "./context/asset-database-source";
 import { useSearch } from "./context/search-context";
 import { FullscreenSpinner } from "./components/full-screen-spinnner";
 import { CssVarsProvider, useColorScheme } from "@mui/joy/styles/CssVarsProvider";
-import { ModeToggle } from "./components/mode-toggle";
 import { useTheme } from "@mui/joy/styles/ThemeProvider";
 import Drawer from "@mui/joy/Drawer/Drawer";
 import { Sidebar } from "./components/sidebar";
@@ -15,20 +14,22 @@ import { Navbar } from "./components/navbar";
 import { Fps } from "./components/fps";
 import { AboutPage } from "./pages/about";
 
-const isProduction = (import.meta.env.MODE === "production");
-
 export interface IMainProps {
     //
     // Set to true if running on mobile device to enable mobile-specific styles.
     //
-    isMobile?: boolean;
+    isMobile: boolean;
+
+    //
+    // Initial theme mode to use before loading from platform.
+    //
+    initialTheme: 'light' | 'dark' | 'system';
 }
 
 //
 // The main page of the Photosphere app.
 //
-function __Main({ isMobile = false }: IMainProps) {
-
+function __Main({ isMobile, initialTheme }: IMainProps) {
     const { 
         isWorking,
         databasePath,
@@ -49,11 +50,25 @@ function __Main({ isMobile = false }: IMainProps) {
     const { mode, setMode } = useColorScheme();
 
     //
-    // Automatically choose system mode on mount.
+    // Set initial theme mode synchronously before rendering.
+    //
+    useLayoutEffect(() => {
+        if (mode !== initialTheme) {
+            setMode(initialTheme);
+        }
+    }, [initialTheme, setMode, mode]);
+
+    //
+    // Listen for theme changes from menu.
     //
     useEffect(() => {
-        setMode("system");
-    }, [setMode]);
+        // Subscribe to theme changes
+        const unsubscribe = platform.onThemeChanged((theme) => {
+            setMode(theme);
+        });
+
+        return unsubscribe;
+    }, [platform, setMode]);
 
     //
     // Adds mobile or desktop class to body based on isMobile prop.
@@ -170,13 +185,10 @@ function __Main({ isMobile = false }: IMainProps) {
 //
 // Wrapped/exported version of Main that ties in the MUI theme.
 //
-export function Main({ isMobile }: IMainProps) {
+export function Main({ isMobile, initialTheme }: IMainProps) {
     return (
-        <CssVarsProvider>
-            {!isProduction &&
-                <ModeToggle />
-            }
-            <__Main isMobile={isMobile} />
+        <CssVarsProvider defaultMode={initialTheme}>
+            <__Main isMobile={isMobile} initialTheme={initialTheme} />
         </CssVarsProvider>
     );
 }
