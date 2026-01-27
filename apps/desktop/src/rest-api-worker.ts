@@ -8,6 +8,14 @@ import type { Server } from 'http';
 import { createWorkerLog } from './lib/worker-log-electron';
 
 //
+// Worker options interface (same as task worker)
+//
+interface IWorkerOptions {
+    verbose: boolean;
+    tools: boolean;
+}
+
+//
 // REST API worker message types
 //
 export interface IRestApiWorkerStartMessage {
@@ -44,8 +52,27 @@ if (!parentPort) {
     throw new Error('parentPort not available - this must run in an Electron utility process');
 }
 
+//
+// Read worker options from environment variable (same as task worker)
+//
+const workerOptionsJson = process.env.WORKER_OPTIONS;
+if (!workerOptionsJson) {
+    console.error("WORKER_OPTIONS environment variable is not set");
+    process.exit(1);
+}
+
+let workerOptions: IWorkerOptions;
+try {
+    workerOptions = JSON.parse(workerOptionsJson);
+}
+catch (error: any) {
+    console.error(`Failed to parse WORKER_OPTIONS:`);
+    console.error(error.stack || error.message || error);
+    process.exit(1);
+}
+
 // Initialize logging to send messages to main process
-setLog(createWorkerLog(false, false));
+setLog(createWorkerLog(workerOptions.verbose, workerOptions.tools));
 
 let server: Server | undefined = undefined;
 
