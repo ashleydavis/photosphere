@@ -20,6 +20,11 @@ export interface IDesktopConfig {
     // The last folder that was opened in the file dialog.
     //
     lastFolder?: string;
+
+    //
+    // The theme preference: 'light', 'dark', or 'system'.
+    //
+    theme?: 'light' | 'dark' | 'system';
 }
 
 const CONFIG_DIR = path.join(os.homedir(), ".config", "photosphere");
@@ -129,6 +134,23 @@ export async function clearLastDatabase(): Promise<void> {
 export async function updateLastFolder(folderPath: string): Promise<void> {
     const config = await loadDesktopConfig();
     config.lastFolder = folderPath;
+    await saveDesktopConfig(config);
+}
+
+//
+// Gets the theme preference.
+//
+export async function getTheme(): Promise<'light' | 'dark' | 'system'> {
+    const config = await loadDesktopConfig();
+    return config.theme || 'system';
+}
+
+//
+// Sets the theme preference.
+//
+export async function setTheme(theme: 'light' | 'dark' | 'system'): Promise<void> {
+    const config = await loadDesktopConfig();
+    config.theme = theme;
     await saveDesktopConfig(config);
 }
 

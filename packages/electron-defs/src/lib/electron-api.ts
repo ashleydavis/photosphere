@@ -9,7 +9,9 @@ export interface IElectronAPI {
     openDatabase: () => Promise<void>;
     getRecentDatabases: () => Promise<string[]>;
     removeDatabase: (databasePath: string) => Promise<void>;
-    addRecentDatabase: (databasePath: string) => Promise<void>;
-    clearLastDatabase: () => Promise<void>;
+    notifyDatabaseOpened: (databasePath: string) => Promise<void>;
+    notifyDatabaseClosed: () => Promise<void>;
+    getTheme: () => Promise<'light' | 'dark' | 'system'>;
+    setTheme: (theme: 'light' | 'dark' | 'system') => Promise<void>;
 }
 

@@ -23,11 +23,17 @@ const electronAPI: IElectronAPI = {
     removeDatabase: (databasePath: string): Promise<void> => {
         return ipcRenderer.invoke('remove-database', databasePath);
     },
-    addRecentDatabase: (databasePath: string): Promise<void> => {
-        return ipcRenderer.invoke('add-recent-database', databasePath);
+    notifyDatabaseOpened: (databasePath: string): Promise<void> => {
+        return ipcRenderer.invoke('notify-database-opened', databasePath);
     },
-    clearLastDatabase: (): Promise<void> => {
-        return ipcRenderer.invoke('clear-last-database');
+    notifyDatabaseClosed: (): Promise<void> => {
+        return ipcRenderer.invoke('notify-database-closed');
+    },
+    getTheme: (): Promise<'light' | 'dark' | 'system'> => {
+        return ipcRenderer.invoke('get-theme');
+    },
+    setTheme: (theme: 'light' | 'dark' | 'system'): Promise<void> => {
+        return ipcRenderer.invoke('set-theme', theme);
     },
 };
 

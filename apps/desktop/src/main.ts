@@ -1,25 +1,39 @@
-import { app, BrowserWindow, ipcMain, utilityProcess, type UtilityProcess, dialog, Menu } from 'electron';
+import { app, BrowserWindow, ipcMain, utilityProcess, type UtilityProcess, dialog, Menu, shell } from 'electron';
 import { join, dirname } from 'path';
 import { cpus } from 'os';
 import type { ITask, ITaskQueue, IWorkerBackend } from 'task-queue';
 import { TaskQueue } from 'task-queue';
 import { WorkerBackendElectronMain } from './lib/worker-backend-electron-main';
 import { RandomUuidGenerator, TimestampProvider, logExceptions } from 'utils';
-import { findAvailablePort, loadDesktopConfig, addRecentDatabase, removeRecentDatabase, updateLastFolder, clearLastDatabase } from 'node-utils';
+import { findAvailablePort, loadDesktopConfig, addRecentDatabase, removeRecentDatabase, updateLastFolder, clearLastDatabase, getTheme, setTheme } from 'node-utils';
 import type { IWorkerOptions } from './lib/worker-init';
 import type { IRestApiWorkerStopMessage, IRestApiWorkerStartMessage } from './rest-api-worker';
 
+// Main application window
 let mainWindow: BrowserWindow | null = null;
+
+// Task queue for background task processing
 let taskQueue: ITaskQueue | null = null;
+
+// Worker backend for executing tasks
 let workerBackend: IWorkerBackend | null = null;
+
+// REST API utility process
 let restApiWorker: UtilityProcess | null = null;
+
+// Flag to prevent restarting workers during shutdown
 let isShuttingDown: boolean = false;
+
+// Port number for the REST API server
 let restApiPort: number | null = null;
+
+// Tracks whether a database is currently open (used for menu state)
+let isDatabaseOpen: boolean = false;
 
 //
 // Creates and configures the main browser window for the Electron app.
 //
-function createMainWindow() {
+async function createMainWindow() {
     if (restApiPort === null) {
         throw new Error('REST API port not initialized');
     }
@@ -34,17 +48,15 @@ function createMainWindow() {
         },
     });
 
+    // Load theme preference to pass to frontend
+    const theme = await getTheme();
+
     // Load from built frontend (works in both dev and production)
-    // Pass restApiUrl as query parameter so the frontend can use it
+    // Pass restApiUrl and theme as query parameters so the frontend can use them
     const htmlPath = join(app.getAppPath(), 'bundle/frontend/index.html');
     const restApiUrl = `http://localhost:${restApiPort}`;
-    const fileUrl = `file://${htmlPath}?restApiUrl=${encodeURIComponent(restApiUrl)}`;
+    const fileUrl = `file://${htmlPath}?restApiUrl=${encodeURIComponent(restApiUrl)}&theme=${encodeURIComponent(theme)}`;
     mainWindow.loadURL(fileUrl);
-    
-    // Open dev tools in development
-    if (process.env.NODE_ENV === 'development' || !app.isPackaged) {
-        mainWindow.webContents.openDevTools();
-    }
 
     mainWindow.on('closed', () => {
         mainWindow = null;
@@ -56,16 +68,16 @@ app.whenReady().then(async () => {
     await initRestApi();
 
     // Create application menu
-    createMenu();
+    await createMenu();
     
     // Start up the background workers
     initWorkers();
     
-    createMainWindow();
+    await createMainWindow();
 
-    app.on('activate', () => {
+    app.on('activate', async () => {
         if (BrowserWindow.getAllWindows().length === 0) {
-            createMainWindow();
+            await createMainWindow();
         }
     });
 });
@@ -129,15 +141,33 @@ ipcMain.handle('get-recent-databases', logExceptions(async () => {
     return config.recentDatabases || [];
 }, 'Error getting recent databases'));
 
-// IPC handler for adding a database to recent list
-ipcMain.handle('add-recent-database', logExceptions(async (event, databasePath: string) => {
+// IPC handler for notifying that database was opened from frontend
+ipcMain.handle('notify-database-opened', logExceptions(async (event, databasePath: string) => {
     await addRecentDatabase(databasePath);
-}, 'Error adding recent database'));
+    isDatabaseOpen = true;
+    await updateMenu();
+}, 'Error notifying database opened'));
 
-// IPC handler for clearing the last database
-ipcMain.handle('clear-last-database', logExceptions(async () => {
+// IPC handler for notifying that database was closed from frontend
+ipcMain.handle('notify-database-closed', logExceptions(async () => {
     await clearLastDatabase();
-}, 'Error clearing last database'));
+    isDatabaseOpen = false;
+    await updateMenu();
+}, 'Error notifying database closed'));
+
+// IPC handler for getting theme preference
+ipcMain.handle('get-theme', logExceptions(async () => {
+    return await getTheme();
+}, 'Error getting theme'));
+
+// IPC handler for setting theme preference
+ipcMain.handle('set-theme', logExceptions(async (event, theme: 'light' | 'dark' | 'system') => {
+    await setTheme(theme);
+    // Notify frontend of theme change
+    if (mainWindow) {
+        mainWindow.webContents.send('theme-changed', theme);
+    }
+}, 'Error setting theme'));
 
 //
 // Initializes the worker pool and task queue for background task processing.
@@ -361,27 +391,203 @@ async function openDatabase(): Promise<void> {
     // The REST API doesn't need to be restarted since it handles multiple databases dynamically
     if (mainWindow) {
         mainWindow.webContents.send('database-opened', databasePath);
+        // Menu will be updated when frontend calls notifyDatabaseOpened()
     }
 }
 
 //
-// Creates the application menu bar with File menu and Open Database option.
+// Closes the currently open database.
 //
-function createMenu(): void {
-    const template: Electron.MenuItemConstructorOptions[] = [
-        {
-            label: 'File',
+async function closeDatabase(): Promise<void> {
+    if (mainWindow) {
+        // Notify frontend to close the database
+        mainWindow.webContents.send('database-closed');
+    }
+}
+
+//
+// Creates the application menu bar with standard menu items for macOS, Windows, and Linux.
+//
+async function createMenu(): Promise<void> {
+    const isMac = process.platform === 'darwin';
+    const template: Electron.MenuItemConstructorOptions[] = [];
+    const currentTheme = await getTheme();
+
+    // macOS App Menu (first menu on macOS)
+    if (isMac) {
+        template.push({
+            label: app.getName(),
             submenu: [
                 {
-                    label: 'Open Database...',
-                    accelerator: 'CmdOrCtrl+O',
-                    click: logExceptions(openDatabase, 'Error opening database from menu'),
+                    label: `About Photosphere`,
+                    click: async () => {
+                        if (mainWindow) {
+                            mainWindow.webContents.executeJavaScript('window.location.hash = "/about"');
+                        }
+                    },
                 },
+                { type: 'separator' },
+                { role: 'services', submenu: [] },
+                { type: 'separator' },
+                { role: 'hide', label: `Hide Photosphere` },
+                { role: 'hideOthers' },
+                { role: 'unhide' },
+                { type: 'separator' },
+                { role: 'quit', label: `Quit Photosphere` },
             ],
+        });
+    }
+
+    // File Menu
+    const fileSubmenu: Electron.MenuItemConstructorOptions[] = [
+        {
+            label: 'Open Database...',
+            accelerator: 'CmdOrCtrl+O',
+            click: logExceptions(openDatabase, 'Error opening database from menu'),
         },
     ];
 
+    // Add Close Database menu item if a database is open
+    if (isDatabaseOpen) {
+        fileSubmenu.push(
+            { type: 'separator' },
+            {
+                label: 'Close Database',
+                click: logExceptions(closeDatabase, 'Error closing database from menu'),
+            }
+        );
+    }
+
+    // Add Exit/Quit to File menu on Windows/Linux
+    if (!isMac) {
+        fileSubmenu.push(
+            { type: 'separator' },
+            { role: 'quit', label: 'Exit' }
+        );
+    }
+
+    template.push({
+        label: 'File',
+        submenu: fileSubmenu,
+    });
+
+    // View Menu
+    const viewSubmenu: Electron.MenuItemConstructorOptions[] = [
+        { role: 'reload', label: 'Reload' },
+        { role: 'forceReload', label: 'Force Reload' },
+        { role: 'toggleDevTools', label: 'Toggle Developer Tools' },
+        { type: 'separator' },
+        {
+            label: 'Theme',
+            submenu: [
+                {
+                    label: 'Light',
+                    type: 'radio',
+                    checked: currentTheme === 'light',
+                    click: async () => {
+                        await setTheme('light');
+                        if (mainWindow) {
+                            mainWindow.webContents.send('theme-changed', 'light');
+                        }
+                        await updateMenu();
+                    },
+                },
+                {
+                    label: 'Dark',
+                    type: 'radio',
+                    checked: currentTheme === 'dark',
+                    click: async () => {
+                        await setTheme('dark');
+                        if (mainWindow) {
+                            mainWindow.webContents.send('theme-changed', 'dark');
+                        }
+                        await updateMenu();
+                    },
+                },
+                {
+                    label: 'System',
+                    type: 'radio',
+                    checked: currentTheme === 'system',
+                    click: async () => {
+                        await setTheme('system');
+                        if (mainWindow) {
+                            mainWindow.webContents.send('theme-changed', 'system');
+                        }
+                        await updateMenu();
+                    },
+                },
+            ],
+        },
+        { type: 'separator' },
+        { role: 'resetZoom', label: 'Actual Size' },
+        { role: 'zoomIn', label: 'Zoom In' },
+        { role: 'zoomOut', label: 'Zoom Out' },
+        { type: 'separator' },
+        { role: 'togglefullscreen', label: 'Toggle Fullscreen' },
+    ];
+
+    template.push({
+        label: 'View',
+        submenu: viewSubmenu,
+    });
+
+    // Window Menu
+    const windowSubmenu: Electron.MenuItemConstructorOptions[] = [
+        { role: 'minimize', label: 'Minimize' },
+        { role: 'zoom', label: 'Zoom' },
+    ];
+
+    if (isMac) {
+        windowSubmenu.push(
+            { type: 'separator' },
+            { role: 'front', label: 'Bring All to Front' }
+        );
+    }
+    else {
+        windowSubmenu.push(
+            { type: 'separator' },
+            { role: 'close', label: 'Close' }
+        );
+    }
+
+    template.push({
+        label: 'Window',
+        submenu: windowSubmenu,
+    });
+
+    // Help Menu
+    const helpSubmenu: Electron.MenuItemConstructorOptions[] = [
+        {
+            label: `About Photosphere`,
+            click: async () => {
+                if (mainWindow) {
+                    mainWindow.webContents.executeJavaScript('window.location.hash = "/about"');
+                }
+            },
+        },
+        { type: 'separator' },
+        {
+            label: `Photosphere Help`,
+            click: async () => {
+                await shell.openExternal('https://github.com/ashleydavis/photosphere/wiki');
+            },
+        },
+    ];
+
+    template.push({
+        role: 'help',
+        label: 'Help',
+        submenu: helpSubmenu,
+    });
+
     const menu = Menu.buildFromTemplate(template);
     Menu.setApplicationMenu(menu);
+}
+
+//
+// Updates the application menu (useful when database state changes).
+//
+async function updateMenu(): Promise<void> {
+    await createMenu();
 }
 

@@ -59,7 +59,7 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
     //
     // Set to true while loading assets.
     //
-    const [ isLoading, setIsLoading ] = useState(true);
+    const [ isLoading, setIsLoading ] = useState(false);
 
     //
     // The database path currently being loaded (if any).
@@ -297,11 +297,8 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
         // Directly set the database path to trigger loading
         setDatabasePath(dbPath);
 
-        // Add to recent databases and update last database (don't await to avoid blocking)
-        platform.addRecentDatabase(dbPath)
-            .catch(err => {
-                console.error("Failed to add database to recent list:", err);
-            });
+        // Notify platform that database was opened (adds to recent databases and updates menu)
+        await platform.notifyDatabaseOpened(dbPath);
     }
     
     //
@@ -311,9 +308,9 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
         setDatabasePath(undefined);
         loadedAssets.current = {};
         onReset.current.invoke();
-        await platform.clearLastDatabase();
+        await platform.notifyDatabaseClosed();
     }
-    
+   
 
     //
     // Moves assets to another database.
@@ -489,19 +486,23 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
     }
 
     //
-    // Listen for database-opened events from platform.
-    // This can result from the user selecting a database from the file dialog.
+    // Listen for database-opened and database-closed events from platform.
     //
     useEffect(() => {
-        const handleDatabaseOpened = (dbPath: string) => {
+        // Subscribe to database events
+        const unsubscribeOpened = platform.onDatabaseOpened((dbPath: string) => {
             setDatabasePath(dbPath);
-        };
+        });
 
-        // Subscribe to database-opened events
-        const unsubscribe = platform.onDatabaseOpened(handleDatabaseOpened);
+        const unsubscribeClosed = platform.onDatabaseClosed(() => {
+            closeDatabase().catch(err => {
+                console.error('Error closing database:', err);
+            });
+        });
 
         return () => {
-            unsubscribe();
+            unsubscribeOpened();
+            unsubscribeClosed();
         };
     }, [platform]);
 

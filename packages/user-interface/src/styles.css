@@ -12,6 +12,16 @@ body {
     right: 0;
 }
 
+/* Light mode: white background */
+[data-joy-color-scheme="light"] body {
+    background-color: white;
+}
+
+/* Dark mode: black background */
+[data-joy-color-scheme="dark"] body {
+    background-color: black;
+}
+
 /* Mobile-specific styles using safe-area-inset */
 body.mobile {
     top: env(safe-area-inset-top);

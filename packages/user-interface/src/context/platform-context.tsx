@@ -23,6 +23,12 @@ export interface IPlatformContext {
     onDatabaseOpened: (callback: (databasePath: string) => void) => Unsubscribe;
 
     //
+    // Subscribes to database closed events.
+    // Returns an unsubscribe function.
+    //
+    onDatabaseClosed: (callback: () => void) => Unsubscribe;
+
+    //
     // Gets the list of recent databases.
     //
     getRecentDatabases: () => Promise<string[]>;
@@ -33,14 +39,32 @@ export interface IPlatformContext {
     removeDatabase: (databasePath: string) => Promise<void>;
 
     //
-    // Adds a database to the recent databases list and updates last database.
+    // Notifies the platform that the database was opened.
+    // This adds the database to recent databases and updates UI state (e.g., menu items in Electron).
     //
-    addRecentDatabase: (databasePath: string) => Promise<void>;
+    notifyDatabaseOpened: (databasePath: string) => Promise<void>;
 
     //
-    // Clears the last database from the config.
+    // Notifies the platform that the database was closed.
+    // This clears the last database from the config and updates UI state (e.g., menu items in Electron).
     //
-    clearLastDatabase: () => Promise<void>;
+    notifyDatabaseClosed: () => Promise<void>;
+
+    //
+    // Gets the theme preference.
+    //
+    getTheme: () => Promise<'light' | 'dark' | 'system'>;
+
+    //
+    // Sets the theme preference.
+    //
+    setTheme: (theme: 'light' | 'dark' | 'system') => Promise<void>;
+
+    //
+    // Subscribes to theme changed events.
+    // Returns an unsubscribe function.
+    //
+    onThemeChanged: (callback: (theme: 'light' | 'dark' | 'system') => void) => Unsubscribe;
 }
 
 const PlatformContext = createContext<IPlatformContext | undefined>(undefined);
