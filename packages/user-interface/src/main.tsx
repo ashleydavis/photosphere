@@ -50,13 +50,12 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
     const { mode, setMode } = useColorScheme();
 
     //
-    // Set initial theme mode synchronously before rendering.
+    // Set initial theme mode synchronously on first render only.
     //
     useLayoutEffect(() => {
-        if (mode !== initialTheme) {
-            setMode(initialTheme);
-        }
-    }, [initialTheme, setMode, mode]);
+        setMode(initialTheme);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []); // Only run once on mount - don't reset when mode changes
 
     //
     // Listen for theme changes from menu.
