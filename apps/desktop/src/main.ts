@@ -305,8 +305,27 @@ async function initRestApi(): Promise<void> {
 
     const serverPath = join(app.getAppPath(), 'bundle/rest-api-worker.js');
 
-    // Fork the utility process
-    restApiWorker = utilityProcess.fork(serverPath);
+    // Set up environment for the utility process
+    const workerEnv: Record<string, string> = {};
+    
+    // Inherit PATH for tool access
+    if (process.env.PATH) {
+        workerEnv.PATH = process.env.PATH;
+    }
+    
+    // Inherit TMPDIR if set
+    if (process.env.TMPDIR) {
+        workerEnv.TMPDIR = process.env.TMPDIR;
+    }
+    
+    // Pass worker options via environment variable (same as task worker)
+    workerEnv.WORKER_OPTIONS = JSON.stringify({
+        verbose: false,
+        tools: false,
+    });
+
+    // Fork the utility process with environment
+    restApiWorker = utilityProcess.fork(serverPath, [], { env: workerEnv });
 
     // Set up exit handler
     restApiWorker.on('exit', async (code) => {
@@ -364,7 +383,10 @@ async function initRestApi(): Promise<void> {
             // Send start message to the utility process with the port
             // restApiPort should never be null here since we set it above
             if (restApiWorker && restApiPort !== null) {
-                const startMessage: IRestApiWorkerStartMessage = { type: 'start', port: restApiPort };
+                const startMessage: IRestApiWorkerStartMessage = { 
+                    type: 'start', 
+                    port: restApiPort,
+                };
                 restApiWorker.postMessage(startMessage);
             }
         };
@@ -776,4 +798,29 @@ async function openBugReport(): Promise<void> {
     const url = createGitHubIssueUrl('Bug Report', template);
     await shell.openExternal(url);
 }
+
+//
+// Handle uncaught exceptions in the main process
+//
+process.on('uncaughtException', (error) => {
+    if (fileLogger) {
+        fileLogger.exception('Uncaught exception in main process', error);
+    }
+    else {
+        console.error('Uncaught exception in main process:', error);
+    }
+});
+
+//
+// Handle unhandled promise rejections in the main process
+//
+process.on('unhandledRejection', (reason, promise) => {
+    const error = reason instanceof Error ? reason : new Error(String(reason));
+    if (fileLogger) {
+        fileLogger.exception('Unhandled rejection in main process', error);
+    }
+    else {
+        console.error('Unhandled rejection in main process:', error);
+    }
+});
 

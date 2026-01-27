@@ -8,6 +8,8 @@ import type { ITaskContext } from "task-queue";
 import { initWorkerContext, setWorkerTaskId, type IWorkerContext, type IWorkerOptions } from "./lib/worker-init";
 import { initTaskHandlers } from "api";
 import type { IWorkerMessage, IWorkerTaskCompletedMessage, IWorkerTaskMessage, IWorkerReadyMessage } from "./lib/worker-backend-electron-main";
+import { setLog, log } from "utils";
+import { createWorkerLog } from "./lib/worker-log-electron";
 
 //
 // Register all task handlers
@@ -40,6 +42,12 @@ const parentPort = (process as any).parentPort;
 if (!parentPort) {
     throw new Error('parentPort not available - this must run in an Electron utility process');
 }
+
+//
+// Initialize IPC-based logging to send messages to main process
+// This must be done early so all logs (including errors) are captured
+//
+setLog(createWorkerLog(workerOptions.verbose, workerOptions.tools));
 
 //
 // Execute a task handler in the worker
@@ -133,7 +141,23 @@ try {
     initWorker(context);
 }
 catch (error: any) {
-    console.error(`Failed to initialize worker:`);
-    console.error(error.stack || error.message || error);
+    log.exception('Failed to initialize worker', error);
     process.exit(1);
 }
+
+//
+// Handle uncaught exceptions in the worker process
+//
+process.on('uncaughtException', (error) => {
+    log.exception('Uncaught exception in worker process', error);
+    process.exit(1);
+});
+
+//
+// Handle unhandled promise rejections in the worker process
+//
+process.on('unhandledRejection', (reason, promise) => {
+    const error = reason instanceof Error ? reason : new Error(String(reason));
+    log.exception('Unhandled rejection in worker process', error);
+    process.exit(1);
+});

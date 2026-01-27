@@ -12,9 +12,9 @@ import type { IUuidGenerator, ITimestampProvider } from "utils";
 // Options passed to workers for context initialization
 //
 export interface IWorkerOptions {
-    verbose?: boolean;
-    tools?: boolean;
-    sessionId?: string;
+    verbose: boolean;
+    tools: boolean;
+    sessionId: string;
 }
 
 // Base worker context (without sendMessage) - used internally in desktop workers
@@ -122,7 +122,7 @@ export function setWorkerTaskId(taskId: string | null): void {
 //
 export function initWorkerContext(options: IWorkerOptions): IWorkerContext {
     // Configure logging (console only for workers)
-    const workerLog = new WorkerLog(options.verbose || false, options.tools || false);
+    const workerLog = new WorkerLog(options.verbose, options.tools);
     workerLogInstance = workerLog;
     setLog(workerLog);
     
@@ -133,12 +133,11 @@ export function initWorkerContext(options: IWorkerOptions): IWorkerContext {
     const timestampProvider = process.env.NODE_ENV === "testing"
         ? new TestTimestampProvider()
         : new TimestampProvider();
-    const sessionId = options.sessionId || uuidGenerator.generate();
     
     return {
         uuidGenerator,
         timestampProvider,
-        sessionId,
+        sessionId: options.sessionId,
     };
 }
 
