@@ -4,7 +4,7 @@ import { useGalleryItem } from "../context/gallery-item-context";
 import { FullImage } from "./full-image";
 import { Video } from "./video";
 import { useGallery } from "../context/gallery-context";
-import { Drawer } from "@mui/joy";
+import { Drawer, IconButton } from "@mui/joy";
 
 export interface IAssetViewProps { 
 
@@ -60,23 +60,27 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                 <div className="photo-nav w-full h-full flex flex-row pointer-events-none">
                     {getPrev(asset) !== undefined
                         && <div className="flex flex-col justify-center">
-                            <button
-                                className="ml-4 p-1 px-3 pointer-events-auto rounded border border-solid border-white"
+                            <IconButton
+                                className="ml-4 pointer-events-auto"
+                                variant="outlined"
+                                color="neutral"
                                 onClick={() => onPrev()}
                                 >
                                 <i className="fa-solid fa-arrow-left"></i>
-                            </button>
+                            </IconButton>
                         </div>
                     }
                     <div className="flex-grow" /> {/* Spacer */}
                     {getNext(asset) !== undefined
                         && <div className="flex flex-col justify-center">
-                            <button
-                                className="mr-4 p-1 px-3 pointer-events-auto rounded border border-solid border-white"
+                            <IconButton
+                                className="mr-4 pointer-events-auto"
+                                variant="outlined"
+                                color="neutral"
                                 onClick={() => onNext()}
                                 >
                                 <i className="fa-solid fa-arrow-right"></i>
-                            </button>
+                            </IconButton>
                         </div>
                     }
                 </div>
@@ -84,25 +88,30 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
             
             <div className="photo-header">
                 <div className="flex flex-row items-center pl-3 pr-3 pt-3 pb-2">
-                    <button
-                        className="p-1 px-3 pointer-events-auto rounded border border-solid border-white"
+                    <IconButton
+                        className="pointer-events-auto"
+                        variant="outlined"
+                        color="neutral"
                         onClick={() => {
                             onClose();
                             setOpenInfo(false);
                         }}
                         >
                         <i className="fa-solid fa-close"></i>
-                    </button>
+                    </IconButton>
 
-                    <button
+                    <IconButton
                         data-testid="open-info-button"
-                        className="ml-auto p-1 px-3 pointer-events-auto rounded border border-solid border-white"
+                        className="pointer-events-auto"
+                        variant="outlined"
+                        color="neutral"
+                        sx={{ ml: 'auto' }}
                         onClick={() => {
                             setOpenInfo(true);
                         }}
                         >
                         <i className="fa-solid fa-circle-info"></i>
-                    </button>
+                    </IconButton>
                 </div>
             </div>
 

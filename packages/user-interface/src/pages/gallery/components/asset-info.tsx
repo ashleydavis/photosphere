@@ -2,8 +2,7 @@ import React, { useCallback, useEffect } from "react";
 import dayjs from "dayjs";
 import { useGalleryItem } from "../../../context/gallery-item-context";
 import _ from "lodash";
-import Textarea from "@mui/joy/Textarea/Textarea";
-import { useTheme } from "@mui/joy/styles/ThemeProvider";
+import { Textarea, IconButton, Button, Chip, Typography, Sheet } from "@mui/joy";
 
 export interface IAssetInfoProps { 
 
@@ -29,8 +28,6 @@ export function AssetInfo({ onClose, onDeleted }: IAssetInfoProps) {
     const { asset, updateAsset, addArrayValue, removeArrayValue, deleteAsset } = useGalleryItem();
 
     const [description, setDescription] = React.useState(asset?.description);
-
-    const theme = useTheme();
 
     //
     // Adds a new label to the asset.
@@ -88,23 +85,25 @@ export function AssetInfo({ onClose, onDeleted }: IAssetInfoProps) {
     //
     function renderLabel(name: string) {
         return (
-            <span
+            <Chip
                 key={name}
-                className="ml-2 mt-1 flex flex-wrap justify-between items-center text-sm border border-gray-200 border-solid rounded pl-1 pr-1 py-0"
+                variant="outlined"
+                color="neutral"
+                className="ml-2 mt-1"
+                endDecorator={
+                    <IconButton
+                        size="sm"
+                        variant="plain"
+                        color="neutral"
+                        onClick={() => onRemoveLabel(name)}
+                        sx={{ minHeight: '20px', minWidth: '20px', ml: 0.5 }}
+                        >
+                        <i className="fa-solid fa-close text-xs" />
+                    </IconButton>
+                }
                 >
                 {name}
-                <button
-                    className="ml-2 p-1 pl-2 pr-1"
-                    onClick={() => onRemoveLabel(name)}
-                    >
-                    <i 
-                        className="fa-solid fa-close"
-                        style={{
-                            color: theme.palette.text.primary,
-                        }}
-                        />
-                </button>
-            </span>
+            </Chip>
         );
     }
 
@@ -113,29 +112,23 @@ export function AssetInfo({ onClose, onDeleted }: IAssetInfoProps) {
     }
 
     return (
-        <div 
+        <Sheet 
             className="info"
-            style={{
-                color: theme.palette.text.primary,
-            }}
+            sx={{ bgcolor: 'background.surface', color: 'text.primary' }}
             >
             <div className="info-header">
                 <div className="flex flex-row items-center pl-3 pt-3 pb-2">
-                    <button
-                        className="p-1 px-3"
+                    <IconButton
+                        variant="plain"
+                        color="neutral"
                         onClick={() => {
                             onClose();
                         }}
                         >
-                        <i 
-                            className="fa-solid fa-close"
-                            style={{
-                                color: theme.palette.text.primary,
-                            }}
-                            />
-                    </button>
+                        <i className="fa-solid fa-close" />
+                    </IconButton>
 
-                    <h1 className="text-xl ml-2">Info</h1>
+                    <Typography level="title-lg" className="ml-2">Info</Typography>
                 </div>
             </div>
 
@@ -154,110 +147,76 @@ export function AssetInfo({ onClose, onDeleted }: IAssetInfoProps) {
                     <div className="flex flex-col">
                         <div className="text-base flex flex-row mt-4 pt-2">
                             <div className="w-6 mt-2 flex flex-col items-center">
-                                <i 
-                                    className="text-2xl fa-solid fa-calendar-day"
-                                    style={{
-                                        color: theme.palette.text.primary,
-                                    }}        
-                                    />
+                                <i className="text-2xl fa-solid fa-calendar-day" />
                             </div>
                             <div className="flex flex-col ml-3">
-                                <div>
-                                    Asset id
-                                </div>
-                                <div
+                                <Typography level="body-md">Asset id</Typography>
+                                <Typography
                                 	data-testid="asset-id"
-                                    className="text-sm flex flex-row" 
+                                    level="body-sm"
                                     >
-                                    <div>{asset._id}</div>
-                                </div>
+                                    {asset._id}
+                                </Typography>
                             </div>
                         </div>
 
                         <div className="text-base flex flex-row mt-4 pt-2">
                             <div className="w-6 mt-2 flex flex-col items-center">
-                                <i 
-                                    className="text-2xl fa-solid fa-calendar-day"
-                                    style={{
-                                        color: theme.palette.text.primary,
-                                    }}        
-                                    />
+                                <i className="text-2xl fa-solid fa-calendar-day" />
                             </div>
                             <div className="flex flex-col ml-3">
-                                <div>
-                                    Asset hash
-                                </div>
-                                <div
-                                    className="text-sm flex flex-row" 
-                                    >
-                                    <div>{asset.hash}</div>
-                                </div>
+                                <Typography level="body-md">Asset hash</Typography>
+                                <Typography level="body-sm">
+                                    {asset.hash}
+                                </Typography>
                             </div>
                         </div>
 
                         <div className="text-lg flex flex-row portrait:mt-10 landscape:mt-4 pt-2">
                             <div className="w-6 mt-2 flex flex-col items-center">
-                                <i 
-                                    className="text-2xl fa-solid fa-tags"
-                                    style={{
-                                        color: theme.palette.text.primary,
-                                    }}        
-                                    />
+                                <i className="text-2xl fa-solid fa-tags" />
                             </div>
                             <div className="flex flex-col ml-3">
-                                <div className="flex flex-row flex-wrap">
+                                <div className="flex flex-row flex-wrap items-center">
                                     {asset.labels?.map(label => {
                                         return renderLabel(label);
                                     })}
 
-                                    <button
-                                        className="ml-2 p-1 pl-3 pr-3"
+                                    <IconButton
+                                        className="ml-2"
+                                        variant="plain"
+                                        color="neutral"
                                         onClick={onAddLabel}
                                         >
-                                        <i 
-                                            className="fa-solid fa-square-plus"
-                                            style={{
-                                                color: theme.palette.text.primary,
-                                            }}                
-                                            />
-                                    </button>
+                                        <i className="fa-solid fa-square-plus" />
+                                    </IconButton>
                                 </div>
                             </div>
                         </div>
 
                         <div className="text-base flex flex-row mt-4 pt-2">
                             <div className="w-6 mt-2 flex flex-col items-center">
-                                <i 
-                                    className="text-2xl fa-solid fa-calendar-day"
-                                    style={{
-                                        color: theme.palette.text.primary,
-                                    }}        
-                                    />
+                                <i className="text-2xl fa-solid fa-calendar-day" />
                             </div>
                             <div className="flex flex-col ml-3">
-                                <div>
+                                <Typography level="body-md">
                                     {asset.photoDate ? dayjs(asset.photoDate).format("MMM D, YYYY") : "No date" }
-                                </div>
-                                <div className="text-sm flex flex-row" >
+                                </Typography>
+                                <Typography level="body-sm">
                                     {asset.photoDate ? dayjs(asset.photoDate).format("HH:mm") : "No time" }
-                                </div>
+                                </Typography>
                             </div>
                         </div>
 
                         {asset.location
                             && <div className="text-base flex flex-row mt-4 pt-2">
                                 <div className="w-6 mt-2 flex flex-col items-center">
-                                    <i 
-                                        className="text-2xl fa-regular fa-map"
-                                        style={{
-                                            color: theme.palette.text.primary,
-                                        }}            
-                                        />
+                                    <i className="text-2xl fa-regular fa-map" />
                                 </div>
                                 <div className="flex flex-col ml-3">
-                                    <div>
+                                    <Typography level="body-md">
                                         {asset.location}
-                                    </div>
+                                    </Typography>
                                 </div>
                             </div>
                         }
@@ -281,20 +240,15 @@ export function AssetInfo({ onClose, onDeleted }: IAssetInfoProps) {
 
                         <div className="text-base flex flex-row mt-4 pt-2">
                             <div className="w-6 mt-2 flex flex-col items-center">
-                                <i 
-                                    className="text-2xl fa-regular fa-image"
-                                    style={{
-                                        color: theme.palette.text.primary,
-                                    }}        
-                                    />
+                                <i className="text-2xl fa-regular fa-image" />
                             </div>
                             <div className="flex flex-col ml-3">
-                                <div>
-                                {asset.origPath} {asset.origFileName}
-                                </div>
-                                <div className="text-sm flex flex-row" >
-                                    <div>{asset.width} × {asset.height}</div>
-                                </div>
+                                <Typography level="body-md">
+                                    {asset.origPath} {asset.origFileName}
+                                </Typography>
+                                <Typography level="body-sm">
+                                    {asset.width} × {asset.height}
+                                </Typography>
                             </div>
                         </div>
 
@@ -310,18 +264,19 @@ export function AssetInfo({ onClose, onDeleted }: IAssetInfoProps) {
                         </div>
                         */}
 
-                        <div className="text-base text-red-600 flex flex-row items-center mt-6">
-                            <button
-                                className=""
+                        <div className="flex flex-row items-center mt-6">
+                            <Button
+                                variant="plain"
+                                color="danger"
+                                startDecorator={<i className="text-xl fa-solid fa-trash" />}
                                 onClick={onDeleteItem}
                                 >
-                                <i className="w-6 text-2xl pt-1 mr-3 text-red-600 fa-solid fa-trash"></i>
                                 Delete
-                            </button>
+                            </Button>
                         </div> 
                     </div>
                 </div>
             </div>
-        </div>
+        </Sheet>
     );
 }
