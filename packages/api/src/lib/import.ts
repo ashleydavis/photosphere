@@ -96,8 +96,8 @@ async function processPendingDatabaseUpdates(
             }
             
             log.verbose(dryRun 
-                ? `[DRY RUN] Would add file "${logicalPath}" to the database with ID "${assetData.assetId}".`
-                : `Added file "${logicalPath}" to the database with ID "${assetData.assetId}".`);
+                ? `[DRY RUN] Would add file "${logicalPath}" to the database with ID "${assetData.assetId}" with id ${assetData.assetId}.`
+                : `Added file "${logicalPath}" to the database with ID "${assetData.assetId}" with id ${assetData.assetId}.`);
             summary.filesAdded++;
             summary.totalSize += totalSize;
         }
@@ -240,7 +240,6 @@ export async function addPaths(
                 }
                 
                 if (importResult.filesAlreadyAdded) {
-                    // File is already in the database, add to summary.
                     log.verbose(`File "${taskData.logicalPath}" is already in the database.`);
                     summary.filesAlreadyAdded++;
                 }
@@ -257,18 +256,18 @@ export async function addPaths(
                         totalSize: importResult.totalSize,
                     });
 
-                    log.verbose(`Added ${taskData.logicalPath} to pending database updates queue.`);
+                    log.verbose(`Added ${taskData.logicalPath} (${taskData.assetId}) to pending database updates queue.`);
                     
                     // Trigger throttled queue processing.
                     throttledProcessQueue();
                 }                
             } 
-            else if (result.status === TaskStatus.Failed) {
-                if (result.error) {
-                    log.exception(`Failed to import file "${task.data.logicalPath}": ${result.errorMessage}`, result.error);
+            else if (taskResult.status === TaskStatus.Failed) {
+                if (taskResult.error) {
+                    log.exception(`Failed to import file "${taskResult.inputs.logicalPath}": ${taskResult.errorMessage}`, taskResult.error);
                 } 
                 else {
-                    log.error(`Failed to import file "${task.data.logicalPath}": ${result.errorMessage}`);
+                    log.error(`Failed to import file "${taskResult.inputs.logicalPath}": ${taskResult.errorMessage}`);
                 }
                 summary.filesFailed++;
             }
@@ -292,6 +291,7 @@ export async function addPaths(
                 googleApiKey,
                 sessionId,
                 dryRun,
+                assetId: uuidGenerator.generate(),
             } as IImportFileData);
         }, (currentlyScanning, state) => {
             summary.filesIgnored = state.numFilesIgnored;
