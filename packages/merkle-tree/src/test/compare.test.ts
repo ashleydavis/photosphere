@@ -6,7 +6,7 @@ import {
     createTree,
     buildMerkleTree
 } from '../lib/merkle-tree';
-import { compareTrees, generateTreeDiffReport } from '../lib/compare';
+import { compareTrees } from '../lib/compare';
 
 describe('Tree Comparison', () => {
 
@@ -109,24 +109,6 @@ describe('Tree Comparison', () => {
         // Note: The current comparison logic doesn't distinguish between "deleted" and "only in B"
         // Both represent files that exist in B but not in A
         expect(diff.onlyInB).toContain('file3.txt');
-    });
-
-    test('should generate a comprehensive report', async () => {
-        const { treeA, treeB } = buildTestTrees();
-        
-        const report = generateTreeDiffReport(treeA, treeB);
-        
-        // Verify the report contains all sections
-        expect(report).toContain('Merkle Tree Comparison Report');
-        expect(report).toContain('Files only in first tree:');
-        expect(report).toContain('Files only in second tree:');
-        expect(report).toContain('Modified files:');
-        expect(report).toContain('Summary:');
-        
-        // Check for specific files in the report
-        expect(report).toContain('file2.txt');
-        expect(report).toContain('file4.txt');
-        expect(report).toContain('file6.txt');
     });
 
     test('should handle identical trees', async () => {

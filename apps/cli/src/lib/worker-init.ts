@@ -18,6 +18,7 @@ export interface IWorkerOptions {
 
 // Base worker context (without sendMessage) - used internally in CLI workers
 export interface IWorkerContext {
+    workerId: number;
     uuidGenerator: IUuidGenerator;
     timestampProvider: ITimestampProvider;
     sessionId: string;
@@ -135,6 +136,7 @@ export function initWorkerContext(options: IWorkerOptions): IWorkerContext {
     const sessionId = options.sessionId || uuidGenerator.generate();
     
     return {
+        workerId: options.workerId,
         uuidGenerator,
         timestampProvider,
         sessionId,

@@ -5,7 +5,7 @@ import { retry, FatalError, ITimestampProvider, IUuidGenerator, log } from "util
 import { IDatabaseMetadata, ProgressCallback, createMediaFileDatabase, loadDatabase, createDatabase } from "./media-file-database";
 import { BsonDatabase } from "bdb";
 import { buildMerkleTree, findDifferingNodes, findMerkleTreeDifferences, getItemInfo, IMerkleTree, MerkleNode, pruneTree, saveTree, upsertItem } from "merkle-tree";
-import { loadMerkleTree } from "./tree";
+import { loadMerkleTree, merkleTreeExists, saveMerkleTree } from "./tree";
 import { loadDatabaseMerkleTree, loadCollectionMerkleTree, loadShardMerkleTree } from "bdb";
 import stringify from "json-stable-stringify";
 
@@ -79,6 +79,7 @@ async function replicateFiles(
         // Find differences between source and destination merkle trees.
         //
         const diff = findMerkleTreeDifferences(merkleTree.merkle, destMerkleTree.merkle);        
+        log.verbose(`Found ${diff.onlyInTree1.length} nodes to copy, ${diff.onlyInTree2.length} nodes to prune`);
         
         //
         // Collect nodes to process - only the differing MerkleNode roots from source.
@@ -90,7 +91,8 @@ async function replicateFiles(
         // Pruning will be done at the end.
         //
         nodesToPrune = diff.onlyInTree2;
-    } else {
+    }
+    else {
         // If there's no dest merkle tree, process the entire source tree
         if (merkleTree.merkle) {
             nodesToProcess = [ merkleTree.merkle ];
@@ -109,6 +111,8 @@ async function replicateFiles(
         // Check if file already exists in destination tree with matching hash.
         const destFileInfo = getItemInfo(destMerkleTree!, fileName);
         if (destFileInfo && Buffer.compare(destFileInfo.hash, sourceHash) === 0) {
+            log.verbose(`File already exists with correct hash, skipping copy: ${fileName}`);
+
             // File already exists with correct hash, skip copying.
             // This assumes the file is non-corrupted. To find corrupted files, a verify would be needed.
             if (progressCallback) {
@@ -117,6 +121,7 @@ async function replicateFiles(
             return;
         }
 
+        log.verbose(`Copying file: ${fileName}`);
         const assetStorage = sourceAssetStorage;
         const srcFileInfo = await retry(() => assetStorage.info(fileName));
         if (!srcFileInfo) {
@@ -131,6 +136,8 @@ async function replicateFiles(
             await destAssetStorage.writeStream(fileName, srcFileInfo.contentType, readStream);
         });
 
+        log.verbose(`Copied file: ${fileName}`);
+
         //
         // Compute hash for the copied file.
         //
@@ -143,6 +150,8 @@ Copied hash: ${copiedHash.toString("hex")}
 `);
         }
 
+        log.verbose(`Destination file ${fileName} matches source hash ${sourceHash.toString("hex")}`);
+
         //
         // Get the info for the copied file.
         //
@@ -154,16 +163,16 @@ Copied hash: ${copiedHash.toString("hex")}
         //
         // Add or update the file in the destination merkle tree.
         //
-        if (!fileName.startsWith("metadata/")) { //TODO: Shouldn't needed now. Should be no metadata files in the merkle tree.
-            destMerkleTree = upsertItem(destMerkleTree!, {
-                name: fileName,
-                hash: copiedHash,
-                length: copiedFileInfo.length,
-                lastModified: copiedFileInfo.lastModified,
-            });
-        }
+        destMerkleTree = upsertItem(destMerkleTree!, {
+            name: fileName,
+            hash: copiedHash,
+            length: copiedFileInfo.length,
+            lastModified: copiedFileInfo.lastModified,
+        });
 
         result.copiedFiles++;
+
+        log.verbose(`Added file to destination merkle tree: ${fileName}`);
 
         if (progressCallback) {
             progressCallback(`Copied ${result.copiedFiles}`);
@@ -203,16 +212,11 @@ Copied hash: ${copiedHash.toString("hex")}
 
                 if (result.copiedFiles % 100 === 0) {
                     // Save the destination merkle tree periodically
-                    await retry(async () => {
-                        if (destMerkleTree!.dirty) {
-                            destMerkleTree!.merkle = buildMerkleTree(destMerkleTree!.sort);
-                            destMerkleTree!.dirty = false;
-                        }
-                        await saveTree(".db/tree.dat", destMerkleTree!, destMetadataStorage);
-                    });
+                    await retry(() => saveMerkleTree(destMerkleTree!, destMetadataStorage));
                 }
             }
-        } else {
+        } 
+        else {
             // Internal node - recursively process children
             if (merkleNode.left) {
                 await processMerkleNode(merkleNode.left);
@@ -236,13 +240,7 @@ Copied hash: ${copiedHash.toString("hex")}
     //
     // Saves the dest database.
     //
-    await retry(async () => {
-        if (destMerkleTree!.dirty) {
-            destMerkleTree!.merkle = buildMerkleTree(destMerkleTree!.sort);
-            destMerkleTree!.dirty = false;
-        }
-        await saveTree(".db/tree.dat", destMerkleTree!, destMetadataStorage);
-    });
+    await retry(() => saveMerkleTree(destMerkleTree!, destMetadataStorage));
 }
 
 //
@@ -427,12 +425,15 @@ async function replicateBsonDatabase(
             // Record doesn't exist in destination, add it
             await retry(() => destCollection.insertOne(sourceRecord));
             result.copiedRecords++;
-        } else {
+            log.verbose(`Inserted record ${diff.recordId} into collection ${diff.collectionName}`);
+        }
+        else {
             // Record exists, check if it's different
             if (!recordsAreEqual(sourceRecord, destRecord)) {
                 // Records are different, update the destination record
                 await retry(() => destCollection.replaceOne(sourceRecord._id, sourceRecord, { upsert: true }));
                 result.copiedRecords++;
+                log.verbose(`Updated record ${diff.recordId} in collection ${diff.collectionName}`);
             }
         }
 
@@ -457,6 +458,7 @@ async function replicateBsonDatabase(
             // Record doesn't exist in source, remove it from dest to match source
             await retry(() => destCollection.deleteOne(diff.recordId));
             result.copiedRecords++;
+            log.verbose(`Deleted record ${diff.recordId} from collection ${diff.collectionName}`);
         }
 
         if (progressCallback && recordsConsidered % 100 === 0) {
@@ -504,21 +506,23 @@ export async function replicate(
         sourceTimestampProvider
     );
 
-    const treeExists = await retry(() => destMetadataStorage.fileExists(".db/tree.dat"));
+    const treeExists = await retry(() => merkleTreeExists(destMetadataStorage));
     if (treeExists) {
+        log.verbose("Loading existing destination database...");
         await loadDatabase(destDb.assetStorage, destDb.metadataCollection);
     }
     else {
+        log.verbose("Creating new destination database...");
         //
         // This is need because it will create the sort indexes and other things.
         //
-        await retry(() => createDatabase(destAssetStorage, destMetadataStorage, sourceUuidGenerator, destDb.metadataCollection, merkleTree.id));
+        await createDatabase(destAssetStorage, destMetadataStorage, sourceUuidGenerator, destDb.metadataCollection, merkleTree.id);
     }
     
     //
     // Load the destination database that might have been just created.
     //
-    let destMerkleTree = await loadMerkleTree(destMetadataStorage);
+    let destMerkleTree = await retry(() => loadMerkleTree(destMetadataStorage));
     if (!destMerkleTree) {
         throw new FatalError(`Failed to load merkle tree from destination database.`);
     }
