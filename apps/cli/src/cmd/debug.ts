@@ -11,7 +11,7 @@ import {
     hashRecord
 } from "bdb";
 import { StoragePrefixWrapper } from "storage";
-import { loadMerkleTree, getDatabaseSummary, removeAsset } from "api";
+import { loadMerkleTree, getDatabaseSummary, removeAsset, ensureSortIndex } from "api";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import { getDirectoryForCommand } from '../lib/directory-picker';
 import { formatBytes } from '../lib/format';
@@ -532,6 +532,66 @@ export async function debugRemoveDuplicatesCommand(context: ICommandContext, opt
     await exit(0);
 }
 
+//
+// Command that deletes all sort indexes and rebuilds them completely.
+//
+export async function debugBuildSortIndexCommand(context: ICommandContext, options: IBaseCommandOptions): Promise<void> {
+    const { uuidGenerator, timestampProvider, sessionId } = context;
+    const { metadataCollection, databaseDir } = await loadDatabase(options.db, options, false, uuidGenerator, timestampProvider, sessionId);
+    
+    log.info('');
+    log.info(pc.bold(pc.blue('🔨 Rebuilding Sort Indexes')));
+    log.info(`  Database: ${pc.cyan(databaseDir)}`);
+    log.info('');
+    
+    // List all existing sort indexes
+    writeProgress('Listing existing sort indexes...');
+    const existingIndexes = await metadataCollection.listSortIndexes();
+    clearProgressMessage();
+    
+    if (existingIndexes.length > 0) {
+        log.info(pc.yellow(`Found ${existingIndexes.length} existing sort index${existingIndexes.length === 1 ? '' : 'es'}:`));
+        for (const index of existingIndexes) {
+            log.info(`  - ${index.fieldName} (${index.direction})`);
+        }
+        log.info('');
+        
+        // Delete all existing sort indexes
+        writeProgress('Deleting existing sort indexes...');
+        let deletedCount = 0;
+        for (const index of existingIndexes) {
+            const deleted = await metadataCollection.deleteSortIndex(index.fieldName, index.direction);
+            if (deleted) {
+                deletedCount++;
+            }
+        }
+        clearProgressMessage();
+        
+        log.info(pc.green(`Deleted ${deletedCount} sort index${deletedCount === 1 ? '' : 'es'}.`));
+        log.info('');
+    }
+    else {
+        log.info(pc.yellow('No existing sort indexes found.'));
+        log.info('');
+    }
+    
+    // Rebuild the expected sort indexes
+    log.info(pc.cyan('Rebuilding sort indexes...'));
+    log.info('');
+    
+    writeProgress('Rebuilding hash index (asc)...');
+    await ensureSortIndex(metadataCollection);
+    clearProgressMessage();
+    
+    log.info(pc.green('✅ Sort indexes rebuilt successfully.'));
+    log.info('');
+    log.info(pc.bold('Rebuilt indexes:'));
+    log.info(`  - hash (asc, string)`);
+    log.info(`  - photoDate (desc, date)`);
+    log.info('');
+    
+    await exit(0);
+}
 
 
 
