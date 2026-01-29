@@ -138,6 +138,38 @@ export interface IProps {
 }
 ```
 
+### JavaScript/TypeScript: Prefer function declarations over arrow functions
+
+**PREFER** `function` declarations over arrow function expressions for named functions.
+
+**Why:** Function declarations are hoisted, easier to read, and provide better stack traces for debugging. Arrow functions should be used for callbacks and inline functions.
+
+**Bad:**
+```typescript
+const processData = (data: string) => {
+    // code
+};
+
+const helper = () => {
+    // code
+};
+```
+
+**Good:**
+```typescript
+function processData(data: string) {
+    // code
+}
+
+function helper() {
+    // code
+}
+
+// Arrow functions are fine for callbacks
+items.map(item => item.value);
+items.filter(item => item.active);
+```
+
 ### JavaScript/TypeScript: Never use lazy requires or imports
 
 **NEVER** use lazy requires or imports (loading modules inside functions, conditionally, or on-demand). Always require/import at the top of the file.

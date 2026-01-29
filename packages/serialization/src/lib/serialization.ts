@@ -655,6 +655,82 @@ export async function load<T>(
 }
 
 //
+// Verifies a serialized file's integrity (checksum and/or version header).
+// Similar to load() but doesn't deserialize the data.
+//
+export interface IVerifyResult {
+    valid: boolean;
+    size: number;
+    error?: string;
+}
+
+export async function verify(
+    storage: IStorage,
+    filePath: string,
+    options?: SerializationOptions
+): Promise<IVerifyResult> {
+    // Read the file from storage
+    const buffer = await retry(() => storage.read(filePath));
+    if (!buffer) {
+        return { valid: false, size: 0, error: "File not found or empty" };
+    }
+    
+    // Check if checksum is enabled (default: true)
+    const useChecksum = options?.checksum !== false;
+    
+    if (useChecksum) {
+        if (buffer.length < 36) {
+            return { 
+                valid: false, 
+                size: buffer.length, 
+                error: `File too small (${buffer.length} bytes, minimum 36)` 
+            };
+        }
+        
+        // Extract data portion (everything between version header and checksum footer)
+        const dataBuffer = buffer.subarray(0, buffer.length - 32);
+        
+        // Calculate SHA256 checksum of the data and verify it matches
+        const calculatedChecksum = createHash('sha256').update(dataBuffer).digest();
+        
+        // Read checksum from last 32 bytes
+        const storedChecksum = buffer.subarray(buffer.length - 32);
+        
+        if (!calculatedChecksum.equals(storedChecksum)) {
+            return { 
+                valid: false, 
+                size: buffer.length, 
+                error: `Checksum mismatch: expected ${storedChecksum.toString('hex')}, got ${calculatedChecksum.toString('hex')}` 
+            };
+        }
+        
+        return { valid: true, size: buffer.length };
+    }
+    else {
+        if (buffer.length < 4) {
+            return { 
+                valid: false, 
+                size: buffer.length, 
+                error: `File too small (${buffer.length} bytes, minimum 4)` 
+            };
+        }
+        
+        // Just verify the version header is readable
+        const version = buffer.readUInt32LE(0);
+        if (version === 0 || version > 100) {
+            // Version number seems unreasonable
+            return { 
+                valid: false, 
+                size: buffer.length, 
+                error: `Suspicious version number: ${version}` 
+            };
+        }
+        
+        return { valid: true, size: buffer.length };
+    }
+}
+
+//
 // Applies a chain of migrations to convert data from one version to another
 //
 function applyMigrations(data: any, fromVersion: number, toVersion: number, migrations: MigrationMap): any {
