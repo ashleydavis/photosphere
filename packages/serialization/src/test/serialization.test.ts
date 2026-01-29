@@ -2,7 +2,7 @@
 // Tests for binary serialization and deserialization with versioning support.
 //
 
-import { save, load, UnsupportedVersionError, BinarySerializer, BinaryDeserializer, type DeserializerMap, type MigrationMap, type ISerializer, type IDeserializer, type DeserializerFunction, type SerializationOptions } from '../lib/serialization';
+import { save, load, verify, UnsupportedVersionError, BinarySerializer, BinaryDeserializer, type DeserializerMap, type MigrationMap, type ISerializer, type IDeserializer, type DeserializerFunction, type SerializationOptions } from '../lib/serialization';
 import { IStorage } from 'storage';
 
 //
@@ -1140,6 +1140,100 @@ describe('Serialization', () => {
             const result = await load(storage, 'special-no-checksum.bin', specialDeserializers, undefined, undefined, options);
 
             expect(result).toEqual(specialData);
+        });
+    });
+
+    describe('verify', () => {
+        const verifyTestData: TestDataV1 = { name: 'verify test', value: 99 };
+
+        it('should return valid: false for non-existent file', async () => {
+            const result = await verify(storage, 'nonexistent.bin');
+            expect(result.valid).toBe(false);
+            expect(result.size).toBe(0);
+            expect(result.error).toBe('File not found or empty');
+        });
+
+        it('should verify checksummed file successfully (default checksum: true)', async () => {
+            await save(storage, 'verify-checksum.bin', verifyTestData, 1, serializeV1, { checksum: true });
+            const result = await verify(storage, 'verify-checksum.bin');
+            expect(result.valid).toBe(true);
+            expect(result.size).toBeGreaterThan(36);
+            expect(result.error).toBeUndefined();
+        });
+
+        it('should return valid: false when checksummed file is too small', async () => {
+            // Write a tiny buffer (less than 36 bytes)
+            await storage.write('tiny.bin', undefined, Buffer.alloc(10));
+            const result = await verify(storage, 'tiny.bin');
+            expect(result.valid).toBe(false);
+            expect(result.size).toBe(10);
+            expect(result.error).toContain('File too small');
+            expect(result.error).toContain('minimum 36');
+        });
+
+        it('should return valid: false on checksum mismatch', async () => {
+            await save(storage, 'good-checksum.bin', verifyTestData, 1, serializeV1, { checksum: true });
+            const buffer = await storage.read('good-checksum.bin');
+            expect(buffer).toBeDefined();
+            // Corrupt the last byte (checksum)
+            buffer!.writeUInt8(buffer!.readUInt8(buffer!.length - 1) ^ 0xff, buffer!.length - 1);
+            await storage.write('corrupt-checksum.bin', undefined, buffer!);
+            const result = await verify(storage, 'corrupt-checksum.bin');
+            expect(result.valid).toBe(false);
+            expect(result.size).toBe(buffer!.length);
+            expect(result.error).toContain('Checksum mismatch');
+        });
+
+        it('should verify file without checksum when options.checksum is false', async () => {
+            await save(storage, 'verify-no-checksum.bin', verifyTestData, 1, serializeV1, { checksum: false });
+            const result = await verify(storage, 'verify-no-checksum.bin', { checksum: false });
+            expect(result.valid).toBe(true);
+            expect(result.size).toBeGreaterThan(0);
+            expect(result.error).toBeUndefined();
+        });
+
+        it('should return valid: false when no-checksum file is too small (< 4 bytes)', async () => {
+            await storage.write('tiny-no-checksum.bin', undefined, Buffer.alloc(2));
+            const result = await verify(storage, 'tiny-no-checksum.bin', { checksum: false });
+            expect(result.valid).toBe(false);
+            expect(result.size).toBe(2);
+            expect(result.error).toContain('File too small');
+            expect(result.error).toContain('minimum 4');
+        });
+
+        it('should return valid: false for suspicious version 0 (no checksum)', async () => {
+            const buf = Buffer.alloc(8);
+            buf.writeUInt32LE(0, 0);
+            await storage.write('version-zero.bin', undefined, buf);
+            const result = await verify(storage, 'version-zero.bin', { checksum: false });
+            expect(result.valid).toBe(false);
+            expect(result.error).toContain('Suspicious version number: 0');
+        });
+
+        it('should return valid: false for version > 100 (no checksum)', async () => {
+            const buf = Buffer.alloc(8);
+            buf.writeUInt32LE(101, 0);
+            await storage.write('version-101.bin', undefined, buf);
+            const result = await verify(storage, 'version-101.bin', { checksum: false });
+            expect(result.valid).toBe(false);
+            expect(result.error).toContain('Suspicious version number: 101');
+        });
+
+        it('should return valid: true for valid version in range 1-100 (no checksum)', async () => {
+            const buf = Buffer.alloc(8);
+            buf.writeUInt32LE(1, 0);
+            await storage.write('version-ok.bin', undefined, buf);
+            const result = await verify(storage, 'version-ok.bin', { checksum: false });
+            expect(result.valid).toBe(true);
+            expect(result.size).toBe(8);
+        });
+
+        it('should report correct size for valid checksummed file', async () => {
+            await save(storage, 'size-check.bin', verifyTestData, 1, serializeV1, { checksum: true });
+            const expectedBuffer = await storage.read('size-check.bin');
+            const result = await verify(storage, 'size-check.bin');
+            expect(result.valid).toBe(true);
+            expect(result.size).toBe(expectedBuffer!.length);
         });
     });
 });

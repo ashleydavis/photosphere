@@ -6,6 +6,7 @@ import { IStorage, IStorageDescriptor, IS3Credentials } from "storage";
 import { TaskStatus } from "task-queue";
 import { IVerifyFileData } from "./verify.worker";
 import type { ITaskQueueProvider } from "task-queue";
+import { verify as verifySerializedFile } from "serialization";
 
 //
 // Options for verifying the media file database.
@@ -87,14 +88,14 @@ export interface IVerifyResult {
 // Checks for missing files, modified files, and new files.
 // If any files are corrupted, this will pick them up as modified.
 //
-export async function verify(storageDescriptor: IStorageDescriptor, metadataStorage: IStorage, taskQueueProvider: ITaskQueueProvider, options?: IVerifyOptions, progressCallback?: ProgressCallback) : Promise<IVerifyResult> {
+export async function verify(storageDescriptor: IStorageDescriptor, databaseStorage: IStorage, taskQueueProvider: ITaskQueueProvider, options?: IVerifyOptions, progressCallback?: ProgressCallback) : Promise<IVerifyResult> {
 
     let pathFilter = options?.pathFilter 
         ? options.pathFilter.replace(/\\/g, '/') // Normalize path separators
         : undefined;
 
     // Load the merkle tree once and reuse it throughout the verification process
-    const merkleTree = await retry(() => loadMerkleTree(metadataStorage));
+    const merkleTree = await retry(() => loadMerkleTree(databaseStorage));
     if (!merkleTree) {
         throw new Error(`Failed to load merkle tree`);
     }
@@ -222,14 +223,240 @@ export async function verify(storageDescriptor: IStorageDescriptor, metadataStor
         //
         await queue.awaitAllTasks();
 
-        //
-        // Log debug information about task execution.
-        //
-        const status = queue.getStatus();
-        log.verbose(`Verification complete: ${status.total} tasks queued, ${status.completed} completed, ${status.failed} failed`);
-
         return result;
-    } finally {
+    }
+    finally {
         queue.shutdown();
     }
+}
+
+//
+// Result from verifying database files.
+//
+export interface IDatabaseFileVerifyResult {
+    totalFiles: number;
+    totalSize: number;
+    validFiles: number;
+    invalidFiles: string[];
+    errors: { file: string; error: string }[];
+}
+
+
+//
+// Verifies all database files (merkle trees, metadata collection, sort indexes).
+// Checks size and checksum for each file.
+//
+// @param metadataStorage - Unencrypted storage scoped to .db/ directory (for tree.dat)
+// @param databaseStorage - Storage rooted at database directory (scans metadata/ subdirectory)
+//
+export async function verifyDatabaseFiles(metadataStorage: IStorage, databaseStorage: IStorage, progressCallback?: ProgressCallback): Promise<IDatabaseFileVerifyResult> {
+    const result: IDatabaseFileVerifyResult = {
+        totalFiles: 0,
+        totalSize: 0,
+        validFiles: 0,
+        invalidFiles: [],
+        errors: [],
+    };
+    
+    // Helper to add an error
+    function addError(file: string, error: string) {
+        result.invalidFiles.push(file);
+        result.errors.push({ file, error });
+    }
+    
+    //
+    // Phase 1: Count all files to verify
+    //
+    if (progressCallback) {
+        progressCallback("Verifying database files...");
+    }
+    
+    let expectedTotal = 0;
+    
+    // Count tree.dat (database merkle tree - metadataStorage is scoped to .db/)
+    if (await metadataStorage.fileExists("tree.dat")) {
+        expectedTotal++;
+    }
+    
+    // Count collection files (scan metadata/ subdirectory)
+    const metadataDirs = await databaseStorage.listDirs("metadata", 1000);
+    const collections = metadataDirs.names.filter(name => name !== "sort_indexes");
+    
+    for (const collectionName of collections) {
+        const collectionDir = `metadata/${collectionName}`;
+        
+        // Count collection.dat
+        if (await databaseStorage.fileExists(`${collectionDir}/collection.dat`)) {
+            expectedTotal++;
+        }
+        
+        // Count all other files in the collection
+        const collectionFiles = await databaseStorage.listFiles(collectionDir, 10000);
+        for (const fileName of collectionFiles.names) {
+            if (fileName !== "collection.dat") {
+                expectedTotal++;
+            }
+        }
+    }
+    
+    // Count sort index files
+    if (await databaseStorage.dirExists("metadata/sort_indexes")) {
+        const sortIndexCollections = await databaseStorage.listDirs("metadata/sort_indexes", 1000);
+        
+        for (const collectionName of sortIndexCollections.names) {
+            const sortIndexCollectionDir = `metadata/sort_indexes/${collectionName}`;
+            const indexDirs = await databaseStorage.listDirs(sortIndexCollectionDir, 1000);
+            
+            for (const indexDirName of indexDirs.names) {
+                const indexDir = `${sortIndexCollectionDir}/${indexDirName}`;
+                const indexFiles = await databaseStorage.listFiles(indexDir, 10000);
+                // Exclude build.checkpoint files
+                expectedTotal += indexFiles.names.filter(name => name !== "build.checkpoint").length;
+            }
+        }
+    }
+    
+    // Helper to report progress
+    let filesVerified = 0;
+    function reportProgress() {
+        filesVerified++;
+        if (progressCallback) {
+            progressCallback(`Verified database file ${filesVerified} of ${expectedTotal}`);
+        }
+    }
+    
+    //
+    // Phase 2: Verify all files
+    //
+    
+    // 1. Verify tree.dat (database merkle tree - no checksum, metadataStorage is scoped to .db/)
+    
+    if (await metadataStorage.fileExists("tree.dat")) {
+        log.verbose(`Verifying .db/tree.dat`);
+        result.totalFiles++;
+        const verifyResult = await verifySerializedFile(metadataStorage, "tree.dat", { checksum: false });
+        result.totalSize += verifyResult.size;
+        if (verifyResult.valid) {
+            result.validFiles++;
+        }
+        else {
+            addError("tree.dat", verifyResult.error || "Unknown error");
+        }
+        reportProgress();
+    }
+    
+    // 2. For each collection, verify all files
+    for (const collectionName of collections) {
+        const collectionDir = `metadata/${collectionName}`;
+        
+        // 3a. Verify collection.dat (collection merkle tree - no checksum)
+        const collectionDatPath = `${collectionDir}/collection.dat`;
+        if (await databaseStorage.fileExists(collectionDatPath)) {
+            log.verbose(`Verifying ${collectionDatPath}`);
+            result.totalFiles++;
+            const verifyResult = await verifySerializedFile(databaseStorage, collectionDatPath, { checksum: false });
+            result.totalSize += verifyResult.size;
+            if (verifyResult.valid) {
+                result.validFiles++;
+            }
+            else {
+                addError(collectionDatPath, verifyResult.error || "Unknown error");
+            }
+            reportProgress();
+        }
+        
+        // 3b. Get all files in the collection directory
+        const collectionFiles = await databaseStorage.listFiles(collectionDir, 10000);
+        
+        for (const fileName of collectionFiles.names) {
+            const filePath = `${collectionDir}/${fileName}`;
+            result.totalFiles++;
+            
+            if (fileName === "collection.dat") {
+                // Already verified above
+                result.totalFiles--;
+                continue;
+            }
+            else if (fileName.endsWith(".dat")) {
+                // Shard merkle tree file (no checksum)
+                log.verbose(`Verifying ${filePath}`);
+                const verifyResult = await verifySerializedFile(databaseStorage, filePath, { checksum: false });
+                result.totalSize += verifyResult.size;
+                if (verifyResult.valid) {
+                    result.validFiles++;
+                }
+                else {
+                    addError(filePath, verifyResult.error || "Unknown error");
+                }
+                reportProgress();
+            }
+            else {
+                // Shard data file (with checksum)
+                log.verbose(`Verifying ${filePath}`);
+                try {
+                    const verifyResult = await verifySerializedFile(databaseStorage, filePath, { checksum: true });
+                    result.totalSize += verifyResult.size;
+                    if (verifyResult.valid) {
+                        result.validFiles++;
+                    }
+                    else {
+                        addError(filePath, verifyResult.error || "Unknown error");
+                    }
+                }
+                catch (error: any) {
+                    addError(filePath, error.message);
+                }
+                reportProgress();
+            }
+        }
+    }
+    
+    // 4. Verify sort_indexes
+    if (await databaseStorage.dirExists("metadata/sort_indexes")) {
+        const sortIndexCollections = await databaseStorage.listDirs("metadata/sort_indexes", 1000);
+        
+        for (const collectionName of sortIndexCollections.names) {
+            const sortIndexCollectionDir = `metadata/sort_indexes/${collectionName}`;
+            const indexDirs = await databaseStorage.listDirs(sortIndexCollectionDir, 1000);
+            
+            for (const indexDirName of indexDirs.names) {
+                const indexDir = `${sortIndexCollectionDir}/${indexDirName}`;
+                
+                // Get all files in the index directory
+                const indexFiles = await databaseStorage.listFiles(indexDir, 10000);
+                
+                for (const fileName of indexFiles.names) {
+                    // Skip build.checkpoint files
+                    if (fileName === "build.checkpoint") {
+                        continue;
+                    }
+                    
+                    const filePath = `${indexDir}/${fileName}`;
+                    result.totalFiles++;
+                    
+                    // tree.dat and page files (all have checksum)
+                    log.verbose(`Verifying ${filePath}`);
+                    try {
+                        const verifyResult = await verifySerializedFile(databaseStorage, filePath, { checksum: true });
+                        result.totalSize += verifyResult.size;
+                        if (verifyResult.valid) {
+                            result.validFiles++;
+                        }
+                        else {
+                            addError(filePath, verifyResult.error || "Unknown error");
+                        }
+                    }
+                    catch (error: any) {
+                        addError(filePath, error.message);
+                    }
+                    reportProgress();
+                }
+            }
+        }
+    }
+    
+    // Ensure totalFiles reflects the expected total
+    result.totalFiles = expectedTotal;
+    
+    return result;
 }

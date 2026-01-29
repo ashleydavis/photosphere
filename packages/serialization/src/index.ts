@@ -5,6 +5,7 @@
 export { 
     save, 
     load, 
+    verify,
     UnsupportedVersionError,
     BinarySerializer,
     BinaryDeserializer,
@@ -16,5 +17,6 @@ export {
     type DeserializerFunction,
     type DeserializerMap,
     type MigrationFunction,
-    type MigrationMap
+    type MigrationMap,
+    type IVerifyResult
 } from './lib/serialization';
