@@ -10,7 +10,7 @@ import { verifyCommand } from './src/cmd/verify';
 import { replicateCommand } from './src/cmd/replicate';
 import { compareCommand } from './src/cmd/compare';
 import { hashCacheCommand } from './src/cmd/hash-cache';
-import { debugMerkleTreeCommand, debugFindCollisionsCommand, debugFindDuplicatesCommand, debugRemoveDuplicatesCommand } from './src/cmd/debug';
+import { debugMerkleTreeCommand, debugFindCollisionsCommand, debugFindDuplicatesCommand, debugRemoveDuplicatesCommand, debugBuildSortIndexCommand } from './src/cmd/debug';
 import { bugReportCommand } from './src/cmd/bug';
 import { examplesCommand } from './src/cmd/examples';
 import { versionCommand } from './src/cmd/version';
@@ -255,6 +255,16 @@ Resources:
         .option(...cwdOption)
         .option("-i, --input <path>", "Input JSON file path from find-duplicates command (default: duplicates.json)", "duplicates.json")
         .action(initContext(debugRemoveDuplicatesCommand));
+
+    debugCommand
+        .command("build-sort-index")
+        .description("Deletes all sort index files and rebuilds them completely.")
+        .option(...dbOption)
+        .option(...keyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option(...cwdOption)
+        .action(initContext(debugBuildSortIndexCommand));
 
     program
         .command("help [command]")
