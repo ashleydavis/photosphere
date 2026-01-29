@@ -31,8 +31,5 @@ export function writeProgress(message: string): void {
             clearProgressMessage();
             process.stdout.write(message);
         }
-        else {
-            process.stdout.write(`${message}\n`);
-        }
     }
 }
