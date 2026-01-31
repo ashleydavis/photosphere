@@ -6,7 +6,7 @@ import { SortNode } from "merkle-tree";
 import { createStorage, loadEncryptionKeys, IStorageDescriptor, IS3Credentials } from "storage";
 import type { ITaskContext } from "task-queue";
 import { computeAssetHash } from "./hash";
-import { formatFileSize, log } from "utils";
+import { formatFileSize, log, retry } from "utils";
 
 export interface IVerifyFileData {
     node: SortNode;
@@ -35,7 +35,7 @@ export async function verifyFileHandler(data: IVerifyFileData, context: ITaskCon
     const { options: storageOptions } = await loadEncryptionKeys(storageDescriptor.encryptionKeyPath, false);
     const { storage: assetStorage } = createStorage(storageDescriptor.dbDir, s3Config, storageOptions);
 
-    const fileInfo = await assetStorage.info(fileName);
+    const fileInfo = await retry(() => assetStorage.info(fileName));
     if (!fileInfo) {
         // The file doesn't exist in the storage.
         log.warn(`File "${fileName}" is missing, even though we just found it by walking the directory.`);
@@ -49,7 +49,7 @@ export async function verifyFileHandler(data: IVerifyFileData, context: ITaskCon
     const timestampChanged = node.lastModified === undefined || node.lastModified!.getTime() !== fileInfo.lastModified.getTime();             
     if (sizeChanged || timestampChanged) {
         // File metadata has changed - check if content actually changed by computing the hash.
-        const freshHash = await computeAssetHash(assetStorage.readStream(fileName), fileInfo);
+        const freshHash = await retry(() => computeAssetHash(assetStorage.readStream(fileName), fileInfo));
         if (Buffer.compare(freshHash.hash, node.contentHash!) !== 0) {
             // The file content has actually been modified.
             const reasons: string[] = [];
