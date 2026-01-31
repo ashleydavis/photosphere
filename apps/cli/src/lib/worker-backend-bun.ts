@@ -57,17 +57,17 @@ export interface IWorkerMessage {
 //
 // Worker response message types
 //
-interface IWorkerReadyMessage {
+export interface IWorkerReadyMessage {
     type: "worker-ready";
 }
 
-interface IWorkerTaskCompletedMessage {
+export interface IWorkerTaskCompletedMessage {
     type: "task-completed";
     taskId: string;
     result: ITaskResult;
 }
 
-interface IWorkerTaskMessage {
+export interface IWorkerTaskMessage {
     type: "task-message";
     taskId: string;
     message: any;

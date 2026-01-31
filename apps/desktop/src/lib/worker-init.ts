@@ -34,7 +34,8 @@ function formatTaskId(taskId: string): string {
     if (taskId.length <= 4) {
         return taskId;
     }
-    return `${taskId.substring(0, 2)}${taskId.substring(taskId.length - 2)}`;
+    // return `${taskId.substring(0, 2)}${taskId.substring(taskId.length - 2)}`;
+    return taskId;
 }
 
 //
