@@ -334,7 +334,7 @@ export async function verifyDatabaseFiles(metadataStorage: IStorage, databaseSto
     if (await metadataStorage.fileExists("tree.dat")) {
         log.verbose(`Verifying .db/tree.dat`);
         result.totalFiles++;
-        const verifyResult = await verifySerializedFile(metadataStorage, "tree.dat", { checksum: false });
+        const verifyResult = await verifySerializedFile(metadataStorage, "tree.dat", { checksum: false }); //todo: various checks can be done in background tasks.
         result.totalSize += verifyResult.size;
         if (verifyResult.valid) {
             result.validFiles++;
