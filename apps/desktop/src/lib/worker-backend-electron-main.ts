@@ -5,6 +5,15 @@ import { deserializeError } from "serialize-error";
 import type { IWorkerOptions } from "./worker-init";
 
 //
+// Options for configuring a worker backend (does not include workerId, which is assigned per worker)
+//
+export interface IWorkerBackendOptions {
+    verbose: boolean;
+    tools: boolean;
+    sessionId: string;
+}
+
+//
 // Worker message interface for communication between main thread and workers
 //
 export interface IWorkerMessage {
@@ -64,7 +73,7 @@ export class WorkerBackendElectronMain implements IWorkerBackend {
     private maxWorkers: number;
     private peakWorkers: number = 0;
     private workerPath: string;
-    private workerOptions: IWorkerOptions;
+    private backendOptions: IWorkerBackendOptions;
     private taskTimeout: number;
     private taskTimeouts: Map<string, NodeJS.Timeout> = new Map();
     private workerAvailableCallbacks: (() => void)[] = [];
@@ -76,11 +85,11 @@ export class WorkerBackendElectronMain implements IWorkerBackend {
     //
     // Creates a new worker backend with the specified number of utility process workers
     //
-    constructor(workerPath: string, maxWorkers: number, taskTimeout: number, workerOptions: IWorkerOptions) {
+    constructor(workerPath: string, maxWorkers: number, taskTimeout: number, backendOptions: IWorkerBackendOptions) {
         this.workerPath = workerPath;
         this.maxWorkers = maxWorkers;
         this.taskTimeout = taskTimeout;
-        this.workerOptions = workerOptions;
+        this.backendOptions = backendOptions;
     }
 
     //
@@ -222,11 +231,11 @@ export class WorkerBackendElectronMain implements IWorkerBackend {
         }
 
         const workerId = this.workers.length + 1;
-        const workerOptionsWithId = {
-            ...this.workerOptions,
+        const workerOptions: IWorkerOptions = {
+            ...this.backendOptions,
             workerId,
         };
-        workerEnv.WORKER_OPTIONS = JSON.stringify(workerOptionsWithId);
+        workerEnv.WORKER_OPTIONS = JSON.stringify(workerOptions);
 
         const worker = utilityProcess.fork(this.workerPath, [], { env: workerEnv });
         const workerState: IWorkerState = {
@@ -454,11 +463,11 @@ export class WorkerBackendElectronMain implements IWorkerBackend {
             workerEnv.TMPDIR = process.env.TMPDIR;
         }
 
-        const workerOptionsWithId = {
-            ...this.workerOptions,
+        const workerOptions: IWorkerOptions = {
+            ...this.backendOptions,
             workerId: oldWorkerState.workerId,
         };
-        workerEnv.WORKER_OPTIONS = JSON.stringify(workerOptionsWithId);
+        workerEnv.WORKER_OPTIONS = JSON.stringify(workerOptions);
 
         const worker = utilityProcess.fork(this.workerPath, [], { env: workerEnv });
         const newWorkerState: IWorkerState = {

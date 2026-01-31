@@ -1,8 +1,7 @@
 import { TaskQueue } from "task-queue";
 import type { ITaskQueue } from "task-queue";
-import type { IWorkerOptions } from "./worker-init";
 import type { ITaskQueueProvider } from "task-queue";
-import { WorkerBackendBun, type IWorkerInfo } from "./worker-backend-bun";
+import { WorkerBackendBun, type IWorkerInfo, type IWorkerOptions } from "./worker-backend-bun";
 import { registerStateProvider, updateStateProvider } from "debug-server";
 import type { IUuidGenerator, ITimestampProvider } from "utils";
 

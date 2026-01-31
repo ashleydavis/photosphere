@@ -7,7 +7,7 @@ import { TaskQueue } from 'task-queue';
 import { WorkerBackendElectronMain } from './lib/worker-backend-electron-main';
 import { RandomUuidGenerator, TimestampProvider, logExceptions } from 'utils';
 import { findAvailablePort, loadDesktopConfig, addRecentDatabase, removeRecentDatabase, updateLastFolder, clearLastDatabase, getTheme, setTheme } from 'node-utils';
-import type { IWorkerOptions } from './lib/worker-init';
+import type { IWorkerBackendOptions } from './lib/worker-backend-electron-main';
 import type { IRestApiWorkerStopMessage, IRestApiWorkerStartMessage } from './rest-api-worker';
 import { FileLoggerElectron } from './lib/file-logger-electron';
 import type { IRendererLogMessage } from 'electron-defs';
@@ -211,7 +211,7 @@ function initWorkers() {
     const uuidGenerator = new RandomUuidGenerator();
     const timestampProvider = new TimestampProvider();
     const taskTimeout = 600000; // 10 minutes
-    const workerOptions: IWorkerOptions = {
+    const workerOptions: IWorkerBackendOptions = {
         verbose: false,
         tools: false,
         sessionId: uuidGenerator.generate(),
