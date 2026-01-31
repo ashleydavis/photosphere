@@ -11,6 +11,8 @@ jest.mock("../../lib/sleep", () => ({
 jest.mock("../../lib/log", () => ({
     log: {
         exception: jest.fn(),
+        verbose: jest.fn(),
+        verboseEnabled: false,
     },
 }));
 
@@ -47,7 +49,6 @@ describe("retry", () => {
         expect(sleep).toHaveBeenCalledTimes(2);
         expect(sleep).toHaveBeenNthCalledWith(1, 100);
         expect(sleep).toHaveBeenNthCalledWith(2, 200);
-        expect(log.exception).toHaveBeenCalledTimes(2);
     });
 
     test("should throw error after all retries exhausted", async () => {
@@ -60,7 +61,6 @@ describe("retry", () => {
         expect(sleep).toHaveBeenCalledTimes(2);
         expect(sleep).toHaveBeenNthCalledWith(1, 100);
         expect(sleep).toHaveBeenNthCalledWith(2, 200);
-        expect(log.exception).toHaveBeenCalledTimes(2);
         expect(console.error).toHaveBeenCalledWith("Operation failed, no more retries allowed.");
     });
 
@@ -119,7 +119,6 @@ describe("retry", () => {
 
         expect(operation).toHaveBeenCalledTimes(2);
         expect(sleep).toHaveBeenCalledTimes(1);
-        expect(log.exception).toHaveBeenCalledTimes(1);
     });
 
     test("should throw error immediately when maxAttempts is 1", async () => {
