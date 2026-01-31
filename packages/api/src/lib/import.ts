@@ -262,12 +262,13 @@ export async function addPaths(
                     throttledProcessQueue();
                 }                
             } 
-            else if (taskResult.status === TaskStatus.Failed) {
-                if (taskResult.error) {
-                    log.exception(`Failed to import file "${taskResult.inputs.logicalPath}": ${taskResult.errorMessage}`, taskResult.error);
+            else if (result.status === TaskStatus.Failed) {
+                const taskData = task.data;
+                if (result.error) {
+                    log.exception(`Failed to import file "${taskData.logicalPath}": ${result.errorMessage}`, result.error);
                 } 
                 else {
-                    log.error(`Failed to import file "${taskResult.inputs.logicalPath}": ${taskResult.errorMessage}`);
+                    log.error(`Failed to import file "${taskData.logicalPath}": ${result.errorMessage}`);
                 }
                 summary.filesFailed++;
             }
