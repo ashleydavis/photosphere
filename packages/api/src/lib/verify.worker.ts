@@ -37,8 +37,6 @@ export async function verifyFileHandler(data: IVerifyFileData, context: ITaskCon
 
     const fileInfo = await retry(() => assetStorage.info(fileName));
     if (!fileInfo) {
-        // The file doesn't exist in the storage.
-        log.warn(`File "${fileName}" is missing, even though we just found it by walking the directory.`);
         return {
             fileName,
             status: "removed",
