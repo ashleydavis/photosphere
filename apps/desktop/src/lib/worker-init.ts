@@ -12,6 +12,7 @@ import type { IUuidGenerator, ITimestampProvider } from "utils";
 // Options passed to workers for context initialization
 //
 export interface IWorkerOptions {
+    workerId: number;
     verbose: boolean;
     tools: boolean;
     sessionId: string;
@@ -42,9 +43,11 @@ function formatTaskId(taskId: string): string {
 class WorkerLog implements ILog {
     readonly verboseEnabled: boolean;
     private readonly toolsEnabled: boolean;
+    private readonly workerId: number;
     private currentTaskId: string | null = null;
 
-    constructor(verboseEnabled: boolean, toolsEnabled: boolean) {
+    constructor(workerId: number, verboseEnabled: boolean, toolsEnabled: boolean) {
+        this.workerId = workerId;
         this.verboseEnabled = verboseEnabled;
         this.toolsEnabled = toolsEnabled;
     }
@@ -54,10 +57,11 @@ class WorkerLog implements ILog {
     }
 
     private prefixMessage(message: string): string {
+        const parts: string[] = [`W${this.workerId}`];
         if (this.currentTaskId) {
-            return `[${formatTaskId(this.currentTaskId)}] ${message}`;
+            parts.push(formatTaskId(this.currentTaskId));
         }
-        return message;
+        return `[${parts.join(':')}] ${message}`;
     }
 
     verbose(message: string): void {    
@@ -93,7 +97,11 @@ class WorkerLog implements ILog {
             return;
         }
         
-        const prefix = this.currentTaskId ? `[${formatTaskId(this.currentTaskId)}] ` : "";
+        const parts: string[] = [`W${this.workerId}`];
+        if (this.currentTaskId) {
+            parts.push(formatTaskId(this.currentTaskId));
+        }
+        const prefix = `[${parts.join(':')}] `;
         if (data.stdout) {
             console.log(`${prefix}== ${tool} stdout ==\n${data.stdout}`);
         }
@@ -122,7 +130,7 @@ export function setWorkerTaskId(taskId: string | null): void {
 //
 export function initWorkerContext(options: IWorkerOptions): IWorkerContext {
     // Configure logging (console only for workers)
-    const workerLog = new WorkerLog(options.verbose, options.tools);
+    const workerLog = new WorkerLog(options.workerId, options.verbose, options.tools);
     workerLogInstance = workerLog;
     setLog(workerLog);
     
