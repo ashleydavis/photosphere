@@ -2062,8 +2062,8 @@ test_repair_damaged_database() {
     local verify_output
     invoke_command "Verify damaged database" "$(get_cli_command) verify --db $damaged_dir --yes --full" 0 "verify_output"
     
-    # Verify should detect issues
-    expect_output_string "$verify_output" "Database verification found issues" "Verify detects damage"
+    # Verify should detect issues (asset and/or database file problems)
+    expect_output_string "$verify_output" "verification found issues" "Verify detects damage"
     
     # Run repair to fix the issues
     log_info "Running repair to fix issues..."
