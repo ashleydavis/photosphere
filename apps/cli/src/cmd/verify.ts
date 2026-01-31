@@ -4,7 +4,7 @@ import { exit } from "node-utils";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import { loadDatabase, IBaseCommandOptions, ICommandContext, resolveKeyPath } from "../lib/init-cmd";
 import { formatBytes } from "../lib/format";
-import { verify, verifyDatabaseFiles } from "api";
+import { verify, verifyDatabaseFiles, IDatabaseFileVerifyResult } from "api";
 import { IStorageDescriptor } from "storage";
 import { getS3Config } from "../lib/config";
 
@@ -37,18 +37,19 @@ export async function verifyCommand(context: ICommandContext, options: IVerifyCo
     
     // Get S3 config to pass to workers (needed for S3-hosted storage)
     const s3Config = await getS3Config();
-    
+
     //
-    // First, verify database files (metadata and sort index files).
+    // First, verify database files (metadata and sort index files) when verifying the full database.
     //
-    log.info(pc.bold(pc.blue('🗄️  Verifying database files...')));
-    log.info('');
-    
-    const dbFileResult = await verifyDatabaseFiles(metadataStorage, assetStorage, (progress) => {
-        writeProgress(`🔍 ${progress}`);
-    });
-    
-    clearProgressMessage();
+    let dbFileResult: IDatabaseFileVerifyResult | undefined;
+    if (!options.path) {
+        log.info(pc.bold(pc.blue('🗄️  Verifying database files...')));
+        log.info('');
+        dbFileResult = await verifyDatabaseFiles(metadataStorage, assetStorage, (progress) => {
+            writeProgress(`🔍 ${progress}`);
+        });
+        clearProgressMessage();
+    }
     
     //
     // Then, verify asset files.
@@ -110,37 +111,38 @@ export async function verifyCommand(context: ICommandContext, options: IVerifyCo
     log.info('');
     
     //
-    // Database file summary
+    // Database file summary (only when we ran database file verification, i.e. full verify without path)
     //
-    log.info(pc.bold('Database files:'));
-    log.info(`  Total files:    ${pc.cyan(dbFileResult.totalFiles.toString())}`);
-    log.info(`  Total size:     ${pc.cyan(formatBytes(dbFileResult.totalSize))}`);
-    log.info(`  Valid files:    ${dbFileResult.validFiles === dbFileResult.totalFiles ? pc.green(dbFileResult.validFiles.toString()) : pc.yellow(dbFileResult.validFiles.toString())}`);
-    log.info(`  Invalid files:  ${dbFileResult.invalidFiles.length > 0 ? pc.red(dbFileResult.invalidFiles.length.toString()) : pc.green('0')}`);
-    
-    // Show details for invalid database files
-    if (dbFileResult.errors.length > 0) {
-        log.info('');
-        log.info(pc.red(`Invalid database files:`));
-        for (const { file, error } of dbFileResult.errors) {
-            log.info(`  ${pc.red('●')} ${file}`);
-            log.info(`    ${pc.gray(error)}`);
+    if (dbFileResult !== undefined) {
+        log.info(pc.bold('Database files:'));
+        log.info(`  Total files:    ${pc.cyan(dbFileResult.totalFiles.toString())}`);
+        log.info(`  Total size:     ${pc.cyan(formatBytes(dbFileResult.totalSize))}`);
+        log.info(`  Valid files:    ${dbFileResult.validFiles === dbFileResult.totalFiles ? pc.green(dbFileResult.validFiles.toString()) : pc.yellow(dbFileResult.validFiles.toString())}`);
+        log.info(`  Invalid files:  ${dbFileResult.invalidFiles.length > 0 ? pc.red(dbFileResult.invalidFiles.length.toString()) : pc.green('0')}`);
+        
+        // Show details for invalid database files
+        if (dbFileResult.errors.length > 0) {
+            log.info('');
+            log.info(pc.red(`Invalid database files:`));
+            for (const { file, error } of dbFileResult.errors) {
+                log.info(`  ${pc.red('●')} ${file}`);
+                log.info(`    ${pc.gray(error)}`);
+            }
         }
+        log.info('');
     }
-    
-    log.info('');
     
     //
     // Summary
     //
-    const dbFilesOk = dbFileResult.invalidFiles.length === 0;
+    const dbFilesOk = dbFileResult === undefined || dbFileResult.invalidFiles.length === 0;
     const assetFilesOk = result.modified.length === 0 && result.new.length === 0 && result.removed.length === 0 && result.numFailures === 0;
     
     if (dbFilesOk && assetFilesOk) {
         log.info(pc.green(`✅ Database verification passed - all files are intact`));
     }
     else {
-        if (!dbFilesOk) {
+        if (dbFileResult !== undefined && !dbFilesOk) {
             log.info(pc.red(`❌ Database file verification failed - ${dbFileResult.invalidFiles.length} file(s) have issues`));
         }
         if (!assetFilesOk) {
@@ -151,7 +153,7 @@ export async function verifyCommand(context: ICommandContext, options: IVerifyCo
     // Show follow-up commands
     log.info('');
     log.info(pc.bold('Next steps:'));
-    const hasProblems = dbFileResult.invalidFiles.length > 0 || result.modified.length > 0 || result.new.length > 0 || result.removed.length > 0 || result.numFailures > 0;
+    const hasProblems = (dbFileResult?.invalidFiles.length ?? 0) > 0 || result.modified.length > 0 || result.new.length > 0 || result.removed.length > 0 || result.numFailures > 0;
     if (hasProblems) {
         log.info(pc.gray(`    # Fix database issues by restoring from source`));
         log.info(`    psi repair --source <backup-db-path>`);
