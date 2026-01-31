@@ -5,8 +5,5 @@ export default {
         "dist",
         "build",
     ],
-    moduleNameMapper: {
-        '^serialize-error$': '<rootDir>/__mocks__/serialize-error.js'
-    },
 };
 
