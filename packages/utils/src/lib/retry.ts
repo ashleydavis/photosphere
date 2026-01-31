@@ -1,3 +1,4 @@
+import { serializeError } from "serialize-error";
 import { log } from "./log";
 import { sleep } from "./sleep";
 
@@ -13,7 +14,10 @@ export async function retry<ReturnT>(operation: () => Promise<ReturnT>, maxAttem
         }
         catch (error: any) {
             if (maxAttempts >= 1) {
-                log.exception("Operation failed, will retry.", error);
+                if (log.verboseEnabled) {
+                    log.verbose("Operation failed with error, will retry.");
+                    log.verbose(`Error: ${JSON.stringify(serializeError(error), null, 2)}`);
+                }
 
                 await sleep(waitTimeMS);
                 waitTimeMS *= waitTimeScale;
