@@ -5,11 +5,12 @@
 //
 
 import { serializeError } from "serialize-error";
-import { executeTaskHandler } from "task-queue";
+import { executeTaskHandler, TaskStatus } from "task-queue";
 import type { ITaskContext } from "task-queue";
 import { initWorkerContext, setWorkerTaskId, type IWorkerContext, type IWorkerOptions } from "./src/lib/worker-init";
 import type { IWorkerMessage, IWorkerTaskCompletedMessage, IWorkerTaskMessage, IWorkerReadyMessage } from "./src/lib/worker-backend-bun";
 import { initTaskHandlers } from "api";
+import { log } from "utils";
 
 //
 // Register all task handlers
@@ -45,8 +46,12 @@ async function executeTask(message: IWorkerMessage, taskContext: ITaskContext): 
         // Set task ID for logging prefix and progress messages
         setWorkerTaskId(taskId);
 
+        log.verbose(`Executing task ${taskId} with type ${taskType} and payload ${JSON.stringify(data, null, 2)}`);
+
         // Execute the handler with task-specific context
         const outputs = await executeTaskHandler(taskType, data, taskContext);
+
+        log.verbose(`Task ${taskId} completed with outputs ${JSON.stringify(outputs, null, 2)}`);
         
         // Clear task ID from logging and progress
         setWorkerTaskId(null);
@@ -56,13 +61,18 @@ async function executeTask(message: IWorkerMessage, taskContext: ITaskContext): 
             type: "task-completed",
             taskId,
             result: {
-                status: "succeeded",
+                taskId,
+                status: TaskStatus.Succeeded,
                 outputs: outputs
             }
         };
         self.postMessage(successMessage);
     }
     catch (error: any) {
+        if (log.verboseEnabled) {
+            log.verbose(`Task ${taskId} failed with error ${JSON.stringify(serializeError(error), null, 2)}`);
+        }
+
         // Clear task ID from logging and progress
         setWorkerTaskId(null);
         
@@ -71,7 +81,8 @@ async function executeTask(message: IWorkerMessage, taskContext: ITaskContext): 
             type: "task-completed",
             taskId,
             result: {
-                status: "failed",
+                taskId,
+                status: TaskStatus.Failed,
                 error: serializeError(error)
             }
         };
