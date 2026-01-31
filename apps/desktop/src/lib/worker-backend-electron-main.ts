@@ -221,12 +221,17 @@ export class WorkerBackendElectronMain implements IWorkerBackend {
             workerEnv.TMPDIR = process.env.TMPDIR;
         }
 
-        workerEnv.WORKER_OPTIONS = JSON.stringify(this.workerOptions);
+        const workerId = this.workers.length + 1;
+        const workerOptionsWithId = {
+            ...this.workerOptions,
+            workerId,
+        };
+        workerEnv.WORKER_OPTIONS = JSON.stringify(workerOptionsWithId);
 
         const worker = utilityProcess.fork(this.workerPath, [], { env: workerEnv });
         const workerState: IWorkerState = {
             worker,
-            workerId: this.workers.length + 1,
+            workerId,
             isReady: false,
             isIdle: false,
             currentTaskId: null,
@@ -449,7 +454,11 @@ export class WorkerBackendElectronMain implements IWorkerBackend {
             workerEnv.TMPDIR = process.env.TMPDIR;
         }
 
-        workerEnv.WORKER_OPTIONS = JSON.stringify(this.workerOptions);
+        const workerOptionsWithId = {
+            ...this.workerOptions,
+            workerId: oldWorkerState.workerId,
+        };
+        workerEnv.WORKER_OPTIONS = JSON.stringify(workerOptionsWithId);
 
         const worker = utilityProcess.fork(this.workerPath, [], { env: workerEnv });
         const newWorkerState: IWorkerState = {

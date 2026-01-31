@@ -11,6 +11,7 @@ import type { IUuidGenerator, ITimestampProvider } from "utils";
 // Options passed to workers for context initialization
 //
 export interface IWorkerOptions {
+    workerId: number;
     verbose?: boolean;
     tools?: boolean;
     sessionId?: string;
