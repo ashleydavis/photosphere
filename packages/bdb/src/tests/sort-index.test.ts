@@ -46,10 +46,10 @@ describe('SortIndex', () => {
         
         
         // Check that tree file has been written
-        expect(await storage.fileExists('db/sort_indexes/test_collection/score_asc/tree.dat')).toBe(true);
+        expect(await storage.fileExists('db/indexes/test_collection/score_asc/tree.dat')).toBe(true);
         
         // B-tree implementation uses UUIDs for page IDs, so we check tree file instead
-        expect(await storage.fileExists('db/sort_indexes/test_collection/score_asc/tree.dat')).toBe(true);
+        expect(await storage.fileExists('db/indexes/test_collection/score_asc/tree.dat')).toBe(true);
         
         // Force metadata save
         await sortIndex.saveTree();
@@ -241,7 +241,7 @@ describe('SortIndex', () => {
         await sortIndex.delete();
         
         // Check that the index directory no longer exists
-        const exists = await storage.dirExists('db/sort_indexes/test_collection/score_asc');
+        const exists = await storage.dirExists('db/indexes/test_collection/score_asc');
         expect(exists).toBe(false);        
     });
 

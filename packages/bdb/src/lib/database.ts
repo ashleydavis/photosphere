@@ -52,48 +52,45 @@ export class BsonDatabase implements IBsonDatabase {
     }
 
     //
-    // Gets the names of all collections in the database.
+    // Gets the names of all collections in the database (v6 layout: list collections/ subdir).
     //
     async collections(): Promise<string[]> {
 
         const uniqueSet = new Set<string>();
 
-        let next: string | undefined = undefined;
-        do {
-            const storageResult = await this.options.storage.listDirs("", 1000, next);
-            for (const name of storageResult.names) { 
-                // Filter out system directories
-                if (name !== 'sort_indexes') {
+        if (await this.options.storage.dirExists("collections")) {
+            let next: string | undefined = undefined;
+            do {
+                const storageResult = await this.options.storage.listDirs("collections", 1000, next);
+                for (const name of storageResult.names) {
                     uniqueSet.add(name);
                 }
-            }
-            next = storageResult.next;
-        } while (next);
+                next = storageResult.next;
+            } while (next);
+        }
 
         for (const name of this._collections.keys()) {
-            // Also filter out system directories from cached collections
-            if (name !== 'sort_indexes') {
-                uniqueSet.add(name);
-            }
+            uniqueSet.add(name);
         }
 
         return Array.from(uniqueSet);
     }
 
     //
-    // Gets a named collection.
+    // Gets a named collection (v6 layout: directory = collections/<name>).
     //
     collection<RecordT extends IRecord>(name: string): IBsonCollection<RecordT> {
-        let collection = this._collections.get(name);
-        if (!collection) {
-            collection = new BsonCollection<IRecord>(name, {
+        let coll = this._collections.get(name);
+        if (!coll) {
+            coll = new BsonCollection<IRecord>(name, {
                 storage: this.options.storage,
-                directory: name,
+                directory: `collections/${name}`,
+                baseDirectory: "",
                 uuidGenerator: this.options.uuidGenerator,
                 timestampProvider: this.options.timestampProvider
             });
-            this._collections.set(name, collection);
-        }        
-        return collection as IBsonCollection<RecordT>;
+            this._collections.set(name, coll);
+        }
+        return coll as IBsonCollection<RecordT>;
     }
 }

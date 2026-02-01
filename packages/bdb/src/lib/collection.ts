@@ -59,9 +59,14 @@ export interface IBsonCollectionOptions {
     storage: IStorage;
 
     //
-    // The directory where the collection is stored.
+    // The directory where the collection is stored (v6: collections/<name>).
     //
     directory: string;
+
+    //
+    // BSON database root (v6: "" = storage root; used for indexes path).
+    //
+    baseDirectory: string;
 
     //
     // UUID generator for creating unique identifiers.
@@ -308,6 +313,8 @@ export interface IBsonCollection<RecordT extends IRecord> {
 export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<RecordT> {
     private storage: IStorage;
     private directory: string;
+
+    private readonly baseDirectory: string;
     private numShards: number;
     private readonly defaultPageSize: number = 1000;
 
@@ -329,6 +336,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     constructor(private readonly name: string, options: IBsonCollectionOptions) {
         this.storage = options.storage;
         this.directory = options.directory;
+        this.baseDirectory = options.baseDirectory;
         this.numShards = options.numShards || 100;
         this.uuidGenerator = options.uuidGenerator;
         this.timestampProvider = options.timestampProvider;
@@ -360,10 +368,10 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     }
 
     //
-    // Gets the base directory for sort indexes (parent directory of collection).
+    // Gets the base directory for sort indexes (v6: BSON root = indexes/).
     //
     private getSortIndexBaseDirectory(): string {
-        return this.directory.split('/').slice(0, -1).join('/');
+        return this.baseDirectory;
     }
 
     //
@@ -441,7 +449,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     // Saves the shard.
     //
     private async saveShard(shard: IShard): Promise<void> {
-        const filePath = `${this.directory}/${shard.id}`;
+        const filePath = `${this.directory}/shards/${shard.id}`;
         await this.saveShardFile(filePath, shard);
     }
 
@@ -808,7 +816,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     // Loads the requested shard from cache or from storage.
     //
     async loadShard(shardId: string): Promise<IShard> {
-        const filePath = `${this.directory}/${shardId}`;
+        const filePath = `${this.directory}/shards/${shardId}`;
         const records = await this.loadRecords(filePath);
         const shard: IShard = {
             id: shardId,
@@ -875,7 +883,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     //
     async *iterateRecords(): AsyncGenerator<IInternalRecord, void, unknown> {
         for (let shardId = 0; shardId < this.numShards; shardId++) {
-            const records = await this.loadRecords(`${this.directory}/${shardId}`);
+            const records = await this.loadRecords(`${this.directory}/shards/${shardId}`);
             for (const record of records) {
                 yield record;
             }
@@ -888,7 +896,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     //
     async *iterateShards(): AsyncGenerator<Iterable<IInternalRecord>, void, unknown> {
         for (let shardId = 0; shardId < this.numShards; shardId++) {
-            const records = await this.loadRecords(`${this.directory}/${shardId}`);
+            const records = await this.loadRecords(`${this.directory}/shards/${shardId}`);
             if (records.length > 0) {
                 yield records;
             }
@@ -905,7 +913,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         let shardId = next ? parseInt(next) : 0;
         while (shardId < this.numShards) {
             // Load records from storage
-            const filePath = `${this.directory}/${shardId}`;
+            const filePath = `${this.directory}/shards/${shardId}`;
             const internalRecords = await this.loadRecords(filePath);
             if (internalRecords.length > 0) {
                 // Convert to external format
@@ -1056,8 +1064,8 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     // Checks if a sort index exists for the given field name
     //
     async hasIndex(fieldName: string, direction: SortDirection): Promise<boolean> {
-        // Check if the index exists on disk.
-        const indexPath = `${this.getSortIndexBaseDirectory()}/sort_indexes/${this.name}/${fieldName}_${direction}`;
+        // Check if the index exists on disk (v6: indexes/).
+        const indexPath = `${this.getSortIndexBaseDirectory()}/indexes/${this.name}/${fieldName}_${direction}`;
         return await this.storage.dirExists(indexPath);
     }
         
@@ -1166,12 +1174,12 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     // List all sort indexes for this collection
     //
     async listSortIndexes(): Promise<Array<{ fieldName: string; direction: SortDirection; }>> {              
-        const collectionIndexPath = `${this.getSortIndexBaseDirectory()}/sort_indexes/${this.name}`;
-        
+        const collectionIndexPath = `${this.getSortIndexBaseDirectory()}/indexes/${this.name}`;
+
         if (!await this.storage.dirExists(collectionIndexPath)) {
             return [];
         }
-        
+
         const result = await this.storage.listDirs(collectionIndexPath, 1000);
         const directories = result.names || [];
         
@@ -1197,7 +1205,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     //
     async deleteSortIndex(fieldName: string, direction: SortDirection): Promise<boolean> {
         // Try to delete from disk.
-        const indexPath = `${this.getSortIndexBaseDirectory()}/sort_indexes/${this.name}/${fieldName}_${direction}`;
+        const indexPath = `${this.getSortIndexBaseDirectory()}/indexes/${this.name}/${fieldName}_${direction}`;
         if (await this.storage.dirExists(indexPath)) {
             // Create instance to call delete() which handles cleanup
             const sortIndex = this.createSortIndex(fieldName, direction);
@@ -1212,16 +1220,10 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     // Drops the whole collection.
     //
     async drop(): Promise<void> {       
-        // Delete sort indexes if any
-        const collectionIndexPath = `${this.getSortIndexBaseDirectory()}/sort_indexes/${this.name}`;
+        // Delete sort indexes if any (v6: indexes/<collectionName>)
+        const collectionIndexPath = `${this.getSortIndexBaseDirectory()}/indexes/${this.name}`;
         if (await this.storage.dirExists(collectionIndexPath)) {
             await this.storage.deleteDir(collectionIndexPath);
-        }
-        
-        // Delete the index directory
-        const indexDirPath = `${this.directory}/index`;
-        if (await this.storage.dirExists(indexDirPath)) {
-            await this.storage.deleteFile(indexDirPath);
         }
         
         // Delete the collection directory (which includes merkle trees)

@@ -1,4 +1,5 @@
-import { IBsonCollection, IBsonDatabase, IInternalRecord, IRecord, loadCollectionMerkleTree, loadDatabaseMerkleTree, loadShardMerkleTree, mergeRecords } from "bdb";
+import { IBsonCollection, IBsonDatabase, IInternalRecord, IRecord, loadDatabaseMerkleTree, mergeRecords } from "bdb";
+import { loadCollectionMerkleTree, loadShardMerkleTree } from "./tree";
 import { deleteItem, findMerkleTreeDifferences, getItemInfo, IMerkleTree, MerkleNode, upsertItem } from "merkle-tree";
 import { IStorage, StoragePrefixWrapper, pathJoin } from "storage";
 import { IDatabaseMetadata } from "./media-file-database";
@@ -397,7 +398,7 @@ async function* iterateCollectionDifferences(
     // Process shards only in source
     for (const shardId of iterateLeaves(diff.onlyInTree1)) {
         seenShardKeys.add(shardId);
-        
+
         const sourceShardTree = await loadShardMerkleTree(sourceStorage, collectionName, shardId);
         const targetShardTree = await loadShardMerkleTree(targetStorage, collectionName, shardId);
         if (!sourceShardTree && !targetShardTree) {
@@ -414,11 +415,11 @@ async function* iterateCollectionDifferences(
         }
         
         const sourceShardTree = await loadShardMerkleTree(sourceStorage, collectionName, shardId);
-        const targetShardTree = await loadShardMerkleTree(targetStorage, collectionName, shardId);        
+        const targetShardTree = await loadShardMerkleTree(targetStorage, collectionName, shardId);
         if (!sourceShardTree && !targetShardTree) {
             continue;
         }
-        
+
         yield* iterateShardDifferences(collectionName, shardId, sourceCollection, targetCollection, sourceShardTree, targetShardTree);
     }
 }
@@ -446,7 +447,7 @@ async function* iterateDatabaseDifferences( //todo: todo this could be in the bd
     // Process collections only in source
     for (const collectionName of iterateLeaves(diff.onlyInTree1)) {
         seenCollections.add(collectionName);
-        
+
         const sourceCollectionTree = await loadCollectionMerkleTree(sourceStorage, collectionName);
         const targetCollectionTree = await loadCollectionMerkleTree(targetStorage, collectionName);
         
@@ -465,11 +466,11 @@ async function* iterateDatabaseDifferences( //todo: todo this could be in the bd
         
         const sourceCollectionTree = await loadCollectionMerkleTree(sourceStorage, collectionName);
         const targetCollectionTree = await loadCollectionMerkleTree(targetStorage, collectionName);
-        
+
         if (!sourceCollectionTree && !targetCollectionTree) {
             continue;
         }
-        
+
         yield* iterateCollectionDifferences(collectionName, sourceStorage, targetStorage, sourceDb, targetDb, sourceCollectionTree, targetCollectionTree);
     }
 }

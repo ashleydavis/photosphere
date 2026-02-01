@@ -38,12 +38,12 @@ describe('BsonDatabase', () => {
         database.collection('users');
         database.collection('products');
         database.collection('orders');
-        
-        // Add some files in the storage to simulate existing collections
-        await storage.write('metadata/1', undefined, Buffer.from('test'));
-        
+
+        // Add v6 layout: collections/metadata so listDirs('collections') returns ['metadata']
+        await storage.write('collections/metadata/shards/0', undefined, Buffer.from('test'));
+
         const collections = await database.collections();
-        
+
         // Should include collections from both memory and storage
         expect(collections).toContain('users');
         expect(collections).toContain('products');

@@ -98,8 +98,8 @@ describe('SortIndex with date type', () => {
         await sortIndexDesc.build(collection);
         
         // Check that tree files have been written
-        expect(await storage.fileExists('db/sort_indexes/test_collection/createdAt_asc/tree.dat')).toBe(true);
-        expect(await storage.fileExists('db/sort_indexes/test_collection/updatedAt_desc/tree.dat')).toBe(true);
+        expect(await storage.fileExists('db/indexes/test_collection/createdAt_asc/tree.dat')).toBe(true);
+        expect(await storage.fileExists('db/indexes/test_collection/updatedAt_desc/tree.dat')).toBe(true);
     });
     
     test('should retrieve records in ascending date order', async () => {

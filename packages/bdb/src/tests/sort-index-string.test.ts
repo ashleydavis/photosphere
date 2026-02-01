@@ -106,8 +106,8 @@ describe('SortIndex with string type', () => {
         await sortIndexDesc.build(collection);
         
         // Check that tree files have been written
-        expect(await storage.fileExists('db/sort_indexes/test_collection/name_asc/tree.dat')).toBe(true);
-        expect(await storage.fileExists('db/sort_indexes/test_collection/status_desc/tree.dat')).toBe(true);
+        expect(await storage.fileExists('db/indexes/test_collection/name_asc/tree.dat')).toBe(true);
+        expect(await storage.fileExists('db/indexes/test_collection/status_desc/tree.dat')).toBe(true);
     });
     
     test('should retrieve records in ascending string order', async () => {
