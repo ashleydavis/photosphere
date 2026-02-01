@@ -15,8 +15,9 @@ async function isMediaDatabase(dirPath: string): Promise<boolean> {
             return false;
         }
 
-        const treePath = join(dbDir, 'tree.dat');
-        return await pathExists(treePath);
+        const filesDatPath = join(dbDir, 'files.dat');
+        const treeDatPath = join(dbDir, 'tree.dat');
+        return await pathExists(filesDatPath) || await pathExists(treeDatPath);
     } catch (error) {
         return false;
     }

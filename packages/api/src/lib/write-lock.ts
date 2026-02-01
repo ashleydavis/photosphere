@@ -4,7 +4,7 @@ import { log, retry, sleep } from "utils";
 //
 // Acquires the write lock for the database.
 // Only needed for writing to:
-// - the merkle tree file (tree.dat).
+// - the merkle tree file (files.dat).
 // - the BSON database and sorted indexes.
 //
 // Throws when the write lock cannot be acquired.

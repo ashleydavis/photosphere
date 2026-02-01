@@ -12,9 +12,9 @@ async function main() {
         .addHelpText('after', `
 
 Examples:
-  ${pc.bold("mk show ./path/to/tree.dat")}                 Show merkle tree visualization
-  ${pc.bold("mk root-hash ./path/to/tree.dat")}           Print the root hash
-  ${pc.bold("mk check ./path/to/tree.dat")}               Check leaf nodes are sorted
+  ${pc.bold("mk show ./path/to/files.dat")}                 Show merkle tree visualization
+  ${pc.bold("mk root-hash ./path/to/files.dat")}           Print the root hash
+  ${pc.bold("mk check ./path/to/files.dat")}               Check leaf nodes are sorted
 
 Resources:
   📖 Merkle Tree Package: packages/merkle-tree
@@ -29,9 +29,9 @@ Resources:
         .addHelpText('after', `
 
 Examples:
-  ${pc.bold("mk show ./my-database/.db/tree.dat")}
+  ${pc.bold("mk show ./my-database/.db/files.dat")}
   ${pc.bold("mk show ./my-database/.db/custom.dat")}
-  ${pc.bold("mk show s3://my-bucket/database/.db/tree.dat")}`)
+  ${pc.bold("mk show s3://my-bucket/database/.db/files.dat")}`)
         .action(showCommand);
 
     program
@@ -42,8 +42,8 @@ Examples:
         .addHelpText('after', `
 
 Examples:
-  ${pc.bold("mk root-hash ./my-database/.db/tree.dat")}
-  ${pc.bold("mk root-hash s3://my-bucket/database/.db/tree.dat")}`)
+  ${pc.bold("mk root-hash ./my-database/.db/files.dat")}
+  ${pc.bold("mk root-hash s3://my-bucket/database/.db/files.dat")}`)
         .action(rootHashCommand);
 
     program
@@ -54,8 +54,8 @@ Examples:
         .addHelpText('after', `
 
 Examples:
-  ${pc.bold("mk check ./my-database/.db/tree.dat")}
-  ${pc.bold("mk check s3://my-bucket/database/.db/tree.dat")}`)
+  ${pc.bold("mk check ./my-database/.db/files.dat")}
+  ${pc.bold("mk check s3://my-bucket/database/.db/files.dat")}`)
         .action(checkCommand);
 
     // Parse the command line arguments

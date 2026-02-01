@@ -3,8 +3,8 @@ import pc from "picocolors";
 import { exit } from "node-utils";
 import { IBaseCommandOptions, loadDatabase, ICommandContext, resolveKeyPath } from "../lib/init-cmd";
 import { intro, outro, confirm } from '../lib/clack/prompts';
-import { addItem, CURRENT_DATABASE_VERSION, rebuildTree, saveTree, SortNode, traverseTreeAsync } from "merkle-tree";
-import { IDatabaseMetadata, loadMerkleTree, acquireWriteLock, releaseWriteLock, createReadme, ensureSortIndex } from "api";
+import { addItem, CURRENT_DATABASE_VERSION, loadTree, rebuildTree, saveTree, SortNode, traverseTreeAsync } from "merkle-tree";
+import { IDatabaseMetadata, acquireWriteLock, releaseWriteLock, createReadme, ensureSortIndex } from "api";
 import { buildDatabaseMerkleTree, deleteDatabaseMerkleTree, saveDatabaseMerkleTree } from "bdb";
 import { pathJoin, StoragePrefixWrapper } from "storage";
 import { computeHash } from "api";
@@ -27,9 +27,11 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
     
     const { assetStorage, metadataStorage, databaseDir, metadataCollection } = await loadDatabase(options.db, options, true, uuidGenerator, timestampProvider, sessionId);
 
-    let merkleTree = await retry(() => loadMerkleTree(metadataStorage));
+    // Load from .db/files.dat (v6) or .db/tree.dat (legacy). Upgrade will write .db/files.dat and remove .db/tree.dat.
+    let merkleTree = await retry(() => loadTree<IDatabaseMetadata>(".db/files.dat", metadataStorage))
+        ?? await retry(() => loadTree<IDatabaseMetadata>(".db/tree.dat", metadataStorage));
     if (!merkleTree) {
-        throw new Error(`Failed to load merkle tree`);
+        throw new Error(`Failed to load merkle tree (no .db/files.dat or .db/tree.dat found)`);
     }
 
     const currentVersion = merkleTree.version;
@@ -220,8 +222,11 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
             merkleTree.databaseMetadata.filesImported = filesImported;
         }                
 
-        // Save the rebuilt tree.
-        await retry(() => saveTree(".db/tree.dat", merkleTree!, metadataStorage));
+        // Save the rebuilt tree to .db/files.dat (v6 path). Remove legacy .db/tree.dat if present.
+        await retry(() => saveTree(".db/files.dat", merkleTree!, metadataStorage));
+        if (await metadataStorage.fileExists(".db/tree.dat")) {
+            await metadataStorage.deleteFile(".db/tree.dat");
+        }
 
         const bsonDatabaseStorage = new StoragePrefixWrapper(assetStorage, "metadata");
 

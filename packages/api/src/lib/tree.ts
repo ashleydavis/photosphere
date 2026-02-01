@@ -3,10 +3,27 @@ import { IDatabaseMetadata } from "./media-file-database";
 import { IStorage } from "storage";
 
 //
+// Path for the files Merkle tree (v6). Legacy path was .db/tree.dat.
+//
+const FILES_TREE_PATH = ".db/files.dat";
+
+//
+// Path for the encryption public-key marker (indicates database is encrypted).
+//
+const ENCRYPTION_PUB_PATH = ".db/encryption.pub";
+
+//
 // Checks if the merkle tree exists.
 //
 export async function merkleTreeExists(metadataStorage: IStorage): Promise<boolean> {
-    return await metadataStorage.fileExists(".db/tree.dat");
+    return await metadataStorage.fileExists(FILES_TREE_PATH);
+}
+
+//
+// Returns true if the database has an encryption marker (storage is scoped to db root).
+//
+export async function isDatabaseEncrypted(metadataStorage: IStorage): Promise<boolean> {
+    return await metadataStorage.fileExists(ENCRYPTION_PUB_PATH);
 }
 
 //
@@ -22,14 +39,14 @@ export async function saveMerkleTree(merkleTree: IMerkleTree<IDatabaseMetadata>,
         merkleTree.dirty = false;
     }
 
-    await saveTree(".db/tree.dat", merkleTree, assetStorage);
+    await saveTree(FILES_TREE_PATH, merkleTree, assetStorage);
 }
 
 //
 // Loads the merkle tree from disk.
 //
 export async function loadMerkleTree(metadataStorage: IStorage): Promise<IMerkleTree<IDatabaseMetadata> | undefined> {
-    return await loadTree(".db/tree.dat", metadataStorage);
+    return await loadTree(FILES_TREE_PATH, metadataStorage);
 }
 
 //

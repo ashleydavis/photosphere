@@ -2,8 +2,8 @@ import { loadDatabase, IBaseCommandOptions, ICommandContext, selectEncryptionKey
 import { log } from "utils";
 import pc from "picocolors";
 import { exit } from "node-utils";
-import { syncDatabases } from "api";
-import { createStorage, loadEncryptionKeys, pathJoin } from "storage";
+import { syncDatabases, merkleTreeExists, isDatabaseEncrypted } from "api";
+import { createStorage, loadEncryptionKeys } from "storage";
 import { configureIfNeeded, getS3Config } from '../lib/config';
 
 //
@@ -39,25 +39,19 @@ export async function syncCommand(context: ICommandContext, options: ISyncComman
         yes: options.yes
     }, false, uuidGenerator, timestampProvider, sessionId);
 
-    // Check if destination database exists and handle encryption
-    const destMetaPath = pathJoin(options.dest, '.db');
-
+    // Check if destination database exists and handle encryption (storage scoped to db root, paths use .db/...)
     if (options.dest.startsWith("s3:")) {
-        await configureIfNeeded(['s3'], nonInteractive);
-    }
-    
-    if (destMetaPath.startsWith("s3:")) {
         await configureIfNeeded(['s3'], nonInteractive);
     }
 
     const s3Config = await getS3Config();
-    const { storage: destMetadataStorage } = createStorage(destMetaPath, s3Config);
+    const { storage: destMetadataStorage } = createStorage(options.dest, s3Config);
 
-    // Check if destination database exists
-    const destDbExists = await destMetadataStorage.fileExists("tree.dat");    
+    // Check if destination database exists (uses .db/files.dat from API)
+    const destDbExists = await merkleTreeExists(destMetadataStorage);    
     if (destDbExists) {
         // Database exists - check if it's encrypted
-        const destDbIsEncrypted = await destMetadataStorage.fileExists('encryption.pub');        
+        const destDbIsEncrypted = await isDatabaseEncrypted(destMetadataStorage);        
         if (destDbIsEncrypted) {
             // Database is encrypted - user must provide a key
             if (!options.destKey) {
