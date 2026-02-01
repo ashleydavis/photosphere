@@ -2,7 +2,6 @@
 // Implements a sorted index for a BSON collection with support for pagination
 //
 
-import { BSON } from 'bson';
 import type { IInternalRecord, IBsonCollection } from './collection';
 import type { IStorage } from 'storage';
 import { retry } from 'utils';
@@ -1110,43 +1109,19 @@ export class SortIndex implements ISortIndex {
         return records;
     }
 
-    // Load leaf records from file using serialization library while preserving exact binary format
+    // Load leaf records from file (v6 format: version, type IDXP, payload, checksum).
     private async loadLeafRecords(pageId: string): Promise<ISortedIndexEntry[] | undefined> {
         const filePath = `${this.indexDirectory}/${pageId}`;
-        
-        try {
-            // Use the new load function with deserializer for version 1
-            const records = await load<ISortedIndexEntry[]>(
-                this.storage,
-                filePath,
-                'IDXP',
-                {
-                    1: (deserializer) => this.deserializeLeafRecords(deserializer)
-                }
-            );
-            return records;
-        } catch (error) {
 
-            //todo: wtf???
-
-            // If file doesn't exist or has a different format, try backward compatibility
-            const fileData = await retry(() => this.storage.read(filePath));
-            
-            if (fileData && fileData.length > 0) {
-                try {
-                    // Try old BSON array format (backward compatibility)
-                    const dataWithoutChecksum = fileData.subarray(0, fileData.length - 32);
-                    const leafRecordsObj = BSON.deserialize(dataWithoutChecksum);
-                    const records = leafRecordsObj.records as ISortedIndexEntry[];
-                    return records;
-                } catch (bsonError) {
-                    console.error(`Failed to load leaf records: ${error}`);
-                    return undefined;
-                }
+        const records = await load<ISortedIndexEntry[]>(
+            this.storage,
+            filePath,
+            'IDXP',
+            {
+                1: (deserializer) => this.deserializeLeafRecords(deserializer)
             }
-            
-            return undefined;
-        }
+        );
+        return records ?? undefined;
     }
     
     // Get a node from cache or map
