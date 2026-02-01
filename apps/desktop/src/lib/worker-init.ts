@@ -98,16 +98,11 @@ class WorkerLog implements ILog {
             return;
         }
         
-        const parts: string[] = [`W${this.workerId}`];
-        if (this.currentTaskId) {
-            parts.push(formatTaskId(this.currentTaskId));
-        }
-        const prefix = `[${parts.join(':')}] `;
         if (data.stdout) {
-            console.log(`${prefix}== ${tool} stdout ==\n${data.stdout}`);
+            console.log(this.prefixMessage(`== ${tool} stdout ==\n${data.stdout}`));
         }
         if (data.stderr) {
-            console.log(`${prefix}== ${tool} stderr ==\n${data.stderr}`);
+            console.log(this.prefixMessage(`== ${tool} stderr ==\n${data.stderr}`));
         }
     }
 }

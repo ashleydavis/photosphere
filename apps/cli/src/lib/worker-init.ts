@@ -34,7 +34,9 @@ function formatTaskId(taskId: string): string {
     if (taskId.length <= 4) {
         return taskId;
     }
-    return `${taskId.substring(0, 2)}${taskId.substring(taskId.length - 2)}`;
+    
+    // return `${taskId.substring(0, 2)}${taskId.substring(taskId.length - 2)}`;
+    return taskId;
 }
 
 //
@@ -43,9 +45,11 @@ function formatTaskId(taskId: string): string {
 class WorkerLog implements ILog {
     readonly verboseEnabled: boolean;
     private readonly toolsEnabled: boolean;
+    private readonly workerId: number;
     private currentTaskId: string | null = null;
 
-    constructor(verboseEnabled: boolean, toolsEnabled: boolean) {
+    constructor(workerId: number, verboseEnabled: boolean, toolsEnabled: boolean) {
+        this.workerId = workerId;
         this.verboseEnabled = verboseEnabled;
         this.toolsEnabled = toolsEnabled;
     }
@@ -55,10 +59,11 @@ class WorkerLog implements ILog {
     }
 
     private prefixMessage(message: string): string {
+        const parts: string[] = [`W${this.workerId}`];
         if (this.currentTaskId) {
-            return `[${formatTaskId(this.currentTaskId)}] ${message}`;
+            parts.push(formatTaskId(this.currentTaskId));
         }
-        return message;
+        return `[${parts.join(':')}] ${message}`;
     }
 
     verbose(message: string): void {    
@@ -94,12 +99,11 @@ class WorkerLog implements ILog {
             return;
         }
         
-        const prefix = this.currentTaskId ? `[${formatTaskId(this.currentTaskId)}] ` : "";
         if (data.stdout) {
-            console.log(`${prefix}== ${tool} stdout ==\n${data.stdout}`);
+            console.log(this.prefixMessage(`== ${tool} stdout ==\n${data.stdout}`));
         }
         if (data.stderr) {
-            console.log(`${prefix}== ${tool} stderr ==\n${data.stderr}`);
+            console.log(this.prefixMessage(`== ${tool} stderr ==\n${data.stderr}`));
         }
     }
 }
@@ -123,7 +127,7 @@ export function setWorkerTaskId(taskId: string | null): void {
 //
 export function initWorkerContext(options: IWorkerOptions): IWorkerContext {
     // Configure logging (console only for workers)
-    const workerLog = new WorkerLog(options.verbose || false, options.tools || false);
+    const workerLog = new WorkerLog(options.workerId, options.verbose || false, options.tools || false);
     workerLogInstance = workerLog;
     setLog(workerLog);
     
