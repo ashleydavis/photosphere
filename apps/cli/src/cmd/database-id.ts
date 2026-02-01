@@ -10,7 +10,7 @@ export interface IDatabaseIdCommandOptions extends IBaseCommandOptions {
 //
 export async function databaseIdCommand(context: ICommandContext, options: IDatabaseIdCommandOptions): Promise<void> {
     const { uuidGenerator, timestampProvider, sessionId } = context;
-    const { assetStorage } = await loadDatabase(options.db, options, true, uuidGenerator, timestampProvider, sessionId);
+    const { assetStorage } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
     
     const merkleTree = await loadMerkleTree(assetStorage);
     

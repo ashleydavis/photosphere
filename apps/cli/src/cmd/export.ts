@@ -23,7 +23,7 @@ export async function exportCommand(context: ICommandContext, assetId: string, o
     const assetType = options.type || "original";
     const dbPath = options.db || process.cwd();
 
-    const { bsonDatabase: metadataDatabase, assetStorage } = await loadDatabase(dbPath, options, false, uuidGenerator, timestampProvider, sessionId);
+    const { bsonDatabase: metadataDatabase, assetStorage } = await loadDatabase(dbPath, options, uuidGenerator, timestampProvider, sessionId);
     const metadataCollection = metadataDatabase.collection("metadata");
     
     const asset = await metadataCollection.getOne(assetId);

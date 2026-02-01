@@ -26,7 +26,7 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
     
     intro(pc.blue(`Upgrading media file database...`));
     
-    const { assetStorage, metadataStorage, databaseDir, metadataCollection } = await loadDatabase(options.db, options, true, uuidGenerator, timestampProvider, sessionId);
+    const { assetStorage, metadataStorage, databaseDir, metadataCollection } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId, true);
 
     // Load from .db/files.dat (v6) or .db/tree.dat (legacy). Upgrade will write .db/files.dat and remove .db/tree.dat.
     let merkleTree = await retry(() => loadTree<IDatabaseMetadata>(".db/files.dat", metadataStorage))

@@ -55,7 +55,7 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
         key: options.key,
         verbose: options.verbose,
         yes: options.yes
-    }, false, uuidGenerator, timestampProvider, sessionId);
+    }, uuidGenerator, timestampProvider, sessionId);
 
     let destDir = options.dest;
     if (destDir === undefined) {

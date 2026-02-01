@@ -27,7 +27,7 @@ export async function removeOrphansCommand(context: ICommandContext, options: IR
     }
 
     // Load the database
-    const { assetStorage, metadataStorage, databaseDir } = await loadDatabase(dbDir, options, false, uuidGenerator, timestampProvider, sessionId);
+    const { assetStorage, metadataStorage, databaseDir } = await loadDatabase(dbDir, options, uuidGenerator, timestampProvider, sessionId);
 
     log.info('');
     log.info(`Finding orphaned files in database:`);
