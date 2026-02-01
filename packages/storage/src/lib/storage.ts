@@ -1,6 +1,9 @@
 //
 // Partial result of the list operation.
 //
+
+import type { Readable } from 'stream';
+
 export interface IListResult {
     //
     // The list of file or directories names found in storage.
@@ -104,8 +107,9 @@ export interface IStorage {
 
     //
     // Streams a file from stroage.
+    // Returns a Node Readable stream (has destroy() for early termination).
     //
-    readStream(filePath: string): NodeJS.ReadableStream;
+    readStream(filePath: string): Readable;
 
     //
     // Writes an input stream to storage.

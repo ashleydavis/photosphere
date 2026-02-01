@@ -655,6 +655,40 @@ export async function load<T>(
 }
 
 //
+// Loads only the per-file version number (first 4 bytes) from a versioned serialized file.
+// Uses a stream so only the first 4 bytes are read, not the entire file.
+// This is the single place that reads the version header; callers use this instead of
+// reading the version bytes directly.
+//
+export async function loadVersion(storage: IStorage, filePath: string): Promise<number | undefined> {
+    return new Promise((resolve, reject) => {
+        const stream = storage.readStream(filePath);
+        const versionBuffer = Buffer.alloc(4);
+        let bytesRead = 0;
+
+        stream.on('data', (chunk: Buffer) => {
+            if (bytesRead < 4) {
+                const toCopy = Math.min(chunk.length, 4 - bytesRead);
+                chunk.copy(versionBuffer, bytesRead, 0, toCopy);
+                bytesRead += toCopy;
+                if (bytesRead >= 4) {
+                    stream.destroy();
+                    resolve(versionBuffer.readUInt32LE(0));
+                }
+            }
+        });
+
+        stream.on('end', () => {
+            resolve(bytesRead >= 4 ? versionBuffer.readUInt32LE(0) : undefined);
+        });
+
+        stream.on('error', () => {
+            resolve(undefined);
+        });
+    });
+}
+
+//
 // Verifies a serialized file's integrity (checksum and/or version header).
 // Similar to load() but doesn't deserialize the data.
 //

@@ -4,7 +4,7 @@
 
 import type { IStorage } from 'storage';
 import type { IUuidGenerator, ITimestampProvider } from 'utils';
-import { save, load, BinaryDeserializer } from 'serialization';
+import { save, load } from 'serialization';
 import type { ISerializer, IDeserializer } from 'serialization';
 import { SortIndex } from './sort-index';
 import type { IRangeOptions, SortDataType, SortDirection, ISortIndexResult } from './sort-index';
@@ -872,19 +872,9 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     // Iterate all records in the collection without loading all into memory.
     //
     async *iterateRecords(): AsyncGenerator<IInternalRecord, void, unknown> {
-
         for (let shardId = 0; shardId < this.numShards; shardId++) {
-             const buffer = await this.storage.read(`${this.directory}/${shardId}`);
-             if (!buffer || buffer.length === 0) {
-                 continue;
-             }
-
-            const deserializer = new BinaryDeserializer(buffer);
-            const fileVersion = deserializer.readUInt32(); // Version
-            const recordCount = deserializer.readUInt32(); // Record count
-
-            for (let i = 0; i < recordCount; i++) {
-                const record = this.deserializeRecord(deserializer, fileVersion);
+            const records = await this.loadRecords(`${this.directory}/${shardId}`);
+            for (const record of records) {
                 yield record;
             }
         }
@@ -892,24 +882,14 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
 
     //
     // Iterate each shard in the collection without loading all into memory.
+    // Yields only shards that have records (same as when reading versioned files directly).
     //
     async *iterateShards(): AsyncGenerator<Iterable<IInternalRecord>, void, unknown> {
         for (let shardId = 0; shardId < this.numShards; shardId++) {
-            const buffer = await this.storage.read(`${this.directory}/${shardId}`);
-            if (!buffer || buffer.length === 0) {
-                continue;
+            const records = await this.loadRecords(`${this.directory}/${shardId}`);
+            if (records.length > 0) {
+                yield records;
             }
-
-            const deserializer = new BinaryDeserializer(buffer);
-            const fileVersion = deserializer.readUInt32(); // Version
-            const recordCount = deserializer.readUInt32(); // Record count
-
-            const records: IInternalRecord[] = [];
-            for (let i = 0; i < recordCount; i++) {
-                const record = this.deserializeRecord(deserializer, fileVersion);
-                records.push(record);
-            }
-            yield records;
         }
     }
 
