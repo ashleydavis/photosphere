@@ -18,7 +18,9 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Test configuration
-TEST_DB_DIR="./test/tmp/shared/test-db"
+# Override TEST_TMP_DIR to run tests in parallel (e.g. TEST_TMP_DIR=./test/tmp-$$ ./smoke-tests.sh all)
+TEST_TMP_DIR="${TEST_TMP_DIR:-./test/tmp}"
+TEST_DB_DIR="$TEST_TMP_DIR/shared/test-db"
 TEST_FILES_DIR="../../test"
 MULTIPLE_IMAGES_DIR="../../test/multiple-images"
 
@@ -58,7 +60,7 @@ declare -a TEST_TABLE=(
     "repair-ok:test_repair_ok_database:Repair OK database (no changes)"
     "remove:test_remove_asset:Remove asset by ID from database"
     "repair-damaged:test_repair_damaged_database:Repair damaged database from replica"
-    "v2-readonly:test_v2_database_readonly_commands:Test readonly commands work on v2 database (summary, verify)"
+    "v2-readonly:test_v2_database_readonly_commands:Test summary and verify reject v2 database (suggest upgrade)"
     "v2-write-fail:test_v2_database_write_commands_fail:Test write commands fail on v2 database (add, remove)"
     "v2-upgrade:test_v2_database_upgrade:Upgrade v2 database to v6"
     "v3-upgrade:test_v3_database_upgrade:Upgrade v3 database to v6"
@@ -81,7 +83,7 @@ declare -a TEST_TABLE=(
 # Get test directory path for a given test number
 get_test_dir() {
     local test_number="$1"
-    echo "./test/tmp/$test_number"
+    echo "$TEST_TMP_DIR/$test_number"
 }
 
 # Get test name by index (1-based)
@@ -955,10 +957,10 @@ test_setup() {
     log_info "Using CLI command: $cli_command"
     
     log_info "Cleaning up previous test run"
-    rm -rf "./test/tmp"
+    rm -rf "$TEST_TMP_DIR"
     
     # Ensure tmp directory exists
-    mkdir -p "./test/tmp"
+    mkdir -p "$TEST_TMP_DIR"
     
     log_info "Building CLI executable for platform: $platform ($arch)"
     case "$platform" in
@@ -1896,7 +1898,7 @@ test_remove_asset() {
     expect_value "$files_after" "$expected_files" "Asset count decreased by 1 after removal"
     
     # Try to export the removed asset (should fail)
-    invoke_command "Try to export removed asset (should fail)" "$(get_cli_command) export --db $TEST_DB_DIR $test_asset_id ./test/tmp/should-fail.png --yes" 1
+    invoke_command "Try to export removed asset (should fail)" "$(get_cli_command) export --db $TEST_DB_DIR $test_asset_id $TEST_TMP_DIR/should-fail.png --yes" 1
     
     # Verify the asset files no longer exist in storage
     local original_file="$TEST_DB_DIR/asset/$test_asset_id"
@@ -2112,18 +2114,17 @@ test_v2_database_readonly_commands() {
     check_exists "$v2_db_dir" "V2 test database directory"
     check_exists "$v2_db_dir/metadata" "V2 database metadata directory"
     
-    # Test that summary command can read v2 database
+    # Test that summary command rejects v2 database (only upgrade can load old DBs)
     local summary_output
-    invoke_command "Run summary on v2 database" "$(get_cli_command) summary --db $v2_db_dir --yes" 0 "summary_output"
+    invoke_command "Run summary on v2 database (should fail)" "$(get_cli_command) summary --db $v2_db_dir --yes" 1 "summary_output"
+    expect_output_string "$summary_output" "upgrade" "Summary on v2 suggests running psi upgrade"
+    log_success "Summary correctly rejected v2 database"
     
-    # Check that summary contains database version
-    expect_output_string "$summary_output" "Database version: 2" "Summary shows v2 database version"
-    log_success "Summary command successfully accessed v2 database"
-    
-    # Test that verify command works on v2 database (readonly operations should work)
+    # Test that verify command rejects v2 database (only upgrade can load old DBs)
     local verify_output
-    invoke_command "Run verify on v2 database" "$(get_cli_command) verify --db $v2_db_dir --yes" 0 "verify_output"
-    log_success "Verify command successfully accessed v2 database (readonly access)"
+    invoke_command "Run verify on v2 database (should fail)" "$(get_cli_command) verify --db $v2_db_dir --yes" 1 "verify_output"
+    expect_output_string "$verify_output" "upgrade" "Verify on v2 suggests running psi upgrade"
+    log_success "Verify correctly rejected v2 database"
     
     test_passed
 }
@@ -3749,7 +3750,7 @@ reset_environment() {
     log_info "Cleaning up test artifacts..."
     
     # Reset UUID counter for deterministic test results
-    local UUID_COUNTER_FILE="./test/tmp/photosphere-test-uuid-counter"
+    local UUID_COUNTER_FILE="$TEST_TMP_DIR/photosphere-test-uuid-counter"
     if [ -f "$UUID_COUNTER_FILE" ]; then
         log_info "Resetting test UUID counter"
         rm -f "$UUID_COUNTER_FILE"
@@ -3759,12 +3760,12 @@ reset_environment() {
     fi
     
     # Remove the specific test database directory
-    if [ -d "./test/tmp" ]; then
-        log_info "Removing all test databases: ./test/tmp"
-        rm -rf "./test/tmp"
-        log_success "Removed ./test/tmp"
+    if [ -d "$TEST_TMP_DIR" ]; then
+        log_info "Removing all test databases: $TEST_TMP_DIR"
+        rm -rf "$TEST_TMP_DIR"
+        log_success "Removed $TEST_TMP_DIR"
     else
-        log_info "Test tmp directory not found (already clean): ./test/tmp"
+        log_info "Test tmp directory not found (already clean): $TEST_TMP_DIR"
     fi
     
     # Remove the replicated database directory
@@ -3804,8 +3805,8 @@ run_all_tests() {
     
     # Clean up previous test run
     log_info "Resetting testing environment"
-    if [ -d "./test/tmp" ]; then
-        rm -rf "./test/tmp"
+    if [ -d "$TEST_TMP_DIR" ]; then
+        rm -rf "$TEST_TMP_DIR"
         log_success "Removed existing test databases"
     else
         log_info "Test tmp directory not found (already clean)"
@@ -3852,7 +3853,7 @@ run_all_tests() {
     # Preserve test database for further inspection or hash capture
     echo ""
     log_info "Preserving test database for inspection"
-    log_info "Test database available at: ./test/tmp/test-db"
+    log_info "Test database available at: $TEST_DB_DIR"
     exit 0
 }
 
@@ -3981,6 +3982,7 @@ show_usage() {
     echo ""
     echo "Options:"
     echo "  -d, --debug         - Run tests using 'bun run start --' instead of built executable"
+    echo "  -t, --tmp-dir <dir> - Use <dir> for test databases (default: ./test/tmp). Enables parallel runs."
     echo "  -h, --help          - Show this help message"
     echo ""
     echo "Commands:"
@@ -4021,16 +4023,33 @@ show_usage() {
     echo "  $0 3                        # Run test 3 (add single file)"
     echo "  $0 reset,setup,1,3          # Reset, setup, create DB, then test 3"
     echo "  DEBUG_MODE=true $0 all      # Alternative way to enable debug mode"
+    echo "  $0 --tmp-dir ./test/tmp-$$ all    # Run in isolated tmp dir (for parallel runs)"
+    echo "  $0 --debug all --tmp-dir ./foobar # Options can appear before or after test name"
     echo "  $0 help                     # Show this help"
 }
 
 # Main test execution
 main() {
-    # Parse command line options
+    # Parse command line options from entire argument list (options can appear before or after test names)
+    POSITIONAL=()
     while [[ $# -gt 0 ]]; do
         case $1 in
             -d|--debug)
                 DEBUG_MODE=true
+                shift
+                ;;
+            -t|--tmp-dir)
+                if [ $# -lt 2 ]; then
+                    log_error "Option $1 requires a directory argument"
+                    exit 1
+                fi
+                TEST_TMP_DIR="$2"
+                TEST_DB_DIR="$TEST_TMP_DIR/shared/test-db"
+                shift 2
+                ;;
+            --tmp-dir=*)
+                TEST_TMP_DIR="${1#*=}"
+                TEST_DB_DIR="$TEST_TMP_DIR/shared/test-db"
                 shift
                 ;;
             -h|--help|help)
@@ -4038,10 +4057,12 @@ main() {
                 exit 0
                 ;;
             *)
-                break  # End of options, remaining arguments are commands
+                POSITIONAL+=("$1")
+                shift
                 ;;
         esac
     done
+    set -- "${POSITIONAL[@]}"
     
     # Check for help request or no arguments after parsing options
     if [ $# -eq 0 ]; then
@@ -4068,8 +4089,8 @@ main() {
             log_info "Running tests 1 through $end_test"
             # Reset environment before running tests
             log_info "Resetting testing environment"
-            if [ -d "./test/tmp" ]; then
-                rm -rf "./test/tmp"
+            if [ -d "$TEST_TMP_DIR" ]; then
+                rm -rf "$TEST_TMP_DIR"
                 log_success "Removed existing test databases"
             else
                 log_info "Test tmp directory not found (already clean)"
@@ -4077,7 +4098,7 @@ main() {
             
             # Reset UUID counter for deterministic test results
             log_info "Resetting test UUID counter"
-            UUID_COUNTER_FILE="./test/tmp/photosphere-test-uuid-counter"
+            UUID_COUNTER_FILE="$TEST_TMP_DIR/photosphere-test-uuid-counter"
             if [ -f "$UUID_COUNTER_FILE" ]; then
                 rm -f "$UUID_COUNTER_FILE"
                 log_success "Removed existing UUID counter file"

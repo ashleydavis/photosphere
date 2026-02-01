@@ -330,6 +330,7 @@ export class SortIndex implements ISortIndex {
         const treeData = await load<ITreeData>(
             this.storage,
             this.treeFilePath,
+            'IDXT',
             {
                 2: (deserializer) => this.deserializeTree(deserializer)
             }
@@ -557,6 +558,7 @@ export class SortIndex implements ISortIndex {
             this.treeFilePath,
             this.getTreeData(),
             2,
+            'IDXT',
             (treeData, serializer) => this.serializeTree(treeData, serializer)
         );
     }
@@ -1071,6 +1073,7 @@ export class SortIndex implements ISortIndex {
             filePath,
             records,
             1,
+            'IDXP',
             (recordsData, serializer) => this.serializeLeafRecords(recordsData, serializer)
         );
     }
@@ -1116,6 +1119,7 @@ export class SortIndex implements ISortIndex {
             const records = await load<ISortedIndexEntry[]>(
                 this.storage,
                 filePath,
+                'IDXP',
                 {
                     1: (deserializer) => this.deserializeLeafRecords(deserializer)
                 }

@@ -1726,9 +1726,9 @@ function deserializeMerkleTreeV2<DatabaseMetadata>(deserializer: IDeserializer):
 }
 
 //
-// Saves a merkle tree to storage.
+// Saves a merkle tree to storage (v6 layout with type code and checksum).
 //
-export async function saveTree<DatabaseMetadata>(filePath: string, tree: IMerkleTree<DatabaseMetadata>, storage: IStorage): Promise<void> {
+export async function saveTree<DatabaseMetadata>(filePath: string, tree: IMerkleTree<DatabaseMetadata>, storage: IStorage, typeCode: string = 'FTRE'): Promise<void> {
 
     if (tree.dirty) {
         throw new Error('Tree is dirty. Cannot save. Make sure to rebuild the tree before saving.');
@@ -1739,10 +1739,8 @@ export async function saveTree<DatabaseMetadata>(filePath: string, tree: IMerkle
         filePath,
         tree,
         CURRENT_DATABASE_VERSION,
-        serializeMerkleTree,
-        {
-            checksum: false,
-        }
+        typeCode,
+        serializeMerkleTree
     );
 }
 
@@ -1755,7 +1753,7 @@ export async function loadTreeVersion(filePath: string, storage: IStorage): Prom
     return await loadVersion(storage, filePath);
 }
 
-export async function loadTree<DatabaseMetadata>(filePath: string, storage: IStorage): Promise<IMerkleTree<DatabaseMetadata> | undefined> {
+export async function loadTree<DatabaseMetadata>(filePath: string, storage: IStorage, typeCode: string = 'FTRE'): Promise<IMerkleTree<DatabaseMetadata> | undefined> {
     const deserializers = {
         6: deserializeMerkleTreeV6<DatabaseMetadata>,
         5: deserializeMerkleTreeV5<DatabaseMetadata>,
@@ -1767,13 +1765,10 @@ export async function loadTree<DatabaseMetadata>(filePath: string, storage: ISto
     return await load<IMerkleTree<DatabaseMetadata>>(
         storage,
         filePath,
+        typeCode,
         deserializers,
         undefined,
-        CURRENT_DATABASE_VERSION,
-        {
-            checksum: false,
-            // Compression is auto-detected when loading, so this option is not needed here
-        }
+        CURRENT_DATABASE_VERSION
     );
 }
 

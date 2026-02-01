@@ -60,7 +60,7 @@ export async function saveShardMerkleTree(storage: IStorage, collectionDirectory
 
     const shardFilePath = `${collectionDirectory}/${shardId}`;
     const treeFilePath = `${shardFilePath}.dat`; //todo: Might be useful to bake this into the shard file?
-    await saveTree(treeFilePath, tree, storage);
+    await saveTree(treeFilePath, tree, storage, 'COLT');
 }
 
 //
@@ -78,7 +78,7 @@ export async function deleteShardMerkleTree(storage: IStorage, collectionDirecto
 export async function loadShardMerkleTree(storage: IStorage, collectionDirectory: string, shardId: string): Promise<IMerkleTree<undefined> | undefined> {
     const shardFilePath = `${collectionDirectory}/${shardId}`;
     const treeFilePath = `${shardFilePath}.dat`;
-    return await loadTree<undefined>(treeFilePath, storage);
+    return await loadTree<undefined>(treeFilePath, storage, 'COLT');
 }
 
 //
@@ -171,7 +171,7 @@ export async function saveCollectionMerkleTree(storage: IStorage, collectionDire
     }
 
     const treeFilePath = `${collectionDirectory}/collection.dat`;
-    await saveTree(treeFilePath, tree, storage);
+    await saveTree(treeFilePath, tree, storage, 'COLT');
 }
 
 //
@@ -179,7 +179,7 @@ export async function saveCollectionMerkleTree(storage: IStorage, collectionDire
 //
 export async function loadCollectionMerkleTree(storage: IStorage, collectionDirectory: string): Promise<IMerkleTree<undefined> | undefined> {
     const treeFilePath = `${collectionDirectory}/collection.dat`;
-    return await loadTree<undefined>(treeFilePath, storage);
+    return await loadTree<undefined>(treeFilePath, storage, 'COLT');
 }
 
 //
@@ -287,7 +287,7 @@ export async function saveDatabaseMerkleTree(storage: IStorage, tree: IMerkleTre
     }
 
     const treeFilePath = "db.dat";
-    await saveTree(treeFilePath, tree, storage);
+    await saveTree(treeFilePath, tree, storage, 'BDBT');
 }
 
 //
@@ -295,7 +295,7 @@ export async function saveDatabaseMerkleTree(storage: IStorage, tree: IMerkleTre
 //
 export async function loadDatabaseMerkleTree(storage: IStorage): Promise<IMerkleTree<undefined> | undefined> {
     const treeFilePath = "db.dat";
-    return await loadTree<undefined>(treeFilePath, storage);
+    return await loadTree<undefined>(treeFilePath, storage, 'BDBT');
 }
 
 //
