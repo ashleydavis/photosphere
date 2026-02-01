@@ -79,7 +79,7 @@ export async function debugMerkleTreeCommand(context: ICommandContext, options: 
     log.info('');
     
     // Show files merkle tree
-    log.info(pc.cyan('Files Merkle Tree (.db/tree.dat):'));
+    log.info(pc.cyan('Files Merkle Tree (.db/files.dat):'));
     log.info(pc.gray('='.repeat(60)));
     const filesTree = await loadMerkleTree(metadataStorage);
     if (filesTree) {

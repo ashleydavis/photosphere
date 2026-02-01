@@ -390,10 +390,12 @@ export async function loadDatabase(
     const { storage: metadataStorage } = createStorage(dbDir, s3Config, undefined);
 
     //
-    // Check that tree.dat exists.
+    // Check that the files tree exists (.db/files.dat or legacy .db/tree.dat).
     //
-    if (!await metadataStorage.fileExists(".db/tree.dat")) {
-        outro(pc.red(`✗ No database found at: ${pc.cyan(dbDir)}\n  The database directory must contain a ".db" folder with the database metadata.\n\nTo create a new database at this directory, use:\n  ${pc.cyan(`psi init --db ${dbDir}`)}`));
+    const hasFilesDat = await metadataStorage.fileExists(".db/files.dat");
+    const hasTreeDat = await metadataStorage.fileExists(".db/tree.dat");
+    if (!hasFilesDat && !hasTreeDat) {
+        outro(pc.red(`✗ No database found at: ${pc.cyan(dbDir)}\n  The database directory must contain a ".db" folder with files.dat or tree.dat.\n\nTo create a new database at this directory, use:\n  ${pc.cyan(`psi init --db ${dbDir}`)}`));
         await exit(1);
     }
 
@@ -402,8 +404,8 @@ export async function loadDatabase(
         // When trying to load the database and we don't allow older versions,
         // quickly load the version from the database and reject if the database is old.
         //
-        
-        let databaseVersion = await loadTreeVersion(".db/tree.dat", metadataStorage);        
+        const treePath = hasFilesDat ? ".db/files.dat" : ".db/tree.dat";
+        let databaseVersion = await loadTreeVersion(treePath, metadataStorage);
         if (databaseVersion && databaseVersion < CURRENT_DATABASE_VERSION) {
             outro(pc.red(`✗ Database version ${databaseVersion} is outdated. Current version is ${CURRENT_DATABASE_VERSION}. Please run 'psi upgrade' to upgrade your database.`));
             await exit(1);

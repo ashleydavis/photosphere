@@ -498,7 +498,7 @@ export async function replicate(
 
     //
     // Create or load the destination MediaFileDatabase to ensure sort indexes are loaded/created.
-    // This has to be created before tree.dat is saved.
+    // This has to be created before files.dat is saved.
     //
     const destDb = createMediaFileDatabase(
         destAssetStorage,

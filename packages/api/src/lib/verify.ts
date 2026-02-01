@@ -246,7 +246,7 @@ export interface IDatabaseFileVerifyResult {
 // Verifies all database files (merkle trees, metadata collection, sort indexes).
 // Checks size and checksum for each file.
 //
-// @param metadataStorage - Unencrypted storage scoped to .db/ directory (for tree.dat)
+// @param metadataStorage - Unencrypted storage scoped to .db/ directory (for files.dat)
 // @param databaseStorage - Storage rooted at database directory (scans metadata/ subdirectory)
 //
 export async function verifyDatabaseFiles(metadataStorage: IStorage, databaseStorage: IStorage, progressCallback?: ProgressCallback): Promise<IDatabaseFileVerifyResult> {
@@ -273,8 +273,8 @@ export async function verifyDatabaseFiles(metadataStorage: IStorage, databaseSto
     
     let expectedTotal = 0;
     
-    // Count tree.dat (database merkle tree - metadataStorage is scoped to .db/)
-    if (await metadataStorage.fileExists("tree.dat")) {
+    // Count files.dat (database merkle tree - metadataStorage is scoped to .db/)
+    if (await metadataStorage.fileExists("files.dat")) {
         expectedTotal++;
     }
     
@@ -329,18 +329,18 @@ export async function verifyDatabaseFiles(metadataStorage: IStorage, databaseSto
     // Phase 2: Verify all files
     //
     
-    // 1. Verify tree.dat (database merkle tree - no checksum, metadataStorage is scoped to .db/)
+    // 1. Verify files.dat (database merkle tree - metadataStorage is scoped to .db/)
     
-    if (await metadataStorage.fileExists("tree.dat")) {
-        log.verbose(`Verifying .db/tree.dat`);
+    if (await metadataStorage.fileExists("files.dat")) {
+        log.verbose(`Verifying .db/files.dat`);
         result.totalFiles++;
-        const verifyResult = await verifySerializedFile(metadataStorage, "tree.dat"); //todo: various checks can be done in background tasks.
+        const verifyResult = await verifySerializedFile(metadataStorage, "files.dat"); //todo: various checks can be done in background tasks.
         result.totalSize += verifyResult.size;
         if (verifyResult.valid) {
             result.validFiles++;
         }
         else {
-            addError("tree.dat", verifyResult.error || "Unknown error");
+            addError("files.dat", verifyResult.error || "Unknown error");
         }
         reportProgress();
     }
@@ -434,7 +434,7 @@ export async function verifyDatabaseFiles(metadataStorage: IStorage, databaseSto
                     const filePath = `${indexDir}/${fileName}`;
                     result.totalFiles++;
                     
-                    // tree.dat and page files (all have checksum)
+                    // files.dat and page files (all have checksum)
                     log.verbose(`Verifying ${filePath}`);
                     try {
                         const verifyResult = await verifySerializedFile(databaseStorage, filePath);

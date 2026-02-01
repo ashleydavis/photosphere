@@ -376,7 +376,7 @@ test_passed() {
     ((TESTS_PASSED++))
     
     # Capture database hash if database exists
-    if [ -d "$TEST_DB_DIR" ] && [ -f "$TEST_DB_DIR/.db/tree.dat" ]; then
+    if [ -d "$TEST_DB_DIR" ] && [ -f "$TEST_DB_DIR/.db/files.dat" ]; then
         local hash_output
         if hash_output=$($(get_cli_command) root-hash --db "$TEST_DB_DIR" --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs); then
             TEST_RESULTS+=("PASS:$hash_output")
@@ -385,7 +385,7 @@ test_passed() {
         fi
         
         # Check that merkle tree leaf nodes are in sorted order
-        check_merkle_tree_order "$TEST_DB_DIR/.db/tree.dat" "main database"
+        check_merkle_tree_order "$TEST_DB_DIR/.db/files.dat" "main database"
     fi
 }
 
@@ -395,7 +395,7 @@ test_failed() {
     FAILED_TESTS+=("$test_name")
     
     # Capture database hash if database exists
-    if [ -d "$TEST_DB_DIR" ] && [ -f "$TEST_DB_DIR/.db/tree.dat" ]; then
+    if [ -d "$TEST_DB_DIR" ] && [ -f "$TEST_DB_DIR/.db/files.dat" ]; then
         local hash_output
         if hash_output=$($(get_cli_command) root-hash --db "$TEST_DB_DIR" --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs); then
             TEST_RESULTS+=("FAIL:$test_name:$hash_output")
@@ -477,7 +477,7 @@ write_github_step_summary() {
             fi
             
             # Add final database hash if database exists
-            if [ -d "$TEST_DB_DIR" ] && [ -f "$TEST_DB_DIR/.db/tree.dat" ]; then
+            if [ -d "$TEST_DB_DIR" ] && [ -f "$TEST_DB_DIR/.db/files.dat" ]; then
                 echo ""
                 echo "**Final database hash:**"
                 echo "\`\`\`"
@@ -816,12 +816,12 @@ invoke_command() {
                 fi
                 
                 # Check if database exists and print root hash
-                if [ -n "$db_path" ] && [ -d "$db_path" ] && [ -f "$db_path/.db/tree.dat" ]; then
+                if [ -n "$db_path" ] && [ -d "$db_path" ] && [ -f "$db_path/.db/files.dat" ]; then
                     echo ""
                     echo -e "[@@@@@@] ${YELLOW}[ROOT-HASH]${NC} $($(get_cli_command) root-hash --db "$db_path" --yes 2>/dev/null || echo "N/A")"
                     echo ""
                     # echo -e "[@@@@@@] ${YELLOW}[MERKLE-TREE]${NC}"
-                    # $(get_mk_command) show "$db_path/.db/tree.dat" 2>/dev/null | sed 's/^/[@@@@@@] /' || echo "[@@@@@@] N/A"
+                    # $(get_mk_command) show "$db_path/.db/files.dat" 2>/dev/null | sed 's/^/[@@@@@@] /' || echo "[@@@@@@] N/A"
                 fi
             fi
         else
@@ -1127,7 +1127,7 @@ test_create_database() {
     # Check if required files were created
     check_exists "$TEST_DB_DIR" "Database directory"
     check_exists "$TEST_DB_DIR/.db" "Database metadata directory"
-    check_exists "$TEST_DB_DIR/.db/tree.dat" "Database tree file"
+    check_exists "$TEST_DB_DIR/.db/files.dat" "Database tree file"
     check_exists "$TEST_DB_DIR/metadata" "Asset metadata directory"
     
     # Test initial state - database creation is verified by file existence checks above
@@ -1614,7 +1614,7 @@ test_database_replicate() {
     # Check that replica was created
     check_exists "$replica_dir" "Replica database directory"
     check_exists "$replica_dir/.db" "Replica metadata directory"
-    check_exists "$replica_dir/.db/tree.dat" "Replica tree file"
+    check_exists "$replica_dir/.db/files.dat" "Replica tree file"
     
     # Verify original and replica have the same aggregate root hash
     verify_root_hashes_match "$TEST_DB_DIR" "$replica_dir" "original and replica"
@@ -1651,7 +1651,7 @@ test_database_replicate() {
     expect_value "$replica_files_imported" "$source_files_imported" "Replica files imported count matches source"
     
     # Check merkle tree order for both original and replica
-    check_merkle_tree_order "$replica_dir/.db/tree.dat" "replica database"
+    check_merkle_tree_order "$replica_dir/.db/files.dat" "replica database"
     
     test_passed
 }
@@ -1720,7 +1720,7 @@ test_database_replicate_second() {
     verify_root_hashes_match "$TEST_DB_DIR" "$replica_dir" "original and replica after second replication"
     
     # Check merkle tree order for replica
-    check_merkle_tree_order "$replica_dir/.db/tree.dat" "replica database"
+    check_merkle_tree_order "$replica_dir/.db/files.dat" "replica database"
     
     test_passed
 }
@@ -1806,7 +1806,7 @@ test_replicate_after_changes() {
     verify_root_hashes_match "$TEST_DB_DIR" "$replica_dir" "original and replica after replication"
     
     # Check merkle tree order for replica
-    check_merkle_tree_order "$replica_dir/.db/tree.dat" "replica database"
+    check_merkle_tree_order "$replica_dir/.db/files.dat" "replica database"
     
     test_passed
 }
@@ -2093,7 +2093,7 @@ test_repair_damaged_database() {
     expect_output_string "$final_verify_output" "Database verification passed - all files are intact" "Repaired database verifies successfully"
     
     # Check merkle tree order for repaired database
-    check_merkle_tree_order "$damaged_dir/.db/tree.dat" "repaired database"
+    check_merkle_tree_order "$damaged_dir/.db/files.dat" "repaired database"
     
     # Clean up damaged database copy
     rm -rf "$damaged_dir"
@@ -2198,7 +2198,7 @@ test_v2_database_upgrade() {
     expect_output_string "$verify_output" "Database verification passed" "Upgraded database verifies successfully"
     
     # Check merkle tree order for upgraded database
-    check_merkle_tree_order "$temp_v2_dir/.db/tree.dat" "upgraded v2 database"
+    check_merkle_tree_order "$temp_v2_dir/.db/files.dat" "upgraded v2 database"
     
     # Clean up temporary database
     rm -rf "$temp_v2_dir"
@@ -2246,7 +2246,7 @@ test_v3_database_upgrade() {
     expect_output_string "$verify_output" "Database verification passed" "Upgraded database verifies successfully"
     
     # Check merkle tree order for upgraded database
-    check_merkle_tree_order "$temp_v3_dir/.db/tree.dat" "upgraded v3 database"
+    check_merkle_tree_order "$temp_v3_dir/.db/files.dat" "upgraded v3 database"
     
     # Clean up temporary database
     rm -rf "$temp_v3_dir"
@@ -2295,7 +2295,7 @@ test_v4_database_upgrade() {
     expect_output_string "$verify_output" "Database verification passed" "Upgraded database verifies successfully"
     
     # Check merkle tree order for upgraded database
-    check_merkle_tree_order "$temp_v4_dir/.db/tree.dat" "upgraded v4 database"
+    check_merkle_tree_order "$temp_v4_dir/.db/files.dat" "upgraded v4 database"
     
     # Clean up temporary database
     rm -rf "$temp_v4_dir"
@@ -2336,7 +2336,7 @@ test_v5_database_upgrade() {
     
     expect_output_string "$verify_output" "Database verification passed" "Upgraded database verifies successfully"
     
-    check_merkle_tree_order "$temp_v5_dir/.db/tree.dat" "upgraded v5 database"
+    check_merkle_tree_order "$temp_v5_dir/.db/files.dat" "upgraded v5 database"
     
     rm -rf "$temp_v5_dir"
     log_success "Cleaned up temporary v5 upgrade database"
@@ -2376,7 +2376,7 @@ test_v6_database_upgrade_no_effect() {
     
     expect_output_string "$verify_output" "Database verification passed" "V6 database verifies successfully after upgrade"
     
-    check_merkle_tree_order "$temp_v6_dir/.db/tree.dat" "v6 upgrade test database"
+    check_merkle_tree_order "$temp_v6_dir/.db/files.dat" "v6 upgrade test database"
     
     rm -rf "$temp_v6_dir"
     log_success "Cleaned up temporary v6 upgrade database"
@@ -2449,7 +2449,7 @@ test_v6_database_add_file() {
     
     expect_output_string "$list_output" "test.jpg" "Test file appears in asset listing"
     
-    check_merkle_tree_order "$temp_v6_dir/.db/tree.dat" "v6 add-file test database"
+    check_merkle_tree_order "$temp_v6_dir/.db/files.dat" "v6 add-file test database"
     
     rm -rf "$temp_v6_dir"
     log_success "Cleaned up temporary v6 add-file database"
@@ -2567,8 +2567,8 @@ test_sync_original_to_copy() {
     expect_output_string "$verify_copy_output" "Database verification passed" "Copy database passes verification"
     
     # Check merkle tree order for both databases
-    check_merkle_tree_order "$original_dir/.db/tree.dat" "sync original database"
-    check_merkle_tree_order "$copy_dir/.db/tree.dat" "sync copy database"
+    check_merkle_tree_order "$original_dir/.db/files.dat" "sync original database"
+    check_merkle_tree_order "$copy_dir/.db/files.dat" "sync copy database"
     
     # Clean up temporary databases
     rm -rf "$original_dir"
@@ -2699,8 +2699,8 @@ test_sync_copy_to_original() {
     expect_output_string "$verify_copy_output" "Database verification passed" "Copy database passes verification"
     
     # Check merkle tree order for both databases
-    check_merkle_tree_order "$original_dir/.db/tree.dat" "reverse sync original database"
-    check_merkle_tree_order "$copy_dir/.db/tree.dat" "reverse sync copy database"
+    check_merkle_tree_order "$original_dir/.db/files.dat" "reverse sync original database"
+    check_merkle_tree_order "$copy_dir/.db/files.dat" "reverse sync copy database"
     
     # Clean up temporary databases
     rm -rf "$original_dir"
@@ -2894,8 +2894,8 @@ test_sync_edit_field() {
     expect_output_string "$verify_copy_output" "Database verification passed" "Copy database passes verification"
     
     # Check merkle tree order for both databases
-    check_merkle_tree_order "$original_dir/.db/tree.dat" "sync edit original database"
-    check_merkle_tree_order "$copy_dir/.db/tree.dat" "sync edit copy database"
+    check_merkle_tree_order "$original_dir/.db/files.dat" "sync edit original database"
+    check_merkle_tree_order "$copy_dir/.db/files.dat" "sync edit copy database"
     
     # Clean up temporary databases
     rm -rf "$original_dir"
@@ -3089,8 +3089,8 @@ test_sync_edit_field_reverse() {
     expect_output_string "$verify_copy_output" "Database verification passed" "Copy database passes verification"
     
     # Check merkle tree order for both databases
-    check_merkle_tree_order "$original_dir/.db/tree.dat" "sync edit reverse original database"
-    check_merkle_tree_order "$copy_dir/.db/tree.dat" "sync edit reverse copy database"
+    check_merkle_tree_order "$original_dir/.db/files.dat" "sync edit reverse original database"
+    check_merkle_tree_order "$copy_dir/.db/files.dat" "sync edit reverse copy database"
     
     # Clean up temporary databases
     rm -rf "$original_dir"
@@ -3234,8 +3234,8 @@ test_sync_delete_asset() {
     fi
     
     # Check merkle tree order for both databases
-    check_merkle_tree_order "$original_dir/.db/tree.dat" "sync delete original database"
-    check_merkle_tree_order "$copy_dir/.db/tree.dat" "sync delete copy database"
+    check_merkle_tree_order "$original_dir/.db/files.dat" "sync delete original database"
+    check_merkle_tree_order "$copy_dir/.db/files.dat" "sync delete copy database"
     
     # Clean up temporary databases
     rm -rf "$original_dir"
@@ -3379,8 +3379,8 @@ test_sync_delete_asset_reverse() {
     fi
     
     # Check merkle tree order for both databases
-    check_merkle_tree_order "$original_dir/.db/tree.dat" "sync delete reverse original database"
-    check_merkle_tree_order "$copy_dir/.db/tree.dat" "sync delete reverse copy database"
+    check_merkle_tree_order "$original_dir/.db/files.dat" "sync delete reverse original database"
+    check_merkle_tree_order "$copy_dir/.db/files.dat" "sync delete reverse copy database"
     
     # Clean up temporary databases
     rm -rf "$original_dir"
@@ -3498,8 +3498,8 @@ test_replicate_with_deleted_asset() {
     expect_output_string "$verify_replica_output" "Database verification passed" "Replica database passes verification"
     
     # Check merkle tree order for both databases
-    check_merkle_tree_order "$source_dir/.db/tree.dat" "replicate deleted source database"
-    check_merkle_tree_order "$replica_dir/.db/tree.dat" "replicate deleted replica database"
+    check_merkle_tree_order "$source_dir/.db/files.dat" "replicate deleted source database"
+    check_merkle_tree_order "$replica_dir/.db/files.dat" "replicate deleted replica database"
     
     # Clean up temporary databases
     rm -rf "$source_dir"
@@ -3623,7 +3623,7 @@ test_replicate_partial() {
     # Check that replica was created
     check_exists "$replica_dir" "Partial replica database directory"
     check_exists "$replica_dir/.db" "Partial replica metadata directory"
-    check_exists "$replica_dir/.db/tree.dat" "Partial replica tree file"
+    check_exists "$replica_dir/.db/files.dat" "Partial replica tree file"
     
     # Count files in partial replica directories
     local replica_thumb_count=0

@@ -5,10 +5,9 @@ import { exit } from "node-utils";
 import { configureIfNeeded, getS3Config } from '../lib/config';
 import { loadDatabase, IBaseCommandOptions, resolveKeyPath, promptForEncryption, selectEncryptionKey, ICommandContext } from "../lib/init-cmd";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
-import * as fs from 'fs/promises';
 import { pathExists, copy } from 'node-utils';
 import { getDirectoryForCommand } from "../lib/directory-picker";
-import { replicate } from "api";
+import { replicate, merkleTreeExists } from "api";
 import { confirm, isCancel } from '../lib/clack/prompts';
 
 export interface IReplicateCommandOptions extends IBaseCommandOptions { 
@@ -77,8 +76,8 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
     const s3Config = await getS3Config();
     const { storage: destMetadataStorage } = createStorage(destDir, s3Config, undefined);
 
-    // Check for tree.dat in device-specific location first, then old location
-    let destDbExists = await destMetadataStorage.fileExists(".db/tree.dat");    
+    // Check if destination database already has a files tree
+    let destDbExists = await merkleTreeExists(destMetadataStorage);    
     if (destDbExists) {
         // Database already exists - check if it's encrypted
         const destDbIsEncrypted = await destMetadataStorage.fileExists('.db/encryption.pub');        
