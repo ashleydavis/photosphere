@@ -9,7 +9,7 @@ import { BufferMap } from './buffer-map';
 //
 // Current database version
 //
-export const CURRENT_DATABASE_VERSION = 5;
+export const CURRENT_DATABASE_VERSION = 6;
 
 //
 // Generic node interface for traversal.
@@ -1458,6 +1458,46 @@ function deserializeSortTree(deserializer: IDeserializer): SortNode | undefined 
 }
 
 //
+// Deserializer function for merkle tree (version 6)
+//
+function deserializeMerkleTreeV6<DatabaseMetadata>(deserializer: IDeserializer): IMerkleTree<DatabaseMetadata> {
+    const databaseMetadata = deserializer.readBSON<DatabaseMetadata>();
+
+    const uuidBytes = deserializer.readBytes(16);
+    const id = stringifyUuid(uuidBytes);
+
+    const stringTableDeserializer = new CompressedBinaryDeserializer(deserializer);
+    const stringTableSize = stringTableDeserializer.readUInt32();
+    const stringTable: string[] = [];
+    for (let i = 0; i < stringTableSize; i++) {
+        const str = stringTableDeserializer.readString();
+        stringTable.push(str);
+    }
+
+    const hashTableSize = deserializer.readUInt32();
+    const hashTable: Buffer[] = [];
+    for (let i = 0; i < hashTableSize; i++) {
+        const hash = deserializer.readBytes(32);
+        hashTable.push(hash);
+    }
+
+    const sortTreeDeserializer = new CompressedBinaryDeserializer(deserializer);
+    const sort = deserializeSortTreeV5(sortTreeDeserializer, stringTable, hashTable);
+
+    const merkleTreeDeserializer = new CompressedBinaryDeserializer(deserializer);
+    const merkle = deserializeMerkleV5(merkleTreeDeserializer, stringTable, hashTable);
+
+    return {
+        id,
+        sort,
+        dirty: false,
+        merkle,
+        databaseMetadata,
+        version: 6,
+    };
+}
+
+//
 // Deserializer function for merkle tree (version 5)
 //
 function deserializeMerkleTreeV5<DatabaseMetadata>(deserializer: IDeserializer): IMerkleTree<DatabaseMetadata> {
@@ -1749,12 +1789,13 @@ export async function loadTreeVersion(filePath: string, storage: IStorage): Prom
 
 export async function loadTree<DatabaseMetadata>(filePath: string, storage: IStorage): Promise<IMerkleTree<DatabaseMetadata> | undefined> {
     const deserializers = {
+        6: deserializeMerkleTreeV6<DatabaseMetadata>,
         5: deserializeMerkleTreeV5<DatabaseMetadata>,
         4: deserializeMerkleTreeV4<DatabaseMetadata>,
         3: deserializeMerkleTreeV3<DatabaseMetadata>,
         2: deserializeMerkleTreeV2<DatabaseMetadata>,
     };
-    
+
     return await load<IMerkleTree<DatabaseMetadata>>(
         storage,
         filePath,
