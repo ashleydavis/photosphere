@@ -2,6 +2,7 @@
 // An implementation of storage that operates under a particular prefix.
 //
 
+import type { Readable } from "stream";
 import { IFileInfo, IListResult, IStorage, IWriteLockInfo } from "./storage";
 import { pathJoin } from "./storage-factory";
 
@@ -89,7 +90,7 @@ export class StoragePrefixWrapper implements IStorage {
     //
     // Streams a file from stroage.
     //
-    readStream(filePath: string): NodeJS.ReadableStream {
+    readStream(filePath: string): Readable {
         return this.storage.readStream(this.makeFullPath(filePath));
     }
 

@@ -215,8 +215,9 @@ describe('loadTreeVersion', () => {
         expect(version).toBe(CURRENT_DATABASE_VERSION);
     });
 
-    test('should throw error for non-existent file', async () => {
-        await expect(loadTreeVersion('./non-existent-file.bin', storage)).rejects.toThrow();
+    test('should return undefined for non-existent file', async () => {
+        const version = await loadTreeVersion('./non-existent-file.bin', storage);
+        expect(version).toBeUndefined();
     });
 
     test('should return undefined for empty file', async () => {

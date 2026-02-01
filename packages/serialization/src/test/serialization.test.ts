@@ -2,6 +2,7 @@
 // Tests for binary serialization and deserialization with versioning support.
 //
 
+import { Readable } from 'stream';
 import { save, load, verify, UnsupportedVersionError, BinarySerializer, BinaryDeserializer, type DeserializerMap, type MigrationMap, type ISerializer, type IDeserializer, type DeserializerFunction, type SerializationOptions } from '../lib/serialization';
 import { IStorage } from 'storage';
 
@@ -53,8 +54,8 @@ class MockStorage implements IStorage {
         this.files.set(path, buffer);
     }
 
-    readStream(filePath: string): NodeJS.ReadableStream {
-        throw new Error('Method not implemented');
+    readStream(filePath: string): Readable {
+        return new Readable({ read() {} });
     }
 
     async writeStream(filePath: string, contentType: string | undefined, inputStream: NodeJS.ReadableStream, contentLength?: number): Promise<void> {

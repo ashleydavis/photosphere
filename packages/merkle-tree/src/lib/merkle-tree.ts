@@ -1,7 +1,7 @@
 import * as crypto from 'crypto';
 import { IStorage } from 'storage';
 import { parse as parseUuid, stringify as stringifyUuid } from 'uuid';
-import { save, load, ISerializer, IDeserializer, CompressedBinarySerializer, CompressedBinaryDeserializer } from 'serialization';
+import { save, load, loadVersion, ISerializer, IDeserializer, CompressedBinarySerializer, CompressedBinaryDeserializer } from 'serialization';
 import { traverseTreeSync } from './traverse';
 import { BufferSet } from './buffer-set';
 import { BufferMap } from './buffer-map';
@@ -1749,42 +1749,10 @@ export async function saveTree<DatabaseMetadata>(filePath: string, tree: IMerkle
 //
 // Loads only the version number from a merkle tree file without loading the entire tree.
 // This is useful for version compatibility checks before full database loading.
-// Uses streaming to read only the first 4 bytes for efficiency.
+// Uses the serialization library so the version header is read in one place.
 //
 export async function loadTreeVersion(filePath: string, storage: IStorage): Promise<number | undefined> {
-    return new Promise((resolve, reject) => {
-        const stream = storage.readStream(filePath);
-        let versionBuffer = Buffer.alloc(4);
-        let bytesRead = 0;
-
-        stream.on('data', (chunk: Buffer) => {
-            if (bytesRead < 4) {
-                const bytesToCopy = Math.min(chunk.length, 4 - bytesRead);
-                chunk.copy(versionBuffer, bytesRead, 0, bytesToCopy);
-                bytesRead += bytesToCopy;
-                
-                if (bytesRead >= 4) {
-                    // We have enough bytes, close the stream and resolve
-                    if ('destroy' in stream && typeof stream.destroy === 'function') {
-                        stream.destroy();
-                    }
-                    resolve(versionBuffer.readUInt32LE(0));
-                }
-            }
-        });
-
-        stream.on('end', () => {
-            if (bytesRead < 4) {
-                resolve(undefined); // File too small or empty
-            } else {
-                resolve(versionBuffer.readUInt32LE(0));
-            }
-        });
-
-        stream.on('error', (error) => {
-            reject(error);
-        });
-    });
+    return await loadVersion(storage, filePath);
 }
 
 export async function loadTree<DatabaseMetadata>(filePath: string, storage: IStorage): Promise<IMerkleTree<DatabaseMetadata> | undefined> {

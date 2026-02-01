@@ -2,9 +2,10 @@
 // Binary serialization and deserialization with versioning support.
 //
 
-export { 
-    save, 
-    load, 
+export {
+    save,
+    load,
+    loadVersion,
     verify,
     UnsupportedVersionError,
     BinarySerializer,
