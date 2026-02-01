@@ -3,7 +3,7 @@
 //
 
 import { Readable } from 'stream';
-import { save, load, verify, UnsupportedVersionError, BinarySerializer, BinaryDeserializer, type DeserializerMap, type MigrationMap, type ISerializer, type IDeserializer, type DeserializerFunction, type SerializationOptions } from '../lib/serialization';
+import { save, load, verify, UnsupportedVersionError, BinarySerializer, BinaryDeserializer, type DeserializerMap, type MigrationMap, type ISerializer, type IDeserializer, type DeserializerFunction } from '../lib/serialization';
 import { IStorage } from 'storage';
 
 //
@@ -163,22 +163,23 @@ describe('Serialization', () => {
             const filePath = 'test.bin';
             const version = 1;
 
-            await save(storage, filePath, data, version, serializeV1);
+            await save(storage, filePath, data, version, 'TEST', serializeV1);
 
             const savedBuffer = await storage.read(filePath);
             expect(savedBuffer).toBeDefined();
-            expect(savedBuffer!.length).toBeGreaterThan(36); // Version header (4) + data + checksum footer (32)
+            expect(savedBuffer!.length).toBeGreaterThan(40); // Version (4) + type (4) + data + checksum (32)
 
             // Check version header
             const savedVersion = savedBuffer!.readUInt32LE(0);
             expect(savedVersion).toBe(version);
+            expect(savedBuffer!.subarray(4, 8).toString('ascii')).toBe('TEST');
 
             // Check checksum footer exists (32 bytes for SHA-256)
             const savedChecksum = savedBuffer!.subarray(savedBuffer!.length - 32);
             expect(savedChecksum.length).toBe(32);
 
-            // Check data portion by deserializing with our deserializer
-            const dataBuffer = savedBuffer!.subarray(4, savedBuffer!.length - 32);
+            // Check payload (after version and type)
+            const dataBuffer = savedBuffer!.subarray(8, savedBuffer!.length - 32);
             const deserializer = new BinaryDeserializer(dataBuffer);
             const deserializedData = JSON.parse(deserializer.readString());
             expect(deserializedData).toEqual(data);
@@ -199,9 +200,9 @@ describe('Serialization', () => {
                 serializer.writeString(JSON.stringify(data));
             };
 
-            await save(storage, 'string.bin', stringData, 1, stringSerializer);
-            await save(storage, 'number.bin', numberData, 2, numberSerializer);
-            await save(storage, 'object.bin', objectData, 3, objectSerializer);
+            await save(storage, 'string.bin', stringData, 1, 'TEST', stringSerializer);
+            await save(storage, 'number.bin', numberData, 2, 'TEST', numberSerializer);
+            await save(storage, 'object.bin', objectData, 3, 'TEST', objectSerializer);
 
             expect(await storage.fileExists('string.bin')).toBe(true);
             expect(await storage.fileExists('number.bin')).toBe(true);
@@ -212,7 +213,7 @@ describe('Serialization', () => {
             const data: TestDataV1 = { name: 'test', value: 42 };
             const largeVersion = 0xFFFFFFFF; // Maximum 32-bit unsigned integer
 
-            await save(storage, 'large-version.bin', data, largeVersion, serializeV1);
+            await save(storage, 'large-version.bin', data, largeVersion, 'TEST', serializeV1);
 
             const savedBuffer = await storage.read('large-version.bin');
             const savedVersion = savedBuffer!.readUInt32LE(0);
@@ -231,16 +232,16 @@ describe('Serialization', () => {
             };
 
             // Save v1 data
-            await save(storage, 'data-v1.bin', dataV1, 1, serializeV1);
+            await save(storage, 'data-v1.bin', dataV1, 1, 'TEST', serializeV1);
             // Save v2 data  
-            await save(storage, 'data-v2.bin', dataV2, 2, serializeV2);
+            await save(storage, 'data-v2.bin', dataV2, 2, 'TEST', serializeV2);
 
             // Load and verify v1 data
-            const loadedV1 = await load(storage, 'data-v1.bin', deserializers);
+            const loadedV1 = await load(storage, 'data-v1.bin', 'TEST', deserializers);
             expect(loadedV1).toEqual(dataV1);
 
             // Load and verify v2 data
-            const loadedV2 = await load(storage, 'data-v2.bin', deserializers);
+            const loadedV2 = await load(storage, 'data-v2.bin', 'TEST', deserializers);
             expect(loadedV2).toEqual(dataV2);
         });
 
@@ -253,7 +254,7 @@ describe('Serialization', () => {
             };
 
             // Save with version 3
-            await save(storage, 'data-v3.bin', data, 3, serializeV3);
+            await save(storage, 'data-v3.bin', data, 3, 'TEST', serializeV3);
 
             // Try to load with deserializers that only support v1 and v2
             const deserializers: DeserializerMap<TestDataV1 | TestDataV2> = {
@@ -261,12 +262,12 @@ describe('Serialization', () => {
                 2: deserializeV2,
             };
 
-            await expect(load(storage, 'data-v3.bin', deserializers))
+            await expect(load(storage, 'data-v3.bin', 'TEST', deserializers))
                 .rejects
                 .toThrow(UnsupportedVersionError);
 
             try {
-                await load(storage, 'data-v3.bin', deserializers);
+                await load(storage, 'data-v3.bin', 'TEST', deserializers);
             } catch (error) {
                 expect(error).toBeInstanceOf(UnsupportedVersionError);
                 expect((error as Error).message).toContain('No deserializer found for version 3');
@@ -279,17 +280,17 @@ describe('Serialization', () => {
                 1: deserializeV1,
             };
 
-            // Test with completely empty file
+            // Test with completely empty file (hits minimum 4-byte check)
             await storage.write('empty.bin', undefined, Buffer.alloc(0));
-            await expect(load(storage, 'empty.bin', deserializers))
+            await expect(load(storage, 'empty.bin', 'TEST', deserializers))
                 .rejects
-                .toThrow("File 'empty.bin' is too small to contain version and checksum");
+                .toThrow(/too small/);
 
-            // Test with file smaller than version (4 bytes) + checksum (32 bytes) = 36 bytes minimum
-            await storage.write('small.bin', undefined, Buffer.alloc(35));
-            await expect(load(storage, 'small.bin', deserializers))
+            // Test with file smaller than v6 minimum (40 bytes); treated as legacy and fails checksum
+            await storage.write('small.bin', undefined, Buffer.alloc(39));
+            await expect(load(storage, 'small.bin', 'TEST', deserializers))
                 .rejects
-                .toThrow("File 'small.bin' is too small to contain version and checksum");
+                .toThrow(/too small|Checksum mismatch/);
         });
 
         it('should return undefined for non-existent files', async () => {
@@ -297,7 +298,7 @@ describe('Serialization', () => {
                 1: deserializeV1,
             };
 
-            const result = await load(storage, 'non-existent.bin', deserializers);
+            const result = await load(storage, 'non-existent.bin', 'TEST', deserializers);
             expect(result).toBeUndefined();
         });
 
@@ -306,26 +307,22 @@ describe('Serialization', () => {
                 1: (deserializer: IDeserializer) => deserializer.readString(),
             };
 
-            // Create a file with version header, empty string data, and checksum footer
+            // Create a file with v6 layout: version (4) + type (4) + payload + checksum (32)
             const versionBuffer = Buffer.alloc(4);
             versionBuffer.writeUInt32LE(1, 0);
-            
-            // Create empty string data (4 bytes length + 0 bytes data)
+            const typeBuffer = Buffer.from('TEST', 'ascii');
             const lengthBuffer = Buffer.alloc(4);
-            lengthBuffer.writeUInt32LE(0, 0); // String length of 0
-            const dataBuffer = Buffer.concat([lengthBuffer]);
-            
-            // Calculate 32-byte SHA-256 checksum of the version + data portion (everything except checksum)
+            lengthBuffer.writeUInt32LE(0, 0);
+            const payload = Buffer.concat([lengthBuffer]);
+            const dataWithVersionAndType = Buffer.concat([versionBuffer, typeBuffer, payload]);
             const { createHash } = await import('crypto');
-            const dataWithVersion = Buffer.concat([versionBuffer, dataBuffer]);
-            const checksum = createHash('sha256').update(dataWithVersion).digest(); // Full 32-byte hash
-            
-            const fileBuffer = Buffer.concat([versionBuffer, dataBuffer, checksum]);
+            const checksum = createHash('sha256').update(dataWithVersionAndType).digest();
+            const fileBuffer = Buffer.concat([dataWithVersionAndType, checksum]);
 
             await storage.write('minimal.bin', undefined, fileBuffer);
 
-            const result = await load(storage, 'minimal.bin', deserializers);
-            expect(result).toBe(''); // Empty string from empty buffer
+            const result = await load(storage, 'minimal.bin', 'TEST', deserializers);
+            expect(result).toBe('');
         });
     });
 
@@ -348,15 +345,15 @@ describe('Serialization', () => {
                 
                 // Choose appropriate serializer based on version
                 if (testCase.version === 1) {
-                    await save(storage, fileName, testCase.data as TestDataV1, testCase.version, serializeV1);
+                    await save(storage, fileName, testCase.data as TestDataV1, testCase.version, 'TEST', serializeV1);
                 } else if (testCase.version === 2) {
-                    await save(storage, fileName, testCase.data as TestDataV2, testCase.version, serializeV2);
+                    await save(storage, fileName, testCase.data as TestDataV2, testCase.version, 'TEST', serializeV2);
                 } else {
-                    await save(storage, fileName, testCase.data as TestDataV3, testCase.version, serializeV3);
+                    await save(storage, fileName, testCase.data as TestDataV3, testCase.version, 'TEST', serializeV3);
                 }
 
                 // Load data back
-                const loadedData = await load(storage, fileName, deserializers);
+                const loadedData = await load(storage, fileName, 'TEST', deserializers);
 
                 // Verify data integrity
                 expect(loadedData).toEqual(testCase.data);
@@ -389,8 +386,8 @@ describe('Serialization', () => {
                 1: deserializer,
             };
 
-            await save(storage, 'special.bin', specialData, 1, serializer);
-            const loadedData = await load(storage, 'special.bin', deserializers);
+            await save(storage, 'special.bin', specialData, 1, 'TEST', serializer);
+            const loadedData = await load(storage, 'special.bin', 'TEST', deserializers);
 
             expect(loadedData).toEqual(specialData);
         });
@@ -404,21 +401,17 @@ describe('Serialization', () => {
             };
 
             // Save valid data
-            await save(storage, 'valid.bin', data, 1, serializeV1);
+            await save(storage, 'valid.bin', data, 1, 'TEST', serializeV1);
 
-            // Read the saved buffer and corrupt the data portion
             const validBuffer = await storage.read('valid.bin');
             const corruptedBuffer = Buffer.from(validBuffer!);
-            // Corrupt a byte in the data portion (after version = 4 bytes, before checksum at end)
-            if (corruptedBuffer.length > 8) {
-                corruptedBuffer[4] = corruptedBuffer[4] ^ 0xFF; // Flip all bits in first data byte
+            if (corruptedBuffer.length > 12) {
+                corruptedBuffer[8] = corruptedBuffer[8] ^ 0xFF;
             }
 
-            // Write corrupted data back
             await storage.write('corrupted.bin', undefined, corruptedBuffer);
 
-            // Try to load corrupted data - should throw checksum error
-            await expect(load(storage, 'corrupted.bin', deserializers))
+            await expect(load(storage, 'corrupted.bin', 'TEST', deserializers))
                 .rejects
                 .toThrow(/Checksum mismatch/);
         });
@@ -429,21 +422,16 @@ describe('Serialization', () => {
                 1: deserializeV1,
             };
 
-            // Save valid data
-            await save(storage, 'valid.bin', data, 1, serializeV1);
+            await save(storage, 'valid.bin', data, 1, 'TEST', serializeV1);
 
-            // Read the saved buffer and corrupt the checksum
             const validBuffer = await storage.read('valid.bin');
             const corruptedBuffer = Buffer.from(validBuffer!);
-            // Corrupt the checksum (last 32 bytes for SHA-256)
             const badChecksum = Buffer.from('deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef', 'hex');
             badChecksum.copy(corruptedBuffer, corruptedBuffer.length - 32);
 
-            // Write corrupted checksum back
             await storage.write('bad-checksum.bin', undefined, corruptedBuffer);
 
-            // Try to load data with bad checksum - should throw checksum error
-            await expect(load(storage, 'bad-checksum.bin', deserializers))
+            await expect(load(storage, 'bad-checksum.bin', 'TEST', deserializers))
                 .rejects
                 .toThrow(/Checksum mismatch/);
         });
@@ -454,21 +442,17 @@ describe('Serialization', () => {
                 1: deserializeV1,
             };
 
-            // Save valid data
-            await save(storage, 'valid.bin', data, 1, serializeV1);
+            await save(storage, 'valid.bin', data, 1, 'TEST', serializeV1);
 
-            // Read the saved buffer and set a specific bad checksum (32 bytes for SHA-256)
             const validBuffer = await storage.read('valid.bin');
             const corruptedBuffer = Buffer.from(validBuffer!);
             const badChecksum = Buffer.from('1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef', 'hex');
             badChecksum.copy(corruptedBuffer, corruptedBuffer.length - 32);
 
-            // Write corrupted checksum back
             await storage.write('bad-checksum.bin', undefined, corruptedBuffer);
 
-            // Try to load and capture the exact error message
             try {
-                await load(storage, 'bad-checksum.bin', deserializers);
+                await load(storage, 'bad-checksum.bin', 'TEST', deserializers);
                 fail('Expected checksum error to be thrown');
             } catch (error) {
                 expect(error).toBeInstanceOf(Error);
@@ -487,7 +471,7 @@ describe('Serialization', () => {
                 throw new Error('Serializer error');
             };
 
-            await expect(save(storage, 'bad.bin', { test: 'data' }, 1, badSerializer))
+            await expect(save(storage, 'bad.bin', { test: 'data' }, 1, 'TEST', badSerializer))
                 .rejects
                 .toThrow('Serializer error');
         });
@@ -501,14 +485,13 @@ describe('Serialization', () => {
             };
 
             // Save valid data
-            await save(storage, 'good-data.bin', 'test', 1, goodSerializer);
+            await save(storage, 'good-data.bin', 'test', 1, 'TEST', goodSerializer);
 
-            // Try to load with bad deserializer
             const deserializers: DeserializerMap<string> = {
                 1: badDeserializer,
             };
 
-            await expect(load(storage, 'good-data.bin', deserializers))
+            await expect(load(storage, 'good-data.bin', 'TEST', deserializers))
                 .rejects
                 .toThrow('Deserializer error');
         });
@@ -747,7 +730,7 @@ describe('Serialization', () => {
         it('should migrate from v1 to v3 through v2', async () => {
             // Save v1 data
             const dataV1: DataV1 = { name: 'test', value: 42 };
-            await save(storage, 'data-v1.bin', dataV1, 1, serializeV1);
+            await save(storage, 'data-v1.bin', dataV1, 1, 'TEST', serializeV1);
 
             // Set up deserializers for all versions
             const deserializers: Record<number, DeserializerFunction<unknown>> = {
@@ -775,7 +758,7 @@ describe('Serialization', () => {
             };
 
             // Load with migrations (should auto-migrate to latest version 3)
-            const result = await load<DataV3>(storage, 'data-v1.bin', deserializers, migrations);
+            const result = await load<DataV3>(storage, 'data-v1.bin', 'TEST', deserializers, migrations);
 
             expect(result).toEqual({
                 name: 'test',
@@ -788,7 +771,7 @@ describe('Serialization', () => {
         it('should migrate to specific target version', async () => {
             // Save v1 data
             const dataV1: DataV1 = { name: 'test', value: 42 };
-            await save(storage, 'data-v1.bin', dataV1, 1, serializeV1);
+            await save(storage, 'data-v1.bin', dataV1, 1, 'TEST', serializeV1);
 
             const deserializers: Record<number, DeserializerFunction<unknown>> = {
                 1: deserializeV1,
@@ -813,8 +796,7 @@ describe('Serialization', () => {
                 }
             };
 
-            // Load with specific target version (should stop at v2)
-            const result = await load<DataV2>(storage, 'data-v1.bin', deserializers, migrations, 2);
+            const result = await load<DataV2>(storage, 'data-v1.bin', 'TEST', deserializers, migrations, 2);
 
             expect(result).toEqual({
                 name: 'test',
@@ -825,9 +807,8 @@ describe('Serialization', () => {
         });
 
         it('should handle complex migration paths', async () => {
-            // Save v1 data
             const dataV1: DataV1 = { name: 'test', value: 42 };
-            await save(storage, 'data-v1.bin', dataV1, 1, serializeV1);
+            await save(storage, 'data-v1.bin', dataV1, 1, 'TEST', serializeV1);
 
             const deserializers: Record<number, DeserializerFunction<unknown>> = {
                 1: deserializeV1,
@@ -869,8 +850,7 @@ describe('Serialization', () => {
                 })
             };
 
-            // Should choose shortest path (1 -> 4 directly)
-            const result = await load<DataV4>(storage, 'data-v1.bin', deserializers, migrations);
+            const result = await load<DataV4>(storage, 'data-v1.bin', 'TEST', deserializers, migrations);
 
             expect(result).toBeDefined();
             expect(result!.description).toBe('Direct migration to v4');
@@ -885,7 +865,7 @@ describe('Serialization', () => {
                 description: 'already v3',
                 tags: ['current']
             };
-            await save(storage, 'data-v3.bin', dataV3, 3, serializeV3);
+            await save(storage, 'data-v3.bin', dataV3, 3, 'TEST', serializeV3);
 
             const deserializers: Record<number, DeserializerFunction<unknown>> = {
                 1: deserializeV1,
@@ -898,8 +878,7 @@ describe('Serialization', () => {
                 '2:3': (data: DataV2): DataV3 => ({ ...data, tags: ['should not run'] })
             };
 
-            // Load v3 data (should not apply any migrations)
-            const result = await load<DataV3>(storage, 'data-v3.bin', deserializers, migrations);
+            const result = await load<DataV3>(storage, 'data-v3.bin', 'TEST', deserializers, migrations);
 
             expect(result).toEqual(dataV3);
         });
@@ -907,19 +886,18 @@ describe('Serialization', () => {
         it('should throw error when no migration path exists', async () => {
             // Save v1 data
             const dataV1: DataV1 = { name: 'test', value: 42 };
-            await save(storage, 'data-v1.bin', dataV1, 1, serializeV1);
+            await save(storage, 'data-v1.bin', dataV1, 1, 'TEST', serializeV1);
 
             const deserializers: Record<number, DeserializerFunction<unknown>> = {
                 1: deserializeV1,
-                3: deserializeV3, // Note: no v2 deserializer
+                3: deserializeV3,
             };
 
             const migrations: MigrationMap = {
                 '2:3': (data: DataV2): DataV3 => ({ ...data, tags: [] })
-                // Note: no 1:2 or 1:3 migration
             };
 
-            await expect(load<DataV3>(storage, 'data-v1.bin', deserializers, migrations))
+            await expect(load<DataV3>(storage, 'data-v1.bin', 'TEST', deserializers, migrations))
                 .rejects
                 .toThrow('No migration path found from version 1 to 3');
         });
@@ -927,7 +905,7 @@ describe('Serialization', () => {
         it('should throw error when migration function is missing in path', async () => {
             // Save v1 data
             const dataV1: DataV1 = { name: 'test', value: 42 };
-            await save(storage, 'data-v1.bin', dataV1, 1, serializeV1);
+            await save(storage, 'data-v1.bin', dataV1, 1, 'TEST', serializeV1);
 
             const deserializers: Record<number, DeserializerFunction<unknown>> = {
                 1: deserializeV1,
@@ -937,10 +915,9 @@ describe('Serialization', () => {
 
             const migrations: MigrationMap = {
                 '1:2': (data: DataV1): DataV2 => ({ ...data, description: 'migrated' })
-                // Missing 2:3 migration
             };
 
-            await expect(load<DataV3>(storage, 'data-v1.bin', deserializers, migrations))
+            await expect(load<DataV3>(storage, 'data-v1.bin', 'TEST', deserializers, migrations))
                 .rejects
                 .toThrow('No migration path found from version 1 to 3');
         });
@@ -948,7 +925,7 @@ describe('Serialization', () => {
         it('should throw error when specific migration step is missing', async () => {
             // Save v1 data  
             const dataV1: DataV1 = { name: 'test', value: 42 };
-            await save(storage, 'data-v1.bin', dataV1, 1, serializeV1);
+            await save(storage, 'data-v1.bin', dataV1, 1, 'TEST', serializeV1);
 
             const deserializers: Record<number, DeserializerFunction<unknown>> = {
                 1: deserializeV1,
@@ -956,15 +933,12 @@ describe('Serialization', () => {
                 3: deserializeV3,
             };
 
-            // Force a specific path that has a missing step
             const migrations: MigrationMap = {
                 '1:3': (data: DataV1): DataV3 => ({ ...data, description: 'direct', tags: [] }),
                 '1:2': (data: DataV1): DataV2 => ({ ...data, description: 'step1' }),
-                // Missing 2:3 step - this will be tested by modifying internal path finding
             };
 
-            // This should work with direct path
-            const result = await load<DataV3>(storage, 'data-v1.bin', deserializers, migrations);
+            const result = await load<DataV3>(storage, 'data-v1.bin', 'TEST', deserializers, migrations);
             expect(result).toBeDefined();
             expect(result!.description).toBe('direct');
         });
@@ -976,14 +950,13 @@ describe('Serialization', () => {
                 value: 42,
                 description: 'v2 data'
             };
-            await save(storage, 'data-v2.bin', dataV2, 2, serializeV2);
+            await save(storage, 'data-v2.bin', dataV2, 2, 'TEST', serializeV2);
 
             const deserializers: Record<number, DeserializerFunction<unknown>> = {
                 2: deserializeV2,
             };
 
-            // Load without migrations (should work fine)
-            const result = await load<DataV2>(storage, 'data-v2.bin', deserializers);
+            const result = await load<DataV2>(storage, 'data-v2.bin', 'TEST', deserializers);
 
             expect(result).toEqual(dataV2);
         });
@@ -996,125 +969,30 @@ describe('Serialization', () => {
         };
 
         it('should enable checksum by default when options is undefined', async () => {
-            await save(storage, 'default.bin', testData, 1, serializeV1);
-            
+            await save(storage, 'default.bin', testData, 1, 'TEST', serializeV1);
+
             const savedBuffer = await storage.read('default.bin');
             expect(savedBuffer).toBeDefined();
-            expect(savedBuffer!.length).toBeGreaterThan(36); // Version (4) + data + checksum (32)
-            
-            // Should be able to load with checksum verification
-            const result = await load(storage, 'default.bin', deserializers);
+            expect(savedBuffer!.length).toBeGreaterThan(40); // Version (4) + type (4) + data + checksum (32)
+
+            const result = await load(storage, 'default.bin', 'TEST', deserializers);
             expect(result).toEqual(testData);
         });
 
-        it('should enable checksum by default when options.checksum is undefined', async () => {
-            const options: SerializationOptions = {}; // No checksum property
-            
-            await save(storage, 'default-empty-options.bin', testData, 1, serializeV1, options);
-            
-            const savedBuffer = await storage.read('default-empty-options.bin');
+        it('should always write v6 format with type and checksum', async () => {
+            await save(storage, 'v6-format.bin', testData, 1, 'TEST', serializeV1);
+
+            const savedBuffer = await storage.read('v6-format.bin');
             expect(savedBuffer).toBeDefined();
-            expect(savedBuffer!.length).toBeGreaterThan(36); // Version (4) + data + checksum (32)
-            
-            // Should be able to load with checksum verification
-            const result = await load(storage, 'default-empty-options.bin', deserializers, undefined, undefined, options);
+            expect(savedBuffer!.length).toBeGreaterThanOrEqual(40);
+            expect(savedBuffer!.readUInt32LE(0)).toBe(1);
+            expect(savedBuffer!.subarray(4, 8).toString('ascii')).toBe('TEST');
+
+            const result = await load(storage, 'v6-format.bin', 'TEST', deserializers);
             expect(result).toEqual(testData);
         });
 
-        it('should enable checksum when explicitly set to true', async () => {
-            const options: SerializationOptions = { checksum: true };
-            
-            await save(storage, 'checksum-enabled.bin', testData, 1, serializeV1, options);
-            
-            const savedBuffer = await storage.read('checksum-enabled.bin');
-            expect(savedBuffer).toBeDefined();
-            expect(savedBuffer!.length).toBeGreaterThan(36); // Version (4) + data + checksum (32)
-            
-            // Should be able to load with checksum verification
-            const result = await load(storage, 'checksum-enabled.bin', deserializers, undefined, undefined, options);
-            expect(result).toEqual(testData);
-        });
-
-        it('should disable checksum when explicitly set to false', async () => {
-            const options: SerializationOptions = { checksum: false };
-            
-            await save(storage, 'checksum-disabled.bin', testData, 1, serializeV1, options);
-            
-            const savedBuffer = await storage.read('checksum-disabled.bin');
-            expect(savedBuffer).toBeDefined();
-            
-            // Should not have checksum, so length should be just version (4) + data
-            // For our test data, serialized size should be much smaller than with checksum
-            expect(savedBuffer!.length).toBeLessThan(36);
-            
-            // Should be able to load without checksum verification
-            const result = await load(storage, 'checksum-disabled.bin', deserializers, undefined, undefined, options);
-            expect(result).toEqual(testData);
-        });
-
-        it('should successfully load checksummed file without checksum verification', async () => {
-            // Save with checksum
-            await save(storage, 'with-checksum.bin', testData, 1, serializeV1, { checksum: true });
-            
-            // Load without checksum verification
-            // This works because our serializer reads the correct amount of data based on length prefixes
-            const result = await load(storage, 'with-checksum.bin', deserializers, undefined, undefined, { checksum: false });
-            
-            // The result should be correct because the deserializer reads the right amount of data
-            expect(result).toEqual(testData);
-        });
-
-        it('should fail to load non-checksummed file with checksum option', async () => {
-            // Save without checksum
-            await save(storage, 'without-checksum.bin', testData, 1, serializeV1, { checksum: false });
-            
-            // Try to load with checksum verification (should fail because file is too small)
-            await expect(load(storage, 'without-checksum.bin', deserializers, undefined, undefined, { checksum: true }))
-                .rejects
-                .toThrow('too small to contain version and checksum');
-        });
-
-        it('should handle round-trip with checksum disabled', async () => {
-            const options: SerializationOptions = { checksum: false };
-            const complexData: TestDataV3 = {
-                name: 'complex test',
-                value: 12345,
-                description: 'testing without checksum',
-                tags: ['no-checksum', 'test', 'round-trip']
-            };
-            
-            const deserializersV3: DeserializerMap<TestDataV3> = {
-                3: deserializeV3,
-            };
-            
-            // Save without checksum
-            await save(storage, 'round-trip-no-checksum.bin', complexData, 3, serializeV3, options);
-            
-            // Load without checksum
-            const result = await load(storage, 'round-trip-no-checksum.bin', deserializersV3, undefined, undefined, options);
-            
-            expect(result).toEqual(complexData);
-        });
-
-        it('should produce different file sizes with and without checksum', async () => {
-            const options1: SerializationOptions = { checksum: true };
-            const options2: SerializationOptions = { checksum: false };
-            
-            await save(storage, 'size-test-with.bin', testData, 1, serializeV1, options1);
-            await save(storage, 'size-test-without.bin', testData, 1, serializeV1, options2);
-            
-            const withChecksum = await storage.read('size-test-with.bin');
-            const withoutChecksum = await storage.read('size-test-without.bin');
-            
-            expect(withChecksum).toBeDefined();
-            expect(withoutChecksum).toBeDefined();
-            
-            // File with checksum should be exactly 32 bytes larger
-            expect(withChecksum!.length).toBe(withoutChecksum!.length + 32);
-        });
-
-        it('should maintain data integrity with checksum disabled', async () => {
-            const options: SerializationOptions = { checksum: false };
+        it('should maintain data integrity with checksum', async () => {
             const specialData = {
                 unicode: '🚀 Unicode test with émojis',
                 binary: 'Binary data: \x00\x01\x02\xFF',
@@ -1137,8 +1015,8 @@ describe('Serialization', () => {
                 1: specialDeserializer,
             };
 
-            await save(storage, 'special-no-checksum.bin', specialData, 1, specialSerializer, options);
-            const result = await load(storage, 'special-no-checksum.bin', specialDeserializers, undefined, undefined, options);
+            await save(storage, 'special-checksum.bin', specialData, 1, 'TEST', specialSerializer);
+            const result = await load(storage, 'special-checksum.bin', 'TEST', specialDeserializers);
 
             expect(result).toEqual(specialData);
         });
@@ -1154,26 +1032,25 @@ describe('Serialization', () => {
             expect(result.error).toBe('File not found or empty');
         });
 
-        it('should verify checksummed file successfully (default checksum: true)', async () => {
-            await save(storage, 'verify-checksum.bin', verifyTestData, 1, serializeV1, { checksum: true });
+        it('should verify v6 file successfully', async () => {
+            await save(storage, 'verify-checksum.bin', verifyTestData, 1, 'TEST', serializeV1);
             const result = await verify(storage, 'verify-checksum.bin');
             expect(result.valid).toBe(true);
-            expect(result.size).toBeGreaterThan(36);
+            expect(result.size).toBeGreaterThan(40);
             expect(result.error).toBeUndefined();
         });
 
-        it('should return valid: false when checksummed file is too small', async () => {
-            // Write a tiny buffer (less than 36 bytes)
+        it('should return valid: false when file is too small for v6 format', async () => {
             await storage.write('tiny.bin', undefined, Buffer.alloc(10));
             const result = await verify(storage, 'tiny.bin');
             expect(result.valid).toBe(false);
             expect(result.size).toBe(10);
             expect(result.error).toContain('File too small');
-            expect(result.error).toContain('minimum 36');
+            expect(result.error).toContain('minimum 40');
         });
 
         it('should return valid: false on checksum mismatch', async () => {
-            await save(storage, 'good-checksum.bin', verifyTestData, 1, serializeV1, { checksum: true });
+            await save(storage, 'good-checksum.bin', verifyTestData, 1, 'TEST', serializeV1);
             const buffer = await storage.read('good-checksum.bin');
             expect(buffer).toBeDefined();
             // Corrupt the last byte (checksum)
@@ -1185,52 +1062,8 @@ describe('Serialization', () => {
             expect(result.error).toContain('Checksum mismatch');
         });
 
-        it('should verify file without checksum when options.checksum is false', async () => {
-            await save(storage, 'verify-no-checksum.bin', verifyTestData, 1, serializeV1, { checksum: false });
-            const result = await verify(storage, 'verify-no-checksum.bin', { checksum: false });
-            expect(result.valid).toBe(true);
-            expect(result.size).toBeGreaterThan(0);
-            expect(result.error).toBeUndefined();
-        });
-
-        it('should return valid: false when no-checksum file is too small (< 4 bytes)', async () => {
-            await storage.write('tiny-no-checksum.bin', undefined, Buffer.alloc(2));
-            const result = await verify(storage, 'tiny-no-checksum.bin', { checksum: false });
-            expect(result.valid).toBe(false);
-            expect(result.size).toBe(2);
-            expect(result.error).toContain('File too small');
-            expect(result.error).toContain('minimum 4');
-        });
-
-        it('should return valid: false for suspicious version 0 (no checksum)', async () => {
-            const buf = Buffer.alloc(8);
-            buf.writeUInt32LE(0, 0);
-            await storage.write('version-zero.bin', undefined, buf);
-            const result = await verify(storage, 'version-zero.bin', { checksum: false });
-            expect(result.valid).toBe(false);
-            expect(result.error).toContain('Suspicious version number: 0');
-        });
-
-        it('should return valid: false for version > 100 (no checksum)', async () => {
-            const buf = Buffer.alloc(8);
-            buf.writeUInt32LE(101, 0);
-            await storage.write('version-101.bin', undefined, buf);
-            const result = await verify(storage, 'version-101.bin', { checksum: false });
-            expect(result.valid).toBe(false);
-            expect(result.error).toContain('Suspicious version number: 101');
-        });
-
-        it('should return valid: true for valid version in range 1-100 (no checksum)', async () => {
-            const buf = Buffer.alloc(8);
-            buf.writeUInt32LE(1, 0);
-            await storage.write('version-ok.bin', undefined, buf);
-            const result = await verify(storage, 'version-ok.bin', { checksum: false });
-            expect(result.valid).toBe(true);
-            expect(result.size).toBe(8);
-        });
-
-        it('should report correct size for valid checksummed file', async () => {
-            await save(storage, 'size-check.bin', verifyTestData, 1, serializeV1, { checksum: true });
+        it('should report correct size for valid v6 file', async () => {
+            await save(storage, 'size-check.bin', verifyTestData, 1, 'TEST', serializeV1);
             const expectedBuffer = await storage.read('size-check.bin');
             const result = await verify(storage, 'size-check.bin');
             expect(result.valid).toBe(true);

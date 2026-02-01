@@ -162,17 +162,6 @@ export type MigrationFunction<TFrom, TTo> = (data: TFrom) => TTo;
 export type MigrationMap = Record<string, (data: any) => any>;
 
 //
-// Options for save and load functions
-//
-export interface SerializationOptions {
-    //
-    // Enable or disable checksum calculation and verification
-    // Defaults to true if not specified
-    //
-    checksum?: boolean;
-}
-
-//
 // Implementation of ISerializer for writing binary data
 //
 export class BinarySerializer implements ISerializer {
@@ -535,122 +524,139 @@ export class UnsupportedVersionError extends Error {
 
 
 //
-// Saves data to storage with version header and optional checksum.
-// With checksum: [4 bytes version] [data] [32 bytes SHA-256 checksum]
-// Without checksum: [4 bytes version] [data]
+// V6 layout: [version 4][type 4][payload][checksum 32]. Type is 4-byte ASCII. Checksum covers version + type + payload.
+//
+const TYPE_CODE_LENGTH = 4;
+
+function typeCodeToBuffer(typeCode: string): Buffer {
+    if (typeCode.length !== TYPE_CODE_LENGTH) {
+        throw new Error(`Type code must be exactly ${TYPE_CODE_LENGTH} ASCII characters, got "${typeCode}" (length ${typeCode.length})`);
+    }
+    return Buffer.from(typeCode, 'ascii');
+}
+
+//
+// Saves data to storage with v6 layout: [version 4][type 4][payload][checksum 32].
+// Always writes checksum covering version + type + payload.
 //
 export async function save<T>(
     storage: IStorage,
     filePath: string,
     data: T,
     version: number,
-    serializer: SerializerFunction<T>,
-    options?: SerializationOptions
+    typeCode: string,
+    serializer: SerializerFunction<T>
 ): Promise<void> {
-    // Create serializer instance
     const binarySerializer = new BinarySerializer();
 
-    // Version always goes first.
     binarySerializer.writeUInt32(version);
-    
-    // Serialize the data using the provided serializer function
+    binarySerializer.writeBytes(typeCodeToBuffer(typeCode));
     serializer(data, binarySerializer);
-    
-    // Get the serialized data
+
     const serializedData = binarySerializer.getBuffer();
-    
-    // Calculate SHA256 checksum of the data
-    //TODO: Need as way to make this checksum be 32 bits instead of 32 bytes!
-    // Add checksum if enabled (default: true)
-    const useChecksum = options?.checksum !== false;
-    let finalBuffer: Buffer;
-    
-    if (useChecksum) {
-        // Calculate SHA256 checksum of the data (full 32 bytes)
-        const checksum = createHash('sha256').update(serializedData).digest();
-        
-        // Combine data and checksum footer.
-        finalBuffer = Buffer.concat([serializedData, checksum]);
-    } else {
-        // No checksum, just use the data
-        finalBuffer = serializedData;
-    }
-    
-    // Write to storage
+    const checksum = createHash('sha256').update(serializedData).digest();
+    const finalBuffer = Buffer.concat([serializedData, checksum]);
+
     await retry(() => storage.write(filePath, undefined, finalBuffer));
 }
 
 //
-// Loads data from storage, reads the version from the first 32 bits and optionally verifies checksum,
-// then uses the appropriate deserializer function.
+// Loads data from storage. Prefers v6 layout [version][type][payload][checksum]; falls back to legacy [version][payload][checksum] for pre-v6 databases.
 //
 export async function load<T>(
     storage: IStorage,
     filePath: string,
+    expectedTypeCode: string,
     deserializers: Record<number, DeserializerFunction<unknown>>,
     migrations?: MigrationMap,
-    targetVersion?: number,
-    options?: SerializationOptions
+    targetVersion?: number
 ): Promise<T | undefined> {
-    // Read the file from storage
     const buffer = await retry(() => storage.read(filePath));
     if (!buffer) {
         return undefined;
     }
-    
-    // Check if checksum is enabled (default: true)
-    const useChecksum = options?.checksum !== false;
-    
-    let dataBuffer: Buffer;
-    
-    if (useChecksum) {
-        if (buffer.length < 36) {
-            throw new Error(`File '${filePath}' is too small to contain version and checksum. File has ${buffer.length} bytes, should have at least 36.`);
-        }
-        
-        // Extract data portion (everything between version header and checksum footer).
-        dataBuffer = buffer.subarray(0, buffer.length - 32);
 
-        // Calculate SHA256 checksum of the data and verify it matches
-        const calculatedChecksum = createHash('sha256').update(dataBuffer).digest();
-
-        // Read checksum from last 32 bytes
-        const storedChecksum = buffer.subarray(buffer.length - 32);
-
-        if (!calculatedChecksum.equals(storedChecksum)) {
-            throw new Error(`Checksum mismatch: expected ${storedChecksum.toString('hex')}, got ${calculatedChecksum.toString('hex')}`);
-        }
-    } else {
-        if (buffer.length < 4) {
-            throw new Error(`File '${filePath}' is too small to contain version. File has ${buffer.length} bytes, should have at least 4.`);
-        }
-        
-        // No checksum, use entire buffer as data
-        dataBuffer = buffer;
+    if (buffer.length < 4) {
+        throw new Error(`File '${filePath}' is too small. File has ${buffer.length} bytes, minimum 4.`);
     }
-    
-    // Determine the target version (latest available if not specified)
+
     const availableVersions = Object.keys(deserializers).map(Number).sort((a, b) => b - a);
     const finalTargetVersion = targetVersion ?? availableVersions[0];
-    
-    // Read version from first 32 bits
-    const binaryDeserializer = new BinaryDeserializer(dataBuffer);
-    const version = binaryDeserializer.readUInt32();
 
-    // Get the appropriate deserializer for the file's version
+    let version: number;
+    let payload: Buffer;
+
+    const v6MinLength = 4 + TYPE_CODE_LENGTH + 32;
+    if (buffer.length >= v6MinLength) {
+        const dataBuffer = buffer.subarray(0, buffer.length - 32);
+        const calculatedChecksum = createHash('sha256').update(dataBuffer).digest();
+        const storedChecksum = buffer.subarray(buffer.length - 32);
+        if (calculatedChecksum.equals(storedChecksum)) {
+            const typeCode = dataBuffer.subarray(4, 4 + TYPE_CODE_LENGTH).toString('ascii');
+            if (typeCode === expectedTypeCode) {
+                version = dataBuffer.readUInt32LE(0);
+                payload = dataBuffer.subarray(4 + TYPE_CODE_LENGTH);
+                const deserializerFunction = deserializers[version];
+                if (!deserializerFunction) {
+                    throw new UnsupportedVersionError(version, availableVersions);
+                }
+                const binaryDeserializer = new BinaryDeserializer(payload);
+                let data = deserializerFunction(binaryDeserializer);
+                if (version !== finalTargetVersion && migrations) {
+                    data = applyMigrations(data, version, finalTargetVersion, migrations);
+                }
+                return data as T;
+            }
+        }
+    }
+
+    // Legacy format: [version 4][payload] or [version 4][payload][checksum 32]
+    if (buffer.length >= 36) {
+        const dataBuffer = buffer.subarray(0, buffer.length - 32);
+        const calculatedChecksum = createHash('sha256').update(dataBuffer).digest();
+        const storedChecksum = buffer.subarray(buffer.length - 32);
+        if (calculatedChecksum.equals(storedChecksum)) {
+            version = dataBuffer.readUInt32LE(0);
+            payload = dataBuffer.subarray(4);
+        }
+        else {
+            // No checksum (e.g. pre-checksum v2): try [version 4][payload]; only accept if deserialization succeeds
+            const legacyVersion = buffer.readUInt32LE(0);
+            const legacyPayload = buffer.subarray(4);
+            const legacyDeserializer = deserializers[legacyVersion];
+            if (legacyDeserializer) {
+                try {
+                    const binaryDeserializer = new BinaryDeserializer(legacyPayload);
+                    let data = legacyDeserializer(binaryDeserializer);
+                    if (legacyVersion !== finalTargetVersion && migrations) {
+                        data = applyMigrations(data, legacyVersion, finalTargetVersion, migrations);
+                    }
+                    return data as T;
+                }
+                catch {
+                    // Deserialization failed; treat as corrupted legacy-with-checksum and throw
+                }
+            }
+            throw new Error(`Checksum mismatch: expected ${storedChecksum.toString('hex')}, got ${calculatedChecksum.toString('hex')}`);
+        }
+    }
+    else {
+        version = buffer.readUInt32LE(0);
+        payload = buffer.subarray(4);
+    }
+
     const deserializerFunction = deserializers[version];
     if (!deserializerFunction) {
         throw new UnsupportedVersionError(version, availableVersions);
     }
-    
-    // Create deserializer instance and deserialize the data
+
+    const binaryDeserializer = new BinaryDeserializer(payload);
     let data = deserializerFunction(binaryDeserializer);
-    
-    // Apply migrations if needed to get to target version
+
     if (version !== finalTargetVersion && migrations) {
         data = applyMigrations(data, version, finalTargetVersion, migrations);
     }
-    
+
     return data as T;
 }
 
@@ -700,68 +706,34 @@ export interface IVerifyResult {
 
 export async function verify(
     storage: IStorage,
-    filePath: string,
-    options?: SerializationOptions
+    filePath: string
 ): Promise<IVerifyResult> {
-    // Read the file from storage
     const buffer = await retry(() => storage.read(filePath));
     if (!buffer) {
         return { valid: false, size: 0, error: "File not found or empty" };
     }
-    
-    // Check if checksum is enabled (default: true)
-    const useChecksum = options?.checksum !== false;
-    
-    if (useChecksum) {
-        if (buffer.length < 36) {
-            return { 
-                valid: false, 
-                size: buffer.length, 
-                error: `File too small (${buffer.length} bytes, minimum 36)` 
-            };
-        }
-        
-        // Extract data portion (everything between version header and checksum footer)
-        const dataBuffer = buffer.subarray(0, buffer.length - 32);
-        
-        // Calculate SHA256 checksum of the data and verify it matches
-        const calculatedChecksum = createHash('sha256').update(dataBuffer).digest();
-        
-        // Read checksum from last 32 bytes
-        const storedChecksum = buffer.subarray(buffer.length - 32);
-        
-        if (!calculatedChecksum.equals(storedChecksum)) {
-            return { 
-                valid: false, 
-                size: buffer.length, 
-                error: `Checksum mismatch: expected ${storedChecksum.toString('hex')}, got ${calculatedChecksum.toString('hex')}` 
-            };
-        }
-        
-        return { valid: true, size: buffer.length };
+
+    const minLength = 4 + TYPE_CODE_LENGTH + 32;
+    if (buffer.length < minLength) {
+        return {
+            valid: false,
+            size: buffer.length,
+            error: `File too small for v6 format (${buffer.length} bytes, minimum ${minLength})`
+        };
     }
-    else {
-        if (buffer.length < 4) {
-            return { 
-                valid: false, 
-                size: buffer.length, 
-                error: `File too small (${buffer.length} bytes, minimum 4)` 
-            };
-        }
-        
-        // Just verify the version header is readable
-        const version = buffer.readUInt32LE(0);
-        if (version === 0 || version > 100) {
-            // Version number seems unreasonable
-            return { 
-                valid: false, 
-                size: buffer.length, 
-                error: `Suspicious version number: ${version}` 
-            };
-        }
-        
-        return { valid: true, size: buffer.length };
+
+    const dataBuffer = buffer.subarray(0, buffer.length - 32);
+    const calculatedChecksum = createHash('sha256').update(dataBuffer).digest();
+    const storedChecksum = buffer.subarray(buffer.length - 32);
+    if (!calculatedChecksum.equals(storedChecksum)) {
+        return {
+            valid: false,
+            size: buffer.length,
+            error: `Checksum mismatch: expected ${storedChecksum.toString('hex')}, got ${calculatedChecksum.toString('hex')}`
+        };
     }
+
+    return { valid: true, size: buffer.length };
 }
 
 //

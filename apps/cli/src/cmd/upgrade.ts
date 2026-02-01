@@ -4,7 +4,7 @@ import { exit } from "node-utils";
 import { IBaseCommandOptions, loadDatabase, ICommandContext, resolveKeyPath } from "../lib/init-cmd";
 import { intro, outro, confirm } from '../lib/clack/prompts';
 import { addItem, CURRENT_DATABASE_VERSION, rebuildTree, saveTree, SortNode, traverseTreeAsync } from "merkle-tree";
-import { IDatabaseMetadata, loadMerkleTree, acquireWriteLock, releaseWriteLock, createReadme } from "api";
+import { IDatabaseMetadata, loadMerkleTree, acquireWriteLock, releaseWriteLock, createReadme, ensureSortIndex } from "api";
 import { buildDatabaseMerkleTree, deleteDatabaseMerkleTree, saveDatabaseMerkleTree } from "bdb";
 import { pathJoin, StoragePrefixWrapper } from "storage";
 import { computeHash } from "api";
@@ -25,7 +25,7 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
     
     intro(pc.blue(`Upgrading media file database...`));
     
-    const { assetStorage, metadataStorage, databaseDir } = await loadDatabase(options.db, options, true, uuidGenerator, timestampProvider, sessionId);
+    const { assetStorage, metadataStorage, databaseDir, metadataCollection } = await loadDatabase(options.db, options, true, uuidGenerator, timestampProvider, sessionId);
 
     let merkleTree = await retry(() => loadMerkleTree(metadataStorage));
     if (!merkleTree) {
@@ -242,6 +242,15 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
             await saveDatabaseMerkleTree(bsonDatabaseStorage, bsonDatabaseTree);
         }
         log.info(pc.green(`✓ BSON database merkle tree built successfully`));
+
+        // Delete and rebuild sort indexes so they use v6 format (type code + checksum).
+        log.info(pc.blue(`Rebuilding sort indexes.`));
+        const existingIndexes = await metadataCollection.listSortIndexes();
+        for (const index of existingIndexes) {
+            await metadataCollection.deleteSortIndex(index.fieldName, index.direction);
+        }
+        await ensureSortIndex(metadataCollection);
+        log.info(pc.green(`✓ Sort indexes rebuilt successfully`));
 
         log.info(pc.green(`✓ Database upgraded successfully to version ${CURRENT_DATABASE_VERSION}`));
     }

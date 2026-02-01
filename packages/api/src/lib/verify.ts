@@ -334,7 +334,7 @@ export async function verifyDatabaseFiles(metadataStorage: IStorage, databaseSto
     if (await metadataStorage.fileExists("tree.dat")) {
         log.verbose(`Verifying .db/tree.dat`);
         result.totalFiles++;
-        const verifyResult = await verifySerializedFile(metadataStorage, "tree.dat", { checksum: false }); //todo: various checks can be done in background tasks.
+        const verifyResult = await verifySerializedFile(metadataStorage, "tree.dat"); //todo: various checks can be done in background tasks.
         result.totalSize += verifyResult.size;
         if (verifyResult.valid) {
             result.validFiles++;
@@ -354,7 +354,7 @@ export async function verifyDatabaseFiles(metadataStorage: IStorage, databaseSto
         if (await databaseStorage.fileExists(collectionDatPath)) {
             log.verbose(`Verifying ${collectionDatPath}`);
             result.totalFiles++;
-            const verifyResult = await verifySerializedFile(databaseStorage, collectionDatPath, { checksum: false });
+            const verifyResult = await verifySerializedFile(databaseStorage, collectionDatPath);
             result.totalSize += verifyResult.size;
             if (verifyResult.valid) {
                 result.validFiles++;
@@ -380,7 +380,7 @@ export async function verifyDatabaseFiles(metadataStorage: IStorage, databaseSto
             else if (fileName.endsWith(".dat")) {
                 // Shard merkle tree file (no checksum)
                 log.verbose(`Verifying ${filePath}`);
-                const verifyResult = await verifySerializedFile(databaseStorage, filePath, { checksum: false });
+                const verifyResult = await verifySerializedFile(databaseStorage, filePath);
                 result.totalSize += verifyResult.size;
                 if (verifyResult.valid) {
                     result.validFiles++;
@@ -394,7 +394,7 @@ export async function verifyDatabaseFiles(metadataStorage: IStorage, databaseSto
                 // Shard data file (with checksum)
                 log.verbose(`Verifying ${filePath}`);
                 try {
-                    const verifyResult = await verifySerializedFile(databaseStorage, filePath, { checksum: true });
+                    const verifyResult = await verifySerializedFile(databaseStorage, filePath);
                     result.totalSize += verifyResult.size;
                     if (verifyResult.valid) {
                         result.validFiles++;
@@ -437,7 +437,7 @@ export async function verifyDatabaseFiles(metadataStorage: IStorage, databaseSto
                     // tree.dat and page files (all have checksum)
                     log.verbose(`Verifying ${filePath}`);
                     try {
-                        const verifyResult = await verifySerializedFile(databaseStorage, filePath, { checksum: true });
+                        const verifyResult = await verifySerializedFile(databaseStorage, filePath);
                         result.totalSize += verifyResult.size;
                         if (verifyResult.valid) {
                             result.validFiles++;

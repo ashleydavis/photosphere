@@ -671,6 +671,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             filePath,
             shard,
             BsonCollection.SHARD_FILE_VERSION,
+            'SHAR',
             (shardData, serializer) => this.serializeShard(shardData, serializer)
         );
     }
@@ -785,6 +786,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         const records = await load<IInternalRecord[]>(
             this.storage,
             shardFilePath,
+            'SHAR',
             {
                 1: (deserializer) => this.deserializeShardV1(deserializer),
                 2: (deserializer) => this.deserializeShardV2(deserializer)
