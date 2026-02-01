@@ -16,7 +16,7 @@ export interface ICheckCommandOptions extends IBaseCommandOptions {
 //
 export async function checkCommand(context: ICommandContext, paths: string[], options: ICheckCommandOptions): Promise<void> {
     const { uuidGenerator, timestampProvider, sessionId, sessionTempDir } = context;
-    const { databaseDir } = await loadDatabase(options.db, options, true, uuidGenerator, timestampProvider, sessionId);
+    const { databaseDir } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
 
     // Create storage descriptor for passing to workers
     const resolvedKeyPath = await resolveKeyPath(options.key);

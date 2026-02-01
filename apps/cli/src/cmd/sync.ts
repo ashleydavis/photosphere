@@ -32,12 +32,12 @@ export async function syncCommand(context: ICommandContext, options: ISyncComman
     log.info("");
 
     // Load source database with source options (including source key)
-    const { assetStorage: sourceAssetStorage, metadataStorage: sourceMetadataStorage, bsonDatabase: sourceBsonDatabase, databaseDir: srcDir } = await loadDatabase(options.db, {
+    const { assetStorage: sourceAssetStorage, metadataStorage: sourceMetadataStorage, bsonDatabase: sourceBsonDatabase } = await loadDatabase(options.db, {
         db: options.db,
         key: options.key,
         verbose: options.verbose,
         yes: options.yes
-    }, false, uuidGenerator, timestampProvider, sessionId);
+    }, uuidGenerator, timestampProvider, sessionId);
 
     // Check if destination database exists and handle encryption (storage scoped to db root, paths use .db/...)
     if (options.dest.startsWith("s3:")) {
@@ -98,7 +98,7 @@ export async function syncCommand(context: ICommandContext, options: ISyncComman
         db: options.dest,
         key: options.destKey  // Use destKey for target database
     };
-    const { assetStorage: targetAssetStorage, metadataStorage: targetMetadataStorage, bsonDatabase: targetBsonDatabase, databaseDir: targetDir } = await loadDatabase(targetOptions.db, targetOptions, false, uuidGenerator, timestampProvider, sessionId);
+    const { assetStorage: targetAssetStorage, metadataStorage: targetMetadataStorage, bsonDatabase: targetBsonDatabase, databaseDir: targetDir } = await loadDatabase(targetOptions.db, targetOptions, uuidGenerator, timestampProvider, sessionId);
     
     await syncDatabases(sourceAssetStorage, sourceMetadataStorage, sourceBsonDatabase, sessionId, targetAssetStorage, targetMetadataStorage, targetBsonDatabase, sessionId);
         

@@ -17,7 +17,7 @@ export interface IListCommandOptions extends IBaseCommandOptions {
 //
 export async function listCommand(context: ICommandContext, options: IListCommandOptions): Promise<void> {
     const { uuidGenerator, timestampProvider, sessionId } = context;
-    const { bsonDatabase } = await loadDatabase(options.db, options, true, uuidGenerator, timestampProvider, sessionId);
+    const { bsonDatabase } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
     const pageSize = parseInt(options.pageSize?.toString() || '20', 10);
 
     const metadataDatabase = bsonDatabase;

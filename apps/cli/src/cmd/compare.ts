@@ -53,9 +53,9 @@ export async function compareCommand(context: ICommandContext, options: ICompare
     }
 
     // Load both databases with allowOlderVersions=false to disallow older databases    
-    const { metadataStorage: sourceMetadataStorage, databaseDir: srcDirResolved } = await loadDatabase(srcDir, options, false, uuidGenerator, timestampProvider, sessionId);
+    const { metadataStorage: sourceMetadataStorage, databaseDir: srcDirResolved } = await loadDatabase(srcDir, options, uuidGenerator, timestampProvider, sessionId);
     const destOptions = { ...options, db: destDir, key: options.destKey };
-    const { metadataStorage: destMetadataStorage, databaseDir: destDirResolved } = await loadDatabase(destDir, destOptions, false, uuidGenerator, timestampProvider, sessionId);
+    const { metadataStorage: destMetadataStorage, databaseDir: destDirResolved } = await loadDatabase(destDir, destOptions, uuidGenerator, timestampProvider, sessionId);
 
     log.info('');
     log.info(`Comparing two databases:`);

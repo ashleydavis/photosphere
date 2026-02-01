@@ -65,7 +65,7 @@ function truncateLongStrings(obj: any, maxLength: number = 100, maxFields: numbe
 //
 export async function debugMerkleTreeCommand(context: ICommandContext, options: IDebugMerkleTreeCommandOptions): Promise<void> {
     const { uuidGenerator, timestampProvider, sessionId } = context;
-    const { assetStorage, metadataStorage, bsonDatabase } = await loadDatabase(options.db, options, true, uuidGenerator, timestampProvider, sessionId);
+    const { assetStorage, metadataStorage, bsonDatabase } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
     
     log.info('');
     log.info(pc.bold(pc.blue(`🌳 Merkle Trees Visualization`)));
@@ -255,7 +255,7 @@ export async function debugFindCollisionsCommand(context: ICommandContext, optio
     }
 
     // Load the database
-    const { metadataStorage, databaseDir: dbDirResolved } = await loadDatabase(dbDir, options, false, uuidGenerator, timestampProvider, sessionId);
+    const { metadataStorage, databaseDir: dbDirResolved } = await loadDatabase(dbDir, options, uuidGenerator, timestampProvider, sessionId);
 
     log.info('');
     log.info(`Finding hash collisions in database:`);
@@ -358,7 +358,7 @@ export async function debugFindDuplicatesCommand(context: ICommandContext, optio
         dbDir = await getDirectoryForCommand("existing", nonInteractive, options.cwd || process.cwd());
     }
 
-    const { databaseDir: dbDirResolved } = await loadDatabase(dbDir, options, false, uuidGenerator, timestampProvider, sessionId);
+    const { databaseDir: dbDirResolved } = await loadDatabase(dbDir, options, uuidGenerator, timestampProvider, sessionId);
 
     // Get input file path (default to collisions.json in database directory)
     const inputPath = options.input
@@ -449,7 +449,7 @@ export async function debugRemoveDuplicatesCommand(context: ICommandContext, opt
         dbDir = await getDirectoryForCommand("existing", nonInteractive, options.cwd || process.cwd());
     }
 
-    const { assetStorage, metadataStorage, metadataCollection, databaseDir: dbDirResolved } = await loadDatabase(dbDir, options, false, uuidGenerator, timestampProvider, sessionId);
+    const { assetStorage, metadataStorage, metadataCollection, databaseDir: dbDirResolved } = await loadDatabase(dbDir, options, uuidGenerator, timestampProvider, sessionId);
 
     // Get input file path (default to duplicates.json in database directory)
     const inputPath = options.input
@@ -537,7 +537,7 @@ export async function debugRemoveDuplicatesCommand(context: ICommandContext, opt
 //
 export async function debugBuildSortIndexCommand(context: ICommandContext, options: IBaseCommandOptions): Promise<void> {
     const { uuidGenerator, timestampProvider, sessionId } = context;
-    const { metadataCollection, databaseDir } = await loadDatabase(options.db, options, false, uuidGenerator, timestampProvider, sessionId);
+    const { metadataCollection, databaseDir } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
     
     log.info('');
     log.info(pc.bold(pc.blue('🔨 Rebuilding Sort Indexes')));

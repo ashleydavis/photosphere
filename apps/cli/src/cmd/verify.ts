@@ -25,7 +25,7 @@ export interface IVerifyCommandOptions extends IBaseCommandOptions {
 //
 export async function verifyCommand(context: ICommandContext, options: IVerifyCommandOptions): Promise<void> {
     const { uuidGenerator, timestampProvider, sessionId } = context;
-    const { metadataStorage, assetStorage, databaseDir } = await loadDatabase(options.db, options, false, uuidGenerator, timestampProvider, sessionId);
+    const { metadataStorage, assetStorage, databaseDir } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
 
 
     // Create storage descriptor for passing to workers

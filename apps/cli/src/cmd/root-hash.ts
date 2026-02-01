@@ -9,7 +9,7 @@ export interface IRootHashCommandOptions extends IBaseCommandOptions {
 //
 export async function rootHashCommand(context: ICommandContext, options: IRootHashCommandOptions): Promise<void> {
     const { uuidGenerator, timestampProvider, sessionId } = context;
-    const { assetStorage, metadataStorage } = await loadDatabase(options.db, options, true, uuidGenerator, timestampProvider, sessionId);
+    const { assetStorage, metadataStorage } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
     
     const { getDatabaseSummary } = await import("api");
     const summary = await getDatabaseSummary(assetStorage, metadataStorage);

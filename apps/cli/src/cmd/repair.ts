@@ -34,13 +34,13 @@ export async function repairCommand(context: ICommandContext, options: IRepairCo
         await exit(1);
     }
     
-    const { assetStorage, metadataStorage, databaseDir: targetDir } = await loadDatabase(options.db, options, false, uuidGenerator, timestampProvider, sessionId);
+    const { assetStorage, metadataStorage, databaseDir: targetDir } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
     const { assetStorage: sourceAssetStorage, databaseDir: sourceDir } = await loadDatabase(options.source, {
         db: options.source,
         key: options.sourceKey,
         verbose: options.verbose,
         yes: options.yes
-    }, false, uuidGenerator, timestampProvider, sessionId);
+    }, uuidGenerator, timestampProvider, sessionId);
     
     log.info('');
     log.info(`Repairing database:`);

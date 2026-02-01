@@ -355,10 +355,10 @@ export interface IInitResult {
 export async function loadDatabase(
     dbDir: string | undefined, 
     options: IBaseCommandOptions, 
-    allowOlderVersions: boolean,
     uuidGenerator: IUuidGenerator,
     timestampProvider: ITimestampProvider,
-    sessionId: string
+    sessionId: string,
+    allowOlderVersions: boolean = false,
 ): Promise<IInitResult> { //todo: Move into api.
 
     const nonInteractive = options.yes || false;
