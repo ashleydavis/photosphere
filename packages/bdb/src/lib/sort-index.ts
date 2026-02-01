@@ -243,7 +243,7 @@ export class SortIndex implements ISortIndex {
     
     constructor(options: ISortIndexOptions) {
         this.storage = options.storage;
-        this.indexDirectory = `${options.baseDirectory}/sort_indexes/${options.collectionName}/${options.fieldName}_${options.direction}`;
+        this.indexDirectory = `${options.baseDirectory}/indexes/${options.collectionName}/${options.fieldName}_${options.direction}`;
         this.fieldName = options.fieldName;
         this.direction = options.direction;
         this.pageSize = options.pageSize || 1000;

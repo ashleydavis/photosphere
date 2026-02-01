@@ -19,7 +19,8 @@ describe('BsonCollection', () => {
         storage = new MockStorage();
         collection = new BsonCollection<TestUser>('users', {
             storage,
-            directory: 'users',
+            directory: 'collections/users',
+            baseDirectory: '',
             uuidGenerator: new RandomUuidGenerator(),
             timestampProvider: new TimestampProvider(),
             numShards: 10

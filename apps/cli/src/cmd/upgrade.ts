@@ -6,6 +6,7 @@ import { intro, outro, confirm } from '../lib/clack/prompts';
 import { addItem, CURRENT_DATABASE_VERSION, loadTree, rebuildTree, saveTree, SortNode, traverseTreeAsync } from "merkle-tree";
 import { IDatabaseMetadata, acquireWriteLock, releaseWriteLock, createReadme, ensureSortIndex } from "api";
 import { buildDatabaseMerkleTree, deleteDatabaseMerkleTree, saveDatabaseMerkleTree } from "bdb";
+import type { IStorage } from "storage";
 import { pathJoin, StoragePrefixWrapper } from "storage";
 import { computeHash } from "api";
 import { loadPrivateKey, loadPublicKey } from "storage";
@@ -230,12 +231,19 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
 
         const bsonDatabaseStorage = new StoragePrefixWrapper(assetStorage, "metadata");
 
+        // Migrate BSON from v5 layout to v6 (collections/, shards/, indexes/) if needed
+        if (!(await bsonDatabaseStorage.dirExists("collections"))) {
+            log.info(pc.blue(`Migrating BSON layout to v6 (collections/, shards/, indexes/).`));
+            await migrateBsonV5ToV6(bsonDatabaseStorage);
+            log.info(pc.green(`✓ BSON layout migrated`));
+        }
+
         log.info(pc.blue(`Rebuilding BSON database merkle tree.`));
-            
+
         const bsonDatabaseTree = await buildDatabaseMerkleTree(
             bsonDatabaseStorage,
             uuidGenerator,
-            "", // The storage wraps the metadata directory already.
+            "collections",
             undefined,
             undefined,
             true
@@ -264,4 +272,88 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
     }
 
     await exit(0);
+}
+
+//
+// Copies a file within the same storage.
+//
+async function copyStorageFile(storage: IStorage, src: string, dest: string): Promise<void> {
+    const data = await storage.read(src);
+    if (data) {
+        await storage.write(dest, undefined, data);
+    }
+}
+
+//
+// Copies a directory recursively (files only; subdirs are traversed).
+//
+async function copyStorageDirRecursive(storage: IStorage, srcPrefix: string, destPrefix: string): Promise<void> {
+    let next: string | undefined = undefined;
+    do {
+        const fileResult = await storage.listFiles(srcPrefix, 1000, next);
+        for (const name of fileResult.names) {
+            const src = pathJoin(srcPrefix, name);
+            const dest = pathJoin(destPrefix, name);
+            await copyStorageFile(storage, src, dest);
+        }
+        next = fileResult.next;
+    } while (next);
+
+    next = undefined;
+    do {
+        const dirResult = await storage.listDirs(srcPrefix, 1000, next);
+        for (const name of dirResult.names) {
+            await copyStorageDirRecursive(storage, pathJoin(srcPrefix, name), pathJoin(destPrefix, name));
+        }
+        next = dirResult.next;
+    } while (next);
+}
+
+//
+// Migrates BSON from v5 layout (metadata/<name>/, sort_indexes/) to v6 (collections/, shards/, indexes/).
+// Storage is the BSON root (e.g. metadata/).
+//
+async function migrateBsonV5ToV6(storage: IStorage): Promise<void> {
+    let next: string | undefined = undefined;
+    const v5CollectionDirs: string[] = [];
+    do {
+        const result = await storage.listDirs("", 1000, next);
+        for (const name of result.names) {
+            if (name !== "sort_indexes" && name !== "collections" && name !== "indexes") {
+                v5CollectionDirs.push(name);
+            }
+        }
+        next = result.next;
+    } while (next);
+
+    for (const collectionName of v5CollectionDirs) {
+        const srcDir = collectionName;
+        let fileNext: string | undefined = undefined;
+        do {
+            const fileResult = await storage.listFiles(srcDir, 1000, fileNext);
+            for (const fileName of fileResult.names) {
+                const srcPath = pathJoin(srcDir, fileName);
+                if (fileName === "collection.dat") {
+                    await copyStorageFile(storage, srcPath, pathJoin("collections", collectionName, "collection.dat"));
+                }
+                else {
+                    await copyStorageFile(storage, srcPath, pathJoin("collections", collectionName, "shards", fileName));
+                }
+            }
+            fileNext = fileResult.next;
+        } while (fileNext);
+    }
+
+    if (await storage.dirExists("sort_indexes")) {
+        await copyStorageDirRecursive(storage, "sort_indexes", "indexes");
+    }
+
+    for (const collectionName of v5CollectionDirs) {
+        if (await storage.dirExists(collectionName)) {
+            await storage.deleteDir(collectionName);
+        }
+    }
+    if (await storage.dirExists("sort_indexes")) {
+        await storage.deleteDir("sort_indexes");
+    }
 }

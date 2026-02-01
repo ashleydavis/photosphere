@@ -32,19 +32,19 @@ describe('Merkle tree updates', () => {
             age: 30,
         });
 
-        // Determine which shard the record went to
-        const shardIds = await listShards(storage, 'test');
+        // Determine which shard the record went to (v6: collection dir = collections/test)
+        const shardIds = await listShards(storage, 'collections/test');
         expect(shardIds.length).toBeGreaterThan(0);
         const shardId = shardIds[0];
-        
+
         // Check shard merkle tree exists
-        const shardTree = await loadShardMerkleTree(storage, 'test', shardId);
+        const shardTree = await loadShardMerkleTree(storage, 'collections/test', shardId);
         expect(shardTree).toBeDefined();
         expect(shardTree!.merkle).toBeDefined();
         expect(shardTree!.sort).toBeDefined();
 
         // Check collection merkle tree exists
-        const collectionTree = await loadCollectionMerkleTree(storage, 'test');
+        const collectionTree = await loadCollectionMerkleTree(storage, 'collections/test');
         expect(collectionTree).toBeDefined();
         expect(collectionTree!.merkle).toBeDefined();
 
@@ -64,12 +64,12 @@ describe('Merkle tree updates', () => {
         });
 
         // Determine which shard the record went to
-        const shardIds = await listShards(storage, 'test');
+        const shardIds = await listShards(storage, 'collections/test');
         expect(shardIds.length).toBeGreaterThan(0);
         const shardId = shardIds[0];
-        
+
         // Get initial shard tree hash
-        const initialShardTree = await loadShardMerkleTree(storage, 'test', shardId);
+        const initialShardTree = await loadShardMerkleTree(storage, 'collections/test', shardId);
         expect(initialShardTree).toBeDefined();
         expect(initialShardTree!.merkle).toBeDefined();
         const initialShardHash = initialShardTree!.merkle!.hash;
@@ -81,7 +81,7 @@ describe('Merkle tree updates', () => {
         });
 
         // Get updated shard tree hash
-        const updatedShardTree = await loadShardMerkleTree(storage, 'test', shardId);
+        const updatedShardTree = await loadShardMerkleTree(storage, 'collections/test', shardId);
         expect(updatedShardTree).toBeDefined();
         expect(updatedShardTree!.merkle).toBeDefined();
         const updatedShardHash = updatedShardTree!.merkle!.hash;
@@ -90,7 +90,7 @@ describe('Merkle tree updates', () => {
         expect(Buffer.compare(initialShardHash, updatedShardHash)).not.toBe(0);
 
         // Collection tree should also be updated
-        const collectionTree = await loadCollectionMerkleTree(storage, 'test');
+        const collectionTree = await loadCollectionMerkleTree(storage, 'collections/test');
         expect(collectionTree).toBeDefined();
         expect(collectionTree!.merkle).toBeDefined();
     });
@@ -106,12 +106,12 @@ describe('Merkle tree updates', () => {
         });
 
         // Determine which shard the record went to
-        const shardIds = await listShards(storage, 'test');
+        const shardIds = await listShards(storage, 'collections/test');
         expect(shardIds.length).toBeGreaterThan(0);
         const shardId = shardIds[0];
-        
+
         // Get initial shard tree
-        const initialShardTree = await loadShardMerkleTree(storage, 'test', shardId);
+        const initialShardTree = await loadShardMerkleTree(storage, 'collections/test', shardId);
         expect(initialShardTree).toBeDefined();
         expect(initialShardTree?.sort).toBeDefined();
         const initialNodeCount = initialShardTree?.sort?.nodeCount;
@@ -121,13 +121,13 @@ describe('Merkle tree updates', () => {
         expect(deleted).toBe(true);
 
         // Get updated shard tree
-        const updatedShardTree = await loadShardMerkleTree(storage, 'test', shardId);
-        
+        const updatedShardTree = await loadShardMerkleTree(storage, 'collections/test', shardId);
+
         // After deleting the last record, the shard tree file is deleted (empty shards don't have tree files)
         expect(updatedShardTree).toBeUndefined();
 
         // Collection tree is also deleted when the collection becomes empty (no shards with records)
-        const collectionTree = await loadCollectionMerkleTree(storage, 'test');
+        const collectionTree = await loadCollectionMerkleTree(storage, 'collections/test');
         expect(collectionTree).toBeUndefined();
     });
 });

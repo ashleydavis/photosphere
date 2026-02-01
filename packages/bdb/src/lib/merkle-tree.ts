@@ -14,6 +14,7 @@ import {
     HashedItem,
     compareNames, 
 } from "merkle-tree";
+import path from "path";
 import { BsonCollection, IInternalRecord } from "./collection";
 import { IStorage } from "storage";
 import { IUuidGenerator, TimestampProvider } from "utils";
@@ -58,8 +59,8 @@ export async function saveShardMerkleTree(storage: IStorage, collectionDirectory
         tree.dirty = false;
     }
 
-    const shardFilePath = `${collectionDirectory}/${shardId}`;
-    const treeFilePath = `${shardFilePath}.dat`; //todo: Might be useful to bake this into the shard file?
+    const shardFilePath = `${collectionDirectory}/shards/${shardId}`;
+    const treeFilePath = `${shardFilePath}.dat`;
     await saveTree(treeFilePath, tree, storage, 'COLT');
 }
 
@@ -67,7 +68,7 @@ export async function saveShardMerkleTree(storage: IStorage, collectionDirectory
 // Deletes a shard merkle tree file.
 //
 export async function deleteShardMerkleTree(storage: IStorage, collectionDirectory: string, shardId: string): Promise<void> {
-    const shardFilePath = `${collectionDirectory}/${shardId}`;
+    const shardFilePath = `${collectionDirectory}/shards/${shardId}`;
     const treeFilePath = `${shardFilePath}.dat`;
     await storage.deleteFile(treeFilePath);
 }
@@ -76,7 +77,7 @@ export async function deleteShardMerkleTree(storage: IStorage, collectionDirecto
 // Loads a shard merkle tree.
 //
 export async function loadShardMerkleTree(storage: IStorage, collectionDirectory: string, shardId: string): Promise<IMerkleTree<undefined> | undefined> {
-    const shardFilePath = `${collectionDirectory}/${shardId}`;
+    const shardFilePath = `${collectionDirectory}/shards/${shardId}`;
     const treeFilePath = `${shardFilePath}.dat`;
     return await loadTree<undefined>(treeFilePath, storage, 'COLT');
 }
@@ -85,23 +86,22 @@ export async function loadShardMerkleTree(storage: IStorage, collectionDirectory
 // Lists existing shard IDs in a collection.
 //
 export async function listShards(storage: IStorage, collectionDirectory: string): Promise<string[]> {
+    const shardsDir = `${collectionDirectory}/shards`;
     const shardIds: string[] = [];
     let next: string | undefined = undefined;
-    
+
     do {
-        const storageResult = await storage.listFiles(collectionDirectory, 1000, next);
+        const storageResult = await storage.listFiles(shardsDir, 1000, next);
         for (const fileName of storageResult.names) {
             if (fileName.includes('.')) {
-                // We are only interested in files with no extension.
                 continue;
             }
-
             shardIds.push(fileName);
         }
         next = storageResult.next;
     } while (next);
-    
-    return shardIds.sort(compareNames); //todo: I'm not sure these should be sorted at this point.
+
+    return shardIds.sort(compareNames);
 }
 
 //
@@ -118,14 +118,17 @@ export async function buildCollectionMerkleTree(
     const shardIds = await listShards(storage, collectionDirectory);
     let collectionTree = createTree<undefined>(uuidGenerator.generate());
 
+    const baseDirectory = path.dirname(path.dirname(collectionDirectory));
+
     for (const shardId of shardIds) {
         const collection = new BsonCollection<any>(collectionName, {
             storage,
             directory: collectionDirectory,
+            baseDirectory,
             uuidGenerator,
             timestampProvider: new TimestampProvider()
         });
-        const records: IInternalRecord[] = await collection.loadRecords(`${collectionDirectory}/${shardId}`);
+        const records: IInternalRecord[] = await collection.loadRecords(`${collectionDirectory}/shards/${shardId}`);
         let shardTree: IMerkleTree<undefined> | undefined;
 
         if (records.length === 0) {
@@ -191,23 +194,19 @@ export async function deleteCollectionMerkleTree(storage: IStorage, collectionDi
 }
 
 //
-// Lists all collections in the database.
+// Lists all collections in the database (v6: databaseDir = "collections").
 //
 async function listCollections(storage: IStorage, databaseDir: string): Promise<string[]> {
     const uniqueSet = new Set<string>();
     let next: string | undefined = undefined;
     do {
         const storageResult = await storage.listDirs(databaseDir, 1000, next);
-        for (const name of storageResult.names) { 
-            // Filter out system directories
-            if (name === 'sort_indexes') {
-                continue;
-            }
+        for (const name of storageResult.names) {
             uniqueSet.add(name);
         }
         next = storageResult.next;
     } while (next);
-    
+
     return Array.from(uniqueSet);
 }
 

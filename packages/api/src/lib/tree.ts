@@ -1,6 +1,10 @@
 import { buildMerkleTree, saveTree, IMerkleTree, loadTree, createTree } from "merkle-tree";
 import { IDatabaseMetadata } from "./media-file-database";
 import { IStorage } from "storage";
+import {
+    loadCollectionMerkleTree as loadCollectionMerkleTreeBdb,
+    loadShardMerkleTree as loadShardMerkleTreeBdb,
+} from "bdb";
 
 //
 // Path for the files Merkle tree (v6). Legacy path was .db/tree.dat.
@@ -56,5 +60,33 @@ export async function loadMerkleTree(metadataStorage: IStorage): Promise<IMerkle
 export async function getFilesRootHash(metadataStorage: IStorage): Promise<Buffer | undefined> {
     const tree = await loadMerkleTree(metadataStorage);
     return tree?.merkle?.hash;
+}
+
+//
+// BDB collection path (v6 layout: collections/<name>). Used by loaders below so callers pass only collection name.
+//
+const COLLECTION_DIR_PREFIX = "collections/";
+
+//
+// Loads a collection Merkle tree by collection name (v6 path: collections/<name>).
+//
+export async function loadCollectionMerkleTree(
+    storage: IStorage,
+    collectionName: string
+): Promise<IMerkleTree<undefined> | undefined> {
+    const collectionDir = COLLECTION_DIR_PREFIX + collectionName;
+    return loadCollectionMerkleTreeBdb(storage, collectionDir);
+}
+
+//
+// Loads a shard Merkle tree by collection name and shard ID (v6 path: collections/<name>/shards/<id>).
+//
+export async function loadShardMerkleTree(
+    storage: IStorage,
+    collectionName: string,
+    shardId: string
+): Promise<IMerkleTree<undefined> | undefined> {
+    const collectionDir = COLLECTION_DIR_PREFIX + collectionName;
+    return loadShardMerkleTreeBdb(storage, collectionDir, shardId);
 }
 

@@ -6,7 +6,8 @@ import { IDatabaseMetadata, ProgressCallback, createMediaFileDatabase, loadDatab
 import { BsonDatabase } from "bdb";
 import { buildMerkleTree, findDifferingNodes, findMerkleTreeDifferences, getItemInfo, IMerkleTree, MerkleNode, pruneTree, saveTree, upsertItem } from "merkle-tree";
 import { loadMerkleTree, merkleTreeExists, saveMerkleTree } from "./tree";
-import { loadDatabaseMerkleTree, loadCollectionMerkleTree, loadShardMerkleTree } from "bdb";
+import { loadDatabaseMerkleTree } from "bdb";
+import { loadCollectionMerkleTree, loadShardMerkleTree } from "./tree";
 import stringify from "json-stable-stringify";
 
 //
@@ -320,7 +321,7 @@ async function* iterateCollectionDifferences(
         // If primary collection tree doesn't exist, no records to process.
         return;
     }
-    
+
     const tree2 = await retry(() => loadCollectionMerkleTree(tree2Storage, collectionName));
     if (!tree2?.merkle) {
         // If comparison collection tree doesn't exist, process all shards in primary tree

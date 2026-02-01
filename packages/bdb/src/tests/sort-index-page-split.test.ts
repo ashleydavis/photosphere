@@ -73,7 +73,7 @@ describe('SortIndex Page Split', () => {
         await sortIndex.addRecord(toInternal<TestRecord>(recordToSplit2, 1000)); // Add score 15 (should go near beginning)
         
         // After adding these records, the tree file should still exist
-        expect(await storage.fileExists('db/sort_indexes/test_collection/score_asc/tree.dat')).toBe(true);
+        expect(await storage.fileExists('db/indexes/test_collection/score_asc/tree.dat')).toBe(true);
         
         // Now request records in order and verify they come back sorted
         let allRecords: ISortedIndexEntry[] = [];

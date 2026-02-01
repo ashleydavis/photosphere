@@ -40,7 +40,8 @@ describe('Collection Metadata and Timestamps', () => {
         timestampProvider = new MockTimestampProvider(1000);
         collection = new BsonCollection<TestRecord>('test', {
             storage,
-            directory: 'test',
+            directory: 'collections/test',
+            baseDirectory: '',
             uuidGenerator: new RandomUuidGenerator(),
             timestampProvider,
             numShards: 10
