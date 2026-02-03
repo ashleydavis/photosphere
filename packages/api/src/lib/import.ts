@@ -202,7 +202,7 @@ export async function addPaths(
             log.verbose(`Processed ${itemsToProcess.length} pending database updates.`);
         }
         catch (error: any) {
-            log.exception(` Error processing pending database updates`, error);
+            log.exception(`Error processing pending database updates`, error);
         }
         finally {
             isProcessingQueue = false;
