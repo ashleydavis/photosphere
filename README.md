@@ -1,26 +1,21 @@
 # Photosphere
 
-Photosphere is a cross-platform application for managing your database of digital media files (photos and videos). I like to think of it as the spiritual successor to [Picasa](https://en.wikipedia.org/wiki/Picasa) but with a UI more like modern Google Photos and backed by a Git-style database for immutable binary assets like photos and videos that have editable metadata.
+Photosphere is a cross-platform application for managing your database of digital media files (photos and videos). I like to think of it as the spiritual successor to [Picasa](https://en.wikipedia.org/wiki/Picasa) but with a UI more like modern Google Photos and backed by a Git-style database for immutable binary files like photos and videos that have editable metadata.
 
 Important features:
+- Local first so you own it and you control.
+- Open source so you can understand what it does with your files.
+- Maintain data sovereignty: the storage and privacy of your files in under your control.
 - Build a corruption resistant database of your digital media files.
 - Backup your database and keep your backup updated.
 - Detect and repair corrupt files.
-- Securely encrypt files that you store in the cloud.
-- Use the UI to search, view and edit your photos and videos.
-
-Photosphere can be run locally or self-hosted as a server:
-- Run it locally using the CLI tool (build and view databases on your desktop computer).
-- Host the Docker container and make your files available over the internet.
-- Provide S3 compatible storage (I used Digital Ocean Spaces, but also works with AWS S3).
-- For authentication, use an API key or provide an Auth0 account for authentication.
+- Securely encrypt files that you store in the cloud vendor or your choice.
+- Use the GUI to search, view and edit your photos and videos.
 
 Contained herein are the code for Photosphere's:
-- Backend
-- Web frontend
+- Desktop app
+- Mobile apps
 - CLI tool
-- Electron app
-- Android and iOS apps
 
 Early development of Photosphere was covered in the book [The Feedback-Driven Developer](https://www.manning.com/books/the-feedback-driven-developer).
 
