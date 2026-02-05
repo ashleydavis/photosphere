@@ -10,7 +10,7 @@ import { IBsonCollection } from "bdb";
 import { IAsset } from "defs";
 import { acquireWriteLock, releaseWriteLock } from "./write-lock";
 import { loadMerkleTree, saveMerkleTree } from "./tree";
-import { addItem } from "merkle-tree";
+import { addItem, BufferSet } from "merkle-tree";
 import { throttle } from "lodash";
 import * as os from "os";
 import * as path from "path";
@@ -27,6 +27,7 @@ interface IPendingDatabaseUpdate {
     assetData: IImportFileDatabaseData;
     logicalPath: string;
     totalSize: number;
+    expectedHash: ArrayBuffer; // Convert to Buffer only when deleting from hashesQueuedForImport (delayed).
 }
 
 //
@@ -159,6 +160,9 @@ export async function addPaths(
     // Counts the number of files added to the cache.
     let filesAddedToCache = 0;
 
+    // Hashes we have already queued for import in this scan (same content at multiple paths = only import once).
+    const hashesQueuedForImport = new BufferSet();
+
     // Set to true when we're processing the queue, set to false when we're done.
     // Prevents us from processing the queue twice.
     let isProcessingQueue = false;
@@ -197,6 +201,12 @@ export async function addPaths(
                 // Lock acquisition failed - re-queue items.
                 // This operation is atomic and no other JS code will be running at this point.
                 pendingDatabaseUpdates = pendingDatabaseUpdates.concat(itemsToProcess);
+            }
+            else {
+                // Remove from set so hashesQueuedForImport does not grow unbounded (memory bound).
+                for (const item of itemsToProcess) {
+                    hashesQueuedForImport.delete(Buffer.from(item.expectedHash));
+                }
             }
 
             log.verbose(`Processed ${itemsToProcess.length} pending database updates.`);
@@ -244,13 +254,20 @@ export async function addPaths(
                         summary.filesAlreadyAdded++;
                     }
                     else {
-                        log.verbose(`File "${taskData.logicalPath}" is not in the database, queueing import task.`);
+                        const hashBuffer = Buffer.from(hashResult.hash);
+                        if (hashesQueuedForImport.has(hashBuffer)) {
+                            log.verbose(`File "${taskData.logicalPath}" has same content as another file in this scan, skipping import (already queued).`);
+                        }
+                        else {
+                            hashesQueuedForImport.add(hashBuffer);
+                            log.verbose(`File "${taskData.logicalPath}" is not in the database, queueing import task.`);
 
-                        // Not in database - queue import task with pre-computed hash so worker skips hashing and duplicate check.
-                        queue.addTask("import-file", {
-                            ...taskData,
-                            expectedHash: hashResult.hash,
-                        });
+                            // Not in database - queue import task with pre-computed hash so worker skips hashing and duplicate check.
+                            queue.addTask("import-file", {
+                                ...taskData,
+                                expectedHash: hashResult.hash,
+                            });
+                        }
                     }
                 }
                 else if (result.status === TaskStatus.Failed) {
@@ -276,6 +293,7 @@ export async function addPaths(
                         assetData: importResult.assetData,
                         logicalPath: taskData.logicalPath,
                         totalSize: importResult.totalSize,
+                        expectedHash: taskData.expectedHash,
                     });
 
                     log.verbose(`Added ${taskData.logicalPath} (${taskData.assetId}) to pending database updates queue.`);
