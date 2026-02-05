@@ -54,7 +54,7 @@ export interface IImportFileData {
     googleApiKey?: string; // Used for reverse geocoding when present.
     sessionId: string;
     dryRun?: boolean;
-    expectedHash: ArrayBuffer; // From hash-file task (transferred via postMessage transfer list).
+    expectedHash: ArrayBuffer; // The hash of the file. It's an ArrayBuffer because that is transferred efficiently via postMessage.
 }
 
 //
@@ -63,7 +63,7 @@ export interface IImportFileData {
 //
 export interface IHashFileResult {
     filesAlreadyAdded: boolean; // True if this hash is already in the database (skip import).
-    hash: ArrayBuffer; // Slice of Buffer's underlying buffer (transferred via postMessage transfer list).
+    hash: ArrayBuffer; // The hash of the file. It's an ArrayBuffer because that is transferred efficiently via postMessage.
     hashFromCache: boolean; // True if the hash was loaded from cache, false if computed.
 }
 
