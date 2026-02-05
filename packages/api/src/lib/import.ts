@@ -3,7 +3,7 @@ import { HashCache } from "./hash-cache";
 import { scanPaths } from "./file-scanner";
 import { IAddSummary } from "./media-file-database";
 import { TaskStatus } from "task-queue";
-import { IImportFileData, IImportFileResult, IImportFileDatabaseData } from "./import.worker";
+import { IImportFileData, IImportFileResult, IImportFileDatabaseData, IHashFileResult } from "./import.worker";
 import type { ITaskQueueProvider } from "task-queue";
 import { IStorage, IStorageDescriptor, IS3Credentials } from "storage";
 import { IBsonCollection } from "bdb";
@@ -212,44 +212,66 @@ export async function addPaths(
     try {
         //
         // Registers a callback to integrate results as tasks complete.
+        // Hash-file completions may trigger an import-file task; import-file completions queue database updates.
         //
-        queue.onTaskComplete<IImportFileData, IImportFileResult>(async (task, result) => {
-            
-            summary.filesProcessed++;
+        queue.onTaskComplete(async (task, result) => {
+            const taskData = task.data as IImportFileData;
 
-            if (result.status === TaskStatus.Succeeded) {
-                const importResult = result.outputs!;
-                const taskData = task.data;
-                
-                // Add hash to cache if computation was successful and hash wasn't already in cache.
-                if (!importResult.hashFromCache) {
-                    localHashCache.addHash(taskData.filePath, {
-                        hash: Buffer.from(importResult.hashedFile.hash, "hex"),
-                        lastModified: new Date(importResult.hashedFile.lastModified),
-                        length: importResult.hashedFile.length,
-                    });
-                    
-                    filesAddedToCache++;
-                    
-                    // Save cache periodically (every 100 files added to cache).
-                    if (filesAddedToCache % 100 === 0) {
-                        // This can fail because workers are constantly loading the hash cache. 
-                        // If it fails we just swallow it, the hash cache remains dirty and we'll try to save again in another 100 files.
-                        await swallowError(() => localHashCache.save()); 
+            if (task.type === "hash-file") {
+                summary.filesProcessed++;
+
+                if (result.status === TaskStatus.Succeeded) {
+                    const hashResult = result.outputs as IHashFileResult;
+
+                    // Add hash to cache if computation was successful and hash wasn't already in cache.
+                    if (!hashResult.hashFromCache) {
+                        localHashCache.addHash(taskData.filePath, {
+                            hash: Buffer.from(hashResult.hash),
+                            lastModified: taskData.fileStat.lastModified,
+                            length: taskData.fileStat.length,
+                        });
+
+                        filesAddedToCache++;
+
+                        // Save cache periodically (every 100 files added to cache).
+                        if (filesAddedToCache % 100 === 0) {
+                            await swallowError(() => localHashCache.save());
+                        }
+                    }
+
+                    if (hashResult.filesAlreadyAdded) {
+                        log.verbose(`File "${taskData.logicalPath}" is already in the database.`);
+                        summary.filesAlreadyAdded++;
+                    }
+                    else {
+                        log.verbose(`File "${taskData.logicalPath}" is not in the database, queueing import task.`);
+
+                        // Not in database - queue import task with pre-computed hash so worker skips hashing and duplicate check.
+                        queue.addTask("import-file", {
+                            ...taskData,
+                            expectedHash: hashResult.hash,
+                        });
                     }
                 }
-                
-                if (importResult.filesAlreadyAdded) {
-                    log.verbose(`File "${taskData.logicalPath}" is already in the database.`);
-                    summary.filesAlreadyAdded++;
+                else if (result.status === TaskStatus.Failed) {
+                    if (result.error) {
+                        log.exception(`Failed to hash file "${taskData.logicalPath}": ${result.errorMessage}`, result.error);
+                    }
+                    else {
+                        log.error(`Failed to hash file "${taskData.logicalPath}": ${result.errorMessage}`);
+                    }
+                    summary.filesFailed++;
                 }
-                else {
+            }
+            else if (task.type === "import-file") {
+                if (result.status === TaskStatus.Succeeded) {
+                    const importResult = result.outputs as IImportFileResult;
+
                     // Worker has uploaded files, now queue for database update.
                     if (!importResult.assetData) {
                         throw new Error(`Missing assetData for file "${taskData.logicalPath}"`);
                     }
-                    
-                    // Add to pending database updates queue.
+
                     pendingDatabaseUpdates.push({
                         assetData: importResult.assetData,
                         logicalPath: taskData.logicalPath,
@@ -257,43 +279,40 @@ export async function addPaths(
                     });
 
                     log.verbose(`Added ${taskData.logicalPath} (${taskData.assetId}) to pending database updates queue.`);
-                    
-                    // Trigger throttled queue processing.
+
                     throttledProcessQueue();
-                }                
-            } 
-            else if (result.status === TaskStatus.Failed) {
-                const taskData = task.data;
-                if (result.error) {
-                    log.exception(`Failed to import file "${taskData.logicalPath}": ${result.errorMessage}`, result.error);
-                } 
-                else {
-                    log.error(`Failed to import file "${taskData.logicalPath}": ${result.errorMessage}`);
                 }
-                summary.filesFailed++;
+                else if (result.status === TaskStatus.Failed) {
+                    if (result.error) {
+                        log.exception(`Failed to import file "${taskData.logicalPath}": ${result.errorMessage}`, result.error);
+                    }
+                    else {
+                        log.error(`Failed to import file "${taskData.logicalPath}": ${result.errorMessage}`);
+                    }
+                    summary.filesFailed++;
+                }
             }
         });
 
         //
-        // Queue up all import tasks as files are scanned.
-        // All files are queued - workers will handle everything: hashing, checking, metadata extraction, uploads, and database updates.
+        // Queue hash-file tasks as files are scanned. When a hash completes and the file is not already in the database,
+        // an import-file task is queued to do metadata extraction, uploads, and database updates.
         //
         await scanPaths(paths, async (result) => {
-            // Queue all files for worker processing (workers will handle everything).
-            queue.addTask("import-file", {
-                filePath: result.filePath, // Use filePath for checking (always a valid file, possibly temp file from zip)
+            queue.addTask("hash-file", {
+                filePath: result.filePath,
                 fileStat: result.fileStat,
                 contentType: result.contentType,
                 storageDescriptor,
                 hashCacheDir,
                 s3Config,
-                logicalPath: result.logicalPath, // Use logicalPath for display to user. This shows the path inside zip files.
+                logicalPath: result.logicalPath,
                 labels: result.labels,
                 googleApiKey,
                 sessionId,
                 dryRun,
                 assetId: uuidGenerator.generate(),
-            } as IImportFileData);
+            });
         }, (currentlyScanning, state) => {
             summary.filesIgnored = state.numFilesIgnored;
             if (progressCallback) {
@@ -301,14 +320,14 @@ export async function addPaths(
             }
         }, { ignorePatterns: [/\.db/] }, sessionTempDir, uuidGenerator);
 
-        log.verbose(`Waiting for all import tasks to complete.`);
+        log.verbose(`Waiting for all tasks to complete.`);
 
         //
         // Wait for all tasks to complete.
         //
         await queue.awaitAllTasks();
 
-        log.verbose(`All import tasks completed, flushing throttled queue.`);
+        log.verbose(`All tasks completed, flushing throttled queue.`);
         
         //
         // Flush the throttled queue then cancel any pending calls.

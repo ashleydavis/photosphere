@@ -696,8 +696,8 @@ validate_database_assets() {
     local asset_type="$4"  # "image" or "video"
     local add_output="$5"  # CLI output from add command
     
-    # Extract asset ID from the verbose CLI output
-    local asset_id=$(echo "$add_output" | grep "Added file.*$source_file.*with ID" | sed -n 's/.*with ID "\([^"]*\)".*/\1/p' | head -1)
+    # Extract asset ID from the verbose CLI output (path in output may be absolute, so match "Added file" and "with ID" only)
+    local asset_id=$(echo "$add_output" | grep "Added file.*to the database with ID" | sed -n 's/.*with ID "\([^"]*\)".*/\1/p' | head -1)
     if [ -z "$asset_id" ]; then
         # Try to extract from "matches existing records" line for files already in database
         # The UUID is on the next line after "matches existing records:"
