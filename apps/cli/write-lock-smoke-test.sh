@@ -19,8 +19,8 @@ NC='\033[0m' # No Color
 TEST_FILES_DIR="./test/tmp/write-lock-files"
 PROCESS_OUTPUT_DIR="./test/tmp/write-lock-outputs"
 
-# Default values
-DEBUG_MODE=false
+# Default: run from code; use --binary for built executable
+USE_BINARY=false
 NUM_PROCESSES=4
 NUM_ITERATIONS=6
 SLEEP_MIN=0.1
@@ -31,8 +31,8 @@ USE_CLOUD=false
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --debug)
-            DEBUG_MODE=true
+        --binary)
+            USE_BINARY=true
             shift
             ;;
         --processes)
@@ -56,8 +56,8 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         -h|--help)
-            echo "Usage: $0 [--debug] [--processes N] [--iterations N] [--sleep-range MIN-MAX] [--simulate-failure] [--cloud]"
-            echo "  --debug       Use bun run start instead of binary"
+            echo "Usage: $0 [--binary] [--processes N] [--iterations N] [--sleep-range MIN-MAX] [--simulate-failure] [--cloud]"
+            echo "  --binary      Use built executable (default: run from code with bun run start)"
             echo "  --processes   Number of parallel processes (default: 4)"
             echo "  --iterations  Number of iterations per process (default: 6)"
             echo "  --sleep-range Sleep range in seconds as MIN-MAX (default: 0.1-2.0)"
@@ -99,14 +99,11 @@ detect_architecture() {
     esac
 }
 
-# Get CLI command based on platform and debug mode
+# Get CLI command: default from code; use --binary for built executable
 get_cli_command() {
-    if [ "$DEBUG_MODE" = "true" ]; then
-        echo "bun run start --"
-    else
+    if [ "$USE_BINARY" = "true" ]; then
         local platform=$(detect_platform)
         local arch=$(detect_architecture)
-        
         case "$platform" in
             "linux")
                 echo "./bin/x64/linux/psi"
@@ -125,6 +122,8 @@ get_cli_command() {
                 echo "./bin/x64/linux/psi"  # Default to linux
                 ;;
         esac
+    else
+        echo "bun run start --"
     fi
 }
 
@@ -658,7 +657,7 @@ main() {
     echo "  Processes: $NUM_PROCESSES"
     echo "  Iterations per process: $NUM_ITERATIONS"
     echo "  Sleep range: ${SLEEP_MIN}s - ${SLEEP_MAX}s"
-    echo "  Debug mode: $DEBUG_MODE"
+    echo "  Use binary: $USE_BINARY"
     echo "  Cloud mode: $USE_CLOUD"
     echo "  CLI command: $(get_cli_command)"
     echo "============================================================================"

@@ -20,8 +20,8 @@ TEST_DB_DIR="./test/tmp/sync-test-db"
 TEST_FILES_DIR="./test/tmp/sync-test-files"
 PROCESS_OUTPUT_DIR="./test/tmp/sync-test-outputs"
 
-# Default values
-DEBUG_MODE=false
+# Default: run from code; use --binary for built executable
+USE_BINARY=false
 NUM_REPLICAS=4
 NUM_ITERATIONS=10
 
@@ -32,8 +32,8 @@ declare -a DB_PATHS
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --debug)
-            DEBUG_MODE=true
+        --binary)
+            USE_BINARY=true
             shift
             ;;
         --replicas)
@@ -45,8 +45,8 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         -h|--help)
-            echo "Usage: $0 [--debug] [--replicas N] [--iterations N]"
-            echo "  --debug       Use bun run start instead of binary"
+            echo "Usage: $0 [--binary] [--replicas N] [--iterations N]"
+            echo "  --binary      Use built executable (default: run from code with bun run start)"
             echo "  --replicas    Number of total databases (original + replicas, default: 4)"
             echo "  --iterations  Number of edit/sync iterations per process (default: 10)"
             exit 0
@@ -78,15 +78,12 @@ detect_architecture() {
     esac
 }
 
-# Get CLI command based on platform and debug mode
+# Get CLI command: default from code; use --binary for built executable
 get_cli_command() {
-    if [ "$DEBUG_MODE" = "true" ]; then
-        echo "bun run start --"
-    else
+    if [ "$USE_BINARY" = "true" ]; then
         local platform=$(detect_platform)
         local arch=$(detect_architecture)
         local cli_path=""
-        
         case "$platform" in
             "linux")
                 cli_path="./bin/x64/linux/psi"
@@ -105,28 +102,24 @@ get_cli_command() {
                 cli_path="./bin/x64/linux/psi"  # Default to linux
                 ;;
         esac
-        
-        # Check if binary exists
         if [ ! -f "$cli_path" ] || [ ! -x "$cli_path" ]; then
             log_error "CLI binary not found or not executable: $cli_path"
-            log_error "Please build the binary or run with --debug flag to use 'bun run start'"
+            log_error "Please build the binary or run without --binary to use 'bun run start'"
             log_info "To build: cd apps/cli && bun run build"
             exit 1
         fi
-        
         echo "$cli_path"
+    else
+        echo "bun run start --"
     fi
 }
 
-# Get bdb command based on platform and debug mode
+# Get bdb command: default from code; use --binary for built executable
 get_bdb_command() {
-    if [ "$DEBUG_MODE" = "true" ]; then
-        echo "bun run ../bdb-cli/src/index.ts"
-    else
+    if [ "$USE_BINARY" = "true" ]; then
         local platform=$(detect_platform)
         local arch=$(detect_architecture)
         local bdb_path=""
-        
         case "$platform" in
             "linux")
                 bdb_path="../bdb-cli/bin/x64/linux/bdb"
@@ -145,16 +138,15 @@ get_bdb_command() {
                 bdb_path="../bdb-cli/bin/x64/linux/bdb"  # Default to linux
                 ;;
         esac
-        
-        # Check if binary exists
         if [ ! -f "$bdb_path" ] || [ ! -x "$bdb_path" ]; then
             log_error "BDB CLI binary not found or not executable: $bdb_path"
-            log_error "Please build the binary or run with --debug flag to use 'bun run ../bdb-cli/src/index.ts'"
+            log_error "Please build the binary or run without --binary to use 'bun run ../bdb-cli/src/index.ts'"
             log_info "To build: cd apps/bdb-cli && bun run build"
             exit 1
         fi
-        
         echo "$bdb_path"
+    else
+        echo "bun run ../bdb-cli/src/index.ts"
     fi
 }
 
@@ -546,7 +538,7 @@ main() {
     echo "Configuration:"
     echo "  Total databases: $NUM_REPLICAS"
     echo "  Iterations per process: $NUM_ITERATIONS"
-    echo "  Debug mode: $DEBUG_MODE"
+    echo "  Use binary: $USE_BINARY"
     echo "  CLI command: $(get_cli_command)"
     echo "  BDB command: $(get_bdb_command)"
     echo "============================================================================"
