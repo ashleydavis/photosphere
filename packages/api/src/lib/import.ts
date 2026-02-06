@@ -329,7 +329,7 @@ export async function addPaths(
                 googleApiKey,
                 sessionId,
                 dryRun,
-                assetId: uuidGenerator.generate(),
+                assetId: uuidGenerator.generate(), //todo: Hash file shouldn't need asset id.
             });
         }, (currentlyScanning, state) => {
             summary.filesIgnored = state.numFilesIgnored;
