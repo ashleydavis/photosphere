@@ -3,14 +3,15 @@ import pc from "picocolors";
 import { exit } from "node-utils";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import { loadDatabase, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
+import { getDirectoryForCommand } from "../lib/directory-picker";
 import { formatBytes } from "../lib/format";
-import { repair } from "api";
+import { repair, loadDatabaseConfig } from "api";
 
 export interface IRepairCommandOptions extends IBaseCommandOptions {
     //
-    // The source database to repair from.
+    // The source database to repair from (optional; defaults to origin from config).
     //
-    source: string;
+    source?: string;
     
     //
     // The source key file.
@@ -29,19 +30,26 @@ export interface IRepairCommandOptions extends IBaseCommandOptions {
 export async function repairCommand(context: ICommandContext, options: IRepairCommandOptions): Promise<void> {
     const { uuidGenerator, timestampProvider, sessionId } = context;
     
-    if (!options.source) {
-        log.error(pc.red("Source database path is required for repair command"));
-        await exit(1);
-    }
-    
     const { assetStorage, metadataStorage, databaseDir: targetDir } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
-    const { assetStorage: sourceAssetStorage, databaseDir: sourceDir } = await loadDatabase(options.source, {
+
+    let sourcePath = options.source;
+    if (sourcePath === undefined) {
+        const config = await loadDatabaseConfig(metadataStorage);
+        sourcePath = config?.origin;
+        if (sourcePath === undefined) {
+            log.error(pc.red("Source database path is required for repair command. Specify --source or set an origin (psi set-origin <path>)."));
+            await exit(1);
+            return;
+        }
+    }
+
+    const { assetStorage: sourceAssetStorage, databaseDir: sourceDir } = await loadDatabase(sourcePath, {
         db: options.source,
         key: options.sourceKey,
         verbose: options.verbose,
         yes: options.yes
     }, uuidGenerator, timestampProvider, sessionId);
-    
+
     log.info('');
     log.info(`Repairing database:`);
     log.info(`  Source:    ${pc.cyan(sourceDir)}`);
@@ -51,7 +59,7 @@ export async function repairCommand(context: ICommandContext, options: IRepairCo
     writeProgress(`🔧 Repairing database...`);
 
     const result = await repair(assetStorage, metadataStorage, sourceAssetStorage, {
-        source: options.source,
+        source: sourcePath,
         sourceKey: options.sourceKey,
         full: options.full,
     }, (progress) => {

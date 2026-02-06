@@ -1,4 +1,5 @@
 import { BsonDatabase, IBsonCollection, getDatabaseRootHash } from "bdb";
+import { saveDatabaseConfig, updateDatabaseConfig } from "./database-config";
 import { IStorage, pathJoin, StoragePrefixWrapper } from "storage";
 import { ILocation, log, retry, IUuidGenerator, ITimestampProvider } from "utils";
 import dayjs from "dayjs";
@@ -285,6 +286,8 @@ export async function createDatabase(
 
     await retry(() => saveMerkleTree(merkleTree, metadataStorage));
 
+    await saveDatabaseConfig(metadataStorage, {});
+
     log.verbose(`Created new media file database.`);
 }
 
@@ -409,6 +412,7 @@ export async function writeAsset(
         }
 
         await retry(() => saveMerkleTree(merkleTree, metadataStorage));
+        await updateDatabaseConfig(metadataStorage, { lastModifiedAt: new Date().toISOString() });
     }
     catch (err: any) {
         log.exception(`Failed to add asset "${assetPath}" from buffer`, err);
@@ -474,11 +478,12 @@ export async function removeAsset(
         deleteItem<IDatabaseMetadata>(merkleTree, pathJoin("display", assetId));
         deleteItem<IDatabaseMetadata>(merkleTree, pathJoin("thumb", assetId));
 
-        await retry(() => saveMerkleTree(merkleTree, metadataStorage)); 
+        await retry(() => saveMerkleTree(merkleTree, metadataStorage));
+        await updateDatabaseConfig(metadataStorage, { lastModifiedAt: new Date().toISOString() });
     }
     finally {
         await releaseWriteLock(metadataStorage);
-    }    
+    }
 }
 
 //

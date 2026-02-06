@@ -1,8 +1,9 @@
 import { loadDatabase, IBaseCommandOptions, ICommandContext, selectEncryptionKey, resolveKeyPath } from "../lib/init-cmd";
+import { getDirectoryForCommand } from "../lib/directory-picker";
 import { log } from "utils";
 import pc from "picocolors";
 import { exit } from "node-utils";
-import { syncDatabases, merkleTreeExists, isDatabaseEncrypted } from "api";
+import { syncDatabases, merkleTreeExists, isDatabaseEncrypted, loadDatabaseConfig, updateDatabaseConfig } from "api";
 import { createStorage, loadEncryptionKeys } from "storage";
 import { configureIfNeeded, getS3Config } from '../lib/config';
 
@@ -10,7 +11,10 @@ import { configureIfNeeded, getS3Config } from '../lib/config';
 // Options for the sync command.
 //
 export interface ISyncCommandOptions extends IBaseCommandOptions {
-    dest: string;
+    //
+    // Destination database (optional; defaults to origin from config).
+    //
+    dest?: string;
 
     //
     // Path to destination encryption key file.
@@ -26,12 +30,7 @@ export async function syncCommand(context: ICommandContext, options: ISyncComman
 
     const nonInteractive = options.yes || false;
 
-    log.info("Starting database sync operation...");
-    log.info(`  Source:    ${pc.cyan(options.db || ".")}`);
-    log.info(`  Target:    ${pc.cyan(options.dest)}`);
-    log.info("");
-
-    // Load source database with source options (including source key)
+    // Load source database first so we can read origin if --dest not provided
     const { assetStorage: sourceAssetStorage, metadataStorage: sourceMetadataStorage, bsonDatabase: sourceBsonDatabase } = await loadDatabase(options.db, {
         db: options.db,
         key: options.key,
@@ -39,13 +38,27 @@ export async function syncCommand(context: ICommandContext, options: ISyncComman
         yes: options.yes
     }, uuidGenerator, timestampProvider, sessionId);
 
+    let destPath = options.dest;
+    if (destPath === undefined) {
+        const config = await loadDatabaseConfig(sourceMetadataStorage);
+        destPath = config?.origin;
+        if (destPath === undefined) {
+            destPath = await getDirectoryForCommand('existing', nonInteractive, options.cwd || process.cwd());
+        }
+    }
+
+    log.info("Starting database sync operation...");
+    log.info(`  Source:    ${pc.cyan(options.db || ".")}`);
+    log.info(`  Target:    ${pc.cyan(destPath)}`);
+    log.info("");
+
     // Check if destination database exists and handle encryption (storage scoped to db root, paths use .db/...)
-    if (options.dest.startsWith("s3:")) {
+    if (destPath.startsWith("s3:")) {
         await configureIfNeeded(['s3'], nonInteractive);
     }
 
     const s3Config = await getS3Config();
-    const { storage: destMetadataStorage } = createStorage(options.dest, s3Config);
+    const { storage: destMetadataStorage } = createStorage(destPath, s3Config);
 
     // Check if destination database exists (uses .db/files.dat from API)
     const destDbExists = await merkleTreeExists(destMetadataStorage);    
@@ -60,8 +73,8 @@ export async function syncCommand(context: ICommandContext, options: ISyncComman
                     log.error(pc.red(`  Please provide the private key using the --dest-key option.`));
                     log.error('');
                     log.error(`Example:`);
-                    log.error(`    ${pc.cyan(`psi sync --dest-key my-photos.key --dest ${options.dest}`)}`);
-                    log.error(`    ${pc.cyan(`psi sync --dest-key <full or relative path to key> --dest ${options.dest}`)}`);
+                    log.error(`    ${pc.cyan(`psi sync --dest-key my-photos.key --dest ${destPath}`)}`);
+                    log.error(`    ${pc.cyan(`psi sync --dest-key <full or relative path to key> --dest ${destPath}`)}`);
                     await exit(1);
                 } else {
                     // Interactive mode - show key selection menu
@@ -93,16 +106,20 @@ export async function syncCommand(context: ICommandContext, options: ISyncComman
     }
 
     // Load target database with target options (using destKey instead of key)
-    const targetOptions = { 
-        ...options, 
-        db: options.dest,
+    const targetOptions = {
+        ...options,
+        db: destPath,
         key: options.destKey  // Use destKey for target database
     };
-    const { assetStorage: targetAssetStorage, metadataStorage: targetMetadataStorage, bsonDatabase: targetBsonDatabase, databaseDir: targetDir } = await loadDatabase(targetOptions.db, targetOptions, uuidGenerator, timestampProvider, sessionId);
-    
+    const { assetStorage: targetAssetStorage, metadataStorage: targetMetadataStorage, bsonDatabase: targetBsonDatabase } = await loadDatabase(targetOptions.db, targetOptions, uuidGenerator, timestampProvider, sessionId);
+
     await syncDatabases(sourceAssetStorage, sourceMetadataStorage, sourceBsonDatabase, sessionId, targetAssetStorage, targetMetadataStorage, targetBsonDatabase, sessionId);
-        
-    log.info("Sync completed successfully!");       
+
+    const lastSyncedAt = new Date().toISOString();
+    await updateDatabaseConfig(sourceMetadataStorage, { lastSyncedAt });
+    await updateDatabaseConfig(targetMetadataStorage, { lastSyncedAt });
+
+    log.info("Sync completed successfully!");
 
     await exit(0);
 }

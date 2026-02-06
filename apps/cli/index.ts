@@ -26,6 +26,8 @@ import { hashCommand } from './src/cmd/hash';
 import { rootHashCommand } from './src/cmd/root-hash';
 import { databaseIdCommand } from './src/cmd/database-id';
 import { syncCommand } from './src/cmd/sync';
+import { originCommand } from './src/cmd/origin';
+import { setOriginCommand, ISetOriginCommandOptions } from './src/cmd/set-origin';
 import { initContext } from './src/lib/init-cmd';
 import { MAIN_EXAMPLES, getCommandExamplesHelp } from './src/examples';
 import pc from "picocolors";
@@ -308,6 +310,27 @@ Resources:
         .option(...sessionIdOption)
         .addHelpText('after', getCommandExamplesHelp('init'))
         .action(initContext(initCommand));
+
+    program
+        .command("origin")
+        .description("Shows the origin database path (from .db/config.json).")
+        .option(...dbOption)
+        .option(...keyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option(...cwdOption)
+        .action(initContext(originCommand));
+
+    program
+        .command("set-origin")
+        .description("Sets the origin database path in .db/config.json (used as default --dest or --source for sync, replicate, repair, compare).")
+        .argument("<path>", "Path or URI of the origin database")
+        .option(...dbOption)
+        .option(...keyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option(...cwdOption)
+        .action(initContext((ctx, path: string, options: ISetOriginCommandOptions) => setOriginCommand(ctx, options, path)));
 
     program
         .command("list")

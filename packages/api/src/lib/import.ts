@@ -10,6 +10,7 @@ import { IBsonCollection } from "bdb";
 import { IAsset } from "defs";
 import { acquireWriteLock, releaseWriteLock } from "./write-lock";
 import { loadMerkleTree, saveMerkleTree } from "./tree";
+import { updateDatabaseConfig } from "./database-config";
 import { addItem } from "merkle-tree";
 import { throttle } from "lodash";
 import * as os from "os";
@@ -112,8 +113,9 @@ async function processPendingDatabaseUpdates(
         // Save merkle tree (skip in dry-run mode)
         if (!dryRun) {
             await retry(() => saveMerkleTree(merkleTree, metadataStorage));
+            await updateDatabaseConfig(metadataStorage, { lastModifiedAt: new Date().toISOString() });
         }
-        
+
         return true;
     }
     finally {
