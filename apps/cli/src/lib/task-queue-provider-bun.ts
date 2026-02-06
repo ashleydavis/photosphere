@@ -1,7 +1,7 @@
 import { TaskQueue } from "task-queue";
 import type { ITaskQueue } from "task-queue";
 import type { ITaskQueueProvider } from "task-queue";
-import { WorkerBackendBun, type IWorkerInfo, type IWorkerOptions } from "./worker-backend-bun";
+import { WorkerBackendBun, type IWorkerInfo, type IWorkerBackendOptions } from "./worker-backend-bun";
 import { registerStateProvider, updateStateProvider } from "debug-server";
 import type { IUuidGenerator, ITimestampProvider } from "utils";
 
@@ -11,12 +11,12 @@ import type { IUuidGenerator, ITimestampProvider } from "utils";
 export class TaskQueueProviderBun implements ITaskQueueProvider {
     private maxWorkers: number;
     private taskTimeout: number;
-    private workerOptions: IWorkerOptions;
+    private workerOptions: IWorkerBackendOptions;
     private debug: boolean;
     private uuidGenerator: IUuidGenerator;
     private timestampProvider: ITimestampProvider;
 
-    constructor(maxWorkers: number, taskTimeout: number, workerOptions: IWorkerOptions, debug: boolean, uuidGenerator: IUuidGenerator, timestampProvider: ITimestampProvider) {
+    constructor(maxWorkers: number, taskTimeout: number, workerOptions: IWorkerBackendOptions, debug: boolean, uuidGenerator: IUuidGenerator, timestampProvider: ITimestampProvider) {
         this.maxWorkers = maxWorkers;
         this.taskTimeout = taskTimeout;
         this.workerOptions = workerOptions;

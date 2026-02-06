@@ -17,26 +17,14 @@ export interface IConfig {
 //
 function getConfigDir(): string {
     const homeDir = os.homedir();
-    if (process.platform === 'win32') {
-        // Windows: use AppData\Roaming\Photosphere
-        return path.join(homeDir, 'AppData', 'Roaming', 'Photosphere');
-    } else {
-        // Mac and Linux: use ~/.config/photosphere
-        return path.join(homeDir, '.config', 'photosphere');
-    }
+    return path.join(homeDir, '.config', 'photosphere');
 }
 
 //
 // Gets the path to the config file
 //
 function getConfigPath(): string {
-    if (process.platform === 'win32') {
-        // Windows: use photosphere.conf
-        return path.join(getConfigDir(), 'photosphere.conf');
-    } else {
-        // Mac and Linux: use photosphere.conf
-        return path.join(getConfigDir(), 'photosphere.conf');
-    }
+    return path.join(getConfigDir(), 'photosphere.conf');
 }
 
 //

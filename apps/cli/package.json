@@ -16,6 +16,7 @@
     "compile:watch": "tsc --watch --preserveWatchOutput",
     "clean": "rm -rf build dist coverage tsconfig.tsbuildinfo bin",
     "start": "bun run index.ts",
+    "start:debug": "bun --inspect run index.ts",
     "dev": "bun run --hot index.ts",
     "d": "bun run dev",
     "build-linux": "bun build --env=disable --compile --minify --sourcemap --target=bun-linux-x64-baseline --outfile bin/x64/linux/psi ./index.ts ./worker.ts",
