@@ -486,7 +486,8 @@ Resources:
     // Parse the command line arguments
     try {
         await program.parseAsync(process.argv);
-    } catch (err: any) {
+    }
+    catch (err: any) {
         // Commander throws an error when no command is provided
         // Check if this is just a help display situation
         if (err.code === 'commander.help' 
@@ -530,18 +531,6 @@ function handleError(error: any, errorType: string | undefined) {
     console.log('If you believe this behaviour is a bug, please report it with the following command:');
     console.log(pc.yellow('   psi bug'));
 }
-
-// Handle unhandled errors
-process.on('uncaughtException', (error) => {
-    handleError(error, 'uncaughtException');
-    process.exit(1);
-});
-
-// Handle unhandled promise rejections
-process.on('unhandledRejection', (reason, promise) => {
-    handleError(reason, 'unhandledRejection');
-    process.exit(1);
-});
 
 main()
     .catch(async (error) => {

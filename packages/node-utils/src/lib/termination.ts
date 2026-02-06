@@ -1,4 +1,15 @@
 import { log } from "utils";
+import {
+    EXIT_FAILURE,
+    EXIT_SUCCESS,
+    EXIT_TERMINATION_CALLBACKS_THREW,
+    EXIT_SIGTERM_CLEANUP_FAILED,
+    EXIT_SIGINT_CLEANUP_FAILED,
+    EXIT_UNCAUGHT_EXCEPTION,
+    EXIT_UNCAUGHT_EXCEPTION_CLEANUP_FAILED,
+    EXIT_UNHANDLED_REJECTION,
+    EXIT_UNHANDLED_REJECTION_CLEANUP_FAILED,
+} from "./exit-codes";
 
 //
 // Set to true after the termination handlers have been initialized.
@@ -38,7 +49,7 @@ export async function exit(code: number): Promise<never> {
     }
     catch (err: any) {
         log.exception('Error during exit termination callbacks.', err);
-        process.exit(1);
+        process.exit(EXIT_TERMINATION_CALLBACKS_THREW);
     }
 }
 
@@ -66,13 +77,13 @@ function initializeTerminationHandlers(): void {
         log.verbose('SIGTERM received. Shutting down gracefully...');
 
         try {
-            await invokeTerminationCallbacks(0);
-            process.exit(0);
+            await invokeTerminationCallbacks(EXIT_SUCCESS);
+            process.exit(EXIT_SUCCESS);
         }
         catch (err: any) {
             log.exception('Error during SIGTERM shutdown.', err);
-            await invokeTerminationCallbacks(1);
-            process.exit(1);
+            await invokeTerminationCallbacks(EXIT_FAILURE);
+            process.exit(EXIT_SIGTERM_CLEANUP_FAILED);
         }
     });
 
@@ -81,15 +92,15 @@ function initializeTerminationHandlers(): void {
     //
     process.on('SIGINT', async () => {
         log.verbose('SIGINT received. Shutting down...');
-        
+
         try {
-            await invokeTerminationCallbacks(0);
-            process.exit(0);
+            await invokeTerminationCallbacks(EXIT_SUCCESS);
+            process.exit(EXIT_SUCCESS);
         }
         catch (err: any) {
             log.exception('Error during SIGINT shutdown.', err);
-            await invokeTerminationCallbacks(1);
-            process.exit(1);
+            await invokeTerminationCallbacks(EXIT_FAILURE);
+            process.exit(EXIT_SIGINT_CLEANUP_FAILED);
         }
     });
 
@@ -99,14 +110,16 @@ function initializeTerminationHandlers(): void {
     process.on('uncaughtException', async (err) => {
         log.exception('Uncaught exception.', err);
 
+        let exitCode = EXIT_UNCAUGHT_EXCEPTION;
         try {
-            await invokeTerminationCallbacks(1);
+            await invokeTerminationCallbacks(EXIT_UNCAUGHT_EXCEPTION);
         }
         catch (err: any) {
             log.exception('Error during uncaught exception shutdown.', err);
+            exitCode = EXIT_UNCAUGHT_EXCEPTION_CLEANUP_FAILED;
         }
         finally {
-            process.exit(1);
+            process.exit(exitCode);
         }
     });
 
@@ -116,14 +129,16 @@ function initializeTerminationHandlers(): void {
     process.on('unhandledRejection', async (reason: string, promise) => {
         log.exception('Unhandled promise rejection.', new Error(reason));
 
+        let exitCode = EXIT_UNHANDLED_REJECTION;
         try {
-            await invokeTerminationCallbacks(1);
+            await invokeTerminationCallbacks(EXIT_UNHANDLED_REJECTION);
         }
         catch (err: any) {
             log.exception('Error during unhandled rejection shutdown.', err);
+            exitCode = EXIT_UNHANDLED_REJECTION_CLEANUP_FAILED;
         }
         finally {
-            process.exit(1);
+            process.exit(exitCode);
         }
     });
 
