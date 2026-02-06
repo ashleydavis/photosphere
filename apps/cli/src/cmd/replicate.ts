@@ -7,7 +7,7 @@ import { loadDatabase, IBaseCommandOptions, resolveKeyPath, promptForEncryption,
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import { pathExists, copy } from 'node-utils';
 import { getDirectoryForCommand } from "../lib/directory-picker";
-import { replicate, merkleTreeExists } from "api";
+import { replicate, merkleTreeExists, loadDatabaseConfig, updateDatabaseConfig } from "api";
 import { confirm, isCancel } from '../lib/clack/prompts';
 
 export interface IReplicateCommandOptions extends IBaseCommandOptions { 
@@ -59,7 +59,11 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
 
     let destDir = options.dest;
     if (destDir === undefined) {
-        destDir = await getDirectoryForCommand('existing', nonInteractive, options.cwd || process.cwd());
+        const config = await loadDatabaseConfig(sourceMetadataStorage);
+        destDir = config?.origin;
+        if (destDir === undefined) {
+            destDir = await getDirectoryForCommand('existing', nonInteractive, options.cwd || process.cwd());
+        }
     }
     
     const destMetaPath = pathJoin(destDir, '.db');
@@ -222,6 +226,12 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
             console.warn(pc.yellow(`⚠️ Warning: Could not copy public key to destination database directory: ${error instanceof Error ? error.message : 'Unknown error'}`));
         }
     }
+
+    // Set replica config: origin = source path, lastReplicatedAt = now
+    await updateDatabaseConfig(destMetadataStorage, {
+        origin: srcDir,
+        lastReplicatedAt: new Date().toISOString(),
+    });
 
     log.info('');
     log.info(pc.green(`✅ Replication completed successfully`));

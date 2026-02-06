@@ -8,7 +8,7 @@ import { configureIfNeeded, getS3Config } from "../lib/config";
 import { intro, confirm, outro } from "../lib/clack/prompts";
 import { createStorage, loadEncryptionKeys } from "storage";
 import { addItem, CURRENT_DATABASE_VERSION, loadTree, rebuildTree, saveTree, SortNode, traverseTreeAsync } from "merkle-tree";
-import { IDatabaseMetadata, acquireWriteLock, releaseWriteLock, createReadme, ensureSortIndex } from "api";
+import { IDatabaseMetadata, acquireWriteLock, releaseWriteLock, createReadme, ensureSortIndex, loadDatabaseConfig, saveDatabaseConfig } from "api";
 import { BsonDatabase, buildDatabaseMerkleTree, deleteDatabaseMerkleTree, saveDatabaseMerkleTree } from "bdb";
 import type { IAsset } from "defs";
 import type { IStorage } from "storage";
@@ -346,6 +346,13 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
         if (await assetStorage.dirExists("metadata")) {
             await assetStorage.deleteDir("metadata");
             log.info(pc.green(`✓ Removed metadata/ directory`));
+        }
+
+        // Ensure .db/config.json exists (create empty if not present)
+        const existingConfig = await loadDatabaseConfig(assetStorage);
+        if (existingConfig === null) {
+            await saveDatabaseConfig(assetStorage, {});
+            log.info(pc.green(`✓ Created .db/config.json`));
         }
 
         log.info(pc.green(`✓ Database upgraded successfully to version ${CURRENT_DATABASE_VERSION}`));

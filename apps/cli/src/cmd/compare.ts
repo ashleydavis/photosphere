@@ -5,7 +5,7 @@ import { getDirectoryForCommand } from '../lib/directory-picker';
 import { compareTrees } from "merkle-tree";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import { loadDatabase, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
-import { loadMerkleTree } from "api";
+import { loadMerkleTree, loadDatabaseConfig } from "api";
 
 export interface ICompareCommandOptions extends IBaseCommandOptions {
     //
@@ -47,13 +47,18 @@ export async function compareCommand(context: ICommandContext, options: ICompare
         srcDir = await getDirectoryForCommand("existing", nonInteractive, options.cwd || process.cwd());
     }
 
+    const { metadataStorage: sourceMetadataStorage, databaseDir: srcDirResolved } = await loadDatabase(srcDir, options, uuidGenerator, timestampProvider, sessionId);
+
     let destDir = options.dest;
     if (destDir === undefined) {
-        destDir = await getDirectoryForCommand('existing', nonInteractive, options.cwd || process.cwd());
+        const config = await loadDatabaseConfig(sourceMetadataStorage);
+        destDir = config?.origin;
+        if (destDir === undefined) {
+            destDir = await getDirectoryForCommand('existing', nonInteractive, options.cwd || process.cwd());
+        }
     }
 
-    // Load both databases with allowOlderVersions=false to disallow older databases    
-    const { metadataStorage: sourceMetadataStorage, databaseDir: srcDirResolved } = await loadDatabase(srcDir, options, uuidGenerator, timestampProvider, sessionId);
+    // Load destination database
     const destOptions = { ...options, db: destDir, key: options.destKey };
     const { metadataStorage: destMetadataStorage, databaseDir: destDirResolved } = await loadDatabase(destDir, destOptions, uuidGenerator, timestampProvider, sessionId);
 
