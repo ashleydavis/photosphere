@@ -18,15 +18,15 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Test configuration
-# Override TEST_TMP_DIR to run tests in parallel (e.g. TEST_TMP_DIR=./test/tmp-$$ ./smoke-tests.sh all)
+# Override TEST_TMP_DIR to run tests in parallel (e.g. TEST_TMP_DIR=./test/tmp-$$ ./smoke-tests.sh)
 TEST_TMP_DIR="${TEST_TMP_DIR:-./test/tmp}"
 TEST_DB_DIR="$TEST_TMP_DIR/shared/test-db"
 TEST_FILES_DIR="../../test"
 MULTIPLE_IMAGES_DIR="../../test/multiple-images"
 DUPLICATE_IMAGES_DIR="../../test/duplicate-images"
 
-# Debug mode flag (can be set via environment variable or command line)
-DEBUG_MODE=${DEBUG_MODE:-false}
+# Use built binary instead of bun run start (set by --binary)
+USE_BINARY=false
 
 # ============================================================================
 # Test Table Definition
@@ -146,14 +146,11 @@ get_test_count() {
     echo "${#TEST_TABLE[@]}"
 }
 
-# Get CLI command based on platform and debug mode
+# Get CLI command: default is from code (bun run start --); use --binary for built executable
 get_cli_command() {
-    if [ "$DEBUG_MODE" = "true" ]; then
-        echo "bun run start --"
-    else
+    if [ "$USE_BINARY" = "true" ]; then
         local platform=$(detect_platform)
         local arch=$(detect_architecture)
-        
         case "$platform" in
             "linux")
                 echo "./bin/x64/linux/psi"
@@ -172,17 +169,16 @@ get_cli_command() {
                 echo "./bin/x64/linux/psi"  # Default to linux
                 ;;
         esac
+    else
+        echo "bun run start --"
     fi
 }
 
-# Get mk command based on platform and debug mode
+# Get mk command: default is from code; use --binary for built executable
 get_mk_command() {
-    if [ "$DEBUG_MODE" = "true" ]; then
-        echo "bun run ../mk-cli/src/index.ts --"
-    else
+    if [ "$USE_BINARY" = "true" ]; then
         local platform=$(detect_platform)
         local arch=$(detect_architecture)
-        
         case "$platform" in
             "linux")
                 echo "../mk-cli/bin/x64/linux/mk"
@@ -201,17 +197,16 @@ get_mk_command() {
                 echo "../mk-cli/bin/x64/linux/mk"  # Default to linux
                 ;;
         esac
+    else
+        echo "bun run ../mk-cli/src/index.ts --"
     fi
 }
 
-# Get bdb command based on platform and debug mode
+# Get bdb command: default is from code; use --binary for built executable
 get_bdb_command() {
-    if [ "$DEBUG_MODE" = "true" ]; then
-        echo "bun run ../bdb-cli/src/index.ts"
-    else
+    if [ "$USE_BINARY" = "true" ]; then
         local platform=$(detect_platform)
         local arch=$(detect_architecture)
-        
         case "$platform" in
             "linux")
                 echo "../bdb-cli/bin/x64/linux/bdb"
@@ -230,6 +225,8 @@ get_bdb_command() {
                 echo "../bdb-cli/bin/x64/linux/bdb"  # Default to linux
                 ;;
         esac
+    else
+        echo "bun run ../bdb-cli/src/index.ts"
     fi
 }
 
@@ -4019,12 +4016,12 @@ show_usage() {
     echo "Run Photosphere CLI smoke tests"
     echo ""
     echo "Options:"
-    echo "  -d, --debug         - Run tests using 'bun run start --' instead of built executable"
+    echo "  -b, --binary        - Run tests using the built executable (default: run from code with 'bun run start --')"
     echo "  -t, --tmp-dir <dir> - Use <dir> for test databases (default: ./test/tmp). Enables parallel runs."
     echo "  -h, --help          - Show this help message"
     echo ""
     echo "Commands:"
-    echo "  all                 - Run all tests (assumes executable built and tools available)"
+    echo "  all                 - Run all tests (default if no command given)"
     local test_count=$(get_test_count)
     echo "  to <number>         - Run tests 1 through <number> (1-$test_count)"
     echo "  setup               - Build executable"
@@ -4047,23 +4044,20 @@ show_usage() {
     echo "  Use commas to separate commands (no spaces around commas)"
     echo ""
     echo "Examples:"
-    echo "  $0 all                      # Run all tests (exe must be built, tools available)"
-    echo "  $0 --debug all              # Run all tests using debug mode (bun run start --)"
-    echo "  $0 to 5                     # Run tests 1-5"
-    echo "  $0 -d to 10                 # Run tests 1-10 in debug mode"
-    echo "  $0 replicate-unrelated-fail # Run test"
+    echo "  $0                           # Run all tests from code (default)"
+    echo "  $0 all                       # Run all tests from code"
+    echo "  $0 --binary                  # Run all tests using built executable"
+    echo "  $0 to 5                      # Run tests 1-5"
     echo "  $0 setup,all                # Build and run all tests (tools must be available)"
     echo "  $0 setup,check-tools,all    # Build, check tools, and run all tests"
-    echo "  $0 setup                    # Build executable only"
-    echo "  $0 check-tools              # Check tools only"
-    echo "  $0 reset                    # Clean up test artifacts"
+    echo "  $0 setup                     # Build executable only"
+    echo "  $0 check-tools               # Check tools only"
+    echo "  $0 reset                     # Clean up test artifacts"
     echo "  $0 create-database          # Run only database creation test"
-    echo "  $0 3                        # Run test 3 (add single file)"
+    echo "  $0 3                         # Run test 3 (add single file)"
     echo "  $0 reset,setup,1,3          # Reset, setup, create DB, then test 3"
-    echo "  DEBUG_MODE=true $0 all      # Alternative way to enable debug mode"
-    echo "  $0 --tmp-dir ./test/tmp-$$ all    # Run in isolated tmp dir (for parallel runs)"
-    echo "  $0 --debug all --tmp-dir ./foobar # Options can appear before or after test name"
-    echo "  $0 help                     # Show this help"
+    echo "  $0 --tmp-dir ./test/tmp-$$  # Run in isolated tmp dir (for parallel runs)"
+    echo "  $0 help                      # Show this help"
 }
 
 # Main test execution
@@ -4072,8 +4066,8 @@ main() {
     POSITIONAL=()
     while [[ $# -gt 0 ]]; do
         case $1 in
-            -d|--debug)
-                DEBUG_MODE=true
+            -b|--binary)
+                USE_BINARY=true
                 shift
                 ;;
             -t|--tmp-dir)
@@ -4102,17 +4096,22 @@ main() {
     done
     set -- "${POSITIONAL[@]}"
     
-    # Check for help request or no arguments after parsing options
-    if [ $# -eq 0 ]; then
+    # Check for help request
+    if [ $# -eq 1 ] && [ "$1" = "help" ]; then
         show_usage
         exit 0
     fi
     
-    # Show debug mode status if enabled
-    if [ "$DEBUG_MODE" = "true" ]; then
-        log_info "Debug mode enabled - using 'bun run start --' instead of built executable"
+    # Default to "all" if no command given
+    if [ $# -eq 0 ]; then
+        set -- "all"
     fi
-        
+    
+    # Show binary mode status if enabled
+    if [ "$USE_BINARY" = "true" ]; then
+        log_info "Using built executable for smoke tests"
+    fi
+
     # Check if "to" command is used (e.g., "./smoke-tests.sh to 5")
     if [ "$1" = "to" ] && [ $# -eq 2 ]; then
         local end_test="$2"

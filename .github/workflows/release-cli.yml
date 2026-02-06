@@ -116,8 +116,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: [validate-version]
     if: always() && (needs.validate-version.result == 'success' || github.ref_type != 'tag')
-    env:
-      DEBUG_MODE: true # Always run the write lock tests from code without using the built executable.
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -148,7 +146,7 @@ jobs:
         working-directory: ./apps/cli
         run: |
           mkdir -p write-lock-test-logs
-          ./write-lock-smoke-test.sh --debug 2>&1 | tee write-lock-test-logs/write-lock-tests-output.log
+          ./write-lock-smoke-test.sh 2>&1 | tee write-lock-test-logs/write-lock-tests-output.log
           WRITE_LOCK_EXIT_CODE=${PIPESTATUS[0]}
           echo "Write lock tests exit code: $WRITE_LOCK_EXIT_CODE"
           echo "Write lock tests exit code: $WRITE_LOCK_EXIT_CODE" >> write-lock-test-logs/write-lock-tests-output.log
@@ -158,7 +156,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: write-lock-test-logs-debug
+          name: write-lock-test-logs
           path: ./apps/cli/write-lock-test-logs/
           retention-days: 7
 
@@ -166,7 +164,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: write-lock-test-outputs-debug
+          name: write-lock-test-outputs
           path: ./apps/cli/test/tmp/write-lock-outputs/
           retention-days: 7
 
@@ -175,8 +173,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: [validate-version]
     if: always() && (needs.validate-version.result == 'success' || github.ref_type != 'tag')
-    env:
-      DEBUG_MODE: true # Always run the sync tests from code without using the built executable.
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -206,15 +202,13 @@ jobs:
       - name: Run sync smoke tests
         working-directory: ./apps/cli
         run: |
-          ./sync-smoke-test.sh --debug
+          ./sync-smoke-test.sh
 
   smoke-test:
     timeout-minutes: 20
     runs-on: ubuntu-latest
     needs: [validate-version]
     if: always() && (needs.validate-version.result == 'success' || github.ref_type != 'tag')
-    env:
-      DEBUG_MODE: true # Always run the smoke tests from code without using the built executable.
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -245,7 +239,7 @@ jobs:
         working-directory: ./apps/cli
         run: |
           mkdir -p smoke-test-logs
-          ./smoke-tests.sh all 2>&1 | tee smoke-test-logs/smoke-tests-output.log
+          ./smoke-tests.sh 2>&1 | tee smoke-test-logs/smoke-tests-output.log
           SMOKE_TEST_EXIT_CODE=${PIPESTATUS[0]}
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE"
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-output.log
@@ -255,7 +249,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: smoke-test-logs-debug
+          name: smoke-test-logs-code
           path: ./apps/cli/smoke-test-logs/
           retention-days: 7
 
@@ -263,7 +257,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: smoke-test-reports-debug
+          name: smoke-test-reports-code
           path: ./apps/cli/tmp/reports/
 
       - name: Capture database hash
@@ -275,21 +269,21 @@ jobs:
           # Create hash capture directory
           mkdir -p hash-validation
           
-          # Get the database root hash from the smoke test database (debug mode uses bun run)
+          # Get the database root hash from the smoke test database (runs from code)
           if [ -d "./test/tmp/test-db" ]; then
             DB_HASH=$(bun run ../mk-cli/src/index.ts root-hash ./test/tmp/test-db/.db/tree.dat 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-            echo "debug:$DB_HASH" > hash-validation/database-hash-debug.txt
-            echo "Debug mode database hash: $DB_HASH"
+            echo "code:$DB_HASH" > hash-validation/database-hash-code.txt
+            echo "Code database hash: $DB_HASH"
           else
             echo "No test database found, cannot capture hash"
-            echo "debug:NO_DATABASE" > hash-validation/database-hash-debug.txt
+            echo "code:NO_DATABASE" > hash-validation/database-hash-code.txt
           fi
 
       - name: Upload database hash
         uses: actions/upload-artifact@v4
         with:
-          name: database-hash-debug
-          path: ./apps/cli/hash-validation/database-hash-debug.txt
+          name: database-hash-code
+          path: ./apps/cli/hash-validation/database-hash-code.txt
 
   build-linux:
     timeout-minutes: 20
@@ -409,7 +403,7 @@ jobs:
         working-directory: ./apps/cli
         run: |
           mkdir -p smoke-test-logs
-          ./smoke-tests.sh all 2>&1 | tee smoke-test-logs/smoke-tests-output.log
+          ./smoke-tests.sh --binary 2>&1 | tee smoke-test-logs/smoke-tests-output.log
           SMOKE_TEST_EXIT_CODE=${PIPESTATUS[0]}
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE"
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-output.log
@@ -572,7 +566,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p smoke-test-logs
-          ./smoke-tests.sh all 2>&1 | tee smoke-test-logs/smoke-tests-output.log
+          ./smoke-tests.sh --binary 2>&1 | tee smoke-test-logs/smoke-tests-output.log
           SMOKE_TEST_EXIT_CODE=${PIPESTATUS[0]}
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE"
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-output.log
@@ -816,12 +810,11 @@ jobs:
         working-directory: ./apps/cli
         run: |
           mkdir -p smoke-test-logs
-          ./smoke-tests.sh all 2>&1 | tee smoke-test-logs/smoke-tests-output.log
+          ./smoke-tests.sh --binary 2>&1 | tee smoke-test-logs/smoke-tests-output.log
           SMOKE_TEST_EXIT_CODE=${PIPESTATUS[0]}
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE"
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-output.log
           exit $SMOKE_TEST_EXIT_CODE
-
 
       - name: Upload smoke test logs
         if: always()
@@ -992,7 +985,7 @@ jobs:
         working-directory: ./apps/cli
         run: |
           mkdir -p smoke-test-logs
-          ./smoke-tests.sh all 2>&1 | tee smoke-test-logs/smoke-tests-output.log
+          ./smoke-tests.sh --binary 2>&1 | tee smoke-test-logs/smoke-tests-output.log
           SMOKE_TEST_EXIT_CODE=${PIPESTATUS[0]}
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE"
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-output.log
