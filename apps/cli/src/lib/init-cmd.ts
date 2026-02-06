@@ -440,8 +440,7 @@ export async function loadDatabase(
         }
     }
 
-    // Create database instance.
-    // Pass assetStorage - the function will wrap it for BSON metadata operations
+    // Create database instance (v6 layout: BSON under .db/bson)
     const database = createMediaFileDatabase(assetStorage, uuidGenerator, timestampProvider);
 
     // Load the database
@@ -527,9 +526,8 @@ export async function createDatabase(
         await exit(1);
     }
 
-    // Create database instance
-    // Pass assetStorage - the function will wrap it for BSON metadata operations
-    const database = createMediaFileDatabase(assetStorage, uuidGenerator, timestampProvider); 
+    // Create database instance (v6 layout: BSON under .db/bson)
+    const database = createMediaFileDatabase(assetStorage, uuidGenerator, timestampProvider);
 
     // Create the database (instead of loading)
     await createMediaDatabase(assetStorage, metadataStorage, uuidGenerator, database.metadataCollection);

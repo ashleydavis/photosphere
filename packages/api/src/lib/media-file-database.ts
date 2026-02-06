@@ -238,7 +238,8 @@ export async function createReadme(
 }
 
 //
-// Creates database dependencies
+// Creates database dependencies. Uses v6 layout (BSON under .db/bson).
+// Only psi upgrade reads the old "metadata/" layout when migrating v5 → v6.
 //
 export function createMediaFileDatabase(
     assetStorage: IStorage,
@@ -246,7 +247,7 @@ export function createMediaFileDatabase(
     timestampProvider: ITimestampProvider
 ) {
     const bsonDatabase = new BsonDatabase({
-        storage: new StoragePrefixWrapper(assetStorage, `metadata`),
+        storage: new StoragePrefixWrapper(assetStorage, ".db/bson"),
         uuidGenerator: uuidGenerator,
         timestampProvider: timestampProvider
     });
@@ -309,7 +310,7 @@ export async function ensureSortIndex(metadataCollection: IBsonCollection<IAsset
 }
 
 //
-// Gets a summary of the entire database.
+// Gets a summary of the entire database. Uses v6 layout (BSON under .db/bson).
 //
 export async function getDatabaseSummary(assetStorage: IStorage, metadataStorage: IStorage): Promise<IDatabaseSummary> {
     const merkleTree = await retry(() => loadMerkleTree(metadataStorage));
@@ -321,7 +322,7 @@ export async function getDatabaseSummary(assetStorage: IStorage, metadataStorage
     
     // Get root hashes from both merkle trees (compute inline to avoid loading merkle tree again)
     const filesRootHash = merkleTree.merkle?.hash;
-    const databaseRootHash = await retry(() => getDatabaseRootHash(new StoragePrefixWrapper(assetStorage, "metadata")));
+    const databaseRootHash = await retry(() => getDatabaseRootHash(new StoragePrefixWrapper(assetStorage, ".db/bson")));
     
     // Compute aggregate root hash
     let fullHash: string;

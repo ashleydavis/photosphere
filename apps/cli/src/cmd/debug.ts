@@ -89,13 +89,13 @@ export async function debugMerkleTreeCommand(context: ICommandContext, options: 
         log.info(pc.yellow('No files merkle tree found.'));
     }
     
-    // Show BSON database merkle tree if it exists
-    const bsonMetadataStorage = new StoragePrefixWrapper(assetStorage, "metadata");
+    // Show BSON database merkle tree if it exists (v6: .db/bson)
+    const bsonMetadataStorage = new StoragePrefixWrapper(assetStorage, ".db/bson");
     const databaseTree = await loadDatabaseMerkleTree(bsonMetadataStorage);
     
     if (databaseTree) {
         log.info('');
-        log.info(pc.cyan('BSON Database Merkle Tree (metadata/db.dat):'));
+        log.info(pc.cyan('BSON Database Merkle Tree (.db/bson/db.dat):'));
         log.info(pc.gray('='.repeat(60)));
         const databaseVisualization = visualizeTree(databaseTree);
         log.info(databaseVisualization);
