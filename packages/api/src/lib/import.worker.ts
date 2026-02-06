@@ -21,71 +21,103 @@ import dayjs from "dayjs";
 import { IAsset } from "defs";
 import { IHashedData } from "merkle-tree";
 
+//
+// Payload for the hash-file task. Contains only what is needed to hash the file and check
+// whether that hash already exists in the database (no labels, API keys, or import-only fields).
+//
+export interface IHashFileData {
+    filePath: string; // Actual path to the file (e.g. temp file when importing from zip).
+    fileStat: IFileStat;
+    contentType: string;
+    storageDescriptor: IStorageDescriptor;
+    hashCacheDir: string; // Directory for the hash cache (read-only in the worker).
+    s3Config?: IS3Credentials;
+    logicalPath: string; // Path used in UI (e.g. path inside a zip).
+    assetId: string; // ID to use for this asset if it is imported.
+}
+
+//
+// Payload for the import-file task. Includes everything needed to run the import (metadata,
+// uploads, labels, etc.) and must include expectedHash from the hash-file result when queued by the main thread.
+// so the worker skips hashing and duplicate check.
+//
 export interface IImportFileData {
-    filePath: string; // Actual file path (always a valid file, possibly temp file from zip)
+    filePath: string;
     fileStat: IFileStat;
     contentType: string;
     storageDescriptor: IStorageDescriptor;
     hashCacheDir: string;
     s3Config?: IS3Credentials;
-    logicalPath: string; // Logical path for display (always set - equals filePath for non-zip files)
+    logicalPath: string;
+    assetId: string;
     labels: string[];
-    googleApiKey?: string;
+    googleApiKey?: string; // Used for reverse geocoding when present.
     sessionId: string;
     dryRun?: boolean;
-    assetId: string; // Asset ID to use for this import
+    expectedHash: ArrayBuffer; // The hash of the file. It's an ArrayBuffer because that is transferred efficiently via postMessage.
 }
 
+//
+// Result of the hash-file task. Returned to the main thread so it can decide whether to queue
+// an import-file task (only when filesAlreadyAdded is false) and update summary stats.
+//
+export interface IHashFileResult {
+    filesAlreadyAdded: boolean; // True if this hash is already in the database (skip import).
+    hash: ArrayBuffer; // The hash of the file. It's an ArrayBuffer because that is transferred efficiently via postMessage.
+    hashFromCache: boolean; // True if the hash was loaded from cache, false if computed.
+}
+
+//
+// Data produced by the import-file worker for the main thread to apply to the database
+// (merkle tree updates and metadata insert). Built after uploads succeed.
+//
 export interface IImportFileDatabaseData {
     assetId: string;
     assetPath: string;
-    assetHash: string; // hex string
+    assetHash: string; // Hex string.
     assetLength: number;
     assetLastModified: Date;
     thumbPath?: string;
-    thumbHash?: string; // hex string
+    thumbHash?: string; // Hex string.
     thumbLength?: number;
     thumbLastModified?: Date;
     displayPath?: string;
-    displayHash?: string; // hex string
+    displayHash?: string; // Hex string.
     displayLength?: number;
     displayLastModified?: Date;
-    assetRecord: IAsset; // Full asset record to insert
+    assetRecord: IAsset; // Full asset record to insert into the metadata collection.
 }
 
+//
+// Result of the import-file task. Returned to the main thread so it can queue a database update.
+// Import is only queued for files not already in the database. Hash cache was updated when
+// the hash-file task completed, so this result only carries what the main thread needs for the DB.
+//
 export interface IImportFileResult {
-    filesAlreadyAdded: boolean;
     totalSize: number;
-    hashedFile: {
-        hash: string; // hex string
-        lastModified: string; // ISO string
-        length: number;
-    };
-    hashFromCache: boolean; // true if hash was loaded from cache, false if computed
-    // Data for database updates (only set if file was successfully processed and needs to be added)
-    assetData?: IImportFileDatabaseData;
+    assetData: IImportFileDatabaseData; // Uploads succeeded; main thread applies this to the database.
 }
 
 //
-// Handler for importing a single file
-// Note: Hash cache is loaded read-only in workers. Saving is handled in the main thread.
-// This handler does CPU-intensive work and file uploads. Database updates are handled in the main thread.
+// Handler for hashing a file and checking if it is already in the database.
+// Returns hash details and filesAlreadyAdded so the main thread can conditionally queue an import task.
 //
-export async function importFileHandler(data: IImportFileData, context: ITaskContext): Promise<IImportFileResult> {
-    const { filePath, fileStat, contentType, storageDescriptor, hashCacheDir, s3Config, googleApiKey, dryRun } = data;
+export async function hashFileHandler(data: IHashFileData, context: ITaskContext): Promise<IHashFileResult> {
+    const { filePath, fileStat, contentType, storageDescriptor, hashCacheDir, s3Config } = data;
     const { uuidGenerator, timestampProvider } = context;
-    
     const assetId = data.assetId;
-    log.verbose(`Importing file ${data.logicalPath} to asset database with asset id ${assetId}`);
+
+    log.verbose(`Hashing file ${data.logicalPath} (asset id ${assetId})`);
 
     // Load hash cache (read-only)
+    //TODO: It might be cheaper just to load this once in the main thread and don't even add a task when we already have the hash.
     const localHashCache = new HashCache(hashCacheDir, true); // readonly = true
     await localHashCache.load();
-   
+
     // Check cache first
     let hashedFile = await getHashFromCache(filePath, fileStat, localHashCache);
     const hashFromCache = !!hashedFile;
-    
+
     if (!hashedFile) {
         // Not in cache - compute hash
         // filePath is always a valid file (already extracted if from zip)
@@ -94,7 +126,7 @@ export async function importFileHandler(data: IImportFileData, context: ITaskCon
             throw new Error(`Failed to validate and hash file ${data.logicalPath} (${assetId})`);
         }
     }
-    
+
     // Recreate storage and metadata collection in the worker (for checking if file exists)
     const { options: storageOptions } = await loadEncryptionKeys(storageDescriptor.encryptionKeyPath, false);
     const { storage: assetStorage } = createStorage(storageDescriptor.dbDir, s3Config, storageOptions);
@@ -103,23 +135,38 @@ export async function importFileHandler(data: IImportFileData, context: ITaskCon
 
     // Check if file is already in database
     const localHashStr = hashedFile.hash.toString("hex");
-    const records = await metadataCollection.findByIndex("hash", localHashStr);
-    
-    if (records.length > 0) {
-        // Already in database
-        return { 
-            filesAlreadyAdded: true, 
-            totalSize: 0,
-            hashedFile: {
-                hash: localHashStr,
-                lastModified: hashedFile.lastModified.toISOString(),
-                length: hashedFile.length,
-            },
-            hashFromCache,
-        };
-    }
-    
-    // Not in database - extract metadata/details and import
+    const records = await metadataCollection.findByIndex("hash", localHashStr); //TODO: If this lookup were fast (I need to optimize it) then we could do it after the has is returned to the main thread.
+
+    // Buffer is backed by ArrayBuffer; slice so it can be transferred (Buffer itself is not transferable).
+    const hashArrayBuffer = hashedFile.hash.buffer.slice(
+        hashedFile.hash.byteOffset,
+        hashedFile.hash.byteOffset + hashedFile.hash.byteLength
+    ) as ArrayBuffer;
+    return {
+        filesAlreadyAdded: records.length > 0,
+        hash: hashArrayBuffer,
+        hashFromCache,
+    };
+}
+
+//
+// Handler for importing a single file (after hash-file has run and determined the file is not already in the database).
+// Expects data.expectedHash from the hash-file task; hashing and duplicate check are done there.
+// Note: Hash cache is loaded read-only in workers. Saving is handled in the main thread.
+// This handler does CPU-intensive work and file uploads. Database updates are handled in the main thread.
+//
+export async function importFileHandler(data: IImportFileData, context: ITaskContext): Promise<IImportFileResult> {
+    const { filePath, fileStat, contentType, storageDescriptor, s3Config, googleApiKey, dryRun } = data;
+    const { uuidGenerator, timestampProvider } = context;
+
+    const assetId = data.assetId;
+    log.verbose(`Importing file ${data.logicalPath} to asset database with asset id ${assetId}`);
+
+    const expectedHashBuffer = Buffer.from(data.expectedHash);
+
+    // Extract metadata/details and import (storage needed for uploads)
+    const { options: storageOptions } = await loadEncryptionKeys(storageDescriptor.encryptionKeyPath, false);
+    const { storage: assetStorage } = createStorage(storageDescriptor.dbDir, s3Config, storageOptions);
     const assetTempDir = path.join(os.tmpdir(), `photosphere`, `assets`, uuidGenerator.generate());
     await ensureDir(assetTempDir);
     
@@ -154,7 +201,7 @@ export async function importFileHandler(data: IImportFileData, context: ITaskCon
             if (dryRun) {
                 // Mock hashed asset.
                 hashedAsset = {
-                    hash: Buffer.from(localHashStr, "hex"),
+                    hash: expectedHashBuffer,
                     length: fileStat.length,
                     lastModified: fileStat.lastModified,
                 };
@@ -166,10 +213,10 @@ export async function importFileHandler(data: IImportFileData, context: ITaskCon
                 if (!assetInfo) {
                     throw new Error(`Failed to get info for file ${assetPath} (${assetId})`);
                 }
-    
+
                 hashedAsset = await retry(() => computeAssetHash(assetStorage.readStream(assetPath), assetInfo));
-                if (Buffer.compare(hashedAsset.hash, hashedFile.hash) !== 0) {
-                    throw new Error(`Hash mismatch for file ${assetPath} (${assetId}): ${hashedAsset.hash.toString("hex")} != ${localHashStr}`);
+                if (Buffer.compare(hashedAsset.hash, expectedHashBuffer) !== 0) {
+                    throw new Error(`Hash mismatch for file ${assetPath} (${assetId}): ${hashedAsset.hash.toString("hex")} != ${expectedHashBuffer.toString("hex")}`);
                 }
             }
 
@@ -180,7 +227,7 @@ export async function importFileHandler(data: IImportFileData, context: ITaskCon
             if (assetDetails?.thumbnailPath) {
                 if (dryRun) {
                     // Mock hashed thumbnail.
-                    thumbHash = Buffer.from(localHashStr, "hex");
+                    thumbHash = expectedHashBuffer;
                     thumbLength = fileStat.length;
                     thumbLastModified = fileStat.lastModified;
                 }
@@ -205,7 +252,7 @@ export async function importFileHandler(data: IImportFileData, context: ITaskCon
             if (assetDetails?.displayPath) {
                 if (dryRun) {
                     // Mock hashed display.
-                    displayHash = Buffer.from(localHashStr, "hex");
+                    displayHash = expectedHashBuffer;
                     displayLength = fileStat.length;
                     displayLastModified = fileStat.lastModified;
                 }
@@ -268,7 +315,7 @@ export async function importFileHandler(data: IImportFileData, context: ITaskCon
                 origFileName: path.basename(filePath),
                 origPath: fileDir,
                 contentType: contentType || "",
-                hash: localHashStr,
+                hash: expectedHashBuffer.toString("hex"),
                 coordinates,
                 location,
                 duration: assetDetails?.duration,
@@ -283,14 +330,7 @@ export async function importFileHandler(data: IImportFileData, context: ITaskCon
             };
 
             return {
-                filesAlreadyAdded: false,
                 totalSize: fileStat.length,
-                hashedFile: {
-                    hash: localHashStr,
-                    lastModified: hashedFile.lastModified.toISOString(),
-                    length: hashedFile.length,
-                },
-                hashFromCache,
                 assetData: {
                     assetId,
                     assetPath,

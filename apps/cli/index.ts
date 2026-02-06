@@ -112,7 +112,7 @@ Resources:
     program
         .command("check")
         .alias("chk")
-        .description("Checks files and direcotires to see what has already been added to the media file database.")
+        .description("Checks files and directories to see what has already been added to the media file database.")
         .argument("<files...>", "The media files (or directories) to add to the database.")
         .option(...dbOption)
         .option(...keyOption)
@@ -289,10 +289,12 @@ Resources:
         .command("info")
         .alias("inf")
         .description("Displays detailed information about media files including EXIF data, metadata, and technical specifications.")
+        .option(...dbOption)
         .option(...verboseOption)
         .option(...toolsOption)
         .option(...yesOption)
-        .argument("<files...>", "The media files to analyze.")
+        .option(...cwdOption)
+        .argument("<files...>", "File path(s), asset ID(s), or hash(es). --db is required only when looking up by asset ID or hash.")
         .addHelpText('after', getCommandExamplesHelp('info'))
         .action(initContext(infoCommand));
 
@@ -507,7 +509,8 @@ Resources:
     // Parse the command line arguments
     try {
         await program.parseAsync(process.argv);
-    } catch (err: any) {
+    }
+    catch (err: any) {
         // Commander throws an error when no command is provided
         // Check if this is just a help display situation
         if (err.code === 'commander.help' 
@@ -551,18 +554,6 @@ function handleError(error: any, errorType: string | undefined) {
     console.log('If you believe this behaviour is a bug, please report it with the following command:');
     console.log(pc.yellow('   psi bug'));
 }
-
-// Handle unhandled errors
-process.on('uncaughtException', (error) => {
-    handleError(error, 'uncaughtException');
-    process.exit(1);
-});
-
-// Handle unhandled promise rejections
-process.on('unhandledRejection', (reason, promise) => {
-    handleError(reason, 'unhandledRejection');
-    process.exit(1);
-});
 
 main()
     .catch(async (error) => {

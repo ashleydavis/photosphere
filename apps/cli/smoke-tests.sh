@@ -23,6 +23,7 @@ TEST_TMP_DIR="${TEST_TMP_DIR:-./test/tmp}"
 TEST_DB_DIR="$TEST_TMP_DIR/shared/test-db"
 TEST_FILES_DIR="../../test"
 MULTIPLE_IMAGES_DIR="../../test/multiple-images"
+DUPLICATE_IMAGES_DIR="../../test/duplicate-images"
 
 # Debug mode flag (can be set via environment variable or command line)
 DEBUG_MODE=${DEBUG_MODE:-false}
@@ -43,6 +44,7 @@ declare -a TEST_TABLE=(
     "add-same:test_add_same_file:Add same file again (no duplication)"
     "add-multiple:test_add_multiple_files:Add multiple files"
     "add-same-multiple:test_add_same_multiple_files:Add same multiple files again"
+    "add-duplicate-images:test_add_duplicate_images:Import directory with duplicate content (dedupe to 1 asset)"
     "summary:test_database_summary:Display database summary"
     "list:test_database_list:List files in database"
     "export:test_export_assets:Export assets by ID"
@@ -697,8 +699,8 @@ validate_database_assets() {
     local asset_type="$4"  # "image" or "video"
     local add_output="$5"  # CLI output from add command
     
-    # Extract asset ID from the verbose CLI output
-    local asset_id=$(echo "$add_output" | grep "Added file.*$source_file.*with ID" | sed -n 's/.*with ID "\([^"]*\)".*/\1/p' | head -1)
+    # Extract asset ID from the verbose CLI output (path in output may be absolute, so match "Added file" and "with ID" only)
+    local asset_id=$(echo "$add_output" | grep "Added file.*to the database with ID" | sed -n 's/.*with ID "\([^"]*\)".*/\1/p' | head -1)
     if [ -z "$asset_id" ]; then
         # Try to extract from "matches existing records" line for files already in database
         # The UUID is on the next line after "matches existing records:"
@@ -1276,6 +1278,38 @@ test_add_same_multiple_files() {
         log_warning "Multiple images directory not found: $MULTIPLE_IMAGES_DIR"
         log_warning "Skipping multiple file tests"
     fi
+    test_passed
+}
+
+test_add_duplicate_images() {
+    local test_number="$1"
+    print_test_header "$test_number" "ADD DUPLICATE IMAGES (DEDUPE TO 1 ASSET)"
+
+    if [ ! -d "$DUPLICATE_IMAGES_DIR" ]; then
+        log_warning "Duplicate images directory not found: $DUPLICATE_IMAGES_DIR"
+        log_warning "Skipping duplicate images test"
+        test_passed
+        return 0
+    fi
+
+    local test_dir=$(get_test_dir "$test_number")
+    mkdir -p "$test_dir"
+    local db_dir="$test_dir/duplicate-test-db"
+    rm -rf "$db_dir"
+
+    log_info "Creating new database at: $db_dir"
+    invoke_command "Initialize new database" "$(get_cli_command) init --db $db_dir --yes"
+
+    local add_output
+    invoke_command "Add duplicate images directory" "$(get_cli_command) add --db $db_dir $DUPLICATE_IMAGES_DIR/ --yes" 0 "add_output"
+
+    local summary_output
+    invoke_command "Get database summary" "$(get_cli_command) summary --db $db_dir --yes" 0 "summary_output"
+
+    local files_imported=$(parse_numeric "$summary_output" "Files imported:" "0")
+    expect_value "$files_imported" "1" "Database should have exactly 1 asset after importing two identical files"
+
+    rm -rf "$db_dir"
     test_passed
 }
 

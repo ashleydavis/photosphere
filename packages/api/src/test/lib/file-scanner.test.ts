@@ -696,6 +696,86 @@ describe('file-scanner', () => {
         });
     });
 
+    describe('relative path resolution', () => {
+        test('scanPath with relative file path yields absolute filePath in callback', async () => {
+            const absoluteFilePath = path.join(testDir, 'rel-file.png');
+            await fs.writeFile(absoluteFilePath, createMinimalPNG());
+
+            const relativePath = path.relative(process.cwd(), absoluteFilePath);
+            expect(relativePath).not.toBe(absoluteFilePath);
+            expect(path.isAbsolute(relativePath)).toBe(false);
+
+            const scannedFiles: FileScannedResult[] = [];
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPath(relativePath, async (result) => {
+                    scannedFiles.push(result);
+                }, undefined, defaultScannerOptions, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
+
+            expect(scannedFiles).toHaveLength(1);
+            expect(path.isAbsolute(scannedFiles[0].filePath)).toBe(true);
+            expect(scannedFiles[0].filePath).toBe(path.resolve(relativePath));
+            expect(scannedFiles[0].filePath).toBe(absoluteFilePath);
+            expect(scannedFiles[0].logicalPath).toBe(scannedFiles[0].filePath);
+        });
+
+        test('scanPath with relative directory path yields absolute filePaths in callback', async () => {
+            const subDir = path.join(testDir, 'subdir');
+            await ensureDir(subDir);
+            await fs.writeFile(path.join(subDir, 'image.png'), createMinimalPNG());
+
+            const relativePath = path.relative(process.cwd(), subDir);
+            expect(path.isAbsolute(relativePath)).toBe(false);
+
+            const scannedFiles: FileScannedResult[] = [];
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPath(relativePath, async (result) => {
+                    scannedFiles.push(result);
+                }, undefined, defaultScannerOptions, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
+
+            expect(scannedFiles).toHaveLength(1);
+            expect(path.isAbsolute(scannedFiles[0].filePath)).toBe(true);
+            expect(scannedFiles[0].filePath).toBe(path.join(path.resolve(relativePath), 'image.png'));
+        });
+
+        test('scanPaths with relative paths yields absolute filePaths in callbacks', async () => {
+            const file1 = path.join(testDir, 'r1.png');
+            const file2 = path.join(testDir, 'r2.jpg');
+            await fs.writeFile(file1, createMinimalPNG());
+            await fs.writeFile(file2, createMinimalJPEG());
+
+            const rel1 = path.relative(process.cwd(), file1);
+            const rel2 = path.relative(process.cwd(), file2);
+            expect(path.isAbsolute(rel1)).toBe(false);
+            expect(path.isAbsolute(rel2)).toBe(false);
+
+            const scannedFiles: FileScannedResult[] = [];
+            const sessionTempDir = await createSessionTempDir();
+            try {
+                await scanPaths([rel1, rel2], async (result) => {
+                    scannedFiles.push(result);
+                }, undefined, defaultScannerOptions, sessionTempDir, uuidGenerator);
+            }
+            finally {
+                await fs.rm(sessionTempDir, { recursive: true, force: true }).catch(() => {});
+            }
+
+            expect(scannedFiles).toHaveLength(2);
+            expect(scannedFiles.every(f => path.isAbsolute(f.filePath))).toBe(true);
+            const resolved = scannedFiles.map(f => f.filePath).sort();
+            expect(resolved).toEqual([path.resolve(rel1), path.resolve(rel2)].sort());
+        });
+    });
+
     describe('progress callback', () => {
         test('should call progress callback when scanning directory', async () => {
             const subDir = path.join(testDir, 'subdir');

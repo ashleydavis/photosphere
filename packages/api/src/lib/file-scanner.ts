@@ -433,6 +433,10 @@ async function scanPathInternal(
     tempDir: string,
     uuidGenerator: IUuidGenerator
 ): Promise<void> {
+    
+    // Resolve to absolute path so workers (which may have different cwd) can access the file
+    filePath = path.resolve(filePath);
+
     let stats;
     try {
         stats = await fs.stat(filePath);

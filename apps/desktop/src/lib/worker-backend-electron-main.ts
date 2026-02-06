@@ -367,7 +367,7 @@ export class WorkerBackendElectronMain implements IWorkerBackend {
             this.taskTimeouts.delete(taskId);
         }
 
-        console.error(`[Task Queue] Task ${taskId.substring(0, 2)}${taskId.substring(taskId.length - 2)} timed out after ${this.taskTimeout}ms`);
+        console.error(`[Task Queue] Task ${taskId} timed out after ${this.taskTimeout}ms`);
 
         // Terminate the worker
         try {

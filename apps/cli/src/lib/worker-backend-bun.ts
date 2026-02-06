@@ -1,5 +1,6 @@
 import { log } from "utils";
 import { ITask, ITaskResult, IWorkerBackend, WorkerTaskCompletionCallback, TaskMessageCallback, TaskStatus } from "task-queue";
+import type { IWorkerOptions } from "./worker-init";
 
 //
 // Worker info interface for debugging and monitoring (Bun-specific)
@@ -36,9 +37,9 @@ interface IWorkerState {
 
 
 //
-// Options passed to workers for context initialization
+// Options passed to workers for context initialization (does not include workerId, which is assigned per worker)
 //
-export interface IWorkerOptions {
+export interface IWorkerBackendOptions {
     verbose?: boolean;
     tools?: boolean;
     sessionId?: string;
@@ -83,7 +84,7 @@ export class WorkerBackendBun implements IWorkerBackend {
     private workers: IWorkerState[] = [];
     private maxWorkers: number;
     private peakWorkers: number = 0;
-    private workerOptions: IWorkerOptions;
+    private workerOptions: IWorkerBackendOptions;
     private workerStateChangeCallback: WorkerStateChangeCallback | null = null;
     private taskTimeout: number;
     private taskTimeouts: Map<string, NodeJS.Timeout> = new Map();
@@ -98,7 +99,7 @@ export class WorkerBackendBun implements IWorkerBackend {
     // taskTimeout: Timeout in milliseconds for tasks (default: 10 minutes = 600000ms).
     // workerOptions: Options to pass to workers for logging and context initialization.
     //
-    constructor(maxWorkers: number, taskTimeout: number, workerOptions: IWorkerOptions) {
+    constructor(maxWorkers: number, taskTimeout: number, workerOptions: IWorkerBackendOptions) {
         this.maxWorkers = maxWorkers;
         this.taskTimeout = taskTimeout;
         this.workerOptions = workerOptions;
@@ -289,12 +290,17 @@ export class WorkerBackendBun implements IWorkerBackend {
             workerEnv.PATH = process.env.PATH;
         }
         
-        workerEnv.WORKER_OPTIONS = JSON.stringify(this.workerOptions);
+        const workerId = this.workers.length + 1;
+        const workerOptions: IWorkerOptions = {
+            ...this.workerOptions,
+            workerId,
+        };
+        workerEnv.WORKER_OPTIONS = JSON.stringify(workerOptions);
         
         const worker = new Worker("./worker.ts", { env: workerEnv });
         const workerState: IWorkerState = {
             worker,
-            workerId: this.workers.length + 1,
+            workerId,
             isReady: false, // Will be set to true when worker sends "ready" message
             isIdle: false, // Will be set to true when worker is ready and idle
             currentTaskId: null,
@@ -363,12 +369,17 @@ export class WorkerBackendBun implements IWorkerBackend {
             workerEnv.PATH = process.env.PATH;
         }
         
-        workerEnv.WORKER_OPTIONS = JSON.stringify(this.workerOptions);
+        const workerId = oldWorkerState.workerId;
+        const workerOptions: IWorkerOptions = {
+            ...this.workerOptions,
+            workerId,
+        };
+        workerEnv.WORKER_OPTIONS = JSON.stringify(workerOptions);
         
         const worker = new Worker("./worker.ts", { env: workerEnv });
         const newWorkerState: IWorkerState = {
             worker,
-            workerId: oldWorkerState.workerId,
+            workerId,
             isReady: false, // Will be set to true when worker sends "ready" message
             isIdle: false,
             currentTaskId: null,
