@@ -36,7 +36,9 @@ export const COMMAND_EXAMPLES: ICommandExamples = {
     info: [
         { command: "psi info photo.jpg", description: "Shows detailed information about a photo." },
         { command: "psi info photo1.jpg photo2.jpg", description: "Analyzes multiple specific files." },
-        { command: "psi info ~/Pictures", description: "Analyzes all media files in a directory." }
+        { command: "psi info ~/Pictures", description: "Analyzes all media files in a directory." },
+        { command: "psi info --db ./photos <asset-id>", description: "Shows database metadata for an asset by ID." },
+        { command: "psi info --db ./photos <hash>", description: "Shows database metadata for asset(s) with the given hash." }
     ],
     
     tools: [
