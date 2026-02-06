@@ -1,13 +1,18 @@
 import { log, retry } from "utils";
 import pc from "picocolors";
 import { exit } from "node-utils";
-import { IBaseCommandOptions, loadDatabase, ICommandContext, resolveKeyPath } from "../lib/init-cmd";
-import { intro, outro, confirm } from '../lib/clack/prompts';
+import { IBaseCommandOptions, ICommandContext, resolveKeyPath, selectEncryptionKey } from "../lib/init-cmd";
+import { getDirectoryForCommand } from "../lib/directory-picker";
+import { ensureMediaProcessingTools } from "../lib/ensure-tools";
+import { configureIfNeeded, getS3Config } from "../lib/config";
+import { intro, confirm, outro } from "../lib/clack/prompts";
+import { createStorage, loadEncryptionKeys } from "storage";
 import { addItem, CURRENT_DATABASE_VERSION, loadTree, rebuildTree, saveTree, SortNode, traverseTreeAsync } from "merkle-tree";
 import { IDatabaseMetadata, acquireWriteLock, releaseWriteLock, createReadme, ensureSortIndex } from "api";
-import { buildDatabaseMerkleTree, deleteDatabaseMerkleTree, saveDatabaseMerkleTree } from "bdb";
+import { BsonDatabase, buildDatabaseMerkleTree, deleteDatabaseMerkleTree, saveDatabaseMerkleTree } from "bdb";
+import type { IAsset } from "defs";
 import type { IStorage } from "storage";
-import { pathJoin, StoragePrefixWrapper } from "storage";
+import { pathJoin, StoragePrefixWrapper, walkDirectory } from "storage";
 import { computeHash } from "api";
 import { loadPrivateKey, loadPublicKey } from "storage";
 import { createPublicKey } from "node:crypto";
@@ -19,14 +24,67 @@ export interface IUpgradeCommandOptions extends IBaseCommandOptions {
 }
 
 //
+// First DB version that stores .db/ files encrypted when the database is encrypted.
+// Re-encrypt .db/ only when upgrading from before this version.
+//
+const FIRST_VERSION_WITH_ENCRYPTED_DOT_DB = 6;
+
+//
 // Command that upgrades a Photosphere media file database to the latest format.
 //
 export async function upgradeCommand(context: ICommandContext, options: IUpgradeCommandOptions): Promise<void> {
     const { uuidGenerator, timestampProvider, sessionId } = context;
     
     intro(pc.blue(`Upgrading media file database...`));
-    
-    const { assetStorage, metadataStorage, databaseDir, metadataCollection } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId, true);
+
+    const nonInteractive = options.yes ?? false;
+    await ensureMediaProcessingTools(nonInteractive);
+
+    let databaseDir: string;
+    if (options.db !== undefined) {
+        databaseDir = options.db;
+    }
+    else {
+        databaseDir = await getDirectoryForCommand("existing", nonInteractive, options.cwd || process.cwd());
+    }
+
+    const metaPath = pathJoin(databaseDir, ".db");
+    if (databaseDir.startsWith("s3:")) {
+        await configureIfNeeded(["s3"], nonInteractive);
+    }
+    if (metaPath.startsWith("s3:")) {
+        await configureIfNeeded(["s3"], nonInteractive);
+    }
+
+    let resolvedKeyPath = await resolveKeyPath(options.key);
+    let { options: storageOptions } = await loadEncryptionKeys(resolvedKeyPath, false);
+    const s3Config = await getS3Config();
+    let { storage: assetStorage } = createStorage(databaseDir, s3Config, storageOptions);
+    const { storage: metadataStorage } = createStorage(databaseDir, s3Config, undefined);
+
+    const hasFilesDat = await metadataStorage.fileExists(".db/files.dat");
+    const hasTreeDat = await metadataStorage.fileExists(".db/tree.dat");
+    if (!hasFilesDat && !hasTreeDat) {
+        outro(pc.red(`✗ No database found at: ${pc.cyan(databaseDir)}\n  The database directory must contain a ".db" folder with files.dat or tree.dat.\n\nTo create a new database at this directory, use:\n  ${pc.cyan(`psi init --db ${databaseDir}`)}`));
+        await exit(1);
+    }
+
+    if (await metadataStorage.fileExists(".db/encryption.pub")) {
+        if (!resolvedKeyPath) {
+            if (nonInteractive) {
+                outro(pc.red(`✗ This database is encrypted and requires a private key to access.\n  Please provide the private key using the --key option.`));
+                await exit(1);
+            }
+            log.info(pc.yellow("This database is encrypted and requires a private key to access."));
+            const selectedKey = await selectEncryptionKey("Select the encryption key for this database:");
+            options.key = selectedKey;
+            resolvedKeyPath = await resolveKeyPath(options.key);
+            const { options: newStorageOptions } = await loadEncryptionKeys(resolvedKeyPath, false);
+            storageOptions = newStorageOptions;
+            const { storage: newAssetStorage } = createStorage(databaseDir, s3Config, storageOptions);
+            assetStorage = newAssetStorage;
+        }
+    }
 
     // Load from .db/files.dat (v6) or .db/tree.dat (legacy). Upgrade will write .db/files.dat and remove .db/tree.dat.
     let merkleTree = await retry(() => loadTree<IDatabaseMetadata>(".db/files.dat", metadataStorage))
@@ -89,6 +147,8 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
     if (!await acquireWriteLock(assetStorage, sessionId)) {
         throw new Error(`Failed to acquire write lock for database upgrade.`);
     }
+
+    const dbStorageForDotDb: IStorage = resolvedKeyPath ? assetStorage : metadataStorage;
 
     try {
         // Fill in missing lastModified from file info using async binary tree traversal.
@@ -169,8 +229,6 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
         }
 
         // Check if database is encrypted and ensure public key is in .db directory
-        // First check if we have a key (which indicates the database is encrypted)
-        const resolvedKeyPath = await resolveKeyPath(options.key);
         if (resolvedKeyPath) {
             // Database is encrypted - check if public key marker exists in .db directory
             if (!await metadataStorage.fileExists('.db/encryption.pub')) {
@@ -193,12 +251,26 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
                     }
                     
                     if (publicKeyPem) {
-                        // Write public key to .db/encryption.pub in metadata storage
-                        await metadataStorage.write('.db/encryption.pub', 'text/plain', Buffer.from(publicKeyPem, 'utf8'));
+                        // Write public key to .db/encryption.pub (encrypted when DB is encrypted)
+                        await dbStorageForDotDb.write('.db/encryption.pub', 'text/plain', Buffer.from(publicKeyPem, 'utf8'));
                         log.info(pc.green(`✓ Copied public key to database directory`));
                     }
                 } catch (error) {
                     log.error(pc.red(`Warning: Could not copy public key to database directory: ${error instanceof Error ? error.message : 'Unknown error'}`));
+                }
+            }
+
+            //
+            // When upgrading from a version before 6 to 6+, encrypt existing .db/ files that were
+            // previously stored unencrypted. From v6 onward these files are already written encrypted.
+            //
+            if (currentVersion < FIRST_VERSION_WITH_ENCRYPTED_DOT_DB) {
+                for await (const { fileName: filePath } of walkDirectory(metadataStorage, ".db", [])) {
+                    const data = await metadataStorage.read(filePath);
+                    if (data) {
+                        const info = await metadataStorage.info(filePath);
+                        await dbStorageForDotDb.write(filePath, info?.contentType, data);
+                    }
                 }
             }
         }
@@ -223,25 +295,24 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
             merkleTree.databaseMetadata.filesImported = filesImported;
         }                
 
-        // Save the rebuilt tree to .db/files.dat (v6 path). Remove legacy .db/tree.dat if present.
-        await retry(() => saveTree(".db/files.dat", merkleTree!, metadataStorage));
+        // Save the rebuilt tree to .db/files.dat (v6 path; encrypted when DB is encrypted).
+        await retry(() => saveTree(".db/files.dat", merkleTree!, dbStorageForDotDb));
         if (await metadataStorage.fileExists(".db/tree.dat")) {
             await metadataStorage.deleteFile(".db/tree.dat");
         }
 
-        const bsonDatabaseStorage = new StoragePrefixWrapper(assetStorage, "metadata");
-
-        // Migrate BSON from v5 layout to v6 (collections/, shards/, indexes/) if needed
-        if (!(await bsonDatabaseStorage.dirExists("collections"))) {
-            log.info(pc.blue(`Migrating BSON layout to v6 (collections/, shards/, indexes/).`));
-            await migrateBsonV5ToV6(bsonDatabaseStorage);
-            log.info(pc.green(`✓ BSON layout migrated`));
+        // Migrate BSON from metadata/ to .db/bson/ when metadata/ exists (copy only; rest of upgrade still uses metadata/)
+        if (await assetStorage.dirExists("metadata")) {
+            log.info(pc.blue(`Migrating BSON from metadata/ to .db/bson/.`));
+            await migrateBsonV5ToV6(assetStorage, "metadata", ".db/bson");
+            log.info(pc.green(`✓ BSON migrated to .db/bson/`));
         }
 
         log.info(pc.blue(`Rebuilding BSON database merkle tree.`));
 
+        const bsonDatabaseStorage2 = new StoragePrefixWrapper(assetStorage, ".db/bson");
         const bsonDatabaseTree = await buildDatabaseMerkleTree(
-            bsonDatabaseStorage,
+            bsonDatabaseStorage2,
             uuidGenerator,
             "collections",
             undefined,
@@ -249,21 +320,33 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
             true
         );
         if (!bsonDatabaseTree.sort) {
-            await deleteDatabaseMerkleTree(bsonDatabaseStorage);
+            await deleteDatabaseMerkleTree(bsonDatabaseStorage2);
         }
         else {
-            await saveDatabaseMerkleTree(bsonDatabaseStorage, bsonDatabaseTree);
+            await saveDatabaseMerkleTree(bsonDatabaseStorage2, bsonDatabaseTree);
         }
         log.info(pc.green(`✓ BSON database merkle tree built successfully`));
 
-        // Delete and rebuild sort indexes so they use v6 format (type code + checksum).
+        // Delete and rebuild sort indexes under .db/bson so they use v6 format (type code + checksum).
         log.info(pc.blue(`Rebuilding sort indexes.`));
-        const existingIndexes = await metadataCollection.listSortIndexes();
+        const bsonDb = new BsonDatabase({
+            storage: bsonDatabaseStorage2,
+            uuidGenerator,
+            timestampProvider,
+        });
+        const v6MetadataCollection = bsonDb.collection<IAsset>("metadata");
+        const existingIndexes = await v6MetadataCollection.listSortIndexes();
         for (const index of existingIndexes) {
-            await metadataCollection.deleteSortIndex(index.fieldName, index.direction);
+            await v6MetadataCollection.deleteSortIndex(index.fieldName, index.direction);
         }
-        await ensureSortIndex(metadataCollection);
+        await ensureSortIndex(v6MetadataCollection);
         log.info(pc.green(`✓ Sort indexes rebuilt successfully`));
+
+        // Remove the old metadata/ directory now that everything is in .db/bson/
+        if (await assetStorage.dirExists("metadata")) {
+            await assetStorage.deleteDir("metadata");
+            log.info(pc.green(`✓ Removed metadata/ directory`));
+        }
 
         log.info(pc.green(`✓ Database upgraded successfully to version ${CURRENT_DATABASE_VERSION}`));
     }
@@ -310,14 +393,27 @@ async function copyStorageDirRecursive(storage: IStorage, srcPrefix: string, des
 }
 
 //
-// Migrates BSON from v5 layout (metadata/<name>/, sort_indexes/) to v6 (collections/, shards/, indexes/).
-// Storage is the BSON root (e.g. metadata/).
+// Copies BSON from srcPrefix (v5 layout: <name>/ collection dirs, sort_indexes/) to destPrefix
+// with v6 layout (collections/, shards/, indexes/). Does not copy sort_indexes (rebuilt later).
+// Does not delete srcPrefix so callers that still use the source root keep working.
 //
-async function migrateBsonV5ToV6(storage: IStorage): Promise<void> {
+async function migrateBsonV5ToV6(
+    storage: IStorage,
+    srcPrefix: string,
+    destPrefix: string
+): Promise<void> {
+    if (await storage.fileExists(pathJoin(srcPrefix, "db.dat"))) {
+        await copyStorageFile(
+            storage,
+            pathJoin(srcPrefix, "db.dat"),
+            pathJoin(destPrefix, "db.dat")
+        );
+    }
+
     let next: string | undefined = undefined;
     const v5CollectionDirs: string[] = [];
     do {
-        const result = await storage.listDirs("", 1000, next);
+        const result = await storage.listDirs(srcPrefix, 1000, next);
         for (const name of result.names) {
             if (name !== "sort_indexes" && name !== "collections" && name !== "indexes") {
                 v5CollectionDirs.push(name);
@@ -327,33 +423,28 @@ async function migrateBsonV5ToV6(storage: IStorage): Promise<void> {
     } while (next);
 
     for (const collectionName of v5CollectionDirs) {
-        const srcDir = collectionName;
+        const srcDir = pathJoin(srcPrefix, collectionName);
         let fileNext: string | undefined = undefined;
         do {
             const fileResult = await storage.listFiles(srcDir, 1000, fileNext);
             for (const fileName of fileResult.names) {
                 const srcPath = pathJoin(srcDir, fileName);
                 if (fileName === "collection.dat") {
-                    await copyStorageFile(storage, srcPath, pathJoin("collections", collectionName, "collection.dat"));
+                    await copyStorageFile(
+                        storage,
+                        srcPath,
+                        pathJoin(destPrefix, "collections", collectionName, "collection.dat")
+                    );
                 }
                 else {
-                    await copyStorageFile(storage, srcPath, pathJoin("collections", collectionName, "shards", fileName));
+                    await copyStorageFile(
+                        storage,
+                        srcPath,
+                        pathJoin(destPrefix, "collections", collectionName, "shards", fileName)
+                    );
                 }
             }
             fileNext = fileResult.next;
         } while (fileNext);
-    }
-
-    if (await storage.dirExists("sort_indexes")) {
-        await copyStorageDirRecursive(storage, "sort_indexes", "indexes");
-    }
-
-    for (const collectionName of v5CollectionDirs) {
-        if (await storage.dirExists(collectionName)) {
-            await storage.deleteDir(collectionName);
-        }
-    }
-    if (await storage.dirExists("sort_indexes")) {
-        await storage.deleteDir("sort_indexes");
     }
 }

@@ -1117,18 +1117,22 @@ test_create_database() {
     local test_number="$1"
     print_test_header "$test_number" "CREATE DATABASE"
     
-    # Ensure shared directory exists
+    # Ensure shared directory exists and remove any existing test db so init can run
     mkdir -p "$(dirname "$TEST_DB_DIR")"
+    if [ -d "$TEST_DB_DIR" ]; then
+        rm -rf "$TEST_DB_DIR"
+        log_info "Removed existing test database for clean init"
+    fi
     
     log_info "Database path: $TEST_DB_DIR"
     
     invoke_command "Initialize new database" "$(get_cli_command) init --db $TEST_DB_DIR --yes"
     
-    # Check if required files were created
+    # Check if required files were created (v6 layout: BSON under .db/bson)
     check_exists "$TEST_DB_DIR" "Database directory"
     check_exists "$TEST_DB_DIR/.db" "Database metadata directory"
     check_exists "$TEST_DB_DIR/.db/files.dat" "Database tree file"
-    check_exists "$TEST_DB_DIR/metadata" "Asset metadata directory"
+    check_exists "$TEST_DB_DIR/.db/bson" "BSON data directory (v6)"
     
     # Test initial state - database creation is verified by file existence checks above
     test_passed
