@@ -629,9 +629,11 @@ export class WorkerBackendBun implements IWorkerBackend {
 
     //
     // Checks if all workers are idle.
+    // Only ready workers are considered; workers that have not yet sent worker-ready
+    // do not block (they are not running a task).
     //
     isIdle(): boolean {
-        return this.workers.every(w => w.isIdle);
+        return this.workers.filter(w => w.isReady).every(w => w.isIdle);
     }
 
     //

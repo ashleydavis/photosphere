@@ -594,7 +594,7 @@ export class WorkerBackendElectronMain implements IWorkerBackend {
     // Checks if all workers are idle.
     //
     isIdle(): boolean {
-        return this.workers.every(w => w.isIdle);
+        return this.workers.filter(w => w.isReady).every(w => w.isIdle);
     }
 
     //
