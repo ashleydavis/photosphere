@@ -2722,7 +2722,8 @@ test_sync_copy_to_original() {
     local original_list_output
     invoke_command "List assets in original database" "$(get_cli_command) list --db $original_dir --yes" 0 "original_list_output"
     
-    expect_output_string "$original_list_output" "test.jpg" "Test file from copy appears in original database"
+    expect_output_string "$original_list_output" "test.png" "Synced file from copy (test.png) appears in original database"
+    expect_output_string "$original_list_output" "test.jpg" "Fixture file (test.jpg) still in original database"
     
     # Verify both databases pass integrity check
     local verify_original_output
