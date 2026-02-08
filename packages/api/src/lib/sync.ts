@@ -484,10 +484,10 @@ export async function syncDatabase(
     targetAssetStorage: IStorage,
     targetBsonDatabase: IBsonDatabase
 ): Promise<void> {
-    // Load database merkle trees (they should already exist)
-    const sourceStorage = new StoragePrefixWrapper(sourceAssetStorage, "metadata"); //todo: It's kind of annoying having to wrap the storage like this.
+    // Load database merkle trees (v6 layout: .db/bson)
+    const sourceStorage = new StoragePrefixWrapper(sourceAssetStorage, ".db/bson");
     const sourceDbTree = await loadDatabaseMerkleTree(sourceStorage);
-    const targetStorage = new StoragePrefixWrapper(targetAssetStorage, "metadata");
+    const targetStorage = new StoragePrefixWrapper(targetAssetStorage, ".db/bson");
     const targetDbTree = await loadDatabaseMerkleTree(targetStorage);
     
     // Compare root hashes to see if databases are identical

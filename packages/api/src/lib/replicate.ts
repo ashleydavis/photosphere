@@ -387,10 +387,9 @@ async function replicateBsonDatabase(
     // This walks the tree of trees (database -> collections -> shards -> records)
     // to efficiently identify only the records that need to be updated.
     //
-    // Wrap storage with metadata prefix for merkle tree loading
-    // The BSON database merkle trees are stored in assetStorage with a "metadata" prefix
-    const sourceStorage = new StoragePrefixWrapper(sourceAssetStorage, "metadata");
-    const destStorage = new StoragePrefixWrapper(destAssetStorage, "metadata");
+    // Use v6 layout: BSON database merkle trees are stored under .db/bson
+    const sourceStorage = new StoragePrefixWrapper(sourceAssetStorage, ".db/bson");
+    const destStorage = new StoragePrefixWrapper(destAssetStorage, ".db/bson");
 
     // Helper function to compare two records for equality
     // Both records should be in external format (flat objects)
