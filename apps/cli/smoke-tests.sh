@@ -2803,7 +2803,7 @@ test_sync_edit_field() {
     # Edit a field in the original database using bdb-cli
     log_info "Editing field '$field_name' in record '$record_id' using bdb-cli"
     local edit_output
-    invoke_command "Edit field using bdb-cli" "$(get_bdb_command) edit $original_dir/metadata metadata $record_id $field_name $field_type \"$new_field_value\"" 0 "edit_output"
+    invoke_command "Edit field using bdb-cli" "$(get_bdb_command) edit $original_dir/.db/bson metadata $record_id $field_name $field_type \"$new_field_value\"" 0 "edit_output"
     
     # Verify the edit was successful
     expect_output_string "$edit_output" "Successfully updated field" "Field edit was successful"
@@ -2811,7 +2811,7 @@ test_sync_edit_field() {
     # Verify the field was actually changed by reading it back
     log_info "Verifying field was changed by reading record back"
     local verify_record_output
-    verify_record_output=$($(get_bdb_command) record $original_dir/metadata metadata $record_id --all 2>&1)
+    verify_record_output=$($(get_bdb_command) record $original_dir/.db/bson metadata $record_id --all 2>&1)
     local record_exit_code=$?
     
     if [ $record_exit_code -ne 0 ]; then
@@ -2877,7 +2877,7 @@ test_sync_edit_field() {
     # Verify the copy database now has the edited field
     log_info "Verifying copy database now has the edited field"
     local copy_record_output
-    copy_record_output=$($(get_bdb_command) record $copy_dir/metadata metadata $record_id --all 2>&1)
+    copy_record_output=$($(get_bdb_command) record $copy_dir/.db/bson metadata $record_id --all 2>&1)
     local copy_record_exit_code=$?
     
     if [ $copy_record_exit_code -ne 0 ]; then
@@ -2998,7 +2998,7 @@ test_sync_edit_field_reverse() {
     # Edit a field in the COPY database using bdb-cli (inverse of the original test)
     log_info "Editing field '$field_name' in record '$record_id' in COPY database using bdb-cli"
     local edit_output
-    invoke_command "Edit field in copy using bdb-cli" "$(get_bdb_command) edit $copy_dir/metadata metadata $record_id $field_name $field_type \"$new_field_value\"" 0 "edit_output"
+    invoke_command "Edit field in copy using bdb-cli" "$(get_bdb_command) edit $copy_dir/.db/bson metadata $record_id $field_name $field_type \"$new_field_value\"" 0 "edit_output"
     
     # Verify the edit was successful
     expect_output_string "$edit_output" "Successfully updated field" "Field edit was successful"
@@ -3006,7 +3006,7 @@ test_sync_edit_field_reverse() {
     # Verify the field was actually changed by reading it back from copy
     log_info "Verifying field was changed in copy by reading record back"
     local verify_record_output
-    verify_record_output=$($(get_bdb_command) record $copy_dir/metadata metadata $record_id --all 2>&1)
+    verify_record_output=$($(get_bdb_command) record $copy_dir/.db/bson metadata $record_id --all 2>&1)
     local record_exit_code=$?
     
     if [ $record_exit_code -ne 0 ]; then
@@ -3072,7 +3072,7 @@ test_sync_edit_field_reverse() {
     # Verify the original database now has the edited field
     log_info "Verifying original database now has the edited field from copy"
     local original_record_output
-    original_record_output=$($(get_bdb_command) record $original_dir/metadata metadata $record_id --all 2>&1)
+    original_record_output=$($(get_bdb_command) record $original_dir/.db/bson metadata $record_id --all 2>&1)
     local original_record_exit_code=$?
     
     if [ $original_record_exit_code -ne 0 ]; then
