@@ -445,6 +445,16 @@ export async function removeAsset(
             throw new Error(`Failed to load media file database.`);
         }
 
+        //
+        // Delete the files from the merkle tree.
+        // We do this first because if there's a failure after this point
+        // the files and database records will be come orphans and can easily be fixed.
+        //
+        deleteItem<IDatabaseMetadata>(merkleTree, pathJoin("asset", assetId));
+        deleteItem<IDatabaseMetadata>(merkleTree, pathJoin("display", assetId));
+        deleteItem<IDatabaseMetadata>(merkleTree, pathJoin("thumb", assetId));
+        await retry(() => saveMerkleTree(merkleTree, metadataStorage)); 
+
         const removed = await metadataCollection.deleteOne(assetId);
         if (removed) {
             if (!merkleTree.databaseMetadata) {
@@ -465,15 +475,12 @@ export async function removeAsset(
             }
         }
 
+        //
+        // Delete the files from storage.
+        //
         await assetStorage.deleteFile(pathJoin("asset", assetId));
         await assetStorage.deleteFile(pathJoin("display", assetId));
         await assetStorage.deleteFile(pathJoin("thumb", assetId));
-
-        deleteItem<IDatabaseMetadata>(merkleTree, pathJoin("asset", assetId));
-        deleteItem<IDatabaseMetadata>(merkleTree, pathJoin("display", assetId));
-        deleteItem<IDatabaseMetadata>(merkleTree, pathJoin("thumb", assetId));
-
-        await retry(() => saveMerkleTree(merkleTree, metadataStorage)); 
     }
     finally {
         await releaseWriteLock(metadataStorage);
