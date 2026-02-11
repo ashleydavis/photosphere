@@ -34,7 +34,7 @@ export async function sortPageCommand(dbPath: string, collectionName: string, fi
             const fieldValue = (record as any)[fieldName];
             console.log(pc.white(`  ${(record as any)._id}: ${fieldValue}`));
             if (options.verbose) {
-                console.log(pc.gray(`    ${JSON.stringify(record, null, 4).split('\n').join('\n    ')}`));
+                console.log(`    ${JSON.stringify(record, null, 4).split('\n').join('\n    ')}`);
             }
         }
     }

@@ -18,7 +18,7 @@ const uuidGenerator = {
 //
 export async function loadDatabase(dbPath: string, verbose: boolean = false): Promise<IBsonDatabase> {
     if (verbose) {
-        console.log(pc.gray(`Loading database from: ${dbPath}`));
+        console.log(`Loading database from: ${dbPath}`);
     }
 
     // Create storage based on the path

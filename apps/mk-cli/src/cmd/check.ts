@@ -28,7 +28,7 @@ export async function checkCommand(treePath: string, options: ICheckCommandOptio
     const { storage, normalizedPath } = createStorage(dirPath);
 
     if (options.verbose) {
-        console.log(pc.gray(`Loading merkle tree from: ${normalizedPath}/${fileName}`));
+        console.log(`Loading merkle tree from: ${normalizedPath}/${fileName}`);
     }
 
     // Load the merkle tree
@@ -53,7 +53,7 @@ export async function checkCommand(treePath: string, options: ICheckCommandOptio
         .map(node => node.name!);
     
     if (options.verbose) {
-        console.log(pc.gray(`Found ${sortLeafNodes.length} leaf nodes in sort tree`));
+        console.log(`Found ${sortLeafNodes.length} leaf nodes in sort tree`);
     }
 
     const isSortTreeSorted = verifyLeafNodesAreSorted(sortLeafNodes);
@@ -65,7 +65,7 @@ export async function checkCommand(treePath: string, options: ICheckCommandOptio
                 if (index > 0 && compareNames(sortLeafNodes[index - 1], name) > 0) {
                     console.error(pc.red(`  ${index}: ${name} (❌ out of order)`));
                 } else {
-                    console.error(pc.gray(`  ${index}: ${name}`));
+                    console.error(`  ${index}: ${name}`);
                 }
             });
         }
@@ -76,7 +76,7 @@ export async function checkCommand(treePath: string, options: ICheckCommandOptio
         .map(node => node.name!);
 
     if (options.verbose) {
-        console.log(pc.gray(`Found ${merkleLeafNodes.length} leaf nodes in merkle tree`));
+        console.log(`Found ${merkleLeafNodes.length} leaf nodes in merkle tree`);
     }
 
     const isMerkleTreeSorted = verifyLeafNodesAreSorted(merkleLeafNodes);
@@ -88,7 +88,7 @@ export async function checkCommand(treePath: string, options: ICheckCommandOptio
                 if (index > 0 && compareNames(merkleLeafNodes[index - 1], name) > 0) {
                     console.error(pc.red(`  ${index}: ${name} (❌ out of order)`));
                 } else {
-                    console.error(pc.gray(`  ${index}: ${name}`));
+                    console.error(`  ${index}: ${name}`);
                 }
             });
         }

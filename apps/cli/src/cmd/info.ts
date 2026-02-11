@@ -94,7 +94,7 @@ export async function infoCommand(context: ICommandContext, inputs: string[], op
             if (currentlyScanning) {
                 progressMessage += ` | Scanning ${pc.cyan(currentlyScanning)}`;
             }
-            progressMessage += ` | ${pc.gray("Abort with Ctrl-C")}`;
+            progressMessage += " | Abort with Ctrl-C";
             writeProgress(progressMessage);
         }, { ignorePatterns: [/\.db/] }, sessionTempDir, uuidGenerator);
         clearProgressMessage();
@@ -220,7 +220,7 @@ function displayFileInfo(analysis: FileAnalysis, options: IInfoCommandOptions) {
     const mimeType = fileInfo.contentType || mime.getType(path) || 'application/octet-stream';
     console.log(`   Type: ${mimeType}`);
     if (hash) {
-        console.log(`   Hash: ${pc.gray(hash)}`);
+        console.log(`   Hash: ${hash}`);
     }
     console.log(`   Size: ${formatBytes(fileInfo.length)}`);
     console.log(`   Modified: ${fileInfo.lastModified.toLocaleString()}`);
@@ -233,13 +233,13 @@ function displayFileInfo(analysis: FileAnalysis, options: IInfoCommandOptions) {
 }
 
 function displayAssetInfo(asset: IAsset) {
-    console.log(`   Asset ID: ${pc.gray(asset._id)}`);
+    console.log(`   Asset ID: ${asset._id}`);
     console.log(`   Original file: ${asset.origFileName}`);
     if (asset.origPath) {
         console.log(`   Original path: ${asset.origPath}`);
     }
     console.log(`   Type: ${asset.contentType}`);
-    console.log(`   Hash: ${pc.gray(asset.hash)}`);
+    console.log(`   Hash: ${asset.hash}`);
     console.log(`   Dimensions: ${asset.width} × ${asset.height}`);
     console.log(`   File date: ${asset.fileDate}`);
     if (asset.photoDate) {
