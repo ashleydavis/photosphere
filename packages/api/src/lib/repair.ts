@@ -4,6 +4,8 @@ import { computeHash, computeAssetHash } from "./hash";
 import { log, retry } from "utils";
 import { IMerkleTree, SortNode, traverseTreeAsync } from "merkle-tree";
 import { loadMerkleTree } from "./tree";
+import type { IBsonCollection } from "bdb";
+import type { IAsset } from "defs";
 
 //
 // Options for repairing the media file database.
@@ -83,18 +85,26 @@ export interface IRepairResult {
     // The number of nodes processed in the merkle tree.
     //
     nodesProcessed: number;
+
+    //
+    // Asset paths whose database record was repaired (wrong or missing hash, or missing record).
+    //
+    recordsRepaired: string[];
 }
 
 //
 // Repairs the media file database by restoring corrupted or missing files from a source database.
+// Also checks that each asset in the merkle tree has a database record with the correct id and hash,
+// and repairs wrong or missing hashes and synthesizes missing records.
 //
 export async function repair(
-    assetStorage: IStorage, 
-    metadataStorage: IStorage, 
+    assetStorage: IStorage,
+    metadataStorage: IStorage,
     sourceAssetStorage: IStorage,
-    options: IRepairOptions, 
+    metadataCollection: IBsonCollection<IAsset>,
+    options: IRepairOptions,
     progressCallback?: ProgressCallback
-): Promise<IRepairResult> {        
+): Promise<IRepairResult> {
     const summary = await getDatabaseSummary(assetStorage, metadataStorage);
     const result: IRepairResult = {
         totalImports: summary.totalImports,
@@ -108,6 +118,7 @@ export async function repair(
         unrepaired: [],
         filesProcessed: 0,
         nodesProcessed: 0,
+        recordsRepaired: [],
     };
 
     //
@@ -230,11 +241,68 @@ export async function repair(
         throw new Error(`Failed to load merkle tree`);
     }
 
+    //
+    // Build id->hash map from the database for asset record check and repair.
+    //
+    const recordIdToHash = new Map<string, string>();
+    for await (const record of metadataCollection.iterateRecords()) {
+        const hash = record.fields?.hash;
+        if (typeof hash === "string") {
+            recordIdToHash.set(record._id, hash);
+        }
+    }
+
     await traverseTreeAsync<SortNode>(merkleTree.sort, async (node) => {
         result.nodesProcessed++;
-    
+
         if (node.name) {
             await checkFile(node, merkleTree);
+
+            //
+            // Check asset nodes have a database record with the correct id and hash; repair if not.
+            //
+            if (node.name.startsWith("asset/") && node.contentHash) {
+                const assetId = node.name.slice("asset/".length);
+                const expectedHashHex = node.contentHash.toString("hex");
+                const dbHash = recordIdToHash.get(assetId);
+                if (dbHash === undefined) {
+                    //
+                    // Record missing: synthesize a minimal database record.
+                    //
+                    if (progressCallback) {
+                        progressCallback(`Repairing missing database record: ${node.name}`);
+                    }
+                    const now = new Date().toISOString();
+                    const minimalRecord: IAsset = {
+                        _id: assetId,
+                        origFileName: assetId,
+                        contentType: "application/octet-stream",
+                        width: 0,
+                        height: 0,
+                        hash: expectedHashHex,
+                        fileDate: now,
+                        uploadDate: now,
+                        micro: "",
+                        color: [0, 0, 0],
+                    };
+                    await retry(() => metadataCollection.insertOne(minimalRecord));
+                    result.recordsRepaired.push(node.name);
+                    recordIdToHash.set(assetId, expectedHashHex);
+                }
+                else if (dbHash !== expectedHashHex) {
+                    //
+                    // Hash wrong: update the record with the hash from the merkle tree.
+                    //
+                    if (progressCallback) {
+                        progressCallback(`Repairing database record hash: ${node.name}`);
+                    }
+                    const updated = await retry(() => metadataCollection.updateOne(assetId, { hash: expectedHashHex }));
+                    if (updated) {
+                        result.recordsRepaired.push(node.name);
+                        recordIdToHash.set(assetId, expectedHashHex);
+                    }
+                }
+            }
         }
 
         return true;
