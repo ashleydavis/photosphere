@@ -25,26 +25,26 @@ export async function summaryCommand(context: ICommandContext, options: ISummary
     log.info(`Total size:       ${pc.green(formatBytes(summary.totalSize))}`);
     log.info(`Database version: ${pc.green(summary.databaseVersion.toString())}`);
     if (summary.filesHash) {
-        log.info(`Files hash:       ${pc.gray(summary.filesHash)}`);
+        log.info(`Files hash:       ${summary.filesHash}`);
     }
     if (summary.databaseHash) {
-        log.info(`Database hash:    ${pc.gray(summary.databaseHash)}`);
+        log.info(`Database hash:    ${summary.databaseHash}`);
     }
-    log.info(`Full root hash:   ${pc.gray(summary.fullHash)}`);
+    log.info(`Full root hash:   ${summary.fullHash}`);
 
     // Show follow-up commands
     log.info('');
     log.info(pc.bold('Next steps:'));
-    log.info(pc.gray(`    # Verify the integrity of all files in the database`));
+    log.info(`    # Verify the integrity of all files in the database`);
     log.info(`    psi verify`);
     log.info('');
-    log.info(pc.gray(`    # Add more files to your database`));
+    log.info(`    # Add more files to your database`);
     log.info(`    psi add <paths>`);
     log.info('');
-    log.info(pc.gray(`    # Create a backup copy of your database`));
+    log.info(`    # Create a backup copy of your database`);
     log.info(`    psi replicate --db ${databaseDir} --dest <path>`);
     log.info('');
-    log.info(pc.gray(`    # Synchronize changes between two databases that have been independently changed`));
+    log.info(`    # Synchronize changes between two databases that have been independently changed`);
     log.info(`    psi sync --db ${databaseDir} --dest <path>`);
 
     await exit(0);

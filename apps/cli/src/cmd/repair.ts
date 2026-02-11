@@ -84,7 +84,7 @@ export async function repairCommand(context: ICommandContext, options: IRepairCo
             log.info(`  ${pc.green('✓')} ${file}`);
         });
         if (result.repaired.length > 10) {
-            log.info(pc.gray(`  ... and ${result.repaired.length - 10} more`));
+            log.info(`  ... and ${result.repaired.length - 10} more`);
         }
     }
     
@@ -96,7 +96,7 @@ export async function repairCommand(context: ICommandContext, options: IRepairCo
             log.info(`  ${pc.red('✗')} ${file}`);
         });
         if (result.unrepaired.length > 10) {
-            log.info(pc.gray(`  ... and ${result.unrepaired.length - 10} more`));
+            log.info(`  ... and ${result.unrepaired.length - 10} more`);
         }
     }
     
@@ -108,7 +108,7 @@ export async function repairCommand(context: ICommandContext, options: IRepairCo
             log.info(`  ${pc.red('●')} ${file}`);
         });
         if (result.modified.length > 10) {
-            log.info(pc.gray(`  ... and ${result.modified.length - 10} more`));
+            log.info(`  ... and ${result.modified.length - 10} more`);
         }
     }
     
@@ -119,7 +119,7 @@ export async function repairCommand(context: ICommandContext, options: IRepairCo
             log.info(`  ${pc.yellow('+')} ${file}`);
         });
         if (result.new.length > 10) {
-            log.info(pc.gray(`  ... and ${result.new.length - 10} more`));
+            log.info(`  ... and ${result.new.length - 10} more`);
         }
     }
     
@@ -130,7 +130,7 @@ export async function repairCommand(context: ICommandContext, options: IRepairCo
             log.info(`  ${pc.red('-')} ${file}`);
         });
         if (result.removed.length > 10) {
-            log.info(pc.gray(`  ... and ${result.removed.length - 10} more`));
+            log.info(`  ... and ${result.removed.length - 10} more`);
         }
     }
 

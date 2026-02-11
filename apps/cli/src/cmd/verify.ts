@@ -132,7 +132,7 @@ export async function verifyCommand(context: ICommandContext, options: IVerifyCo
             log.info(pc.red(`Invalid database files:`));
             for (const { file, error } of dbFileResult.errors) {
                 log.info(`  ${pc.red('●')} ${file}`);
-                log.info(`    ${pc.gray(error)}`);
+                log.info(`    ${error}`);
             }
         }
         log.info('');
@@ -164,21 +164,21 @@ export async function verifyCommand(context: ICommandContext, options: IVerifyCo
     log.info(pc.bold('Next steps:'));
     const hasProblems = (dbFileResult?.invalidFiles.length ?? 0) > 0 || result.modified.length > 0 || result.new.length > 0 || result.removed.length > 0 || result.numFailures > 0 || (result.recordMismatches?.length ?? 0) > 0;
     if (hasProblems) {
-        log.info(pc.gray(`    # Fix database issues by restoring from source`));
+        log.info(`    # Fix database issues by restoring from source`);
         log.info(`    psi repair --source <backup-db-path>`);
         log.info('');
     }
     else {
-        log.info(pc.gray(`    # Create a backup copy of your database`));
+        log.info(`    # Create a backup copy of your database`);
         log.info(`    psi replicate --db ${databaseDir} --dest <other-db-path>`);
         log.info('');
-        log.info(pc.gray(`    # Synchronize changes between two databases that have been independently changed`));
+        log.info(`    # Synchronize changes between two databases that have been independently changed`);
         log.info(`    psi sync --db ${databaseDir} --dest <other-db-path>`);
         log.info('');
-        log.info(pc.gray(`    # Compare this database with another location`));
+        log.info(`    # Compare this database with another location`);
         log.info(`    psi compare --db ${databaseDir} --dest <other-db-path>`);
         log.info('');
-        log.info(pc.gray(`    # View database summary and tree hash`));
+        log.info(`    # View database summary and tree hash`);
         log.info(`    psi summary`);
     }
 

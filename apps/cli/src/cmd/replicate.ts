@@ -162,7 +162,7 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
             });
 
             if (isCancel(confirmed) || !confirmed) {
-                log.info(pc.gray('Replication cancelled.'));
+                log.info('Replication cancelled.');
                 await exit(0);
                 return;
             }
@@ -196,9 +196,9 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
     log.info('');
     
     log.info(`Total files imported:      ${pc.cyan(result.filesImported.toString())}`);
-    log.info(`Total files copied:        ${result.copiedFiles > 0 ? pc.green(result.copiedFiles.toString()) : pc.gray('0')}`);
+    log.info(`Total files copied:        ${result.copiedFiles > 0 ? pc.green(result.copiedFiles.toString()) : '0'}`);
     log.info('');
-    log.info(`Total records copied:      ${result.copiedRecords > 0 ? pc.green(result.copiedRecords.toString()) : pc.gray('0')}`);
+    log.info(`Total records copied:      ${result.copiedRecords > 0 ? pc.green(result.copiedRecords.toString()) : '0'}`);
     
     // Print pruned files if any
     if (result.prunedFiles.length > 0) {
@@ -233,16 +233,16 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
     // Show follow-up commands
     log.info('');
     log.info(pc.bold('Next steps:'));
-    log.info(pc.gray(`    # Verify the integrity of the replicated database`));
+    log.info(`    # Verify the integrity of the replicated database`);
     log.info(`    psi verify --db ${destDir}`);
     log.info('');
-    log.info(pc.gray(`    # Compare source and destination databases`));
+    log.info(`    # Compare source and destination databases`);
     log.info(`    psi compare --db ${srcDir} --dest ${destDir}`);
     log.info('');
-    log.info(pc.gray(`    # Synchronize changes between two databases that have been independently changed`));
+    log.info(`    # Synchronize changes between two databases that have been independently changed`);
     log.info(`    psi sync --db ${srcDir} --dest ${destDir}`);
     log.info('');
-    log.info(pc.gray(`    # View summary of the replicated database`));
+    log.info(`    # View summary of the replicated database`);
     log.info(`    psi summary --db ${destDir}`);
 
     await exit(0);
