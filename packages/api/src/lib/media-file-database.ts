@@ -423,7 +423,7 @@ export async function writeAsset(
 // Removes an asset by ID, including all associated files and metadata.
 // This is the comprehensive removal method that handles storage cleanup.
 //
-// @param recordDeleted - Whether to record the deleted asset ID in deletedAssetIds. Defaults to true.
+// @param recordDeleted - Whether to record the deleted asset ID in deletedAssetIds.
 //                        Set to false when removing duplicates or performing cleanup operations
 //                        where tracking deleted assets is not desired.
 //
@@ -433,7 +433,7 @@ export async function removeAsset(
     sessionId: string,
     metadataCollection: IBsonCollection<IAsset>,
     assetId: string,
-    recordDeleted?: boolean
+    recordDeleted: boolean
 ): Promise<void> {
     if (!await acquireWriteLock(metadataStorage, sessionId)) {
         throw new Error(`Failed to acquire write lock.`);
@@ -453,7 +453,6 @@ export async function removeAsset(
         deleteItem<IDatabaseMetadata>(merkleTree, pathJoin("asset", assetId));
         deleteItem<IDatabaseMetadata>(merkleTree, pathJoin("display", assetId));
         deleteItem<IDatabaseMetadata>(merkleTree, pathJoin("thumb", assetId));
-        await retry(() => saveMerkleTree(merkleTree, metadataStorage)); 
 
         const removed = await metadataCollection.deleteOne(assetId);
         if (removed) {
@@ -463,9 +462,9 @@ export async function removeAsset(
             if (merkleTree.databaseMetadata.filesImported > 0) {
                 merkleTree.databaseMetadata.filesImported--;
             }
-            
-            // Record deleted asset ID if requested (default: true for backward compatibility)
-            if (recordDeleted !== false) {
+
+            // Record deleted asset ID if requested
+            if (recordDeleted) {
                 if (!merkleTree.databaseMetadata.deletedAssetIds) {
                     merkleTree.databaseMetadata.deletedAssetIds = [];
                 }
@@ -474,6 +473,9 @@ export async function removeAsset(
                 }
             }
         }
+        
+        // Merkle tree has to be saved after all modifications to it are made.
+        await retry(() => saveMerkleTree(merkleTree, metadataStorage));
 
         //
         // Delete the files from storage.
