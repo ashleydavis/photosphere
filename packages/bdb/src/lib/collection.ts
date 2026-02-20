@@ -84,6 +84,17 @@ export interface IBsonCollectionOptions {
     maxCachedShards?: number;
 }
 
+//
+// Options needed to construct a sort index (caller adds fieldName and direction).
+//
+export interface ISortIndexCreationOptions {
+    storage: IStorage;
+    baseDirectory: string;
+    collectionName: string;
+    uuidGenerator: IUuidGenerator;
+    pageSize: number;
+}
+
 export interface IRecord {
     _id: string;
     [key: string]: any;
@@ -302,7 +313,42 @@ export interface IBsonCollection<RecordT extends IRecord> {
     //
     // Loads the requested shard from cache or from storage.
     //
-    loadShard(shardId: string): Promise<IShard>;    
+    loadShard(shardId: string): Promise<IShard>;
+
+    //
+    // Returns the shard id for a record (for replication batching).
+    //
+    getShardId(recordId: string): string;
+
+    //
+    // Saves the shard to storage (for replication after batch updates).
+    //
+    saveShard(shard: IShard): Promise<void>;
+
+    //
+    // Gets a record from an already-loaded shard (for replication).
+    //
+    getRecordFromShard(recordId: string, shard: IShard): IInternalRecord | undefined;
+
+    //
+    // Sets a record in an already-loaded shard (for replication).
+    //
+    setRecordInShard(recordId: string, record: IInternalRecord, shard: IShard): void;
+
+    //
+    // Deletes a record from an already-loaded shard (for replication).
+    //
+    deleteRecordFromShard(recordId: string, shard: IShard): void;
+
+    //
+    // Rebuilds and saves the shard merkle tree from the shard's records, then updates collection and database trees (for replication).
+    //
+    rebuildAndSaveShardMerkleTree(shard: IShard): Promise<void>;
+
+    //
+    // Options needed to construct a sort index. Used by callers that manage indexes (e.g. BatchSortIndexManager).
+    //
+    getSortIndexOptions(): ISortIndexCreationOptions;
 }
 
 export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<RecordT> {
@@ -440,7 +486,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     //
     // Saves the shard.
     //
-    private async saveShard(shard: IShard): Promise<void> {
+    async saveShard(shard: IShard): Promise<void> {
         const filePath = `${this.directory}/${shard.id}`;
         await this.saveShardFile(filePath, shard);
     }
@@ -807,7 +853,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     //
     async loadShard(shardId: string): Promise<IShard> {
         const filePath = `${this.directory}/${shardId}`;
-        const records = await this.loadRecords(filePath);
+        const records = await this.loadRecords(filePath); //todo: It would be good if we could load a shard without deserializing all the records. Then we can just lazy dersialize the ones we want.
         const shard: IShard = {
             id: shardId,
             records: new Map<string, IInternalRecord>(),
@@ -819,6 +865,64 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         }
 
         return shard;
+    }
+
+    //
+    // Returns the shard id for a record (for replication batching).
+    //
+    getShardId(recordId: string): string {
+        return this.generateShardId(recordId);
+    }
+
+    //
+    // Gets a record from an already-loaded shard (for replication).
+    //
+    getRecordFromShard(recordId: string, shard: IShard): IInternalRecord | undefined {
+        return this.getRecord(recordId, shard);
+    }
+
+    //
+    // Sets a record in an already-loaded shard (for replication).
+    //
+    setRecordInShard(recordId: string, record: IInternalRecord, shard: IShard): void {
+        const normalizedId = this.normalizeId(recordId);
+        shard.records.set(normalizedId, record);
+    }
+
+    //
+    // Deletes a record from an already-loaded shard (for replication).
+    //
+    deleteRecordFromShard(recordId: string, shard: IShard): void {
+        this.deleteRecord(recordId, shard);
+    }
+
+    //
+    // Rebuilds the shard merkle tree from the shard's records, saves it, and updates collection and database trees (for replication).
+    //
+    async rebuildAndSaveShardMerkleTree(shard: IShard): Promise<void> {
+        const records = Array.from(shard.records.values());
+        if (records.length === 0) {
+            await deleteShardMerkleTree(this.storage, this.directory, shard.id);
+            await this.updateCollectionTree(shard.id, undefined);
+        }
+        else {
+            const shardTree = await buildShardMerkleTree(records, this.uuidGenerator);
+            await saveShardMerkleTree(this.storage, this.directory, shard.id, shardTree);
+            await this.updateCollectionTree(shard.id, shardTree);
+        }
+    }
+
+    //
+    // Options needed to construct a sort index.
+    //
+    getSortIndexOptions(): ISortIndexCreationOptions {
+        return {
+            storage: this.storage,
+            baseDirectory: this.getSortIndexBaseDirectory(),
+            collectionName: this.name,
+            uuidGenerator: this.uuidGenerator,
+            pageSize: this.defaultPageSize
+        };
     }
 
     //
