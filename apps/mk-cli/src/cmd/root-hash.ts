@@ -16,7 +16,7 @@ export async function rootHashCommand(treePath: string, options: IRootHashComman
     const { storage, normalizedPath } = createStorage(dirPath);
 
     if (options.verbose) {
-        console.log(pc.gray(`Loading merkle tree from: ${normalizedPath}/${fileName}`));
+        console.log(`Loading merkle tree from: ${normalizedPath}/${fileName}`);
     }
 
     // Load the merkle tree

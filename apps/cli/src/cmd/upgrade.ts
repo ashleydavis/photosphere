@@ -136,7 +136,7 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
     }
     
     if (!shouldProceed) {
-        outro(pc.gray("Database upgrade cancelled."));
+        outro("Database upgrade cancelled.");
         await exit(0);
         return;
     }

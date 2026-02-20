@@ -16,7 +16,7 @@ export async function showCommand(treePath: string, options: IShowCommandOptions
     const { storage, normalizedPath } = createStorage(dirPath);
 
     if (options.verbose) {
-        console.log(pc.gray(`Loading merkle tree from: ${normalizedPath}/${fileName}`));
+        console.log(`Loading merkle tree from: ${normalizedPath}/${fileName}`);
     }
 
     // Load the merkle tree
@@ -29,7 +29,7 @@ export async function showCommand(treePath: string, options: IShowCommandOptions
 
     // Visualize the merkle tree
     console.log(pc.blue("\nMerkle Tree Visualization:"));
-    console.log(pc.gray("=".repeat(50)));
+    console.log("=".repeat(50));
     console.log();
 
     // Full visualization with both sort tree and merkle tree

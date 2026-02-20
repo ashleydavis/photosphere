@@ -86,7 +86,7 @@ export async function addCommand(context: ICommandContext, paths: string[], opti
                 progressMessage += ` | ${pc.yellow("DRY RUN")}`;
             }
 
-            progressMessage += ` | ${pc.gray("Abort with Ctrl-C. It is safe to abort and resume later.")}`;
+            progressMessage += ` | Abort with Ctrl-C. It is safe to abort and resume later.`;
             writeProgress(progressMessage);
         },
         sessionTempDir,
@@ -128,16 +128,16 @@ export async function addCommand(context: ICommandContext, paths: string[], opti
     // Show follow-up commands
     log.info('');
     log.info(pc.bold('Next steps:'));
-    log.info(pc.gray(`    # Verify the integrity of all files in the database`));
+    log.info(`    # Verify the integrity of all files in the database`);
     log.info(`    psi verify`);
     log.info('');
-    log.info(pc.gray(`    # View database summary and tree hash`));
+    log.info(`    # View database summary and tree hash`);
     log.info(`    psi summary`);
     log.info('');
-    log.info(pc.gray(`    # Replicate the database to another location`));
+    log.info(`    # Replicate the database to another location`);
     log.info(`    psi replicate --db ${databaseDir} --dest <path>`);
     log.info('');
-    log.info(pc.gray(`    # Synchronize changes between two databases that have been independently changed`));
+    log.info(`    # Synchronize changes between two databases that have been independently changed`);
     log.info(`    psi sync --db ${databaseDir} --dest <path>`);
 
     await exit(0);

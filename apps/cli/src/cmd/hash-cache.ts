@@ -70,5 +70,5 @@ function displayHashCacheEntries(hashCache: HashCache): void {
         console.log("");
     }
     
-    console.log(pc.gray(`  Total: ${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}`));
+    console.log(`  Total: ${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}`);
 }

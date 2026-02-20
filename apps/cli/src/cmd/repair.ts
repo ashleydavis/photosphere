@@ -30,7 +30,7 @@ export interface IRepairCommandOptions extends IBaseCommandOptions {
 export async function repairCommand(context: ICommandContext, options: IRepairCommandOptions): Promise<void> {
     const { uuidGenerator, timestampProvider, sessionId } = context;
     
-    const { assetStorage, metadataStorage, databaseDir: targetDir } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
+    const { assetStorage, metadataStorage, databaseDir: targetDir, metadataCollection } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
 
     let sourcePath = options.source;
     if (sourcePath === undefined) {
@@ -42,8 +42,7 @@ export async function repairCommand(context: ICommandContext, options: IRepairCo
             return;
         }
     }
-
-    const { assetStorage: sourceAssetStorage, databaseDir: sourceDir } = await loadDatabase(sourcePath, {
+    const { assetStorage: sourceAssetStorage, databaseDir: sourceDir } = await loadDatabase(options.source, {
         db: options.source,
         key: options.sourceKey,
         verbose: options.verbose,
@@ -58,7 +57,7 @@ export async function repairCommand(context: ICommandContext, options: IRepairCo
 
     writeProgress(`🔧 Repairing database...`);
 
-    const result = await repair(assetStorage, metadataStorage, sourceAssetStorage, {
+    const result = await repair(assetStorage, metadataStorage, sourceAssetStorage, metadataCollection, {
         source: sourcePath,
         sourceKey: options.sourceKey,
         full: options.full,
@@ -82,7 +81,8 @@ export async function repairCommand(context: ICommandContext, options: IRepairCo
     log.info(`Removed:          ${result.removed.length > 0 ? pc.red(result.removed.length.toString()) : pc.green('0')}`);
     log.info(`Repaired:         ${result.repaired.length > 0 ? pc.green(result.repaired.length.toString()) : pc.green('0')}`);
     log.info(`Unrepaired:       ${result.unrepaired.length > 0 ? pc.red(result.unrepaired.length.toString()) : pc.green('0')}`);
-        
+    log.info(`Records repaired: ${result.recordsRepaired.length > 0 ? pc.green(result.recordsRepaired.length.toString()) : pc.green('0')}`);
+
     // Show details for repaired files
     if (result.repaired.length > 0) {
         log.info('');
@@ -91,7 +91,7 @@ export async function repairCommand(context: ICommandContext, options: IRepairCo
             log.info(`  ${pc.green('✓')} ${file}`);
         });
         if (result.repaired.length > 10) {
-            log.info(pc.gray(`  ... and ${result.repaired.length - 10} more`));
+            log.info(`  ... and ${result.repaired.length - 10} more`);
         }
     }
     
@@ -103,7 +103,7 @@ export async function repairCommand(context: ICommandContext, options: IRepairCo
             log.info(`  ${pc.red('✗')} ${file}`);
         });
         if (result.unrepaired.length > 10) {
-            log.info(pc.gray(`  ... and ${result.unrepaired.length - 10} more`));
+            log.info(`  ... and ${result.unrepaired.length - 10} more`);
         }
     }
     
@@ -115,7 +115,7 @@ export async function repairCommand(context: ICommandContext, options: IRepairCo
             log.info(`  ${pc.red('●')} ${file}`);
         });
         if (result.modified.length > 10) {
-            log.info(pc.gray(`  ... and ${result.modified.length - 10} more`));
+            log.info(`  ... and ${result.modified.length - 10} more`);
         }
     }
     
@@ -126,7 +126,7 @@ export async function repairCommand(context: ICommandContext, options: IRepairCo
             log.info(`  ${pc.yellow('+')} ${file}`);
         });
         if (result.new.length > 10) {
-            log.info(pc.gray(`  ... and ${result.new.length - 10} more`));
+            log.info(`  ... and ${result.new.length - 10} more`);
         }
     }
     
@@ -137,12 +137,23 @@ export async function repairCommand(context: ICommandContext, options: IRepairCo
             log.info(`  ${pc.red('-')} ${file}`);
         });
         if (result.removed.length > 10) {
-            log.info(pc.gray(`  ... and ${result.removed.length - 10} more`));
+            log.info(`  ... and ${result.removed.length - 10} more`);
         }
     }
-    
+
+    if (result.recordsRepaired.length > 0) {
+        log.info('');
+        log.info(pc.green(`Database records repaired:`));
+        result.recordsRepaired.slice(0, 10).forEach(path => {
+            log.info(`  ${pc.green('✓')} ${path}`);
+        });
+        if (result.recordsRepaired.length > 10) {
+            log.info(pc.gray(`  ... and ${result.recordsRepaired.length - 10} more`));
+        }
+    }
+
     log.info('');
-    if (result.repaired.length === 0 && result.unrepaired.length === 0 && result.modified.length === 0 && result.new.length === 0 && result.removed.length === 0) {
+    if (result.repaired.length === 0 && result.unrepaired.length === 0 && result.modified.length === 0 && result.new.length === 0 && result.removed.length === 0 && result.recordsRepaired.length === 0) {
         log.info(pc.green(`✅ Database repair completed - no issues found`));
     } else if (result.unrepaired.length > 0) {
         log.info(pc.red(`❌ Database repair completed with ${result.unrepaired.length} unrepaired files`));

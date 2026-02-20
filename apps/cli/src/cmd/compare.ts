@@ -136,7 +136,7 @@ export async function compareCommand(context: ICommandContext, options: ICompare
             log.info(`  ${pc.cyan('+')} ${file}`);
         });
         if (!showFull && compareResult.onlyInA.length > maxItems) {
-            log.info(pc.gray(`  ... and ${compareResult.onlyInA.length - maxItems} more`));
+            log.info(`  ... and ${compareResult.onlyInA.length - maxItems} more`);
         }
         log.info('');
     }
@@ -149,7 +149,7 @@ export async function compareCommand(context: ICommandContext, options: ICompare
             log.info(`  ${pc.magenta('+')} ${file}`);
         });
         if (!showFull && compareResult.onlyInB.length > maxItems) {
-            log.info(pc.gray(`  ... and ${compareResult.onlyInB.length - maxItems} more`));
+            log.info(`  ... and ${compareResult.onlyInB.length - maxItems} more`);
         }
         log.info('');
     }
@@ -162,7 +162,7 @@ export async function compareCommand(context: ICommandContext, options: ICompare
             log.info(`  ${pc.yellow('●')} ${file}`);
         });
         if (!showFull && compareResult.modified.length > maxItems) {
-            log.info(pc.gray(`  ... and ${compareResult.modified.length - maxItems} more`));
+            log.info(`  ... and ${compareResult.modified.length - maxItems} more`);
         }
         log.info('');
     }

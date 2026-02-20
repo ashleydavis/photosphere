@@ -1,5 +1,5 @@
 import { IMerkleTree } from 'merkle-tree';
-import { IShard, toExternal, toInternal, type IBsonCollection, type IGetAllResult, type IInternalRecord, type IRecord } from '../lib/collection';
+import { IShard, toExternal, toInternal, type IBsonCollection, type IGetAllResult, type IInternalRecord, type IRecord, type ISortIndexCreationOptions } from '../lib/collection';
 import type { SortDirection, SortDataType, IRangeOptions } from '../lib/sort-index';
 import type { SortIndex } from '../lib/sort-index';
 
@@ -207,5 +207,56 @@ export class MockCollection<T extends IRecord> implements IBsonCollection<T> {
 
     loadShard(shardId: string): Promise<IShard> {
         throw new Error('Method not implemented.');
+    }
+
+    //
+    // Returns the shard id for a record (mock returns '0').
+    //
+    getShardId(recordId: string): string {
+        return '0';
+    }
+
+    //
+    // Saves the shard (mock no-op).
+    //
+    saveShard(shard: IShard): Promise<void> {
+        return Promise.resolve();
+    }
+
+    //
+    // Gets a record from an already-loaded shard (mock reads from shard.records).
+    //
+    getRecordFromShard(recordId: string, shard: IShard): IInternalRecord | undefined {
+        return shard.records.get(recordId.replace(/-/g, '')) ?? undefined;
+    }
+
+    //
+    // Sets a record in an already-loaded shard (mock writes to shard.records).
+    //
+    setRecordInShard(recordId: string, record: IInternalRecord, shard: IShard): void {
+        const normalizedId = recordId.replace(/-/g, '');
+        shard.records.set(normalizedId, record);
+    }
+
+    //
+    // Deletes a record from an already-loaded shard (mock removes from shard.records).
+    //
+    deleteRecordFromShard(recordId: string, shard: IShard): void {
+        const normalizedId = recordId.replace(/-/g, '');
+        shard.records.delete(normalizedId);
+    }
+
+    //
+    // Rebuilds and saves shard merkle tree (mock no-op).
+    //
+    async rebuildAndSaveShardMerkleTree(shard: IShard): Promise<void> {
+        // No-op for mock
+    }
+
+    //
+    // Options to construct a sort index (mock: not supported).
+    //
+    getSortIndexOptions(): ISortIndexCreationOptions {
+        throw new Error('getSortIndexOptions not supported by MockCollection');
     }
 }

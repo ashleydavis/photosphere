@@ -116,6 +116,27 @@ catch (error: any) {
 }
 ```
 
+### TypeScript: Do not use inline interfaces or object types for return/parameter types
+
+**NEVER** use inline object types (e.g. `{ storage: IStorage; baseDirectory: string }`) for method return types or parameters. Always define a named interface or type and use that.
+
+**Why:** Named types are reusable, easier to refactor, and keep signatures readable. Inline types are hard to maintain and cannot be referenced elsewhere.
+
+**Bad:**
+```typescript
+getSortIndexOptions(): { storage: IStorage; baseDirectory: string; collectionName: string } {
+```
+
+**Good:**
+```typescript
+export interface ISortIndexCreationOptions {
+    storage: IStorage;
+    baseDirectory: string;
+    collectionName: string;
+}
+getSortIndexOptions(): ISortIndexCreationOptions {
+```
+
 ### TypeScript: Never use dynamic imports
 
 **NEVER** use dynamic imports (like `import("package")`) in type definitions or anywhere else. Always use static imports at the top of the file.

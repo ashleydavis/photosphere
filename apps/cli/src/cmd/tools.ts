@@ -75,7 +75,7 @@ async function listTools(options: IToolsCommandOptions): Promise<void> {
             : pc.red('Not found');
             
         log.info(`${icon} ${pc.bold(tool.name)}: ${statusText}`);
-        log.info(`   ${pc.gray(tool.description)}`);
+        log.info(`   ${tool.description}`);
         
         if (!status.available) {
             allAvailable = false;
