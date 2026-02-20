@@ -25,8 +25,7 @@ export interface IVerifyCommandOptions extends IBaseCommandOptions {
 //
 export async function verifyCommand(context: ICommandContext, options: IVerifyCommandOptions): Promise<void> {
     const { uuidGenerator, timestampProvider, sessionId } = context;
-    const { metadataStorage, assetStorage, databaseDir } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
-
+    const { metadataStorage, assetStorage, databaseDir, metadataCollection } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
 
     // Create storage descriptor for passing to workers
     const resolvedKeyPath = await resolveKeyPath(options.key);
@@ -43,21 +42,18 @@ export async function verifyCommand(context: ICommandContext, options: IVerifyCo
     //
     let dbFileResult: IDatabaseFileVerifyResult | undefined;
     if (!options.path) {
-        log.info(pc.bold(pc.blue('🗄️  Verifying database files...')));
-        log.info('');
+        writeProgress('🗄️  Verifying database files...');
         dbFileResult = await verifyDatabaseFiles(metadataStorage, assetStorage, (progress) => {
             writeProgress(`🔍 ${progress}`);
         });
-        clearProgressMessage();
     }
     
     //
     // Then, verify asset files.
     //
-    log.info(pc.bold(pc.blue('📷 Verifying asset files...')));
-    log.info('');
+    writeProgress('Verifying assets...');
     
-    const result = await verify(storageDescriptor, metadataStorage, context.taskQueueProvider, { 
+    const result = await verify(storageDescriptor, metadataStorage, context.taskQueueProvider, metadataCollection, {
         full: options.full,
         pathFilter: options.path,
         s3Config
@@ -82,7 +78,8 @@ export async function verifyCommand(context: ICommandContext, options: IVerifyCo
     log.info(`New:              ${result.new.length > 0 ? pc.yellow(result.new.length.toString()) : pc.green('0')}`);
     log.info(`Removed:          ${result.removed.length > 0 ? pc.red(result.removed.length.toString()) : pc.green('0')}`);
     log.info(`Failures:         ${result.numFailures > 0 ? pc.red(result.numFailures.toString()) : pc.green('0')}`);
-        
+    log.info(`Record mismatches: ${(result.recordMismatches?.length ?? 0) > 0 ? pc.red((result.recordMismatches?.length ?? 0).toString()) : pc.green('0')}`);
+
     // Show details for problematic files
     if (result.modified.length > 0) {
         log.info('');
@@ -107,7 +104,15 @@ export async function verifyCommand(context: ICommandContext, options: IVerifyCo
             log.info(`  ${pc.red('-')} ${file}`);
         });
     }
-    
+
+    if ((result.recordMismatches?.length ?? 0) > 0) {
+        log.info('');
+        log.info(pc.red(`Asset record mismatches (missing or wrong id/hash):`));
+        result.recordMismatches!.forEach(path => {
+            log.info(`  ${pc.red('●')} ${path}`);
+        });
+    }
+
     log.info('');
     
     //
@@ -126,7 +131,7 @@ export async function verifyCommand(context: ICommandContext, options: IVerifyCo
             log.info(pc.red(`Invalid database files:`));
             for (const { file, error } of dbFileResult.errors) {
                 log.info(`  ${pc.red('●')} ${file}`);
-                log.info(`    ${pc.gray(error)}`);
+                log.info(`    ${error}`);
             }
         }
         log.info('');
@@ -136,7 +141,7 @@ export async function verifyCommand(context: ICommandContext, options: IVerifyCo
     // Summary
     //
     const dbFilesOk = dbFileResult === undefined || dbFileResult.invalidFiles.length === 0;
-    const assetFilesOk = result.modified.length === 0 && result.new.length === 0 && result.removed.length === 0 && result.numFailures === 0;
+    const assetFilesOk = result.modified.length === 0 && result.new.length === 0 && result.removed.length === 0 && result.numFailures === 0 && (result.recordMismatches?.length ?? 0) === 0;
     
     if (dbFilesOk && assetFilesOk) {
         log.info(pc.green(`✅ Database verification passed - all files are intact`));
@@ -148,28 +153,31 @@ export async function verifyCommand(context: ICommandContext, options: IVerifyCo
         if (!assetFilesOk) {
             log.info(pc.yellow(`⚠️ Asset file verification found issues - see details above`));
         }
+        if ((result.recordMismatches?.length ?? 0) > 0) {
+            log.info(pc.red(`❌ Asset record verification failed - ${result.recordMismatches!.length} asset(s) have missing or wrong database record`));
+        }
     }
 
     // Show follow-up commands
     log.info('');
     log.info(pc.bold('Next steps:'));
-    const hasProblems = (dbFileResult?.invalidFiles.length ?? 0) > 0 || result.modified.length > 0 || result.new.length > 0 || result.removed.length > 0 || result.numFailures > 0;
+    const hasProblems = (dbFileResult?.invalidFiles.length ?? 0) > 0 || result.modified.length > 0 || result.new.length > 0 || result.removed.length > 0 || result.numFailures > 0 || (result.recordMismatches?.length ?? 0) > 0;
     if (hasProblems) {
-        log.info(pc.gray(`    # Fix database issues by restoring from source`));
+        log.info(`    # Fix database issues by restoring from source`);
         log.info(`    psi repair --source <backup-db-path>`);
         log.info('');
     }
     else {
-        log.info(pc.gray(`    # Create a backup copy of your database`));
+        log.info(`    # Create a backup copy of your database`);
         log.info(`    psi replicate --db ${databaseDir} --dest <other-db-path>`);
         log.info('');
-        log.info(pc.gray(`    # Synchronize changes between two databases that have been independently changed`));
+        log.info(`    # Synchronize changes between two databases that have been independently changed`);
         log.info(`    psi sync --db ${databaseDir} --dest <other-db-path>`);
         log.info('');
-        log.info(pc.gray(`    # Compare this database with another location`));
+        log.info(`    # Compare this database with another location`);
         log.info(`    psi compare --db ${databaseDir} --dest <other-db-path>`);
         log.info('');
-        log.info(pc.gray(`    # View database summary and tree hash`));
+        log.info(`    # View database summary and tree hash`);
         log.info(`    psi summary`);
     }
 

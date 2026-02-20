@@ -33,7 +33,7 @@ export async function shardCommand(dbPath: string, collectionName: string, shard
             for (const [recordId, record] of shard.records) {
                 console.log(pc.white(`  ${recordId}:`));
                 const truncatedRecord = truncateLongStrings(record, 100, 5, options.all);
-                console.log(pc.gray(`    ${JSON.stringify(truncatedRecord, null, 4).split('\n').join('\n    ')}`));
+                console.log(`    ${JSON.stringify(truncatedRecord, null, 4).split('\n').join('\n    ')}`);
             }
         }
     }

@@ -39,13 +39,13 @@ export async function checkCommand(context: ICommandContext, paths: string[], op
                 progressMessage += ` | Would add: ${pc.yellow(summary.filesAdded)}`;
             }
             if (summary.filesIgnored > 0) {
-                progressMessage += ` | Ignored: ${pc.gray(summary.filesIgnored)}`;
+                progressMessage += ` | Ignored: ${summary.filesIgnored}`;
             }
             if (currentlyScanning) {
                 progressMessage += ` | Scanning ${pc.cyan(currentlyScanning)}`;
             }
 
-            progressMessage += ` | ${pc.gray("Abort with Ctrl-C")}`;
+            progressMessage += " | Abort with Ctrl-C";
             writeProgress(progressMessage);
         },
         context.taskQueueProvider,

@@ -71,7 +71,7 @@ export async function bugReportCommand(options: IBugReportCommandOptions): Promi
         });
         
         if (isCancel(title)) {
-            outro(pc.gray("Bug report cancelled."));
+            outro("Bug report cancelled.");
             await exit(0);
         }
         
@@ -86,7 +86,7 @@ export async function bugReportCommand(options: IBugReportCommandOptions): Promi
         });
         
         if (isCancel(description)) {
-            outro(pc.gray("Bug report cancelled."));
+            outro("Bug report cancelled.");
             await exit(0);
         }
         
@@ -108,7 +108,7 @@ export async function bugReportCommand(options: IBugReportCommandOptions): Promi
             });
             
             if (isCancel(step)) {
-                outro(pc.gray("Bug report cancelled."));
+                outro("Bug report cancelled.");
                 await exit(0);
             }
 
@@ -140,7 +140,7 @@ export async function bugReportCommand(options: IBugReportCommandOptions): Promi
         });
         
         if (isCancel(expectedBehavior)) {
-            outro(pc.gray("Bug report cancelled."));
+            outro("Bug report cancelled.");
             await exit(0);
         }
         
@@ -155,7 +155,7 @@ export async function bugReportCommand(options: IBugReportCommandOptions): Promi
         });
         
         if (isCancel(actualBehavior)) {
-            outro(pc.gray("Bug report cancelled."));
+            outro("Bug report cancelled.");
             await exit(0);
         }
         

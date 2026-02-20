@@ -26,7 +26,7 @@ export async function listCommand(context: ICommandContext, options: IListComman
     log.info('');
     log.info(pc.bold(pc.blue(`📁 Database Files`)));
     log.info('');
-    log.info(pc.gray(`Files are sorted by date (newest first).`));
+    log.info(`Files are sorted by date (newest first).`);
     log.info('');
 
     let nextPageId: string | undefined;
@@ -94,10 +94,10 @@ function displayPage(records: IAsset[], pageNumber: number, pageSize: number): v
         const dimensions = record.width && record.height ? `${record.width}×${record.height}` : '';
         
         log.info(`${pc.blue(record._id)} ${pc.green(record.origFileName || 'Unknown')}`);
-        log.info(`  ${pc.gray(`Date: ${date} | Size: ${size} | Type: ${record.contentType || 'Unknown'}`)}${dimensions ? ` | ${dimensions}` : ''}`);
+        log.info(`  Date: ${date} | Size: ${size} | Type: ${record.contentType || 'Unknown'}${dimensions ? ` | ${dimensions}` : ''}`);
         
         if (record.origPath) {
-            log.info(`  ${pc.gray(`Path: ${record.origPath}`)}`);
+            log.info(`  Path: ${record.origPath}`);
         }
         
         log.info('');

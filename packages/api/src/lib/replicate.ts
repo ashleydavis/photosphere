@@ -3,12 +3,11 @@ import { computeHash } from "./hash";
 import { IStorage, StoragePrefixWrapper } from "storage";
 import { retry, FatalError, ITimestampProvider, IUuidGenerator, log } from "utils";
 import { IDatabaseMetadata, ProgressCallback, createMediaFileDatabase, loadDatabase, createDatabase } from "./media-file-database";
-import { BsonDatabase } from "bdb";
-import { buildMerkleTree, findDifferingNodes, findMerkleTreeDifferences, getItemInfo, IMerkleTree, MerkleNode, pruneTree, saveTree, upsertItem } from "merkle-tree";
+import { BsonDatabase, BatchSortIndexManager } from "bdb";
+import { findDifferingNodes, findMerkleTreeDifferences, getItemInfo, IMerkleTree, MerkleNode, pruneTree, upsertItem } from "merkle-tree";
 import { loadMerkleTree, merkleTreeExists, saveMerkleTree } from "./tree";
-import { loadDatabaseMerkleTree } from "bdb";
 import { loadCollectionMerkleTree, loadShardMerkleTree } from "./tree";
-import stringify from "json-stable-stringify";
+import { loadDatabaseMerkleTree } from "bdb";
 
 //
 // Result of the replication process.
@@ -227,27 +226,32 @@ Copied hash: ${copiedHash.toString("hex")}
             }
         }
     };
+    
+    if (nodesToProcess.length > 0 || nodesToPrune.length > 0) {
+        //
+        // Process only the nodes that differ.
+        //
 
-    // Process only the nodes that differ
-    for (const nodeToProcess of nodesToProcess) {
-        await processMerkleNode(nodeToProcess);
+        for (const nodeToProcess of nodesToProcess) {
+            await processMerkleNode(nodeToProcess);
+        }
+
+        //
+        // Prune nodes from dest that are different (only in tree2).
+        //
+        result.prunedFiles = pruneTree(destMerkleTree, nodesToPrune);
+
+        //
+        // Saves the dest database.
+        //
+        await retry(() => saveMerkleTree(destMerkleTree!, destMetadataStorage));
     }
-
-    //
-    // Prune nodes from dest that are different (only in tree2).
-    //
-    result.prunedFiles = pruneTree(destMerkleTree, nodesToPrune);
-
-    //
-    // Saves the dest database.
-    //
-    await retry(() => saveMerkleTree(destMerkleTree!, destMetadataStorage));
 }
 
 //
 // Generator to extract leaf node names from MerkleNode arrays.
 //
-function* iterateLeaves(nodes: MerkleNode[]): Generator<string> { //todo: move this to the merkle-tree package and test it.
+export function* iterateLeaves(nodes: MerkleNode[]): Generator<string> { //todo: move this to the merkle-tree package and test it.
     for (const node of nodes) {
         if (!node.left && !node.right) {
             if (!node.name) {
@@ -271,18 +275,18 @@ function* iterateLeaves(nodes: MerkleNode[]): Generator<string> { //todo: move t
 // tree2 is the comparison tree (dest for pass 1, source for pass 2).
 // tree1Storage and tree2Storage are the storage locations for tree1 and tree2 respectively.
 //
-async function* iterateShardDifferences(
+export async function* iterateShardDifferences(
     collectionName: string,
     shardId: string,
     tree1Storage: IStorage,
     tree2Storage: IStorage
 ): AsyncGenerator<{ collectionName: string; recordId: string }> {
-    const tree1 = await retry(() => loadShardMerkleTree(tree1Storage, collectionName, shardId));    
+    const tree1 = await retry(() => loadShardMerkleTree(tree1Storage, collectionName, shardId));
     if (!tree1?.merkle) {
         // If primary tree doesn't exist, no records to process.
         return;
     }
-    
+
     const tree2 = await retry(() => loadShardMerkleTree(tree2Storage, collectionName, shardId));
     if (!tree2?.merkle) {
         // If comparison tree doesn't exist, all records in primary tree need to be processed
@@ -294,9 +298,9 @@ async function* iterateShardDifferences(
         }
         return;
     }
-    
+
     // Find records in tree1 that differ from tree2
-    const differingNodes = findDifferingNodes(tree1.merkle, tree2.merkle);    
+    const differingNodes = findDifferingNodes(tree1.merkle, tree2.merkle);
     for (const recordId of iterateLeaves(differingNodes)) {
         yield {
             collectionName,
@@ -311,7 +315,7 @@ async function* iterateShardDifferences(
 // tree2 is the comparison tree (dest for pass 1, source for pass 2).
 // tree1Storage and tree2Storage are the storage locations for tree1 and tree2 respectively.
 //
-async function* iterateCollectionDifferences(
+export async function* iterateCollectionDifferences(
     collectionName: string,
     tree1Storage: IStorage,
     tree2Storage: IStorage
@@ -330,9 +334,9 @@ async function* iterateCollectionDifferences(
         }
         return;
     }
-    
+
     // Find shards in tree1 that differ from tree2
-    const differingShards = findDifferingNodes(tree1.merkle, tree2.merkle);    
+    const differingShards = findDifferingNodes(tree1.merkle, tree2.merkle);
     for (const shardId of iterateLeaves(differingShards)) {
         yield* iterateShardDifferences(collectionName, shardId, tree1Storage, tree2Storage);
     }
@@ -344,17 +348,17 @@ async function* iterateCollectionDifferences(
 // tree2 is the comparison tree (dest for pass 1, source for pass 2).
 // tree1Storage and tree2Storage are the storage locations for tree1 and tree2 respectively.
 //
-async function* iterateDatabaseDifferences(
+export async function* iterateDatabaseDifferences(
     tree1Storage: IStorage,
     tree2Storage: IStorage
 ): AsyncGenerator<{ collectionName: string; recordId: string }> {
 
-    const tree1 = await retry(() => loadDatabaseMerkleTree(tree1Storage));    
+    const tree1 = await retry(() => loadDatabaseMerkleTree(tree1Storage));
     if (!tree1?.merkle) {
         // If primary database tree doesn't exist, no records to process.
         return;
     }
-    
+
     const tree2 = await retry(() => loadDatabaseMerkleTree(tree2Storage));
     if (!tree2?.merkle) {
         // If comparison database tree doesn't exist, process all collections in primary tree
@@ -363,9 +367,9 @@ async function* iterateDatabaseDifferences(
         }
         return;
     }
-    
+
     // Find collections in tree1 that differ from tree2
-    const differingCollections = findDifferingNodes(tree1.merkle, tree2.merkle);    
+    const differingCollections = findDifferingNodes(tree1.merkle, tree2.merkle);
     for (const collectionName of iterateLeaves(differingCollections)) {
         yield* iterateCollectionDifferences(collectionName, tree1Storage, tree2Storage);
     }
@@ -373,6 +377,8 @@ async function* iterateDatabaseDifferences(
 
 //
 // Replicates BSON database records from source to destination.
+// Builds a map of modified records per collection, then processes by shard: load source and dest shards,
+// apply updates to dest shard's records map, update sort indexes, save shard once, update merkle trees.
 //
 async function replicateBsonDatabase(
     sourceBsonDatabase: BsonDatabase,
@@ -382,6 +388,7 @@ async function replicateBsonDatabase(
     progressCallback: ProgressCallback | undefined,
     result: IReplicationResult
 ): Promise<void> {
+
     //
     // Replicate BSON database records using merkle tree differences.
     // This walks the tree of trees (database -> collections -> shards -> records)
@@ -391,79 +398,96 @@ async function replicateBsonDatabase(
     const sourceStorage = new StoragePrefixWrapper(sourceAssetStorage, ".db/bson");
     const destStorage = new StoragePrefixWrapper(destAssetStorage, ".db/bson");
 
-    // Helper function to compare two records for equality
-    // Both records should be in external format (flat objects)
-    const recordsAreEqual = (record1: any, record2: any): boolean => {
-        // Serialize both records in a stable way and compare
-        const record1Json = stringify(record1);
-        const record2Json = stringify(record2);
-        return record1Json === record2Json;
-    };
+    // 1. Build map of modified records per collection: toCopy (source→dest) and toDelete (dest→source)
+    const toCopyByCollection = new Map<string, Set<string>>();
+    const toDeleteByCollection = new Map<string, Set<string>>();
 
-    let recordsConsidered = 0;
-
-    //
-    // First pass: Find records in source that are new or different.
-    // These records need to be inserted or replaced in the dest database.
-    //
     for await (const diff of iterateDatabaseDifferences(sourceStorage, destStorage)) {
-        recordsConsidered++;
+        let set = toCopyByCollection.get(diff.collectionName);
+        if (!set) {
+            set = new Set<string>();
+            toCopyByCollection.set(diff.collectionName, set);
+        }
+        set.add(diff.recordId);
+    }
+    const toCopyTotal = [...toCopyByCollection.values()].reduce((n, s) => n + s.size, 0);
 
-        const sourceCollection = sourceBsonDatabase.collection(diff.collectionName);
-        const destCollection = destBsonDatabase.collection(diff.collectionName);
+    for await (const diff of iterateDatabaseDifferences(destStorage, sourceStorage)) {
+        let set = toDeleteByCollection.get(diff.collectionName);
+        if (!set) {
+            set = new Set<string>();
+            toDeleteByCollection.set(diff.collectionName, set);
+        }
+        set.add(diff.recordId);
+    }
+    const toDeleteTotal = [...toDeleteByCollection.values()].reduce((n, s) => n + s.size, 0);
 
-        // Load the source record (getOne already returns external format)
-        const sourceRecord = await retry(() => sourceCollection.getOne(diff.recordId));
-        if (!sourceRecord) {
-            // Record doesn't exist in source, skip it
-            continue;
+    const collectionNames = new Set<string>([...toCopyByCollection.keys(), ...toDeleteByCollection.keys()]);
+
+    for (const collectionName of collectionNames) {
+        const sourceColl = sourceBsonDatabase.collection(collectionName);
+        const destColl = destBsonDatabase.collection(collectionName);
+
+        const toCopy = toCopyByCollection.get(collectionName) ?? new Set<string>();
+        const toDelete = toDeleteByCollection.get(collectionName) ?? new Set<string>();
+
+        const batchSortIndexManager = new BatchSortIndexManager(destColl);
+        await batchSortIndexManager.startBatch();
+
+        // 2. Group record ids by shard
+        const byShard = new Map<string, { toCopy: Set<string>; toDelete: Set<string> }>();
+        function addToShard(recordId: string, kind: 'toCopy' | 'toDelete'): void {
+            const shardId = destColl.getShardId(recordId);
+            let entry = byShard.get(shardId);
+            if (!entry) {
+                entry = { toCopy: new Set<string>(), toDelete: new Set<string>() };
+                byShard.set(shardId, entry);
+            }
+            entry[kind].add(recordId);
+        }
+        for (const id of toCopy) {
+            addToShard(id, 'toCopy');
+        }
+        for (const id of toDelete) {
+            addToShard(id, 'toDelete');
         }
 
-        // Check if record exists in destination
-        const destRecord = await retry(() => destCollection.getOne(sourceRecord._id));
-        if (!destRecord) {
-            // Record doesn't exist in destination, add it
-            await retry(() => destCollection.insertOne(sourceRecord));
-            result.copiedRecords++;
-            log.verbose(`Inserted record ${diff.recordId} into collection ${diff.collectionName}`);
-        }
-        else {
-            // Record exists, check if it's different
-            if (!recordsAreEqual(sourceRecord, destRecord)) {
-                // Records are different, update the destination record
-                await retry(() => destCollection.replaceOne(sourceRecord._id, sourceRecord, { upsert: true }));
+        for (const [shardId, { toCopy: toCopyInShard, toDelete: toDeleteInShard }] of byShard) {
+            const sourceShard = await retry(() => sourceColl.loadShard(shardId));
+
+            const destShard = await retry(() => destColl.loadShard(shardId));
+
+            for (const recordId of toCopyInShard) {
+                const sourceRecord = sourceColl.getRecordFromShard(recordId, sourceShard);
+                if (!sourceRecord) {
+                    continue;
+                }
+                const oldDest = destColl.getRecordFromShard(recordId, destShard);
+                destColl.setRecordInShard(recordId, sourceRecord, destShard);
+                await retry(() => batchSortIndexManager.syncRecord(sourceRecord, oldDest));
                 result.copiedRecords++;
-                log.verbose(`Updated record ${diff.recordId} in collection ${diff.collectionName}`);
+            }
+
+            for (const recordId of toDeleteInShard) {
+                const oldDest = destColl.getRecordFromShard(recordId, destShard);
+                if (!oldDest) {
+                    continue;
+                }
+                destColl.deleteRecordFromShard(recordId, destShard);
+                await retry(() => batchSortIndexManager.removeRecord(recordId, oldDest));
+                result.copiedRecords++;
+            }
+
+            await retry(() => destColl.saveShard(destShard));
+
+            await retry(() => destColl.rebuildAndSaveShardMerkleTree(destShard));
+
+            if (progressCallback) {
+                progressCallback(`Copied ${result.copiedFiles} files, ${result.copiedRecords} records`);
             }
         }
 
-        if (progressCallback && recordsConsidered % 100 === 0) {
-            progressCallback(`Copied ${result.copiedFiles} files, ${result.copiedRecords} records`);
-        }
-    }
-
-    //
-    // Second pass: Find records in dest that are new or different.
-    // These records need to be removed from the dest database to match source.
-    //
-    for await (const diff of iterateDatabaseDifferences(destStorage, sourceStorage)) {
-        recordsConsidered++;
-
-        const destCollection = destBsonDatabase.collection(diff.collectionName);
-
-        // Check if record exists in source
-        const sourceCollection = sourceBsonDatabase.collection(diff.collectionName);
-        const sourceRecord = await retry(() => sourceCollection.getOne(diff.recordId)); //todo: It's possible we don't need to do this lookup.
-        if (!sourceRecord) {
-            // Record doesn't exist in source, remove it from dest to match source
-            await retry(() => destCollection.deleteOne(diff.recordId));
-            result.copiedRecords++;
-            log.verbose(`Deleted record ${diff.recordId} from collection ${diff.collectionName}`);
-        }
-
-        if (progressCallback && recordsConsidered % 100 === 0) {
-            progressCallback(`Copied ${result.copiedFiles} files, ${result.copiedRecords} records`);
-        }
+        await batchSortIndexManager.commitChanges();
     }
 }
 

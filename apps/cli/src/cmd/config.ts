@@ -48,7 +48,7 @@ export async function configureCommand(options: IConfigureCommandOptions): Promi
         });
         
         if (isCancel(configChoice)) {
-            outro(pc.gray('Configuration cancelled.'));
+            outro('Configuration cancelled.');
             await exit(0);
         }
         

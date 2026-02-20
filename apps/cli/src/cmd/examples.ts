@@ -39,6 +39,6 @@ export async function examplesCommand(): Promise<void> {
         }
     }
 
-    console.log(pc.gray('💡 Tip: Use "psi <command> --help" to see detailed help for any specific command.'));
+    console.log('💡 Tip: Use "psi <command> --help" to see detailed help for any specific command.');
     console.log();
 }

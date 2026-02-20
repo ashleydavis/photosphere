@@ -74,13 +74,13 @@ export async function debugMerkleTreeCommand(context: ICommandContext, options: 
     // Get and display the aggregate root hash
     const summary = await getDatabaseSummary(assetStorage, metadataStorage);
     log.info(pc.cyan('Aggregate Root Hash:'));
-    log.info(pc.gray('='.repeat(60)));
+    log.info('='.repeat(60));
     log.info(pc.white(summary.fullHash));
     log.info('');
     
     // Show files merkle tree
     log.info(pc.cyan('Files Merkle Tree (.db/files.dat):'));
-    log.info(pc.gray('='.repeat(60)));
+    log.info('='.repeat(60));
     const filesTree = await loadMerkleTree(metadataStorage);
     if (filesTree) {
         const filesVisualization = visualizeTree(filesTree);
@@ -96,14 +96,14 @@ export async function debugMerkleTreeCommand(context: ICommandContext, options: 
     if (databaseTree) {
         log.info('');
         log.info(pc.cyan('BSON Database Merkle Tree (.db/bson/db.dat):'));
-        log.info(pc.gray('='.repeat(60)));
+        log.info('='.repeat(60));
         const databaseVisualization = visualizeTree(databaseTree);
         log.info(databaseVisualization);
         
         // Show all collection trees
         log.info('');
         log.info(pc.cyan('Collection Merkle Trees:'));
-        log.info(pc.gray('='.repeat(60)));
+        log.info('='.repeat(60));
         
         const collections = await bsonDatabase.collections();
         
@@ -115,7 +115,7 @@ export async function debugMerkleTreeCommand(context: ICommandContext, options: 
                 if (collectionTree) {
                     log.info('');
                     log.info(pc.cyan(`Collection: ${collectionName}`));
-                    log.info(pc.gray('-'.repeat(60)));
+                    log.info('-'.repeat(60));
                     const collectionVisualization = visualizeTree(collectionTree);
                     log.info(collectionVisualization);
                 } else {
@@ -133,7 +133,7 @@ export async function debugMerkleTreeCommand(context: ICommandContext, options: 
                     if (shardTree) {
                         log.info('');
                         log.info(pc.cyan(`  Shard: ${shardId}`));
-                        log.info(pc.gray('  ' + '-'.repeat(58)));
+                        log.info('  ' + '-'.repeat(58));
                         const shardVisualization = visualizeTree(shardTree);
                         // Indent shard visualization
                         const indentedVisualization = shardVisualization.split('\n').map(line => `  ${line}`).join('\n');
@@ -156,13 +156,13 @@ export async function debugMerkleTreeCommand(context: ICommandContext, options: 
                                 const hashHex = hashedItem.hash.toString('hex');
                                 
                                 log.info(pc.white(`      ${recordId}:`));
-                                log.info(pc.gray(`        Hash: ${hashHex}`));
+                                log.info(`        Hash: ${hashHex}`);
                                 // Truncate long strings unless --all is used
                                 const recordToDisplay = options.all ? record : truncateLongStrings(record, 100, 5, false);
                                 const recordJson = JSON.stringify(recordToDisplay, null, 2);
                                 // Indent each line of the JSON
                                 const indentedJson = recordJson.split('\n').map(line => `        ${line}`).join('\n');
-                                log.info(pc.gray(indentedJson));
+                                log.info(indentedJson);
                             }
                         } else {
                             log.info('');

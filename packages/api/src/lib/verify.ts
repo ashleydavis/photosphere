@@ -7,6 +7,8 @@ import { TaskStatus } from "task-queue";
 import { IVerifyFileData } from "./verify.worker";
 import type { ITaskQueueProvider } from "task-queue";
 import { verify as verifySerializedFile } from "serialization";
+import type { IBsonCollection } from "bdb";
+import type { IAsset } from "defs";
 
 //
 // Options for verifying the media file database.
@@ -81,14 +83,20 @@ export interface IVerifyResult {
     // The number of nodes processed in the merkle tree.
     //
     nodesProcessed: number;
+
+    //
+    // Asset paths that have no database record or a record with the wrong id/hash.
+    //
+    recordMismatches?: string[];
 }
 
 //
 // Verifies the media file database.
 // Checks for missing files, modified files, and new files.
 // If any files are corrupted, this will pick them up as modified.
+// Also checks each asset in the merkle tree has a database record with the correct id and hash.
 //
-export async function verify(storageDescriptor: IStorageDescriptor, databaseStorage: IStorage, taskQueueProvider: ITaskQueueProvider, options?: IVerifyOptions, progressCallback?: ProgressCallback) : Promise<IVerifyResult> {
+export async function verify(storageDescriptor: IStorageDescriptor, databaseStorage: IStorage, taskQueueProvider: ITaskQueueProvider, metadataCollection: IBsonCollection<IAsset>, options?: IVerifyOptions, progressCallback?: ProgressCallback) : Promise<IVerifyResult> {
 
     let pathFilter = options?.pathFilter 
         ? options.pathFilter.replace(/\\/g, '/') // Normalize path separators
@@ -112,6 +120,7 @@ export async function verify(storageDescriptor: IStorageDescriptor, databaseStor
         removed: [],
         filesProcessed: 0,
         nodesProcessed: 0,
+        recordMismatches: [],
     };
 
     //
@@ -142,6 +151,22 @@ export async function verify(storageDescriptor: IStorageDescriptor, databaseStor
     const queue = await taskQueueProvider.create();
 
     try {
+        //
+        // Load details of database records so we can check them against the merkle tree.
+        //
+        const recordIdToHash = new Map<string, string>();
+        let recordsLoaded = 0;
+        for await (const record of metadataCollection.iterateRecords()) { //todo: each shard could be loaded in a separate task.
+            const hash = record.fields?.hash;
+            if (typeof hash === "string") {
+                recordIdToHash.set(record._id, hash);
+            }
+            recordsLoaded++;
+            if (progressCallback) {
+                progressCallback(`Loaded database records... ${recordsLoaded} loaded`);
+            }
+        }
+
         //
         // Registers a callback to integrate results as tasks complete.
         //
@@ -192,7 +217,7 @@ export async function verify(storageDescriptor: IStorageDescriptor, databaseStor
         const isPartial = merkleTree.databaseMetadata?.isPartial === true;
 
         //
-        // Queue up all verification tasks as quickly as possible.
+        // Queue up all verification tasks and check asset records against the database in a single traversal.
         // Pass the storage descriptor instead of the storage object (which can't be serialized).
         // Filter nodes by pathFilter before queuing tasks.
         //
@@ -213,6 +238,16 @@ export async function verify(storageDescriptor: IStorageDescriptor, databaseStor
                         full: options?.full,
                     },
                 });
+
+                // Check asset nodes have a database record with the correct id and hash
+                if (node.name.startsWith("asset/") && node.contentHash) {
+                    const assetId = node.name.slice("asset/".length);
+                    const expectedHashHex = node.contentHash.toString("hex");
+                    const dbHash = recordIdToHash.get(assetId);
+                    if (dbHash === undefined || dbHash !== expectedHashHex) {
+                        result.recordMismatches!.push(node.name);
+                    }
+                }
             }
 
             return true;
