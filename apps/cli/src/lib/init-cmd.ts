@@ -385,9 +385,8 @@ export async function loadDatabase(
 
     const s3Config = await getS3Config();
     let { storage: assetStorage } = createStorage(dbDir, s3Config, storageOptions);
-    
-    // Create unencrypted storage for metadata (metadata was never encrypted)
-    const { storage: metadataStorage } = createStorage(dbDir, s3Config, undefined);
+    // Metadata storage uses the same encryption as asset storage (when the database is encrypted).
+    let { storage: metadataStorage } = createStorage(dbDir, s3Config, storageOptions);
 
     //
     // Check that the files tree exists (.db/files.dat or legacy .db/tree.dat).
@@ -434,8 +433,9 @@ export async function loadDatabase(
                 storageOptions = newStorageOptions;
                 
                 // Recreate storage with the new encryption options
-                const { storage: newAssetStorage } = createStorage(dbDir, s3Config, storageOptions);        
+                const { storage: newAssetStorage } = createStorage(dbDir, s3Config, storageOptions);
                 assetStorage = newAssetStorage;
+                metadataStorage = newAssetStorage;
             }
         }
     }
