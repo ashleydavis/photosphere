@@ -356,6 +356,13 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
         }
 
         log.info(pc.green(`✓ Database upgraded successfully to version ${CURRENT_DATABASE_VERSION}`));
+        log.info('');
+        log.info(pc.bold('Next steps:'));
+        log.info(`    # View database summary and tree hash`);
+        log.info(`    psi summary --db ${databaseDir}`);
+        log.info('');
+        log.info(`    # Verify the integrity of the upgraded database`);
+        log.info(`    psi verify --db ${databaseDir}`);
     }
     finally {
         await releaseWriteLock(assetStorage);
