@@ -81,10 +81,15 @@ export async function checkCommand(context: ICommandContext, paths: string[], op
     log.info('');
     log.info(pc.bold('Next steps:'));
     if (addSummary.filesAdded > 0) {
-        log.info(`    ${pc.cyan('psi add <paths>')}               Add the new files found to your database`);
+        log.info(`    # Add the new files found to your database`);
+        log.info(`    psi add <paths> --db ${databaseDir}`);
+        log.info('');
     }
-    log.info(`    ${pc.cyan('psi verify')}                    Verify the integrity of all files in the database`);
-    log.info(`    ${pc.cyan('psi summary')}                   View database summary and statistics`);
+    log.info(`    # Verify the integrity of all files in the database`);
+    log.info(`    psi verify --db ${databaseDir}`);
+    log.info('');
+    log.info(`    # View database summary and statistics`);
+    log.info(`    psi summary --db ${databaseDir}`);
 
     await exit(0);
 }

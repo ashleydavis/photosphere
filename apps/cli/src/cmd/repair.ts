@@ -164,8 +164,11 @@ export async function repairCommand(context: ICommandContext, options: IRepairCo
     // Show follow-up commands
     log.info('');
     log.info(pc.bold('Next steps:'));
-    log.info(`    ${pc.cyan('psi verify')}                     Verify the repaired database integrity`);
-    log.info(`    ${pc.cyan('psi summary')}                   View database summary and tree hash`);
+    log.info(`    # Verify the repaired database integrity`);
+    log.info(`    psi verify --db ${targetDir}`);
+    log.info('');
+    log.info(`    # View database summary and tree hash`);
+    log.info(`    psi summary --db ${targetDir}`);
 
     await exit(0);
 }
