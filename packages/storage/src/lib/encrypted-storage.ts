@@ -86,7 +86,7 @@ export class EncryptedStorage implements IStorage {
     // Streams a file from stroage.
     //
     readStream(filePath: string): Readable {
-        const decryptionStream = createDecryptionStream(this.privateKey);
+        const decryptionStream = createDecryptionStream(this.privateKeyMap);
         const readStream = this.storage.readStream(filePath);
         readStream.pipe(decryptionStream);
         return decryptionStream;
