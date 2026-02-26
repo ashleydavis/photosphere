@@ -28,6 +28,8 @@ import { databaseIdCommand } from './src/cmd/database-id';
 import { syncCommand } from './src/cmd/sync';
 import { originCommand } from './src/cmd/origin';
 import { setOriginCommand, ISetOriginCommandOptions } from './src/cmd/set-origin';
+import { encryptCommand } from './src/cmd/encrypt';
+import { decryptCommand } from './src/cmd/decrypt';
 import { initContext } from './src/lib/init-cmd';
 import { MAIN_EXAMPLES, getCommandExamplesHelp } from './src/examples';
 import pc from "picocolors";
@@ -490,6 +492,29 @@ Resources:
         .description("Displays version information for psi and its dependencies.")
         .addHelpText('after', getCommandExamplesHelp('version'))
         .action(versionCommand);
+
+    program
+        .command("encrypt")
+        .description("Encrypts the database in place (plain → encrypted, re-encrypt with new key, or old-format → new format).")
+        .option(...dbOption)
+        .option(...keyOption)
+        .option("--sk, --source-key <keyfile>", "Path to source encryption key file(s) for reading an already-encrypted database (comma-separated list supported).")
+        .option(...generateKeyOption)
+        .option(...yesOption)
+        .option(...cwdOption)
+        .addHelpText('after', getCommandExamplesHelp('encrypt'))
+        .action(initContext(encryptCommand));
+
+    program
+        .command("decrypt")
+        .description("Decrypts the encrypted database in place (removes encryption; deletes .db/encryption.pub).")
+        .option(...dbOption)
+        .option(...keyOption)
+        .option("--sk, --source-key <keyfile>", "Optional additional source encryption key file(s) (comma-separated list supported).")
+        .option(...yesOption)
+        .option(...cwdOption)
+        .addHelpText('after', getCommandExamplesHelp('decrypt'))
+        .action(initContext(decryptCommand));
 
     // Start debug server if --debug flag is set (before parsing so it's available during command execution)
     if (process.argv.includes('--debug')) {

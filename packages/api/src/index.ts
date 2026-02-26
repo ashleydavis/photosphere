@@ -8,6 +8,7 @@ export * from "./lib/task-handlers";
 export * from "./lib/repair";
 export * from "./lib/replicate";
 export * from "./lib/tree";
+export * from "./lib/encrypt";
 export * from "./lib/write-lock";
 export * from "./lib/sync";
 export * from "./lib/hash";

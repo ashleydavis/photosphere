@@ -245,6 +245,15 @@ jobs:
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-output.log
           exit $SMOKE_TEST_EXIT_CODE
 
+      - name: Run encrypted smoke tests
+        working-directory: ./apps/cli
+        run: |
+          ./smoke-tests-encrypted.sh all 2>&1 | tee smoke-test-logs/smoke-tests-encrypted-output.log
+          ENCRYPTED_EXIT_CODE=${PIPESTATUS[0]}
+          echo "Encrypted smoke tests exit code: $ENCRYPTED_EXIT_CODE"
+          echo "Encrypted smoke tests exit code: $ENCRYPTED_EXIT_CODE" >> smoke-test-logs/smoke-tests-encrypted-output.log
+          exit $ENCRYPTED_EXIT_CODE
+
       - name: Upload smoke test logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -409,6 +418,15 @@ jobs:
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-output.log
           exit $SMOKE_TEST_EXIT_CODE
 
+      - name: Run encrypted smoke tests
+        working-directory: ./apps/cli
+        run: |
+          ./smoke-tests-encrypted.sh --binary all 2>&1 | tee smoke-test-logs/smoke-tests-encrypted-output.log
+          ENCRYPTED_EXIT_CODE=${PIPESTATUS[0]}
+          echo "Encrypted smoke tests exit code: $ENCRYPTED_EXIT_CODE"
+          echo "Encrypted smoke tests exit code: $ENCRYPTED_EXIT_CODE" >> smoke-test-logs/smoke-tests-encrypted-output.log
+          exit $ENCRYPTED_EXIT_CODE
+
       - name: Upload smoke test logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -571,6 +589,16 @@ jobs:
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE"
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-output.log
           exit $SMOKE_TEST_EXIT_CODE
+
+      - name: Run encrypted smoke tests
+        working-directory: ./apps/cli
+        shell: bash
+        run: |
+          ./smoke-tests-encrypted.sh --binary all 2>&1 | tee smoke-test-logs/smoke-tests-encrypted-output.log
+          ENCRYPTED_EXIT_CODE=${PIPESTATUS[0]}
+          echo "Encrypted smoke tests exit code: $ENCRYPTED_EXIT_CODE"
+          echo "Encrypted smoke tests exit code: $ENCRYPTED_EXIT_CODE" >> smoke-test-logs/smoke-tests-encrypted-output.log
+          exit $ENCRYPTED_EXIT_CODE
 
       - name: Upload smoke test logs
         if: always()
@@ -816,6 +844,15 @@ jobs:
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-output.log
           exit $SMOKE_TEST_EXIT_CODE
 
+      - name: Run encrypted smoke tests
+        working-directory: ./apps/cli
+        run: |
+          ./smoke-tests-encrypted.sh --binary all 2>&1 | tee smoke-test-logs/smoke-tests-encrypted-output.log
+          ENCRYPTED_EXIT_CODE=${PIPESTATUS[0]}
+          echo "Encrypted smoke tests exit code: $ENCRYPTED_EXIT_CODE"
+          echo "Encrypted smoke tests exit code: $ENCRYPTED_EXIT_CODE" >> smoke-test-logs/smoke-tests-encrypted-output.log
+          exit $ENCRYPTED_EXIT_CODE
+
       - name: Upload smoke test logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -990,6 +1027,15 @@ jobs:
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE"
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-output.log
           exit $SMOKE_TEST_EXIT_CODE
+
+      - name: Run encrypted smoke tests
+        working-directory: ./apps/cli
+        run: |
+          ./smoke-tests-encrypted.sh --binary all 2>&1 | tee smoke-test-logs/smoke-tests-encrypted-output.log
+          ENCRYPTED_EXIT_CODE=${PIPESTATUS[0]}
+          echo "Encrypted smoke tests exit code: $ENCRYPTED_EXIT_CODE"
+          echo "Encrypted smoke tests exit code: $ENCRYPTED_EXIT_CODE" >> smoke-test-logs/smoke-tests-encrypted-output.log
+          exit $ENCRYPTED_EXIT_CODE
 
       - name: Upload smoke test logs
         if: always()

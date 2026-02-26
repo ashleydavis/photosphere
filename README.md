@@ -31,7 +31,8 @@ See the [wiki](https://github.com/ashleydavis/photosphere/wiki) for installation
 
 ## Ingesting assets
 
-Use the CLI tool `psi add` to scan a directory and do bulk uploads. Use `psi summary` to view database statistics, `psi verify` to check integrity, `psi replicate` to create backups, `psi sync` to synchronize databases between devices, and `psi compare` to verify backup consistency.
+Use the CLI tool `psi add` to scan a directory and do bulk uploads. Use `psi summary` to view database statistics, `psi verify` to check integrity, `psi replicate` to create backups, `psi sync` to synchronize databases between devices, and `psi compare` to verify backup consistency.  
+Use `psi encrypt` and `psi decrypt` to convert databases between plain and encrypted storage (or re-encrypt with new keys) without manually copying files.
 
 To move assets from Google Photos:
 - Use Google Takeout to export all your assets to a series of large zip files.
@@ -156,5 +157,7 @@ To run the CLI tool, follow the instructions in [./apps/cli/README.md](./apps/cl
 To start the dev-server, follow the instructions in [./apps/dev-server/README.md](./apps/dev-server/README.md).
 
 To start the dev-frontend, follow the instructions in [./apps/dev-frontend/README.md](./apps/dev-frontend/README.md).
+
+Encrypted CLI database workflows are covered by `apps/cli/smoke-tests-encrypted.sh`, which runs end-to-end smoke tests for encrypted init, replication, encrypt/decrypt, and basic CRUD operations.
 
 
