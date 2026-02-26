@@ -4,6 +4,7 @@ import fs from "fs";
 export * from "./lib/storage";
 export * from "./lib/cloud-storage";
 export * from "./lib/encryption-constants";
+export * from "./lib/encryption-types";
 export * from "./lib/file-storage";
 export * from "./lib/encrypted-storage";
 export * from "./lib/storage-prefix-wrapper";
