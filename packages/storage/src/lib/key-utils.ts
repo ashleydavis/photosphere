@@ -1,4 +1,4 @@
-import { generateKeyPairSync, createPrivateKey, createPublicKey, KeyObject } from 'node:crypto';
+import { createHash, generateKeyPairSync, createPrivateKey, createPublicKey, KeyObject } from 'node:crypto';
 import * as fs from 'fs/promises';
 import { pathExists } from 'node-utils';
 import { IStorageOptions } from './storage-factory';
@@ -130,8 +130,17 @@ export async function loadOrGenerateKeyPair(keyFilePath: string, generate = fals
 }
 
 /**
+ * Returns a 32-byte SHA-256 hash of the public key (SPKI format).
+ * Used in the encrypted file header to identify which key encrypted the file.
+ */
+export function hashPublicKey(publicKey: KeyObject): Buffer {
+    const spki = publicKey.export({ type: 'spki', format: 'der' }) as Buffer;
+    return createHash('sha256').update(spki).digest();
+}
+
+/**
  * Load encryption keys for storage
- * 
+ *
  * @param keyPath Path to the key file
  * @param generateKey Whether to generate a key if it doesn't exist
  * @returns Storage options with encryption keys, or empty object if no key provided
