@@ -31,8 +31,8 @@ export async function verifyFileHandler(data: IVerifyFileData, context: ITaskCon
     const fileName = node.name!;
 
     // Recreate the storage in the worker (storage objects can't be passed through worker messages)
-    // S3 config is passed in the data, and encryption key path comes from the storage descriptor
-    const { options: storageOptions } = await loadEncryptionKeys(storageDescriptor.encryptionKeyPath, false);
+    // S3 config is passed in the data, and encryption key paths come from the storage descriptor
+    const { options: storageOptions } = await loadEncryptionKeys(storageDescriptor.encryptionKeyPaths, false);
     const { storage: assetStorage } = createStorage(storageDescriptor.dbDir, s3Config, storageOptions);
 
     const fileInfo = await retry(() => assetStorage.info(fileName));

@@ -3,7 +3,6 @@ import { IFileInfo, IListResult, IStorage, IWriteLockInfo } from "./storage";
 import { KeyObject } from "node:crypto";
 import { decryptBuffer, encryptBuffer } from "./encrypt-buffer";
 import { createDecryptionStream, createEncryptionStream } from "./encrypt-stream";
-import { hashPublicKey } from "./key-utils";
 import type { IPrivateKeyMap } from "./encryption-types";
 
 //
@@ -11,13 +10,12 @@ import type { IPrivateKeyMap } from "./encryption-types";
 //
 export class EncryptedStorage implements IStorage {
 
-    private readonly privateKeyMap: IPrivateKeyMap;
+    private readonly decryptionKeyMap: IPrivateKeyMap;
+    private readonly encryptionPublicKey: KeyObject;
 
-    constructor(public readonly location: string, private storage: IStorage, private publicKey: KeyObject, private privateKey: KeyObject) {
-        this.privateKeyMap = {
-            default: privateKey,
-            [hashPublicKey(publicKey).toString("hex")]: privateKey,
-        };
+    constructor(public readonly location: string, private storage: IStorage, decryptionKeyMap: IPrivateKeyMap, encryptionPublicKey: KeyObject) {
+        this.decryptionKeyMap = decryptionKeyMap;
+        this.encryptionPublicKey = encryptionPublicKey;
     }
 
     //
@@ -72,21 +70,21 @@ export class EncryptedStorage implements IStorage {
             return undefined;
         }
 
-        return decryptBuffer(data, this.privateKeyMap);
+        return decryptBuffer(data, this.decryptionKeyMap);
     }
 
     //
     // Writes a file to storage.
     //
     async write(filePath: string, contentType: string | undefined, data: Buffer): Promise<void> {               
-        await this.storage.write(filePath, contentType, await encryptBuffer(this.publicKey, data));
+        await this.storage.write(filePath, contentType, await encryptBuffer(this.encryptionPublicKey, data));
     }
 
     //
     // Streams a file from stroage.
     //
     readStream(filePath: string): Readable {
-        const decryptionStream = createDecryptionStream(this.privateKeyMap);
+        const decryptionStream = createDecryptionStream(this.decryptionKeyMap);
         const readStream = this.storage.readStream(filePath);
         readStream.pipe(decryptionStream);
         return decryptionStream;
@@ -96,7 +94,7 @@ export class EncryptedStorage implements IStorage {
     // Writes an input stream to storage.
     //
     async writeStream(filePath: string, contentType: string | undefined, inputStream: Readable, contentLength?: number): Promise<void> {
-        const encryptionStream = createEncryptionStream(this.publicKey);
+        const encryptionStream = createEncryptionStream(this.encryptionPublicKey);
         inputStream.pipe(encryptionStream);
         await this.storage.writeStream(filePath, contentType, encryptionStream, contentLength);
     }

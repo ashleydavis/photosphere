@@ -1,7 +1,7 @@
 import { log, retry } from "utils";
 import pc from "picocolors";
 import { exit } from "node-utils";
-import { IBaseCommandOptions, ICommandContext, resolveKeyPath, selectEncryptionKey } from "../lib/init-cmd";
+import { IBaseCommandOptions, ICommandContext, resolveKeyPaths, selectEncryptionKey } from "../lib/init-cmd";
 import { getDirectoryForCommand } from "../lib/directory-picker";
 import { ensureMediaProcessingTools } from "../lib/ensure-tools";
 import { configureIfNeeded, getS3Config } from "../lib/config";
@@ -56,8 +56,8 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
         await configureIfNeeded(["s3"], nonInteractive);
     }
 
-    let resolvedKeyPath = await resolveKeyPath(options.key);
-    let { options: storageOptions } = await loadEncryptionKeys(resolvedKeyPath, false);
+    let resolvedKeyPaths = await resolveKeyPaths(options.key);
+    let { options: storageOptions } = await loadEncryptionKeys(resolvedKeyPaths, false);
     const s3Config = await getS3Config();
     let { storage: assetStorage } = createStorage(databaseDir, s3Config, storageOptions);
     const { storage: metadataStorage } = createStorage(databaseDir, s3Config, undefined);
@@ -70,7 +70,7 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
     }
 
     if (await metadataStorage.fileExists(".db/encryption.pub")) {
-        if (!resolvedKeyPath) {
+        if (resolvedKeyPaths.length === 0) {
             if (nonInteractive) {
                 outro(pc.red(`✗ This database is encrypted and requires a private key to access.\n  Please provide the private key using the --key option.`));
                 await exit(1);
@@ -78,8 +78,8 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
             log.info(pc.yellow("This database is encrypted and requires a private key to access."));
             const selectedKey = await selectEncryptionKey("Select the encryption key for this database:");
             options.key = selectedKey;
-            resolvedKeyPath = await resolveKeyPath(options.key);
-            const { options: newStorageOptions } = await loadEncryptionKeys(resolvedKeyPath, false);
+            resolvedKeyPaths = await resolveKeyPaths(options.key);
+            const { options: newStorageOptions } = await loadEncryptionKeys(resolvedKeyPaths, false);
             storageOptions = newStorageOptions;
             const { storage: newAssetStorage } = createStorage(databaseDir, s3Config, storageOptions);
             assetStorage = newAssetStorage;
@@ -148,7 +148,7 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
         throw new Error(`Failed to acquire write lock for database upgrade.`);
     }
 
-    const dbStorageForDotDb: IStorage = resolvedKeyPath ? assetStorage : metadataStorage;
+    const dbStorageForDotDb: IStorage = resolvedKeyPaths.length > 0 ? assetStorage : metadataStorage;
 
     try {
         // Fill in missing lastModified from file info using async binary tree traversal.
@@ -229,18 +229,18 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
         }
 
         // Check if database is encrypted and ensure public key is in .db directory
-        if (resolvedKeyPath) {
+        if (resolvedKeyPaths.length > 0) {
             // Database is encrypted - check if public key marker exists in .db directory
             if (!await metadataStorage.fileExists('.db/encryption.pub')) {
                 // Generate public key from private key and save it
                 try {
                     let publicKeyPem: string | undefined;
-                    const publicKeyPath = `${resolvedKeyPath}.pub`;
+                    const publicKeyPath = `${resolvedKeyPaths[0]}.pub`;
                     if (await pathExists(publicKeyPath)) {
                         publicKeyPem = await fs.readFile(publicKeyPath, 'utf8');
                     } else {
                         // Extract public key from private key
-                        const privateKey = await loadPrivateKey(resolvedKeyPath);
+                        const privateKey = await loadPrivateKey(resolvedKeyPaths[0]);
                         if (privateKey) {
                             const publicKey = createPublicKey(privateKey);
                             publicKeyPem = publicKey.export({

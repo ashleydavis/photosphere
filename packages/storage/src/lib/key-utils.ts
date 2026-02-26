@@ -4,6 +4,7 @@ import { pathExists } from 'node-utils';
 import { IStorageOptions } from './storage-factory';
 import { ensureParentDirectoryExists } from 'node-utils';
 import { FatalError } from 'utils';
+import type { IPrivateKeyMap } from './encryption-types';
 
 /**
  * Interface for key pair
@@ -141,54 +142,69 @@ export function hashPublicKey(publicKey: KeyObject): Buffer {
 /**
  * Load encryption keys for storage
  *
- * @param keyPath Path to the key file
+ * @param keyPaths Array of paths to key files (first is default/write key)
  * @param generateKey Whether to generate a key if it doesn't exist
  * @returns Storage options with encryption keys, or empty object if no key provided
  */
 export async function loadEncryptionKeys(
-    keyPath: string | undefined, 
+    keyPaths: string[], 
     generateKey: boolean
 ): Promise<{ options: IStorageOptions, isEncrypted: boolean }> {
-    if (!keyPath) {
+    if (!keyPaths || keyPaths.length === 0) {
         return { options: {}, isEncrypted: false };
     }
     
-    // console.log(`Using ${description} encryption key: ${keyPath}`);
-    
-    if (generateKey) {
-        // Try to load or generate key pair
-        const keyPair = await loadOrGenerateKeyPair(keyPath, true);
-        
-        if (!keyPair) {
-            throw new Error(`Failed to generate key pair at ${keyPath}`);
+    const decryptionKeyMap: IPrivateKeyMap = {};
+    let encryptionPublicKey: KeyObject | undefined = undefined;
+
+    for (let index = 0; index < keyPaths.length; index++) {
+        const keyPath = keyPaths[index];
+
+        if (generateKey) {
+            const keyPair = await loadOrGenerateKeyPair(keyPath, true);
+            
+            if (!keyPair) {
+                throw new Error(`Failed to generate key pair at ${keyPath}`);
+            }
+
+            const keyHashHex = hashPublicKey(keyPair.publicKey).toString('hex');
+            decryptionKeyMap[keyHashHex] = keyPair.privateKey;
+
+            if (index === 0) {
+                decryptionKeyMap.default = keyPair.privateKey;
+                encryptionPublicKey = keyPair.publicKey;
+            }
+        } 
+        else {
+            const privateKey = await loadPrivateKey(keyPath);
+            if (!privateKey) {
+                throw new FatalError(`Private key not found: ${keyPath}\nUse --generate-key to create a new key or specify an existing key file either in the current directory or in the ~/.config/photosphere/keys directory.`);
+            }
+            
+            let publicKey = await loadPublicKey(`${keyPath}.pub`);
+            if (!publicKey) {
+                publicKey = privateKey;
+            }
+
+            const keyHashHex = hashPublicKey(publicKey).toString('hex');
+            decryptionKeyMap[keyHashHex] = privateKey;
+
+            if (index === 0) {
+                decryptionKeyMap.default = privateKey;
+                encryptionPublicKey = publicKey;
+            }
         }
-        
-        return {
-            options: {
-                publicKey: keyPair.publicKey,
-                privateKey: keyPair.privateKey
-            },
-            isEncrypted: true
-        };
-    } 
-    else {
-        // Just load existing keys
-        const privateKey = await loadPrivateKey(keyPath);
-        if (!privateKey) {
-            throw new FatalError(`Private key not found: ${keyPath}\nUse --generate-key to create a new key or specify an existing key file either in the current directory or in the ~/.config/photosphere/keys directory.`);
-        }
-        
-        let publicKey = await loadPublicKey(`${keyPath}.pub`);
-        if (!publicKey) {
-            publicKey = privateKey; // Use private key as public key if public key not found.            
-        }
-        
-        return {
-            options: {
-                publicKey,
-                privateKey
-            },
-            isEncrypted: true
-        };
     }
+
+    if (!encryptionPublicKey || !decryptionKeyMap.default) {
+        return { options: {}, isEncrypted: false };
+    }
+
+    return {
+        options: {
+            decryptionKeyMap,
+            encryptionPublicKey
+        },
+        isEncrypted: true
+    };
 }
