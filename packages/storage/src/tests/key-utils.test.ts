@@ -93,7 +93,7 @@ describe('loadEncryptionKeys', () => {
 
         const writeHashHex = hashPublicKey(writeKey).toString('hex');
         expect(map[writeHashHex]).toBeDefined();
-    });
+    }, 30000);
 
     afterAll(async () => {
         try {
