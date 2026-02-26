@@ -59,7 +59,7 @@ export async function checkFileHandler(data: ICheckFileData, context: ITaskConte
     }
     
     // Recreate storage and metadata collection in the worker
-    const { options: storageOptions } = await loadEncryptionKeys(storageDescriptor.encryptionKeyPath, false);
+    const { options: storageOptions } = await loadEncryptionKeys(storageDescriptor.encryptionKeyPaths, false);
     const { storage: assetStorage } = createStorage(storageDescriptor.dbDir, s3Config, storageOptions);
     const database = createMediaFileDatabase(assetStorage, uuidGenerator, timestampProvider);
     const metadataCollection = database.metadataCollection;

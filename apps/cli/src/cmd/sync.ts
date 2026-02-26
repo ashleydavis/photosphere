@@ -1,4 +1,4 @@
-import { loadDatabase, IBaseCommandOptions, ICommandContext, selectEncryptionKey, resolveKeyPath } from "../lib/init-cmd";
+import { loadDatabase, IBaseCommandOptions, ICommandContext, selectEncryptionKey, resolveKeyPaths } from "../lib/init-cmd";
 import { getDirectoryForCommand } from "../lib/directory-picker";
 import { log } from "utils";
 import pc from "picocolors";
@@ -87,9 +87,9 @@ export async function syncCommand(context: ICommandContext, options: ISyncComman
             }
             
             // Verify the key works by trying to load encryption keys
-            const resolvedDestKeyPath = await resolveKeyPath(options.destKey);
+            const resolvedDestKeyPaths = await resolveKeyPaths(options.destKey);
             try {
-                await loadEncryptionKeys(resolvedDestKeyPath, false);
+                await loadEncryptionKeys(resolvedDestKeyPaths, false);
             } catch (error) {
                 log.error(pc.red(`✗ Failed to load encryption key: ${error instanceof Error ? error.message : String(error)}`));
                 log.error(pc.red(`  Please check that the key file exists and is valid.`));

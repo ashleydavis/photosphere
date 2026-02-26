@@ -3,7 +3,7 @@ import { createStorage, loadEncryptionKeys, pathJoin } from "storage";
 import pc from "picocolors";
 import { exit } from "node-utils";
 import { configureIfNeeded, getS3Config } from '../lib/config';
-import { loadDatabase, IBaseCommandOptions, resolveKeyPath, promptForEncryption, selectEncryptionKey, ICommandContext } from "../lib/init-cmd";
+import { loadDatabase, IBaseCommandOptions, resolveKeyPaths, promptForEncryption, selectEncryptionKey, ICommandContext } from "../lib/init-cmd";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import { pathExists, copy } from 'node-utils';
 import { getDirectoryForCommand } from "../lib/directory-picker";
@@ -107,9 +107,9 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
             }
             
             // Verify the key works by trying to load encryption keys
-            const resolvedDestKeyPath = await resolveKeyPath(options.destKey);
+            const resolvedDestKeyPaths = await resolveKeyPaths(options.destKey);
             try {
-                await loadEncryptionKeys(resolvedDestKeyPath, false);
+                await loadEncryptionKeys(resolvedDestKeyPaths, false);
             } catch (error) {
                 log.error(pc.red(`✗ Failed to load encryption key: ${error instanceof Error ? error.message : String(error)}`));
                 log.error(pc.red(`  Please check that the key file exists and is valid.`));
@@ -137,8 +137,8 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
         }
     }
 
-    const resolvedDestKeyPath = await resolveKeyPath(options.destKey);
-    const { options: destStorageOptions, isEncrypted: destIsEncrypted } = await loadEncryptionKeys(resolvedDestKeyPath, options.generateKey || false);
+    const resolvedDestKeyPaths = await resolveKeyPaths(options.destKey);
+    const { options: destStorageOptions, isEncrypted: destIsEncrypted } = await loadEncryptionKeys(resolvedDestKeyPaths, options.generateKey || false);
 
     const { storage: destAssetStorage } = createStorage(destDir, s3Config, destStorageOptions);
 
@@ -213,8 +213,8 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
     }
     
     // If destination is encrypted, copy the public key to the destination .db directory
-    if (destIsEncrypted && resolvedDestKeyPath) {
-        const publicKeySource = `${resolvedDestKeyPath}.pub`;
+    if (destIsEncrypted && resolvedDestKeyPaths.length > 0) {
+        const publicKeySource = `${resolvedDestKeyPaths[0]}.pub`;
         const publicKeyDest = pathJoin(destMetaPath, 'encryption.pub');
         
         try {

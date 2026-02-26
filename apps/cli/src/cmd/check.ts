@@ -2,7 +2,7 @@ import { log } from "utils";
 import pc from "picocolors";
 import { exit } from "node-utils";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
-import { loadDatabase, IBaseCommandOptions, ICommandContext, resolveKeyPath } from "../lib/init-cmd";
+import { loadDatabase, IBaseCommandOptions, ICommandContext, resolveKeyPaths } from "../lib/init-cmd";
 import { getS3Config } from "../lib/config";
 import { getFileLogger } from "../lib/log";
 import { checkPaths } from "api";
@@ -19,10 +19,10 @@ export async function checkCommand(context: ICommandContext, paths: string[], op
     const { databaseDir } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
 
     // Create storage descriptor for passing to workers
-    const resolvedKeyPath = await resolveKeyPath(options.key);
+    const resolvedKeyPaths = await resolveKeyPaths(options.key);
     const storageDescriptor: IStorageDescriptor = {
         dbDir: databaseDir,
-        encryptionKeyPath: resolvedKeyPath
+        encryptionKeyPaths: resolvedKeyPaths
     };
     
     // Get S3 config to pass to workers (needed for S3-hosted storage)

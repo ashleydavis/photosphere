@@ -4,6 +4,8 @@ import { FileStorage } from './file-storage';
 import { CloudStorage, IS3Credentials } from './cloud-storage';
 import { EncryptedStorage } from './encrypted-storage';
 import { StoragePrefixWrapper } from './storage-prefix-wrapper';
+import { hashPublicKey } from './key-utils';
+import type { IPrivateKeyMap } from './encryption-types';
 import path from 'node:path';
 
 //
@@ -23,14 +25,16 @@ export function pathJoin(...paths: string[]): string {
  */
 export interface IStorageOptions {
     /**
-     * Public key for encryption (if using encryption)
+     * Public key used when writing new encrypted data.
+     * Must correspond to the "default" private key in decryptionKeyMap.
      */
-    publicKey?: KeyObject;
-    
+    encryptionPublicKey?: KeyObject;
+
     /**
-     * Private key for decryption (if using encryption)
+     * Map of key identifier to private key for decryption.
+     * The "default" entry is used for old-format files (no header).
      */
-    privateKey?: KeyObject;
+    decryptionKeyMap?: IPrivateKeyMap;
 }
 
 /**
@@ -44,9 +48,10 @@ export interface IStorageDescriptor {
     dbDir: string;
     
     /**
-     * Path to encryption key file (if storage is encrypted)
+     * Paths to encryption key files (if storage is encrypted).
+     * Empty array means no encryption keys (plain storage).
      */
-    encryptionKeyPath?: string;
+    encryptionKeyPaths: string[];
 }
 
 /**
@@ -91,9 +96,8 @@ export function createStorage(
     normalizedPath = normalizedPath.replace(/\\/g, '/'); // Convert backslashes to forward slashes for consistency.
 
     // Wrap with encryption if keys are provided
-    if (options?.privateKey) {
-        storage = new EncryptedStorage(rootPath, storage, options.publicKey || options.privateKey, options.privateKey);
-        // console.log(`Loading encrypted storage for path: ${rootPath}`);
+    if (options?.decryptionKeyMap && options.encryptionPublicKey) {
+        storage = new EncryptedStorage(rootPath, storage, options.decryptionKeyMap, options.encryptionPublicKey);
         type = `encrypted-${type}`;
     }
 

@@ -178,6 +178,28 @@ export async function resolveKeyPath(keyPath: string | undefined): Promise<strin
 }
 
 //
+// Resolves a comma-separated list of key paths into absolute/expanded paths.
+// Returns an array of resolved paths; empty array means "no keys provided".
+//
+export async function resolveKeyPaths(raw: string | undefined): Promise<string[]> {
+    if (!raw) {
+        return [];
+    }
+
+    const parts = raw.split(',').map(part => part.trim()).filter(part => part.length > 0);
+    const resolved: string[] = [];
+
+    for (const part of parts) {
+        const resolvedPath = await resolveKeyPath(part);
+        if (resolvedPath) {
+            resolved.push(resolvedPath);
+        }
+    }
+
+    return resolved;
+}
+
+//
 // Common options interface that all commands should extend
 //
 export interface IBaseCommandOptions {
@@ -380,8 +402,8 @@ export async function loadDatabase(
         await configureIfNeeded(['s3'], nonInteractive);
     }
 
-    let resolvedKeyPath = await resolveKeyPath(options.key);
-    let { options: storageOptions } = await loadEncryptionKeys(resolvedKeyPath, false);
+    const resolvedKeyPaths = await resolveKeyPaths(options.key);
+    let { options: storageOptions } = await loadEncryptionKeys(resolvedKeyPaths, false);
 
     const s3Config = await getS3Config();
     let { storage: assetStorage } = createStorage(dbDir, s3Config, storageOptions);
@@ -415,7 +437,7 @@ export async function loadDatabase(
     // See if the database is encrypted and requires a key.
     //
     if (await metadataStorage.fileExists('.db/encryption.pub')) {
-        if (!resolvedKeyPath) {
+        if (resolvedKeyPaths.length === 0) {
             if (nonInteractive) {
                 outro(pc.red(`✗ This database is encrypted and requires a private key to access.\n  Please provide the private key using the --key option.\n\nExample:\n    ${pc.cyan(`psi <command> --key my-photos.key`)}\n    ${pc.cyan(`psi <command> --key <full or relative path to key>`)}`));
                 await exit(1);
@@ -428,8 +450,8 @@ export async function loadDatabase(
                 
                 // Resolve the selected key path and reload encryption keys
                 options.key = selectedKey;
-                resolvedKeyPath = await resolveKeyPath(options.key);
-                const { options: newStorageOptions } = await loadEncryptionKeys(resolvedKeyPath, false);
+                const selectedKeyPaths = await resolveKeyPaths(options.key);
+                const { options: newStorageOptions } = await loadEncryptionKeys(selectedKeyPaths, false);
                 storageOptions = newStorageOptions;
                 
                 // Recreate storage with the new encryption options
@@ -506,8 +528,8 @@ export async function createDatabase(
     }
 
     // Load encryption keys (with generateKey support for init)
-    const resolvedKeyPath = await resolveKeyPath(options.key);
-    const { options: storageOptions, isEncrypted } = await loadEncryptionKeys(resolvedKeyPath, options.generateKey || false);
+    const resolvedKeyPaths = await resolveKeyPaths(options.key);
+    const { options: storageOptions, isEncrypted } = await loadEncryptionKeys(resolvedKeyPaths, options.generateKey || false);
 
     const s3Config = await getS3Config();
     const { storage: assetStorage } = createStorage(dbDir, s3Config, storageOptions);
@@ -533,8 +555,8 @@ export async function createDatabase(
     await createMediaDatabase(assetStorage, metadataStorage, uuidGenerator, database.metadataCollection);
 
     // If database is encrypted, copy the public key to the .db directory as a marker
-    if (isEncrypted && resolvedKeyPath) {
-        const publicKeySource = `${resolvedKeyPath}.pub`;
+    if (isEncrypted && resolvedKeyPaths.length > 0) {
+        const publicKeySource = `${resolvedKeyPaths[0]}.pub`;
         const publicKeyDest = pathJoin(metaPath, 'encryption.pub');
         
         try {
