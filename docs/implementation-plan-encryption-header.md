@@ -117,51 +117,51 @@ Each commit is self-contained: implement the “What to do” below, add the tes
 
 ---
 
-### [ ] Commit 5: CLI – encrypt command
+### [x] Commit 5: CLI – encrypt command
 
-- **Message:** `Add encrypt command for plain→encrypted, re-encrypt, and old→new format`
-- **Description:** Adds `psi encrypt` so users can encrypt a plain DB, re-encrypt with a new key, or convert an old-format encrypted DB to the new format (same key) without manual file work. Uses createStorage for source and dest (with or without keys), copies all asset and metadata files through the right storage layer, writes `.db/encryption.pub` at encrypted destinations, and reuses existing replicate/copy and key resolution.
+- **Message:** `Add encrypt command for plain→encrypted, re-encrypt, and old→new format (in place)`
+- **Description:** Adds `psi encrypt` so users can encrypt a plain DB, re-encrypt with a new key, or convert an old-format encrypted DB to the new format (same key) **in place**—no destination; the database at `--db` is transformed where it is. The command creates the appropriate storage (plain for read when source is plain, or key map for read when source is encrypted), creates encrypted storage for write targeting the same `--db` path, reads each file and writes it back encrypted (new format), then writes `.db/encryption.pub`. Reuses `resolveKeyPath`, `loadEncryptionKeys`, `createStorage`; implements in-place copy (read each path, write to same path with encrypted storage) rather than replicate.
 
 - **Scope**: `apps/cli`
 - **What to do**:
-  - Add `src/cmd/encrypt.ts`. **Behaviors:** (1) Plain → encrypted: `--db <plain> --dest <dir> --key <keyfile[,keyfile2,...]> [--generate-key]` — source no key, dest with one or more keys; parse the comma-separated list into an array and call `loadEncryptionKeys` so the first key becomes default/write key and all keys populate the key map; copy all files through EncryptedStorage (new format); copy `.db` metadata; write `.db/encryption.pub` at dest. (2) Re-encrypt: `--db <enc> --dest <dir> --key <new-key[,new-key2,...]> [--generate-key] --source-key <old-key[,old-key2,...]>` — build separate key maps for source and dest from their respective lists; source map may contain multiple old keys, dest uses the first new key as default/write key. (3) Old-format → new format (same key): `--key` and `--source-key` lists can both include the same path as their first element so that the same default key is used for reading and writing. Options: `--db`, `--dest`, `--key`, `--generate-key`, `--source-key`, `--yes`. Reuse `resolveKeyPath`, `loadEncryptionKeys`, `createStorage`, replicate/copy logic.
+  - Add `src/cmd/encrypt.ts`. **In-place behavior:** Operate only on `--db <path>`; there is no `--dest`. **Behaviors:** (1) Plain → encrypted: `--db <path> --key <keyfile[,keyfile2,...]> [--generate-key]` — open DB at path with no key (plain read); open same path with encrypted storage using key(s) from `--key` (first = write key); enumerate all files (e.g. from files Merkle / asset/display/thumb + `.db` tree), for each file read plain and write encrypted to the same path; write `.db/encryption.pub`. (2) Re-encrypt: `--db <path> --key <new-key[,...]> [--generate-key] --source-key <old-key[,...]>` — open DB for read with source key map; open same path for write with new key(s) (first = write key); read each file, write back encrypted with new key; update `.db/encryption.pub` to new public key. (3) Old-format → new format (same key): `--db <path> --key <keyfile[,...]> --source-key <same-key[,...]>` (or single key for both) — read with key map, write with same key to same paths so every file gets the new header. Options: `--db`, `--key`, `--generate-key`, `--source-key`, `--yes`. No `--dest`.
   - Register `encrypt` in `index.ts` with `initContext(encryptCommand)`.
 - **Unit tests**: Command test if present; else rely on smoke.
 - **Smoke tests**: `./smoke-tests.sh all` from `apps/cli`.
-- **README**: `apps/cli/README.md` — document `psi encrypt` (usage + brief: encrypt plain, re-encrypt, or convert old→new format).
+- **README**: `apps/cli/README.md` — document `psi encrypt` (in-place; usage + brief: encrypt plain, re-encrypt, or convert old→new format).
 
 ---
 
-### [ ] Commit 6: CLI – decrypt command
+### [x] Commit 6: CLI – decrypt command
 
-- **Message:** `Add decrypt command to write encrypted DB to plain storage`
-- **Description:** Adds `psi decrypt` to read an encrypted DB (old or new format) and write decrypted content to a plain destination, for backup or migration. Source storage is created with a key map from `--key` (and optional `--source-key`); destination is unencrypted. All files are copied via source read / dest write; metadata is copied but `.db/encryption.pub` is not written at the destination.
+- **Message:** `Add decrypt command to decrypt encrypted DB in place`
+- **Description:** Adds `psi decrypt` to decrypt an encrypted DB (old or new format) **in place**—no destination; the database at `--db` is transformed where it is. The command opens storage at `--db` with a key map from `--key` (and optional `--source-key`) for reading, opens the same path as plain storage for writing, reads each file (decrypted) and writes it back plain to the same path, then removes `.db/encryption.pub`.
 
 - **Scope**: `apps/cli`
 - **What to do**:
-  - Add `src/cmd/decrypt.ts`: `psi decrypt --db <encrypted> --dest <plain> --key <keyfile[,keyfile2,...]> [--source-key <keyfile[,keyfile2,...]>] [--yes]`. Source storage is created with a key map from the comma-separated lists (merged into a single `privateKeyMap` where the first key is treated as default for old-format files); destination is unencrypted. Copy all files (read via EncryptedStorage, write plain). Copy metadata; do **not** write `.db/encryption.pub` at dest.
+  - Add `src/cmd/decrypt.ts`: `psi decrypt --db <path> --key <keyfile[,keyfile2,...]> [--source-key <keyfile[,keyfile2,...]>] [--yes]`. No `--dest`. Open `--db` with encrypted storage (key map from comma-separated `--key` and `--source-key`); open same path with plain storage for write. Enumerate all files; for each, read decrypted and write plain to the same path. Remove `.db/encryption.pub` at the end.
   - Register `decrypt` in `index.ts`.
 - **Unit tests**: Same as Commit 5.
 - **Smoke tests**: `./smoke-tests.sh all` from `apps/cli`.
-- **README**: `apps/cli/README.md` — document `psi decrypt` (usage + brief).
+- **README**: `apps/cli/README.md` — document `psi decrypt` (in-place; usage + brief).
 
 ---
 
-### [ ] Commit 7: Encrypted smoke test script
+### [x] Commit 7: Encrypted smoke test script
 
 - **Message:** `Add smoke-tests-encrypted.sh with seven independent encryption tests`
 - **Description:** Adds `smoke-tests-encrypted.sh` following the main smoke script’s conventions. Seven tests (init-encrypted, replicate-to/from-encrypted, encrypt-plain, encrypt-reencrypt, encrypt-old-to-new-format, decrypt-encrypted) each use their own directory and keys so they are independent and safe to run in any order or alone. Uses the same env, helpers, and invocation pattern as `smoke-tests.sh`; test 6 may use an optional old-format fixture.
 
 - **Scope**: `apps/cli` (+ optional fixture)
 - **What to do**:
-  - Add `apps/cli/smoke-tests-encrypted.sh`: same conventions as `smoke-tests.sh` (env, helpers, TEST_TABLE, run_test, run_all_tests, main, `--binary`, `--tmp-dir`, reset, setup, all, by name/index). **Seven tests**, each with its own dir under `TEST_TMP_DIR` and own keys: (1) **init-encrypted** — init with `--key` + `--generate-key`, assert `.db`, `.db/files.dat`, `.db/encryption.pub`; (2) **replicate-to-encrypted** — plain DB + asset, replicate with `--dest-key` + `--generate-key`, assert dest encrypted and verify with key; (3) **replicate-from-encrypted** — encrypted DB + asset, replicate to plain dest, assert dest unencrypted and verify; (4) **encrypt-plain** — plain DB + assets, `psi encrypt` to dest, assert dest encrypted and verify; (5) **encrypt-reencrypt** — encrypted with key1, `psi encrypt --key key2 --source-key key1`, assert dest works only with key2; (6) **encrypt-old-to-new-format** — old-format DB (fixture or create before header change), `psi encrypt` same key to dest, assert dest has 4-byte tag and verify; (7) **decrypt-encrypted** — encrypted DB + assets, `psi decrypt` to plain, assert dest unencrypted and verify. Also add six additional tests: (8) **add-encrypted-file** — add a file to an encrypted database and assert the stored file is encrypted; (9) **export-encrypted-file** — export a file from an encrypted database and assert the exported file is decrypted/plain; (10) **verify-encrypted-db** — verify an encrypted database containing one encrypted file; (11) **delete-encrypted-file** — delete a file from an encrypted database and verify it no longer exists and verification still passes; (12) **list-encrypted-files** — list files in an encrypted database and verify the listing works and shows the added asset; (13) **replicate-decrypted-from-encrypted** — replicate from an encrypted database to a plain destination and verify the destination database is decrypted/plain and passes verification; (14) **export-with-multiple-keys** — start from an encrypted database containing two encrypted files, each encrypted with a different key, and verify that exporting both assets with their respective keys produces correctly decrypted/plain files.
+  - Add `apps/cli/smoke-tests-encrypted.sh`: same conventions as `smoke-tests.sh` (env, helpers, TEST_TABLE, run_test, run_all_tests, main, `--binary`, `--tmp-dir`, reset, setup, all, by name/index). **Seven tests**, each with its own dir under `TEST_TMP_DIR` and own keys: (1) **init-encrypted** — init with `--key` + `--generate-key`, assert `.db`, `.db/files.dat`, `.db/encryption.pub`; (2) **replicate-to-encrypted** — plain DB + asset, replicate with `--dest-key` + `--generate-key`, assert dest encrypted and verify with key; (3) **replicate-from-encrypted** — encrypted DB + asset, replicate to plain dest, assert dest unencrypted and verify; (4) **encrypt-plain** — plain DB + assets, `psi encrypt --db <dir>` in place, assert DB encrypted and verify; (5) **encrypt-reencrypt** — encrypted with key1, `psi encrypt --db <dir> --key key2 --source-key key1` in place, assert DB works only with key2; (6) **encrypt-old-to-new-format** — old-format DB (fixture or create before header change), `psi encrypt --db <dir>` same key in place, assert DB has 4-byte tag and verify; (7) **decrypt-encrypted** — encrypted DB + assets, `psi decrypt --db <dir>` in place, assert DB unencrypted and verify. Also add six additional tests: (8) **add-encrypted-file** — add a file to an encrypted database and assert the stored file is encrypted; (9) **export-encrypted-file** — export a file from an encrypted database and assert the exported file is decrypted/plain; (10) **verify-encrypted-db** — verify an encrypted database containing one encrypted file; (11) **delete-encrypted-file** — delete a file from an encrypted database and verify it no longer exists and verification still passes; (12) **list-encrypted-files** — list files in an encrypted database and verify the listing works and shows the added asset; (13) **replicate-decrypted-from-encrypted** — replicate from an encrypted database to a plain destination and verify the destination is decrypted/plain and passes verification; (14) **export-with-multiple-keys** — start from an encrypted database containing two encrypted files, each encrypted with a different key, and verify that exporting both assets with their respective keys produces correctly decrypted/plain files.
 - **Unit tests**: N/A.
 - **Smoke tests**: `./smoke-tests-encrypted.sh all` and `./smoke-tests.sh all` from `apps/cli`.
 - **README**: `apps/cli/README.md` — “Encrypted database smoke tests”: describe `smoke-tests-encrypted.sh`, how to run (all, by name, reset, setup), independence (own dirs/keys).
 
 ---
 
-### [ ] Commit 8: Docs and README polish
+### [x] Commit 8: Docs and README polish
 
 - **Message:** `Add encrypt/decrypt and encrypted smoke tests to READMEs`
 - **Description:** Updates root or CLAUDE docs with brief references to `encrypt`/`decrypt` and the encrypted smoke tests where relevant, and brings packages/storage and apps/cli READMEs in line with the encryption format, commands, and how to run the encrypted test script so the docs match the implementation.

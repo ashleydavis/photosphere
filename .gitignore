@@ -45,3 +45,4 @@ tmp/
 bundle/
 release/
 apps/desktop/test-results
+apps/cli/test/tmp-encrypted/

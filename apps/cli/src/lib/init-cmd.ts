@@ -534,8 +534,10 @@ export async function createDatabase(
     const s3Config = await getS3Config();
     const { storage: assetStorage } = createStorage(dbDir, s3Config, storageOptions);
     
-    // Create unencrypted storage for metadata (metadata was never encrypted)
-    const { storage: metadataStorage } = createStorage(dbDir, s3Config, undefined);
+    // Metadata storage follows the same encryption settings as asset storage when the database is encrypted.
+    const { storage: metadataStorage } = isEncrypted
+        ? createStorage(dbDir, s3Config, storageOptions)
+        : createStorage(dbDir, s3Config, undefined);
 
     // Check the requested directory is empty or non-existent using the storage interface. 
     if (!await assetStorage.isEmpty("/")) {

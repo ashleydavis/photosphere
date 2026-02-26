@@ -76,15 +76,15 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
         await configureIfNeeded(['s3'], nonInteractive);
     }
     
-    // Check if destination database already exists
+    // Check if destination database already exists (using plain metadata probe storage)
     const s3Config = await getS3Config();
-    const { storage: destMetadataStorage } = createStorage(destDir, s3Config, undefined);
+    const { storage: destMetadataProbeStorage } = createStorage(destDir, s3Config, undefined);
 
     // Check if destination database already has a files tree
-    let destDbExists = await merkleTreeExists(destMetadataStorage);    
+    let destDbExists = await merkleTreeExists(destMetadataProbeStorage);    
     if (destDbExists) {
         // Database already exists - check if it's encrypted
-        const destDbIsEncrypted = await destMetadataStorage.fileExists('.db/encryption.pub');        
+        const destDbIsEncrypted = await destMetadataProbeStorage.fileExists('.db/encryption.pub');        
         if (destDbIsEncrypted) {
             // Database is encrypted - user must provide a key
             if (!options.destKey) {
@@ -141,6 +141,11 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
     const { options: destStorageOptions, isEncrypted: destIsEncrypted } = await loadEncryptionKeys(resolvedDestKeyPaths, options.generateKey || false);
 
     const { storage: destAssetStorage } = createStorage(destDir, s3Config, destStorageOptions);
+
+    // Metadata storage follows the same encryption settings as asset storage when destination is encrypted.
+    const { storage: destMetadataStorage } = destIsEncrypted
+        ? createStorage(destDir, s3Config, destStorageOptions)
+        : createStorage(destDir, s3Config, undefined);
 
     // If destination database exists, warn user and ask for confirmation (unless --ues is used)
     if (destDbExists && !options.yes) {

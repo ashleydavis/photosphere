@@ -13,6 +13,7 @@ cli/
 │   ├── lib/                              # Shared libraries
 │   └── test/                             # Unit tests
 ├── smoke-tests.sh                        # Comprehensive smoke tests
+├── smoke-tests-encrypted.sh              # Encrypted database smoke tests
 ├── package.json
 └── tsconfig.json
 ```
@@ -40,6 +41,18 @@ bun run create-simple-database-test
 ```
 
 Use Git diff (or similar) to determine if the test worked.
+
+## Encryption commands
+
+The CLI includes dedicated commands for working with encrypted databases. Both operate **in place** on the database directory (no `--dest`).
+
+- **`psi encrypt`** – Encrypts a plain database in place, or re-encrypts an already encrypted database with a new key. If the database is already encrypted with the **same key** as the one given with `--key`, the command exits successfully without rewriting files. The new public key (`.db/encryption.pub`) is written **only after** the entire database has been re-encrypted with the new key.  
+  Example: `psi encrypt --db ./my-db --key my-photos.key [--generate-key] [--source-key old.key[,old2.key]] --yes`
+
+- **`psi decrypt`** – Decrypts an encrypted database in place. Removes `.db/encryption.pub` when done.  
+  Example: `psi decrypt --db ./encrypted-db --key my-photos.key[,other.key] [--source-key old.key[,old2.key]] --yes`
+
+All encryption-related options that accept key paths (`--key`, `--source-key`) support comma-separated lists, which are resolved into a key map so databases containing files encrypted with different keys can be read.
 
 ## Building the CLI tool
 
@@ -109,5 +122,23 @@ The smoke tests require the following tools to be installed:
 
 # Check if required tools are installed
 ./smoke-tests.sh check-tools
+```
+
+## Encrypted database smoke tests
+
+Encrypted database workflows (init with encryption, replicate to/from encrypted databases, encrypt/decrypt, and basic CRUD on encrypted data) are covered by a dedicated script: `smoke-tests-encrypted.sh`.
+
+```bash
+# Run all encrypted smoke tests (from code)
+./smoke-tests-encrypted.sh all
+
+# Use built binary instead of bun run start --
+./smoke-tests-encrypted.sh --binary all
+
+# Run a single encrypted test
+./smoke-tests-encrypted.sh encrypt-plain
+
+# Override the temporary directory (useful for parallel runs)
+TEST_TMP_DIR=./test/tmp-enc ./smoke-tests-encrypted.sh all
 ```
 

@@ -127,6 +127,15 @@ export const COMMAND_EXAMPLES: ICommandExamples = {
         { command: "psi hash --key ./key encrypted:photo.jpg", description: "Computes hash of an encrypted file." }
     ],
     
+    encrypt: [
+        { command: "psi encrypt --db ./photos --key my-photos.key --yes", description: "Encrypts a plain database in place using the specified key." },
+        { command: "psi encrypt --db ./photos --key new.key --source-key old.key --yes", description: "Re-encrypts (or converts old-format to new-format) in place with a new key." }
+    ],
+
+    decrypt: [
+        { command: "psi decrypt --db ./photos --key my-photos.key --yes", description: "Decrypts the encrypted database in place." }
+    ],
+    
     sync: [
         { command: "psi sync --db ./photos --dest ./backup", description: "Synchronizes changes between two databases." },
         { command: "psi sync --db . --dest s3:bucket/photos", description: "Synchronizes local database with an S3 replica." },
