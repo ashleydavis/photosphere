@@ -1,6 +1,6 @@
-# Defs
+# Storage
 
-Shared code library for Photosphere storage.
+Shared code library for Photosphere storage. Encryption format version and constants (tag, type, key hash length) are defined in this package.
 
 ## Setup
 
