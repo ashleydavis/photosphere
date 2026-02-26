@@ -4,7 +4,7 @@
 //
 
 /** 4-byte magic tag that marks a file as encrypted with the new format. */
-export const ENCRYPTION_TAG = Buffer.from('PSEN', 'ascii');
+export const ENCRYPTION_TAG = 'PSEN';
 
 /** Format version of the encryption code (uint32). Version 1 = new header format. */
 export const ENCRYPTION_FORMAT_VERSION = 1;

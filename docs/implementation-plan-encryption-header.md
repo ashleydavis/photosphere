@@ -22,6 +22,10 @@ Commit only when the codebase compiles and both unit and relevant smoke tests pa
 
 **Preparing commits:** For each commit, implement the changes, run the gates, and have the message and description ready. Do **not** stage files or run `git commit`—the author will stage and commit each one after review.
 
+**Keep it simple:** Avoid over-engineering. Only add options, abstractions, or extra types when they are clearly required by the current feature or tests; prefer the simplest design that satisfies the requirements.
+
+**New code:** Any new functions added as part of this plan should have a brief intent-level comment (explaining what the function does and its contract) and at least one unit test that exercises the normal path and any important edge cases.
+
 ---
 
 ## Reference (shared by commits 2–4)
@@ -41,7 +45,7 @@ Each commit is self-contained: implement the “What to do” below, add the tes
 
 ---
 
-### [ ] Commit 1: Storage – encryption constants and public key hash
+### [x] Commit 1: Storage – encryption constants and public key hash
 
 - **Message:** `Add encryption constants and public key hash`
 - **Description:** Adds `encryption-constants.ts` (tag, format version, encryption type, key hash length) and `hashPublicKey()` in key-utils so encrypted file headers and key identification have a single source of truth. Constants are exported from storage; `hashPublicKey` exports the key as SPKI and returns a 32-byte SHA-256 hash for use in headers and key maps.
@@ -56,7 +60,7 @@ Each commit is self-contained: implement the “What to do” below, add the tes
 
 ---
 
-### [ ] Commit 2: Storage – key map type and encrypt-buffer
+### [x] Commit 2: Storage – key map type and encrypt-buffer
 
 - **Message:** `Add key map and new-format encrypt/decrypt for buffers`
 - **Description:** Introduces `IPrivateKeyMap` and updates buffer encrypt/decrypt: `encryptBuffer` always writes the new header (tag, version, type, keyHash + payload); `decryptBuffer` takes a key map and supports both legacy files (no header, use `"default"` key) and new-format files (header + key lookup by hash). Keeps decryption backward compatible and prepares for multi-key migration without touching streams or storage yet.

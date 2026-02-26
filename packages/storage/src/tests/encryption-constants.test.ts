@@ -6,9 +6,9 @@ import {
 } from '../lib/encryption-constants';
 
 describe('encryption constants', () => {
-    it('ENCRYPTION_TAG is 4 bytes and equals PSEN', () => {
+    it('ENCRYPTION_TAG is 4 characters and equals PSEN', () => {
+        expect(ENCRYPTION_TAG).toBe('PSEN');
         expect(ENCRYPTION_TAG.length).toBe(4);
-        expect(ENCRYPTION_TAG.toString('ascii')).toBe('PSEN');
     });
 
     it('ENCRYPTION_FORMAT_VERSION is 1', () => {

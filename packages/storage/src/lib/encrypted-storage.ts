@@ -3,13 +3,21 @@ import { IFileInfo, IListResult, IStorage, IWriteLockInfo } from "./storage";
 import { KeyObject } from "node:crypto";
 import { decryptBuffer, encryptBuffer } from "./encrypt-buffer";
 import { createDecryptionStream, createEncryptionStream } from "./encrypt-stream";
+import { hashPublicKey } from "./key-utils";
+import type { IPrivateKeyMap } from "./encryption-types";
 
 //
 // A type of storage that wraps another storage and encrypts it.
 //
 export class EncryptedStorage implements IStorage {
 
-    constructor(public readonly location: string, private storage: IStorage, private publicKey: KeyObject, private privateKey: KeyObject) {        
+    private readonly privateKeyMap: IPrivateKeyMap;
+
+    constructor(public readonly location: string, private storage: IStorage, private publicKey: KeyObject, private privateKey: KeyObject) {
+        this.privateKeyMap = {
+            default: privateKey,
+            [hashPublicKey(publicKey).toString("hex")]: privateKey,
+        };
     }
 
     //
@@ -64,7 +72,7 @@ export class EncryptedStorage implements IStorage {
             return undefined;
         }
 
-        return decryptBuffer(this.privateKey, data);
+        return decryptBuffer(data, this.privateKeyMap);
     }
 
     //
