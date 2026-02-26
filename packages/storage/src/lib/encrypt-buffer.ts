@@ -3,15 +3,14 @@ import {
     ENCRYPTION_TAG,
     ENCRYPTION_FORMAT_VERSION,
     ENCRYPTION_TYPE,
+    LEGACY_HEADER_LENGTH,
+    NEW_FORMAT_HEADER_LENGTH,
     PUBLIC_KEY_HASH_LENGTH,
+    SUPPORTED_TYPES,
+    SUPPORTED_VERSIONS,
 } from "./encryption-constants";
 import { hashPublicKey } from "./key-utils";
 import type { IPrivateKeyMap } from "./encryption-types";
-
-const LEGACY_HEADER_LENGTH = 512 + 16; // encryptedKey + iv
-const NEW_FORMAT_HEADER_LENGTH = 4 + 4 + 4 + PUBLIC_KEY_HASH_LENGTH; // tag + version + type + keyHash
-const SUPPORTED_VERSIONS = [1];
-const SUPPORTED_TYPES = ["A2CB"];
 
 //
 // Encrypts a buffer using a public key. Always writes the new format (tag, version, type, keyHash + payload).

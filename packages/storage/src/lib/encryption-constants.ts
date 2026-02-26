@@ -14,3 +14,18 @@ export const ENCRYPTION_TYPE = 'A2CB';
 
 /** Length in bytes of the public key hash (SHA-256) stored in the header. */
 export const PUBLIC_KEY_HASH_LENGTH = 32;
+
+/** Length in bytes of the legacy payload header (encryptedKey + iv). */
+export const LEGACY_HEADER_LENGTH = 512 + 16;
+
+/** Length in bytes of the new-format file header (tag + version + type + keyHash). */
+export const NEW_FORMAT_HEADER_LENGTH = 4 + 4 + 4 + PUBLIC_KEY_HASH_LENGTH;
+
+/** Offset in bytes at which ciphertext starts in a new-format file (header + legacy header). */
+export const NEW_FORMAT_PAYLOAD_OFFSET = NEW_FORMAT_HEADER_LENGTH + LEGACY_HEADER_LENGTH;
+
+/** Format version values that are supported for decryption. */
+export const SUPPORTED_VERSIONS: readonly number[] = [1];
+
+/** Encryption type values that are supported for decryption. */
+export const SUPPORTED_TYPES: readonly string[] = ["A2CB"];
