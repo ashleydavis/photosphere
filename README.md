@@ -1,29 +1,30 @@
 # Photosphere
 
-Photosphere is a cross-platform application for managing your database of digital media files (photos and videos). I like to think of it as the spiritual successor to [Picasa](https://en.wikipedia.org/wiki/Picasa) but with a UI more like modern Google Photos and backed by a Git-style database for immutable binary assets like photos and videos that have editable metadata.
+Photosphere is a cross-platform application for managing your database of digital media files (photos and videos). I like to think of it as the spiritual successor to [Picasa](https://en.wikipedia.org/wiki/Picasa) but with a UI more like modern Google Photos and backed by a Git-style database for immutable binary files like photos and videos that have editable metadata.
 
 Important features:
+- Local first so you own it and you control.
+- Open source so you can understand what it does with your files.
+- Maintain data sovereignty: the storage and privacy of your files in under your control.
 - Build a corruption resistant database of your digital media files.
 - Backup your database and keep your backup updated.
 - Bidirectional synchronization between devices.
 - Detect and repair corrupt files.
-- Securely encrypt files that you store in the cloud.
-- Use the UI to search, view and edit your photos and videos.
+
+- Securely encrypt files that you store in the cloud vendor or your choice.
+- Use the GUI to search, view and edit your photos and videos.
 
 Photosphere is a local-first application available as:
 - A CLI tool (build and manage databases from the command line).
-- A desktop application (Electron-based app for Windows, macOS, and Linux).
-- A mobile application (Android and iOS apps).
+- A desktop application (Electron-based app for Windows, macOS, and Linux - COMING SOON).
+- A mobile application (Android and iOS apps - COMING SOON).
 
 Note: The self-hosted server option has been discontinued for now, but may be reinstated later if there's demand for it.
 
 Contained herein are the code for Photosphere's:
-- Dev-server (for faster dev outside Electron)
-- Dev-frontend (for faster dev outside Electron)
+- Desktop app
+- Mobile apps
 - CLI tool
-- Desktop app (Electron)
-- Desktop frontend (React UI for Electron)
-- Android and iOS apps
 
 Early development of Photosphere was covered in the book [The Feedback-Driven Developer](https://www.manning.com/books/the-feedback-driven-developer).
 
