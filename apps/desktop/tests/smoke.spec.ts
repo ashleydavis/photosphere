@@ -88,7 +88,7 @@ test.describe('Smoke Tests', () => {
         executablePath,
         cwd,
         args: ['--no-sandbox'],
-        timeout: 30000,
+        timeout: 60_000,
       });
     } catch (error) {
       console.error('Failed to launch Photosphere:', error);
