@@ -36,6 +36,11 @@ let isDatabaseOpen: boolean = false;
 // File logger for writing logs to files
 let fileLogger: FileLoggerElectron | null = null;
 
+// In CI (e.g. GitHub Actions), disable GPU so the window can appear on limited-GPU runners (e.g. Windows)
+if (process.env.CI) {
+    app.commandLine.appendSwitch('disable-gpu');
+}
+
 //
 // Creates and configures the main browser window for the Electron app.
 //
