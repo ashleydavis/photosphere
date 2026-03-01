@@ -95,8 +95,8 @@ test.describe('Smoke Tests', () => {
       throw new Error(`Failed to launch Photosphere: ${error}\nExecutable: ${executablePath}\nWorking directory: ${cwd}`);
     }
 
-    // Get the first window
-    const window = await electronApp.firstWindow();
+    // Get the first window (allow enough time for app to create window on slow CI)
+    const window = await electronApp.firstWindow({ timeout: 90_000 });
     
     // Wait for the page to load
     await window.waitForLoadState('domcontentloaded');
