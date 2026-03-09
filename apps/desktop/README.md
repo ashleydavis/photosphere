@@ -81,6 +81,14 @@ Run Playwright smoke tests:
 bun run test:smoke
 ```
 
+To show the app GUI and pause so you can watch the test (opens Playwright Inspector):
+
+```bash
+bun run test:smoke:gui
+```
+
+Or set `SHOW_GUI=1` when running the test (e.g. `SHOW_GUI=1 bun run test:smoke` on Unix, or set the env var in your shell before running).
+
 Tests verify:
 - App launches successfully
 - Basic UI interactions
