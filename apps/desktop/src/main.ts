@@ -310,20 +310,9 @@ async function initRestApi(): Promise<void> {
 
     const serverPath = join(app.getAppPath(), 'bundle/rest-api-worker.js');
 
-    // Set up environment for the utility process
-    const workerEnv: Record<string, string> = {};
-    
-    // Inherit PATH for tool access
-    if (process.env.PATH) {
-        workerEnv.PATH = process.env.PATH;
-    }
-    
-    // Inherit TMPDIR if set
-    if (process.env.TMPDIR) {
-        workerEnv.TMPDIR = process.env.TMPDIR;
-    }
-    
-    // Pass worker options via environment variable (same as task worker)
+    // Set up environment for the utility process.
+    // utilityProcess.fork() does not inherit process.env; pass it explicitly so Windows network stack works.
+    const workerEnv: Record<string, string> = { ...process.env } as Record<string, string>;
     workerEnv.WORKER_OPTIONS = JSON.stringify({
         verbose: false,
         tools: false,
