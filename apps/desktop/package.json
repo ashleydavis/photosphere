@@ -22,6 +22,7 @@
     "build": "bun run bundle && electron-builder",
     "setup-electron-builder": "powershell -ExecutionPolicy Bypass -File scripts/setup-electron-builder.ps1",
     "test:smoke": "playwright test tests/smoke.spec.ts",
+    "test:smoke:gui": "cross-env SHOW_GUI=1 playwright test tests/smoke.spec.ts",
     "test:post-install": "bash scripts/test-post-install.sh"
   },
   "dependencies": {
@@ -35,6 +36,7 @@
     "tools": "workspace:*"
   },
   "devDependencies": {
+    "cross-env": "^7.0.3",
     "electron": "^40.0.0",
     "@types/node": "^20.10.0",
     "electron-builder": "^26.4.0",

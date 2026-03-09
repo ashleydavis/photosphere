@@ -112,6 +112,11 @@ test.describe('Smoke Tests', () => {
     // Verify "Photosphere is developed by" text appears
     await expect(window.getByText('Photosphere is developed by')).toBeVisible();
 
+    // When SHOW_GUI=1, pause so you can see the app and use Playwright Inspector to step through
+    if (process.env.SHOW_GUI) {
+      await window.pause();
+    }
+
     // Close the app
     await electronApp.close();
   });
