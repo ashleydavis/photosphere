@@ -144,7 +144,7 @@ export async function createAssetServer(options: IAssetServerOptions): Promise<I
 
     // Start server
     await new Promise<void>((resolve) => {
-        server.listen(port, () => {
+        server.listen(port, "127.0.0.1", () => {
             log.info(`Asset server running on http://localhost:${port}`);
             resolve();
         });
