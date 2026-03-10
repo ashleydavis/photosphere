@@ -55,13 +55,6 @@ export class FileLoggerElectron implements ILog {
     }
     
     private async writeLogHeader(): Promise<void> {
-        const toolVersions = process.env.CI
-            ? ['(skipped in CI to avoid blocking startup)']
-            : [
-                await this.getImageMagickVersion(),
-                await this.getFFmpegVersion(),
-                await this.getFFprobeVersion(),
-            ];
         const lines = [
             '='.repeat(80),
             `Photosphere Desktop Log`,
@@ -77,7 +70,9 @@ export class FileLoggerElectron implements ILog {
             `Chrome Version: ${process.versions.chrome || 'unknown'}`,
             '',
             '--- Tool Versions ---',
-            ...toolVersions,
+            await this.getImageMagickVersion(),
+            await this.getFFmpegVersion(),
+            await this.getFFprobeVersion(),
             '',
             '--- Log Start ---',
             ''
@@ -88,13 +83,6 @@ export class FileLoggerElectron implements ILog {
     }
     
     private async writeErrorLogHeader(): Promise<void> {
-        const toolVersions = process.env.CI
-            ? ['(skipped in CI to avoid blocking startup)']
-            : [
-                await this.getImageMagickVersion(),
-                await this.getFFmpegVersion(),
-                await this.getFFprobeVersion(),
-            ];
         const header = [
             '='.repeat(80),
             `Photosphere Desktop Error Log`,
@@ -110,7 +98,9 @@ export class FileLoggerElectron implements ILog {
             `Chrome Version: ${process.versions.chrome || 'unknown'}`,
             '',
             '--- Tool Versions ---',
-            ...toolVersions,
+            await this.getImageMagickVersion(),
+            await this.getFFmpegVersion(),
+            await this.getFFprobeVersion(),
             '',
             'If this file contains nothing below, it means there were no errors.',
             '',
