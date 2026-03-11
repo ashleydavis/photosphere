@@ -183,7 +183,7 @@ export async function loadEncryptionKeys(
             
             let publicKey = await loadPublicKey(`${keyPath}.pub`);
             if (!publicKey) {
-                publicKey = privateKey;
+                publicKey = createPublicKey(privateKey);
             }
 
             const keyHashHex = hashPublicKey(publicKey).toString('hex');

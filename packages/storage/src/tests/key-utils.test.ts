@@ -95,6 +95,36 @@ describe('loadEncryptionKeys', () => {
         expect(map[writeHashHex]).toBeDefined();
     }, 30000);
 
+    it('derives a public key from a private key when .pub is missing (generateKey=false)', async () => {
+        const keyPath = await createTestKeyPath('test-private-only-loadEncryptionKeys.key');
+
+        const keyPair = generateKeyPair();
+        const privateKeyPem = keyPair.privateKey.export({
+            type: 'pkcs8',
+            format: 'pem'
+        }) as string;
+
+        await fs.writeFile(keyPath, privateKeyPem);
+
+        const { options, isEncrypted } = await loadEncryptionKeys([keyPath], false);
+        const typedOptions = options as IStorageOptions;
+
+        expect(isEncrypted).toBe(true);
+        expect(typedOptions.decryptionKeyMap).toBeDefined();
+        expect(typedOptions.encryptionPublicKey).toBeDefined();
+
+        const map = typedOptions.decryptionKeyMap!;
+        const writeKey = typedOptions.encryptionPublicKey!;
+
+        const defaultKey = map.default;
+        expect(defaultKey).toBeDefined();
+
+        const writeHashHex = hashPublicKey(writeKey).toString('hex');
+        const entryKey = map[writeHashHex];
+        expect(entryKey).toBeDefined();
+        expect(entryKey).toBe(defaultKey);
+    });
+
     afterAll(async () => {
         try {
             await fs.rm(testKeysDir, { recursive: true, force: true });

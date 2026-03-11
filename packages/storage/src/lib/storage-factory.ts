@@ -4,7 +4,6 @@ import { FileStorage } from './file-storage';
 import { CloudStorage, IS3Credentials } from './cloud-storage';
 import { EncryptedStorage } from './encrypted-storage';
 import { StoragePrefixWrapper } from './storage-prefix-wrapper';
-import { hashPublicKey } from './key-utils';
 import type { IPrivateKeyMap } from './encryption-types';
 import path from 'node:path';
 
