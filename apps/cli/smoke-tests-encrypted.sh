@@ -33,7 +33,81 @@ TESTS_PASSED=0
 TESTS_FAILED=0
 FAILED_TESTS=()
 
-# List of tests in execution order
+# Trap to show summary on exit (including failures)
+cleanup_and_show_summary() {
+    local exit_code=$?
+    echo ""
+
+    # Show final status message - this should be the last thing printed
+    echo ""
+    echo "============================================================================"
+    echo "============================================================================"
+    if [ $TESTS_FAILED -eq 0 ] && [ $exit_code -eq 0 ]; then
+        echo -e "${GREEN}✓✓✓ ALL SMOKE TESTS PASSED ✓✓✓${NC}"
+        echo -e "${GREEN}Tests Passed: $TESTS_PASSED${NC}"
+    else
+        echo -e "${RED}✗✗✗ SMOKE TESTS FAILED ✗✗✗${NC}"
+        echo -e "${RED}Exit Code: $exit_code${NC}"
+        if [ $TESTS_FAILED -gt 0 ]; then
+            echo -e "${RED}Tests Failed: $TESTS_FAILED${NC}"
+            if [ ${#FAILED_TESTS[@]} -gt 0 ]; then
+                echo -e "${RED}Failed Tests:${NC}"
+                for failed_test in "${FAILED_TESTS[@]}"; do
+                    echo -e "${RED}  - $failed_test${NC}"
+                done
+            fi
+        else
+            echo -e "${RED}Test execution was aborted (likely due to an assertion failure)${NC}"
+        fi
+        if [ $TESTS_PASSED -gt 0 ]; then
+            echo -e "${GREEN}Tests Passed: $TESTS_PASSED${NC}"
+        fi
+    fi
+    echo "============================================================================"
+    echo "============================================================================"
+
+    # Exit with the appropriate code
+    exit $exit_code
+}
+
+trap cleanup_and_show_summary EXIT
+
+# List of tests in execution order.
+#
+# Test descriptions:
+#   init-encrypted
+#     Create a new database with encryption using a generated key; checks .db metadata and encryption.pub.
+#   replicate-to-encrypted
+#     Init plain DB, add a file, replicate to an encrypted destination; verifies destination is encrypted and verifies.
+#   replicate-from-encrypted
+#     Init encrypted DB, add a file, replicate to a plain destination; verifies destination is plain and verifies.
+#   encrypt-plain
+#     Init plain DB, add a file, run psi encrypt in place; verifies assets have PSEN header and DB verifies with key.
+#   encrypt-reencrypt
+#     Init encrypted DB with key1, add file, re-encrypt in place with key2; verifies with key2 and that key1 fails.
+#   encrypt-old-to-new-format
+#     Encrypt in place with same key as source (no-op rewrite); verifies DB remains encrypted and verifies with key.
+#   decrypt-encrypted
+#     Init encrypted DB, add file, run psi decrypt in place; verifies encryption.pub removed and assets are plain.
+#   add-encrypted-file
+#     Init encrypted DB and add a file; verifies stored assets have PSEN header.
+#   export-encrypted-file
+#     Init encrypted DB, add file, export by asset ID; verifies exported file is plain (no PSEN).
+#   verify-encrypted-db
+#     Init encrypted DB, add file, run verify with key; checks verify succeeds.
+#   delete-encrypted-file
+#     Init encrypted DB, add file, remove asset by ID; verifies DB still verifies after delete.
+#   list-encrypted-files
+#     Init encrypted DB, add file, run list with key; verifies list output includes the added filename.
+#   replicate-decrypted-from-encrypted
+#     Same as replicate-from-encrypted: encrypted source -> plain destination; verifies plain replica.
+#   export-with-multiple-keys
+#     Two assets encrypted with different keys (key1 official, asset2 with key2); export with key1,key2; verify exports match originals.
+#   multi-key-encrypt
+#     Same as above; also verify list shows encryption details; export both with key1,key2; verify content matches originals.
+#   partial-encrypt
+#     Two assets in encrypted DB: one encrypted, one plain (--store-plain); list shows both states; export both with key; verify match originals.
+#
 ENCRYPTED_TESTS=(
     "init-encrypted"
     "replicate-to-encrypted"
@@ -49,6 +123,8 @@ ENCRYPTED_TESTS=(
     "list-encrypted-files"
     "replicate-decrypted-from-encrypted"
     "export-with-multiple-keys"
+    "multi-key-encrypt"
+    "partial-encrypt"
 )
 
 # -----------------------------------------------------------------------------
@@ -67,11 +143,20 @@ log_error() {
     echo -e "${RED}[FAIL]${NC} $1"
 }
 
+log_warning() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
 print_test_header() {
     local name="$1"
+    local desc
+    desc="$(get_test_description "$name")"
     echo ""
     echo "============================================================================"
     echo "Encrypted Smoke Test: $name"
+    if [ -n "$desc" ]; then
+        echo "  $desc"
+    fi
     echo "============================================================================"
 }
 
@@ -145,16 +230,35 @@ reset_environment() {
     fi
 }
 
+# Return one-line description for a test name (for help output).
+get_test_description() {
+    case "$1" in
+        init-encrypted) echo "Create DB with encryption and generated key" ;;
+        replicate-to-encrypted) echo "Replicate plain DB to encrypted destination" ;;
+        replicate-from-encrypted) echo "Replicate encrypted DB to plain destination" ;;
+        encrypt-plain) echo "Encrypt plain DB in place with psi encrypt" ;;
+        encrypt-reencrypt) echo "Re-encrypt DB with new key (key rotation)" ;;
+        encrypt-old-to-new-format) echo "Encrypt in place with same key (format conversion, no-op)" ;;
+        decrypt-encrypted) echo "Decrypt encrypted DB in place" ;;
+        add-encrypted-file) echo "Add file to encrypted DB" ;;
+        export-encrypted-file) echo "Export asset from encrypted DB (decrypted output)" ;;
+        verify-encrypted-db) echo "Verify encrypted DB with key" ;;
+        delete-encrypted-file) echo "Remove asset from encrypted DB" ;;
+        list-encrypted-files) echo "List files in encrypted DB" ;;
+        replicate-decrypted-from-encrypted) echo "Replicate encrypted to plain (decrypted replica)" ;;
+        export-with-multiple-keys) echo "Export with both keys; verify exports match originals" ;;
+        multi-key-encrypt) echo "Two assets with different keys; list shows encryption; export both; verify match originals" ;;
+        partial-encrypt) echo "One encrypted, one plain asset; list shows both; export with key; verify match originals" ;;
+        *) echo "" ;;
+    esac
+}
+
 check_tools() {
-    # Delegate to main smoke-tests script so we share the same tool checks
     local script_dir
     script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    if [ -f "$script_dir/smoke-tests.sh" ]; then
-        TEST_TMP_DIR="$TEST_TMP_DIR" USE_BINARY="$USE_BINARY" bash "$script_dir/smoke-tests.sh" check-tools
-    else
-        log_error "Cannot find main smoke-tests.sh to run tool checks"
-        exit 1
-    fi
+    # shellcheck source=./check-tools.sh
+    source "$script_dir/check-tools.sh"
+    run_check_tools
 }
 
 # Ensure directory exists and is empty
@@ -880,58 +984,53 @@ test_export_with_multiple_keys() {
     prepare_test_dir "$test_dir"
     mkdir -p "$export_dir"
 
-    # Create encrypted database with key1
+    # Create encrypted database with key1 (official key).
     invoke_command "Init encrypted database with key1" "$cli init --db \"$db_dir\" --key \"$key1\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
 
-    # Ensure key2 also exists on disk (generate it using a throwaway database).
-    invoke_command "Generate secondary key2 in throwaway database" "$cli init --db \"$test_dir/tmp-key2-db\" --key \"$key2\" --generate-key --yes" || {
+    # Ensure key2 exists (generate via throwaway database).
+    invoke_command "Generate key2" "$cli init --db \"$test_dir/tmp-key2-db\" --key \"$key2\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
 
-    # Add two files to the encrypted database.
-    invoke_command "Add first PNG (key1)" "$cli add --db \"$db_dir\" --key \"$key1\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    # Add first file with key1 (encrypted with key1).
+    invoke_command "Add first PNG with key1" "$cli add --db \"$db_dir\" --key \"$key1\" \"$TEST_FILES_DIR/test.png\" --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Add second JPG (key1)" "$cli add --db \"$db_dir\" --key \"$key1\" \"$TEST_FILES_DIR/test.jpg\" --yes" || {
-        test_failed "$name"
-        return
-    }
-
-    assert_database_assets_encrypted "$db_dir" || {
+    # Add second file with key2,key1 so key2 is write key (encrypted with key2).
+    invoke_command "Add second JPG with key2" "$cli add --db \"$db_dir\" --key \"$key2,$key1\" \"$TEST_FILES_DIR/test.jpg\" --yes" || {
         test_failed "$name"
         return
     }
 
     # Look up asset IDs via list.
     local asset_id1
-    asset_id1=$(get_asset_id_for_filename "$db_dir" "$key1" "test.png") || {
+    local multi_keys="$key1,$key2"
+    asset_id1=$(get_asset_id_for_filename "$db_dir" "$multi_keys" "test.png") || {
         test_failed "$name"
         return
     }
 
     local asset_id2
-    asset_id2=$(get_asset_id_for_filename "$db_dir" "$key1" "test.jpg") || {
+    asset_id2=$(get_asset_id_for_filename "$db_dir" "$multi_keys" "test.jpg") || {
         test_failed "$name"
         return
     }
 
-    # Export both assets using a comma-separated key list (multi-key map).
-    local multi_keys="$key1,$key2"
     local export1="$export_dir/export1.png"
     local export2="$export_dir/export2.jpg"
 
-    invoke_command "Export first asset with multiple keys" "$cli export --db \"$db_dir\" --key \"$multi_keys\" \"$asset_id1\" \"$export1\" --yes" || {
+    invoke_command "Export first asset with both keys" "$cli export --db \"$db_dir\" --key \"$multi_keys\" \"$asset_id1\" \"$export1\" --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Export second asset with multiple keys" "$cli export --db \"$db_dir\" --key \"$multi_keys\" \"$asset_id2\" \"$export2\" --yes" || {
+    invoke_command "Export second asset with both keys" "$cli export --db \"$db_dir\" --key \"$multi_keys\" \"$asset_id2\" \"$export2\" --yes" || {
         test_failed "$name"
         return
     }
@@ -942,11 +1041,159 @@ test_export_with_multiple_keys() {
         return
     fi
 
-    local tag1 tag2
-    tag1=$(read_magic_tag "$export1")
-    tag2=$(read_magic_tag "$export2")
-    if [ "$tag1" = "PSEN" ] || [ "$tag2" = "PSEN" ]; then
-        log_error "Exported files appear to be encrypted (found PSEN header)"
+    if ! cmp -s "$TEST_FILES_DIR/test.png" "$export1"; then
+        log_error "Exported PNG does not match original"
+        test_failed "$name"
+        return
+    fi
+
+    if ! cmp -s "$TEST_FILES_DIR/test.jpg" "$export2"; then
+        log_error "Exported JPG does not match original"
+        test_failed "$name"
+        return
+    fi
+
+    test_passed "$name"
+}
+
+test_multi_key_encrypt() {
+    local name="multi-key-encrypt"
+    print_test_header "$name"
+
+    local cli
+    cli="$(get_cli_command)"
+
+    local test_dir="$TEST_TMP_DIR/$name"
+    local db1_dir="$test_dir/encrypted-db1"
+    local db2_dir="$test_dir/encrypted-db2"
+    local export_dir="$test_dir/export"
+    local key1="$test_dir/key1.key"
+    local key2="$test_dir/key2.key"
+
+    prepare_test_dir "$test_dir"
+    mkdir -p "$export_dir"
+
+    # Create two encrypted DBs with different keys, add two assets to each.
+    invoke_command "Init encrypted database 1 with key1" "$cli init --db \"$db1_dir\" --key \"$key1\" --generate-key --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    invoke_command "Init encrypted database 2 with key2" "$cli init --db \"$db2_dir\" --key \"$key2\" --generate-key --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    invoke_command "Add PNG and JPG to DB1 (key1)" "$cli add --db \"$db1_dir\" --key \"$key1\" \"$TEST_FILES_DIR/test.png\" \"$TEST_FILES_DIR/test.jpg\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    invoke_command "Add PNG and JPG to DB2 (key2)" "$cli add --db \"$db2_dir\" --key \"$key2\" \"$TEST_FILES_DIR/test.png\" \"$TEST_FILES_DIR/test.jpg\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    # Simulate failed re-encrypt: take one asset from DB2 (key2) and overwrite same slot in DB1. Now DB1 has one asset with key1, one with key2.
+    local asset_id_jpg_db1 asset_id_jpg_db2
+    asset_id_jpg_db1=$(get_asset_id_for_filename "$db1_dir" "$key1" "test.jpg") || { test_failed "$name"; return; }
+    asset_id_jpg_db2=$(get_asset_id_for_filename "$db2_dir" "$key2" "test.jpg") || { test_failed "$name"; return; }
+
+    log_info "Overwriting DB1 asset $asset_id_jpg_db1 with DB2 file (key2) to simulate partial re-encrypt"
+    cp "$db2_dir/asset/$asset_id_jpg_db2" "$db1_dir/asset/$asset_id_jpg_db1" || {
+        log_error "Failed to copy asset from DB2 to DB1"
+        test_failed "$name"
+        return
+    }
+
+    rm -rf "$db2_dir"
+
+    # Export from DB1 with both keys; PNG is key1, JPG is key2.
+    local asset_id_png
+    asset_id_png=$(get_asset_id_for_filename "$db1_dir" "$key1,$key2" "test.png") || { test_failed "$name"; return; }
+    asset_id_jpg_db1=$(get_asset_id_for_filename "$db1_dir" "$key1,$key2" "test.jpg") || { test_failed "$name"; return; }
+
+    local multi_keys="$key1,$key2"
+    local export1="$export_dir/out1.png"
+    local export2="$export_dir/out2.jpg"
+    invoke_command "Export PNG (key1)" "$cli export --db \"$db1_dir\" --key \"$multi_keys\" \"$asset_id_png\" \"$export1\" --yes" || { test_failed "$name"; return; }
+    invoke_command "Export JPG (key2)" "$cli export --db \"$db1_dir\" --key \"$multi_keys\" \"$asset_id_jpg_db1\" \"$export2\" --yes" || { test_failed "$name"; return; }
+
+    if ! cmp -s "$TEST_FILES_DIR/test.png" "$export1"; then
+        log_error "Exported PNG does not match original"
+        test_failed "$name"
+        return
+    fi
+    if ! cmp -s "$TEST_FILES_DIR/test.jpg" "$export2"; then
+        log_error "Exported JPG does not match original"
+        test_failed "$name"
+        return
+    fi
+
+    test_passed "$name"
+}
+
+test_partial_encrypt() {
+    local name="partial-encrypt"
+    print_test_header "$name"
+
+    local cli
+    cli="$(get_cli_command)"
+
+    local test_dir="$TEST_TMP_DIR/$name"
+    local db_dir="$test_dir/encrypted-db"
+    local export_dir="$test_dir/export"
+    local key="$test_dir/key1.key"
+
+    prepare_test_dir "$test_dir"
+    mkdir -p "$export_dir"
+
+    # Create encrypted DB and add two assets (both encrypted).
+    invoke_command "Init encrypted database" "$cli init --db \"$db_dir\" --key \"$key\" --generate-key --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    invoke_command "Add PNG (encrypted)" "$cli add --db \"$db_dir\" --key \"$key\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    invoke_command "Add JPG (encrypted)" "$cli add --db \"$db_dir\" --key \"$key\" \"$TEST_FILES_DIR/test.jpg\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    # Simulate failed encrypt: replace second asset file with plain content (one encrypted, one plain).
+    local asset_id2
+    asset_id2=$(get_asset_id_for_filename "$db_dir" "$key" "test.jpg") || { test_failed "$name"; return; }
+    if [ ! -d "$db_dir/asset" ]; then
+        log_error "Expected asset directory $db_dir/asset"
+        test_failed "$name"
+        return
+    fi
+    log_info "Overwriting asset $asset_id2 with plain file (simulate partial encrypt failure)"
+    cp "$TEST_FILES_DIR/test.jpg" "$db_dir/asset/$asset_id2" || {
+        log_error "Failed to overwrite asset with plain file"
+        test_failed "$name"
+        return
+    }
+
+    local asset_id1
+    asset_id1=$(get_asset_id_for_filename "$db_dir" "$key" "test.png") || { test_failed "$name"; return; }
+
+    local export1="$export_dir/out.png"
+    local export2="$export_dir/out.jpg"
+    invoke_command "Export PNG (encrypted)" "$cli export --db \"$db_dir\" --key \"$key\" \"$asset_id1\" \"$export1\" --yes" || { test_failed "$name"; return; }
+    invoke_command "Export JPG (plain)" "$cli export --db \"$db_dir\" --key \"$key\" \"$asset_id2\" \"$export2\" --yes" || { test_failed "$name"; return; }
+
+    if ! cmp -s "$TEST_FILES_DIR/test.png" "$export1"; then
+        log_error "Exported PNG does not match original"
+        test_failed "$name"
+        return
+    fi
+    if ! cmp -s "$TEST_FILES_DIR/test.jpg" "$export2"; then
+        log_error "Exported JPG does not match original"
         test_failed "$name"
         return
     fi
@@ -976,6 +1223,8 @@ run_single_test() {
         list-encrypted-files)             test_list_encrypted_files ;;
         replicate-decrypted-from-encrypted) test_replicate_decrypted_from_encrypted ;;
         export-with-multiple-keys)        test_export_with_multiple_keys ;;
+        multi-key-encrypt)                test_multi_key_encrypt ;;
+        partial-encrypt)                 test_partial_encrypt ;;
         *)
             log_error "Unknown test: $name"
             return 1
@@ -991,16 +1240,7 @@ run_all_tests() {
         run_single_test "$name"
     done
 
-    echo ""
-    echo "Encrypted smoke tests completed."
-    echo -e "Tests Passed: ${GREEN}$TESTS_PASSED${NC}"
-    echo -e "Tests Failed: ${RED}$TESTS_FAILED${NC}"
-
     if [ $TESTS_FAILED -ne 0 ]; then
-        echo -e "${RED}Failed tests:${NC}"
-        for t in "${FAILED_TESTS[@]}"; do
-            echo "  - $t"
-        done
         exit 1
     fi
 }
@@ -1020,7 +1260,14 @@ show_usage() {
     echo ""
     echo "Available tests:"
     for name in "${ENCRYPTED_TESTS[@]}"; do
-        echo "  - $name"
+        local desc
+        desc="$(get_test_description "$name")"
+        if [ -n "$desc" ]; then
+            echo "  $name"
+            echo "    $desc"
+        else
+            echo "  - $name"
+        fi
     done
 }
 
@@ -1067,6 +1314,7 @@ main() {
             ;;
         reset)
             reset_environment
+            exit 0
             ;;
         *)
             # Single test

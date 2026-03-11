@@ -49,7 +49,7 @@ describe("encrypt-stream", () => {
     describe("legacy format (no header)", () => {
         it("decrypts legacy payload using default key", async () => {
             const plain = Buffer.from("legacy stream payload");
-            const fullEncrypted = await encryptBuffer(keyPair.publicKey, plain);
+            const fullEncrypted = encryptBuffer(keyPair.publicKey, plain);
             const legacyPayload = fullEncrypted.slice(44);
             const dec = createDecryptionStream(keyMap);
             Readable.from(legacyPayload).pipe(dec);
@@ -70,7 +70,7 @@ describe("encrypt-stream", () => {
 
         it("decrypts buffer-encrypted new format with stream", async () => {
             const plain = Buffer.from("buffer then stream");
-            const encrypted = await encryptBuffer(keyPair.publicKey, plain);
+            const encrypted = encryptBuffer(keyPair.publicKey, plain);
             const dec = createDecryptionStream(keyMap);
             Readable.from(encrypted).pipe(dec);
             const out = await streamToBuffer(dec);

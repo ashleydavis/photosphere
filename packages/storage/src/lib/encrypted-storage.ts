@@ -77,7 +77,7 @@ export class EncryptedStorage implements IStorage {
     // Writes a file to storage.
     //
     async write(filePath: string, contentType: string | undefined, data: Buffer): Promise<void> {               
-        await this.storage.write(filePath, contentType, await encryptBuffer(this.encryptionPublicKey, data));
+        await this.storage.write(filePath, contentType, encryptBuffer(this.encryptionPublicKey, data));
     }
 
     //

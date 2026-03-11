@@ -9,13 +9,14 @@ import {
     SUPPORTED_TYPES,
     SUPPORTED_VERSIONS,
 } from "./encryption-constants";
+import { log } from "utils";
 import { hashPublicKey } from "./key-utils";
 import type { IPrivateKeyMap } from "./encryption-types";
 
 //
 // Encrypts a buffer using a public key. Always writes the new format (tag, version, type, keyHash + payload).
 //
-export async function encryptBuffer(publicKey: KeyObject, data: Buffer): Promise<Buffer> {
+export function encryptBuffer(publicKey: KeyObject, data: Buffer): Buffer {
     const key = randomBytes(32);
     const iv = randomBytes(16);
     const cipher = createCipheriv("aes-256-cbc", key, iv);
@@ -36,25 +37,54 @@ export async function encryptBuffer(publicKey: KeyObject, data: Buffer): Promise
     return Buffer.concat([header, payload]);
 }
 
+const TAG_BYTES = Buffer.from(ENCRYPTION_TAG, "ascii");
+
 //
-// Decrypts a buffer using a key map. Supports old format (no header, use "default" key) and new format (header + key lookup by hash).
+// Decrypts a buffer using a key map. Tries in order: new format, legacy format, then returns data unchanged.
 //
-export async function decryptBuffer(data: Buffer, privateKeyMap: IPrivateKeyMap): Promise<Buffer> {
+export function decryptBuffer(data: Buffer, privateKeyMap: IPrivateKeyMap): Buffer {
     if (data.length < 4) {
-        throw new Error("Encrypted data too short to read format tag");
+        return data;
     }
 
-    const hasNewFormatTag = data.slice(0, 4).equals(Buffer.from(ENCRYPTION_TAG, "ascii"));
-    if (!hasNewFormatTag) {
-        const defaultKey = privateKeyMap["default"];
-        if (!defaultKey) {
-            throw new Error('Old-format encrypted data requires privateKeyMap["default"]');
+    //
+    // Try to decrypt as new format.
+    //
+    try {
+        return decryptNewFormat(data, privateKeyMap);
+    }
+    catch (err: any) {
+        log.exception(`decryptBuffer: new format decryption failed, trying legacy`, err);
+    }
+
+    //
+    // Try to decrypt as legacy format.
+    //
+    const defaultKey = privateKeyMap["default"];
+    if (defaultKey) {
+        try {
+            return decryptLegacy(data, defaultKey);
         }
-        return decryptLegacy(data, defaultKey);
+        catch (err: any) {
+            log.exception(`decryptBuffer: legacy decryption failed, returning data unchanged`, err);
+        }
     }
 
+    //
+    // Assume data is not encrypted.
+    //
+    return data;
+}
+
+//
+// Decrypts a buffer in new format (PSEN header + version, type, keyHash + payload).
+//
+export function decryptNewFormat(data: Buffer, privateKeyMap: IPrivateKeyMap): Buffer {
     if (data.length < NEW_FORMAT_HEADER_LENGTH) {
-        throw new Error("New-format encrypted data too short to read header");
+        throw new Error("New-format data too short for header");
+    }
+    if (!data.slice(0, 4).equals(TAG_BYTES)) {
+        throw new Error("New-format data does not start with encryption tag");
     }
 
     const version = data.readUInt32LE(4);
@@ -62,10 +92,6 @@ export async function decryptBuffer(data: Buffer, privateKeyMap: IPrivateKeyMap)
     const keyHashBuffer = data.slice(12, 12 + PUBLIC_KEY_HASH_LENGTH);
     const keyHashHex = keyHashBuffer.toString("hex");
     if (!SUPPORTED_VERSIONS.includes(version) || !SUPPORTED_TYPES.includes(encType)) {
-        const defaultKey = privateKeyMap["default"];
-        if (defaultKey) {
-            return decryptLegacy(data, defaultKey);
-        }
         throw new Error(`Unsupported encryption format version=${version} type=${encType}`);
     }
 
@@ -75,14 +101,18 @@ export async function decryptBuffer(data: Buffer, privateKeyMap: IPrivateKeyMap)
     }
 
     const payload = data.slice(NEW_FORMAT_HEADER_LENGTH);
-    return decryptLegacy(payload, privateKey);
+    const encryptedKey = payload.slice(0, 512);
+    const iv = payload.slice(512, 512 + 16);
+    const encrypted = payload.slice(512 + 16);
+    const key = privateDecrypt(privateKey, encryptedKey);
+    const decipher = createDecipheriv("aes-256-cbc", key, iv);
+    return Buffer.concat([decipher.update(encrypted), decipher.final()]);
 }
 
 //
-// Decrypts a legacy-format payload (encryptedKey + iv + ciphertext) using the given private key.
-// Used for both old-format files (no header) and the payload section of new-format files.
+// Decrypts a buffer in legacy format (no header: encryptedKey + iv + ciphertext) using the default key.
 //
-function decryptLegacy(data: Buffer, privateKey: KeyObject): Promise<Buffer> {
+export function decryptLegacy(data: Buffer, privateKey: KeyObject): Buffer {
     if (data.length < LEGACY_HEADER_LENGTH) {
         throw new Error("Legacy encrypted data too short");
     }
@@ -91,6 +121,5 @@ function decryptLegacy(data: Buffer, privateKey: KeyObject): Promise<Buffer> {
     const encrypted = data.slice(512 + 16);
     const key = privateDecrypt(privateKey, encryptedKey);
     const decipher = createDecipheriv("aes-256-cbc", key, iv);
-    const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
-    return Promise.resolve(decrypted);
+    return Buffer.concat([decipher.update(encrypted), decipher.final()]);
 }
