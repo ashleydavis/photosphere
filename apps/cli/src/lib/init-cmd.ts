@@ -155,6 +155,49 @@ export async function promptForEncryption(message: string = 'Would you like to e
     return {};
 }
 
+//
+// When the user has requested key generation (e.g., via --generate-key) but has not
+// provided a key path, this helper interactively prompts for a destination path.
+// It mirrors the "generate" branch of promptForEncryption so that non-interactive
+// callers can still delegate to a shared flow when they only know "generate: true".
+//
+export async function promptForKeyGenerationPath(): Promise<IEncryptionPromptResult> {
+    const keysDir = join(os.homedir(), '.config', 'photosphere', 'keys');
+
+    await ensureDir(keysDir);
+
+    const keyFilename = await text({
+        message: 'Enter filename for encryption key:',
+        placeholder: 'my-photos.key',
+        initialValue: 'my-photos.key',
+        validate: (value) => {
+            if (!value || value.trim().length === 0) {
+                return 'Filename is required';
+            }
+
+            if (!/^[a-zA-Z0-9._-]+$/.test(value)) {
+                return 'Filename can only contain letters, numbers, dots, hyphens, and underscores';
+            }
+
+            const keyPath = join(keysDir, value);
+            if (existsSync(keyPath)) {
+                return 'File already exists';
+            }
+
+            return undefined;
+        },
+    });
+
+    if (isCancel(keyFilename)) {
+        await exit(1);
+    }
+
+    return {
+        keyPath: join(keysDir, keyFilename as string),
+        generateKey: true,
+    };
+}
+
 export async function resolveKeyPath(keyPath: string | undefined): Promise<string | undefined> {
     if (!keyPath) {
         return undefined;
@@ -508,11 +551,26 @@ export async function createDatabase(
 
     // Ask about encryption if not already specified
     if (!options.key && !nonInteractive) {
-        const encryptionResult = await promptForEncryption('Would you like to encrypt your database? (You can say no now and create an encrypted copy later using the replicate command)');
-        
-        if (encryptionResult.keyPath) {
-            options.key = encryptionResult.keyPath;
-            options.generateKey = encryptionResult.generateKey || false;
+        if (options.generateKey) {
+            //
+            // User has already requested key generation via --generate-key but did not
+            // provide a key path. Mirror the "generate" branch of the interactive
+            // prompt so that CLI flags behave consistently with the wizard.
+            //
+            const encryptionResult = await promptForKeyGenerationPath();
+
+            if (encryptionResult.keyPath) {
+                options.key = encryptionResult.keyPath;
+                options.generateKey = encryptionResult.generateKey || false;
+            }
+        }
+        else {
+            const encryptionResult = await promptForEncryption('Would you like to encrypt your database? (You can say no now and create an encrypted copy later using the replicate command)');
+            
+            if (encryptionResult.keyPath) {
+                options.key = encryptionResult.keyPath;
+                options.generateKey = encryptionResult.generateKey || false;
+            }
         }
     }
 

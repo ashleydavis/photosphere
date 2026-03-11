@@ -12,7 +12,7 @@ import { log } from "utils";
 import { exit } from "node-utils";
 import { configureIfNeeded, getS3Config } from "../lib/config";
 import { getDirectoryForCommand } from "../lib/directory-picker";
-import { resolveKeyPaths, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
+import { resolveKeyPaths, IBaseCommandOptions, ICommandContext, promptForKeyGenerationPath } from "../lib/init-cmd";
 import { writeProgress, clearProgressMessage } from "../lib/terminal-utils";
 import { confirm, isCancel } from "../lib/clack/prompts";
 import { merkleTreeExists, encrypt as apiEncrypt } from "api";
@@ -84,6 +84,20 @@ export async function encryptCommand(context: ICommandContext, options: IEncrypt
         if (hasEncryptionPub) {
             log.error(pc.red(`✗ Database at ${pc.cyan(dbDir)} is already encrypted. Use --source-key to re-encrypt or convert format.`));
             await exit(1);
+        }
+    }
+
+    //
+    // Destination key handling:
+    // - In non-interactive mode we still require --key explicitly.
+    // - In interactive mode, if --generate-key is set but no --key was provided,
+    //   prompt the user for a destination key path (mirroring init behavior).
+    //
+    if (!nonInteractive && options.generateKey && !options.key) {
+        const result = await promptForKeyGenerationPath();
+        if (result.keyPath) {
+            options.key = result.keyPath;
+            options.generateKey = result.generateKey;
         }
     }
 

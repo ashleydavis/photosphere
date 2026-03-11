@@ -110,9 +110,13 @@ trap cleanup_and_show_summary EXIT
 #
 ENCRYPTED_TESTS=(
     "init-encrypted"
+    "init-generate-key-file"
+    "init-generate-key-file"
     "replicate-to-encrypted"
     "replicate-from-encrypted"
     "encrypt-plain"
+    "encrypt-generate-key-file"
+    "encrypt-generate-key-file"
     "encrypt-reencrypt"
     "encrypt-old-to-new-format"
     "decrypt-encrypted"
@@ -234,9 +238,11 @@ reset_environment() {
 get_test_description() {
     case "$1" in
         init-encrypted) echo "Create DB with encryption and generated key" ;;
+        init-generate-key-file) echo "Init encrypted DB and ensure key file is created and cleaned up" ;;
         replicate-to-encrypted) echo "Replicate plain DB to encrypted destination" ;;
         replicate-from-encrypted) echo "Replicate encrypted DB to plain destination" ;;
         encrypt-plain) echo "Encrypt plain DB in place with psi encrypt" ;;
+        encrypt-generate-key-file) echo "Encrypt plain DB with generated key and ensure key file is created and cleaned up" ;;
         encrypt-reencrypt) echo "Re-encrypt DB with new key (key rotation)" ;;
         encrypt-old-to-new-format) echo "Encrypt in place with same key (format conversion, no-op)" ;;
         decrypt-encrypted) echo "Decrypt encrypted DB in place" ;;
@@ -406,6 +412,36 @@ test_init_encrypted() {
     test_passed "$name"
 }
 
+test_init_generate_key_file() {
+    local name="init-generate-key-file"
+    print_test_header "$name"
+
+    local cli
+    cli="$(get_cli_command)"
+
+    local test_dir="$TEST_TMP_DIR/$name"
+    local db_dir="$test_dir/db"
+    local key_path="$test_dir/key-generate.key"
+
+    prepare_test_dir "$test_dir"
+
+    invoke_command "Init encrypted database with generated key file" "$cli init --db \"$db_dir\" --key \"$key_path\" --generate-key --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    if [ ! -f "$key_path" ]; then
+        log_error "Expected generated key file not found: $key_path"
+        test_failed "$name"
+        return
+    fi
+
+    # Clean up key file after verification
+    rm -f "$key_path" "$key_path.pub"
+
+    test_passed "$name"
+}
+
 test_replicate_to_encrypted() {
     local name="replicate-to-encrypted"
     print_test_header "$name"
@@ -550,6 +586,46 @@ test_encrypt_plain() {
         test_failed "$name"
         return
     }
+
+    test_passed "$name"
+}
+
+test_encrypt_generate_key_file() {
+    local name="encrypt-generate-key-file"
+    print_test_header "$name"
+
+    local cli
+    cli="$(get_cli_command)"
+
+    local test_dir="$TEST_TMP_DIR/$name"
+    local plain_dir="$test_dir/plain-db"
+    local key_path="$test_dir/encrypt-generate.key"
+
+    prepare_test_dir "$test_dir"
+
+    invoke_command "Init plain source database" "$cli init --db \"$plain_dir\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    invoke_command "Add PNG file to plain database" "$cli add --db \"$plain_dir\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    invoke_command "Encrypt plain database with generated key file" "$cli encrypt --db \"$plain_dir\" --key \"$key_path\" --generate-key --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    if [ ! -f "$key_path" ]; then
+        log_error "Expected generated key file not found after encrypt: $key_path"
+        test_failed "$name"
+        return
+    fi
+
+    # Clean up key file after verification
+    rm -f "$key_path" "$key_path.pub"
 
     test_passed "$name"
 }
@@ -1210,9 +1286,11 @@ run_single_test() {
 
     case "$name" in
         init-encrypted)                    test_init_encrypted ;;
+        init-generate-key-file)            test_init_generate_key_file ;;
         replicate-to-encrypted)            test_replicate_to_encrypted ;;
         replicate-from-encrypted)          test_replicate_from_encrypted ;;
-        encrypt-plain)                    test_encrypt_plain ;;
+        encrypt-plain)                     test_encrypt_plain ;;
+        encrypt-generate-key-file)         test_encrypt_generate_key_file ;;
         encrypt-reencrypt)                test_encrypt_reencrypt ;;
         encrypt-old-to-new-format)        test_encrypt_old_to_new_format ;;
         decrypt-encrypted)                test_decrypt_encrypted ;;
