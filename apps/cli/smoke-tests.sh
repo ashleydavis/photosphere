@@ -239,8 +239,6 @@ FAILED_TESTS=()
 cleanup_and_show_summary() {
     local exit_code=$?
     echo ""
-    show_test_hash_summary
-    write_github_step_summary
     
     # Show final status message - this should be the last thing printed
     echo ""
@@ -414,84 +412,6 @@ log_warning() {
 
 
 # Show test hash summary for local console output
-show_test_hash_summary() {
-    if [ ${#TEST_RESULTS[@]} -gt 0 ]; then
-        echo "======================================"
-        echo "DATABASE HASH PROGRESSION"
-        echo "======================================"
-        local test_num=1
-        for result in "${TEST_RESULTS[@]}"; do
-            local status=$(echo "$result" | cut -d: -f1)
-            if [ "$status" = "PASS" ]; then
-                local hash=$(echo "$result" | cut -d: -f2-)
-                echo -e "${test_num}. ${GREEN}✓${NC} $hash"
-            else
-                local test_name=$(echo "$result" | cut -d: -f2)
-                local hash=$(echo "$result" | cut -d: -f3-)
-                echo -e "${test_num}. ${RED}✗ $test_name${NC} $hash"
-            fi
-            ((test_num++))
-        done
-        echo "======================================"
-    fi
-}
-
-# Write concise summary to GitHub step summary if running in GitHub Actions
-write_github_step_summary() {
-    if [ -n "$GITHUB_STEP_SUMMARY" ]; then
-        {
-            echo "## Smoke Test Results"
-            echo ""
-            if [ $TESTS_FAILED -eq 0 ]; then
-                echo "✅ **PASSED** ($TESTS_PASSED tests)"
-            else
-                echo "❌ **FAILED** ($TESTS_FAILED failed, $TESTS_PASSED passed)"
-                if [ ${#FAILED_TESTS[@]} -gt 0 ]; then
-                    echo ""
-                    echo "**Failed tests:**"
-                    for failed_test in "${FAILED_TESTS[@]}"; do
-                        echo "- $failed_test"
-                    done
-                fi
-            fi
-            
-            # Add test results with hashes if we have them
-            if [ ${#TEST_RESULTS[@]} -gt 0 ]; then
-                echo ""
-                echo "**Database hashes after each test:**"
-                echo ""
-                local test_num=1
-                for result in "${TEST_RESULTS[@]}"; do
-                    local status=$(echo "$result" | cut -d: -f1)
-                    if [ "$status" = "PASS" ]; then
-                        local hash=$(echo "$result" | cut -d: -f2-)
-                        echo "$test_num. ✅ \`$hash\`"
-                    else
-                        local test_name=$(echo "$result" | cut -d: -f2)
-                        local hash=$(echo "$result" | cut -d: -f3-)
-                        echo "$test_num. ❌ **$test_name** \`$hash\`"
-                    fi
-                    ((test_num++))
-                done
-            fi
-            
-            # Add final database hash if database exists
-            if [ -d "$TEST_DB_DIR" ] && [ -f "$TEST_DB_DIR/.db/files.dat" ]; then
-                echo ""
-                echo "**Final database hash:**"
-                echo "\`\`\`"
-                if hash_output=$($(get_cli_command) root-hash --db "$TEST_DB_DIR" --yes 2>/dev/null); then
-                    echo "$hash_output"
-                else
-                    echo "Failed to get database hash"
-                fi
-                echo "\`\`\`"
-            fi
-        } >> "$GITHUB_STEP_SUMMARY"
-    fi
-}
-
-
 # Check if a value matches expected value
 expect_value() {
     local actual="$1"
@@ -1020,96 +940,11 @@ test_setup() {
 }
 
 check_tools() {
-    echo ""
-    echo "=== CHECK TOOLS ==="
-    
-    log_info "Changing to CLI directory"
-    if ! cd "$(dirname "$0")"; then
-        log_error "Failed to change to CLI directory"
-        return 1
-    fi
-    
-    local cli_command=$(get_cli_command)
-    log_info "Using CLI command: $cli_command"
-    
-    # Verify NODE_ENV is set for deterministic UUID generation
-    log_info "NODE_ENV is set to: ${NODE_ENV:-'(not set)'}"
-    if [ "$NODE_ENV" = "testing" ]; then
-        log_success "NODE_ENV=testing is set for deterministic UUID generation"
-    else
-        log_warning "NODE_ENV is not set to 'testing' - UUIDs may not be deterministic"
-    fi
-    
-    log_info "Checking for required tools in system PATH"
-    invoke_command "Check tools" "$(get_cli_command) tools --yes"
-    echo ""
-    
-    log_info "Verifying tools are installed and working..."
-    
-    # Check that required tools exist and can print versions
-    local tools_verified=true
-    
-    # Check ImageMagick - determine which version to use
-    if command -v magick &> /dev/null; then
-        local magick_output=$(magick --version || echo "")
-        if [ -n "$magick_output" ]; then
-            log_success "ImageMagick 7.x verified (using 'magick identify'):"
-            echo "$magick_output"
-            IMAGEMAGICK_IDENTIFY_CMD="magick identify"
-        else
-            log_error "ImageMagick magick command exists but cannot get version"
-            tools_verified=false
-        fi
-    elif command -v identify &> /dev/null; then
-        local identify_output=$(identify -version | head -1 || echo "")
-        if [ -n "$identify_output" ]; then
-            log_success "ImageMagick 6.x verified (using 'identify'):"
-            echo "$identify_output"
-            IMAGEMAGICK_IDENTIFY_CMD="identify"
-        else
-            log_error "ImageMagick identify command exists but cannot get version"
-            tools_verified=false
-        fi
-    else
-        log_error "ImageMagick not found in system PATH (tried both 'magick' and 'identify')"
-        tools_verified=false
-    fi
-    
-    # Check ffprobe
-    if command -v ffprobe &> /dev/null; then
-        local ffprobe_version=$(ffprobe -version | head -1 | sed 's/ffprobe version //' | cut -d' ' -f1 || echo "")
-        if [ -n "$ffprobe_version" ]; then
-            log_success "ffprobe verified: version $ffprobe_version"
-        else
-            log_error "ffprobe command exists but cannot get version"
-            tools_verified=false
-        fi
-    else
-        log_error "ffprobe not found in system PATH"
-        tools_verified=false
-    fi
-    
-    # Check ffmpeg
-    if command -v ffmpeg &> /dev/null; then
-        local ffmpeg_version=$(ffmpeg -version | head -1 | sed 's/ffmpeg version //' | cut -d' ' -f1 || echo "")
-        if [ -n "$ffmpeg_version" ]; then
-            log_success "ffmpeg verified: version $ffmpeg_version"
-        else
-            log_error "ffmpeg command exists but cannot get version"
-            tools_verified=false
-        fi
-    else
-        log_error "ffmpeg not found in system PATH"
-        tools_verified=false
-    fi
-    
-    # Fail the tests if any tools are not working
-    if [ "$tools_verified" = false ]; then
-        log_error "Tool verification failed - some required tools are missing or not working"
-        exit 1
-    fi
-    
-    log_success "All tools verified and working correctly"
+    local script_dir
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    # shellcheck source=./check-tools.sh
+    source "$script_dir/check-tools.sh"
+    run_check_tools
 }
 
 test_create_database() {
