@@ -1,0 +1,21 @@
+---
+description: Ensure all new or modified code paths are covered by unit tests
+alwaysApply: true
+---
+
+# Test Coverage for New or Changed Code
+
+- **Every time you add or modify logic**, identify all meaningful branches and code paths introduced or touched by the change.
+- **For each branch / path** (e.g. `if` / `else`, early returns, fallback behavior, error branches), either:
+    - Add or update a **unit test that exercises it**, or
+    - Explicitly call out in your explanation why that path cannot or should not be tested.
+- Do **not** consider a change complete until:
+    - Each new or modified branch has at least one corresponding test case, and
+    - Those tests are run and passing.
+
+When working in this project, you must:
+
+- Map code changes to specific test cases in your reasoning.
+- Avoid leaving new fallbacks or error-handling paths untested unless you clearly justify the exception.
+- Prefer small, focused tests that each target a single branch or behavior.
+
