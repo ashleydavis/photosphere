@@ -129,7 +129,7 @@ export const COMMAND_EXAMPLES: ICommandExamples = {
     
     encrypt: [
         { command: "psi encrypt --db ./photos --key my-photos.key --yes", description: "Encrypts a plain database in place using the specified key." },
-        { command: "psi encrypt --db ./photos --key new.key --source-key old.key --yes", description: "Re-encrypts (or converts old-format to new-format) in place with a new key." }
+        { command: "psi encrypt --db ./photos --key new.key,old.key --yes", description: "Re-encrypts in place using the first key for new writes and the full list for reads." }
     ],
 
     decrypt: [

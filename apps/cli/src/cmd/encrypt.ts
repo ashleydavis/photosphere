@@ -19,19 +19,13 @@ import { merkleTreeExists, encrypt as apiEncrypt } from "api";
 
 export interface IEncryptCommandOptions extends IBaseCommandOptions {
     //
-    // Destination encryption key file(s) (comma-separated list).
-    // First key is the write key; must match .db/encryption.pub after encrypt.
+    // Encryption key file(s) (comma-separated list).
+    // First key is the default key used for writing and for reading legacy-format files.
     //
     key?: string;
 
     //
-    // Source encryption key file(s) for reading an already-encrypted database.
-    // When omitted, the source is treated as plain.
-    //
-    sourceKey?: string;
-
-    //
-    // Generate destination encryption key if it does not exist.
+    // Generate encryption key(s) if they do not exist.
     //
     generateKey?: boolean;
 }
@@ -58,40 +52,11 @@ export async function encryptCommand(context: ICommandContext, options: IEncrypt
 
     const s3Config = await getS3Config();
 
-    // Read storage: plain if no sourceKey, else encrypted with sourceKey
-    const resolvedSourceKeyPaths = await resolveKeyPaths(options.sourceKey);
-    const readOptions = resolvedSourceKeyPaths.length > 0
-        ? (await loadEncryptionKeys(resolvedSourceKeyPaths, false)).options
-        : undefined;
-    const { storage: readStorage } = createStorage(dbDir, s3Config, readOptions);
-
-    const hasTree = await merkleTreeExists(readStorage);
-    if (!hasTree) {
-        log.error(pc.red(`✗ No database found at: ${pc.cyan(dbDir)}`));
-        await exit(1);
-    }
-
-    // When source is encrypted we expect .db/encryption.pub
-    if (resolvedSourceKeyPaths.length > 0) {
-        const hasEncryptionPub = await readStorage.fileExists(".db/encryption.pub");
-        if (!hasEncryptionPub) {
-            log.error(pc.red(`✗ Database at ${pc.cyan(dbDir)} does not appear to be encrypted (no .db/encryption.pub). Omit --source-key for a plain database.`));
-            await exit(1);
-        }
-    }
-    else {
-        const hasEncryptionPub = await readStorage.fileExists(".db/encryption.pub");
-        if (hasEncryptionPub) {
-            log.error(pc.red(`✗ Database at ${pc.cyan(dbDir)} is already encrypted. Use --source-key to re-encrypt or convert format.`));
-            await exit(1);
-        }
-    }
-
     //
-    // Destination key handling:
+    // Key handling:
     // - In non-interactive mode we still require --key explicitly.
     // - In interactive mode, if --generate-key is set but no --key was provided,
-    //   prompt the user for a destination key path (mirroring init behavior).
+    //   prompt the user for a key path (mirroring init behavior).
     //
     if (!nonInteractive && options.generateKey && !options.key) {
         const result = await promptForKeyGenerationPath();
@@ -101,31 +66,33 @@ export async function encryptCommand(context: ICommandContext, options: IEncrypt
         }
     }
 
-    const resolvedDestKeyPaths = await resolveKeyPaths(options.key);
-    if (resolvedDestKeyPaths.length === 0) {
-        log.error(pc.red(`✗ Encryption requires --key (destination key for encrypting the database).`));
+    const resolvedKeyPaths = await resolveKeyPaths(options.key);
+    if (resolvedKeyPaths.length === 0) {
+        log.error(pc.red(`✗ Encryption requires --key (comma-separated list supported).`));
         await exit(1);
     }
 
     const { options: writeStorageOptions, isEncrypted: writeIsEncrypted } = await loadEncryptionKeys(
-        resolvedDestKeyPaths,
+        resolvedKeyPaths,
         options.generateKey ?? false
     );
     if (!writeIsEncrypted) {
-        log.error(pc.red(`✗ Failed to load or generate encryption key for destination.`));
+        log.error(pc.red(`✗ Failed to load or generate encryption key(s).`));
         await exit(1);
     }
 
-    const { storage: writeStorage } = createStorage(dbDir, s3Config, writeStorageOptions);
-
-    // Re-encrypting with the same key: nothing to do; exit early. Do not overwrite .db/encryption.pub.
-    if (resolvedSourceKeyPaths.length > 0 && resolvedSourceKeyPaths[0] === resolvedDestKeyPaths[0]) {
-        log.info(pc.blue("Database is already encrypted with this key; nothing to do."));
-        log.info("");
-        log.info(pc.green("✅ Done"));
-        await exit(0);
-        return;
+    const { storage: plainStorage } = createStorage(dbDir, s3Config, undefined);
+    const hasTree = await merkleTreeExists(plainStorage);
+    if (!hasTree) {
+        log.error(pc.red(`✗ No database found at: ${pc.cyan(dbDir)}`));
+        await exit(1);
     }
+
+    const hasEncryptionPub = await plainStorage.fileExists(".db/encryption.pub");
+    const { storage: readStorage } = hasEncryptionPub
+        ? createStorage(dbDir, s3Config, writeStorageOptions)
+        : { storage: plainStorage };
+    const { storage: writeStorage } = createStorage(dbDir, s3Config, writeStorageOptions);
 
     if (!nonInteractive) {
         log.warn(pc.yellow(`⚠️  This will encrypt the database in place at ${pc.cyan(dbDir)}.`));
@@ -146,7 +113,7 @@ export async function encryptCommand(context: ICommandContext, options: IEncrypt
     clearProgressMessage();
 
     // Only after the entire database has been re-encrypted: store the new public key in .db (plain marker file).
-    const publicKeySource = `${resolvedDestKeyPaths[0]}.pub`;
+    const publicKeySource = `${resolvedKeyPaths[0]}.pub`;
     const metaPath = pathJoin(dbDir, ".db");
     const encryptionPubDest = pathJoin(metaPath, "encryption.pub");
 

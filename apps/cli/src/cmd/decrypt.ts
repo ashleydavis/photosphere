@@ -16,14 +16,9 @@ import { merkleTreeExists, decrypt as apiDecrypt } from "api";
 
 export interface IDecryptCommandOptions extends IBaseCommandOptions {
     //
-    // Primary encryption key file(s) used to read the source database (comma-separated).
+    // Encryption key file(s) used to read the source database (comma-separated).
     //
     key?: string;
-
-    //
-    // Optional additional source key file(s); merged with --key for the key map.
-    //
-    sourceKey?: string;
 }
 
 //
@@ -49,15 +44,12 @@ export async function decryptCommand(context: ICommandContext, options: IDecrypt
     const s3Config = await getS3Config();
 
     const keyPaths = await resolveKeyPaths(options.key);
-    const sourceKeyPaths = await resolveKeyPaths(options.sourceKey);
-    const allKeyPaths = keyPaths.length > 0 ? [...keyPaths, ...sourceKeyPaths] : [...sourceKeyPaths];
-
-    if (allKeyPaths.length === 0) {
-        log.error(pc.red(`✗ Decryption requires --key (and optionally --source-key) to read the encrypted database.`));
+    if (keyPaths.length === 0) {
+        log.error(pc.red(`✗ Decryption requires --key (comma-separated list supported).`));
         await exit(1);
     }
 
-    const { options: readStorageOptions } = await loadEncryptionKeys(allKeyPaths, false);
+    const { options: readStorageOptions } = await loadEncryptionKeys(keyPaths, false);
     const { storage: readStorage } = createStorage(dbDir, s3Config, readStorageOptions);
 
     const hasTree = await merkleTreeExists(readStorage);
