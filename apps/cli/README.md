@@ -46,13 +46,13 @@ Use Git diff (or similar) to determine if the test worked.
 
 The CLI includes dedicated commands for working with encrypted databases. Both operate **in place** on the database directory (no `--dest`).
 
-- **`psi encrypt`** – Encrypts a plain database in place, or re-encrypts an already encrypted database with a new key. If the database is already encrypted with the **same key** as the one given with `--key`, the command exits successfully without rewriting files. The new public key (`.db/encryption.pub`) is written **only after** the entire database has been re-encrypted with the new key.  
-  Example: `psi encrypt --db ./my-db --key my-photos.key [--generate-key] [--source-key old.key[,old2.key]] --yes`
+- **`psi encrypt`** – Encrypts a plain database in place, or re-encrypts an already encrypted database with the key list supplied via `--key`. The first key is used for new writes and for reading legacy-format files; the remaining keys are added to the read key map for current-format files. The new public key (`.db/encryption.pub`) is written **only after** the entire database has been re-encrypted.  
+  Example: `psi encrypt --db ./my-db --key new.key,old.key[,older.key] [--generate-key] --yes`
 
 - **`psi decrypt`** – Decrypts an encrypted database in place. Removes `.db/encryption.pub` when done.  
-  Example: `psi decrypt --db ./encrypted-db --key my-photos.key[,other.key] [--source-key old.key[,old2.key]] --yes`
+  Example: `psi decrypt --db ./encrypted-db --key my-photos.key[,other.key] --yes`
 
-All encryption-related options that accept key paths (`--key`, `--source-key`) support comma-separated lists, which are resolved into a key map so databases containing files encrypted with different keys can be read.
+Encryption-related key options support comma-separated lists. The first key is the default key for writes and for reading legacy-format files; all keys are added to the key map so databases containing files encrypted with different keys can be read.
 
 ## Building the CLI tool
 

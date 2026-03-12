@@ -33,7 +33,7 @@ See the [wiki](https://github.com/ashleydavis/photosphere/wiki) for installation
 ## Ingesting assets
 
 Use the CLI tool `psi add` to scan a directory and do bulk uploads. Use `psi summary` to view database statistics, `psi verify` to check integrity, `psi replicate` to create backups, `psi sync` to synchronize databases between devices, and `psi compare` to verify backup consistency.  
-Use `psi encrypt` and `psi decrypt` to convert databases between plain and encrypted storage (or re-encrypt with new keys) without manually copying files.
+Use `psi encrypt` and `psi decrypt` to convert databases between plain and encrypted storage (or re-encrypt with new keys) without manually copying files. For encrypted workflows, `--key` accepts a comma-separated list; the first key is the default write key and legacy-read key, and the full list is used to read current-format encrypted files.
 
 To move assets from Google Photos:
 - Use Google Takeout to export all your assets to a series of large zip files.
