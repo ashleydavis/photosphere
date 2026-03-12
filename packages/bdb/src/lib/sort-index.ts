@@ -4,9 +4,8 @@
 
 import type { IInternalRecord, IBsonCollection } from './collection';
 import type { IStorage } from 'storage';
-import { retry } from 'utils';
 import type { IUuidGenerator } from 'utils';
-import { save, load, BinarySerializer, BinaryDeserializer } from 'serialization';
+import { save, load } from 'serialization';
 import type { IDeserializer, ISerializer } from 'serialization';
 
 export type SortDirection = 'asc' | 'desc';
