@@ -1,8 +1,8 @@
 import pc from "picocolors";
 import { exit } from "node-utils";
 import { loadDatabase, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
-import { log } from "utils";
-import { visualizeTree, iterateLeaves, MerkleNode, getItemInfo } from "merkle-tree";
+import { log, retry } from "utils";
+import { visualizeTree, iterateLeaves, MerkleNode, getItemInfo, IMerkleTree } from "merkle-tree";
 import { 
     loadDatabaseMerkleTree,
     loadCollectionMerkleTree,
@@ -11,10 +11,9 @@ import {
     hashRecord
 } from "bdb";
 import { StoragePrefixWrapper } from "storage";
-import { loadMerkleTree, getDatabaseSummary, removeAsset, ensureSortIndex } from "api";
+import { loadMerkleTree, getDatabaseSummary, removeAsset, ensureSortIndex, buildFilesTree } from "api";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import { getDirectoryForCommand } from '../lib/directory-picker';
-import { formatBytes } from '../lib/format';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
@@ -590,6 +589,40 @@ export async function debugBuildSortIndexCommand(context: ICommandContext, optio
     log.info(`  - photoDate (desc, date)`);
     log.info('');
     
+    await exit(0);
+}
+
+//
+// Rebuilds the files merkle tree (.db/files.dat) from the actual files on storage.
+// Walks storage, hashes each file (logical/decrypted content when encrypted), and builds
+// a new tree with logical hash, length, and lastModified per file. This is the single
+// source of truth for "rebuild tree from files".
+//
+export async function debugBuildFilesTreeCommand(context: ICommandContext, options: IBaseCommandOptions): Promise<void> {
+    const { uuidGenerator, timestampProvider, sessionId } = context;
+
+    const nonInteractive = options.yes || false;
+    let dbDir = options.db;
+    if (dbDir === undefined) {
+        dbDir = await getDirectoryForCommand("existing", nonInteractive, options.cwd || process.cwd());
+    }
+
+    const { assetStorage, metadataStorage, databaseDir: dbDirResolved } = await loadDatabase(dbDir, options, uuidGenerator, timestampProvider, sessionId);
+
+    log.info('');
+    log.info(pc.bold(pc.blue("Rebuilding files merkle tree from storage")));
+    log.info(`  Database: ${pc.cyan(dbDirResolved)}`);
+    log.info('');
+
+    const { fileCount } = await buildFilesTree(assetStorage, metadataStorage, (count) => {
+        if (count % 50 === 0) {
+            writeProgress(`Hashed ${count} files...`);
+        }
+    }, uuidGenerator);
+    clearProgressMessage();
+
+    log.info(pc.green(`Rebuilt files merkle tree: ${fileCount} files.`));
+    log.info('');
     await exit(0);
 }
 
