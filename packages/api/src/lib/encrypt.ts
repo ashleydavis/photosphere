@@ -49,8 +49,9 @@ async function runInPlaceTransform(
         if (!data) {
             throw new Error(`Source file "${filePath}" read returned no data.`);
         }
+        
         await retry(() =>
-            writeStorage.write(filePath, srcFileInfo.contentType ?? "application/octet-stream", data)
+            writeStorage.write(filePath, srcFileInfo.contentType, data)
         );
 
         const copiedHash = await retry(() => computeHash(writeStorage.readStream(filePath)));
