@@ -1,10 +1,12 @@
-import { buildMerkleTree, saveTree, IMerkleTree, loadTree, createTree } from "merkle-tree";
+import { buildMerkleTree, saveTree, IMerkleTree, loadTree, createTree, upsertItem } from "merkle-tree";
 import { IDatabaseMetadata } from "./media-file-database";
-import { IStorage } from "storage";
+import { IStorage, walkDirectory } from "storage";
 import {
     loadCollectionMerkleTree as loadCollectionMerkleTreeBdb,
     loadShardMerkleTree as loadShardMerkleTreeBdb,
 } from "bdb";
+import { computeHash } from "./hash";
+import { retry, IUuidGenerator } from "utils";
 
 //
 // Path for the files Merkle tree (v6). Legacy path was .db/tree.dat.
@@ -88,5 +90,59 @@ export async function loadShardMerkleTree(
 ): Promise<IMerkleTree<undefined> | undefined> {
     const collectionDir = COLLECTION_DIR_PREFIX + collectionName;
     return loadShardMerkleTreeBdb(storage, collectionDir, shardId);
+}
+
+//
+// Result of buildFilesTree: the rebuilt tree and the number of files included.
+//
+export interface IBuildFilesTreeResult {
+    merkleTree: IMerkleTree<IDatabaseMetadata>;
+    fileCount: number;
+}
+
+//
+// Builds the files merkle tree from storage: walks only paths that belong in the tree
+// (asset/, display/, thumb/; skips .db/). Hashes each file via storage (logical content
+// when encrypted), upserts into tree, saves once.
+//
+export async function buildFilesTree(
+    assetStorage: IStorage,
+    metadataStorage: IStorage,
+    progressCallback: (fileCount: number) => void,
+    uuidGenerator: IUuidGenerator
+): Promise<IBuildFilesTreeResult> {
+    const existingTree = await retry(() => loadMerkleTree(metadataStorage));
+    const newTreeId = existingTree ? existingTree.id : uuidGenerator.generate();
+    let merkleTree = createTree<IDatabaseMetadata>(newTreeId);
+    let databaseMetadata: IDatabaseMetadata = existingTree?.databaseMetadata
+        ? { ...existingTree.databaseMetadata } 
+        : { filesImported: 0 };  
+    let filesImported = 0;
+    let fileCount = 0;
+
+    for await (const { fileName } of walkDirectory(assetStorage, "", [/^\.db(\/|$)/])) {
+        const info = await retry(() => assetStorage.info(fileName));
+        if (!info) {
+            throw new Error(`No info for file listed in storage: ${fileName}`);
+        }
+
+        const hash = await computeHash(assetStorage.readStream(fileName));
+        merkleTree = upsertItem(merkleTree, {
+            name: fileName,
+            hash,
+            length: info.length,
+            lastModified: info.lastModified,
+        });
+        fileCount++;
+        if (fileName.startsWith("asset/")) {
+            filesImported++;
+        }
+        progressCallback(fileCount);
+    }
+
+    databaseMetadata.filesImported = filesImported;
+    merkleTree.databaseMetadata = databaseMetadata;
+    await retry(() => saveMerkleTree(merkleTree, assetStorage));
+    return { merkleTree, fileCount };
 }
 

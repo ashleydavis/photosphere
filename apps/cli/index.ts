@@ -10,7 +10,7 @@ import { verifyCommand } from './src/cmd/verify';
 import { replicateCommand } from './src/cmd/replicate';
 import { compareCommand } from './src/cmd/compare';
 import { hashCacheCommand } from './src/cmd/hash-cache';
-import { debugMerkleTreeCommand, debugFindCollisionsCommand, debugFindDuplicatesCommand, debugRemoveDuplicatesCommand, debugBuildSortIndexCommand } from './src/cmd/debug';
+import { debugMerkleTreeCommand, debugFindCollisionsCommand, debugFindDuplicatesCommand, debugRemoveDuplicatesCommand, debugBuildSortIndexCommand, debugBuildFilesTreeCommand } from './src/cmd/debug';
 import { bugReportCommand } from './src/cmd/bug';
 import { examplesCommand } from './src/cmd/examples';
 import { versionCommand } from './src/cmd/version';
@@ -269,6 +269,16 @@ Resources:
         .option(...yesOption)
         .option(...cwdOption)
         .action(initContext(debugBuildSortIndexCommand));
+
+    debugCommand
+        .command("build-files-tree")
+        .description("Rebuild the files merkle tree (.db/files.dat) from actual files on storage (logical content hash/length/lastModified per file).")
+        .option(...dbOption)
+        .option(...keyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option(...cwdOption)
+        .action(initContext(debugBuildFilesTreeCommand));
 
     program
         .command("help [command]")
