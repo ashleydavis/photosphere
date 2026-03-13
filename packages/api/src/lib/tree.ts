@@ -101,9 +101,15 @@ export interface IBuildFilesTreeResult {
 }
 
 //
+// Number of files to read and hash in parallel per batch. Tree updates remain sequential.
+//
+const BUILD_FILES_TREE_BATCH_SIZE = 10;
+
+//
 // Builds the files merkle tree from storage: walks only paths that belong in the tree
 // (asset/, display/, thumb/; skips .db/). Hashes each file via storage (logical content
-// when encrypted), upserts into tree, saves once.
+// when encrypted), upserts into tree, saves once. Reads and hashes up to BUILD_FILES_TREE_BATCH_SIZE
+// files in parallel per batch to overlap I/O.
 //
 export async function buildFilesTree(
     assetStorage: IStorage,
@@ -115,30 +121,49 @@ export async function buildFilesTree(
     const newTreeId = existingTree ? existingTree.id : uuidGenerator.generate();
     let merkleTree = createTree<IDatabaseMetadata>(newTreeId);
     let databaseMetadata: IDatabaseMetadata = existingTree?.databaseMetadata
-        ? { ...existingTree.databaseMetadata } 
-        : { filesImported: 0 };  
+        ? { ...existingTree.databaseMetadata }
+        : { filesImported: 0 };
     let filesImported = 0;
     let fileCount = 0;
 
-    for await (const { fileName } of walkDirectory(assetStorage, "", [/^\.db(\/|$)/])) {
+    async function readAndHash(fileName: string): Promise<{ fileName: string; hash: Buffer; length: number; lastModified: Date }> {
         const info = await retry(() => assetStorage.info(fileName));
         if (!info) {
             throw new Error(`No info for file listed in storage: ${fileName}`);
         }
-
         const hash = await computeHash(assetStorage.readStream(fileName));
-        merkleTree = upsertItem(merkleTree, {
-            name: fileName,
-            hash,
-            length: info.length,
-            lastModified: info.lastModified,
-        });
-        fileCount++;
-        if (fileName.startsWith("asset/")) {
-            filesImported++;
-        }
-        progressCallback(fileCount);
+        return { fileName, hash, length: info.length, lastModified: info.lastModified };
     }
+
+    const batch: string[] = [];
+    const flushBatch = async (): Promise<void> => {
+        if (batch.length === 0) {
+            return;
+        }
+        const results = await Promise.all(batch.map(name => readAndHash(name)));
+        batch.length = 0;
+        for (const r of results) {
+            merkleTree = upsertItem(merkleTree, {
+                name: r.fileName,
+                hash: r.hash,
+                length: r.length,
+                lastModified: r.lastModified,
+            });
+            fileCount++;
+            if (r.fileName.startsWith("asset/")) {
+                filesImported++;
+            }
+            progressCallback(fileCount);
+        }
+    };
+
+    for await (const { fileName } of walkDirectory(assetStorage, "", [/^\.db(\/|$)/])) {
+        batch.push(fileName);
+        if (batch.length >= BUILD_FILES_TREE_BATCH_SIZE) {
+            await flushBatch();
+        }
+    }
+    await flushBatch();
 
     databaseMetadata.filesImported = filesImported;
     merkleTree.databaseMetadata = databaseMetadata;
