@@ -41,7 +41,6 @@ describe("buildFilesTree", () => {
         const progressCalls: number[] = [];
         const result = await buildFilesTree(
             storage,
-            storage,
             (count) => progressCalls.push(count),
             uuidGenerator
         );
@@ -64,7 +63,7 @@ describe("buildFilesTree", () => {
         await storage.write("asset/new", "application/octet-stream", Buffer.from("new"));
 
         const uuidGenerator = new TestUuidGenerator();
-        const result = await buildFilesTree(storage, storage, () => {}, uuidGenerator);
+        const result = await buildFilesTree(storage, () => {}, uuidGenerator);
 
         expect(result.merkleTree.id).toBe(TREE_ID);
         const leafNames = [...iterateLeaves<SortNode>(result.merkleTree.sort)].map(n => n.name).filter(Boolean);
@@ -78,7 +77,7 @@ describe("buildFilesTree", () => {
         await storage.write(".db/config.json", "application/json", Buffer.from("{}"));
 
         const uuidGenerator = new TestUuidGenerator();
-        const result = await buildFilesTree(storage, storage, () => {}, uuidGenerator);
+        const result = await buildFilesTree(storage, () => {}, uuidGenerator);
 
         const leafNames = [...iterateLeaves<SortNode>(result.merkleTree.sort)].map(n => n.name).filter(Boolean);
         expect(leafNames).toContain("asset/f1");
@@ -89,7 +88,7 @@ describe("buildFilesTree", () => {
         const storage = new MockStorage();
 
         const uuidGenerator = new TestUuidGenerator();
-        const result = await buildFilesTree(storage, storage, () => {}, uuidGenerator);
+        const result = await buildFilesTree(storage, () => {}, uuidGenerator);
 
         expect(result.fileCount).toBe(0);
         expect(result.merkleTree.databaseMetadata?.filesImported).toBe(0);
@@ -102,7 +101,7 @@ describe("buildFilesTree", () => {
         await storage.write("asset/b", "application/octet-stream", Buffer.from("b"));
 
         const progressCalls: number[] = [];
-        await buildFilesTree(storage, storage, (count) => progressCalls.push(count), new TestUuidGenerator());
+        await buildFilesTree(storage, (count) => progressCalls.push(count), new TestUuidGenerator());
 
         expect(progressCalls.length).toBeGreaterThanOrEqual(2);
         expect(progressCalls[0]).toBe(1);
@@ -114,7 +113,7 @@ describe("buildFilesTree", () => {
         await storage.write("asset/only", "application/octet-stream", Buffer.from("x"));
 
         const uuidGenerator = new TestUuidGenerator();
-        await buildFilesTree(storage, storage, () => {}, uuidGenerator);
+        await buildFilesTree(storage, () => {}, uuidGenerator);
 
         const loaded = await loadMerkleTree(storage);
         expect(loaded).toBeDefined();

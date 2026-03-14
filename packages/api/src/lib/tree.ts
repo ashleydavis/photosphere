@@ -112,12 +112,11 @@ const BUILD_FILES_TREE_BATCH_SIZE = 10;
 // files in parallel per batch to overlap I/O.
 //
 export async function buildFilesTree(
-    assetStorage: IStorage,
-    metadataStorage: IStorage,
+    storage: IStorage,
     progressCallback: (fileCount: number) => void,
     uuidGenerator: IUuidGenerator
 ): Promise<IBuildFilesTreeResult> {
-    const existingTree = await retry(() => loadMerkleTree(metadataStorage));
+    const existingTree = await retry(() => loadMerkleTree(storage));
     const newTreeId = existingTree ? existingTree.id : uuidGenerator.generate();
     let merkleTree = createTree<IDatabaseMetadata>(newTreeId);
     let databaseMetadata: IDatabaseMetadata = existingTree?.databaseMetadata
@@ -127,11 +126,11 @@ export async function buildFilesTree(
     let fileCount = 0;
 
     async function readAndHash(fileName: string): Promise<{ fileName: string; hash: Buffer; length: number; lastModified: Date }> {
-        const info = await retry(() => assetStorage.info(fileName));
+        const info = await retry(() => storage.info(fileName));
         if (!info) {
             throw new Error(`No info for file listed in storage: ${fileName}`);
         }
-        const hash = await computeHash(assetStorage.readStream(fileName));
+        const hash = await retry(() => computeHash(storage.readStream(fileName)));
         return { fileName, hash, length: info.length, lastModified: info.lastModified };
     }
 
@@ -158,7 +157,7 @@ export async function buildFilesTree(
         }
     };
 
-    for await (const { fileName } of walkDirectory(assetStorage, "", [/^\.db(\/|$)/])) {
+    for await (const { fileName } of walkDirectory(storage, "", [/^\.db(\/|$)/])) {
         batch.push(fileName);
         if (batch.length >= BUILD_FILES_TREE_BATCH_SIZE) {
             await flushBatch();
@@ -168,7 +167,7 @@ export async function buildFilesTree(
 
     databaseMetadata.filesImported = filesImported;
     merkleTree.databaseMetadata = databaseMetadata;
-    await retry(() => saveMerkleTree(merkleTree, assetStorage));
+    await retry(() => saveMerkleTree(merkleTree, storage));
     return { merkleTree, fileCount };
 }
 

@@ -614,7 +614,7 @@ export async function debugBuildFilesTreeCommand(context: ICommandContext, optio
     log.info(`  Database: ${pc.cyan(dbDirResolved)}`);
     log.info('');
 
-    const { fileCount } = await buildFilesTree(assetStorage, metadataStorage, (count) => {
+    const { fileCount } = await buildFilesTree(assetStorage, (count) => {
         if (count % 50 === 0) {
             writeProgress(`Hashed ${count} files...`);
         }
