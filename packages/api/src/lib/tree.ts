@@ -6,7 +6,7 @@ import {
     loadShardMerkleTree as loadShardMerkleTreeBdb,
 } from "bdb";
 import { computeHash } from "./hash";
-import { retry, IUuidGenerator } from "utils";
+import { log, retry, IUuidGenerator } from "utils";
 
 //
 // Path for the files Merkle tree (v6). Legacy path was .db/tree.dat.
@@ -143,6 +143,7 @@ export async function buildFilesTree(
         const results = await Promise.all(batch.map(name => readAndHash(name)));
         batch.length = 0;
         for (const r of results) {
+            log.info(r.fileName);
             merkleTree = upsertItem(merkleTree, {
                 name: r.fileName,
                 hash: r.hash,
