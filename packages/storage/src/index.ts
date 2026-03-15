@@ -11,5 +11,6 @@ export * from "./lib/storage-prefix-wrapper";
 export * from "./tests/mock-storage";
 export * from "./lib/storage-factory";
 export * from "./lib/key-utils";
+export * from "./lib/read-encryption-header";
 export * from "./lib/walk-directory";
 

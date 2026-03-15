@@ -131,6 +131,13 @@ export async function loadOrGenerateKeyPair(keyFilePath: string, generate = fals
 }
 
 /**
+ * Export a public key to SPKI PEM string (same format as .pub files and .db/encryption.pub).
+ */
+export function exportPublicKeyToPem(publicKey: KeyObject): string {
+    return publicKey.export({ type: 'spki', format: 'pem' }) as string;
+}
+
+/**
  * Returns a 32-byte SHA-256 hash of the public key (SPKI format).
  * Used in the encrypted file header to identify which key encrypted the file.
  */

@@ -516,8 +516,8 @@ export class BinaryDeserializer implements IDeserializer {
 // Error thrown when no deserializer is found for a version
 //
 export class UnsupportedVersionError extends Error {
-    constructor(version: number, availableVersions: number[]) {
-        super(`No deserializer found for version ${version}. Available versions: ${availableVersions.join(', ')}`);
+    constructor(version: number, availableVersions: number[], fileName: string) {
+        super(`No deserializer found for version ${version} from file ${fileName}. Available versions: ${availableVersions.join(', ')}`);
         this.name = 'UnsupportedVersionError';
     }
 }
@@ -571,6 +571,7 @@ export async function load<T>(
     migrations?: MigrationMap,
     targetVersion?: number
 ): Promise<T | undefined> {
+
     const buffer = await retry(() => storage.read(filePath));
     if (!buffer) {
         return undefined;
@@ -598,7 +599,7 @@ export async function load<T>(
                 payload = dataBuffer.subarray(4 + TYPE_CODE_LENGTH);
                 const deserializerFunction = deserializers[version];
                 if (!deserializerFunction) {
-                    throw new UnsupportedVersionError(version, availableVersions);
+                    throw new UnsupportedVersionError(version, availableVersions, filePath);
                 }
                 const binaryDeserializer = new BinaryDeserializer(payload);
                 let data = deserializerFunction(binaryDeserializer);
@@ -647,7 +648,7 @@ export async function load<T>(
 
     const deserializerFunction = deserializers[version];
     if (!deserializerFunction) {
-        throw new UnsupportedVersionError(version, availableVersions);
+        throw new UnsupportedVersionError(version, availableVersions, filePath);
     }
 
     const binaryDeserializer = new BinaryDeserializer(payload);

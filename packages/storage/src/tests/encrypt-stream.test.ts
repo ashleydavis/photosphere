@@ -77,4 +77,30 @@ describe("encrypt-stream", () => {
             expect(out.equals(plain)).toBe(true);
         });
     });
+
+    describe("pass-through (no decryption)", () => {
+        it("passes plain data through when key map has no default key", async () => {
+            const plain = Buffer.from("plain file content");
+            const dec = createDecryptionStream({});
+            Readable.from(plain).pipe(dec);
+            const out = await streamToBuffer(dec);
+            expect(out.equals(plain)).toBe(true);
+        });
+
+        it("passes data through when new-format header present but no matching key in map", async () => {
+            const encrypted = encryptBuffer(keyPair.publicKey, Buffer.from("secret"));
+            const dec = createDecryptionStream({});
+            Readable.from(encrypted).pipe(dec);
+            const out = await streamToBuffer(dec);
+            expect(out.equals(encrypted)).toBe(true);
+        });
+
+        it("passes plain data through when default key present but data is not encrypted (legacy decrypt throws)", async () => {
+            const plain = Buffer.from("plain file content that is not encrypted");
+            const dec = createDecryptionStream(keyMap);
+            Readable.from(plain).pipe(dec);
+            const out = await streamToBuffer(dec);
+            expect(out.equals(plain)).toBe(true);
+        });
+    });
 });

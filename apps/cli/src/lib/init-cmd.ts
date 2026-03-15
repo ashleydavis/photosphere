@@ -404,6 +404,13 @@ export interface IInitResult {
     //
     assetStorage: IStorage;
     metadataStorage: IStorage; // Unencrypted storage for metadata (under .db directory)
+
+    //
+    // Raw (unencrypted) storage - reads bytes exactly as stored on disk, with no decryption applied.
+    // Use this when you need to inspect the raw on-disk bytes (e.g. to read encryption headers).
+    //
+    rawAssetStorage: IStorage;
+
     bsonDatabase: BsonDatabase;
     sessionId: string;
     metadataCollection: IBsonCollection<IAsset>;
@@ -452,6 +459,8 @@ export async function loadDatabase(
     let { storage: assetStorage } = createStorage(dbDir, s3Config, storageOptions);
     // Metadata storage uses the same encryption as asset storage (when the database is encrypted).
     let { storage: metadataStorage } = createStorage(dbDir, s3Config, storageOptions);
+    // Raw storage reads bytes exactly as stored on disk, with no decryption applied.
+    const { storage: rawAssetStorage } = createStorage(dbDir, s3Config);
 
     //
     // Check that the files tree exists (.db/files.dat or legacy .db/tree.dat).
@@ -516,6 +525,7 @@ export async function loadDatabase(
         metaPath,
         assetStorage: assetStorage,
         metadataStorage: metadataStorage,
+        rawAssetStorage,
         bsonDatabase: database.bsonDatabase,
         sessionId,
         metadataCollection: database.metadataCollection,
@@ -596,6 +606,8 @@ export async function createDatabase(
     const { storage: metadataStorage } = isEncrypted
         ? createStorage(dbDir, s3Config, storageOptions)
         : createStorage(dbDir, s3Config, undefined);
+    // Raw storage reads bytes exactly as stored on disk, with no decryption applied.
+    const { storage: rawAssetStorage } = createStorage(dbDir, s3Config);
 
     // Check the requested directory is empty or non-existent using the storage interface. 
     if (!await assetStorage.isEmpty("/")) {
@@ -634,6 +646,7 @@ export async function createDatabase(
         metaPath,
         assetStorage: assetStorage,
         metadataStorage: metadataStorage,
+        rawAssetStorage,
         bsonDatabase: database.bsonDatabase,
         sessionId,
         metadataCollection: database.metadataCollection,

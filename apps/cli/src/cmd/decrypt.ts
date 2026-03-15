@@ -12,7 +12,8 @@ import { getDirectoryForCommand } from "../lib/directory-picker";
 import { resolveKeyPaths, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
 import { writeProgress, clearProgressMessage } from "../lib/terminal-utils";
 import { confirm, isCancel } from "../lib/clack/prompts";
-import { merkleTreeExists, decrypt as apiDecrypt } from "api";
+import { decrypt as apiDecrypt } from "api";
+import { configureLog } from "../lib/log";
 
 export interface IDecryptCommandOptions extends IBaseCommandOptions {
     //
@@ -25,8 +26,10 @@ export interface IDecryptCommandOptions extends IBaseCommandOptions {
 // Decrypts the database at --db in place (encrypted → plain). Removes .db/encryption.pub.
 //
 export async function decryptCommand(context: ICommandContext, options: IDecryptCommandOptions): Promise<void> {
-    const { yes, cwd } = options;
+    const { verbose, yes, cwd } = options;
     const nonInteractive = yes ?? false;
+
+    await configureLog({ verbose });
 
     let dbDir: string | undefined = options.db;
     if (dbDir === undefined) {
@@ -50,23 +53,23 @@ export async function decryptCommand(context: ICommandContext, options: IDecrypt
     }
 
     const { options: readStorageOptions } = await loadEncryptionKeys(keyPaths, false);
-    const { storage: readStorage } = createStorage(dbDir, s3Config, readStorageOptions);
 
-    const hasTree = await merkleTreeExists(readStorage);
-    if (!hasTree) {
-        log.error(pc.red(`✗ No database found at: ${pc.cyan(dbDir)}`));
-        await exit(1);
-    }
-
-    const hasEncryptionPub = await readStorage.fileExists(".db/encryption.pub");
+    const { storage: rawStorage } = createStorage(dbDir, s3Config, undefined);
+    const hasEncryptionPub = await rawStorage.fileExists(".db/encryption.pub");
     if (!hasEncryptionPub) {
         log.error(pc.red(`✗ Database at ${pc.cyan(dbDir)} does not appear to be encrypted (no .db/encryption.pub).`));
         await exit(1);
     }
 
-    const { storage: writeStorage } = createStorage(dbDir, s3Config, undefined);
+    const { storage: readStorage } = createStorage(dbDir, s3Config, readStorageOptions);
 
-    if (!nonInteractive) {
+    if (nonInteractive) {
+        if (!yes) {
+            log.error(pc.red("✗ Non interactive decryption requires --yes to proceed."));
+            await exit(1);
+        }
+    }
+    else {
         log.warn(pc.yellow(`⚠️  This will decrypt the database in place at ${pc.cyan(dbDir)}.`));
         log.warn(pc.yellow(`    All files will be rewritten in plain form. The database will no longer be encrypted.`));
         const confirmed = await confirm({ message: "Proceed with decryption?", initialValue: false });
@@ -77,14 +80,13 @@ export async function decryptCommand(context: ICommandContext, options: IDecrypt
         }
     }
 
-    log.info(pc.blue("Decrypting database in place..."));
     writeProgress("Decrypting files...");
 
-    await apiDecrypt(readStorage, writeStorage, (msg) => writeProgress(msg));
+    await apiDecrypt(readStorage, rawStorage, (msg) => writeProgress(msg), rawStorage);
 
     clearProgressMessage();
 
-    await writeStorage.deleteFile(".db/encryption.pub");
+    await rawStorage.deleteFile(".db/encryption.pub");
     log.info(pc.green("✓ Removed .db/encryption.pub"));
 
     log.info("");

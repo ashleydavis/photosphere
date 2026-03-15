@@ -1160,9 +1160,7 @@ export class BatchSortIndex implements IBatchSortIndex {
         if (cached !== undefined) {
             return cached;
         }
-        console.time(`loadLeafRecordsFromStorage ${pageId}`);
         const records = await this.loadLeafRecordsFromStorage(pageId);
-        console.timeEnd(`loadLeafRecordsFromStorage ${pageId}`);
         if (records) {
             this.leafCache.set(pageId, records);
         }
@@ -1173,7 +1171,6 @@ export class BatchSortIndex implements IBatchSortIndex {
     // Loads leaf records from storage (used when not in cache).
     //
     private async loadLeafRecordsFromStorage(pageId: string): Promise<ISortedIndexEntry[] | undefined> {
-        console.trace(); //fio:
         const filePath = `${this.indexDirectory}/${pageId}`;
         try {
             const records = await load<ISortedIndexEntry[]>(

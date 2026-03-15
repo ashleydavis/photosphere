@@ -54,7 +54,7 @@ export function decryptBuffer(data: Buffer, privateKeyMap: IPrivateKeyMap): Buff
         return decryptNewFormat(data, privateKeyMap);
     }
     catch (err: any) {
-        log.exception(`decryptBuffer: new format decryption failed, trying legacy`, err);
+        log.verbose(`decryptBuffer: new format decryption failed, trying legacy`);
     }
 
     //
@@ -66,7 +66,7 @@ export function decryptBuffer(data: Buffer, privateKeyMap: IPrivateKeyMap): Buff
             return decryptLegacy(data, defaultKey);
         }
         catch (err: any) {
-            log.exception(`decryptBuffer: legacy decryption failed, returning data unchanged`, err);
+            log.verbose(`decryptBuffer: legacy decryption failed, returning data unchanged`);
         }
     }
 
