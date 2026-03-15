@@ -298,6 +298,7 @@ export class CloudStorage implements IStorage {
             if (!headResult.LastModified) {
                 throw new Error(`LastModified is undefined for ${filePath}`);
             }
+            console.log(`@@@@ All good`, filePath, bucket, key);
             return {
                 contentType: headResult.ContentType as string,
                 length: headResult.ContentLength as number,
@@ -306,11 +307,14 @@ export class CloudStorage implements IStorage {
         }
         catch (err: any) {
             if (err.statusCode === 404) {
+                console.log(`!!!!! Missing`, filePath, bucket, key);
                 return undefined;
             }
             else if (this.verbose) {
+                console.log(`!!!!! Failed 1`, filePath, bucket, key);
                 throw new WrappedError(`Failed to get info for ${filePath}: ${err.message}`, { cause: err });
             }
+            console.log(`!!!!! Failed 2`, filePath, bucket, key);
             throw err;
         }
     }
