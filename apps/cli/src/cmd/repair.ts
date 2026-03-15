@@ -3,7 +3,6 @@ import pc from "picocolors";
 import { exit } from "node-utils";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import { loadDatabase, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
-import { getDirectoryForCommand } from "../lib/directory-picker";
 import { formatBytes } from "../lib/format";
 import { repair, loadDatabaseConfig } from "api";
 

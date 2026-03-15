@@ -46,12 +46,12 @@ async function executeTask(message: IWorkerMessage, taskContext: ITaskContext): 
         // Set task ID for logging prefix and progress messages
         setWorkerTaskId(taskId);
 
-        log.verbose(`Executing task ${taskId} with type ${taskType} and payload ${JSON.stringify(data, null, 2)}`);
+        // log.verbose(`Executing task ${taskId} with type ${taskType} and payload ${JSON.stringify(data, null, 2)}`);
 
         // Execute the handler with task-specific context
         const outputs = await executeTaskHandler(taskType, data, taskContext);
 
-        log.verbose(`Task ${taskId} completed with outputs ${JSON.stringify(outputs, null, 2)}`);
+        // log.verbose(`Task ${taskId} completed with outputs ${JSON.stringify(outputs, null, 2)}`);
         
         // Clear task ID from logging and progress
         setWorkerTaskId(null);
