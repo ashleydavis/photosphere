@@ -186,17 +186,25 @@ export async function verify(storageDescriptor: IStorageDescriptor, databaseStor
                     // For partial databases, ignore missing files (they're expected to be missing)
                     if (!isPartial) {
                         result.removed.push(fileResult.fileName);
+
+                        log.verbose(`File ${fileResult.fileName} is missing.`);
                     }
                     else {
                         // Count as unmodified since missing files are expected in partial databases
                         result.numUnmodified++;
+
+                        log.verbose(`File ${fileResult.fileName} is missing, but not an issue because this is a partial database.`)
                     }
                 }
                 else if (fileResult.status === "modified") {
                     result.modified.push(fileResult.fileName);
+
+                    log.verbose(`File ${fileResult.fileName} is modified.`)
                 }
                 else {
                     result.numUnmodified++;
+
+                    log.verbose(`File ${fileResult.fileName} is not modified.`)
                 }
             } 
             else if (taskResult.status === TaskStatus.Failed) {
@@ -246,6 +254,8 @@ export async function verify(storageDescriptor: IStorageDescriptor, databaseStor
                     const dbHash = recordIdToHash.get(assetId);
                     if (dbHash === undefined || dbHash !== expectedHashHex) {
                         result.recordMismatches!.push(node.name);
+
+                        log.verbose(`Record mismatch for ${node.name}. Expected hash ${expectedHashHex}, found hash ${dbHash}.`);
                     }
                 }
             }
