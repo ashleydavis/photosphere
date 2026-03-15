@@ -17,6 +17,7 @@ export type IDecryptProgress = (message: string) => void;
 //
 // Decrypts a single file from readStorage and writes it plain to writeStorage.
 // Skips files that are not encrypted. Updates the merkle tree entry for non-.db/ files.
+// Returns true if the file was decrypted, false if it was skipped (already plain).
 //
 async function decryptFile(
     fileName: string,
@@ -24,7 +25,7 @@ async function decryptFile(
     writeStorage: IStorage,
     rawReadStorage: IStorage,
     merkleTree: IMerkleTree<IDatabaseMetadata>
-): Promise<void> {
+): Promise<boolean> {
     const srcFileInfo = await retry(() => readStorage.info(fileName));
     if (!srcFileInfo) {
         throw new Error(`Source file "${fileName}" does not exist.`);
@@ -60,9 +61,12 @@ async function decryptFile(
                 });
             }
         }
+
+        return true;
     }
     else {
         log.info(`Already decrypted ${fileName}`);
+        return false;
     }
 }
 
@@ -84,6 +88,7 @@ export async function decrypt(
     }
 
     let decrypted = 0;
+    let skipped = 0;
     const BATCH_SIZE = 10;
     let batch: string[] = [];
 
@@ -98,23 +103,25 @@ export async function decrypt(
         batch.push(fileName);
 
         if (batch.length >= BATCH_SIZE) {
-            await Promise.all(batch.map(fileName => decryptFile(fileName, readStorage, writeStorage, rawReadStorage, merkleTree)));
-            decrypted += batch.length;
+            const results = await Promise.all(batch.map(fileName => decryptFile(fileName, readStorage, writeStorage, rawReadStorage, merkleTree)));
+            decrypted += results.filter(result => result).length;
+            skipped += results.filter(result => !result).length;
             batch = [];
             if (progressCallback) {
-                progressCallback(`Decrypted ${decrypted} files`);
+                progressCallback(`Decrypted ${decrypted} files, skipped ${skipped} already plain`);
             }
         }
     }
 
     if (batch.length > 0) {
-        await Promise.all(batch.map(fileName => decryptFile(fileName, readStorage, writeStorage, rawReadStorage, merkleTree)));
-        decrypted += batch.length;
+        const results = await Promise.all(batch.map(fileName => decryptFile(fileName, readStorage, writeStorage, rawReadStorage, merkleTree)));
+        decrypted += results.filter(result => result).length;
+        skipped += results.filter(result => !result).length;
     }
 
     await retry(() => saveMerkleTree(merkleTree, writeStorage));
 
     if (progressCallback) {
-        progressCallback(`Decrypted ${decrypted} files, saved merkle tree`);
+        progressCallback(`Decrypted ${decrypted} files, skipped ${skipped} already plain, saved merkle tree`);
     }
 }
