@@ -68,16 +68,16 @@ export async function verifyCommand(context: ICommandContext, options: IVerifyCo
         : `Asset files verified.`);
     log.info('');
     
-    log.info(`Files imported:   ${pc.cyan(result.totalImports.toString())}`);
-    log.info(`Total files:      ${pc.cyan(result.totalFiles.toString())}`);
-    log.info(`Total size:       ${pc.cyan(formatBytes(result.totalSize))}`);
-    log.info(`Files processed:  ${pc.cyan(result.filesProcessed.toString())}`);
-    log.info(`Nodes processed:  ${pc.cyan(result.nodesProcessed.toString())}`);
-    log.info(`Unmodified:       ${pc.green(result.numUnmodified.toString())}`);
-    log.info(`Modified:         ${result.modified.length > 0 ? pc.red(result.modified.length.toString()) : pc.green('0')}`);
-    log.info(`New:              ${result.new.length > 0 ? pc.yellow(result.new.length.toString()) : pc.green('0')}`);
-    log.info(`Removed:          ${result.removed.length > 0 ? pc.red(result.removed.length.toString()) : pc.green('0')}`);
-    log.info(`Failures:         ${result.numFailures > 0 ? pc.red(result.numFailures.toString()) : pc.green('0')}`);
+    log.info(`Files imported:    ${pc.cyan(result.totalImports.toString())}`);
+    log.info(`Total files:       ${pc.cyan(result.totalFiles.toString())}`);
+    log.info(`Total size:        ${pc.cyan(formatBytes(result.totalSize))}`);
+    log.info(`Files processed:   ${pc.cyan(result.filesProcessed.toString())}`);
+    log.info(`Nodes processed:   ${pc.cyan(result.nodesProcessed.toString())}`);
+    log.info(`Unmodified:        ${pc.green(result.numUnmodified.toString())}`);
+    log.info(`Modified:          ${result.modified.length > 0 ? pc.red(result.modified.length.toString()) : pc.green('0')}`);
+    log.info(`New:               ${result.new.length > 0 ? pc.yellow(result.new.length.toString()) : pc.green('0')}`);
+    log.info(`Removed:           ${result.removed.length > 0 ? pc.red(result.removed.length.toString()) : pc.green('0')}`);
+    log.info(`Failures:          ${result.numFailures > 0 ? pc.red(result.numFailures.toString()) : pc.green('0')}`);
     log.info(`Record mismatches: ${(result.recordMismatches?.length ?? 0) > 0 ? pc.red((result.recordMismatches?.length ?? 0).toString()) : pc.green('0')}`);
 
     // Show details for problematic files
