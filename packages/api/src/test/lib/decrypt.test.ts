@@ -42,7 +42,7 @@ describe("decrypt", () => {
         await saveTree(FILES_TREE_PATH, tree, readStorage);
         await readStorage.write(leafFile, "application/octet-stream", Buffer.from("encrypted or plain payload"));
 
-        await decrypt(readStorage, writeStorage, undefined, readStorage);
+        await decrypt(readStorage, writeStorage, () => {}, readStorage);
 
         expect(await writeStorage.fileExists(FILES_TREE_PATH)).toBe(true);
         expect(await writeStorage.fileExists(leafFile)).toBe(true);
@@ -71,7 +71,7 @@ describe("decrypt", () => {
         await saveTree(FILES_TREE_PATH, tree, readStorage);
         await readStorage.write(displayPath, "application/octet-stream", logicalContent);
 
-        await decrypt(readStorage, writeStorage, undefined, readStorage);
+        await decrypt(readStorage, writeStorage, () => {}, readStorage);
 
         const loadedTree = await loadMerkleTree(writeStorage);
         expect(loadedTree?.merkle).toBeDefined();
@@ -104,7 +104,7 @@ describe("decrypt", () => {
         const content = Buffer.from("plain content");
         await storage.write(leafFile, "application/octet-stream", content);
 
-        await decrypt(storage, storage, undefined, storage);
+        await decrypt(storage, storage, () => {}, storage);
 
         const readBack = await storage.read(leafFile);
         expect(readBack?.toString()).toBe("plain content");
@@ -116,7 +116,7 @@ describe("decrypt", () => {
         const readStorage = new MockStorage("read");
         const writeStorage = new MockStorage("write");
         await readStorage.write("asset/x", "application/octet-stream", Buffer.from("x"));
-        await expect(decrypt(readStorage, writeStorage, undefined, readStorage)).rejects.toThrow(
+        await expect(decrypt(readStorage, writeStorage, () => {}, readStorage)).rejects.toThrow(
             "Failed to load merkle tree"
         );
     });

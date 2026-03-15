@@ -7,10 +7,68 @@
 import type { KeyObject } from "node:crypto";
 import { hashPublicKey, IStorage, readEncryptionHeader, walkDirectory } from "storage";
 import { loadMerkleTree, saveMerkleTree } from "./tree";
-import { getItemInfo, updateItem } from "merkle-tree";
+import { getItemInfo, IMerkleTree, updateItem } from "merkle-tree";
 import { log, retry } from "utils";
+import { IDatabaseMetadata } from "./media-file-database";
 
-export type IEncryptDecryptProgress = (message: string) => void;
+//
+// Callback invoked periodically during encrypt to report progress.
+//
+export type IEncryptProgress = (message: string) => void;
+
+//
+// Encrypts a single file from readStorage and writes it to writeStorage.
+// Skips files already encrypted with the given publicKeyHash.
+// Updates the merkle tree entry for non-.db/ files with the new storage metadata.
+//
+export async function encryptFile(
+    fileName: string,
+    readStorage: IStorage,
+    writeStorage: IStorage,
+    rawReadStorage: IStorage,
+    publicKeyHash: Buffer,
+    merkleTree: IMerkleTree<IDatabaseMetadata>
+): Promise<void> {
+    const srcFileInfo = await retry(() => readStorage.info(fileName));
+    if (!srcFileInfo) {
+        throw new Error(`Source file "${fileName}" does not exist.`);
+    }
+
+    const header = await readEncryptionHeader(rawReadStorage, fileName);
+    const shouldEncrypt = header === undefined || !header.equals(publicKeyHash);
+    if (shouldEncrypt) {
+        log.verbose(`Encrypting ${fileName}`);
+
+        await retry(async () => {
+            await writeStorage.writeStream(
+                fileName,
+                srcFileInfo.contentType,
+                readStorage.readStream(fileName),
+                srcFileInfo.length
+            );
+        });
+
+        if (!fileName.startsWith(".db/")) {
+            const existing = getItemInfo(merkleTree, fileName);
+            if (existing) {
+                const updatedInfo = await retry(() => writeStorage.info(fileName));
+                if (!updatedInfo) {
+                    throw new Error(`Written file "${fileName}" has no info.`);
+                }
+
+                updateItem(merkleTree, {
+                    name: fileName,
+                    hash: existing.hash,
+                    length: updatedInfo.length,
+                    lastModified: updatedInfo.lastModified,
+                });
+            }
+        }
+    }
+    else {
+        log.verbose(`Already encrypted ${fileName}`);
+    }
+}
 
 //
 // Encrypts the database in place: reads each file from readStorage, writes it encrypted
@@ -24,7 +82,7 @@ export type IEncryptDecryptProgress = (message: string) => void;
 export async function encrypt(
     readStorage: IStorage,
     writeStorage: IStorage,
-    progressCallback: IEncryptDecryptProgress,
+    progressCallback: IEncryptProgress,
     encryptionPublicKey: KeyObject,
     rawReadStorage: IStorage
 ): Promise<void> {
@@ -36,6 +94,9 @@ export async function encrypt(
     const publicKeyHash = hashPublicKey(encryptionPublicKey);
 
     let encrypted = 0;
+    const BATCH_SIZE = 10;
+
+    let batch: string[] = [];
 
     for await (const { fileName } of walkDirectory(readStorage, "", [])) {
 
@@ -45,51 +106,19 @@ export async function encrypt(
             continue;
         }
 
-        const srcFileInfo = await retry(() => readStorage.info(fileName));
-        if (!srcFileInfo) {
-            throw new Error(`Source file "${fileName}" does not exist.`);
-        }
+        batch.push(fileName);
 
-        const header = await readEncryptionHeader(rawReadStorage, fileName);
-        const shouldEncrypt = header === undefined || !header.equals(publicKeyHash);
-        if (shouldEncrypt) {
-            log.verbose(`Encrypting ${fileName}`);
-
-            await retry(async () => {
-                await writeStorage.writeStream(
-                    fileName,
-                    srcFileInfo.contentType,
-                    readStorage.readStream(fileName),
-                    srcFileInfo.length
-                );
-            });
-
-            if (!fileName.startsWith(".db/")) {
-                const existing = getItemInfo(merkleTree, fileName);
-                if (existing) {
-                    const updatedInfo = await retry(() => writeStorage.info(fileName));
-                    if (!updatedInfo) {
-                        throw new Error(`Written file "${fileName}" has no info.`);
-                    }
-                    
-                    updateItem(merkleTree, {
-                        name: fileName,
-                        hash: existing.hash,
-                        length: updatedInfo.length,
-                        lastModified: updatedInfo.lastModified,
-                    });
-                }
-            }
-        }
-        else {
-            log.verbose(`Already encrypted ${fileName}`);
-        }
-
-        encrypted++;
-
-        if (encrypted % 10 === 0) {
+        if (batch.length >= BATCH_SIZE) {
+            await Promise.all(batch.map(fileName => encryptFile(fileName, readStorage, writeStorage, rawReadStorage, publicKeyHash, merkleTree)));
+            encrypted += batch.length;
+            batch = [];
             progressCallback(`Encrypted ${encrypted} files`);
         }
+    }
+
+    if (batch.length > 0) {
+        await Promise.all(batch.map(fileName => encryptFile(fileName, readStorage, writeStorage, rawReadStorage, publicKeyHash, merkleTree)));
+        encrypted += batch.length;
     }
 
     await retry(() => saveMerkleTree(merkleTree, writeStorage));
