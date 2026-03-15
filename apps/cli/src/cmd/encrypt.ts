@@ -3,10 +3,7 @@
 // (plain → encrypted, re-encrypt with new key, or old-format → new format).
 //
 
-import { Readable } from "stream";
-import * as fs from "fs/promises";
-import { createStorage, loadEncryptionKeys, pathJoin } from "storage";
-import { pathExists, copy } from "node-utils";
+import { createStorage, exportPublicKeyToPem, loadEncryptionKeys } from "storage";
 import pc from "picocolors";
 import { log } from "utils";
 import { exit } from "node-utils";
@@ -16,6 +13,7 @@ import { resolveKeyPaths, IBaseCommandOptions, ICommandContext, promptForKeyGene
 import { writeProgress, clearProgressMessage } from "../lib/terminal-utils";
 import { confirm, isCancel } from "../lib/clack/prompts";
 import { merkleTreeExists, encrypt as apiEncrypt } from "api";
+import { configureLog } from "../lib/log";
 
 export interface IEncryptCommandOptions extends IBaseCommandOptions {
     //
@@ -36,6 +34,8 @@ export interface IEncryptCommandOptions extends IBaseCommandOptions {
 export async function encryptCommand(context: ICommandContext, options: IEncryptCommandOptions): Promise<void> {
     const { verbose, yes, cwd } = options;
     const nonInteractive = yes ?? false;
+
+    await configureLog({ verbose });
 
     let dbDir: string | undefined = options.db;
     if (dbDir === undefined) {
@@ -81,20 +81,23 @@ export async function encryptCommand(context: ICommandContext, options: IEncrypt
         await exit(1);
     }
 
-    const { storage: plainStorage } = createStorage(dbDir, s3Config, undefined);
-    const hasTree = await merkleTreeExists(plainStorage);
+    const { storage: rawStorage } = createStorage(dbDir, s3Config, undefined);
+    const hasTree = await merkleTreeExists(rawStorage);
     if (!hasTree) {
         log.error(pc.red(`✗ No database found at: ${pc.cyan(dbDir)}`));
         await exit(1);
     }
 
-    const hasEncryptionPub = await plainStorage.fileExists(".db/encryption.pub");
-    const { storage: readStorage } = hasEncryptionPub
-        ? createStorage(dbDir, s3Config, writeStorageOptions)
-        : { storage: plainStorage };
+    const { storage: readStorage } = createStorage(dbDir, s3Config, writeStorageOptions);
     const { storage: writeStorage } = createStorage(dbDir, s3Config, writeStorageOptions);
 
-    if (!nonInteractive) {
+    if (nonInteractive) {
+        if (!yes) {
+            log.error(pc.red("✗ Non interactive encryption requires --yes to proceed."));
+            await exit(1);
+        }
+    }
+    else {
         log.warn(pc.yellow(`⚠️  This will encrypt the database in place at ${pc.cyan(dbDir)}.`));
         log.warn(pc.yellow(`    All files will be rewritten in encrypted form. This cannot be undone without the key.`));
         const confirmed = await confirm({ message: "Proceed with encryption?", initialValue: false });
@@ -105,32 +108,16 @@ export async function encryptCommand(context: ICommandContext, options: IEncrypt
         }
     }
 
-    log.info(pc.blue("Encrypting database in place..."));
     writeProgress("Encrypting files...");
 
-    await apiEncrypt(readStorage, writeStorage, (msg) => writeProgress(msg));
+    await apiEncrypt(readStorage, writeStorage, (msg) => writeProgress(msg), writeStorageOptions.encryptionPublicKey!, rawStorage);
 
     clearProgressMessage();
 
-    // Only after the entire database has been re-encrypted: store the new public key in .db (plain marker file).
-    const publicKeySource = `${resolvedKeyPaths[0]}.pub`;
-    const metaPath = pathJoin(dbDir, ".db");
-    const encryptionPubDest = pathJoin(metaPath, "encryption.pub");
-
-    if (dbDir.startsWith("s3:")) {
-        const { storage: plainStorage } = createStorage(dbDir, s3Config, undefined);
-        const content = await fs.readFile(publicKeySource);
-        await plainStorage.writeStream(".db/encryption.pub", "application/octet-stream", Readable.from(content));
-    }
-    else {
-        if (await pathExists(publicKeySource)) {
-            await copy(publicKeySource, encryptionPubDest);
-            log.info(pc.green("✓ Wrote .db/encryption.pub"));
-        }
-        else {
-            log.warn(pc.yellow(`⚠️ Public key file not found: ${publicKeySource}`));
-        }
-    }
+    // Only after the entire database has been re-encrypted: write the public key to .db/encryption.pub.
+    const publicKeyPem = exportPublicKeyToPem(writeStorageOptions.encryptionPublicKey!);
+    await rawStorage.write(".db/encryption.pub", undefined, Buffer.from(publicKeyPem, "utf8"));
+    log.info(pc.green("✓ Wrote .db/encryption.pub"));
 
     log.info("");
     log.info(pc.green("✅ Database encrypted in place successfully"));

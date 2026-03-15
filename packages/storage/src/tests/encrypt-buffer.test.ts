@@ -5,6 +5,7 @@ import { ENCRYPTION_TAG, LEGACY_HEADER_LENGTH, NEW_FORMAT_HEADER_LENGTH } from "
 jest.mock("utils", () => ({
     log: {
         exception: jest.fn(),
+        verbose: jest.fn(),
     },
 }));
 

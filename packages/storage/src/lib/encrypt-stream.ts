@@ -46,6 +46,13 @@ export function createEncryptionStream(publicKey: KeyObject): Duplex {
         },
 
         flush(callback) {
+            if (!headerSent) {
+                const encryptedKey = publicEncrypt(publicKey, key);
+                this.push(header);
+                this.push(encryptedKey);
+                this.push(iv);
+                headerSent = true;
+            }
             this.push(cipher.final());
             callback();
         },
@@ -58,12 +65,20 @@ export function createEncryptionStream(publicKey: KeyObject): Duplex {
 //
 export function createDecryptionStream(privateKeyMap: IPrivateKeyMap): Duplex {
     let decipher: Decipher | undefined;
+    let passThrough = false;
     let buffer = Buffer.alloc(0);
     const tagBytes = Buffer.from(ENCRYPTION_TAG, "ascii");
 
     return new Transform({
         transform(chunk, encoding, callback) {
             buffer = Buffer.concat([buffer, chunk]);
+
+            if (passThrough) {
+                this.push(buffer);
+                buffer = Buffer.alloc(0);
+                callback();
+                return;
+            }
 
             if (decipher) {
                 this.push(decipher.update(buffer));
@@ -81,20 +96,30 @@ export function createDecryptionStream(privateKeyMap: IPrivateKeyMap): Duplex {
             if (isLegacy) {
                 const defaultKey = privateKeyMap["default"];
                 if (!defaultKey) {
-                    callback(new Error('Old-format stream requires privateKeyMap["default"]'));
+                    passThrough = true;
+                    this.push(buffer);
+                    buffer = Buffer.alloc(0);
+                    callback();
                     return;
                 }
                 if (buffer.length < LEGACY_HEADER_LENGTH) {
                     callback();
                     return;
                 }
-                const encryptedKey = buffer.slice(0, 512);
-                const iv = buffer.slice(512, 512 + 16);
-                const key = privateDecrypt(defaultKey, encryptedKey);
-                decipher = createDecipheriv('aes-256-cbc', key, iv);
-                buffer = buffer.slice(LEGACY_HEADER_LENGTH);
-                if (buffer.length > 0) {
-                    this.push(decipher.update(buffer));
+                try {
+                    const encryptedKey = buffer.slice(0, 512);
+                    const iv = buffer.slice(512, 512 + 16);
+                    const key = privateDecrypt(defaultKey, encryptedKey);
+                    decipher = createDecipheriv("aes-256-cbc", key, iv);
+                    buffer = buffer.slice(LEGACY_HEADER_LENGTH);
+                    if (buffer.length > 0) {
+                        this.push(decipher.update(buffer));
+                        buffer = Buffer.alloc(0);
+                    }
+                }
+                catch {
+                    passThrough = true;
+                    this.push(buffer);
                     buffer = Buffer.alloc(0);
                 }
                 callback();
@@ -115,11 +140,10 @@ export function createDecryptionStream(privateKeyMap: IPrivateKeyMap): Duplex {
             }
 
             if (!key) {
-                if (SUPPORTED_VERSIONS.includes(version) && SUPPORTED_TYPES.includes(encType)) {
-                    callback(new Error(`No private key in map for key hash ${keyHashHex}`));
-                    return;
-                }
-                callback(new Error(`Unsupported encryption format version=${version} type=${encType}`));
+                passThrough = true;
+                this.push(buffer);
+                buffer = Buffer.alloc(0);
+                callback();
                 return;
             }
             
@@ -136,11 +160,18 @@ export function createDecryptionStream(privateKeyMap: IPrivateKeyMap): Duplex {
         },
 
         flush(callback) {
-            if (decipher && buffer.length > 0) {
-                this.push(decipher.update(buffer));
+            if (passThrough && buffer.length > 0) {
+                this.push(buffer);
             }
-            if (decipher) {
+            else if (decipher) {
+                if (buffer.length > 0) {
+                    this.push(decipher.update(buffer));
+                }
                 this.push(decipher.final());
+            }
+            else if (buffer.length > 0) {
+                // Plain data that never triggered decrypt (e.g. shorter than legacy header)
+                this.push(buffer);
             }
             callback();
         },

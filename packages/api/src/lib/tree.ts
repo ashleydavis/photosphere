@@ -10,6 +10,8 @@ import { log, retry, IUuidGenerator } from "utils";
 
 //
 // Path for the files Merkle tree (v6). Legacy path was .db/tree.dat.
+// The files tree stores hash, length, and lastModified of the logical (plain/decrypted)
+// content of each file only, so that plain and encrypted databases compare equal via compare.
 //
 const FILES_TREE_PATH = ".db/files.dat";
 

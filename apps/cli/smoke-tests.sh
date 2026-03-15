@@ -1180,7 +1180,9 @@ test_database_list() {
     expect_output_string "$list_output" "Date:" "List output contains date information"
     expect_output_string "$list_output" "Size:" "List output contains size information"
     expect_output_string "$list_output" "Type:" "List output contains type information"
-    
+    expect_output_string "$list_output" "Encryption:" "List output contains encryption information"
+    expect_output_string "$list_output" "unencrypted" "List output shows unencrypted status for plain database"
+
     # Check that it shows the expected number of files
     expect_output_string "$list_output" "End of results" "List shows end of results message"
     expect_output_string "$list_output" "Displayed 5 files total" "List shows correct total file count"

@@ -511,6 +511,7 @@ Resources:
         .option(...generateKeyOption)
         .option(...yesOption)
         .option(...cwdOption)
+        .option(...verboseOption)
         .addHelpText('after', getCommandExamplesHelp('encrypt'))
         .action(initContext(encryptCommand));
 
@@ -521,6 +522,7 @@ Resources:
         .option(...keyOption)
         .option(...yesOption)
         .option(...cwdOption)
+        .option(...verboseOption)
         .addHelpText('after', getCommandExamplesHelp('decrypt'))
         .action(initContext(decryptCommand));
 

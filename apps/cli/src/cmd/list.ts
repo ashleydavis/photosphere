@@ -4,6 +4,7 @@ import { formatBytes } from "../lib/format";
 import { loadDatabase, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
 import { log } from "utils";
 import { IAsset } from "defs";
+import { readEncryptionHeader } from "storage";
 
 export interface IListCommandOptions extends IBaseCommandOptions {
     //
@@ -17,7 +18,7 @@ export interface IListCommandOptions extends IBaseCommandOptions {
 //
 export async function listCommand(context: ICommandContext, options: IListCommandOptions): Promise<void> {
     const { uuidGenerator, timestampProvider, sessionId } = context;
-    const { bsonDatabase } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
+    const { bsonDatabase, rawAssetStorage } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
     const pageSize = parseInt(options.pageSize?.toString() || '20', 10);
 
     const metadataDatabase = bsonDatabase;
@@ -48,9 +49,16 @@ export async function listCommand(context: ICommandContext, options: IListComman
         // Cast to IAsset and slice the results to match our page size
         const records = result.records;
         const pageRecords = records.slice(0, pageSize);
-        
+
+        // Read encryption headers for each record
+        const encryptionHeaders = new Map<string, Buffer | undefined>();
+        for (const record of pageRecords) {
+            const hash = await readEncryptionHeader(rawAssetStorage, `asset/${record._id}`);
+            encryptionHeaders.set(record._id, hash);
+        }
+
         // Display current page
-        displayPage(pageRecords, pageNumber, pageSize);
+        displayPage(pageRecords, pageNumber, pageSize, encryptionHeaders);
         totalDisplayed += pageRecords.length;
 
         // Check if there are more pages
@@ -85,17 +93,22 @@ export async function listCommand(context: ICommandContext, options: IListComman
     await exit(0);
 }
 
-function displayPage(records: IAsset[], pageNumber: number, pageSize: number): void {
+function displayPage(records: IAsset[], pageNumber: number, pageSize: number, encryptionHeaders: Map<string, Buffer | undefined>): void {
     log.info(pc.bold(pc.cyan(`--- Page ${pageNumber} ---`)));
     
     for (const record of records) {
         const date = record.photoDate ? new Date(record.photoDate).toLocaleDateString() : 'Unknown';
         const size = record.properties?.fileSize ? formatBytes(record.properties.fileSize) : 'Unknown';
         const dimensions = record.width && record.height ? `${record.width}×${record.height}` : '';
-        
+        const encHeader = encryptionHeaders.get(record._id);
+        const encStatus = encHeader
+            ? `encrypted (key: ${encHeader.toString('hex')})`
+            : 'unencrypted';
+
         log.info(`${pc.blue(record._id)} ${pc.green(record.origFileName || 'Unknown')}`);
         log.info(`  Date: ${date} | Size: ${size} | Type: ${record.contentType || 'Unknown'}${dimensions ? ` | ${dimensions}` : ''}`);
-        
+        log.info(`  Encryption: ${encStatus}`);
+
         if (record.origPath) {
             log.info(`  Path: ${record.origPath}`);
         }

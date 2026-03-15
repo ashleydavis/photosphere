@@ -143,7 +143,9 @@ export class FileStorage implements IStorage {
     async write(filePath: string, contentType: string | undefined, data: Buffer): Promise<void> {
 
         await ensureDir(path.dirname(filePath));
-        await fs.writeFile(filePath, data);
+        const tmpPath = `${filePath}.tmp`;
+        await fs.writeFile(tmpPath, data);
+        await fs.rename(tmpPath, filePath);
     }
 
     //
@@ -159,15 +161,18 @@ export class FileStorage implements IStorage {
     writeStream(filePath: string, contentType: string | undefined, inputStream: Readable): Promise<void> {
 
         return new Promise<void>((resolve, reject) => {
+            const tmpPath = `${filePath}.tmp`;
             ensureDir(path.dirname(filePath))
                 .then(() => {
-                    const fileWriteStream = createWriteStream(filePath);
+                    const fileWriteStream = createWriteStream(tmpPath);
                     inputStream.pipe(fileWriteStream)
                         .on("error", (err: any) => {
                             reject(err);
                         })
                         .on("finish", () => {
-                            resolve();
+                            fs.rename(tmpPath, filePath)
+                                .then(() => resolve())
+                                .catch((err) => reject(err));
                         });
                 })
                 .catch((err) => {

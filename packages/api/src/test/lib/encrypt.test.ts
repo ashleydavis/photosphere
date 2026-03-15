@@ -1,12 +1,18 @@
 import * as crypto from "crypto";
-import { createTree, addItem, buildMerkleTree, saveTree } from "merkle-tree";
+import { createTree, addItem, buildMerkleTree, saveTree, upsertItem } from "merkle-tree";
 import type { HashedItem } from "merkle-tree";
-import { MockStorage } from "storage";
-import { encrypt, decrypt } from "../../lib/encrypt";
+import { iterateLeaves } from "merkle-tree";
+import { generateKeyPair, MockStorage } from "storage";
+import { encrypt } from "../../lib/encrypt";
 import { loadMerkleTree } from "../../lib/tree";
+import { getItemInfo } from "merkle-tree";
+import { computeHash } from "../../lib/hash";
+import { Readable } from "stream";
 
 const FILES_TREE_PATH = ".db/files.dat";
 const VALID_UUID = "12345678-1234-5678-9abc-123456789abc";
+
+const encryptKeyPair = generateKeyPair();
 
 function makeHash(seed: string): Buffer {
     return crypto.createHash("sha256").update(seed, "utf8").digest();
@@ -38,7 +44,7 @@ describe("encrypt", () => {
         await saveTree(FILES_TREE_PATH, tree, readStorage);
         await readStorage.write(leafFile, "application/octet-stream", Buffer.from("file content"));
 
-        await encrypt(readStorage, writeStorage);
+        await encrypt(readStorage, writeStorage, () => {}, encryptKeyPair.publicKey, readStorage);
 
         expect(await writeStorage.fileExists(FILES_TREE_PATH)).toBe(true);
         expect(await writeStorage.fileExists(leafFile)).toBe(true);
@@ -57,30 +63,49 @@ describe("encrypt", () => {
         await readStorage.write("a.dat", "application/octet-stream", Buffer.from("a"));
 
         const messages: string[] = [];
-        await encrypt(readStorage, writeStorage, msg => messages.push(msg));
+        await encrypt(readStorage, writeStorage, msg => messages.push(msg), encryptKeyPair.publicKey, readStorage);
 
-        expect(messages.length).toBeGreaterThanOrEqual(0);
+        expect(messages.some(m => m.includes("saved merkle tree"))).toBe(true);
     });
-});
 
-describe("decrypt", () => {
-    test("copies all files from read storage to write storage and updates merkle tree", async () => {
+    test("throws when merkle tree cannot be loaded", async () => {
         const readStorage = new MockStorage("read");
         const writeStorage = new MockStorage("write");
+        await readStorage.write("asset/x", "application/octet-stream", Buffer.from("x"));
 
-        const leafFile = "other/data.bin";
-        const tree = buildMinimalFilesTree([leafFile]);
+        await expect(
+            encrypt(readStorage, writeStorage, () => {}, encryptKeyPair.publicKey, readStorage)
+        ).rejects.toThrow("Failed to load merkle tree from database");
+    });
+
+    test("tree entries for tree-tracked files use logical hash, length, lastModified; tree has no .db/files.dat entry", async () => {
+        const readStorage = new MockStorage("read");
+        const writeStorage = new MockStorage("write");
+        const logicalContent = Buffer.from("logical file content");
+        const assetPath = "asset/f1";
+        const contentHash = await computeHash(Readable.from(logicalContent));
+        let tree = buildMinimalFilesTree([assetPath]);
+        tree = upsertItem(tree, {
+            name: assetPath,
+            hash: contentHash,
+            length: logicalContent.length,
+            lastModified: new Date(),
+        });
+        tree.merkle = buildMerkleTree(tree.sort);
+        tree.dirty = false;
         await saveTree(FILES_TREE_PATH, tree, readStorage);
-        await readStorage.write(leafFile, "application/octet-stream", Buffer.from("encrypted or plain payload"));
+        await readStorage.write(assetPath, "application/octet-stream", logicalContent);
 
-        await decrypt(readStorage, writeStorage);
-
-        expect(await writeStorage.fileExists(FILES_TREE_PATH)).toBe(true);
-        expect(await writeStorage.fileExists(leafFile)).toBe(true);
-        const writtenContent = await writeStorage.read(leafFile);
-        expect(writtenContent?.toString()).toBe("encrypted or plain payload");
+        await encrypt(readStorage, writeStorage, () => {}, encryptKeyPair.publicKey, readStorage);
 
         const loadedTree = await loadMerkleTree(writeStorage);
         expect(loadedTree?.merkle).toBeDefined();
+        const leafNames = [...iterateLeaves(loadedTree!.merkle!)].map(n => (n as { name?: string }).name).filter(Boolean);
+        expect(leafNames).not.toContain(".db/files.dat");
+        const itemInfo = getItemInfo(loadedTree!, assetPath);
+        expect(itemInfo).toBeDefined();
+        expect(itemInfo!.hash.equals(contentHash)).toBe(true);
+        expect(itemInfo!.length).toBe(logicalContent.length);
+        expect(itemInfo!.lastModified).toBeInstanceOf(Date);
     });
 });

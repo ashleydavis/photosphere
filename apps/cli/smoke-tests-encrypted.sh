@@ -659,7 +659,7 @@ test_encrypt_reencrypt() {
         return
     }
 
-    invoke_command "Re-encrypt database in place with key2" "$cli encrypt --db \"$enc1_dir\" --key \"$key2\" --generate-key --source-key \"$key1\" --yes" || {
+    invoke_command "Re-encrypt database in place with key2" "$cli encrypt --db \"$enc1_dir\" --key \"$key2,$key1\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
@@ -713,7 +713,7 @@ test_encrypt_old_to_new_format() {
         return
     }
 
-    invoke_command "Run psi encrypt in place to convert to new format" "$cli encrypt --db \"$old_dir\" --key \"$key\" --source-key \"$key\" --yes" || {
+    invoke_command "Run psi encrypt in place to convert to new format" "$cli encrypt --db \"$old_dir\" --key \"$key\" --yes" || {
         test_failed "$name"
         return
     }
@@ -983,6 +983,20 @@ test_list_encrypted_files() {
 
     if ! echo "$list_output" | grep -q "test.png"; then
         log_error "List output does not reference added asset"
+        echo "$list_output"
+        test_failed "$name"
+        return
+    fi
+
+    if ! echo "$list_output" | grep -q "Encryption:"; then
+        log_error "List output does not contain Encryption field"
+        echo "$list_output"
+        test_failed "$name"
+        return
+    fi
+
+    if ! echo "$list_output" | grep -q "encrypted (key:"; then
+        log_error "List output does not show encrypted status with key hash"
         echo "$list_output"
         test_failed "$name"
         return
