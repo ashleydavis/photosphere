@@ -93,6 +93,8 @@ Frontend:
 - **Error Handling**: Try/catch blocks with specific error handling, custom error classes
 - **Formatting**: 4-space indentation, braces on same line as control statements
 - **Comments**: Line comments with `//` preceded by blank line, method docs above function. Use `//` comments for method docs.
+- All global symbols (functions, types, interfaces, classes, constants) must have a `//` comment block above them explaining their intent.
+- Never use single-character variable names, including arrow function parameters (e.g. use `fileName => ...` not `f => ...`).
 - Avoid single line if statements. All if statements should have curly brackets around the function body.
 - Use 4 space tabs for indentation.
 - Put `else` and `catch` blocks on a new line.
