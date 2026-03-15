@@ -204,7 +204,10 @@ export async function verify(storageDescriptor: IStorageDescriptor, databaseStor
                 else {
                     result.numUnmodified++;
 
-                    log.verbose(`File ${fileResult.fileName} is not modified.`)
+                    //
+                    // Too noisy:
+                    //
+                    // log.verbose(`File ${fileResult.fileName} is not modified.`)
                 }
             } 
             else if (taskResult.status === TaskStatus.Failed) {
