@@ -270,34 +270,16 @@ export class WorkerBackendBun implements IWorkerBackend {
     // Returns the worker state.
     //
     private createWorker(): IWorkerState {
-        // Pass worker options via environment variable
-        // Also pass through environment variables needed for tmpdir() to work correctly
-        const workerEnv: Record<string, string> = {};
-        
-        // Pass through temp directory environment variables (needed for os.tmpdir() to work)
-        if (process.env.TEMP) {
-            workerEnv.TEMP = process.env.TEMP;
-        }
-        if (process.env.TMP) {
-            workerEnv.TMP = process.env.TMP;
-        }
-        if (process.env.TMPDIR) {
-            workerEnv.TMPDIR = process.env.TMPDIR;
-        }
-        
-        // Pass through PATH so workers can find binaries (e.g., ImageMagick in /opt/homebrew/bin on macOS ARM64)
-        if (process.env.PATH) {
-            workerEnv.PATH = process.env.PATH;
-        }
-        
+        const env: any = process.env;
+
         const workerId = this.workers.length + 1;
         const workerOptions: IWorkerOptions = {
             ...this.workerOptions,
             workerId,
         };
-        workerEnv.WORKER_OPTIONS = JSON.stringify(workerOptions);
+        env.WORKER_OPTIONS = JSON.stringify(workerOptions);
         
-        const worker = new Worker("./worker.ts", { env: workerEnv });
+        const worker = new Worker("./worker.ts", { env });
         const workerState: IWorkerState = {
             worker,
             workerId,
@@ -348,35 +330,16 @@ export class WorkerBackendBun implements IWorkerBackend {
             this.notifyWorkerStateChange();
         }
 
-        // Create replacement worker
-        // Pass worker options via environment variable
-        // Also pass through environment variables needed for tmpdir() to work correctly
-        const workerEnv: Record<string, string> = {};
-        
-        // Pass through temp directory environment variables (needed for os.tmpdir() to work)
-        if (process.env.TEMP) {
-            workerEnv.TEMP = process.env.TEMP;
-        }
-        if (process.env.TMP) {
-            workerEnv.TMP = process.env.TMP;
-        }
-        if (process.env.TMPDIR) {
-            workerEnv.TMPDIR = process.env.TMPDIR;
-        }
-        
-        // Pass through PATH so workers can find binaries (e.g., ImageMagick in /opt/homebrew/bin on macOS ARM64)
-        if (process.env.PATH) {
-            workerEnv.PATH = process.env.PATH;
-        }
-        
+        const env: any = process.env;
+
         const workerId = oldWorkerState.workerId;
         const workerOptions: IWorkerOptions = {
             ...this.workerOptions,
             workerId,
         };
-        workerEnv.WORKER_OPTIONS = JSON.stringify(workerOptions);
+        env.WORKER_OPTIONS = JSON.stringify(workerOptions);
         
-        const worker = new Worker("./worker.ts", { env: workerEnv });
+        const worker = new Worker("./worker.ts", { env });
         const newWorkerState: IWorkerState = {
             worker,
             workerId,
