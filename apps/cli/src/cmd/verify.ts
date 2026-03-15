@@ -41,12 +41,12 @@ export async function verifyCommand(context: ICommandContext, options: IVerifyCo
     // First, verify database files (metadata and sort index files) when verifying the full database.
     //
     let dbFileResult: IDatabaseFileVerifyResult | undefined;
-    if (!options.path) {
-        writeProgress('🗄️  Verifying database files...');
-        dbFileResult = await verifyDatabaseFiles(metadataStorage, assetStorage, (progress) => {
-            writeProgress(`🔍 ${progress}`);
-        });
-    }
+    // if (!options.path) {
+    //     writeProgress('🗄️  Verifying database files...');
+    //     dbFileResult = await verifyDatabaseFiles(metadataStorage, assetStorage, (progress) => {
+    //         writeProgress(`🔍 ${progress}`);
+    //     });
+    // }
     
     //
     // Then, verify asset files.
