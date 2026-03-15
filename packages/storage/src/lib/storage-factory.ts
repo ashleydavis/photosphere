@@ -96,7 +96,7 @@ export function createStorage(
 
     // Wrap with encryption if keys are provided
     if (options?.decryptionKeyMap && options.encryptionPublicKey) {
-        storage = new EncryptedStorage(rootPath, storage, options.decryptionKeyMap, options.encryptionPublicKey);
+        storage = new EncryptedStorage(storage.location, storage, options.decryptionKeyMap, options.encryptionPublicKey);
         type = `encrypted-${type}`;
     }
 
