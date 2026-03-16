@@ -110,16 +110,15 @@ export async function encryptCommand(context: ICommandContext, options: IEncrypt
 
     writeProgress("Encrypting files...");
 
-    await apiEncrypt(readStorage, writeStorage, (msg) => writeProgress(msg), writeStorageOptions.encryptionPublicKey!, rawStorage);
+    const { encrypted, skipped } = await apiEncrypt(readStorage, writeStorage, (msg) => writeProgress(msg), writeStorageOptions.encryptionPublicKey!, rawStorage);
 
     clearProgressMessage();
 
     // Only after the entire database has been re-encrypted: write the public key to .db/encryption.pub.
     const publicKeyPem = exportPublicKeyToPem(writeStorageOptions.encryptionPublicKey!);
     await rawStorage.write(".db/encryption.pub", undefined, Buffer.from(publicKeyPem, "utf8"));
-    log.info(pc.green("✓ Wrote .db/encryption.pub"));
 
     log.info("");
-    log.info(pc.green("✅ Database encrypted in place successfully"));
+    log.info(pc.green(`✅ Encrypted ${encrypted} files, ${skipped} were already encrypted.`));
     await exit(0);
 }

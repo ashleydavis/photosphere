@@ -17,6 +17,14 @@ import { IDatabaseMetadata } from "./media-file-database";
 export type IEncryptProgress = (message: string) => void;
 
 //
+// Result returned by encrypt with counts of files processed.
+//
+export interface IEncryptResult {
+    encrypted: number;
+    skipped: number;
+}
+
+//
 // Encrypts a single file from readStorage and writes it to writeStorage.
 // Skips files already encrypted with the given publicKeyHash.
 // Updates the merkle tree entry for non-.db/ files with the new storage metadata.
@@ -103,7 +111,7 @@ export async function encrypt(
     progressCallback: IEncryptProgress,
     encryptionPublicKey: KeyObject,
     rawReadStorage: IStorage
-): Promise<void> {
+): Promise<IEncryptResult> {
     const merkleTree = await retry(() => loadMerkleTree(readStorage));
     if (!merkleTree) {
         throw new Error("Failed to load merkle tree from database.");
@@ -129,5 +137,6 @@ export async function encrypt(
 
     await retry(() => saveMerkleTree(merkleTree, writeStorage));
     progressCallback(`Encrypted ${encrypted} files, skipped ${skipped} already encrypted, saved merkle tree`);
+    return { encrypted, skipped };
 }
 

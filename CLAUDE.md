@@ -100,6 +100,8 @@ Frontend:
 - Put `else` and `catch` blocks on a new line.
 - Tests should go under the directory src/test in each package.
 - Refrain from using the `any` type in normal code, although it's ok sometimes in test code.
+- Never use anonymous object types inline (e.g. `Promise<{ foo: number }>`). Always define a named interface instead.
+- Never use IIFE async generator pattern (`(async function* () { ... })()`). Extract to a named `async function*` instead.
 
 ## Restrictions
 - TypeScript code should always compile after making changes.

@@ -82,14 +82,13 @@ export async function decryptCommand(context: ICommandContext, options: IDecrypt
 
     writeProgress("Decrypting files...");
 
-    await apiDecrypt(readStorage, rawStorage, (msg) => writeProgress(msg), rawStorage);
+    const { decrypted, skipped } = await apiDecrypt(readStorage, rawStorage, (msg) => writeProgress(msg), rawStorage);
 
     clearProgressMessage();
 
     await rawStorage.deleteFile(".db/encryption.pub");
-    log.info(pc.green("✓ Removed .db/encryption.pub"));
 
     log.info("");
-    log.info(pc.green("✅ Database decrypted in place successfully"));
+    log.info(pc.green(`✅ Decrypted ${decrypted} files, ${skipped} were already plain.`));
     await exit(0);
 }

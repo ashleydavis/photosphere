@@ -15,6 +15,14 @@ import { IDatabaseMetadata } from "./media-file-database";
 export type IDecryptProgress = (message: string) => void;
 
 //
+// Result returned by decrypt with counts of files processed.
+//
+export interface IDecryptResult {
+    decrypted: number;
+    skipped: number;
+}
+
+//
 // Decrypts a single file from readStorage and writes it plain to writeStorage.
 // Skips files that are not encrypted. Updates the merkle tree entry for non-.db/ files.
 // Returns true if the file was decrypted, false if it was skipped (already plain).
@@ -92,7 +100,7 @@ export async function decrypt(
     writeStorage: IStorage,
     progressCallback: IDecryptProgress,
     rawReadStorage: IStorage
-): Promise<void> {
+): Promise<IDecryptResult> {
 
     const merkleTree = await retry(() => loadMerkleTree(readStorage));
     if (!merkleTree) {
@@ -122,4 +130,5 @@ export async function decrypt(
     if (progressCallback) {
         progressCallback(`Decrypted ${decrypted} files, skipped ${skipped} already plain, saved merkle tree`);
     }
+    return { decrypted, skipped };
 }
