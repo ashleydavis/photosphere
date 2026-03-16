@@ -5,6 +5,7 @@
 
 import type { IStorage } from "./storage";
 import { ENCRYPTION_TAG, NEW_FORMAT_HEADER_LENGTH, PUBLIC_KEY_HASH_LENGTH } from "./encryption-constants";
+import { retry } from "utils";
 
 //
 // Reads the first bytes of a file and returns the public key hash from the encryption header if present.
@@ -16,7 +17,9 @@ export async function readEncryptionHeader(
     rawStorage: IStorage,
     filePath: string
 ): Promise<Buffer | undefined> {
-    const buf = await rawStorage.read(filePath);
+    console.log(`[readEncryptionHeader] rawStorage.read ${filePath}`);
+    const buf = await retry(() => rawStorage.read(filePath));
+    console.log(`[readEncryptionHeader] rawStorage.read DONE ${filePath}`);
     const raw = buf?.slice(0, NEW_FORMAT_HEADER_LENGTH);
     if (!raw || raw.length < 4) {
         return undefined;

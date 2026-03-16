@@ -32,16 +32,23 @@ export async function encryptFile(
     publicKeyHash: Buffer,
     merkleTree: IMerkleTree<IDatabaseMetadata>
 ): Promise<boolean> {
+    console.log(`[encryptFile] START ${fileName}`);
+
+    console.log(`[encryptFile] readStorage.info ${fileName}`);
     const srcFileInfo = await retry(() => readStorage.info(fileName));
+    console.log(`[encryptFile] readStorage.info DONE ${fileName}`);
     if (!srcFileInfo) {
         throw new Error(`Source file "${fileName}" does not exist.`);
     }
 
+    console.log(`[encryptFile] readEncryptionHeader ${fileName}`);
     const header = await readEncryptionHeader(rawReadStorage, fileName);
+    console.log(`[encryptFile] readEncryptionHeader DONE ${fileName}`);
     const shouldEncrypt = header === undefined || !header.equals(publicKeyHash);
     if (shouldEncrypt) {
         log.verbose(`Encrypting ${fileName}`);
 
+        console.log(`[encryptFile] writeStorage.writeStream ${fileName}`);
         await retry(async () => {
             await writeStorage.writeStream(
                 fileName,
@@ -50,11 +57,14 @@ export async function encryptFile(
                 srcFileInfo.length
             );
         });
+        console.log(`[encryptFile] writeStorage.writeStream DONE ${fileName}`);
 
         if (!fileName.startsWith(".db/")) {
             const existing = getItemInfo(merkleTree, fileName);
             if (existing) {
+                console.log(`[encryptFile] writeStorage.info ${fileName}`);
                 const updatedInfo = await retry(() => writeStorage.info(fileName));
+                console.log(`[encryptFile] writeStorage.info DONE ${fileName}`);
                 if (!updatedInfo) {
                     throw new Error(`Written file "${fileName}" has no info.`);
                 }
@@ -71,7 +81,8 @@ export async function encryptFile(
         return true;
     }
     else {
-        log.verbose(`Already encrypted ${fileName}`);
+        // log.verbose(`Already encrypted ${fileName}`);
+        console.log(`[encryptFile] SKIP (already encrypted) ${fileName}`);
         return false;
     }
 }
@@ -115,22 +126,35 @@ export async function encrypt(
 
         batch.push(fileName);
 
-        if (batch.length >= BATCH_SIZE) {
-            const results = await Promise.all(batch.map(fileName => encryptFile(fileName, readStorage, writeStorage, rawReadStorage, publicKeyHash, merkleTree)));
-            encrypted += results.filter(result => result).length;
-            skipped += results.filter(result => !result).length;
-            batch = [];
-            progressCallback(`Encrypted ${encrypted} files, skipped ${skipped} already encrypted`);
-        }
+        console.log(`Added ${batch.length}`); //fio:
+
+        // if (batch.length >= BATCH_SIZE) {
+        //     const results = await Promise.all(batch.map(fileName => encryptFile(fileName, readStorage, writeStorage, rawReadStorage, publicKeyHash, merkleTree)));
+        //     encrypted += results.filter(result => result).length;
+        //     skipped += results.filter(result => !result).length;
+        //     batch = [];
+        //     progressCallback(`Encrypted ${encrypted} files, skipped ${skipped} already encrypted`);
+        //     log.verbose(`Encrypted ${encrypted} files, skipped ${skipped} already encrypted`);
+        // }
     }
 
+    console.log(`Collected ${batch.length}`);
+
+    let done = 0;
+
     if (batch.length > 0) {
-        const results = await Promise.all(batch.map(fileName => encryptFile(fileName, readStorage, writeStorage, rawReadStorage, publicKeyHash, merkleTree)));
-        encrypted += results.filter(result => result).length;
-        skipped += results.filter(result => !result).length;
+        for (const fileName of batch) {
+            await encryptFile(fileName, readStorage, writeStorage, rawReadStorage, publicKeyHash, merkleTree);
+            ++done;
+            console.log(`Processed ${done}`); //fio:
+        }
+        // const results = await Promise.all(batch.map(fileName => encryptFile(fileName, readStorage, writeStorage, rawReadStorage, publicKeyHash, merkleTree)));
+        // encrypted += results.filter(result => result).length;
+        // skipped += results.filter(result => !result).length;
     }
 
     await retry(() => saveMerkleTree(merkleTree, writeStorage));
     progressCallback(`Encrypted ${encrypted} files, skipped ${skipped} already encrypted, saved merkle tree`);
+    log.verbose(`!!!!!!!!!!!!!!!!!!!!!!!`);
 }
 
