@@ -6,7 +6,7 @@ import {
     loadShardMerkleTree as loadShardMerkleTreeBdb,
 } from "bdb";
 import { computeHash } from "./hash";
-import { log, retry, IUuidGenerator } from "utils";
+import { batchGenerator, log, retry, IUuidGenerator } from "utils";
 
 //
 // Path for the files Merkle tree (v6). Legacy path was .db/tree.dat.
@@ -103,14 +103,9 @@ export interface IBuildFilesTreeResult {
 }
 
 //
-// Number of files to read and hash in parallel per batch. Tree updates remain sequential.
-//
-const BUILD_FILES_TREE_BATCH_SIZE = 10;
-
-//
 // Builds the files merkle tree from storage: walks only paths that belong in the tree
 // (asset/, display/, thumb/; skips .db/). Hashes each file via storage (logical content
-// when encrypted), upserts into tree, saves once. Reads and hashes up to BUILD_FILES_TREE_BATCH_SIZE
+// when encrypted), upserts into tree, saves once. Reads and hashes up to BATCH_SIZE
 // files in parallel per batch to overlap I/O.
 //
 export async function buildFilesTree(
@@ -136,15 +131,10 @@ export async function buildFilesTree(
         return { fileName, hash, length: info.length, lastModified: info.lastModified };
     }
 
-    const batch: string[] = [];
-    const flushBatch = async (): Promise<void> => {
-        if (batch.length === 0) {
-            return;
-        }
-        const results = await Promise.all(batch.map(name => readAndHash(name)));
-        batch.length = 0;
+    const BATCH_SIZE = 10;
+    for await (const batch of batchGenerator(walkDirectory(storage, "", [/^\.db(\/|$)/]), BATCH_SIZE)) {
+        const results = await Promise.all(batch.map(({ fileName }) => readAndHash(fileName)));
         for (const r of results) {
-            log.info(r.fileName);
             merkleTree = upsertItem(merkleTree, {
                 name: r.fileName,
                 hash: r.hash,
@@ -157,15 +147,7 @@ export async function buildFilesTree(
             }
             progressCallback(fileCount);
         }
-    };
-
-    for await (const { fileName } of walkDirectory(storage, "", [/^\.db(\/|$)/])) {
-        batch.push(fileName);
-        if (batch.length >= BUILD_FILES_TREE_BATCH_SIZE) {
-            await flushBatch();
-        }
     }
-    await flushBatch();
 
     databaseMetadata.filesImported = filesImported;
     merkleTree.databaseMetadata = databaseMetadata;
