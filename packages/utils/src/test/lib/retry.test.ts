@@ -1,4 +1,4 @@
-import { retry } from "../../lib/retry";
+import { retry, rejectAfter } from "../../lib/retry";
 import { sleep } from "../../lib/sleep";
 import { log } from "../../lib/log";
 
@@ -33,7 +33,8 @@ describe("retry", () => {
 
         expect(result).toBe("success");
         expect(operation).toHaveBeenCalledTimes(1);
-        expect(sleep).not.toHaveBeenCalled();
+        // sleep(timeoutMS) is called once by rejectAfter for the single attempt
+        expect(sleep).toHaveBeenCalledTimes(1);
     });
 
     test("should succeed after retries", async () => {
@@ -46,9 +47,10 @@ describe("retry", () => {
 
         expect(result).toBe("success");
         expect(operation).toHaveBeenCalledTimes(3);
-        expect(sleep).toHaveBeenCalledTimes(2);
-        expect(sleep).toHaveBeenNthCalledWith(1, 100);
-        expect(sleep).toHaveBeenNthCalledWith(2, 200);
+        // Each attempt: sleep(timeoutMS) from rejectAfter, plus sleep(waitTimeMS) backoff between attempts
+        expect(sleep).toHaveBeenCalledTimes(5);
+        expect(sleep).toHaveBeenNthCalledWith(2, 100);
+        expect(sleep).toHaveBeenNthCalledWith(4, 200);
     });
 
     test("should throw error after all retries exhausted", async () => {
@@ -58,9 +60,10 @@ describe("retry", () => {
         await expect(retry(operation, 3, 100, 2)).rejects.toThrow("Operation failed");
 
         expect(operation).toHaveBeenCalledTimes(3);
-        expect(sleep).toHaveBeenCalledTimes(2);
-        expect(sleep).toHaveBeenNthCalledWith(1, 100);
-        expect(sleep).toHaveBeenNthCalledWith(2, 200);
+        // Each attempt: sleep(timeoutMS) from rejectAfter, plus sleep(waitTimeMS) backoff between attempts
+        expect(sleep).toHaveBeenCalledTimes(5);
+        expect(sleep).toHaveBeenNthCalledWith(2, 100);
+        expect(sleep).toHaveBeenNthCalledWith(4, 200);
         expect(console.error).toHaveBeenCalledWith("Operation failed, no more retries allowed.");
     });
 
@@ -71,7 +74,8 @@ describe("retry", () => {
         await expect(retry(operation)).rejects.toThrow("Operation failed");
 
         expect(operation).toHaveBeenCalledTimes(3);
-        expect(sleep).toHaveBeenCalledTimes(2);
+        // 3 rejectAfter sleeps + 2 backoff sleeps
+        expect(sleep).toHaveBeenCalledTimes(5);
     });
 
     test("should use default waitTimeMS of 1000", async () => {
@@ -81,8 +85,9 @@ describe("retry", () => {
 
         await retry(operation, 2);
 
-        expect(sleep).toHaveBeenCalledTimes(1);
-        expect(sleep).toHaveBeenCalledWith(1000);
+        // 2 rejectAfter sleeps + 1 backoff sleep
+        expect(sleep).toHaveBeenCalledTimes(3);
+        expect(sleep).toHaveBeenNthCalledWith(2, 1000);
     });
 
     test("should use default waitTimeScale of 2", async () => {
@@ -93,9 +98,10 @@ describe("retry", () => {
 
         await retry(operation, 3, 100);
 
-        expect(sleep).toHaveBeenCalledTimes(2);
-        expect(sleep).toHaveBeenNthCalledWith(1, 100);
-        expect(sleep).toHaveBeenNthCalledWith(2, 200);
+        // 3 rejectAfter sleeps + 2 backoff sleeps
+        expect(sleep).toHaveBeenCalledTimes(5);
+        expect(sleep).toHaveBeenNthCalledWith(2, 100);
+        expect(sleep).toHaveBeenNthCalledWith(4, 200);
     });
 
     test("should work with custom waitTimeScale", async () => {
@@ -106,9 +112,10 @@ describe("retry", () => {
 
         await retry(operation, 3, 100, 3);
 
-        expect(sleep).toHaveBeenCalledTimes(2);
-        expect(sleep).toHaveBeenNthCalledWith(1, 100);
-        expect(sleep).toHaveBeenNthCalledWith(2, 300);
+        // 3 rejectAfter sleeps + 2 backoff sleeps
+        expect(sleep).toHaveBeenCalledTimes(5);
+        expect(sleep).toHaveBeenNthCalledWith(2, 100);
+        expect(sleep).toHaveBeenNthCalledWith(4, 300);
     });
 
     test("should not sleep on last attempt", async () => {
@@ -118,7 +125,8 @@ describe("retry", () => {
         await expect(retry(operation, 2, 100)).rejects.toThrow("Operation failed");
 
         expect(operation).toHaveBeenCalledTimes(2);
-        expect(sleep).toHaveBeenCalledTimes(1);
+        // 2 rejectAfter sleeps + 1 backoff sleep
+        expect(sleep).toHaveBeenCalledTimes(3);
     });
 
     test("should throw error immediately when maxAttempts is 1", async () => {
@@ -128,7 +136,8 @@ describe("retry", () => {
         await expect(retry(operation, 1, 100)).rejects.toThrow("Operation failed");
 
         expect(operation).toHaveBeenCalledTimes(1);
-        expect(sleep).not.toHaveBeenCalled();
+        // sleep(timeoutMS) is called once by rejectAfter for the single attempt
+        expect(sleep).toHaveBeenCalledTimes(1);
         expect(log.exception).not.toHaveBeenCalled();
         expect(console.error).toHaveBeenCalledWith("Operation failed, no more retries allowed.");
     });
@@ -174,6 +183,39 @@ describe("retry", () => {
 
         expect(result).toBeUndefined();
         expect(operation).toHaveBeenCalledTimes(1);
+    });
+
+    test("should retry when operation times out", async () => {
+        const neverResolves = jest.fn(() => new Promise<string>(() => {}));
+
+        await expect(retry(neverResolves, 3, 100, 2, 50)).rejects.toThrow("Operation timed out after 50ms");
+
+        expect(neverResolves).toHaveBeenCalledTimes(3);
+    });
+
+    test("should succeed if operation completes before timeout", async () => {
+        const operation = jest.fn().mockResolvedValue("success");
+
+        const result = await retry(operation, 3, 100, 2, 50);
+
+        expect(result).toBe("success");
+        expect(operation).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe("rejectAfter", () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+    });
+
+    test("should reject with timeout message", async () => {
+        await expect(rejectAfter(100)).rejects.toThrow("Operation timed out after 100ms");
+    });
+
+    test("should call sleep with the given duration", async () => {
+        await expect(rejectAfter(500)).rejects.toThrow();
+
+        expect(sleep).toHaveBeenCalledWith(500);
     });
 });
 
