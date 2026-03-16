@@ -3,7 +3,7 @@ import { createTree, addItem, buildMerkleTree, saveTree, upsertItem } from "merk
 import type { HashedItem } from "merkle-tree";
 import { iterateLeaves } from "merkle-tree";
 import { generateKeyPair, MockStorage } from "storage";
-import { encrypt } from "../../lib/encrypt";
+import { encrypt, encryptableFiles } from "../../lib/encrypt";
 import { loadMerkleTree } from "../../lib/tree";
 import { getItemInfo } from "merkle-tree";
 import { computeHash } from "../../lib/hash";
@@ -33,6 +33,56 @@ function buildMinimalFilesTree(leafNames: string[]): import("merkle-tree").IMerk
     tree.dirty = false;
     return tree;
 }
+
+async function collectFiles(gen: AsyncIterable<string>): Promise<string[]> {
+    const results: string[] = [];
+    for await (const fileName of gen) {
+        results.push(fileName);
+    }
+    return results;
+}
+
+describe("encryptableFiles", () => {
+    test("yields regular files", async () => {
+        const storage = new MockStorage("read");
+        await storage.write("photo/img.jpg", "image/jpeg", Buffer.from("x"));
+        await storage.write(".db/bson/meta", "application/octet-stream", Buffer.from("x"));
+        const files = await collectFiles(encryptableFiles(storage));
+        expect(files).toContain("photo/img.jpg");
+        expect(files).toContain(".db/bson/meta");
+    });
+
+    test("excludes .db/files.dat", async () => {
+        const storage = new MockStorage("read");
+        await storage.write(".db/files.dat", "application/octet-stream", Buffer.from("x"));
+        await storage.write("photo/img.jpg", "image/jpeg", Buffer.from("x"));
+        const files = await collectFiles(encryptableFiles(storage));
+        expect(files).not.toContain(".db/files.dat");
+        expect(files).toContain("photo/img.jpg");
+    });
+
+    test("excludes .db/encryption.pub", async () => {
+        const storage = new MockStorage("read");
+        await storage.write(".db/encryption.pub", "application/octet-stream", Buffer.from("x"));
+        await storage.write("photo/img.jpg", "image/jpeg", Buffer.from("x"));
+        const files = await collectFiles(encryptableFiles(storage));
+        expect(files).not.toContain(".db/encryption.pub");
+    });
+
+    test("excludes README.md", async () => {
+        const storage = new MockStorage("read");
+        await storage.write("README.md", "text/markdown", Buffer.from("x"));
+        await storage.write("photo/img.jpg", "image/jpeg", Buffer.from("x"));
+        const files = await collectFiles(encryptableFiles(storage));
+        expect(files).not.toContain("README.md");
+    });
+
+    test("yields nothing for empty storage", async () => {
+        const storage = new MockStorage("read");
+        const files = await collectFiles(encryptableFiles(storage));
+        expect(files).toEqual([]);
+    });
+});
 
 describe("encrypt", () => {
     test("copies all files from read storage to write storage and updates merkle tree", async () => {

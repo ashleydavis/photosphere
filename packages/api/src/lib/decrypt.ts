@@ -6,7 +6,7 @@
 import { IStorage, readEncryptionHeader, walkDirectory } from "storage";
 import { loadMerkleTree, saveMerkleTree } from "./tree";
 import { getItemInfo, IMerkleTree, updateItem } from "merkle-tree";
-import { log, retry } from "utils";
+import { batchGenerator, log, retry } from "utils";
 import { IDatabaseMetadata } from "./media-file-database";
 
 //
@@ -71,6 +71,18 @@ async function decryptFile(
 }
 
 //
+// Yields file names from readStorage that should be decrypted, skipping metadata and config files
+// that are either handled separately or not decrypted at all.
+//
+export async function* decryptableFiles(readStorage: IStorage): AsyncGenerator<string> {
+    for await (const { fileName } of walkDirectory(readStorage, "", [])) {
+        if (fileName !== ".db/files.dat" && fileName !== ".db/encryption.pub" && fileName !== "README.md") {
+            yield fileName;
+        }
+    }
+}
+
+//
 // Decrypts the database in place: reads each file from readStorage (encrypted),
 // writes it plain to writeStorage (same path).
 // rawReadStorage is the raw storage (no decryption layer) used to peek encryption headers.
@@ -90,33 +102,19 @@ export async function decrypt(
     let decrypted = 0;
     let skipped = 0;
     const BATCH_SIZE = 10;
-    let batch: string[] = [];
 
-    for await (const { fileName } of walkDirectory(readStorage, "", [])) {
-
-        if (fileName === ".db/files.dat" || fileName === ".db/encryption.pub" || fileName === "README.md") {
-            // .db/file.dat will be written decrypted after this loop.
-            // The other files are not decrypted.
-            continue;
-        }
-
-        batch.push(fileName);
-
-        if (batch.length >= BATCH_SIZE) {
-            const results = await Promise.all(batch.map(fileName => decryptFile(fileName, readStorage, writeStorage, rawReadStorage, merkleTree)));
-            decrypted += results.filter(result => result).length;
-            skipped += results.filter(result => !result).length;
-            batch = [];
-            if (progressCallback) {
-                progressCallback(`Decrypted ${decrypted} files, skipped ${skipped} already plain`);
+    for await (const batch of batchGenerator(decryptableFiles(readStorage), BATCH_SIZE)) {
+        await Promise.all(batch.map(async fileName => {
+            if (await decryptFile(fileName, readStorage, writeStorage, rawReadStorage, merkleTree)) {
+                ++decrypted;
             }
+            else {
+                ++skipped;
+            }
+        }));
+        if (progressCallback) {
+            progressCallback(`Decrypted ${decrypted} files, skipped ${skipped} already plain`);
         }
-    }
-
-    if (batch.length > 0) {
-        const results = await Promise.all(batch.map(fileName => decryptFile(fileName, readStorage, writeStorage, rawReadStorage, merkleTree)));
-        decrypted += results.filter(result => result).length;
-        skipped += results.filter(result => !result).length;
     }
 
     await retry(() => saveMerkleTree(merkleTree, writeStorage));
