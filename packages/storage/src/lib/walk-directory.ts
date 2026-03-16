@@ -1,4 +1,4 @@
-import { log } from "utils";
+import { log, retry } from "utils";
 import { IStorage } from "./storage";
 import { pathJoin } from "./storage-factory";
 
@@ -22,7 +22,7 @@ export async function* walkDirectory(
 ): AsyncGenerator<IOrderedFile> {
     let next: string | undefined = undefined;
     do {
-        const fileBatch = await storage.listFiles(dirPath, 1000, next);
+        const fileBatch = await retry(() => storage.listFiles(dirPath, 1000, next));
         for (const fileName of fileBatch.names) {
             let fullPath = pathJoin(dirPath, fileName);
 
@@ -44,7 +44,7 @@ export async function* walkDirectory(
 
     next = undefined;
     do {
-        const dirBatch = await storage.listDirs(dirPath, 1000, next);
+        const dirBatch = await retry(() => storage.listDirs(dirPath, 1000, next));
         for (const dirName of dirBatch.names) {
             let fullPath = pathJoin(dirPath, dirName);
 
