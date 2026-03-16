@@ -41,6 +41,10 @@ export class CloudStorage implements IStorage {
     constructor(public readonly location: string, private verbose?: boolean, credentials?: IS3Credentials) {
         const s3Config: aws.S3.ClientConfiguration = {
             endpoint: credentials?.endpoint || process.env.AWS_ENDPOINT,
+            httpOptions: {
+                timeout: 30000,
+                connectTimeout: 10000,
+            },
         };
 
         if (credentials) {
