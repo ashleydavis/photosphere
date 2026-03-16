@@ -8,7 +8,7 @@ import type { KeyObject } from "node:crypto";
 import { hashPublicKey, IStorage, readEncryptionHeader, walkDirectory } from "storage";
 import { loadMerkleTree, saveMerkleTree } from "./tree";
 import { getItemInfo, IMerkleTree, updateItem } from "merkle-tree";
-import { log, retry } from "utils";
+import { batchGenerator, log, retry } from "utils";
 import { IDatabaseMetadata } from "./media-file-database";
 
 //
@@ -77,6 +77,18 @@ export async function encryptFile(
 }
 
 //
+// Yields file names from readStorage that should be encrypted, skipping metadata and config files
+// that are either handled separately or not encrypted at all.
+//
+export async function* encryptableFiles(readStorage: IStorage): AsyncGenerator<string> {
+    for await (const { fileName } of walkDirectory(readStorage, "", [])) {
+        if (fileName !== ".db/files.dat" && fileName !== ".db/encryption.pub" && fileName !== "README.md") {
+            yield fileName;
+        }
+    }
+}
+
+//
 // Encrypts the database in place: reads each file from readStorage, writes it encrypted
 // to writeStorage (same path). Can be run on an already encrypted database to re-encrypt
 // with a new key. Use readStorage = plain, writeStorage = encrypted for plain→encrypted;
@@ -103,31 +115,16 @@ export async function encrypt(
     let skipped = 0;
     const BATCH_SIZE = 10;
 
-    let batch: string[] = [];
-
-    for await (const { fileName } of walkDirectory(readStorage, "", [])) {
-
-        if (fileName === ".db/files.dat" || fileName === ".db/encryption.pub" || fileName === "README.md") {
-            // .db/file.dat will be written encrypted after this loop.
-            // The other files are not encrypted.
-            continue;
-        }
-
-        batch.push(fileName);
-
-        if (batch.length >= BATCH_SIZE) {
-            const results = await Promise.all(batch.map(fileName => encryptFile(fileName, readStorage, writeStorage, rawReadStorage, publicKeyHash, merkleTree)));
-            encrypted += results.filter(result => result).length;
-            skipped += results.filter(result => !result).length;
-            batch = [];
-            progressCallback(`Encrypted ${encrypted} files, skipped ${skipped} already encrypted`);
-        }
-    }
-
-    if (batch.length > 0) {
-        const results = await Promise.all(batch.map(fileName => encryptFile(fileName, readStorage, writeStorage, rawReadStorage, publicKeyHash, merkleTree)));
-        encrypted += results.filter(result => result).length;
-        skipped += results.filter(result => !result).length;
+    for await (const batch of batchGenerator(encryptableFiles(readStorage), BATCH_SIZE)) {
+        await Promise.all(batch.map(async fileName => {
+            if (await encryptFile(fileName, readStorage, writeStorage, rawReadStorage, publicKeyHash, merkleTree)) {
+                ++encrypted;
+            }
+            else {
+                ++skipped;
+            }
+        }));
+        progressCallback(`Encrypted ${encrypted} files, skipped ${skipped} already encrypted`);
     }
 
     await retry(() => saveMerkleTree(merkleTree, writeStorage));
