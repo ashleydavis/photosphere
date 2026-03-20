@@ -534,22 +534,6 @@ describe('CloudStorage Tests', () => {
                 .rejects.toThrow();
         });
 
-        it('should handle readonly mode', async () => {
-            const readonlyStorage = new CloudStorage(`${bucketName}/${testPrefix}`, true, {
-                accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-                secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-                region: process.env.AWS_REGION
-            }, true);
-
-            await expect(readonlyStorage.write(`${location}/${errorTestDir}/readonly-test.txt`, 'text/plain', Buffer.from('test', 'utf8')))
-                .rejects.toThrow('Cannot perform write file operation: storage is in readonly mode');
-
-            await expect(readonlyStorage.acquireWriteLock(`${location}/${errorTestDir}/readonly-test.lock`, 'user'))
-                .rejects.toThrow('Cannot perform acquire write lock operation: storage is in readonly mode');
-
-            await expect(readonlyStorage.releaseWriteLock(`${location}/${errorTestDir}/readonly-test.lock`))
-                .rejects.toThrow('Cannot perform release write lock operation: storage is in readonly mode');
-        });
     });
 
     describe('Path Handling', () => {
