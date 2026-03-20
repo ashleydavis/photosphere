@@ -1,5 +1,16 @@
-import { Readable } from "stream";
-import aws from "aws-sdk";
+import { Readable, PassThrough } from "stream";
+import {
+    S3Client,
+    ListObjectsV2Command,
+    HeadObjectCommand,
+    GetObjectCommand,
+    PutObjectCommand,
+    DeleteObjectCommand,
+    DeleteObjectsCommand,
+    CopyObjectCommand,
+    ListObjectsV2CommandOutput,
+} from "@aws-sdk/client-s3";
+import { Upload } from "@aws-sdk/lib-storage";
 import { IFileInfo, IListResult, IStorage, IWriteLockInfo } from "./storage";
 import { WrappedError } from "utils";
 import { log } from "utils";
@@ -34,28 +45,27 @@ Digital Ocean Spaces:
 export class CloudStorage implements IStorage {
     
     //
-    // AWS S3 interface.
+    // AWS S3 client.
     //
-    private s3!: aws.S3;
+    private s3!: S3Client;
 
     constructor(public readonly location: string, private verbose?: boolean, credentials?: IS3Credentials) {
-        const s3Config: aws.S3.ClientConfiguration = {
-            endpoint: credentials?.endpoint || process.env.AWS_ENDPOINT,
-            httpOptions: {
-                timeout: 30000,
-                connectTimeout: 10000,
+        const endpoint = credentials?.endpoint || process.env.AWS_ENDPOINT;
+
+        this.s3 = new S3Client({
+            ...(endpoint && { endpoint }),
+            requestHandler: {
+                requestTimeout: 30000,
+                connectionTimeout: 10000,
             },
-        };
-
-        if (credentials) {
-            s3Config.accessKeyId = credentials.accessKeyId;
-            s3Config.secretAccessKey = credentials.secretAccessKey;
-            if (credentials.region) {
-                s3Config.region = credentials.region;
-            }
-        }
-
-        this.s3 = new aws.S3(s3Config);
+            ...(credentials && {
+                credentials: {
+                    accessKeyId: credentials.accessKeyId,
+                    secretAccessKey: credentials.secretAccessKey,
+                },
+                ...(credentials.region && { region: credentials.region }),
+            }),
+        });
     }
 
     //
@@ -119,16 +129,15 @@ export class CloudStorage implements IStorage {
             }
         }
 
-        const listParams: aws.S3.Types.ListObjectsV2Request = {
-            Bucket: bucket,
-            Prefix: key,
-            Delimiter: "/",
-            MaxKeys: max,
-            ContinuationToken: next,
-        };
-
         try {
-            const response = await this.s3.listObjectsV2(listParams).promise();
+            const response = await this.s3.send(new ListObjectsV2Command({
+                Bucket: bucket,
+                Prefix: key,
+                Delimiter: "/",
+                MaxKeys: max,
+                ContinuationToken: next,
+            }));
+
             let names = response.Contents?.map(item => {
                     const nameParts = item.Key!.split("/");
                     return nameParts[nameParts.length - 1]; // The last part is the file name or asset ID.
@@ -177,17 +186,15 @@ export class CloudStorage implements IStorage {
             }
         }
 
-        const listParams: aws.S3.Types.ListObjectsV2Request = {
-            Bucket: bucket,
-            Prefix: key,
-            Delimiter: "/",
-            MaxKeys: max,
-            ContinuationToken: next,
-        };
-
         try {
-            const response = await this.s3.listObjectsV2(listParams).promise();
-    
+            const response = await this.s3.send(new ListObjectsV2Command({
+                Bucket: bucket,
+                Prefix: key,
+                Delimiter: "/",
+                MaxKeys: max,
+                ContinuationToken: next,
+            }));
+
             let names = response.CommonPrefixes?.map(item => {
                 const nameParts = item.Prefix!
                     .slice(0, item.Prefix!.length-1) // Trims trailing slash.
@@ -224,16 +231,15 @@ export class CloudStorage implements IStorage {
             key = key.slice(1); // Remove leading slash.
         }
 
-        const headParams: aws.S3.Types.HeadObjectRequest = {
-            Bucket: bucket,
-            Key: key,
-        };
         try {
-            await this.s3.headObject(headParams).promise();
+            await this.s3.send(new HeadObjectCommand({
+                Bucket: bucket,
+                Key: key,
+            }));
             return true;
         }
         catch (err: any) {
-            if (err.code === 'NotFound') {
+            if (err.name === "NotFound" || err.$metadata?.httpStatusCode === 404) {
                 return false;
             }
             else if (this.verbose) {
@@ -266,14 +272,12 @@ export class CloudStorage implements IStorage {
             }
         }
 
-        const listParams: aws.S3.Types.ListObjectsV2Request = {
-            Bucket: bucket,
-            Prefix: key,
-            MaxKeys: 1, // We only need to find one object to confirm directory exists
-        };
-
         try {
-            const response = await this.s3.listObjectsV2(listParams).promise();
+            const response = await this.s3.send(new ListObjectsV2Command({
+                Bucket: bucket,
+                Prefix: key,
+                MaxKeys: 1, // We only need to find one object to confirm directory exists
+            }));
             return (response.Contents !== undefined && response.Contents.length > 0);
         }
         catch (err: any) {
@@ -293,12 +297,11 @@ export class CloudStorage implements IStorage {
             key = key.slice(1); // Remove leading slash.
         }
 
-        const headParams: aws.S3.Types.HeadObjectRequest = {
-            Bucket: bucket,
-            Key: key,
-        };
         try {
-            const headResult = await this.s3.headObject(headParams).promise();
+            const headResult = await this.s3.send(new HeadObjectCommand({
+                Bucket: bucket,
+                Key: key,
+            }));
             if (!headResult.LastModified) {
                 throw new Error(`LastModified is undefined for ${filePath}`);
             }
@@ -309,7 +312,7 @@ export class CloudStorage implements IStorage {
             };
         }
         catch (err: any) {
-            if (err.statusCode === 404) {
+            if (err.name === "NotFound" || err.$metadata?.httpStatusCode === 404) {
                 return undefined;
             }
             else if (this.verbose) {
@@ -329,16 +332,16 @@ export class CloudStorage implements IStorage {
             key = key.slice(1); // Remove leading slash.
         }
 
-        const getParams: aws.S3.Types.GetObjectRequest = {
-            Bucket:bucket, 
-            Key: key,
-        };
         try {
-            const getObjectOutput = await this.s3.getObject(getParams).promise();
-            return getObjectOutput.Body as Buffer;
+            const response = await this.s3.send(new GetObjectCommand({
+                Bucket: bucket,
+                Key: key,
+            }));
+            const bodyBytes = await response.Body!.transformToByteArray();
+            return Buffer.from(bodyBytes);
         }
         catch (err: any) {
-            if (err.code === 'NoSuchKey') {
+            if (err.name === "NoSuchKey") {
                 return undefined;
             }
             else if (this.verbose) {
@@ -358,35 +361,22 @@ export class CloudStorage implements IStorage {
             key = key.slice(1); // Remove leading slash.
         }
 
-        const params: aws.S3.Types.PutObjectRequest = {
-            Bucket: bucket,
-            Key: key,
-            Body: data,
-            ContentType: contentType,
-            ContentLength: data.length,
-        };    
-        
         //
         // NOTE: These values have been tuned to allow uploading of 2GB+ files.
-        //    
-        const options: aws.S3.ManagedUpload.ManagedUploadOptions = {
-            partSize: 100 * 1024 * 1024, // 100 MB
-            queueSize: 1,
-        };
-
+        //
         try {
-            const upload = this.s3.upload(params, options);
-    
-            // upload.on('httpUploadProgress', (progress) => {
-            //     console.log(`Uploaded ${progress.loaded/1024/1024} of ${progress.total/1024/1024} MB.`);
-    
-            //     if (progress.total) {
-            //         const percentage = ((progress.loaded / progress.total) * 100).toFixed(2);
-            //         console.log(`S3 Upload Progress: ${percentage}%`);
-            //     }
-            // });
-    
-            await upload.promise();
+            await new Upload({
+                client: this.s3,
+                params: {
+                    Bucket: bucket,
+                    Key: key,
+                    Body: data,
+                    ContentType: contentType,
+                    ContentLength: data.length,
+                },
+                partSize: 100 * 1024 * 1024, // 100 MB
+                queueSize: 1,
+            }).done();
         }
         catch (err: any) {
             if (this.verbose) {
@@ -397,7 +387,7 @@ export class CloudStorage implements IStorage {
     }
 
     //
-    // Streams a file from stroage.
+    // Streams a file from storage.
     //
     readStream(filePath: string): Readable {
         let { bucket, key } = this.parsePath(filePath);
@@ -405,20 +395,25 @@ export class CloudStorage implements IStorage {
             key = key.slice(1); // Remove leading slash.
         }
 
-        const getParams: aws.S3.Types.GetObjectRequest = {
-            Bucket: bucket, 
-            Key: key,
-        };
+        const passThrough = new PassThrough();
 
-        try {
-            return this.s3.getObject(getParams).createReadStream();
-        }
-        catch (err: any) {
+        this.s3.send(new GetObjectCommand({
+            Bucket: bucket,
+            Key: key,
+        }))
+        .then(response => {
+            (response.Body as Readable).pipe(passThrough);
+        })
+        .catch(err => {
             if (this.verbose) {
-                throw new WrappedError(`Failed to read stream from ${filePath}: ${err.message}`, { cause: err });
+                passThrough.destroy(new WrappedError(`Failed to read stream from ${filePath}: ${err.message}`, { cause: err }));
             }
-            throw err;
-        }
+            else {
+                passThrough.destroy(err instanceof Error ? err : new Error(String(err)));
+            }
+        });
+
+        return passThrough;
     }
 
     //
@@ -431,35 +426,22 @@ export class CloudStorage implements IStorage {
             key = key.slice(1); // Remove leading slash.
         }
 
-        const params: aws.S3.Types.PutObjectRequest = {
-            Bucket: bucket,
-            Key: key,
-            Body: inputStream,
-            ContentType: contentType,
-            ContentLength: contentLength,
-        };    
-
         //
         // NOTE: These values have been tuned to allow uploading of 2GB+ files.
-        //    
-        const options: aws.S3.ManagedUpload.ManagedUploadOptions = {
-            partSize: 100 * 1024 * 1024, // 100 MB
-            queueSize: 1,
-        };
-
+        //
         try {
-            const upload = this.s3.upload(params, options);
-    
-            // upload.on('httpUploadProgress', (progress) => {
-            //     console.log(`Uploaded ${progress.loaded/1024/1024} of ${progress.total/1024/1024} MB.`);
-    
-            //     if (progress.total) {
-            //         const percentage = ((progress.loaded / progress.total) * 100).toFixed(2);
-            //         console.log(`S3 Upload Progress: ${percentage}%`);
-            //     }
-            // });
-    
-            await upload.promise();
+            await new Upload({
+                client: this.s3,
+                params: {
+                    Bucket: bucket,
+                    Key: key,
+                    Body: inputStream,
+                    ContentType: contentType,
+                    ContentLength: contentLength,
+                },
+                partSize: 100 * 1024 * 1024, // 100 MB
+                queueSize: 1,
+            }).done();
         }
         catch (err: any) {
             if (this.verbose) {
@@ -479,13 +461,11 @@ export class CloudStorage implements IStorage {
             key = key.slice(1); // Remove leading slash.
         }
 
-        const deleteParams: aws.S3.Types.DeleteObjectRequest = {
-            Bucket: bucket,
-            Key: key,
-        };
-
         try {
-            await this.s3.deleteObject(deleteParams).promise();
+            await this.s3.send(new DeleteObjectCommand({
+                Bucket: bucket,
+                Key: key,
+            }));
         }
         catch (err: any) {
             // Ignore errors if the file doesn't exist
@@ -508,32 +488,24 @@ export class CloudStorage implements IStorage {
         }
         
         try {
-            // List all objects with the directory prefix
-            const listParams: aws.S3.Types.ListObjectsV2Request = {
-                Bucket: bucket,
-                Prefix: key
-            };
-            
             let isTruncated = true;
             let continuationToken: string | undefined = undefined;
             
             while (isTruncated) {
-                if (continuationToken) {
-                    listParams.ContinuationToken = continuationToken;
-                }
-                
-                const listResult = await this.s3.listObjectsV2(listParams).promise();
-                
+                const listResult: ListObjectsV2CommandOutput = await this.s3.send(new ListObjectsV2Command({
+                    Bucket: bucket,
+                    Prefix: key,
+                    ContinuationToken: continuationToken,
+                }));
+
                 if (listResult.Contents && listResult.Contents.length > 0) {
                     // Batch delete objects (up to 1000 at a time)
-                    const deleteParams: aws.S3.Types.DeleteObjectsRequest = {
+                    await this.s3.send(new DeleteObjectsCommand({
                         Bucket: bucket,
                         Delete: {
                             Objects: listResult.Contents.map(obj => ({ Key: obj.Key! }))
-                        }
-                    };
-                    
-                    await this.s3.deleteObjects(deleteParams).promise();
+                        },
+                    }));
                 }
                 
                 isTruncated = !!listResult.IsTruncated;
@@ -561,14 +533,12 @@ export class CloudStorage implements IStorage {
             destKey = destKey.slice(1); // Remove leading slash.
         }
 
-        const copyParams: aws.S3.Types.CopyObjectRequest = {
-            Bucket: destBucket,
-            CopySource: `${srcBucket}/${srcKey}`,
-            Key: destKey,
-        };
-
         try {
-            await this.s3.copyObject(copyParams).promise();
+            await this.s3.send(new CopyObjectCommand({
+                Bucket: destBucket,
+                CopySource: `${srcBucket}/${srcKey}`,
+                Key: destKey,
+            }));
         }
         catch (err: any) {
             if (this.verbose) {
@@ -589,14 +559,12 @@ export class CloudStorage implements IStorage {
             key = key.slice(1); // Remove leading slash.
         }
 
-        const getParams: aws.S3.Types.GetObjectRequest = {
-            Bucket: bucket,
-            Key: key,
-        };
-
         try {
-            const getObjectOutput = await this.s3.getObject(getParams).promise();
-            const lockContent = getObjectOutput.Body?.toString('utf8');
+            const response = await this.s3.send(new GetObjectCommand({
+                Bucket: bucket,
+                Key: key,
+            }));
+            const lockContent = await response.Body!.transformToString("utf8");
             if (lockContent) {
                 const lockData = JSON.parse(lockContent.trim());
                 return {
@@ -606,8 +574,9 @@ export class CloudStorage implements IStorage {
                 };
             }
             return undefined;
-        } catch (err: any) {
-            if (err.code === 'NoSuchKey') {
+        }
+        catch (err: any) {
+            if (err.name === "NoSuchKey") {
                 return undefined;
             }
             if (this.verbose) {
@@ -642,28 +611,29 @@ export class CloudStorage implements IStorage {
             timestamp
         };
         const lockContent = JSON.stringify(lockInfo);
+        const lockBody = Buffer.from(lockContent, "utf8");
 
-        const putParams: aws.S3.Types.PutObjectRequest = {
+        const putParams = {
             Bucket: bucket,
             Key: key,
-            Body: Buffer.from(lockContent, 'utf8'),
-            ContentType: 'application/json',
-            ContentLength: Buffer.byteLength(lockContent, 'utf8'),
+            Body: lockBody,
+            ContentType: "application/json",
+            ContentLength: lockBody.byteLength,
+            IfNoneMatch: "*",
         };
 
         try {
             // Use conditional write to ensure atomic "create if not exists"
-            const request = this.s3.putObject(putParams);
-            request.httpRequest.headers['If-None-Match'] = '*';
-            await request.promise();
-            
+            await this.s3.send(new PutObjectCommand(putParams));
+
             if (log.verboseEnabled) {
                 log.verbose(`[LOCK] ${timestamp},ACQUIRE_SUCCESS,${processId},${owner},${filePath}`);
             }
             return true;
-        } catch (putErr: any) {
+        }
+        catch (putErr: any) {
             // If the condition failed (object already exists), check if it's timed out
-            if (putErr.statusCode === 412 || putErr.code === 'PreconditionFailed') {
+            if (putErr.$metadata?.httpStatusCode === 412 || putErr.name === "PreconditionFailed" || putErr.name === "ConditionalRequestConflict") {
                 // Check if existing lock has timed out (10 seconds = 10000ms)
                 const existingLock = await this.checkWriteLock(filePath);
                 if (existingLock) {
@@ -676,55 +646,57 @@ export class CloudStorage implements IStorage {
                         
                         try {
                             // Delete the expired lock
-                            const deleteParams: aws.S3.Types.DeleteObjectRequest = {
+                            await this.s3.send(new DeleteObjectCommand({
                                 Bucket: bucket,
                                 Key: key,
-                            };
-                            await this.s3.deleteObject(deleteParams).promise();
-                            
+                            }));
+
                             // Try to acquire the lock again (without conditional header this time)
-                            const retryPutParams = { ...putParams };
-                            await this.s3.putObject(retryPutParams).promise();
-                            
+                            const retryPutParams = { ...putParams, IfNoneMatch: undefined };
+                            await this.s3.send(new PutObjectCommand(retryPutParams));
+
                             if (log.verboseEnabled) {
                                 log.verbose(`[LOCK] ${timestamp},ACQUIRE_SUCCESS_AFTER_TIMEOUT,${processId},${owner},${filePath}`);
                             }
                             return true;
-                        } catch (retryErr) {
+                        }
+                        catch (retryErr) {
                             // Another process might have acquired the lock in the meantime
                             if (log.verboseEnabled) {
                                 log.verbose(`[LOCK] ${timestamp},ACQUIRE_FAILED_RETRY,${processId},${owner},${filePath}`);
                             }
                             return false;
                         }
-                    } else {
+                    }
+                    else {
                         // Lock is still valid
                         if (log.verboseEnabled) {
                             log.verbose(`[LOCK] ${timestamp},ACQUIRE_FAILED_EXISTS,${processId},${owner},${filePath},age:${lockAge}ms,owner:${existingLock.owner}`);
                         }
                         return false;
                     }
-                } else {
+                }
+                else {
                     // Lock file exists but is corrupted, try to delete and retry
                     if (log.verboseEnabled) {
                         log.verbose(`[LOCK] ${timestamp},ACQUIRE_CORRUPTED_BREAK,${processId},${owner},${filePath}`);
                     }
                     
                     try {
-                        const deleteParams: aws.S3.Types.DeleteObjectRequest = {
+                        await this.s3.send(new DeleteObjectCommand({
                             Bucket: bucket,
                             Key: key,
-                        };
-                        await this.s3.deleteObject(deleteParams).promise();
-                        
-                        const retryPutParams = { ...putParams };
-                        await this.s3.putObject(retryPutParams).promise();
-                        
+                        }));
+
+                        const retryPutParams = { ...putParams, IfNoneMatch: undefined };
+                        await this.s3.send(new PutObjectCommand(retryPutParams));
+
                         if (log.verboseEnabled) {
                             log.verbose(`[LOCK] ${timestamp},ACQUIRE_SUCCESS_AFTER_CORRUPT,${processId},${owner},${filePath}`);
                         }
                         return true;
-                    } catch (retryErr) {
+                    }
+                    catch (retryErr) {
                         if (log.verboseEnabled) {
                             log.verbose(`[LOCK] ${timestamp},ACQUIRE_FAILED_RETRY,${processId},${owner},${filePath}`);
                         }
@@ -754,20 +726,19 @@ export class CloudStorage implements IStorage {
             key = key.slice(1); // Remove leading slash.
         }
 
-        const deleteParams: aws.S3.Types.DeleteObjectRequest = {
-            Bucket: bucket,
-            Key: key,
-        };
-
         try {
-            await this.s3.deleteObject(deleteParams).promise();
+            await this.s3.send(new DeleteObjectCommand({
+                Bucket: bucket,
+                Key: key,
+            }));
             if (log.verboseEnabled) {
                 log.verbose(`[LOCK] ${Date.now()},RELEASE_SUCCESS,${process.pid},unknown,${filePath}`);
             }
-        } catch (err: any) {
+        }
+        catch (err: any) {
             // Ignore errors if the lock file doesn't exist
             if (log.verboseEnabled) {
-                log.verbose(`[LOCK] ${Date.now()},RELEASE_FAILED,${process.pid},unknown,${filePath},error:${err?.message || 'unknown'}`);
+                log.verbose(`[LOCK] ${Date.now()},RELEASE_FAILED,${process.pid},unknown,${filePath},error:${err?.message || "unknown"}`);
             }
         }
     }
@@ -808,21 +779,21 @@ export class CloudStorage implements IStorage {
                 timestamp
             };
             const lockContent = JSON.stringify(lockInfo);
+            const lockBody = Buffer.from(lockContent, "utf8");
 
-            const putParams: aws.S3.Types.PutObjectRequest = {
+            await this.s3.send(new PutObjectCommand({
                 Bucket: bucket,
                 Key: key,
-                Body: Buffer.from(lockContent, 'utf8'),
-                ContentType: 'application/json',
-                ContentLength: Buffer.byteLength(lockContent, 'utf8'),
-            };
+                Body: lockBody,
+                ContentType: "application/json",
+                ContentLength: lockBody.byteLength,
+            }));
 
-            await this.s3.putObject(putParams).promise();
-            
             if (log.verboseEnabled) {
                 log.verbose(`[LOCK] ${timestamp},REFRESH_SUCCESS,${processId},${owner},${filePath}`);
             }
-        } catch (err: any) {
+        }
+        catch (err: any) {
             if (log.verboseEnabled) {
                 log.verbose(`[LOCK] ${timestamp},REFRESH_FAILED,${processId},${owner},${filePath},error:${err.message}`);
             }
