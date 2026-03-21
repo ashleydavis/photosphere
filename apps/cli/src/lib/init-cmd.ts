@@ -403,7 +403,6 @@ export interface IInitResult {
     // Individual database dependencies
     //
     assetStorage: IStorage;
-    metadataStorage: IStorage; // Unencrypted storage for metadata (under .db directory)
 
     //
     // Raw (unencrypted) storage - reads bytes exactly as stored on disk, with no decryption applied.
@@ -457,16 +456,14 @@ export async function loadDatabase(
 
     const s3Config = await getS3Config();
     let { storage: assetStorage } = createStorage(dbDir, s3Config, storageOptions);
-    // Metadata storage uses the same encryption as asset storage (when the database is encrypted).
-    let { storage: metadataStorage } = createStorage(dbDir, s3Config, storageOptions);
     // Raw storage reads bytes exactly as stored on disk, with no decryption applied.
     const { storage: rawAssetStorage } = createStorage(dbDir, s3Config);
 
     //
     // Check that the files tree exists (.db/files.dat or legacy .db/tree.dat).
     //
-    const hasFilesDat = await metadataStorage.fileExists(".db/files.dat");
-    const hasTreeDat = await metadataStorage.fileExists(".db/tree.dat");
+    const hasFilesDat = await assetStorage.fileExists(".db/files.dat");
+    const hasTreeDat = await assetStorage.fileExists(".db/tree.dat");
     if (!hasFilesDat && !hasTreeDat) {
         outro(pc.red(`✗ No database found at: ${pc.cyan(dbDir)}\n  The database directory must contain a ".db" folder with files.dat or tree.dat.\n\nTo create a new database at this directory, use:\n  ${pc.cyan(`psi init --db ${dbDir}`)}`));
         await exit(1);
@@ -478,7 +475,7 @@ export async function loadDatabase(
         // quickly load the version from the database and reject if the database is old.
         //
         const treePath = hasFilesDat ? ".db/files.dat" : ".db/tree.dat";
-        let databaseVersion = await loadTreeVersion(treePath, metadataStorage);
+        let databaseVersion = await loadTreeVersion(treePath, assetStorage);
         if (databaseVersion && databaseVersion < CURRENT_DATABASE_VERSION) {
             outro(pc.red(`✗ Database version ${databaseVersion} is outdated. Current version is ${CURRENT_DATABASE_VERSION}. Please run 'psi upgrade' to upgrade your database.`));
             await exit(1);
@@ -488,7 +485,7 @@ export async function loadDatabase(
     //
     // See if the database is encrypted and requires a key.
     //
-    if (await metadataStorage.fileExists('.db/encryption.pub')) {
+    if (await assetStorage.fileExists('.db/encryption.pub')) {
         if (resolvedKeyPaths.length === 0) {
             if (nonInteractive) {
                 outro(pc.red(`✗ This database is encrypted and requires a private key to access.\n  Please provide the private key using the --key option.\n\nExample:\n    ${pc.cyan(`psi <command> --key my-photos.key`)}\n    ${pc.cyan(`psi <command> --key <full or relative path to key>`)}`));
@@ -509,7 +506,7 @@ export async function loadDatabase(
                 // Recreate storage with the new encryption options
                 const { storage: newAssetStorage } = createStorage(dbDir, s3Config, storageOptions);
                 assetStorage = newAssetStorage;
-                metadataStorage = newAssetStorage;
+                assetStorage = newAssetStorage;
             }
         }
     }
@@ -523,8 +520,7 @@ export async function loadDatabase(
     return {
         databaseDir: dbDir,
         metaPath,
-        assetStorage: assetStorage,
-        metadataStorage: metadataStorage,
+        assetStorage,
         rawAssetStorage,
         bsonDatabase: database.bsonDatabase,
         sessionId,
@@ -644,8 +640,7 @@ export async function createDatabase(
     return {
         databaseDir: dbDir,
         metaPath,
-        assetStorage: assetStorage,
-        metadataStorage: metadataStorage,
+        assetStorage,
         rawAssetStorage,
         bsonDatabase: database.bsonDatabase,
         sessionId,

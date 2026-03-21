@@ -25,7 +25,7 @@ export interface IVerifyCommandOptions extends IBaseCommandOptions {
 //
 export async function verifyCommand(context: ICommandContext, options: IVerifyCommandOptions): Promise<void> {
     const { uuidGenerator, timestampProvider, sessionId } = context;
-    const { metadataStorage, assetStorage, databaseDir, metadataCollection } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
+    const { assetStorage, databaseDir, metadataCollection } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
 
     // Create storage descriptor for passing to workers
     const resolvedKeyPaths = await resolveKeyPaths(options.key);
@@ -43,7 +43,7 @@ export async function verifyCommand(context: ICommandContext, options: IVerifyCo
     let dbFileResult: IDatabaseFileVerifyResult | undefined;
     if (!options.path) {
         writeProgress('🗄️  Verifying database files...');
-        dbFileResult = await verifyDatabaseFiles(metadataStorage, assetStorage, (progress) => {
+        dbFileResult = await verifyDatabaseFiles(assetStorage, assetStorage, (progress) => {
             writeProgress(`🔍 ${progress}`);
         });
     }
@@ -53,7 +53,7 @@ export async function verifyCommand(context: ICommandContext, options: IVerifyCo
     //
     writeProgress('Verifying assets...');
     
-    const result = await verify(storageDescriptor, metadataStorage, context.taskQueueProvider, metadataCollection, {
+    const result = await verify(storageDescriptor, assetStorage, context.taskQueueProvider, metadataCollection, {
         full: options.full,
         pathFilter: options.path,
         s3Config

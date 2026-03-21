@@ -99,13 +99,12 @@ export interface IRepairResult {
 //
 export async function repair(
     assetStorage: IStorage,
-    metadataStorage: IStorage,
     sourceAssetStorage: IStorage,
     metadataCollection: IBsonCollection<IAsset>,
     options: IRepairOptions,
     progressCallback?: ProgressCallback
 ): Promise<IRepairResult> {
-    const summary = await getDatabaseSummary(assetStorage, metadataStorage);
+    const summary = await getDatabaseSummary(assetStorage);
     const result: IRepairResult = {
         totalImports: summary.totalImports,
         totalFiles: summary.totalFiles,
@@ -236,7 +235,7 @@ export async function repair(
         progressCallback(`Checking for missing or corrupt files in merkle tree...`);
     }
 
-    const merkleTree = await retry(() => loadMerkleTree(metadataStorage));
+    const merkleTree = await retry(() => loadMerkleTree(assetStorage));
     if (!merkleTree) {
         throw new Error(`Failed to load merkle tree`);
     }
