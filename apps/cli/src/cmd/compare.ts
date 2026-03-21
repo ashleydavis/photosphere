@@ -47,11 +47,11 @@ export async function compareCommand(context: ICommandContext, options: ICompare
         srcDir = await getDirectoryForCommand("existing", nonInteractive, options.cwd || process.cwd());
     }
 
-    const { metadataStorage: sourceMetadataStorage, databaseDir: srcDirResolved } = await loadDatabase(srcDir, options, uuidGenerator, timestampProvider, sessionId);
+    const { assetStorage: srcAssetStorage, databaseDir: srcDirResolved } = await loadDatabase(srcDir, options, uuidGenerator, timestampProvider, sessionId);
 
     let destDir = options.dest;
     if (destDir === undefined) {
-        const config = await loadDatabaseConfig(sourceMetadataStorage);
+        const config = await loadDatabaseConfig(srcAssetStorage);
         destDir = config?.origin;
         if (destDir === undefined) {
             destDir = await getDirectoryForCommand('existing', nonInteractive, options.cwd || process.cwd());
@@ -60,7 +60,7 @@ export async function compareCommand(context: ICommandContext, options: ICompare
 
     // Load destination database
     const destOptions = { ...options, db: destDir, key: options.destKey };
-    const { metadataStorage: destMetadataStorage, databaseDir: destDirResolved } = await loadDatabase(destDir, destOptions, uuidGenerator, timestampProvider, sessionId);
+    const { assetStorage: destAssetStorage, databaseDir: destDirResolved } = await loadDatabase(destDir, destOptions, uuidGenerator, timestampProvider, sessionId);
 
     log.info('');
     log.info(`Comparing two databases:`);
@@ -69,14 +69,14 @@ export async function compareCommand(context: ICommandContext, options: ICompare
     log.info('');
 
     // Load merkle trees from the databases
-    const srcMerkleTree = await loadMerkleTree(sourceMetadataStorage);
+    const srcMerkleTree = await loadMerkleTree(srcAssetStorage);
     if (!srcMerkleTree) {
         clearProgressMessage();
         log.info(pc.red(`Error: Failed to load source database merkle tree`));
         await exit(1);
     }
     
-    const destMerkleTree = await loadMerkleTree(destMetadataStorage);
+    const destMerkleTree = await loadMerkleTree(destAssetStorage);
     if (!destMerkleTree) {
         clearProgressMessage();
         log.info(pc.red(`Error: Failed to load destination database merkle tree`));

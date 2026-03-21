@@ -25,7 +25,7 @@ export async function findOrphansCommand(context: ICommandContext, options: IFin
     }
 
     // Load the database
-    const { assetStorage, metadataStorage, databaseDir } = await loadDatabase(dbDir, options, uuidGenerator, timestampProvider, sessionId);
+    const { assetStorage, databaseDir } = await loadDatabase(dbDir, options, uuidGenerator, timestampProvider, sessionId);
 
     log.info('');
     log.info(`Finding orphaned files in database:`);
@@ -34,7 +34,7 @@ export async function findOrphansCommand(context: ICommandContext, options: IFin
 
     // Load merkle tree
     writeProgress(`Loading merkle tree...`);
-    const merkleTree = await loadMerkleTree(metadataStorage);
+    const merkleTree = await loadMerkleTree(assetStorage);
     if (!merkleTree) {
         clearProgressMessage();
         log.info(pc.red(`Error: Failed to load merkle tree`));

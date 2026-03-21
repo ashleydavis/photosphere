@@ -39,7 +39,7 @@ export async function addCommand(context: ICommandContext, paths: string[], opti
     await configureIfNeeded(['google'], nonInteractive);
     const googleApiKey = await getGoogleApiKey();
     
-    const { metadataStorage, metadataCollection, databaseDir } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
+    const { assetStorage, metadataCollection, databaseDir } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
     
     // Create hash cache for file hashing optimization
     const localHashCachePath = path.join(os.tmpdir(), `photosphere`);
@@ -59,7 +59,7 @@ export async function addCommand(context: ICommandContext, paths: string[], opti
     writeProgress(`Searching for files...`);
 
     const addSummary = await addPaths(
-        metadataStorage,
+        assetStorage,
         googleApiKey,
         uuidGenerator,
         sessionId,

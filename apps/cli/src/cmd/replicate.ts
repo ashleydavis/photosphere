@@ -50,7 +50,7 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
 
     const nonInteractive = options.yes || false;
 
-    const { assetStorage: sourceAssetStorage, metadataStorage: sourceMetadataStorage, bsonDatabase: sourceBsonDatabase, databaseDir: srcDir } = await loadDatabase(options.db, {
+    const { assetStorage: sourceAssetStorage, bsonDatabase: sourceBsonDatabase, databaseDir: srcDir } = await loadDatabase(options.db, {
         db: options.db,
         key: options.key,
         verbose: options.verbose,
@@ -59,7 +59,7 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
 
     let destDir = options.dest;
     if (destDir === undefined) {
-        const config = await loadDatabaseConfig(sourceMetadataStorage);
+        const config = await loadDatabaseConfig(sourceAssetStorage);
         destDir = config?.origin;
         if (destDir === undefined) {
             destDir = await getDirectoryForCommand('existing', nonInteractive, options.cwd || process.cwd());
@@ -187,7 +187,7 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
         ? `Copying files matching: ${options.path}...` 
         : `Copying files...`);
 
-    const result = await replicate(sourceAssetStorage, sourceMetadataStorage, sourceBsonDatabase, uuidGenerator, timestampProvider, destAssetStorage, destMetadataStorage, { 
+    const result = await replicate(sourceAssetStorage, sourceAssetStorage, sourceBsonDatabase, uuidGenerator, timestampProvider, destAssetStorage, destMetadataStorage, { 
         pathFilter: options.path,
         force: options.force,
         partial: options.partial

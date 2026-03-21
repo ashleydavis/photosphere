@@ -315,8 +315,8 @@ export async function ensureSortIndex(metadataCollection: IBsonCollection<IAsset
 //
 // Gets a summary of the entire database. Uses v6 layout (BSON under .db/bson).
 //
-export async function getDatabaseSummary(assetStorage: IStorage, metadataStorage: IStorage): Promise<IDatabaseSummary> {
-    const merkleTree = await retry(() => loadMerkleTree(metadataStorage));
+export async function getDatabaseSummary(assetStorage: IStorage): Promise<IDatabaseSummary> {
+    const merkleTree = await retry(() => loadMerkleTree(assetStorage));
     if (!merkleTree) {
         throw new Error(`Failed to load merkle tree.`);
     }

@@ -64,14 +64,14 @@ function truncateLongStrings(obj: any, maxLength: number = 100, maxFields: numbe
 //
 export async function debugMerkleTreeCommand(context: ICommandContext, options: IDebugMerkleTreeCommandOptions): Promise<void> {
     const { uuidGenerator, timestampProvider, sessionId } = context;
-    const { assetStorage, metadataStorage, bsonDatabase } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
+    const { assetStorage, bsonDatabase } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
     
     log.info('');
     log.info(pc.bold(pc.blue(`🌳 Merkle Trees Visualization`)));
     log.info('');
     
     // Get and display the aggregate root hash
-    const summary = await getDatabaseSummary(assetStorage, metadataStorage);
+    const summary = await getDatabaseSummary(assetStorage);
     log.info(pc.cyan('Aggregate Root Hash:'));
     log.info('='.repeat(60));
     log.info(pc.white(summary.fullHash));
@@ -80,7 +80,7 @@ export async function debugMerkleTreeCommand(context: ICommandContext, options: 
     // Show files merkle tree
     log.info(pc.cyan('Files Merkle Tree (.db/files.dat):'));
     log.info('='.repeat(60));
-    const filesTree = await loadMerkleTree(metadataStorage);
+    const filesTree = await loadMerkleTree(assetStorage);
     if (filesTree) {
         const filesVisualization = visualizeTree(filesTree);
         log.info(filesVisualization);
@@ -89,7 +89,7 @@ export async function debugMerkleTreeCommand(context: ICommandContext, options: 
     }
     
     // Show BSON database merkle tree if it exists (v6: .db/bson)
-    const bsonMetadataStorage = new StoragePrefixWrapper(assetStorage, ".db/bson");
+    const bsonMetadataStorage = new StoragePrefixWrapper(assetStorage, ".db/bson"); //todo: could just push the path into `loadDatabaseMerkleTree`.
     const databaseTree = await loadDatabaseMerkleTree(bsonMetadataStorage);
     
     if (databaseTree) {
@@ -254,7 +254,7 @@ export async function debugFindCollisionsCommand(context: ICommandContext, optio
     }
 
     // Load the database
-    const { metadataStorage, databaseDir: dbDirResolved } = await loadDatabase(dbDir, options, uuidGenerator, timestampProvider, sessionId);
+    const { assetStorage, databaseDir: dbDirResolved } = await loadDatabase(dbDir, options, uuidGenerator, timestampProvider, sessionId);
 
     log.info('');
     log.info(`Finding hash collisions in database:`);
@@ -263,7 +263,7 @@ export async function debugFindCollisionsCommand(context: ICommandContext, optio
 
     // Load merkle tree from the database
     writeProgress(`Loading merkle tree...`);
-    const merkleTree = await loadMerkleTree(metadataStorage);
+    const merkleTree = await loadMerkleTree(assetStorage);
     if (!merkleTree || !merkleTree.merkle) {
         clearProgressMessage();
         log.info(pc.red(`Error: Failed to load database merkle tree`));
@@ -448,7 +448,7 @@ export async function debugRemoveDuplicatesCommand(context: ICommandContext, opt
         dbDir = await getDirectoryForCommand("existing", nonInteractive, options.cwd || process.cwd());
     }
 
-    const { assetStorage, metadataStorage, metadataCollection, databaseDir: dbDirResolved } = await loadDatabase(dbDir, options, uuidGenerator, timestampProvider, sessionId);
+    const { assetStorage, metadataCollection, databaseDir: dbDirResolved } = await loadDatabase(dbDir, options, uuidGenerator, timestampProvider, sessionId);
 
     // Get input file path (default to duplicates.json in database directory)
     const inputPath = options.input
@@ -507,7 +507,7 @@ export async function debugRemoveDuplicatesCommand(context: ICommandContext, opt
     for (let i = 0; i < assetIdsToRemove.length; i++) {
         const assetId = assetIdsToRemove[i];
         try {
-            await removeAsset(assetStorage, metadataStorage, sessionId, metadataCollection, assetId, false);
+            await removeAsset(assetStorage, assetStorage, sessionId, metadataCollection, assetId, false);
             removed++;
             if ((i + 1) % 10 === 0) {
                 writeProgress(`Removing duplicate assets... (${i + 1}/${assetIdsToRemove.length})`);
@@ -607,7 +607,7 @@ export async function debugBuildFilesTreeCommand(context: ICommandContext, optio
         dbDir = await getDirectoryForCommand("existing", nonInteractive, options.cwd || process.cwd());
     }
 
-    const { assetStorage, metadataStorage, databaseDir: dbDirResolved } = await loadDatabase(dbDir, options, uuidGenerator, timestampProvider, sessionId);
+    const { assetStorage, databaseDir: dbDirResolved } = await loadDatabase(dbDir, options, uuidGenerator, timestampProvider, sessionId);
 
     log.info('');
     log.info(pc.bold(pc.blue("Rebuilding files merkle tree from storage")));

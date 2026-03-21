@@ -13,8 +13,8 @@ export interface IOriginCommandOptions extends IBaseCommandOptions {
 export async function originCommand(context: ICommandContext, options: IOriginCommandOptions): Promise<void> {
     const { uuidGenerator, timestampProvider, sessionId } = context;
 
-    const { metadataStorage } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
-    const config = await loadDatabaseConfig(metadataStorage);
+    const { assetStorage } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
+    const config = await loadDatabaseConfig(assetStorage);
 
     if (config?.origin) {
         console.log(config.origin);
