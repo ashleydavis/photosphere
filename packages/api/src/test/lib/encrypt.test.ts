@@ -2,7 +2,7 @@ import * as crypto from "crypto";
 import { createTree, addItem, buildMerkleTree, saveTree, upsertItem } from "merkle-tree";
 import type { HashedItem } from "merkle-tree";
 import { iterateLeaves } from "merkle-tree";
-import { generateKeyPair, MockStorage } from "storage";
+import { generateKeyPair, hashPublicKey, MockStorage } from "storage";
 import { encrypt, encryptableFiles } from "../../lib/encrypt";
 import { loadMerkleTree } from "../../lib/tree";
 import { getItemInfo } from "merkle-tree";
@@ -82,6 +82,15 @@ describe("encryptableFiles", () => {
         const files = await collectFiles(encryptableFiles(storage));
         expect(files).toEqual([]);
     });
+
+    test("excludes .db/config.json", async () => {
+        const storage = new MockStorage("read");
+        await storage.write(".db/config.json", "application/json", Buffer.from("{}"));
+        await storage.write("photo/img.jpg", "image/jpeg", Buffer.from("x"));
+        const files = await collectFiles(encryptableFiles(storage));
+        expect(files).not.toContain(".db/config.json");
+        expect(files).toContain("photo/img.jpg");
+    });
 });
 
 describe("encrypt", () => {
@@ -126,6 +135,42 @@ describe("encrypt", () => {
         await expect(
             encrypt(readStorage, writeStorage, () => {}, encryptKeyPair.publicKey, readStorage)
         ).rejects.toThrow("Failed to load merkle tree from database");
+    });
+
+    test("returns correct encrypted count for newly encrypted files", async () => {
+        const readStorage = new MockStorage("read");
+        const writeStorage = new MockStorage("write");
+        // Use empty tree to avoid BSON leaf files being written to storage.
+        const tree = buildMinimalFilesTree([]);
+        await saveTree(FILES_TREE_PATH, tree, readStorage);
+        await readStorage.write("asset/a.dat", "application/octet-stream", Buffer.from("a"));
+        await readStorage.write("asset/b.dat", "application/octet-stream", Buffer.from("b"));
+
+        const result = await encrypt(readStorage, writeStorage, () => {}, encryptKeyPair.publicKey, readStorage);
+
+        expect(result.encrypted).toBe(2);
+        expect(result.skipped).toBe(0);
+    });
+
+    test("skips files already encrypted with the same key and returns correct skipped count", async () => {
+        const readStorage = new MockStorage("read");
+        const writeStorage = new MockStorage("write");
+        const publicKeyHash = hashPublicKey(encryptKeyPair.publicKey);
+        const fakeHeader = Buffer.concat([
+            Buffer.from("PSEN", "ascii"),
+            Buffer.alloc(4),
+            Buffer.from("A2CB", "ascii"),
+            publicKeyHash,
+        ]);
+        // Use empty tree to avoid BSON leaf files being written to storage.
+        const tree = buildMinimalFilesTree([]);
+        await saveTree(FILES_TREE_PATH, tree, readStorage);
+        await readStorage.write("asset/already.dat", "application/octet-stream", fakeHeader);
+
+        const result = await encrypt(readStorage, writeStorage, () => {}, encryptKeyPair.publicKey, readStorage);
+
+        expect(result.skipped).toBe(1);
+        expect(result.encrypted).toBe(0);
     });
 
     test("tree entries for tree-tracked files use logical hash, length, lastModified; tree has no .db/files.dat entry", async () => {

@@ -71,7 +71,7 @@ export async function decryptCommand(context: ICommandContext, options: IDecrypt
     }
     else {
         log.warn(pc.yellow(`⚠️  This will decrypt the database in place at ${pc.cyan(dbDir)}.`));
-        log.warn(pc.yellow(`    All files will be rewritten in plain form. The database will no longer be encrypted.`));
+        log.warn(pc.yellow(`   All files will be rewritten in plain form. The database will no longer be encrypted.`));
         const confirmed = await confirm({ message: "Proceed with decryption?", initialValue: false });
         if (isCancel(confirmed) || !confirmed) {
             log.info("Decryption cancelled.");
