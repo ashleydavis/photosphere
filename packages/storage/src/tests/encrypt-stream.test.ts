@@ -1,5 +1,5 @@
 import { Readable } from "stream";
-import { createEncryptionStream, createDecryptionStream } from "../lib/encrypt-stream";
+import { computeEncryptedLength, createEncryptionStream, createDecryptionStream } from "../lib/encrypt-stream";
 import { generateKeyPair, hashPublicKey } from "../lib/key-utils";
 import { encryptBuffer } from "../lib/encrypt-buffer";
 import { ENCRYPTION_TAG } from "../lib/encryption-constants";
@@ -12,6 +12,35 @@ function streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
         stream.on("error", reject);
     });
 }
+
+describe("computeEncryptedLength", () => {
+    const keyPair = generateKeyPair();
+
+    test("returns correct length for empty input", () => {
+        expect(computeEncryptedLength(0)).toBe(588); // 572 overhead + 16 (one padding block)
+    });
+
+    test("returns correct length for non-block-aligned input", () => {
+        expect(computeEncryptedLength(1)).toBe(588);   // 572 + 16
+        expect(computeEncryptedLength(15)).toBe(588);  // 572 + 16
+        expect(computeEncryptedLength(17)).toBe(604);  // 572 + 32
+    });
+
+    test("returns correct length for block-aligned input", () => {
+        expect(computeEncryptedLength(16)).toBe(604);  // 572 + 32 (full padding block added)
+        expect(computeEncryptedLength(32)).toBe(620);  // 572 + 48
+    });
+
+    test("matches actual encrypted stream output length", async () => {
+        for (const plainLength of [0, 1, 15, 16, 17, 32, 100]) {
+            const plain = Buffer.alloc(plainLength, 0x42);
+            const enc = createEncryptionStream(keyPair.publicKey);
+            Readable.from(plain).pipe(enc);
+            const encryptedBuffer = await streamToBuffer(enc);
+            expect(encryptedBuffer.length).toBe(computeEncryptedLength(plainLength));
+        }
+    });
+});
 
 describe("encrypt-stream", () => {
     const keyPair = generateKeyPair();
