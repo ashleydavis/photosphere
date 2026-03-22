@@ -54,8 +54,7 @@ export async function encryptFile(
             await writeStorage.writeStream(
                 fileName,
                 srcFileInfo.contentType,
-                readStorage.readStream(fileName),
-                srcFileInfo.length
+                readStorage.readStream(fileName)
             );
         });
 
