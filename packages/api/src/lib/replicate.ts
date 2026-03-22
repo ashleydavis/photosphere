@@ -502,6 +502,7 @@ export async function replicate(
     sourceUuidGenerator: IUuidGenerator,
     sourceTimestampProvider: ITimestampProvider,
     destAssetStorage: IStorage,
+    destRawAssetStorage: IStorage,
     options?: IReplicateOptions,
     progressCallback?: ProgressCallback
 ): Promise<IReplicationResult> {
@@ -540,7 +541,7 @@ export async function replicate(
         //
         // This is need because it will create the sort indexes and other things.
         //
-        await createDatabase(destAssetStorage, sourceUuidGenerator, destDb.metadataCollection, merkleTree.id);
+        await createDatabase(destAssetStorage, destRawAssetStorage, sourceUuidGenerator, destDb.metadataCollection, merkleTree.id);
     }
     
     //

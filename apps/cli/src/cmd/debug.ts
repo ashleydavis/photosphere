@@ -446,7 +446,7 @@ export async function debugRemoveDuplicatesCommand(context: ICommandContext, opt
         dbDir = await getDirectoryForCommand("existing", nonInteractive, options.cwd || process.cwd());
     }
 
-    const { assetStorage, metadataCollection, databaseDir: dbDirResolved } = await loadDatabase(dbDir, options, uuidGenerator, timestampProvider, sessionId);
+    const { assetStorage, rawAssetStorage, metadataCollection, databaseDir: dbDirResolved } = await loadDatabase(dbDir, options, uuidGenerator, timestampProvider, sessionId);
 
     // Get input file path (default to duplicates.json in database directory)
     const inputPath = options.input
@@ -505,7 +505,7 @@ export async function debugRemoveDuplicatesCommand(context: ICommandContext, opt
     for (let i = 0; i < assetIdsToRemove.length; i++) {
         const assetId = assetIdsToRemove[i];
         try {
-            await removeAsset(assetStorage, sessionId, metadataCollection, assetId, false);
+            await removeAsset(assetStorage, rawAssetStorage, sessionId, metadataCollection, assetId, false);
             removed++;
             if ((i + 1) % 10 === 0) {
                 writeProgress(`Removing duplicate assets... (${i + 1}/${assetIdsToRemove.length})`);

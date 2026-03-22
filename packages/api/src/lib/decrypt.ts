@@ -84,7 +84,7 @@ async function decryptFile(
 //
 export async function* decryptableFiles(readStorage: IStorage): AsyncGenerator<string> {
     for await (const { fileName } of walkDirectory(readStorage, "", [])) {
-        if (fileName !== ".db/files.dat" && fileName !== ".db/encryption.pub" && fileName !== "README.md") {
+        if (fileName !== ".db/files.dat" && fileName !== ".db/encryption.pub" && fileName !== ".db/config.json" && fileName !== "README.md") {
             yield fileName;
         }
     }

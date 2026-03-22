@@ -38,6 +38,7 @@ interface IPendingDatabaseUpdate {
 async function processPendingDatabaseUpdates(
     itemsToProcess: IPendingDatabaseUpdate[],
     assetStorage: IStorage,
+    rawStorage: IStorage,
     sessionId: string,
     metadataCollection: IBsonCollection<IAsset>,
     summary: IAddSummary,
@@ -114,7 +115,7 @@ async function processPendingDatabaseUpdates(
         // Save merkle tree (skip in dry-run mode)
         if (!dryRun) {
             await retry(() => saveMerkleTree(merkleTree, assetStorage));
-            await updateDatabaseConfig(assetStorage, { lastModifiedAt: new Date().toISOString() });
+            await updateDatabaseConfig(rawStorage, { lastModifiedAt: new Date().toISOString() });
         }
 
         return true;
@@ -131,6 +132,7 @@ async function processPendingDatabaseUpdates(
 //
 export async function addPaths(
     assetStorage: IStorage,
+    rawStorage: IStorage,
     googleApiKey: string | undefined,
     uuidGenerator: IUuidGenerator,
     sessionId: string,
@@ -198,7 +200,7 @@ export async function addPaths(
             pendingDatabaseUpdates = [];
             
             // Process items (processPendingDatabaseUpdates will handle lock acquisition)
-            const processed = await processPendingDatabaseUpdates(itemsToProcess, assetStorage, sessionId, metadataCollection, summary, dryRun);
+            const processed = await processPendingDatabaseUpdates(itemsToProcess, assetStorage, rawStorage, sessionId, metadataCollection, summary, dryRun);
             if (!processed) {
                 // Lock acquisition failed - re-queue items.
                 // This operation is atomic and no other JS code will be running at this point.
@@ -364,7 +366,7 @@ export async function addPaths(
         log.verbose(`Queue processing complete, processing final ${pendingDatabaseUpdates.length} pending database updates.`);
 
         if (pendingDatabaseUpdates.length !== 0) {
-            const processed = await processPendingDatabaseUpdates(pendingDatabaseUpdates, assetStorage, sessionId, metadataCollection, summary, dryRun);
+            const processed = await processPendingDatabaseUpdates(pendingDatabaseUpdates, assetStorage, rawStorage, sessionId, metadataCollection, summary, dryRun);
             if (!processed) {
                 log.error(`Failed to process final ${pendingDatabaseUpdates.length} pending database updates.`);
             }

@@ -16,10 +16,10 @@ export async function removeCommand(context: ICommandContext, assetId: string, o
     const dbPath = options.db || process.cwd();
 
     // Load the database using shared function
-    const { assetStorage, metadataCollection } = await loadDatabase(dbPath, options, uuidGenerator, timestampProvider, sessionId);
+    const { assetStorage, rawAssetStorage, metadataCollection } = await loadDatabase(dbPath, options, uuidGenerator, timestampProvider, sessionId);
 
     // Remove the asset using the comprehensive removal method
-    await removeAsset(assetStorage, sessionId, metadataCollection, assetId, true);
+    await removeAsset(assetStorage, rawAssetStorage, sessionId, metadataCollection, assetId, true);
 
     log.info(pc.green(`✓ Successfully removed asset ${assetId} from database`));
 

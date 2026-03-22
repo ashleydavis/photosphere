@@ -51,7 +51,7 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
 
     const nonInteractive = options.yes || false;
 
-    const { assetStorage: sourceAssetStorage, bsonDatabase: sourceBsonDatabase, databaseDir: srcDir } = await loadDatabase(options.db, {
+    const { assetStorage: sourceAssetStorage, rawAssetStorage: sourceRawAssetStorage, bsonDatabase: sourceBsonDatabase, databaseDir: srcDir } = await loadDatabase(options.db, {
         db: options.db,
         key: options.key,
         verbose: options.verbose,
@@ -60,7 +60,7 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
 
     let destDir = options.dest;
     if (destDir === undefined) {
-        const config = await loadDatabaseConfig(sourceAssetStorage);
+        const config = await loadDatabaseConfig(sourceRawAssetStorage);
         destDir = config?.origin;
         if (destDir === undefined) {
             destDir = await getDirectoryForCommand('existing', nonInteractive, options.cwd || process.cwd());
@@ -140,7 +140,7 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
 
     const resolvedDestKeyPaths = await resolveKeyPaths(options.destKey);
     const { options: destStorageOptions, isEncrypted: destIsEncrypted } = await loadEncryptionKeys(resolvedDestKeyPaths, options.generateKey || false);
-    const { storage: destAssetStorage } = createStorage(destDir, s3Config, destStorageOptions);
+    const { storage: destAssetStorage, rawStorage: destRawStorage } = createStorage(destDir, s3Config, destStorageOptions);
 
     // If destination database exists, warn user and ask for confirmation (unless --ues is used)
     if (destDbExists && !options.yes) {
@@ -182,7 +182,7 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
         ? `Copying files matching: ${options.path}...` 
         : `Copying files...`);
 
-    const result = await replicate(sourceAssetStorage, sourceBsonDatabase, uuidGenerator, timestampProvider, destAssetStorage, { 
+    const result = await replicate(sourceAssetStorage, sourceBsonDatabase, uuidGenerator, timestampProvider, destAssetStorage, destRawStorage, {
         pathFilter: options.path,
         force: options.force,
         partial: options.partial
@@ -219,7 +219,7 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
         try {
             if (await pathExists(publicKeySource)) {
                 const publicKeyData = await readFile(publicKeySource);
-                await destMetadataProbeStorage.write('.db/encryption.pub', undefined, publicKeyData); //todo: needs to use raw storage.
+                await destRawStorage.write('.db/encryption.pub', undefined, publicKeyData);
                 log.info(pc.green(`✓ Copied public key to destination database directory`));
             }
         } catch (error) {
@@ -228,7 +228,7 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
     }
 
     // Set replica config: origin = source path, lastReplicatedAt = now
-    await updateDatabaseConfig(destAssetStorage, {
+    await updateDatabaseConfig(destRawStorage, {
         origin: srcDir,
         lastReplicatedAt: new Date().toISOString(),
     });

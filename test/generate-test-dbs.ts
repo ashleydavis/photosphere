@@ -85,9 +85,9 @@ async function main(): Promise<void> {
             // Create empty database
             const uuidGenerator = new RandomUuidGenerator();
             const timestampProvider = new TimestampProvider();
-            const { storage: assetStorage } = createStorage(dbPath);
+            const { storage: assetStorage, rawStorage } = createStorage(dbPath);
             const database = createMediaFileDatabase(assetStorage, uuidGenerator, timestampProvider);
-            await createDatabase(assetStorage, uuidGenerator, database.metadataCollection);
+            await createDatabase(assetStorage, rawStorage, uuidGenerator, database.metadataCollection);
             console.log(`  ✓ Created empty database: ${dbPath}`);
         }
     }
@@ -105,13 +105,13 @@ async function createCollectionDatabase(
     const timestampProvider = new TimestampProvider();
     
     // Create storage instances
-    const { storage: assetStorage } = createStorage(dbPath);
-    
+    const { storage: assetStorage, rawStorage } = createStorage(dbPath);
+
     // Create database instance
     const database = createMediaFileDatabase(assetStorage, uuidGenerator, timestampProvider);
-    
+
     // Create the database structure (merkle tree, README, etc.)
-    await createDatabase(assetStorage, uuidGenerator, database.metadataCollection, databaseId);
+    await createDatabase(assetStorage, rawStorage, uuidGenerator, database.metadataCollection, databaseId);
     
     // Load metadata from fixture
     const bsonPath = path.join(collectionPath, 'bson');

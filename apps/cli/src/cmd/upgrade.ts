@@ -59,7 +59,7 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
     let resolvedKeyPaths = await resolveKeyPaths(options.key);
     let { options: storageOptions } = await loadEncryptionKeys(resolvedKeyPaths, false);
     const s3Config = await getS3Config();
-    let { storage: assetStorage } = createStorage(databaseDir, s3Config, storageOptions);
+    let { storage: assetStorage, rawStorage } = createStorage(databaseDir, s3Config, storageOptions);
 
     const hasFilesDat = await assetStorage.fileExists(".db/files.dat");
     const hasTreeDat = await assetStorage.fileExists(".db/tree.dat");
@@ -222,7 +222,7 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
         // Create README.md if it doesn't exist
         const existingReadme = await retry(() => assetStorage.info('README.md'));
         if (!existingReadme) {
-            merkleTree = await createReadme(assetStorage, merkleTree);
+            merkleTree = await createReadme(rawStorage, merkleTree);
         }
 
         // Check if database is encrypted and ensure public key is in .db directory
@@ -248,8 +248,7 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
                     }
                     
                     if (publicKeyPem) {
-                        // Write public key to .db/encryption.pub (encrypted when DB is encrypted)
-                        await assetStorage.write('.db/encryption.pub', 'text/plain', Buffer.from(publicKeyPem, 'utf8')); //todo: use raw storage.
+                        await rawStorage.write('.db/encryption.pub', 'text/plain', Buffer.from(publicKeyPem, 'utf8'));
                         log.info(pc.green(`✓ Copied public key to database directory`));
                     }
                 } catch (error) {
@@ -346,9 +345,9 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
         }
 
         // Ensure .db/config.json exists (create empty if not present)
-        const existingConfig = await loadDatabaseConfig(assetStorage);
+        const existingConfig = await loadDatabaseConfig(rawStorage);
         if (existingConfig === null) {
-            await saveDatabaseConfig(assetStorage, {});
+            await saveDatabaseConfig(rawStorage, {});
             log.info(pc.green(`✓ Created .db/config.json`));
         }
 

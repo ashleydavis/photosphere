@@ -22,11 +22,11 @@ export interface IDatabaseConfig {
 //
 // Loads the database config from .db/config.json. Returns null if the file does not exist.
 //
-export async function loadDatabaseConfig(assetStorage: IStorage): Promise<IDatabaseConfig | null> {
-    if (!await assetStorage.fileExists(CONFIG_PATH)) {
+export async function loadDatabaseConfig(rawStorage: IStorage): Promise<IDatabaseConfig | null> {
+    if (!await rawStorage.fileExists(CONFIG_PATH)) {
         return null;
     }
-    const data = await retry(() => assetStorage.read(CONFIG_PATH));  //todo: need to use raw storage
+    const data = await retry(() => rawStorage.read(CONFIG_PATH));
     if (!data) {
         return null;
     }
@@ -38,19 +38,19 @@ export async function loadDatabaseConfig(assetStorage: IStorage): Promise<IDatab
 //
 // Saves the full database config to .db/config.json.
 //
-export async function saveDatabaseConfig(assetStorage: IStorage, config: IDatabaseConfig): Promise<void> {
+export async function saveDatabaseConfig(rawStorage: IStorage, config: IDatabaseConfig): Promise<void> {
     const text = JSON.stringify(config, null, 2);
-    await retry(() => assetStorage.write(CONFIG_PATH, "application/json", Buffer.from(text, "utf8"))); //todo: need to use raw storage
+    await retry(() => rawStorage.write(CONFIG_PATH, "application/json", Buffer.from(text, "utf8")));
 }
 
 //
 // Updates the database config by merging partial into the existing config (or empty object).
 //
 export async function updateDatabaseConfig(
-    assetStorage: IStorage,
+    rawStorage: IStorage,
     partial: Partial<IDatabaseConfig>
 ): Promise<void> {
-    const existing = await loadDatabaseConfig(assetStorage);
+    const existing = await loadDatabaseConfig(rawStorage);
     const merged: IDatabaseConfig = { ...existing ?? {}, ...partial };
-    await saveDatabaseConfig(assetStorage, merged);
+    await saveDatabaseConfig(rawStorage, merged);
 }
