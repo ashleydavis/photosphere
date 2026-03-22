@@ -80,6 +80,15 @@ describe("decryptableFiles", () => {
         const files = await collectFiles(decryptableFiles(storage));
         expect(files).toEqual([]);
     });
+
+    test("excludes .db/config.json", async () => {
+        const storage = new MockStorage("read");
+        await storage.write(".db/config.json", "application/json", Buffer.from("{}"));
+        await storage.write("photo/img.jpg", "image/jpeg", Buffer.from("x"));
+        const files = await collectFiles(decryptableFiles(storage));
+        expect(files).not.toContain(".db/config.json");
+        expect(files).toContain("photo/img.jpg");
+    });
 });
 
 describe("decrypt", () => {
@@ -160,6 +169,34 @@ describe("decrypt", () => {
         expect(readBack?.toString()).toBe("plain content");
         const loadedTree = await loadMerkleTree(storage);
         expect(loadedTree?.merkle).toBeDefined();
+    });
+
+    test("returns correct decrypted count for files written to a different storage", async () => {
+        const readStorage = new MockStorage("read");
+        const writeStorage = new MockStorage("write");
+        // Use empty tree to avoid BSON leaf files being written to storage.
+        const tree = buildMinimalFilesTree([]);
+        await saveTree(FILES_TREE_PATH, tree, readStorage);
+        await readStorage.write("asset/f1.dat", "application/octet-stream", Buffer.from("content1"));
+        await readStorage.write("asset/f2.dat", "application/octet-stream", Buffer.from("content2"));
+
+        const result = await decrypt(readStorage, writeStorage, () => {}, readStorage);
+
+        expect(result.decrypted).toBe(2);
+        expect(result.skipped).toBe(0);
+    });
+
+    test("returns correct skipped count when files are already plain and same storage is used", async () => {
+        const storage = new MockStorage("same");
+        // Use empty tree to avoid BSON leaf files being written to storage.
+        const tree = buildMinimalFilesTree([]);
+        await saveTree(FILES_TREE_PATH, tree, storage);
+        await storage.write("asset/f1.dat", "application/octet-stream", Buffer.from("plain content"));
+
+        const result = await decrypt(storage, storage, () => {}, storage);
+
+        expect(result.skipped).toBe(1);
+        expect(result.decrypted).toBe(0);
     });
 
     test("throws when merkle tree cannot be loaded", async () => {
