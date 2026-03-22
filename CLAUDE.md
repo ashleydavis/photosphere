@@ -100,7 +100,7 @@ Frontend:
 - Put `else` and `catch` blocks on a new line.
 - Tests should go under the directory src/test in each package.
 - Refrain from using the `any` type in normal code, although it's ok sometimes in test code.
-- Never use anonymous object types inline (e.g. `Promise<{ foo: number }>`). Always define a named interface instead.
+- Never use anonymous object types inline (e.g. `Promise<{ foo: number }>`). Always define a named interface instead, unless specifically asked to use an anonymous type.
 - Never use IIFE async generator pattern (`(async function* () { ... })()`). Extract to a named `async function*` instead.
 
 ## Restrictions
@@ -114,3 +114,5 @@ Frontend:
 - All imports should be at the top of the file and not inside any functions.
 - Don't use dynamic imports.
 - Don't add exception handling unless I ask for it.
+- Don't use default parameter values unless specifically asked to.
+- Never reformat or rewrite entire files. Only edit the specific lines that need to change.

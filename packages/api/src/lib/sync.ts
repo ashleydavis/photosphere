@@ -1,7 +1,7 @@
 import { IBsonCollection, IBsonDatabase, IInternalRecord, IRecord, loadDatabaseMerkleTree, mergeRecords } from "bdb";
 import { loadCollectionMerkleTree, loadShardMerkleTree } from "./tree";
 import { deleteItem, findMerkleTreeDifferences, getItemInfo, IMerkleTree, MerkleNode, upsertItem } from "merkle-tree";
-import { IStorage, StoragePrefixWrapper, pathJoin } from "storage";
+import { IStorage, pathJoin } from "storage";
 import { IDatabaseMetadata } from "./media-file-database";
 import { acquireWriteLock, releaseWriteLock } from "./write-lock";
 import { loadMerkleTree, saveMerkleTree } from "./tree";
@@ -318,6 +318,16 @@ function* iterateLeaves(nodes: MerkleNode[]): Generator<string> { //todo: This c
 }
 
 //
+// Identifies a differing record between source and target databases, used as the yield type for sync diff generators.
+//
+interface ISyncDiffRecord {
+    collectionName: string;
+    recordId: string;
+    sourceRecord?: IInternalRecord;
+    targetRecord?: IInternalRecord;
+}
+
+//
 // Yields differing records for a specific collection and shard.
 //
 async function* iterateShardDifferences(
@@ -327,7 +337,7 @@ async function* iterateShardDifferences(
     targetCollection: IBsonCollection<IRecord>,
     sourceShardTree: IMerkleTree<undefined> | undefined,
     targetShardTree: IMerkleTree<undefined> | undefined
-): AsyncGenerator<{ collectionName: string; recordId: string; sourceRecord?: IInternalRecord; targetRecord?: IInternalRecord }> {
+): AsyncGenerator<ISyncDiffRecord> {
     const diff = findMerkleTreeDifferences(sourceShardTree?.merkle, targetShardTree?.merkle);
     
     const sourceShard = await sourceCollection.loadShard(shardId);
@@ -386,7 +396,7 @@ async function* iterateCollectionDifferences(
     targetDb: IBsonDatabase,
     sourceCollectionTree: IMerkleTree<undefined> | undefined,
     targetCollectionTree: IMerkleTree<undefined> | undefined
-): AsyncGenerator<{ collectionName: string; recordId: string; sourceRecord?: IInternalRecord; targetRecord?: IInternalRecord }> {
+): AsyncGenerator<ISyncDiffRecord> {
     const sourceCollection = sourceDb.collection(collectionName);
     const targetCollection = targetDb.collection(collectionName);
     
@@ -432,9 +442,9 @@ async function* iterateDatabaseDifferences( //todo: todo this could be in the bd
     targetStorage: IStorage,
     sourceDb: IBsonDatabase,
     targetDb: IBsonDatabase,
-): AsyncGenerator<{ collectionName: string; recordId: string; sourceRecord?: IInternalRecord; targetRecord?: IInternalRecord }> {
-    const sourceDbTree = await loadDatabaseMerkleTree(sourceStorage);
-    const targetDbTree = await loadDatabaseMerkleTree(targetStorage);    
+): AsyncGenerator<ISyncDiffRecord> {
+    const sourceDbTree = await loadDatabaseMerkleTree(sourceStorage, ".db/bson");
+    const targetDbTree = await loadDatabaseMerkleTree(targetStorage, ".db/bson");    
     if (!sourceDbTree && !targetDbTree) {
         return;
     }
@@ -485,10 +495,8 @@ export async function syncDatabase(
     targetBsonDatabase: IBsonDatabase
 ): Promise<void> {
     // Load database merkle trees (v6 layout: .db/bson)
-    const sourceStorage = new StoragePrefixWrapper(sourceAssetStorage, ".db/bson");
-    const sourceDbTree = await loadDatabaseMerkleTree(sourceStorage);
-    const targetStorage = new StoragePrefixWrapper(targetAssetStorage, ".db/bson");
-    const targetDbTree = await loadDatabaseMerkleTree(targetStorage);
+    const sourceDbTree = await loadDatabaseMerkleTree(sourceAssetStorage, ".db/bson");
+    const targetDbTree = await loadDatabaseMerkleTree(targetAssetStorage, ".db/bson");
     
     // Compare root hashes to see if databases are identical
     if (sourceDbTree?.merkle && targetDbTree?.merkle) { //todo: move this comparison to the iterateDatabaseDifferences function.
@@ -503,7 +511,7 @@ export async function syncDatabase(
     let mergedCount = 0;
     
     // Process differing records as they're found (using generator)
-    for await (const diff of iterateDatabaseDifferences(sourceStorage, targetStorage, sourceBsonDatabase, targetBsonDatabase)) {
+    for await (const diff of iterateDatabaseDifferences(sourceAssetStorage, targetAssetStorage, sourceBsonDatabase, targetBsonDatabase)) {
 
         const targetCollection = targetBsonDatabase.collection(diff.collectionName);        
 

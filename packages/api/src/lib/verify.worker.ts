@@ -33,9 +33,9 @@ export async function verifyFileHandler(data: IVerifyFileData, context: ITaskCon
     // Recreate the storage in the worker (storage objects can't be passed through worker messages)
     // S3 config is passed in the data, and encryption key paths come from the storage descriptor
     const { options: storageOptions } = await loadEncryptionKeys(storageDescriptor.encryptionKeyPaths, false);
-    const { storage: assetStorage } = createStorage(storageDescriptor.dbDir, s3Config, storageOptions);
+    const { storage } = createStorage(storageDescriptor.dbDir, s3Config, storageOptions);
 
-    const fileInfo = await retry(() => assetStorage.info(fileName));
+    const fileInfo = await retry(() => storage.info(fileName));
     if (!fileInfo) {
         return {
             fileName,
@@ -47,7 +47,7 @@ export async function verifyFileHandler(data: IVerifyFileData, context: ITaskCon
     const timestampChanged = node.lastModified === undefined || node.lastModified!.getTime() !== fileInfo.lastModified.getTime();             
     if (sizeChanged || timestampChanged) {
         // File metadata has changed - check if content actually changed by computing the hash.
-        const freshHash = await retry(() => computeAssetHash(assetStorage.readStream(fileName), fileInfo));
+        const freshHash = await retry(() => computeAssetHash(storage.readStream(fileName), fileInfo));
         if (Buffer.compare(freshHash.hash, node.contentHash!) !== 0) {
             // The file content has actually been modified.
             const reasons: string[] = [];

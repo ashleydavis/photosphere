@@ -38,7 +38,7 @@ describe('Collection Metadata and Timestamps', () => {
     beforeEach(() => {
         storage = new MockStorage();
         timestampProvider = new MockTimestampProvider(1000);
-        collection = new BsonCollection<TestRecord>('test', {
+        collection = new BsonCollection<TestRecord>('test', '', {
             storage,
             directory: 'collections/test',
             baseDirectory: '',

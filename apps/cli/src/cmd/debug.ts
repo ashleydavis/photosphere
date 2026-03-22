@@ -10,7 +10,6 @@ import {
     listShards,
     hashRecord
 } from "bdb";
-import { StoragePrefixWrapper } from "storage";
 import { loadMerkleTree, getDatabaseSummary, removeAsset, ensureSortIndex, buildFilesTree } from "api";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import { getDirectoryForCommand } from '../lib/directory-picker';
@@ -89,8 +88,7 @@ export async function debugMerkleTreeCommand(context: ICommandContext, options: 
     }
     
     // Show BSON database merkle tree if it exists (v6: .db/bson)
-    const bsonMetadataStorage = new StoragePrefixWrapper(assetStorage, ".db/bson"); //todo: could just push the path into `loadDatabaseMerkleTree`.
-    const databaseTree = await loadDatabaseMerkleTree(bsonMetadataStorage);
+    const databaseTree = await loadDatabaseMerkleTree(assetStorage, ".db/bson");
     
     if (databaseTree) {
         log.info('');
@@ -110,7 +108,7 @@ export async function debugMerkleTreeCommand(context: ICommandContext, options: 
             log.info(pc.yellow('No collections found in database.'));
         } else {
             for (const collectionName of collections) {
-                const collectionTree = await loadCollectionMerkleTree(bsonMetadataStorage, collectionName);
+                const collectionTree = await loadCollectionMerkleTree(assetStorage, ".db/bson", collectionName);
                 if (collectionTree) {
                     log.info('');
                     log.info(pc.cyan(`Collection: ${collectionName}`));
@@ -126,9 +124,9 @@ export async function debugMerkleTreeCommand(context: ICommandContext, options: 
                 const collection = bsonDatabase.collection(collectionName);
 
                 // Show all shard trees for this collection
-                const shardIds = await listShards(bsonMetadataStorage, collectionName);
+                const shardIds = await listShards(assetStorage, ".db/bson", collectionName);
                 for (const shardId of shardIds) {
-                    const shardTree = await loadShardMerkleTree(bsonMetadataStorage, collectionName, shardId);
+                    const shardTree = await loadShardMerkleTree(assetStorage, ".db/bson", collectionName, shardId);
                     if (shardTree) {
                         log.info('');
                         log.info(pc.cyan(`  Shard: ${shardId}`));
@@ -507,7 +505,7 @@ export async function debugRemoveDuplicatesCommand(context: ICommandContext, opt
     for (let i = 0; i < assetIdsToRemove.length; i++) {
         const assetId = assetIdsToRemove[i];
         try {
-            await removeAsset(assetStorage, assetStorage, sessionId, metadataCollection, assetId, false);
+            await removeAsset(assetStorage, sessionId, metadataCollection, assetId, false);
             removed++;
             if ((i + 1) % 10 === 0) {
                 writeProgress(`Removing duplicate assets... (${i + 1}/${assetIdsToRemove.length})`);

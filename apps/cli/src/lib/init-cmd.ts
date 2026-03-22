@@ -598,10 +598,6 @@ export async function createDatabase(
     const s3Config = await getS3Config();
     const { storage: assetStorage } = createStorage(dbDir, s3Config, storageOptions);
     
-    // Metadata storage follows the same encryption settings as asset storage when the database is encrypted.
-    const { storage: metadataStorage } = isEncrypted
-        ? createStorage(dbDir, s3Config, storageOptions)
-        : createStorage(dbDir, s3Config, undefined);
     // Raw storage reads bytes exactly as stored on disk, with no decryption applied.
     const { storage: rawAssetStorage } = createStorage(dbDir, s3Config);
 
@@ -611,7 +607,7 @@ export async function createDatabase(
         await exit(1);
     }
 
-    if (!await metadataStorage.isEmpty(".db")) {
+    if (!await assetStorage.isEmpty(".db")) {
         outro(pc.red(`✗ The metadata directory ${pc.cyan(metaPath)} is not empty or already contains a database.\n  Please choose an empty directory or a non-existent one.`));
         await exit(1);
     }
@@ -620,7 +616,7 @@ export async function createDatabase(
     const database = createMediaFileDatabase(assetStorage, uuidGenerator, timestampProvider);
 
     // Create the database (instead of loading)
-    await createMediaDatabase(assetStorage, metadataStorage, uuidGenerator, database.metadataCollection);
+    await createMediaDatabase(assetStorage, uuidGenerator, database.metadataCollection);
 
     // If database is encrypted, copy the public key to the .db directory as a marker
     if (isEncrypted && resolvedKeyPaths.length > 0) {
@@ -629,7 +625,7 @@ export async function createDatabase(
         
         try {
             if (await pathExists(publicKeySource)) {
-                await copy(publicKeySource, publicKeyDest);
+                await copy(publicKeySource, publicKeyDest); //todo: use raw storage.
                 // console.log(`Copied public key to database directory: ${publicKeyDest}`);
             }
         } catch (error) {

@@ -2,7 +2,7 @@
 // A collection in a database that stores BSON records in a sharded format.
 //
 
-import type { IStorage } from 'storage';
+import { pathJoin, type IStorage } from 'storage';
 import type { IUuidGenerator, ITimestampProvider } from 'utils';
 import { save, load } from 'serialization';
 import type { ISerializer, IDeserializer } from 'serialization';
@@ -61,12 +61,12 @@ export interface IBsonCollectionOptions {
     //
     // The directory where the collection is stored (v6: collections/<name>).
     //
-    directory: string;
+    directory: string; //fio:
 
     //
     // BSON database root (v6: "" = storage root; used for indexes path).
     //
-    baseDirectory: string;
+    baseDirectory: string; //fio:
 
     //
     // UUID generator for creating unique identifiers.
@@ -379,7 +379,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     //
     private static readonly SHARD_FILE_VERSION = 2;
 
-    constructor(private readonly name: string, options: IBsonCollectionOptions) {
+    constructor(private readonly name: string, private readonly bsonDbPath: string, options: IBsonCollectionOptions) {
         this.storage = options.storage;
         this.directory = options.directory;
         this.baseDirectory = options.baseDirectory;
@@ -495,7 +495,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     // Saves the shard.
     //
     async saveShard(shard: IShard): Promise<void> {
-        const filePath = `${this.directory}/shards/${shard.id}`;
+        const filePath = pathJoin(this.bsonDbPath, "collections", this.name, "shards", shard.id);
         await this.saveShardFile(filePath, shard);
     }
 
@@ -558,7 +558,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     // Upserts a record in the shard merkle tree (adds if doesn't exist, updates if it does).
     //
     private async upsertRecordInShardTree(shardId: string, record: IInternalRecord, shard: IShard): Promise<void> {
-        let shardTree = await loadShardMerkleTree(this.storage, this.directory, shardId);        
+        let shardTree = await loadShardMerkleTree(this.storage, this.bsonDbPath, this.name, shardId);
         if (!shardTree) {
             // Tree doesn't exist, build it from the shard.
             const records = Array.from(shard.records.values());
@@ -569,7 +569,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             shardTree = upsertItem(shardTree, hashRecord(record));
         }
         
-        await saveShardMerkleTree(this.storage, this.directory, shardId, shardTree);        
+        await saveShardMerkleTree(this.storage, this.bsonDbPath, this.name, shardId, shardTree);        
         await this.updateCollectionTree(shardId, shardTree);
     }
 
@@ -578,7 +578,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     //
     private async deleteRecordFromShardTree(shardId: string, recordId: string, shard: IShard): Promise<void> {
 
-        let shardTree = await loadShardMerkleTree(this.storage, this.directory, shardId);        
+        let shardTree = await loadShardMerkleTree(this.storage, this.bsonDbPath, this.name, shardId);        
         if (!shardTree) {
             // Tree doesn't exist, but if shard still has records, build it.
             const records = Array.from(shard.records.values());
@@ -596,10 +596,10 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         if (!shardTree || !shardTree.sort) {
             // Shard tree is empty, delete it.
             shardTree = undefined;
-            await deleteShardMerkleTree(this.storage, this.directory, shardId);
+            await deleteShardMerkleTree(this.storage, this.bsonDbPath, this.name, shardId);
         }
         else {
-            await saveShardMerkleTree(this.storage, this.directory, shardId, shardTree);
+            await saveShardMerkleTree(this.storage, this.bsonDbPath, this.name, shardId, shardTree);
         }
         
         await this.updateCollectionTree(shardId, shardTree);
@@ -610,10 +610,10 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     //
     private async updateCollectionTree(shardId: string, shardTree: IMerkleTree<undefined> | undefined): Promise<void> {
         
-        let collectionTree = await loadCollectionMerkleTree(this.storage, this.directory);        
+        let collectionTree = await loadCollectionMerkleTree(this.storage, this.bsonDbPath, this.name);        
         if (!collectionTree) {
             // Collection tree doesn't exist, build it.
-            collectionTree = await buildCollectionMerkleTree(this.storage, this.name, this.directory, this.uuidGenerator, false);
+            collectionTree = await buildCollectionMerkleTree(this.storage, this.bsonDbPath, this.name, this.uuidGenerator, false);
         }
 
         if (shardTree && shardTree.merkle) {
@@ -635,10 +635,10 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         if (!collectionTree.sort) {
             // Collection tree is empty, delete it.
             collectionTree = undefined;
-            await deleteCollectionMerkleTree(this.storage, this.directory);
+            await deleteCollectionMerkleTree(this.storage, this.bsonDbPath, this.name);
         }        
         else {
-            await saveCollectionMerkleTree(this.storage, this.directory, collectionTree);
+            await saveCollectionMerkleTree(this.storage, this.bsonDbPath, this.name, collectionTree);
         }
         
         await this.updateDatabaseTree(collectionTree);
@@ -649,13 +649,13 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     //
     private async updateDatabaseTree(collectionTree: IMerkleTree<undefined> | undefined): Promise<void> {
         
-        let databaseTree = await loadDatabaseMerkleTree(this.storage);        
+        let databaseTree = await loadDatabaseMerkleTree(this.storage, this.bsonDbPath);
         if (!databaseTree) {
             // Database tree doesn't exist, rebuild it from all collections.
             databaseTree = await buildDatabaseMerkleTree(
                 this.storage,
+                this.bsonDbPath,
                 this.uuidGenerator,
-                path.dirname(this.directory),
                 this.name,
                 collectionTree,
                 false
@@ -679,10 +679,10 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
 
         if (!databaseTree.sort) {
             // Database tree is empty, delete it.
-            await deleteDatabaseMerkleTree(this.storage);
+            await deleteDatabaseMerkleTree(this.storage, this.bsonDbPath);
         }
         else {
-            await saveDatabaseMerkleTree(this.storage, databaseTree);
+            await saveDatabaseMerkleTree(this.storage, this.bsonDbPath, databaseTree);
         }
     }
 
@@ -862,7 +862,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     // Loads the requested shard from cache or from storage.
     //
     async loadShard(shardId: string): Promise<IShard> {
-        const filePath = `${this.directory}/shards/${shardId}`;
+        const filePath = pathJoin(this.bsonDbPath, "collections", this.name, "shards", shardId);
         const records = await this.loadRecords(filePath); //todo: It would be good if we could load a shard without deserializing all the records. Then we can just lazy dersialize the ones we want.
         const shard: IShard = {
             id: shardId,
@@ -912,12 +912,12 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     async rebuildAndSaveShardMerkleTree(shard: IShard): Promise<void> {
         const records = Array.from(shard.records.values());
         if (records.length === 0) {
-            await deleteShardMerkleTree(this.storage, this.directory, shard.id);
+            await deleteShardMerkleTree(this.storage, this.bsonDbPath, this.name, shard.id);
             await this.updateCollectionTree(shard.id, undefined);
         }
         else {
             const shardTree = await buildShardMerkleTree(records, this.uuidGenerator);
-            await saveShardMerkleTree(this.storage, this.directory, shard.id, shardTree);
+            await saveShardMerkleTree(this.storage, this.bsonDbPath, this.name, shard.id, shardTree);
             await this.updateCollectionTree(shard.id, shardTree);
         }
     }
@@ -987,7 +987,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     //
     async *iterateRecords(): AsyncGenerator<IInternalRecord, void, unknown> {
         for (let shardId = 0; shardId < this.numShards; shardId++) {
-            const records = await this.loadRecords(`${this.directory}/shards/${shardId}`);
+            const records = await this.loadRecords(pathJoin(this.bsonDbPath, "collections", this.name, "shards", shardId.toString()));
             for (const record of records) {
                 yield record;
             }
@@ -1000,7 +1000,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     //
     async *iterateShards(): AsyncGenerator<Iterable<IInternalRecord>, void, unknown> {
         for (let shardId = 0; shardId < this.numShards; shardId++) {
-            const records = await this.loadRecords(`${this.directory}/shards/${shardId}`);
+            const records = await this.loadRecords(pathJoin(this.bsonDbPath, "collections", this.name, "shards", shardId.toString()));
             if (records.length > 0) {
                 yield records;
             }
@@ -1017,7 +1017,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         let shardId = next ? parseInt(next) : 0;
         while (shardId < this.numShards) {
             // Load records from storage
-            const filePath = `${this.directory}/shards/${shardId}`;
+            const filePath = pathJoin(this.bsonDbPath, "collections", this.name, "shards", shardId.toString());
             const internalRecords = await this.loadRecords(filePath);
             if (internalRecords.length > 0) {
                 // Convert to external format
@@ -1331,6 +1331,6 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         }
         
         // Delete the collection directory (which includes merkle trees)
-        await this.storage.deleteDir(this.directory); 
+        await this.storage.deleteDir(pathJoin(this.bsonDbPath, "collections", this.name));
     }
 }

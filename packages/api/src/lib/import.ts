@@ -37,7 +37,7 @@ interface IPendingDatabaseUpdate {
 //
 async function processPendingDatabaseUpdates(
     itemsToProcess: IPendingDatabaseUpdate[],
-    metadataStorage: IStorage,
+    assetStorage: IStorage,
     sessionId: string,
     metadataCollection: IBsonCollection<IAsset>,
     summary: IAddSummary,
@@ -47,7 +47,7 @@ async function processPendingDatabaseUpdates(
         return true;
     }
     
-    if (!await acquireWriteLock(metadataStorage, sessionId, 1)) {
+    if (!await acquireWriteLock(assetStorage, sessionId, 1)) {
         // Couldn't acquire lock
         return false;
     }
@@ -55,7 +55,7 @@ async function processPendingDatabaseUpdates(
     log.verbose(`Have write lock, processing ${itemsToProcess.length} items to update database.`);
     
     try {
-        let merkleTree = await retry(() => loadMerkleTree(metadataStorage));
+        let merkleTree = await retry(() => loadMerkleTree(assetStorage));
         if (!merkleTree) {
             throw new Error(`Failed to load media file database.`);
         }
@@ -113,14 +113,14 @@ async function processPendingDatabaseUpdates(
         
         // Save merkle tree (skip in dry-run mode)
         if (!dryRun) {
-            await retry(() => saveMerkleTree(merkleTree, metadataStorage));
-            await updateDatabaseConfig(metadataStorage, { lastModifiedAt: new Date().toISOString() });
+            await retry(() => saveMerkleTree(merkleTree, assetStorage));
+            await updateDatabaseConfig(assetStorage, { lastModifiedAt: new Date().toISOString() });
         }
 
         return true;
     }
     finally {
-        await releaseWriteLock(metadataStorage);
+        await releaseWriteLock(assetStorage);
 
         log.verbose(`Released write lock, processed ${itemsToProcess.length} items to update database.`);
     }
@@ -130,7 +130,7 @@ async function processPendingDatabaseUpdates(
 // Adds a list of files or directories to the media file database.
 //
 export async function addPaths(
-    metadataStorage: IStorage,
+    assetStorage: IStorage,
     googleApiKey: string | undefined,
     uuidGenerator: IUuidGenerator,
     sessionId: string,
@@ -198,7 +198,7 @@ export async function addPaths(
             pendingDatabaseUpdates = [];
             
             // Process items (processPendingDatabaseUpdates will handle lock acquisition)
-            const processed = await processPendingDatabaseUpdates(itemsToProcess, metadataStorage, sessionId, metadataCollection, summary, dryRun);
+            const processed = await processPendingDatabaseUpdates(itemsToProcess, assetStorage, sessionId, metadataCollection, summary, dryRun);
             if (!processed) {
                 // Lock acquisition failed - re-queue items.
                 // This operation is atomic and no other JS code will be running at this point.
@@ -364,7 +364,7 @@ export async function addPaths(
         log.verbose(`Queue processing complete, processing final ${pendingDatabaseUpdates.length} pending database updates.`);
 
         if (pendingDatabaseUpdates.length !== 0) {
-            const processed = await processPendingDatabaseUpdates(pendingDatabaseUpdates, metadataStorage, sessionId, metadataCollection, summary, dryRun);
+            const processed = await processPendingDatabaseUpdates(pendingDatabaseUpdates, assetStorage, sessionId, metadataCollection, summary, dryRun);
             if (!processed) {
                 log.error(`Failed to process final ${pendingDatabaseUpdates.length} pending database updates.`);
             }

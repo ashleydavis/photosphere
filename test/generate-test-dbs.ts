@@ -86,9 +86,8 @@ async function main(): Promise<void> {
             const uuidGenerator = new RandomUuidGenerator();
             const timestampProvider = new TimestampProvider();
             const { storage: assetStorage } = createStorage(dbPath);
-            const { storage: metadataStorage } = createStorage(dbPath);
             const database = createMediaFileDatabase(assetStorage, uuidGenerator, timestampProvider);
-            await createDatabase(assetStorage, metadataStorage, uuidGenerator, database.metadataCollection);
+            await createDatabase(assetStorage, uuidGenerator, database.metadataCollection);
             console.log(`  ✓ Created empty database: ${dbPath}`);
         }
     }
@@ -107,13 +106,12 @@ async function createCollectionDatabase(
     
     // Create storage instances
     const { storage: assetStorage } = createStorage(dbPath);
-    const { storage: metadataStorage } = createStorage(dbPath);
     
     // Create database instance
     const database = createMediaFileDatabase(assetStorage, uuidGenerator, timestampProvider);
     
     // Create the database structure (merkle tree, README, etc.)
-    await createDatabase(assetStorage, metadataStorage, uuidGenerator, database.metadataCollection, databaseId);
+    await createDatabase(assetStorage, uuidGenerator, database.metadataCollection, databaseId);
     
     // Load metadata from fixture
     const bsonPath = path.join(collectionPath, 'bson');
@@ -130,7 +128,7 @@ async function createCollectionDatabase(
     }
     
     // Copy asset files and add them to merkle tree
-    let merkleTree = await loadMerkleTree(metadataStorage);
+    let merkleTree = await loadMerkleTree(assetStorage);
     if (!merkleTree) {
         throw new Error('Failed to load merkle tree after database creation');
     }
@@ -190,7 +188,7 @@ async function createCollectionDatabase(
     }
     
     // Save updated merkle tree
-    await saveMerkleTree(merkleTree, metadataStorage);
+    await saveMerkleTree(merkleTree, assetStorage);
     
     console.log(`    ✓ Created database: ${dbPath}`);
 }

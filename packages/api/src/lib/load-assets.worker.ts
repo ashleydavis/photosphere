@@ -26,13 +26,13 @@ export async function loadAssetsHandler(
     console.log(`Loading assets from database ${data.databasePath}`);
 
     // Create storage without encryption
-    const { storage: assetStorage } = createStorage(data.databasePath, undefined, undefined);
+    const { storage } = createStorage(data.databasePath, undefined, undefined);
     
     // Create database instance
-    const database = createMediaFileDatabase(assetStorage, uuidGenerator, timestampProvider);
+    const database = createMediaFileDatabase(storage, uuidGenerator, timestampProvider);
     
     // Load the database
-    await loadDatabase(assetStorage, database.metadataCollection);
+    await loadDatabase(storage, database.metadataCollection);
     
     const metadataCollection = database.metadataCollection;
     

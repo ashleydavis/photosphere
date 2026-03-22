@@ -23,15 +23,15 @@ const ENCRYPTION_PUB_PATH = ".db/encryption.pub";
 //
 // Checks if the merkle tree exists.
 //
-export async function merkleTreeExists(metadataStorage: IStorage): Promise<boolean> {
-    return await metadataStorage.fileExists(FILES_TREE_PATH);
+export async function merkleTreeExists(assetStorage: IStorage): Promise<boolean> {
+    return await assetStorage.fileExists(FILES_TREE_PATH);
 }
 
 //
 // Returns true if the database has an encryption marker (storage is scoped to db root).
 //
-export async function isDatabaseEncrypted(metadataStorage: IStorage): Promise<boolean> {
-    return await metadataStorage.fileExists(ENCRYPTION_PUB_PATH);
+export async function isDatabaseEncrypted(assetStorage: IStorage): Promise<boolean> {
+    return await assetStorage.fileExists(ENCRYPTION_PUB_PATH);
 }
 
 //
@@ -53,16 +53,16 @@ export async function saveMerkleTree(merkleTree: IMerkleTree<IDatabaseMetadata>,
 //
 // Loads the merkle tree from disk.
 //
-export async function loadMerkleTree(metadataStorage: IStorage): Promise<IMerkleTree<IDatabaseMetadata> | undefined> {
-    return await loadTree(FILES_TREE_PATH, metadataStorage);
+export async function loadMerkleTree(assetStorage: IStorage): Promise<IMerkleTree<IDatabaseMetadata> | undefined> {
+    return await loadTree(FILES_TREE_PATH, assetStorage);
 }
 
 //
 // Gets the root hash for the files merkle tree.
 // Returns undefined if the merkle tree doesn't exist or has no root hash.
 //
-export async function getFilesRootHash(metadataStorage: IStorage): Promise<Buffer | undefined> {
-    const tree = await loadMerkleTree(metadataStorage);
+export async function getFilesRootHash(assetStorage: IStorage): Promise<Buffer | undefined> {
+    const tree = await loadMerkleTree(assetStorage);
     return tree?.merkle?.hash;
 }
 
@@ -78,8 +78,7 @@ export async function loadCollectionMerkleTree(
     storage: IStorage,
     collectionName: string
 ): Promise<IMerkleTree<undefined> | undefined> {
-    const collectionDir = COLLECTION_DIR_PREFIX + collectionName;
-    return loadCollectionMerkleTreeBdb(storage, collectionDir);
+    return loadCollectionMerkleTreeBdb(storage, ".db/bson", collectionName);
 }
 
 //
@@ -90,8 +89,7 @@ export async function loadShardMerkleTree(
     collectionName: string,
     shardId: string
 ): Promise<IMerkleTree<undefined> | undefined> {
-    const collectionDir = COLLECTION_DIR_PREFIX + collectionName;
-    return loadShardMerkleTreeBdb(storage, collectionDir, shardId);
+    return loadShardMerkleTreeBdb(storage, ".db/bson", collectionName, shardId);
 }
 
 //
