@@ -129,8 +129,8 @@ export async function hashFileHandler(data: IHashFileData, context: ITaskContext
 
     // Recreate storage and metadata collection in the worker (for checking if file exists)
     const { options: storageOptions } = await loadEncryptionKeys(storageDescriptor.encryptionKeyPaths, false);
-    const { storage: assetStorage } = createStorage(storageDescriptor.dbDir, s3Config, storageOptions);
-    const database = createMediaFileDatabase(assetStorage, uuidGenerator, timestampProvider);
+    const { storage } = createStorage(storageDescriptor.dbDir, s3Config, storageOptions);
+    const database = createMediaFileDatabase(storage, uuidGenerator, timestampProvider);
     const metadataCollection = database.metadataCollection;
 
     // Check if file is already in database
@@ -166,7 +166,7 @@ export async function importFileHandler(data: IImportFileData, context: ITaskCon
 
     // Extract metadata/details and import (storage needed for uploads)
     const { options: storageOptions } = await loadEncryptionKeys(storageDescriptor.encryptionKeyPaths, false);
-    const { storage: assetStorage } = createStorage(storageDescriptor.dbDir, s3Config, storageOptions);
+    const { storage } = createStorage(storageDescriptor.dbDir, s3Config, storageOptions);
     const assetTempDir = path.join(os.tmpdir(), `photosphere`, `assets`, uuidGenerator.generate());
     await ensureDir(assetTempDir);
     
@@ -185,7 +185,7 @@ export async function importFileHandler(data: IImportFileData, context: ITaskCon
             assetDetails = await getImageDetails(filePath, assetTempDir, contentType, uuidGenerator, data.logicalPath);
         }
 
-        const assetPath = `asset/${assetId}`;
+        const assetPath = `asset/${assetId}`; //todo: this relies on the wrapper!
         const thumbPath = `thumb/${assetId}`;
         const displayPath = `display/${assetId}`;
 
@@ -207,14 +207,14 @@ export async function importFileHandler(data: IImportFileData, context: ITaskCon
                 };
             }
             else {
-                await retry(() => assetStorage.writeStream(assetPath, contentType, createReadStream(filePath), fileStat.length));
+                await retry(() => storage.writeStream(assetPath, contentType, createReadStream(filePath), fileStat.length));
 
-                const assetInfo = await retry(() => assetStorage.info(assetPath));
+                const assetInfo = await retry(() => storage.info(assetPath));
                 if (!assetInfo) {
                     throw new Error(`Failed to get info for file ${assetPath} (${assetId})`);
                 }
 
-                hashedAsset = await retry(() => computeAssetHash(assetStorage.readStream(assetPath), assetInfo));
+                hashedAsset = await retry(() => computeAssetHash(storage.readStream(assetPath), assetInfo));
                 if (Buffer.compare(hashedAsset.hash, expectedHashBuffer) !== 0) {
                     throw new Error(`Hash mismatch for file ${assetPath} (${assetId}): ${hashedAsset.hash.toString("hex")} != ${expectedHashBuffer.toString("hex")}`);
                 }
@@ -232,13 +232,13 @@ export async function importFileHandler(data: IImportFileData, context: ITaskCon
                     thumbLastModified = fileStat.lastModified;
                 }
                 else {
-                    await retry(() => assetStorage.writeStream(thumbPath, assetDetails.thumbnailContentType!, createReadStream(assetDetails.thumbnailPath)));
+                    await retry(() => storage.writeStream(thumbPath, assetDetails.thumbnailContentType!, createReadStream(assetDetails.thumbnailPath)));
 
-                    const thumbInfo = await retry(() => assetStorage.info(thumbPath));
+                    const thumbInfo = await retry(() => storage.info(thumbPath));
                     if (!thumbInfo) {
                         throw new Error(`Failed to get info for thumbnail ${thumbPath} (${assetId})`);
                     }
-                    const hashedThumb = await retry(() => computeAssetHash(assetStorage.readStream(thumbPath), thumbInfo));
+                    const hashedThumb = await retry(() => computeAssetHash(storage.readStream(thumbPath), thumbInfo));
                     thumbHash = hashedThumb.hash;
                     thumbLength = hashedThumb.length;
                     thumbLastModified = hashedThumb.lastModified;
@@ -257,13 +257,13 @@ export async function importFileHandler(data: IImportFileData, context: ITaskCon
                     displayLastModified = fileStat.lastModified;
                 }
                 else {
-                    await retry(() => assetStorage.writeStream(displayPath, assetDetails.displayContentType, createReadStream(assetDetails.displayPath!)));
+                    await retry(() => storage.writeStream(displayPath, assetDetails.displayContentType, createReadStream(assetDetails.displayPath!)));
 
-                    const displayInfo = await retry(() => assetStorage.info(displayPath));
+                    const displayInfo = await retry(() => storage.info(displayPath));
                     if (!displayInfo) {
                         throw new Error(`Failed to get info for display ${displayPath} (${assetId})`);
                     }
-                    const hashedDisplay = await retry(() => computeAssetHash(assetStorage.readStream(displayPath), displayInfo));
+                    const hashedDisplay = await retry(() => computeAssetHash(storage.readStream(displayPath), displayInfo));
                     displayHash = hashedDisplay.hash;
                     displayLength = hashedDisplay.length;
                     displayLastModified = hashedDisplay.lastModified;
@@ -353,9 +353,9 @@ export async function importFileHandler(data: IImportFileData, context: ITaskCon
             log.exception(`Error importing file ${filePath} (${assetId})`, err);
 
             // Clean up uploaded files on error, then let exception propagate to task queue
-            await retry(() => assetStorage.deleteFile(assetPath));
-            await retry(() => assetStorage.deleteFile(thumbPath));
-            await retry(() => assetStorage.deleteFile(displayPath));
+            await retry(() => storage.deleteFile(assetPath));
+            await retry(() => storage.deleteFile(thumbPath));
+            await retry(() => storage.deleteFile(displayPath));
             throw err;
         }
     }

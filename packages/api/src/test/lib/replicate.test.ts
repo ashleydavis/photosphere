@@ -127,7 +127,7 @@ describe('iterateLeaves', () => {
 });
 
 describe('iterateShardDifferences', () => {
-    const shardPath = (coll: string, shardId: string) => `collections/${coll}/shards/${shardId}.dat`;
+    const shardPath = (coll: string, shardId: string) => `.db/bson/collections/${coll}/shards/${shardId}.dat`;
 
     test('yields nothing when tree1 does not exist', async () => {
         const storage1 = new MockStorage();
@@ -180,8 +180,8 @@ describe('iterateShardDifferences', () => {
 });
 
 describe('iterateCollectionDifferences', () => {
-    const collCollectionPath = (coll: string) => `collections/${coll}/collection.dat`;
-    const shardPath = (coll: string, shardId: string) => `collections/${coll}/shards/${shardId}.dat`;
+    const collCollectionPath = (coll: string) => `.db/bson/collections/${coll}/collection.dat`;
+    const shardPath = (coll: string, shardId: string) => `.db/bson/collections/${coll}/shards/${shardId}.dat`;
 
     test('yields nothing when tree1 collection does not exist', async () => {
         const storage1 = new MockStorage();
@@ -231,13 +231,13 @@ describe('iterateCollectionDifferences', () => {
 });
 
 describe('iterateDatabaseDifferences', () => {
-    const collCollectionPath = (coll: string) => `collections/${coll}/collection.dat`;
-    const shardPath = (coll: string, shardId: string) => `collections/${coll}/shards/${shardId}.dat`;
+    const collCollectionPath = (coll: string) => `.db/bson/collections/${coll}/collection.dat`;
+    const shardPath = (coll: string, shardId: string) => `.db/bson/collections/${coll}/shards/${shardId}.dat`;
 
     test('yields nothing when tree1 database does not exist', async () => {
         const storage1 = new MockStorage();
         const storage2 = new MockStorage();
-        await buildAndSaveTreeAsync(storage2, 'db.dat', VALID_UUID, ['coll'], 'BDBT');
+        await buildAndSaveTreeAsync(storage2, '.db/bson/db.dat', VALID_UUID, ['coll'], 'BDBT');
         const results: Array<{ collectionName: string; recordId: string }> = [];
         for await (const d of iterateDatabaseDifferences(storage1, storage2)) {
             results.push(d);
@@ -248,7 +248,7 @@ describe('iterateDatabaseDifferences', () => {
     test('yields record ids from all collections when tree2 database does not exist', async () => {
         const storage1 = new MockStorage();
         const storage2 = new MockStorage();
-        await buildAndSaveTreeAsync(storage1, 'db.dat', VALID_UUID, ['c1', 'c2'], 'BDBT');
+        await buildAndSaveTreeAsync(storage1, '.db/bson/db.dat', VALID_UUID, ['c1', 'c2'], 'BDBT');
         await buildAndSaveTreeAsync(storage1, collCollectionPath('c1'), VALID_UUID, ['s1'], 'COLT');
         await buildAndSaveTreeAsync(storage1, shardPath('c1', 's1'), VALID_UUID, ['r1'], 'COLT');
         await buildAndSaveTreeAsync(storage1, collCollectionPath('c2'), VALID_UUID, ['s1'], 'COLT');
@@ -283,8 +283,8 @@ describe('iterateDatabaseDifferences', () => {
         await saveTree(collCollectionPath('coll'), collTree2, storage2, 'COLT');
         const dbTree1 = buildTree(VALID_UUID, [{ name: 'coll', hash: collTree1.merkle!.hash, length: 0, lastModified: new Date() }]);
         const dbTree2 = buildTree(VALID_UUID, [{ name: 'coll', hash: collTree2.merkle!.hash, length: 0, lastModified: new Date() }]);
-        await saveTree('db.dat', dbTree1, storage1, 'BDBT');
-        await saveTree('db.dat', dbTree2, storage2, 'BDBT');
+        await saveTree('.db/bson/db.dat', dbTree1, storage1, 'BDBT');
+        await saveTree('.db/bson/db.dat', dbTree2, storage2, 'BDBT');
         const results: Array<{ collectionName: string; recordId: string }> = [];
         for await (const d of iterateDatabaseDifferences(storage1, storage2)) {
             results.push(d);
@@ -300,20 +300,16 @@ describe('replicate', () => {
     const dbId = uuidGenerator.generate();
 
     test('throws when source merkle tree fails to load', async () => {
-        const sourceMeta = new MockStorage();
         const sourceAsset = new MockStorage();
-        const destMeta = new MockStorage();
         const destAsset = new MockStorage();
-        const sourceBdb = new BsonDatabase({ storage: new MockStorage(), uuidGenerator, timestampProvider });
+        const sourceBdb = new BsonDatabase({ storage: new MockStorage(), bsonDbPath: "", uuidGenerator, timestampProvider });
         await expect(
             replicate(
                 sourceAsset,
-                sourceMeta,
                 sourceBdb,
                 uuidGenerator,
                 timestampProvider,
                 destAsset,
-                destMeta,
                 undefined,
                 undefined
             )
@@ -321,31 +317,27 @@ describe('replicate', () => {
     });
 
     test('throws when dest has different database ID and force is not set', async () => {
-        const sourceMeta = new MockStorage();
         const sourceAsset = new MockStorage();
-        const destMeta = new MockStorage();
         const destAsset = new MockStorage();
-        const sourceBdb = new BsonDatabase({ storage: new MockStorage(), uuidGenerator, timestampProvider });
+        const sourceBdb = new BsonDatabase({ storage: new MockStorage(), bsonDbPath: "", uuidGenerator, timestampProvider });
         let sourceTree = createTree<IDatabaseMetadata>(dbId);
         sourceTree.databaseMetadata = { filesImported: 0 };
         sourceTree.merkle = buildMerkleTree(sourceTree.sort);
         sourceTree.dirty = false;
-        await saveTree('.db/files.dat', sourceTree, sourceMeta);
+        await saveTree('.db/files.dat', sourceTree, sourceAsset);
         const destDbId = uuidGenerator.generate();
         let destTree = createTree<IDatabaseMetadata>(destDbId);
         destTree.databaseMetadata = { filesImported: 0 };
         destTree.merkle = buildMerkleTree(destTree.sort);
         destTree.dirty = false;
-        await saveTree('.db/files.dat', destTree, destMeta);
+        await saveTree('.db/files.dat', destTree, destAsset);
         await expect(
             replicate(
                 sourceAsset,
-                sourceMeta,
                 sourceBdb,
                 uuidGenerator,
                 timestampProvider,
                 destAsset,
-                destMeta,
                 undefined,
                 undefined
             )
@@ -353,32 +345,27 @@ describe('replicate', () => {
     });
 
     test('succeeds when force is true and database IDs differ', async () => {
-        const sourceMeta = new MockStorage();
         const sourceAsset = new MockStorage();
-        const destMeta = new MockStorage();
         const destAsset = new MockStorage();
-        const sourceBdb = new BsonDatabase({ storage: new MockStorage(), uuidGenerator, timestampProvider });
+        const sourceBdb = new BsonDatabase({ storage: new MockStorage(), bsonDbPath: "", uuidGenerator, timestampProvider });
         const destBdbStorage = new MockStorage();
-        const destBdb = new BsonDatabase({ storage: destBdbStorage, uuidGenerator, timestampProvider });
         let sourceTree = createTree<IDatabaseMetadata>(dbId);
         sourceTree.databaseMetadata = { filesImported: 0 };
         sourceTree.merkle = buildMerkleTree(sourceTree.sort);
         sourceTree.dirty = false;
-        await saveTree('.db/files.dat', sourceTree, sourceMeta);
+        await saveTree('.db/files.dat', sourceTree, sourceAsset);
         const destDbId = uuidGenerator.generate();
         let destTree = createTree<IDatabaseMetadata>(destDbId);
         destTree.databaseMetadata = { filesImported: 0 };
         destTree.merkle = buildMerkleTree(destTree.sort);
         destTree.dirty = false;
-        await saveTree('.db/files.dat', destTree, destMeta);
+        await saveTree('.db/files.dat', destTree, destAsset);
         const result = await replicate(
             sourceAsset,
-            sourceMeta,
             sourceBdb,
             uuidGenerator,
             timestampProvider,
             destAsset,
-            destMeta,
             { force: true },
             undefined
         );
@@ -390,25 +377,21 @@ describe('replicate', () => {
     });
 
     test('returns result shape with zero counts when source has no files and empty dest', async () => {
-        const sourceMeta = new MockStorage();
         const sourceAsset = new MockStorage();
-        const destMeta = new MockStorage();
         const destAsset = new MockStorage();
         const sourceBdbStorage = new MockStorage();
-        const sourceBdb = new BsonDatabase({ storage: sourceBdbStorage, uuidGenerator, timestampProvider });
+        const sourceBdb = new BsonDatabase({ storage: sourceBdbStorage, bsonDbPath: "", uuidGenerator, timestampProvider });
         let sourceTree = createTree<IDatabaseMetadata>(dbId);
         sourceTree.databaseMetadata = { filesImported: 0 };
         sourceTree.merkle = buildMerkleTree(sourceTree.sort);
         sourceTree.dirty = false;
-        await saveTree('.db/files.dat', sourceTree, sourceMeta);
+        await saveTree('.db/files.dat', sourceTree, sourceAsset);
         const result = await replicate(
             sourceAsset,
-            sourceMeta,
             sourceBdb,
             uuidGenerator,
             timestampProvider,
             destAsset,
-            destMeta,
             undefined,
             undefined
         );

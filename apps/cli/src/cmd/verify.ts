@@ -43,7 +43,7 @@ export async function verifyCommand(context: ICommandContext, options: IVerifyCo
     let dbFileResult: IDatabaseFileVerifyResult | undefined;
     if (!options.path) {
         writeProgress('🗄️  Verifying database files...');
-        dbFileResult = await verifyDatabaseFiles(assetStorage, assetStorage, (progress) => {
+        dbFileResult = await verifyDatabaseFiles(assetStorage, (progress) => {
             writeProgress(`🔍 ${progress}`);
         });
     }

@@ -10,6 +10,7 @@ describe('BsonDatabase', () => {
         storage = new MockStorage();
         database = new BsonDatabase({
             storage,
+            bsonDbPath: "",
             uuidGenerator: new RandomUuidGenerator(),
             timestampProvider: new TimestampProvider()
         });

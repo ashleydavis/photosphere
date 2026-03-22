@@ -212,7 +212,7 @@ interface IBuildCheckpoint {
 
 export class SortIndex implements ISortIndex {
     private storage: IStorage;
-    private indexDirectory: string;
+    private indexDirectory: string;  //fio:
     private fieldName: string;
     private direction: SortDirection;
     private pageSize: number;
@@ -224,7 +224,7 @@ export class SortIndex implements ISortIndex {
     private type?: SortDataType; // Optional type for value conversion
     
     // Path to the single file that contains all tree nodes and metadata
-    private treeFilePath: string;
+    private treeFilePath: string; 
     
     // Path to the checkpoint file for incremental builds
     private checkpointFilePath: string;

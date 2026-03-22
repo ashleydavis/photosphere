@@ -1,6 +1,6 @@
 
 import { computeHash } from "./hash";
-import { IStorage, StoragePrefixWrapper } from "storage";
+import { IStorage } from "storage";
 import { retry, FatalError, ITimestampProvider, IUuidGenerator, log } from "utils";
 import { IDatabaseMetadata, ProgressCallback, createMediaFileDatabase, loadDatabase, createDatabase } from "./media-file-database";
 import { BsonDatabase, BatchSortIndexManager } from "bdb";
@@ -270,6 +270,14 @@ export function* iterateLeaves(nodes: MerkleNode[]): Generator<string> { //todo:
 }
 
 //
+// Identifies a record by collection name and record ID, used as the yield type for database diff generators.
+//
+export interface ICollectionRecord {
+    collectionName: string;
+    recordId: string;
+}
+
+//
 // Yields record IDs from tree1 that differ from tree2.
 // tree1 is the primary tree (source for pass 1, dest for pass 2).
 // tree2 is the comparison tree (dest for pass 1, source for pass 2).
@@ -280,7 +288,7 @@ export async function* iterateShardDifferences(
     shardId: string,
     tree1Storage: IStorage,
     tree2Storage: IStorage
-): AsyncGenerator<{ collectionName: string; recordId: string }> {
+): AsyncGenerator<ICollectionRecord> {
     const tree1 = await retry(() => loadShardMerkleTree(tree1Storage, collectionName, shardId));
     if (!tree1?.merkle) {
         // If primary tree doesn't exist, no records to process.
@@ -319,7 +327,7 @@ export async function* iterateCollectionDifferences(
     collectionName: string,
     tree1Storage: IStorage,
     tree2Storage: IStorage
-): AsyncGenerator<{ collectionName: string; recordId: string }> {
+): AsyncGenerator<ICollectionRecord> {
     const tree1 = await retry(() => loadCollectionMerkleTree(tree1Storage, collectionName));
     if (!tree1?.merkle) {
         // If primary collection tree doesn't exist, no records to process.
@@ -348,18 +356,15 @@ export async function* iterateCollectionDifferences(
 // tree2 is the comparison tree (dest for pass 1, source for pass 2).
 // tree1Storage and tree2Storage are the storage locations for tree1 and tree2 respectively.
 //
-export async function* iterateDatabaseDifferences(
-    tree1Storage: IStorage,
-    tree2Storage: IStorage
-): AsyncGenerator<{ collectionName: string; recordId: string }> {
+export async function* iterateDatabaseDifferences(tree1Storage: IStorage, tree2Storage: IStorage): AsyncGenerator<ICollectionRecord> {
 
-    const tree1 = await retry(() => loadDatabaseMerkleTree(tree1Storage));
+    const tree1 = await retry(() => loadDatabaseMerkleTree(tree1Storage, ".db/bson"));
     if (!tree1?.merkle) {
         // If primary database tree doesn't exist, no records to process.
         return;
     }
 
-    const tree2 = await retry(() => loadDatabaseMerkleTree(tree2Storage));
+    const tree2 = await retry(() => loadDatabaseMerkleTree(tree2Storage, ".db/bson"));
     if (!tree2?.merkle) {
         // If comparison database tree doesn't exist, process all collections in primary tree
         for (const collectionName of iterateLeaves([tree1.merkle])) {
@@ -395,14 +400,11 @@ async function replicateBsonDatabase(
     // to efficiently identify only the records that need to be updated.
     //
     // Use v6 layout: BSON database merkle trees are stored under .db/bson
-    const sourceStorage = new StoragePrefixWrapper(sourceAssetStorage, ".db/bson");
-    const destStorage = new StoragePrefixWrapper(destAssetStorage, ".db/bson");
-
     // 1. Build map of modified records per collection: toCopy (source→dest) and toDelete (dest→source)
     const toCopyByCollection = new Map<string, Set<string>>();
     const toDeleteByCollection = new Map<string, Set<string>>();
 
-    for await (const diff of iterateDatabaseDifferences(sourceStorage, destStorage)) {
+    for await (const diff of iterateDatabaseDifferences(sourceAssetStorage, destAssetStorage)) {
         let set = toCopyByCollection.get(diff.collectionName);
         if (!set) {
             set = new Set<string>();
@@ -412,7 +414,7 @@ async function replicateBsonDatabase(
     }
     const toCopyTotal = [...toCopyByCollection.values()].reduce((n, s) => n + s.size, 0);
 
-    for await (const diff of iterateDatabaseDifferences(destStorage, sourceStorage)) {
+    for await (const diff of iterateDatabaseDifferences(destAssetStorage, sourceAssetStorage)) {
         let set = toDeleteByCollection.get(diff.collectionName);
         if (!set) {
             set = new Set<string>();
@@ -496,17 +498,15 @@ async function replicateBsonDatabase(
 //
 export async function replicate(
     sourceAssetStorage: IStorage,
-    sourceMetadataStorage: IStorage,
     sourceBsonDatabase: BsonDatabase,
     sourceUuidGenerator: IUuidGenerator,
     sourceTimestampProvider: ITimestampProvider,
     destAssetStorage: IStorage,
-    destMetadataStorage: IStorage,
     options?: IReplicateOptions,
     progressCallback?: ProgressCallback
 ): Promise<IReplicationResult> {
 
-    const merkleTree = await retry(() => loadMerkleTree(sourceMetadataStorage));
+    const merkleTree = await retry(() => loadMerkleTree(sourceAssetStorage));
     if (!merkleTree) {
         throw new Error(`Failed to load merkle tree`);
     }
@@ -530,7 +530,7 @@ export async function replicate(
         sourceTimestampProvider
     );
 
-    const treeExists = await retry(() => merkleTreeExists(destMetadataStorage));
+    const treeExists = await retry(() => merkleTreeExists(destAssetStorage));
     if (treeExists) {
         log.verbose("Loading existing destination database...");
         await loadDatabase(destDb.assetStorage, destDb.metadataCollection);
@@ -540,13 +540,13 @@ export async function replicate(
         //
         // This is need because it will create the sort indexes and other things.
         //
-        await createDatabase(destAssetStorage, destMetadataStorage, sourceUuidGenerator, destDb.metadataCollection, merkleTree.id);
+        await createDatabase(destAssetStorage, sourceUuidGenerator, destDb.metadataCollection, merkleTree.id);
     }
     
     //
     // Load the destination database that might have been just created.
     //
-    let destMerkleTree = await retry(() => loadMerkleTree(destMetadataStorage));
+    let destMerkleTree = await retry(() => loadMerkleTree(destAssetStorage));
     if (!destMerkleTree) {
         throw new FatalError(`Failed to load merkle tree from destination database.`);
     }
@@ -589,7 +589,7 @@ export async function replicate(
         merkleTree,
         destMerkleTree,
         destAssetStorage,
-        destMetadataStorage,
+        destAssetStorage,
         sourceAssetStorage,
         options,
         progressCallback,

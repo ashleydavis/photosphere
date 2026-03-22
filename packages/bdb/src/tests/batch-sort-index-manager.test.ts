@@ -20,7 +20,7 @@ describe('BatchSortIndexManager', () => {
 
     beforeEach(() => {
         storage = new MockStorage();
-        collection = new BsonCollection<TestRecord>('items', {
+        collection = new BsonCollection<TestRecord>('items', '', {
             storage,
             directory: 'data/items',
             baseDirectory: 'data',

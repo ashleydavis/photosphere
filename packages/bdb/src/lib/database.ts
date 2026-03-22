@@ -2,7 +2,7 @@
 // Implements a BSON-based database that can store multiple collections of documents.
 //
 
-import type { IStorage } from "storage";
+import { pathJoin, type IStorage } from "storage";
 import { BsonCollection } from "./collection";
 import type { IRecord, IBsonCollection } from "./collection";
 import type { IUuidGenerator, ITimestampProvider } from "utils";
@@ -29,6 +29,11 @@ export interface IBsonDatabaseOptions {
     // Interface to the file storage system.
     //
     storage: IStorage;
+
+    //
+    // The path in storage containing the database.
+    //
+    bsonDbPath: string;
 
     //
     // UUID generator for creating unique identifiers.
@@ -58,10 +63,11 @@ export class BsonDatabase implements IBsonDatabase {
 
         const uniqueSet = new Set<string>();
 
-        if (await this.options.storage.dirExists("collections")) {
+        const collectionsPath = pathJoin(this.options.bsonDbPath, "collections");
+        if (await this.options.storage.dirExists(collectionsPath)) {
             let next: string | undefined = undefined;
             do {
-                const storageResult = await this.options.storage.listDirs("collections", 1000, next);
+                const storageResult = await this.options.storage.listDirs(collectionsPath, 1000, next);
                 for (const name of storageResult.names) {
                     uniqueSet.add(name);
                 }
@@ -82,10 +88,10 @@ export class BsonDatabase implements IBsonDatabase {
     collection<RecordT extends IRecord>(name: string): IBsonCollection<RecordT> {
         let coll = this._collections.get(name);
         if (!coll) {
-            coll = new BsonCollection<IRecord>(name, {
+            coll = new BsonCollection<IRecord>(name, this.options.bsonDbPath, {
                 storage: this.options.storage,
-                directory: `collections/${name}`,
-                baseDirectory: "",
+                directory: pathJoin(this.options.bsonDbPath, "collections", name),
+                baseDirectory: this.options.bsonDbPath,
                 uuidGenerator: this.options.uuidGenerator,
                 timestampProvider: this.options.timestampProvider
             });

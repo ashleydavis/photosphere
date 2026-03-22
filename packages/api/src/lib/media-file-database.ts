@@ -248,7 +248,8 @@ export function createMediaFileDatabase(
     timestampProvider: ITimestampProvider
 ) {
     const bsonDatabase = new BsonDatabase({
-        storage: new StoragePrefixWrapper(assetStorage, ".db/bson"),
+        storage: assetStorage,
+        bsonDbPath: ".db/bson",
         uuidGenerator: uuidGenerator,
         timestampProvider: timestampProvider
     });
@@ -267,7 +268,6 @@ export function createMediaFileDatabase(
 //
 export async function createDatabase(
     assetStorage: IStorage,
-    metadataStorage: IStorage,
     uuidGenerator: IUuidGenerator,
     metadataCollection: IBsonCollection<IAsset>,
     databaseId?: string
@@ -284,9 +284,9 @@ export async function createDatabase(
 
     merkleTree = await createReadme(assetStorage, merkleTree);
 
-    await retry(() => saveMerkleTree(merkleTree, metadataStorage));
+    await retry(() => saveMerkleTree(merkleTree, assetStorage));
 
-    await saveDatabaseConfig(metadataStorage, {});
+    await saveDatabaseConfig(assetStorage, {});
 
     log.verbose(`Created new media file database.`);
 }
@@ -325,7 +325,7 @@ export async function getDatabaseSummary(assetStorage: IStorage): Promise<IDatab
     
     // Get root hashes from both merkle trees (compute inline to avoid loading merkle tree again)
     const filesRootHash = merkleTree.merkle?.hash;
-    const databaseRootHash = await retry(() => getDatabaseRootHash(new StoragePrefixWrapper(assetStorage, ".db/bson")));
+    const databaseRootHash = await retry(() => getDatabaseRootHash(assetStorage, ".db/bson"));
     
     // Compute aggregate root hash
     let fullHash: string;
@@ -367,7 +367,6 @@ export function streamAsset(assetStorage: IStorage, assetId: string, assetType: 
 //
 export async function writeAsset(
     assetStorage: IStorage,
-    metadataStorage: IStorage,
     sessionId: string,
     assetId: string,
     assetType: string,
@@ -376,12 +375,12 @@ export async function writeAsset(
 ): Promise<void> {
     const assetPath = `${assetType}/${assetId}`;
 
-    if (!await acquireWriteLock(metadataStorage, sessionId)) {
+    if (!await acquireWriteLock(assetStorage, sessionId)) {
         throw new Error(`Failed to acquire write lock.`);
     }
 
     try {
-        let merkleTree = await retry(() => loadMerkleTree(metadataStorage));
+        let merkleTree = await retry(() => loadMerkleTree(assetStorage));
         if (!merkleTree) {
             throw new Error(`Failed to load media file database.`);
         }
@@ -395,7 +394,7 @@ export async function writeAsset(
 
         const hashedAsset = await retry(() => computeAssetHash(assetStorage.readStream(assetPath), assetInfo));
 
-        await refreshWriteLock(metadataStorage, sessionId);
+        await refreshWriteLock(assetStorage, sessionId);
 
         merkleTree = addItem(merkleTree, {
             name: assetPath,
@@ -411,8 +410,8 @@ export async function writeAsset(
             merkleTree.databaseMetadata.filesImported++;
         }
 
-        await retry(() => saveMerkleTree(merkleTree, metadataStorage));
-        await updateDatabaseConfig(metadataStorage, { lastModifiedAt: new Date().toISOString() });
+        await retry(() => saveMerkleTree(merkleTree, assetStorage));
+        await updateDatabaseConfig(assetStorage, { lastModifiedAt: new Date().toISOString() });
     }
     catch (err: any) {
         log.exception(`Failed to add asset "${assetPath}" from buffer`, err);
@@ -420,7 +419,7 @@ export async function writeAsset(
         throw err;
     }
     finally {
-        await releaseWriteLock(metadataStorage);
+        await releaseWriteLock(assetStorage);
     }
 }
 
@@ -434,18 +433,17 @@ export async function writeAsset(
 //
 export async function removeAsset(
     assetStorage: IStorage,
-    metadataStorage: IStorage,
     sessionId: string,
     metadataCollection: IBsonCollection<IAsset>,
     assetId: string,
     recordDeleted: boolean
 ): Promise<void> {
-    if (!await acquireWriteLock(metadataStorage, sessionId)) {
+    if (!await acquireWriteLock(assetStorage, sessionId)) {
         throw new Error(`Failed to acquire write lock.`);
     }
 
     try {
-        let merkleTree = await retry(() => loadMerkleTree(metadataStorage));
+        let merkleTree = await retry(() => loadMerkleTree(assetStorage));
         if (!merkleTree) {
             throw new Error(`Failed to load media file database.`);
         }
@@ -480,7 +478,7 @@ export async function removeAsset(
         }
         
         // Merkle tree has to be saved after all modifications to it are made.
-        await retry(() => saveMerkleTree(merkleTree, metadataStorage));
+        await retry(() => saveMerkleTree(merkleTree, assetStorage));
 
         //
         // Delete the files from storage.
@@ -492,10 +490,10 @@ export async function removeAsset(
         //
         // Update config.json.
         //
-        await updateDatabaseConfig(metadataStorage, { lastModifiedAt: new Date().toISOString() });
+        await updateDatabaseConfig(assetStorage, { lastModifiedAt: new Date().toISOString() });
     }
     finally {
-        await releaseWriteLock(metadataStorage);
+        await releaseWriteLock(assetStorage);
     }
 }
 

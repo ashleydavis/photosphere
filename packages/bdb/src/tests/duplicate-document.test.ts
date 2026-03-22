@@ -17,8 +17,9 @@ describe('Collection duplicate document tests', () => {
         
         // Create a database with a mock storage
         const storage = new MockStorage();
-        db = new BsonDatabase({ 
+        db = new BsonDatabase({
             storage,
+            bsonDbPath: "",
             uuidGenerator: new RandomUuidGenerator(),
             timestampProvider: new TimestampProvider()
         });

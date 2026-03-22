@@ -5,7 +5,8 @@ import { exit } from "node-utils";
 import { configureIfNeeded, getS3Config } from '../lib/config';
 import { loadDatabase, IBaseCommandOptions, resolveKeyPaths, promptForEncryption, selectEncryptionKey, ICommandContext } from "../lib/init-cmd";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
-import { pathExists, copy } from 'node-utils';
+import { pathExists } from 'node-utils';
+import { readFile } from 'fs/promises';
 import { getDirectoryForCommand } from "../lib/directory-picker";
 import { replicate, merkleTreeExists, loadDatabaseConfig, updateDatabaseConfig } from "api";
 import { confirm, isCancel } from '../lib/clack/prompts';
@@ -139,13 +140,7 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
 
     const resolvedDestKeyPaths = await resolveKeyPaths(options.destKey);
     const { options: destStorageOptions, isEncrypted: destIsEncrypted } = await loadEncryptionKeys(resolvedDestKeyPaths, options.generateKey || false);
-
     const { storage: destAssetStorage } = createStorage(destDir, s3Config, destStorageOptions);
-
-    // Metadata storage follows the same encryption settings as asset storage when destination is encrypted.
-    const { storage: destMetadataStorage } = destIsEncrypted
-        ? createStorage(destDir, s3Config, destStorageOptions)
-        : createStorage(destDir, s3Config, undefined);
 
     // If destination database exists, warn user and ask for confirmation (unless --ues is used)
     if (destDbExists && !options.yes) {
@@ -187,7 +182,7 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
         ? `Copying files matching: ${options.path}...` 
         : `Copying files...`);
 
-    const result = await replicate(sourceAssetStorage, sourceAssetStorage, sourceBsonDatabase, uuidGenerator, timestampProvider, destAssetStorage, destMetadataStorage, { 
+    const result = await replicate(sourceAssetStorage, sourceBsonDatabase, uuidGenerator, timestampProvider, destAssetStorage, { 
         pathFilter: options.path,
         force: options.force,
         partial: options.partial
@@ -220,11 +215,11 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
     // If destination is encrypted, copy the public key to the destination .db directory
     if (destIsEncrypted && resolvedDestKeyPaths.length > 0) {
         const publicKeySource = `${resolvedDestKeyPaths[0]}.pub`;
-        const publicKeyDest = pathJoin(destMetaPath, 'encryption.pub');
-        
+
         try {
             if (await pathExists(publicKeySource)) {
-                await copy(publicKeySource, publicKeyDest);
+                const publicKeyData = await readFile(publicKeySource);
+                await destMetadataProbeStorage.write('.db/encryption.pub', undefined, publicKeyData); //todo: needs to use raw storage.
                 log.info(pc.green(`✓ Copied public key to destination database directory`));
             }
         } catch (error) {
@@ -233,7 +228,7 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
     }
 
     // Set replica config: origin = source path, lastReplicatedAt = now
-    await updateDatabaseConfig(destMetadataStorage, {
+    await updateDatabaseConfig(destAssetStorage, {
         origin: srcDir,
         lastReplicatedAt: new Date().toISOString(),
     });

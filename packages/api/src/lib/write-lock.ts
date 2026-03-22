@@ -9,12 +9,12 @@ import { log, retry, sleep } from "utils";
 //
 // Throws when the write lock cannot be acquired.
 //
-export async function acquireWriteLock(metadataStorage: IStorage, sessionId: string, maxAttempts: number = 3): Promise<boolean> {
+export async function acquireWriteLock(assetStorage: IStorage, sessionId: string, maxAttempts: number = 3): Promise<boolean> {
     
     const lockFilePath = ".db/write.lock";
     
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        const haveWriteLock = await metadataStorage.acquireWriteLock(lockFilePath, sessionId);
+        const haveWriteLock = await assetStorage.acquireWriteLock(lockFilePath, sessionId);
         if (haveWriteLock) {
             // We have the write lock.
             return true;
@@ -28,7 +28,7 @@ export async function acquireWriteLock(metadataStorage: IStorage, sessionId: str
     }
     
     // All attempts failed - check lock info for detailed error message.
-    const lockInfo = await metadataStorage.checkWriteLock(lockFilePath);
+    const lockInfo = await assetStorage.checkWriteLock(lockFilePath);
     if (lockInfo) {
         const timeSinceLocked = Date.now() - lockInfo.acquiredAt.getTime();
         const timeString = timeSinceLocked < 60000 
@@ -54,13 +54,13 @@ export async function acquireWriteLock(metadataStorage: IStorage, sessionId: str
 //
 // Refreshes the write lock to prevent timeout.
 //
-export async function refreshWriteLock(metadataStorage: IStorage, sessionId: string): Promise<void> {
-    await retry(() => metadataStorage.refreshWriteLock(".db/write.lock", sessionId));
+export async function refreshWriteLock(assetStorage: IStorage, sessionId: string): Promise<void> {
+    await retry(() => assetStorage.refreshWriteLock(".db/write.lock", sessionId));
 }
 
 //
 // Releases the write lock for the database.
 //
-export async function releaseWriteLock(metadataStorage: IStorage): Promise<void> {
-    await retry(() => metadataStorage.releaseWriteLock(".db/write.lock"));
+export async function releaseWriteLock(assetStorage: IStorage): Promise<void> {
+    await retry(() => assetStorage.releaseWriteLock(".db/write.lock"));
 }

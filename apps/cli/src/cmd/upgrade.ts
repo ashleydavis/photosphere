@@ -12,7 +12,7 @@ import { IDatabaseMetadata, acquireWriteLock, releaseWriteLock, createReadme, en
 import { BsonDatabase, buildDatabaseMerkleTree, deleteDatabaseMerkleTree, saveDatabaseMerkleTree } from "bdb";
 import type { IAsset } from "defs";
 import type { IStorage } from "storage";
-import { pathJoin, StoragePrefixWrapper, walkDirectory } from "storage";
+import { pathJoin, walkDirectory } from "storage";
 import { computeHash } from "api";
 import { loadPrivateKey, loadPublicKey } from "storage";
 import { createPublicKey } from "node:crypto";
@@ -60,16 +60,15 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
     let { options: storageOptions } = await loadEncryptionKeys(resolvedKeyPaths, false);
     const s3Config = await getS3Config();
     let { storage: assetStorage } = createStorage(databaseDir, s3Config, storageOptions);
-    const { storage: metadataStorage } = createStorage(databaseDir, s3Config, undefined);
 
-    const hasFilesDat = await metadataStorage.fileExists(".db/files.dat");
-    const hasTreeDat = await metadataStorage.fileExists(".db/tree.dat");
+    const hasFilesDat = await assetStorage.fileExists(".db/files.dat");
+    const hasTreeDat = await assetStorage.fileExists(".db/tree.dat");
     if (!hasFilesDat && !hasTreeDat) {
         outro(pc.red(`✗ No database found at: ${pc.cyan(databaseDir)}\n  The database directory must contain a ".db" folder with files.dat or tree.dat.\n\nTo create a new database at this directory, use:\n  ${pc.cyan(`psi init --db ${databaseDir}`)}`));
         await exit(1);
     }
 
-    if (await metadataStorage.fileExists(".db/encryption.pub")) {
+    if (await assetStorage.fileExists(".db/encryption.pub")) {
         if (resolvedKeyPaths.length === 0) {
             if (nonInteractive) {
                 outro(pc.red(`✗ This database is encrypted and requires a private key to access.\n  Please provide the private key using the --key option.`));
@@ -87,8 +86,8 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
     }
 
     // Load from .db/files.dat (v6) or .db/tree.dat (legacy). Upgrade will write .db/files.dat and remove .db/tree.dat.
-    let merkleTree = await retry(() => loadTree<IDatabaseMetadata>(".db/files.dat", metadataStorage))
-        ?? await retry(() => loadTree<IDatabaseMetadata>(".db/tree.dat", metadataStorage));
+    let merkleTree = await retry(() => loadTree<IDatabaseMetadata>(".db/files.dat", assetStorage))
+        ?? await retry(() => loadTree<IDatabaseMetadata>(".db/tree.dat", assetStorage));
     if (!merkleTree) {
         throw new Error(`Failed to load merkle tree (no .db/files.dat or .db/tree.dat found)`);
     }
@@ -147,8 +146,6 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
     if (!await acquireWriteLock(assetStorage, sessionId)) {
         throw new Error(`Failed to acquire write lock for database upgrade.`);
     }
-
-    const dbStorageForDotDb: IStorage = resolvedKeyPaths.length > 0 ? assetStorage : metadataStorage;
 
     try {
         // Fill in missing lastModified from file info using async binary tree traversal.
@@ -231,7 +228,7 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
         // Check if database is encrypted and ensure public key is in .db directory
         if (resolvedKeyPaths.length > 0) {
             // Database is encrypted - check if public key marker exists in .db directory
-            if (!await metadataStorage.fileExists('.db/encryption.pub')) {
+            if (!await assetStorage.fileExists('.db/encryption.pub')) {
                 // Generate public key from private key and save it
                 try {
                     let publicKeyPem: string | undefined;
@@ -252,7 +249,7 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
                     
                     if (publicKeyPem) {
                         // Write public key to .db/encryption.pub (encrypted when DB is encrypted)
-                        await dbStorageForDotDb.write('.db/encryption.pub', 'text/plain', Buffer.from(publicKeyPem, 'utf8'));
+                        await assetStorage.write('.db/encryption.pub', 'text/plain', Buffer.from(publicKeyPem, 'utf8')); //todo: use raw storage.
                         log.info(pc.green(`✓ Copied public key to database directory`));
                     }
                 } catch (error) {
@@ -265,11 +262,11 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
             // previously stored unencrypted. From v6 onward these files are already written encrypted.
             //
             if (currentVersion < FIRST_VERSION_WITH_ENCRYPTED_DOT_DB) {
-                for await (const { fileName: filePath } of walkDirectory(metadataStorage, ".db", [])) {
-                    const data = await metadataStorage.read(filePath);
+                for await (const { fileName: filePath } of walkDirectory(assetStorage, ".db", [])) {
+                    const data = await assetStorage.read(filePath);
                     if (data) {
-                        const info = await metadataStorage.info(filePath);
-                        await dbStorageForDotDb.write(filePath, info?.contentType, data);
+                        const info = await assetStorage.info(filePath);
+                        await assetStorage.write(filePath, info?.contentType, data);
                     }
                 }
             }
@@ -296,9 +293,9 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
         }                
 
         // Save the rebuilt tree to .db/files.dat (v6 path; encrypted when DB is encrypted).
-        await retry(() => saveTree(".db/files.dat", merkleTree!, dbStorageForDotDb));
-        if (await metadataStorage.fileExists(".db/tree.dat")) {
-            await metadataStorage.deleteFile(".db/tree.dat");
+        await retry(() => saveTree(".db/files.dat", merkleTree!, assetStorage));
+        if (await assetStorage.fileExists(".db/tree.dat")) {
+            await assetStorage.deleteFile(".db/tree.dat");
         }
 
         // Migrate BSON from metadata/ to .db/bson/ when metadata/ exists (copy only; rest of upgrade still uses metadata/)
@@ -310,27 +307,27 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
 
         log.info(pc.blue(`Rebuilding BSON database merkle tree.`));
 
-        const bsonDatabaseStorage2 = new StoragePrefixWrapper(assetStorage, ".db/bson");
         const bsonDatabaseTree = await buildDatabaseMerkleTree(
-            bsonDatabaseStorage2,
+            assetStorage,
+            ".db/bson",
             uuidGenerator,
-            "collections",
             undefined,
             undefined,
             true
         );
         if (!bsonDatabaseTree.sort) {
-            await deleteDatabaseMerkleTree(bsonDatabaseStorage2);
+            await deleteDatabaseMerkleTree(assetStorage, ".db/bson");
         }
         else {
-            await saveDatabaseMerkleTree(bsonDatabaseStorage2, bsonDatabaseTree);
+            await saveDatabaseMerkleTree(assetStorage, ".db/bson", bsonDatabaseTree);
         }
         log.info(pc.green(`✓ BSON database merkle tree built successfully`));
 
         // Delete and rebuild sort indexes under .db/bson so they use v6 format (type code + checksum).
         log.info(pc.blue(`Rebuilding sort indexes.`));
         const bsonDb = new BsonDatabase({
-            storage: bsonDatabaseStorage2,
+            storage: assetStorage,
+            bsonDbPath: ".db/bson",
             uuidGenerator,
             timestampProvider,
         });

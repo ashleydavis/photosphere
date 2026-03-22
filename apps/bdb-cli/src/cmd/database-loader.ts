@@ -28,6 +28,7 @@ export async function loadDatabase(dbPath: string, verbose: boolean = false): Pr
     // Create the BSON database
     const database = new BsonDatabase({
         storage,
+        bsonDbPath: "",
         uuidGenerator,
         timestampProvider: new TimestampProvider()
     });

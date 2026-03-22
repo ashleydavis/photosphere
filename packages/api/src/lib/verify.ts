@@ -294,10 +294,9 @@ export interface IDatabaseFileVerifyResult {
 // Verifies all database files (merkle trees, metadata collection, sort indexes).
 // Checks size and checksum for each file.
 //
-// @param metadataStorage - Unencrypted storage scoped to .db/ directory (for files.dat)
-// @param databaseStorage - Storage rooted at database directory (scans metadata/ subdirectory; v6: .db/bson/)
+// @param assetStorage - Storage rooted at the asset storage root (database files live under .db/)
 //
-export async function verifyDatabaseFiles(metadataStorage: IStorage, databaseStorage: IStorage, progressCallback?: ProgressCallback): Promise<IDatabaseFileVerifyResult> {
+export async function verifyDatabaseFiles(assetStorage: IStorage, progressCallback?: ProgressCallback): Promise<IDatabaseFileVerifyResult> {
     const result: IDatabaseFileVerifyResult = {
         totalFiles: 0,
         totalSize: 0,
@@ -321,39 +320,39 @@ export async function verifyDatabaseFiles(metadataStorage: IStorage, databaseSto
     
     let expectedTotal = 0;
     
-    // Count files.dat (database merkle tree - metadataStorage is scoped to .db/)
-    if (await metadataStorage.fileExists("files.dat")) {
+    // Count files.dat (database merkle tree)
+    if (await assetStorage.fileExists(".db/files.dat")) {
         expectedTotal++;
     }
     
     // Count collection files (scan metadata/ subdirectory; v6: .db/bson/collections/)
-    const metadataDirs = await databaseStorage.listDirs(".db/bson/collections", 1000);
+    const metadataDirs = await assetStorage.listDirs(".db/bson/collections", 1000);
     const collections = metadataDirs.names;
     for (const collectionName of collections) {
         const collectionDir = `.db/bson/collections/${collectionName}`;
 
         // Count collection.dat
-        if (await databaseStorage.fileExists(`${collectionDir}/collection.dat`)) {
+        if (await assetStorage.fileExists(`${collectionDir}/collection.dat`)) {
             expectedTotal++;
         }
+        
         // Count all other files in the collection (v6: shards/ subdir)
-        const collectionFiles = await databaseStorage.listFiles(`${collectionDir}/shards`, 10000);
-        for (const fileName of collectionFiles.names) {
-            expectedTotal++;
-        }
+        const collectionFiles = await assetStorage.listFiles(`${collectionDir}/shards`, 10000);
+        expectedTotal += collectionFiles.names.length;
     }
+    
     // Count sort index files
-    if (await databaseStorage.dirExists(".db/bson/indexes")) {
-        const sortIndexCollections = await databaseStorage.listDirs(".db/bson/indexes", 1000);
+    if (await assetStorage.dirExists(".db/bson/indexes")) {
+        const sortIndexCollections = await assetStorage.listDirs(".db/bson/indexes", 1000);
         for (const collectionName of sortIndexCollections.names) {
             const sortIndexCollectionDir = `.db/bson/indexes/${collectionName}`;
-            const indexDirs = await databaseStorage.listDirs(sortIndexCollectionDir, 1000);
-            
+            const indexDirs = await assetStorage.listDirs(sortIndexCollectionDir, 1000);
+
             for (const indexDirName of indexDirs.names) {
                 const indexDir = `${sortIndexCollectionDir}/${indexDirName}`;
-                const indexFiles = await databaseStorage.listFiles(indexDir, 10000);
+                const indexFiles = await assetStorage.listFiles(indexDir, 10000);
                 // Exclude build.checkpoint files
-                expectedTotal += indexFiles.names.filter(name => name !== "build.checkpoint").length;
+                expectedTotal += indexFiles.names.filter(fileName => fileName !== "build.checkpoint").length;
             }
         }
     }
@@ -371,18 +370,17 @@ export async function verifyDatabaseFiles(metadataStorage: IStorage, databaseSto
     // Phase 2: Verify all files
     //
     
-    // 1. Verify files.dat (database merkle tree - metadataStorage is scoped to .db/)
-    
-    if (await metadataStorage.fileExists("files.dat")) {
+    // 1. Verify files.dat (database merkle tree)
+    if (await assetStorage.fileExists(".db/files.dat")) {
         log.verbose(`Verifying .db/files.dat`);
         result.totalFiles++;
-        const verifyResult = await verifySerializedFile(metadataStorage, "files.dat"); //todo: various checks can be done in background tasks.
+        const verifyResult = await verifySerializedFile(assetStorage, ".db/files.dat");
         result.totalSize += verifyResult.size;
         if (verifyResult.valid) {
             result.validFiles++;
         }
         else {
-            addError("files.dat", verifyResult.error || "Unknown error");
+            addError(".db/files.dat", verifyResult.error || "Unknown error");
         }
         reportProgress();
     }
@@ -393,10 +391,10 @@ export async function verifyDatabaseFiles(metadataStorage: IStorage, databaseSto
 
         // 3a. Verify collection.dat (collection merkle tree - no checksum)
         const collectionDatPath = `${collectionDir}/collection.dat`;
-        if (await databaseStorage.fileExists(collectionDatPath)) {
+        if (await assetStorage.fileExists(collectionDatPath)) {
             log.verbose(`Verifying ${collectionDatPath}`);
             result.totalFiles++;
-            const verifyResult = await verifySerializedFile(databaseStorage, collectionDatPath);
+            const verifyResult = await verifySerializedFile(assetStorage, collectionDatPath);
             result.totalSize += verifyResult.size;
             if (verifyResult.valid) {
                 result.validFiles++;
@@ -407,14 +405,14 @@ export async function verifyDatabaseFiles(metadataStorage: IStorage, databaseSto
             reportProgress();
         }
         // 3b. Get all files in the collection directory (v6: shards/ subdir)
-        const collectionFiles = await databaseStorage.listFiles(`${collectionDir}/shards`, 10000);
+        const collectionFiles = await assetStorage.listFiles(`${collectionDir}/shards`, 10000);
         for (const fileName of collectionFiles.names) {
             const filePath = `${collectionDir}/shards/${fileName}`;
             result.totalFiles++;
             if (fileName.endsWith(".dat")) {
                 // Shard merkle tree file (no checksum)
                 log.verbose(`Verifying ${filePath}`);
-                const verifyResult = await verifySerializedFile(databaseStorage, filePath);
+                const verifyResult = await verifySerializedFile(assetStorage, filePath);
                 result.totalSize += verifyResult.size;
                 if (verifyResult.valid) {
                     result.validFiles++;
@@ -428,7 +426,7 @@ export async function verifyDatabaseFiles(metadataStorage: IStorage, databaseSto
                 // Shard data file (with checksum)
                 log.verbose(`Verifying ${filePath}`);
                 try {
-                    const verifyResult = await verifySerializedFile(databaseStorage, filePath);
+                    const verifyResult = await verifySerializedFile(assetStorage, filePath);
                     result.totalSize += verifyResult.size;
                     if (verifyResult.valid) {
                         result.validFiles++;
@@ -446,19 +444,19 @@ export async function verifyDatabaseFiles(metadataStorage: IStorage, databaseSto
     }
     
     // 4. Verify sort_indexes
-    if (await databaseStorage.dirExists(".db/bson/indexes")) {
-        const sortIndexCollections = await databaseStorage.listDirs(".db/bson/indexes", 1000);
-        
+    if (await assetStorage.dirExists(".db/bson/indexes")) {
+        const sortIndexCollections = await assetStorage.listDirs(".db/bson/indexes", 1000);
+
         for (const collectionName of sortIndexCollections.names) {
             const sortIndexCollectionDir = `.db/bson/indexes/${collectionName}`;
-            const indexDirs = await databaseStorage.listDirs(sortIndexCollectionDir, 1000);
-            
+            const indexDirs = await assetStorage.listDirs(sortIndexCollectionDir, 1000);
+
             for (const indexDirName of indexDirs.names) {
                 const indexDir = `${sortIndexCollectionDir}/${indexDirName}`;
-                
+
                 // Get all files in the index directory
-                const indexFiles = await databaseStorage.listFiles(indexDir, 10000);                
-                
+                const indexFiles = await assetStorage.listFiles(indexDir, 10000);
+
                 for (const fileName of indexFiles.names) {
                     // Skip build.checkpoint files
                     if (fileName === "build.checkpoint") {
@@ -471,7 +469,7 @@ export async function verifyDatabaseFiles(metadataStorage: IStorage, databaseSto
                     // files.dat and page files (all have checksum)
                     log.verbose(`Verifying ${filePath}`);
                     try {
-                        const verifyResult = await verifySerializedFile(databaseStorage, filePath);
+                        const verifyResult = await verifySerializedFile(assetStorage, filePath);
                         result.totalSize += verifyResult.size;
                         if (verifyResult.valid) {
                             result.validFiles++;

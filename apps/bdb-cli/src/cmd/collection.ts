@@ -18,7 +18,7 @@ export async function collectionCommand(dbPath: string, collectionName: string, 
     
     // Get existing shards
     const storageResult = createStorage(dbPath);
-    const existingShards = await listShards(storageResult.storage, collectionName);
+    const existingShards = await listShards(storageResult.storage, storageResult.normalizedPath, collectionName);
     console.log(pc.cyan(`Number of shards: ${existingShards.length}`));
     
     // Get sort indexes
