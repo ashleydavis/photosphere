@@ -13,9 +13,9 @@ export interface ISetOriginCommandOptions extends IBaseCommandOptions {
 export async function setOriginCommand(context: ICommandContext, options: ISetOriginCommandOptions, originPath: string): Promise<void> {
     const { uuidGenerator, timestampProvider, sessionId } = context;
 
-    const { assetStorage } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
-    const existing = await loadDatabaseConfig(assetStorage);
-    await updateDatabaseConfig(assetStorage, { ...existing ?? {}, origin: originPath });
+    const { rawAssetStorage } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
+    const existing = await loadDatabaseConfig(rawAssetStorage);
+    await updateDatabaseConfig(rawAssetStorage, { ...existing ?? {}, origin: originPath });
 
     console.log(pc.green(`✓ Origin set to: ${originPath}`));
     await exit(0);

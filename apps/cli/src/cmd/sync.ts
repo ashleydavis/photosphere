@@ -31,7 +31,7 @@ export async function syncCommand(context: ICommandContext, options: ISyncComman
     const nonInteractive = options.yes || false;
 
     // Load source database first so we can read origin if --dest not provided
-    const { assetStorage: sourceAssetStorage, bsonDatabase: sourceBsonDatabase } = await loadDatabase(options.db, {
+    const { assetStorage: sourceAssetStorage, rawAssetStorage: sourceRawAssetStorage, bsonDatabase: sourceBsonDatabase } = await loadDatabase(options.db, {
         db: options.db,
         key: options.key,
         verbose: options.verbose,
@@ -40,7 +40,7 @@ export async function syncCommand(context: ICommandContext, options: ISyncComman
 
     let destPath = options.dest;
     if (destPath === undefined) {
-        const config = await loadDatabaseConfig(sourceAssetStorage);
+        const config = await loadDatabaseConfig(sourceRawAssetStorage);
         destPath = config?.origin;
         if (destPath === undefined) {
             destPath = await getDirectoryForCommand('existing', nonInteractive, options.cwd || process.cwd());
@@ -111,13 +111,13 @@ export async function syncCommand(context: ICommandContext, options: ISyncComman
         db: destPath,
         key: options.destKey  // Use destKey for target database
     };
-    const { assetStorage: targetAssetStorage, bsonDatabase: targetBsonDatabase } = await loadDatabase(targetOptions.db, targetOptions, uuidGenerator, timestampProvider, sessionId);
+    const { assetStorage: targetAssetStorage, rawAssetStorage: targetRawAssetStorage, bsonDatabase: targetBsonDatabase } = await loadDatabase(targetOptions.db, targetOptions, uuidGenerator, timestampProvider, sessionId);
 
     await syncDatabases(sourceAssetStorage, sourceAssetStorage, sourceBsonDatabase, sessionId, targetAssetStorage, targetAssetStorage, targetBsonDatabase, sessionId);
 
     const lastSyncedAt = new Date().toISOString();
-    await updateDatabaseConfig(sourceAssetStorage, { lastSyncedAt });
-    await updateDatabaseConfig(targetAssetStorage, { lastSyncedAt });
+    await updateDatabaseConfig(sourceRawAssetStorage, { lastSyncedAt });
+    await updateDatabaseConfig(targetRawAssetStorage, { lastSyncedAt });
 
     log.info("Sync completed successfully!");
 

@@ -47,11 +47,11 @@ export async function compareCommand(context: ICommandContext, options: ICompare
         srcDir = await getDirectoryForCommand("existing", nonInteractive, options.cwd || process.cwd());
     }
 
-    const { assetStorage: srcAssetStorage, databaseDir: srcDirResolved } = await loadDatabase(srcDir, options, uuidGenerator, timestampProvider, sessionId);
+    const { assetStorage: srcAssetStorage, rawAssetStorage: srcRawAssetStorage, databaseDir: srcDirResolved } = await loadDatabase(srcDir, options, uuidGenerator, timestampProvider, sessionId);
 
     let destDir = options.dest;
     if (destDir === undefined) {
-        const config = await loadDatabaseConfig(srcAssetStorage);
+        const config = await loadDatabaseConfig(srcRawAssetStorage);
         destDir = config?.origin;
         if (destDir === undefined) {
             destDir = await getDirectoryForCommand('existing', nonInteractive, options.cwd || process.cwd());

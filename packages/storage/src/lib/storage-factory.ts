@@ -19,51 +19,69 @@ export function pathJoin(...paths: string[]): string {
     return result;
 }
 
-/**
- * Options for creating storage
- */
+//
+// Options for creating storage.
+//
 export interface IStorageOptions {
-    /**
-     * Public key used when writing new encrypted data.
-     * Must correspond to the "default" private key in decryptionKeyMap.
-     */
+    //
+    // Public key used when writing new encrypted data.
+    // Must correspond to the "default" private key in decryptionKeyMap.
+    //
     encryptionPublicKey?: KeyObject;
 
-    /**
-     * Map of key identifier to private key for decryption.
-     * The "default" entry is used for old-format files (no header).
-     */
+    //
+    // Map of key identifier to private key for decryption.
+    // The "default" entry is used for old-format files (no header).
+    //
     decryptionKeyMap?: IPrivateKeyMap;
 }
 
-/**
- * Descriptor for storage configuration that can be serialized and passed to workers.
- * Contains all information needed to recreate a storage instance.
- */
+//
+// Descriptor for storage configuration that can be serialized and passed to workers.
+// Contains all information needed to recreate a storage instance.
+//
 export interface IStorageDescriptor {
-    /**
-     * Storage location string (e.g., "fs:path" or "s3:bucket/path")
-     */
+    //
+    // Storage location string (e.g., "fs:path" or "s3:bucket/path").
+    //
     dbDir: string;
-    
-    /**
-     * Paths to encryption key files (if storage is encrypted).
-     * Empty array means no encryption keys (plain storage).
-     */
+
+    //
+    // Paths to encryption key files (if storage is encrypted).
+    // Empty array means no encryption keys (plain storage).
+    //
     encryptionKeyPaths: string[];
 }
 
-/**
- * Creates the appropriate storage implementation based on the prefix in the path
- * @param rootPath Path with storage prefix (e.g. "fs:path" or "s3:bucket/path")
- * @param options Options for storage creation including encryption keys
- * @returns The corresponding storage implementation and normalized path
- */
-export function createStorage(
-    rootPath: string, 
-    s3Config?: IS3Credentials,
-    options?: IStorageOptions
-): { storage: IStorage, normalizedPath: string, type: string } {
+//
+// Result of creating a storage instance.
+//
+export interface ICreateStorageResult {
+    //
+    // The storage instance, wrapped with encryption if keys were provided.
+    //
+    storage: IStorage;
+
+    //
+    // The raw (unencrypted) storage instance, for writing files that must be readable without a key.
+    //
+    rawStorage: IStorage;
+
+    //
+    // The normalized path used as the storage root prefix.
+    //
+    normalizedPath: string;
+
+    //
+    // The storage type identifier (e.g. "fs", "s3", "encrypted-fs").
+    //
+    type: string;
+}
+
+//
+// Creates the appropriate storage implementation based on the prefix in the path.
+//
+export function createStorage(rootPath: string, s3Config?: IS3Credentials, options?: IStorageOptions): ICreateStorageResult {
     if (!rootPath) {
         throw new Error('Path is required');
     }
@@ -94,6 +112,8 @@ export function createStorage(
 
     normalizedPath = normalizedPath.replace(/\\/g, '/'); // Convert backslashes to forward slashes for consistency.
 
+    const rawStorage = new StoragePrefixWrapper(storage, normalizedPath);
+
     // Wrap with encryption if keys are provided
     if (options?.decryptionKeyMap && options.encryptionPublicKey) {
         storage = new EncryptedStorage(storage.location, storage, options.decryptionKeyMap, options.encryptionPublicKey);
@@ -102,5 +122,5 @@ export function createStorage(
 
     storage = new StoragePrefixWrapper(storage, normalizedPath);
 
-    return { storage, normalizedPath, type };
+    return { storage, rawStorage, normalizedPath, type };
 }

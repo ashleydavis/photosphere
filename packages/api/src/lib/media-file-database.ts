@@ -217,20 +217,20 @@ export interface IAssetDetails {
 // Returns the updated merkle tree with the README.md file added.
 //
 export async function createReadme(
-    assetStorage: IStorage,
+    rawStorage: IStorage,
     merkleTree: IMerkleTree<IDatabaseMetadata>
 ): Promise<IMerkleTree<IDatabaseMetadata>> {
     // Create README.md file with warning about manual modifications
-    await retry(() => assetStorage.write('README.md', 'text/markdown', Buffer.from(DATABASE_README_CONTENT, 'utf8')));
+    await retry(() => rawStorage.write('README.md', 'text/markdown', Buffer.from(DATABASE_README_CONTENT, 'utf8')));
 
-    const readmeInfo = await retry(() => assetStorage.info('README.md'));
+    const readmeInfo = await retry(() => rawStorage.info('README.md'));
     if (!readmeInfo) {
         throw new Error('README.md file not found after creation.');
     }
 
     merkleTree = addItem(merkleTree, {
         name: 'README.md',
-        hash: await retry(() => computeHash(assetStorage.readStream('README.md'))),
+        hash: await retry(() => computeHash(rawStorage.readStream('README.md'))),
         length: readmeInfo.length,
         lastModified: readmeInfo.lastModified,
     });
@@ -268,6 +268,7 @@ export function createMediaFileDatabase(
 //
 export async function createDatabase(
     assetStorage: IStorage,
+    rawStorage: IStorage,
     uuidGenerator: IUuidGenerator,
     metadataCollection: IBsonCollection<IAsset>,
     databaseId?: string
@@ -282,11 +283,11 @@ export async function createDatabase(
 
     await ensureSortIndex(metadataCollection);
 
-    merkleTree = await createReadme(assetStorage, merkleTree);
+    merkleTree = await createReadme(rawStorage, merkleTree);
 
     await retry(() => saveMerkleTree(merkleTree, assetStorage));
 
-    await saveDatabaseConfig(assetStorage, {});
+    await saveDatabaseConfig(rawStorage, {});
 
     log.verbose(`Created new media file database.`);
 }
@@ -367,6 +368,7 @@ export function streamAsset(assetStorage: IStorage, assetId: string, assetType: 
 //
 export async function writeAsset(
     assetStorage: IStorage,
+    rawStorage: IStorage,
     sessionId: string,
     assetId: string,
     assetType: string,
@@ -411,7 +413,7 @@ export async function writeAsset(
         }
 
         await retry(() => saveMerkleTree(merkleTree, assetStorage));
-        await updateDatabaseConfig(assetStorage, { lastModifiedAt: new Date().toISOString() });
+        await updateDatabaseConfig(rawStorage, { lastModifiedAt: new Date().toISOString() });
     }
     catch (err: any) {
         log.exception(`Failed to add asset "${assetPath}" from buffer`, err);
@@ -433,6 +435,7 @@ export async function writeAsset(
 //
 export async function removeAsset(
     assetStorage: IStorage,
+    rawStorage: IStorage,
     sessionId: string,
     metadataCollection: IBsonCollection<IAsset>,
     assetId: string,
@@ -490,7 +493,7 @@ export async function removeAsset(
         //
         // Update config.json.
         //
-        await updateDatabaseConfig(assetStorage, { lastModifiedAt: new Date().toISOString() });
+        await updateDatabaseConfig(rawStorage, { lastModifiedAt: new Date().toISOString() });
     }
     finally {
         await releaseWriteLock(assetStorage);

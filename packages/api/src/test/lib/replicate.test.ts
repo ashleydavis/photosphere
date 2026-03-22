@@ -310,6 +310,7 @@ describe('replicate', () => {
                 uuidGenerator,
                 timestampProvider,
                 destAsset,
+                destAsset,
                 undefined,
                 undefined
             )
@@ -337,6 +338,7 @@ describe('replicate', () => {
                 sourceBdb,
                 uuidGenerator,
                 timestampProvider,
+                destAsset,
                 destAsset,
                 undefined,
                 undefined
@@ -366,6 +368,7 @@ describe('replicate', () => {
             uuidGenerator,
             timestampProvider,
             destAsset,
+            destAsset,
             { force: true },
             undefined
         );
@@ -391,6 +394,7 @@ describe('replicate', () => {
             sourceBdb,
             uuidGenerator,
             timestampProvider,
+            destAsset,
             destAsset,
             undefined,
             undefined

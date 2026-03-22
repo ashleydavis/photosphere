@@ -29,11 +29,11 @@ export interface IRepairCommandOptions extends IBaseCommandOptions {
 export async function repairCommand(context: ICommandContext, options: IRepairCommandOptions): Promise<void> {
     const { uuidGenerator, timestampProvider, sessionId } = context;
     
-    const { assetStorage, databaseDir: targetDir, metadataCollection } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
+    const { assetStorage, rawAssetStorage, databaseDir: targetDir, metadataCollection } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
 
     let sourcePath = options.source;
     if (sourcePath === undefined) {
-        const config = await loadDatabaseConfig(assetStorage);
+        const config = await loadDatabaseConfig(rawAssetStorage);
         sourcePath = config?.origin;
         if (sourcePath === undefined) {
             log.error(pc.red("Source database path is required for repair command. Specify --source or set an origin (psi set-origin <path>)."));

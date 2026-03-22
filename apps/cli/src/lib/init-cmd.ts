@@ -13,7 +13,7 @@ import { getDirectoryForCommand } from './directory-picker';
 import { ensureMediaProcessingTools } from './ensure-tools';
 import * as fs from 'fs/promises';
 import { existsSync } from 'fs';
-import { pathExists, ensureDir, copy } from 'node-utils';
+import { pathExists, ensureDir } from 'node-utils';
 import * as os from 'os';
 import pc from "picocolors";
 import { confirm, text, isCancel, outro, select } from './clack/prompts';
@@ -455,9 +455,7 @@ export async function loadDatabase(
     let { options: storageOptions } = await loadEncryptionKeys(resolvedKeyPaths, false);
 
     const s3Config = await getS3Config();
-    let { storage: assetStorage } = createStorage(dbDir, s3Config, storageOptions);
-    // Raw storage reads bytes exactly as stored on disk, with no decryption applied.
-    const { storage: rawAssetStorage } = createStorage(dbDir, s3Config);
+    let { storage: assetStorage, rawStorage: rawAssetStorage } = createStorage(dbDir, s3Config, storageOptions);
 
     //
     // Check that the files tree exists (.db/files.dat or legacy .db/tree.dat).
@@ -596,10 +594,7 @@ export async function createDatabase(
     const { options: storageOptions, isEncrypted } = await loadEncryptionKeys(resolvedKeyPaths, options.generateKey || false);
 
     const s3Config = await getS3Config();
-    const { storage: assetStorage } = createStorage(dbDir, s3Config, storageOptions);
-    
-    // Raw storage reads bytes exactly as stored on disk, with no decryption applied.
-    const { storage: rawAssetStorage } = createStorage(dbDir, s3Config);
+    const { storage: assetStorage, rawStorage: rawAssetStorage } = createStorage(dbDir, s3Config, storageOptions);
 
     // Check the requested directory is empty or non-existent using the storage interface. 
     if (!await assetStorage.isEmpty("/")) {
@@ -616,17 +611,16 @@ export async function createDatabase(
     const database = createMediaFileDatabase(assetStorage, uuidGenerator, timestampProvider);
 
     // Create the database (instead of loading)
-    await createMediaDatabase(assetStorage, uuidGenerator, database.metadataCollection);
+    await createMediaDatabase(assetStorage, rawAssetStorage, uuidGenerator, database.metadataCollection);
 
     // If database is encrypted, copy the public key to the .db directory as a marker
     if (isEncrypted && resolvedKeyPaths.length > 0) {
         const publicKeySource = `${resolvedKeyPaths[0]}.pub`;
-        const publicKeyDest = pathJoin(metaPath, 'encryption.pub');
-        
+
         try {
             if (await pathExists(publicKeySource)) {
-                await copy(publicKeySource, publicKeyDest); //todo: use raw storage.
-                // console.log(`Copied public key to database directory: ${publicKeyDest}`);
+                const publicKeyData = await fs.readFile(publicKeySource);
+                await rawAssetStorage.write('.db/encryption.pub', undefined, publicKeyData);
             }
         } catch (error) {
             console.warn(`Warning: Could not copy public key to database directory: ${error instanceof Error ? error.message : 'Unknown error'}`);
