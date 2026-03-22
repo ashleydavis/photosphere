@@ -15,6 +15,15 @@ import { hashPublicKey } from "./key-utils";
 import type { IPrivateKeyMap } from "./encryption-types";
 
 //
+// Computes the byte length of the encrypted output for a given plaintext length.
+// AES-256-CBC always adds a PKCS#7 padding block, so the ciphertext is always
+// rounded up to the next 16-byte boundary plus one full padding block.
+//
+export function computeEncryptedLength(plainLength: number): number {
+    return NEW_FORMAT_PAYLOAD_OFFSET + (Math.floor(plainLength / 16) + 1) * 16;
+}
+
+//
 // Creates a stream that encrypts data with a public key and writes the new format header
 // (tag, version, type, keyHash) then the legacy payload (encryptedKey + iv + ciphertext).
 //

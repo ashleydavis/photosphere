@@ -109,7 +109,7 @@ Frontend:
 - All tests should pass after making changes.
 - Prefer to minimize the size of code changes.
 - Prefer not to update test code unless needed.
-- Add new tests for new code.
+- Add new tests for new code. Every function that is new, that you edit, or that the user asks you about should have unit tests.
 - Backward compatibility is not required.
 - Use imports instead of requires.
 - All imports should be at the top of the file and not inside any functions.
