@@ -98,7 +98,7 @@ export async function encryptCommand(context: ICommandContext, options: IEncrypt
         }
     }
     else {
-        log.warn(pc.yellow(`⚠️  This will encrypt the database in place at ${pc.cyan(dbDir)}.`));
+        log.warn(pc.yellow(`⚠️  This will encrypt the database in place at ${pc.cyan(dbDir)} using key(s): ${pc.cyan(resolvedKeyPaths.join(", "))}.`));
         log.warn(pc.yellow(`   All files will be rewritten in encrypted form. This cannot be undone without the key.`));
         const confirmed = await confirm({ message: "Proceed with encryption?", initialValue: false });
         if (isCancel(confirmed) || !confirmed) {
