@@ -177,8 +177,8 @@ describe("decrypt", () => {
         // Use empty tree to avoid BSON leaf files being written to storage.
         const tree = buildMinimalFilesTree([]);
         await saveTree(FILES_TREE_PATH, tree, readStorage);
-        await readStorage.write("asset/f1.dat", "application/octet-stream", Buffer.from("content1"));
-        await readStorage.write("asset/f2.dat", "application/octet-stream", Buffer.from("content2"));
+        await readStorage.write("f1.dat", "application/octet-stream", Buffer.from("content1"));
+        await readStorage.write("f2.dat", "application/octet-stream", Buffer.from("content2"));
 
         const result = await decrypt(readStorage, writeStorage, () => {}, readStorage);
 
@@ -191,7 +191,7 @@ describe("decrypt", () => {
         // Use empty tree to avoid BSON leaf files being written to storage.
         const tree = buildMinimalFilesTree([]);
         await saveTree(FILES_TREE_PATH, tree, storage);
-        await storage.write("asset/f1.dat", "application/octet-stream", Buffer.from("plain content"));
+        await storage.write("f1.dat", "application/octet-stream", Buffer.from("plain content"));
 
         const result = await decrypt(storage, storage, () => {}, storage);
 
