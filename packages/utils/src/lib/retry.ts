@@ -12,6 +12,25 @@ export async function rejectAfter<ReturnT>(ms: number): Promise<ReturnT> {
 }
 
 //
+// Attempts an operation once, rejecting if it doesn't complete within timeoutMS.
+//
+export async function retryOnce<ReturnT>(operation: () => Promise<ReturnT>, timeoutMS: number): Promise<ReturnT> {
+    return new Promise<ReturnT>((resolve, reject) => {
+        const timeoutId = setTimeout(() => reject(new Error(`Operation timed out after ${timeoutMS}ms`)), timeoutMS);
+        operation().then(
+            result => {
+                clearTimeout(timeoutId);
+                resolve(result);
+            },
+            error => {
+                clearTimeout(timeoutId);
+                reject(error);
+            }
+        );
+    });
+}
+
+//
 // Retrys a failing operation a number of times.
 // Each attempt is raced against a timeout and rejected if it doesn't complete in time.
 //
@@ -19,10 +38,7 @@ export async function retry<ReturnT>(operation: () => Promise<ReturnT>, maxAttem
 
     while (maxAttempts-- > 0) {
         try {
-            return await Promise.race([
-                operation(),
-                rejectAfter<ReturnT>(timeoutMS),
-            ]);
+            return await retryOnce(operation, timeoutMS);
         }
         catch (error: any) {
             if (maxAttempts >= 1) {
