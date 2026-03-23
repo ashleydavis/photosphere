@@ -7,6 +7,7 @@ import { IStorage, readEncryptionHeader, walkDirectory } from "storage";
 import { loadMerkleTree, saveMerkleTree } from "./tree";
 import { getItemInfo, IMerkleTree, updateItem } from "merkle-tree";
 import { batchGenerator, log, retry } from "utils";
+import { LARGE_FILE_TIMEOUT } from "./constants";
 import { IDatabaseMetadata } from "./media-file-database";
 
 //
@@ -52,7 +53,7 @@ async function decryptFile(
                 stream,
                 srcFileInfo.length
             );
-        });
+        }, 3, 1_000, 2, LARGE_FILE_TIMEOUT);
 
         if (!fileName.startsWith(".db/")) {
             const existing = getItemInfo(merkleTree, fileName);

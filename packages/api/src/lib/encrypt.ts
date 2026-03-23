@@ -9,6 +9,7 @@ import { hashPublicKey, IStorage, readEncryptionHeader, walkDirectory } from "st
 import { loadMerkleTree, saveMerkleTree } from "./tree";
 import { getItemInfo, IMerkleTree, updateItem } from "merkle-tree";
 import { batchGenerator, log, retry } from "utils";
+import { LARGE_FILE_TIMEOUT } from "./constants";
 import { IDatabaseMetadata } from "./media-file-database";
 
 //
@@ -56,7 +57,7 @@ export async function encryptFile(
                 srcFileInfo.contentType,
                 readStorage.readStream(fileName)
             );
-        });
+        }, 3, 1_000, 2, LARGE_FILE_TIMEOUT);
 
         if (!fileName.startsWith(".db/")) {
             const existing = getItemInfo(merkleTree, fileName);

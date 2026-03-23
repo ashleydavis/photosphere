@@ -7,6 +7,7 @@ import { createStorage, loadEncryptionKeys, IStorageDescriptor, IS3Credentials }
 import type { ITaskContext } from "task-queue";
 import { computeAssetHash } from "./hash";
 import { formatFileSize, log, retry } from "utils";
+import { LARGE_FILE_TIMEOUT } from "./constants";
 
 export interface IVerifyFileData {
     node: SortNode;
@@ -47,7 +48,7 @@ export async function verifyFileHandler(data: IVerifyFileData, context: ITaskCon
     const timestampChanged = node.lastModified === undefined || node.lastModified!.getTime() !== fileInfo.lastModified.getTime();             
     if (sizeChanged || timestampChanged) {
         // File metadata has changed - check if content actually changed by computing the hash.
-        const freshHash = await retry(() => computeAssetHash(storage.readStream(fileName), fileInfo));
+        const freshHash = await retry(() => computeAssetHash(storage.readStream(fileName), fileInfo), 3, 1_000, 2, LARGE_FILE_TIMEOUT);
         if (Buffer.compare(freshHash.hash, node.contentHash!) !== 0) {
             // The file content has actually been modified.
             const reasons: string[] = [];

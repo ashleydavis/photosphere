@@ -17,6 +17,7 @@ import { getVideoDetails } from "./video";
 import { getImageDetails } from "./image";
 import { IAssetDetails } from "./media-file-database";
 import { ILocation, log, retry, reverseGeocode, swallowError } from "utils";
+import { LARGE_FILE_TIMEOUT } from "./constants";
 import dayjs from "dayjs";
 import { IAsset } from "defs";
 import { IHashedData } from "merkle-tree";
@@ -207,14 +208,14 @@ export async function importFileHandler(data: IImportFileData, context: ITaskCon
                 };
             }
             else {
-                await retry(() => storage.writeStream(assetPath, contentType, createReadStream(filePath), fileStat.length));
+                await retry(() => storage.writeStream(assetPath, contentType, createReadStream(filePath), fileStat.length), 3, 1_000, 2, LARGE_FILE_TIMEOUT);
 
                 const assetInfo = await retry(() => storage.info(assetPath));
                 if (!assetInfo) {
                     throw new Error(`Failed to get info for file ${assetPath} (${assetId})`);
                 }
 
-                hashedAsset = await retry(() => computeAssetHash(storage.readStream(assetPath), assetInfo));
+                hashedAsset = await retry(() => computeAssetHash(storage.readStream(assetPath), assetInfo), 3, 1_000, 2, LARGE_FILE_TIMEOUT);
                 if (Buffer.compare(hashedAsset.hash, expectedHashBuffer) !== 0) {
                     throw new Error(`Hash mismatch for file ${assetPath} (${assetId}): ${hashedAsset.hash.toString("hex")} != ${expectedHashBuffer.toString("hex")}`);
                 }
@@ -232,13 +233,13 @@ export async function importFileHandler(data: IImportFileData, context: ITaskCon
                     thumbLastModified = fileStat.lastModified;
                 }
                 else {
-                    await retry(() => storage.writeStream(thumbPath, assetDetails.thumbnailContentType!, createReadStream(assetDetails.thumbnailPath)));
+                    await retry(() => storage.writeStream(thumbPath, assetDetails.thumbnailContentType!, createReadStream(assetDetails.thumbnailPath)), 3, 1_000, 2, LARGE_FILE_TIMEOUT);
 
                     const thumbInfo = await retry(() => storage.info(thumbPath));
                     if (!thumbInfo) {
                         throw new Error(`Failed to get info for thumbnail ${thumbPath} (${assetId})`);
                     }
-                    const hashedThumb = await retry(() => computeAssetHash(storage.readStream(thumbPath), thumbInfo));
+                    const hashedThumb = await retry(() => computeAssetHash(storage.readStream(thumbPath), thumbInfo), 3, 1_000, 2, LARGE_FILE_TIMEOUT);
                     thumbHash = hashedThumb.hash;
                     thumbLength = hashedThumb.length;
                     thumbLastModified = hashedThumb.lastModified;
@@ -257,13 +258,13 @@ export async function importFileHandler(data: IImportFileData, context: ITaskCon
                     displayLastModified = fileStat.lastModified;
                 }
                 else {
-                    await retry(() => storage.writeStream(displayPath, assetDetails.displayContentType, createReadStream(assetDetails.displayPath!)));
+                    await retry(() => storage.writeStream(displayPath, assetDetails.displayContentType, createReadStream(assetDetails.displayPath!)), 3, 1_000, 2, LARGE_FILE_TIMEOUT);
 
                     const displayInfo = await retry(() => storage.info(displayPath));
                     if (!displayInfo) {
                         throw new Error(`Failed to get info for display ${displayPath} (${assetId})`);
                     }
-                    const hashedDisplay = await retry(() => computeAssetHash(storage.readStream(displayPath), displayInfo));
+                    const hashedDisplay = await retry(() => computeAssetHash(storage.readStream(displayPath), displayInfo), 3, 1_000, 2, LARGE_FILE_TIMEOUT);
                     displayHash = hashedDisplay.hash;
                     displayLength = hashedDisplay.length;
                     displayLastModified = hashedDisplay.lastModified;
