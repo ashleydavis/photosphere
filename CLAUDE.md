@@ -96,6 +96,7 @@ Frontend:
 - All global symbols (functions, types, interfaces, classes, constants) must have a `//` comment block above them explaining their intent.
 - Never use single-character variable names, including arrow function parameters (e.g. use `fileName => ...` not `f => ...`).
 - Avoid single line if statements. All if statements should have curly brackets around the function body.
+- Never put multiple statements on one line. Each statement should be on its own line.
 - Use 4 space tabs for indentation.
 - Put `else` and `catch` blocks on a new line.
 - Tests should go under the directory src/test in each package.
@@ -103,6 +104,7 @@ Frontend:
 - Refrain from using the `any` type in normal code, although it's ok sometimes in test code.
 - Never use anonymous object types inline (e.g. `Promise<{ foo: number }>`). Always define a named interface instead, unless specifically asked to use an anonymous type.
 - Never use IIFE async generator pattern (`(async function* () { ... })()`). Extract to a named `async function*` instead.
+- Never use `ReturnType<typeof ...>`. Use the actual type directly (e.g. `NodeJS.Timeout` instead of `ReturnType<typeof setTimeout>`).
 
 ## Restrictions
 - TypeScript code should always compile after making changes.
