@@ -4,7 +4,7 @@
 //
 
 import { TestUuidGenerator, TestTimestampProvider } from "node-utils";
-import { RandomUuidGenerator, TimestampProvider, setLog, ILog } from "utils";
+import { RandomUuidGenerator, TimestampProvider, setLog, ILog, formatErrorChain } from "utils";
 import type { IUuidGenerator, ITimestampProvider } from "utils";
 
 //
@@ -83,7 +83,7 @@ class WorkerLog implements ILog {
     
     exception(message: string, error: Error): void {
         console.error(this.prefixMessage(message));
-        console.error(error.stack || error.message || error);
+        console.error(formatErrorChain(error));
     }
 
     warn(message: string): void {

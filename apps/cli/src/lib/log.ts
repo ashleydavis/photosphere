@@ -1,4 +1,4 @@
-import { ILog, setLog } from "utils";
+import { ILog, setLog, formatErrorChain } from "utils";
 import { FileLogger } from "./file-logger";
 
 export interface ILogOptions {
@@ -54,7 +54,7 @@ class Log implements ILog {
     
     exception(message: string, error: Error): void {
         console.error(message);
-        console.error(error.stack || error.message || error);
+        console.error(formatErrorChain(error));
     }
 
     warn(message: string): void {

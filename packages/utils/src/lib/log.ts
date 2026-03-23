@@ -1,3 +1,5 @@
+import { formatErrorChain } from "./wrapped-error";
+
 export interface ILog {
     info(message: string): void;
     verbose(message: string): void;
@@ -28,7 +30,7 @@ export let log: ILog = {
     },
     exception(message: string, error: Error): void {
         console.error(message);
-        console.error(error.stack || error.message || error);
+        console.error(formatErrorChain(error));
     },
     warn(message: string): void {
         console.warn(message);

@@ -1,4 +1,5 @@
 import { retry, rejectAfter } from "../../lib/retry";
+import { WrappedError } from "../../lib/wrapped-error";
 import { sleep } from "../../lib/sleep";
 import { log } from "../../lib/log";
 
@@ -200,6 +201,26 @@ describe("retry", () => {
 
         expect(result).toBe("success");
         expect(operation).toHaveBeenCalledTimes(1);
+    });
+
+    test("should wrap error with errorContext when provided", async () => {
+        const cause = new Error("original error");
+        const operation = jest.fn().mockRejectedValue(cause);
+
+        const thrown = await retry(operation, 1, 100, 2, 30_000, "context message").catch(err => err);
+
+        expect(thrown).toBeInstanceOf(WrappedError);
+        expect(thrown.message).toBe("context message");
+        expect(thrown.options.cause).toBe(cause);
+    });
+
+    test("should throw original error when errorContext is not provided", async () => {
+        const cause = new Error("original error");
+        const operation = jest.fn().mockRejectedValue(cause);
+
+        const thrown = await retry(operation, 1).catch(err => err);
+
+        expect(thrown).toBe(cause);
     });
 });
 

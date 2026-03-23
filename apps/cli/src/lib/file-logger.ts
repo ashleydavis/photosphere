@@ -2,7 +2,7 @@ import * as fs from "fs/promises";
 import { ensureDirSync } from "node-utils";
 import path from "path";
 import os from "os";
-import { ILog } from "utils";
+import { ILog, formatErrorChain } from "utils";
 import { registerTerminationCallback } from "node-utils";
 import { Image, Video } from "tools";
 import { version } from "./version";
@@ -268,7 +268,7 @@ export class FileLogger implements ILog {
     }
     
     exception(message: string, error: Error): void {
-        const fullMessage = `${message}\nStack trace: ${error.stack || error.message || error}`;
+        const fullMessage = `${message}\nStack trace: ${formatErrorChain(error)}`;
         this.writeToFile('exception', fullMessage);
         this.writeToErrorFile('exception', fullMessage);
         this.consoleLogger.exception(message, error);
