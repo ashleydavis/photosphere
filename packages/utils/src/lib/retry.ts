@@ -1,6 +1,7 @@
 import { serializeError } from "serialize-error";
 import { log } from "./log";
 import { sleep } from "./sleep";
+import { WrappedError } from "./wrapped-error";
 
 //
 // Returns a promise that rejects after the given number of milliseconds.
@@ -14,7 +15,7 @@ export async function rejectAfter<ReturnT>(ms: number): Promise<ReturnT> {
 // Retrys a failing operation a number of times.
 // Each attempt is raced against a timeout and rejected if it doesn't complete in time.
 //
-export async function retry<ReturnT>(operation: () => Promise<ReturnT>, maxAttempts: number = 3, waitTimeMS: number = 1_000, waitTimeScale: number = 2, timeoutMS: number = 30_000): Promise<ReturnT> {
+export async function retry<ReturnT>(operation: () => Promise<ReturnT>, maxAttempts: number = 3, waitTimeMS: number = 1_000, waitTimeScale: number = 2, timeoutMS: number = 30_000, errorContext?: string): Promise<ReturnT> {
 
     while (maxAttempts-- > 0) {
         try {
@@ -35,6 +36,10 @@ export async function retry<ReturnT>(operation: () => Promise<ReturnT>, maxAttem
             }
             else {
                 console.error("Operation failed, no more retries allowed.");
+
+                if (errorContext) {
+                    throw new WrappedError(errorContext, { cause: error });
+                }
 
                 throw error;
             }
