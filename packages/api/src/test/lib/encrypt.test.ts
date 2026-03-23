@@ -143,8 +143,8 @@ describe("encrypt", () => {
         // Use empty tree to avoid BSON leaf files being written to storage.
         const tree = buildMinimalFilesTree([]);
         await saveTree(FILES_TREE_PATH, tree, readStorage);
-        await readStorage.write("asset/a.dat", "application/octet-stream", Buffer.from("a"));
-        await readStorage.write("asset/b.dat", "application/octet-stream", Buffer.from("b"));
+        await readStorage.write("a.dat", "application/octet-stream", Buffer.from("a"));
+        await readStorage.write("b.dat", "application/octet-stream", Buffer.from("b"));
 
         const result = await encrypt(readStorage, writeStorage, () => {}, encryptKeyPair.publicKey, readStorage);
 
@@ -165,7 +165,7 @@ describe("encrypt", () => {
         // Use empty tree to avoid BSON leaf files being written to storage.
         const tree = buildMinimalFilesTree([]);
         await saveTree(FILES_TREE_PATH, tree, readStorage);
-        await readStorage.write("asset/already.dat", "application/octet-stream", fakeHeader);
+        await readStorage.write("already.dat", "application/octet-stream", fakeHeader);
 
         const result = await encrypt(readStorage, writeStorage, () => {}, encryptKeyPair.publicKey, readStorage);
 
