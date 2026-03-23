@@ -6,7 +6,8 @@ import {
     loadShardMerkleTree as loadShardMerkleTreeBdb,
 } from "bdb";
 import { computeHash } from "./hash";
-import { batchGenerator, log, retry, IUuidGenerator } from "utils";
+import { batchGenerator, retry, IUuidGenerator } from "utils";
+import { LARGE_FILE_TIMEOUT } from "./constants";
 
 //
 // Path for the files Merkle tree (v6). Legacy path was .db/tree.dat.
@@ -125,7 +126,7 @@ export async function buildFilesTree(
         if (!info) {
             throw new Error(`No info for file listed in storage: ${fileName}`);
         }
-        const hash = await retry(() => computeHash(storage.readStream(fileName)));
+        const hash = await retry(() => computeHash(storage.readStream(fileName)), 3, 1_000, 2, LARGE_FILE_TIMEOUT, `Failed to hash file ${fileName}`);
         return { fileName, hash, length: info.length, lastModified: info.lastModified };
     }
 

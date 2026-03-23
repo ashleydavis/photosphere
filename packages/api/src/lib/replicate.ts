@@ -2,6 +2,7 @@
 import { computeHash } from "./hash";
 import { IStorage } from "storage";
 import { retry, FatalError, ITimestampProvider, IUuidGenerator, log } from "utils";
+import { LARGE_FILE_TIMEOUT } from "./constants";
 import { IDatabaseMetadata, ProgressCallback, createMediaFileDatabase, loadDatabase, createDatabase } from "./media-file-database";
 import { BsonDatabase, BatchSortIndexManager } from "bdb";
 import { findDifferingNodes, findMerkleTreeDifferences, getItemInfo, IMerkleTree, MerkleNode, pruneTree, upsertItem } from "merkle-tree";
@@ -134,14 +135,14 @@ async function replicateFiles(
         await retry(async  () => {
             const readStream = assetStorage.readStream(fileName);
             await destAssetStorage.writeStream(fileName, srcFileInfo.contentType, readStream);
-        });
+        }, 3, 1_000, 2, LARGE_FILE_TIMEOUT);
 
         log.verbose(`Copied file: ${fileName}`);
 
         //
         // Compute hash for the copied file.
         //
-        const copiedHash = await retry(() => computeHash(destAssetStorage.readStream(fileName)));
+        const copiedHash = await retry(() => computeHash(destAssetStorage.readStream(fileName)), 3, 1_000, 2, LARGE_FILE_TIMEOUT);
         if (Buffer.compare(copiedHash, sourceHash) !== 0) {
             throw new Error(
 `Copied file "${fileName}" hash does not match the source hash.
