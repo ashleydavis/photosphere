@@ -16,7 +16,7 @@ export async function readFirstBytes(storage: IStorage, filePath: string, length
         return undefined;
     }
 
-    const stream = storage.readStream(filePath);
+    const stream = await storage.readStream(filePath);
     return new Promise<Buffer | undefined>((resolve, reject) => {
         const chunks: Buffer[] = [];
         let collected = 0;

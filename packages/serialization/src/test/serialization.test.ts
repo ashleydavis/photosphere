@@ -54,7 +54,7 @@ class MockStorage implements IStorage {
         this.files.set(path, buffer);
     }
 
-    readStream(filePath: string): Readable {
+    async readStream(filePath: string): Promise<Readable> {
         return new Readable({ read() {} });
     }
 

@@ -164,7 +164,7 @@ async function createCollectionDatabase(
                 }
                 
                 const hashedAsset = await computeAssetHash(
-                    assetStorage.readStream(destPath),
+                    await assetStorage.readStream(destPath),
                     fileInfo
                 );
                 

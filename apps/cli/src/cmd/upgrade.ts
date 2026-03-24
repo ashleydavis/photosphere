@@ -182,14 +182,14 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
                     // Get file info and compute hash of source file
                     const fileInfo = await assetStorage.info(sourceFile);
                     if (fileInfo) {
-                        const sourceHash = await computeHash(assetStorage.readStream(sourceFile));
-                        
+                        const sourceHash = await computeHash(await assetStorage.readStream(sourceFile));
+
                         // Copy file from assets/ to asset/
-                        const readStream = assetStorage.readStream(sourceFile);
+                        const readStream = await assetStorage.readStream(sourceFile);
                         await assetStorage.writeStream(destFile, fileInfo.contentType, readStream);
                         
                         // Verify the copied file has the same hash
-                        const destHash = await computeHash(assetStorage.readStream(destFile));
+                        const destHash = await computeHash(await assetStorage.readStream(destFile));
                         
                         if (sourceHash.toString('hex') !== destHash.toString('hex')) {
                             throw new Error(`Hash mismatch during file move from ${sourceFile} to ${destFile}: source=${sourceHash.toString('hex')}, dest=${destHash.toString('hex')}`);

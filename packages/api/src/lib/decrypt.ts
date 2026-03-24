@@ -46,7 +46,7 @@ async function decryptFile(
         log.verbose(`Decrypting ${fileName}`);
 
         await retry(async () => {
-            const stream = readStorage.readStream(fileName);
+            const stream = await readStorage.readStream(fileName);
             await writeStorage.writeStream(
                 fileName,
                 srcFileInfo.contentType,

@@ -215,7 +215,7 @@ export async function importFileHandler(data: IImportFileData, context: ITaskCon
                     throw new Error(`Failed to get info for file ${assetPath} (${assetId})`);
                 }
 
-                hashedAsset = await retry(() => computeAssetHash(storage.readStream(assetPath), assetInfo), 3, 1_000, 2, LARGE_FILE_TIMEOUT);
+                hashedAsset = await retry(async () => computeAssetHash(await storage.readStream(assetPath), assetInfo), 3, 1_000, 2, LARGE_FILE_TIMEOUT);
                 if (Buffer.compare(hashedAsset.hash, expectedHashBuffer) !== 0) {
                     throw new Error(`Hash mismatch for file ${assetPath} (${assetId}): ${hashedAsset.hash.toString("hex")} != ${expectedHashBuffer.toString("hex")}`);
                 }
@@ -239,7 +239,7 @@ export async function importFileHandler(data: IImportFileData, context: ITaskCon
                     if (!thumbInfo) {
                         throw new Error(`Failed to get info for thumbnail ${thumbPath} (${assetId})`);
                     }
-                    const hashedThumb = await retry(() => computeAssetHash(storage.readStream(thumbPath), thumbInfo), 3, 1_000, 2, LARGE_FILE_TIMEOUT);
+                    const hashedThumb = await retry(async () => computeAssetHash(await storage.readStream(thumbPath), thumbInfo), 3, 1_000, 2, LARGE_FILE_TIMEOUT);
                     thumbHash = hashedThumb.hash;
                     thumbLength = hashedThumb.length;
                     thumbLastModified = hashedThumb.lastModified;
@@ -264,7 +264,7 @@ export async function importFileHandler(data: IImportFileData, context: ITaskCon
                     if (!displayInfo) {
                         throw new Error(`Failed to get info for display ${displayPath} (${assetId})`);
                     }
-                    const hashedDisplay = await retry(() => computeAssetHash(storage.readStream(displayPath), displayInfo), 3, 1_000, 2, LARGE_FILE_TIMEOUT);
+                    const hashedDisplay = await retry(async () => computeAssetHash(await storage.readStream(displayPath), displayInfo), 3, 1_000, 2, LARGE_FILE_TIMEOUT);
                     displayHash = hashedDisplay.hash;
                     displayLength = hashedDisplay.length;
                     displayLastModified = hashedDisplay.lastModified;

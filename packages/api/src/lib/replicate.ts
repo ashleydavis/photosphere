@@ -133,7 +133,7 @@ async function replicateFiles(
         // Copy the file from source to dest.
         //
         await retry(async  () => {
-            const readStream = assetStorage.readStream(fileName);
+            const readStream = await assetStorage.readStream(fileName);
             await destAssetStorage.writeStream(fileName, srcFileInfo.contentType, readStream);
         }, 3, 1_000, 2, LARGE_FILE_TIMEOUT);
 
@@ -142,7 +142,7 @@ async function replicateFiles(
         //
         // Compute hash for the copied file.
         //
-        const copiedHash = await retry(() => computeHash(destAssetStorage.readStream(fileName)), 3, 1_000, 2, LARGE_FILE_TIMEOUT);
+        const copiedHash = await retry(async () => computeHash(await destAssetStorage.readStream(fileName)), 3, 1_000, 2, LARGE_FILE_TIMEOUT);
         if (Buffer.compare(copiedHash, sourceHash) !== 0) {
             throw new Error(
 `Copied file "${fileName}" hash does not match the source hash.

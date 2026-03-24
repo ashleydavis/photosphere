@@ -55,7 +55,7 @@ export async function encryptFile(
             await writeStorage.writeStream(
                 fileName,
                 srcFileInfo.contentType,
-                readStorage.readStream(fileName)
+                await readStorage.readStream(fileName)
             );
         }, 3, 1_000, 2, LARGE_FILE_TIMEOUT);
 

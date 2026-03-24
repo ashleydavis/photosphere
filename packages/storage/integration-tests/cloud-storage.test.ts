@@ -178,7 +178,7 @@ describe('CloudStorage Tests', () => {
 
             await storage.writeStream(`${location}/${testFile}`, 'text/plain', readableStream, testContent.length);
             
-            const stream = storage.readStream(`${location}/${testFile}`);
+            const stream = await storage.readStream(`${location}/${testFile}`);
             const chunks: Buffer[] = [];
             
             await new Promise<void>((resolve, reject) => {

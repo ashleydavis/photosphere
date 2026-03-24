@@ -90,7 +90,7 @@ export class StoragePrefixWrapper implements IStorage {
     //
     // Streams a file from stroage.
     //
-    readStream(filePath: string): Readable {
+    async readStream(filePath: string): Promise<Readable> {
         return this.storage.readStream(this.makeFullPath(filePath));
     }
 

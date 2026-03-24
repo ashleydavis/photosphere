@@ -144,7 +144,7 @@ export class MockStorage implements IStorage {
         };
     }
 
-    readStream(filePath: string): Readable {
+    async readStream(filePath: string): Promise<Readable> {
         const file = this.files.get(filePath);
         if (!file) {
             throw new Error(`File not found: ${filePath}`);
