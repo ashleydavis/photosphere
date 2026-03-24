@@ -75,74 +75,84 @@ export function createEncryptionStream(publicKey: KeyObject): Duplex {
 export function createDecryptionStream(privateKeyMap: IPrivateKeyMap): Duplex {
     let decipher: Decipher | undefined;
     let passThrough = false;
-    let buffer = Buffer.alloc(0);
+    const headerBuffer = Buffer.allocUnsafe(NEW_FORMAT_PAYLOAD_OFFSET);
+    let headerBytesReceived = 0;
     const tagBytes = Buffer.from(ENCRYPTION_TAG, "ascii");
 
     return new Transform({
         transform(chunk, encoding, callback) {
-            buffer = Buffer.concat([buffer, chunk]);
-
             if (passThrough) {
-                this.push(buffer);
-                buffer = Buffer.alloc(0);
+                this.push(chunk);
                 callback();
                 return;
             }
 
             if (decipher) {
-                this.push(decipher.update(buffer));
-                buffer = Buffer.alloc(0);
+                this.push(decipher.update(chunk));
                 callback();
                 return;
             }
 
-            if (buffer.length < 4) {
+            const toCopy = Math.min(chunk.length, NEW_FORMAT_PAYLOAD_OFFSET - headerBytesReceived);
+            chunk.copy(headerBuffer, headerBytesReceived, 0, toCopy);
+            headerBytesReceived += toCopy;
+            const remainder = chunk.subarray(toCopy);
+
+            if (headerBytesReceived < 4) {
                 callback();
                 return;
             }
-            
-            const isLegacy = !buffer.slice(0, 4).equals(tagBytes);
+
+            const isLegacy = !headerBuffer.subarray(0, 4).equals(tagBytes);
             if (isLegacy) {
                 const defaultKey = privateKeyMap["default"];
                 if (!defaultKey) {
                     passThrough = true;
-                    this.push(buffer);
-                    buffer = Buffer.alloc(0);
+                    this.push(headerBuffer.subarray(0, headerBytesReceived));
+                    headerBytesReceived = 0;
+                    if (remainder.length > 0) {
+                        this.push(remainder);
+                    }
                     callback();
                     return;
                 }
-                if (buffer.length < LEGACY_HEADER_LENGTH) {
+                if (headerBytesReceived < LEGACY_HEADER_LENGTH) {
                     callback();
                     return;
                 }
                 try {
-                    const encryptedKey = buffer.slice(0, 512);
-                    const iv = buffer.slice(512, 512 + 16);
+                    const encryptedKey = headerBuffer.subarray(0, 512);
+                    const iv = headerBuffer.subarray(512, 512 + 16);
                     const key = privateDecrypt(defaultKey, encryptedKey);
                     decipher = createDecipheriv("aes-256-cbc", key, iv);
-                    buffer = buffer.slice(LEGACY_HEADER_LENGTH);
-                    if (buffer.length > 0) {
-                        this.push(decipher.update(buffer));
-                        buffer = Buffer.alloc(0);
+                    const bufferedCiphertext = headerBuffer.subarray(LEGACY_HEADER_LENGTH, headerBytesReceived);
+                    if (bufferedCiphertext.length > 0) {
+                        this.push(decipher.update(bufferedCiphertext));
+                    }
+                    if (remainder.length > 0) {
+                        this.push(decipher.update(remainder));
                     }
                 }
                 catch {
                     passThrough = true;
-                    this.push(buffer);
-                    buffer = Buffer.alloc(0);
+                    this.push(headerBuffer.subarray(0, headerBytesReceived));
+                    headerBytesReceived = 0;
+                    if (remainder.length > 0) {
+                        this.push(remainder);
+                    }
                 }
                 callback();
                 return;
             }
 
-            if (buffer.length < NEW_FORMAT_PAYLOAD_OFFSET) {
+            if (headerBytesReceived < NEW_FORMAT_PAYLOAD_OFFSET) {
                 callback();
                 return;
             }
 
-            const version = buffer.readUInt32LE(4);
-            const encType = buffer.slice(8, 12).toString("ascii").replace(/\0/g, "").trim();
-            const keyHashHex = buffer.slice(12, 12 + PUBLIC_KEY_HASH_LENGTH).toString("hex");
+            const version = headerBuffer.readUInt32LE(4);
+            const encType = headerBuffer.subarray(8, 12).toString("ascii").replace(/\0/g, "").trim();
+            const keyHashHex = headerBuffer.subarray(12, 12 + PUBLIC_KEY_HASH_LENGTH).toString("hex");
             let key = privateKeyMap[keyHashHex];
             if (!key && (!SUPPORTED_VERSIONS.includes(version) || !SUPPORTED_TYPES.includes(encType))) {
                 key = privateKeyMap["default"];
@@ -150,37 +160,35 @@ export function createDecryptionStream(privateKeyMap: IPrivateKeyMap): Duplex {
 
             if (!key) {
                 passThrough = true;
-                this.push(buffer);
-                buffer = Buffer.alloc(0);
+                this.push(headerBuffer.subarray(0, headerBytesReceived));
+                headerBytesReceived = 0;
+                if (remainder.length > 0) {
+                    this.push(remainder);
+                }
                 callback();
                 return;
             }
-            
-            const encryptedKey = buffer.slice(NEW_FORMAT_HEADER_LENGTH, NEW_FORMAT_HEADER_LENGTH + 512);
-            const iv = buffer.slice(NEW_FORMAT_HEADER_LENGTH + 512, NEW_FORMAT_HEADER_LENGTH + 512 + 16);
+
+            const encryptedKey = headerBuffer.subarray(NEW_FORMAT_HEADER_LENGTH, NEW_FORMAT_HEADER_LENGTH + 512);
+            const iv = headerBuffer.subarray(NEW_FORMAT_HEADER_LENGTH + 512, NEW_FORMAT_HEADER_LENGTH + 512 + 16);
             const symKey = privateDecrypt(key, encryptedKey);
             decipher = createDecipheriv('aes-256-cbc', symKey, iv);
-            buffer = buffer.slice(NEW_FORMAT_PAYLOAD_OFFSET);
-            if (buffer.length > 0) {
-                this.push(decipher.update(buffer));
-                buffer = Buffer.alloc(0);
+            if (remainder.length > 0) {
+                this.push(decipher.update(remainder));
             }
             callback();
         },
 
         flush(callback) {
-            if (passThrough && buffer.length > 0) {
-                this.push(buffer);
+            if (passThrough && headerBytesReceived > 0) {
+                this.push(headerBuffer.subarray(0, headerBytesReceived));
             }
             else if (decipher) {
-                if (buffer.length > 0) {
-                    this.push(decipher.update(buffer));
-                }
                 this.push(decipher.final());
             }
-            else if (buffer.length > 0) {
+            else if (headerBytesReceived > 0) {
                 // Plain data that never triggered decrypt (e.g. shorter than legacy header)
-                this.push(buffer);
+                this.push(headerBuffer.subarray(0, headerBytesReceived));
             }
             callback();
         },
