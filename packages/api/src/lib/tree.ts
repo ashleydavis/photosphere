@@ -130,7 +130,7 @@ export async function buildFilesTree(
         return { fileName, hash, length: info.length, lastModified: info.lastModified };
     }
 
-    const BATCH_SIZE = 10;
+    const BATCH_SIZE = 100;
     for await (const batch of batchGenerator(walkDirectory(storage, "", [/^\.db(\/|$)/]), BATCH_SIZE)) {
         const results = await Promise.all(batch.map(({ fileName }) => readAndHash(fileName)));
         for (const r of results) {
