@@ -1,3 +1,4 @@
+import { pipeline } from "stream/promises";
 import express from "express";
 import type { Request, Response, Application } from "express";
 import { createServer, type Server } from "http";
@@ -118,7 +119,7 @@ export async function createAssetServer(options: IAssetServerOptions): Promise<I
             const assetStream = await loadAssetStream(assetId, assetType, databasePath);
             
             res.setHeader("Content-Type", "application/octet-stream");
-            assetStream.pipe(res);
+            await pipeline(assetStream, res);
         }
         catch (error: any) {
             log.exception(`Error loading asset ${assetId}`, error);

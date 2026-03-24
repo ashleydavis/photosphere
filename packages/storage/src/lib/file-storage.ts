@@ -1,5 +1,6 @@
 import * as fs from "fs/promises";
 import { createReadStream, createWriteStream } from "fs";
+import { pipeline } from "stream/promises";
 import * as path from "path";
 import { Readable } from "stream";
 import { IFileInfo, IListResult, IStorage, IWriteLockInfo } from "./storage";
@@ -158,27 +159,11 @@ export class FileStorage implements IStorage {
     //
     // Writes an input stream to storage.
     //
-    writeStream(filePath: string, contentType: string | undefined, inputStream: Readable): Promise<void> {
-
-        return new Promise<void>((resolve, reject) => {
-            const tmpPath = `${filePath}.tmp`;
-            ensureDir(path.dirname(filePath))
-                .then(() => {
-                    const fileWriteStream = createWriteStream(tmpPath);
-                    inputStream.pipe(fileWriteStream)
-                        .on("error", (err: any) => {
-                            reject(err);
-                        })
-                        .on("finish", () => {
-                            fs.rename(tmpPath, filePath)
-                                .then(() => resolve())
-                                .catch((err) => reject(err));
-                        });
-                })
-                .catch((err) => {
-                    reject(err);
-                });
-        });
+    async writeStream(filePath: string, _contentType: string | undefined, inputStream: Readable): Promise<void> {
+        const tmpPath = `${filePath}.tmp`;
+        await ensureDir(path.dirname(filePath));
+        await pipeline(inputStream, createWriteStream(tmpPath));
+        await fs.rename(tmpPath, filePath);
     }
 
     //
