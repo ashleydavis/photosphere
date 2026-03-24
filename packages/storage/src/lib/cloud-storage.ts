@@ -10,6 +10,7 @@ import {
     CopyObjectCommand,
     ListObjectsV2CommandOutput,
 } from "@aws-sdk/client-s3";
+import { S3RangeReadableStream } from "./s3-range-readable-stream";
 import { Upload } from "@aws-sdk/lib-storage";
 import { IFileInfo, IListResult, IStorage, IWriteLockInfo } from "./storage";
 import { WrappedError } from "utils";
@@ -374,16 +375,7 @@ export class CloudStorage implements IStorage {
             key = key.slice(1); // Remove leading slash.
         }
 
-        try {
-            const response = await this.s3.send(new GetObjectCommand({
-                Bucket: bucket,
-                Key: key,
-            }));
-            return response.Body as Readable;
-        }
-        catch (err: any) {
-            throw new WrappedError(`Failed to read stream from ${filePath}: ${err.message}`, { cause: err });
-        }
+        return new S3RangeReadableStream(this.s3, bucket, key);
     }
 
     //
