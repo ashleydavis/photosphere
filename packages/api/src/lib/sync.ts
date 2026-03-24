@@ -161,7 +161,7 @@ async function pushFiles(sourceAssetStorage: IStorage, sourceMetadataStorage: IS
         }
         
         // Copy file from source to target.
-        const readStream = sourceAssetStorage.readStream(fileName);
+        const readStream = await sourceAssetStorage.readStream(fileName);
         await targetAssetStorage.writeStream(fileName, sourceFileInfo.contentType, readStream);
 
         const copiedFileInfo = await targetAssetStorage.info(fileName);
@@ -169,7 +169,7 @@ async function pushFiles(sourceAssetStorage: IStorage, sourceMetadataStorage: IS
             throw new Error(`Failed to copy ${fileName} to target db.`);
         }
 
-        const copiedFileHash = await computeHash(targetAssetStorage.readStream(fileName));
+        const copiedFileHash = await computeHash(await targetAssetStorage.readStream(fileName));
         if (Buffer.compare(copiedFileHash, sourceHash) !== 0) {
             throw new Error(`Hash of copied file ${fileName} is different to the source hash.`);            
         }

@@ -1,4 +1,4 @@
-import { Readable, PassThrough } from "stream";
+import { Readable } from "stream";
 import {
     S3Client,
     ListObjectsV2Command,
@@ -389,31 +389,25 @@ export class CloudStorage implements IStorage {
     //
     // Streams a file from storage.
     //
-    readStream(filePath: string): Readable {
+    async readStream(filePath: string): Promise<Readable> {
         let { bucket, key } = this.parsePath(filePath);
         if (key.startsWith("/")) {
             key = key.slice(1); // Remove leading slash.
         }
 
-        const passThrough = new PassThrough();
-
-        this.s3.send(new GetObjectCommand({
-            Bucket: bucket,
-            Key: key,
-        }))
-        .then(response => {
-            (response.Body as Readable).pipe(passThrough);
-        })
-        .catch(err => {
+        try {
+            const response = await this.s3.send(new GetObjectCommand({
+                Bucket: bucket,
+                Key: key,
+            }));
+            return response.Body as Readable;
+        }
+        catch (err: any) {
             if (this.verbose) {
-                passThrough.destroy(new WrappedError(`Failed to read stream from ${filePath}: ${err.message}`, { cause: err }));
+                throw new WrappedError(`Failed to read stream from ${filePath}: ${err.message}`, { cause: err });
             }
-            else {
-                passThrough.destroy(err instanceof Error ? err : new Error(String(err)));
-            }
-        });
-
-        return passThrough;
+            throw err;
+        }
     }
 
     //

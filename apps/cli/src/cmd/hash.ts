@@ -46,7 +46,7 @@ export async function hashCommand(filePath: string, options: IHashCommandOptions
         return;
     }
 
-    const stream = storage.readStream(fileName);
+    const stream = await storage.readStream(fileName);
     const hashBuffer = await computeHash(stream);
     const hashHex = hashBuffer.toString('hex');
     

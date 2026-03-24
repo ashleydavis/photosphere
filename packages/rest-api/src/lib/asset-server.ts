@@ -71,7 +71,7 @@ export async function createAssetServer(options: IAssetServerOptions): Promise<I
         await loadDatabase(assetStorage, database.metadataCollection);
         
         // Stream the asset
-        return streamAsset(assetStorage, assetId, assetType);
+        return await streamAsset(assetStorage, assetId, assetType);
     }
 
     // Use existing app or create new one

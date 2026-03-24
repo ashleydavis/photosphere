@@ -230,7 +230,7 @@ export async function createReadme(
 
     merkleTree = addItem(merkleTree, {
         name: 'README.md',
-        hash: await retry(() => computeHash(rawStorage.readStream('README.md'))),
+        hash: await retry(async () => computeHash(await rawStorage.readStream('README.md'))),
         length: readmeInfo.length,
         lastModified: readmeInfo.lastModified,
     });
@@ -357,7 +357,7 @@ export async function getDatabaseSummary(assetStorage: IStorage): Promise<IDatab
 // Streams an asset from the database.
 // This is used by the REST API server to read assets.
 //
-export function streamAsset(assetStorage: IStorage, assetId: string, assetType: string): NodeJS.ReadableStream {
+export async function streamAsset(assetStorage: IStorage, assetId: string, assetType: string): Promise<NodeJS.ReadableStream> {
     const assetPath = `${assetType}/${assetId}`;
     return assetStorage.readStream(assetPath);
 }
@@ -394,7 +394,7 @@ export async function writeAsset(
             throw new Error(`Failed to get info for file "${assetPath}"`);
         }
 
-        const hashedAsset = await retry(() => computeAssetHash(assetStorage.readStream(assetPath), assetInfo));
+        const hashedAsset = await retry(async () => computeAssetHash(await assetStorage.readStream(assetPath), assetInfo));
 
         await refreshWriteLock(assetStorage, sessionId);
 

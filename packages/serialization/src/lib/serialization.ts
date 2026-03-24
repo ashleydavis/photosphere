@@ -668,8 +668,8 @@ export async function load<T>(
 // reading the version bytes directly.
 //
 export async function loadVersion(storage: IStorage, filePath: string): Promise<number | undefined> {
+    const stream = await storage.readStream(filePath);
     return new Promise((resolve, reject) => {
-        const stream = storage.readStream(filePath);
         const versionBuffer = Buffer.alloc(4);
         let bytesRead = 0;
 

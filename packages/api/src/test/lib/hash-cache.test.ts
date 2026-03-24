@@ -64,7 +64,7 @@ class MockStorage {
         this.files.set(filePath, data);
     }
     
-    readStream(filePath: string): any {
+    async readStream(filePath: string): Promise<any> {
         throw new Error('Not implemented in mock');
     }
     

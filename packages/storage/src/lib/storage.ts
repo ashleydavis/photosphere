@@ -109,7 +109,7 @@ export interface IStorage {
     // Streams a file from stroage.
     // Returns a Node Readable stream (has destroy() for early termination).
     //
-    readStream(filePath: string): Readable;
+    readStream(filePath: string): Promise<Readable>;
 
     //
     // Writes an input stream to storage.
