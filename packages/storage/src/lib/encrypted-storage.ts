@@ -1,10 +1,10 @@
 import { Readable } from "stream";
-import { pipeline } from "stream/promises";
 import { IFileInfo, IListResult, IStorage, IWriteLockInfo } from "./storage";
 import { computeEncryptedLength, createDecryptionStream, createEncryptionStream } from "./encrypt-stream";
 import { KeyObject } from "node:crypto";
 import { decryptBuffer, encryptBuffer } from "./encrypt-buffer";
 import type { IPrivateKeyMap } from "./encryption-types";
+import { pipe } from "node-utils";
 
 //
 // A type of storage that wraps another storage and encrypts it.
@@ -87,7 +87,7 @@ export class EncryptedStorage implements IStorage {
     async readStream(filePath: string): Promise<Readable> {
         const decryptionStream = createDecryptionStream(this.decryptionKeyMap);
         const readStream = await this.storage.readStream(filePath);
-        await pipeline(readStream, decryptionStream);
+        pipe(readStream, decryptionStream);
         return decryptionStream;
     }
 
@@ -96,7 +96,7 @@ export class EncryptedStorage implements IStorage {
     //
     async writeStream(filePath: string, contentType: string | undefined, inputStream: Readable, contentLength?: number): Promise<void> {
         const encryptionStream = createEncryptionStream(this.encryptionPublicKey);
-        await pipeline(inputStream, encryptionStream);
+        pipe(inputStream, encryptionStream);
         await this.storage.writeStream(filePath, contentType, encryptionStream, contentLength !== undefined ? computeEncryptedLength(contentLength) : undefined);
     }
 

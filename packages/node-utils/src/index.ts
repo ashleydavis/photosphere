@@ -8,3 +8,4 @@ export * from "./lib/dir";
 export * from "./lib/fs";
 export * from "./lib/find-available-port";
 export * from "./lib/desktop-config";
+export * from "./lib/pipe";
