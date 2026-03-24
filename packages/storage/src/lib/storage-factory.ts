@@ -99,7 +99,7 @@ export function createStorage(rootPath: string, s3Config?: IS3Credentials, optio
     else if (rootPath.startsWith('s3:')) {
         // For S3, we keep the bucket:key format that CloudStorage expects
         const s3Path = rootPath.substring('s3:'.length);
-        storage = new CloudStorage(`s3:`, true, s3Config);
+        storage = new CloudStorage(`s3:`, s3Config);
         normalizedPath = s3Path;
         type = 's3';
     } 

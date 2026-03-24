@@ -49,7 +49,7 @@ export class CloudStorage implements IStorage {
     //
     private s3!: S3Client;
 
-    constructor(public readonly location: string, private verbose?: boolean, credentials?: IS3Credentials) {
+    constructor(public readonly location: string, credentials?: IS3Credentials) {
         const endpoint = credentials?.endpoint || process.env.AWS_ENDPOINT;
 
         this.s3 = new S3Client({
@@ -156,10 +156,7 @@ export class CloudStorage implements IStorage {
             };
         }
         catch (err: any) {
-            if (this.verbose) {
-                throw new WrappedError(`Failed to list files in ${path}: ${err.message}`, { cause: err });
-            }
-            throw err;
+            throw new WrappedError(`Failed to list files in ${path}: ${err.message}`, { cause: err });
         }
     }
 
@@ -215,10 +212,7 @@ export class CloudStorage implements IStorage {
             };
         }
         catch (err: any) {
-            if (this.verbose) {
-                throw new WrappedError(`Failed to list directories in ${path}: ${err.message}`, { cause: err });
-            }
-            throw err;
+            throw new WrappedError(`Failed to list directories in ${path}: ${err.message}`, { cause: err });
         }
     }
 
@@ -242,10 +236,7 @@ export class CloudStorage implements IStorage {
             if (err.name === "NotFound" || err.$metadata?.httpStatusCode === 404) {
                 return false;
             }
-            else if (this.verbose) {
-                throw new WrappedError(`Failed to check if file exists: ${err.message}`, { cause: err });
-            }
-            throw err;
+            throw new WrappedError(`Failed to check if file exists: ${err.message}`, { cause: err });
         }
     }
 
@@ -281,10 +272,7 @@ export class CloudStorage implements IStorage {
             return (response.Contents !== undefined && response.Contents.length > 0);
         }
         catch (err: any) {
-            if (this.verbose) {
-                throw new WrappedError(`Failed to check if directory exists: ${err.message}`, { cause: err });
-            }
-            throw err;
+            throw new WrappedError(`Failed to check if directory exists: ${err.message}`, { cause: err });
         }
     }
     
@@ -315,10 +303,7 @@ export class CloudStorage implements IStorage {
             if (err.name === "NotFound" || err.$metadata?.httpStatusCode === 404) {
                 return undefined;
             }
-            else if (this.verbose) {
-                throw new WrappedError(`Failed to get info for ${filePath}: ${err.message}`, { cause: err });
-            }
-            throw err;
+            throw new WrappedError(`Failed to get info for ${filePath}: ${err.message}`, { cause: err });
         }
     }
 
@@ -344,10 +329,7 @@ export class CloudStorage implements IStorage {
             if (err.name === "NoSuchKey") {
                 return undefined;
             }
-            else if (this.verbose) {
-                throw new WrappedError(`Failed to read ${filePath}: ${err.message}`, { cause: err });
-            }
-            throw err;            
+            throw new WrappedError(`Failed to read ${filePath}: ${err.message}`, { cause: err });            
         }
     }
 
@@ -379,11 +361,8 @@ export class CloudStorage implements IStorage {
             }).done();
         }
         catch (err: any) {
-            if (this.verbose) {
-                throw new WrappedError(`Failed to write to ${filePath}: ${err.message}`, { cause: err });
-            }
-            throw err;
-        }       
+            throw new WrappedError(`Failed to write to ${filePath}: ${err.message}`, { cause: err });
+        }
     }
 
     //
@@ -403,10 +382,7 @@ export class CloudStorage implements IStorage {
             return response.Body as Readable;
         }
         catch (err: any) {
-            if (this.verbose) {
-                throw new WrappedError(`Failed to read stream from ${filePath}: ${err.message}`, { cause: err });
-            }
-            throw err;
+            throw new WrappedError(`Failed to read stream from ${filePath}: ${err.message}`, { cause: err });
         }
     }
 
@@ -438,10 +414,7 @@ export class CloudStorage implements IStorage {
             }).done();
         }
         catch (err: any) {
-            if (this.verbose) {
-                throw new WrappedError(`Failed to write stream to ${filePath}: ${err.message}`, { cause: err });
-            }
-            throw err;
+            throw new WrappedError(`Failed to write stream to ${filePath}: ${err.message}`, { cause: err });
         }
     }
 
@@ -535,10 +508,7 @@ export class CloudStorage implements IStorage {
             }));
         }
         catch (err: any) {
-            if (this.verbose) {
-                throw new WrappedError(`Failed to copy from ${srcPath} to ${destPath}: ${err.message}`, { cause: err });
-            }
-            throw err;
+            throw new WrappedError(`Failed to copy from ${srcPath} to ${destPath}: ${err.message}`, { cause: err });
         }
     }
 
@@ -573,10 +543,7 @@ export class CloudStorage implements IStorage {
             if (err.name === "NoSuchKey") {
                 return undefined;
             }
-            if (this.verbose) {
-                throw new WrappedError(`Failed to check write lock for ${filePath}: ${err.message}`, { cause: err });
-            }
-            throw err;
+            throw new WrappedError(`Failed to check write lock for ${filePath}: ${err.message}`, { cause: err });
         }
     }
 
@@ -703,10 +670,7 @@ export class CloudStorage implements IStorage {
                 log.verbose(`[LOCK] ${timestamp},ACQUIRE_FAILED_ERROR,${processId},${owner},${filePath},error:${putErr.message}`);
             }
             
-            if (this.verbose) {
-                throw new WrappedError(`Failed to acquire write lock for ${filePath}: ${putErr.message}`, { cause: putErr });
-            }
-            throw putErr;
+            throw new WrappedError(`Failed to acquire write lock for ${filePath}: ${putErr.message}`, { cause: putErr });
         }
     }
 
