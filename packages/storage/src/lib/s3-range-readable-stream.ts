@@ -12,6 +12,8 @@ const DEFAULT_CHUNK_SIZE = 10 * 1024 * 1024;
 // request is made, so no S3 response stream is held open between reads.
 // This prevents the memory leaks caused by holding a long-lived S3 body stream.
 //
+// NOTE: Breaking up an S3 download into multiple HTTP requests makes it really slow.
+//
 export class S3RangeReadableStream extends Readable {
 
     //
