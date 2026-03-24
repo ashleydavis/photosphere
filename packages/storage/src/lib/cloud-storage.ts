@@ -375,16 +375,7 @@ export class CloudStorage implements IStorage {
             key = key.slice(1); // Remove leading slash.
         }
 
-        try {
-            const response = await this.s3.send(new GetObjectCommand({
-                Bucket: bucket,
-                Key: key,
-            }));
-            return response.Body as Readable;
-        }
-        catch (err: any) {
-            throw new WrappedError(`Failed to read stream from ${filePath}: ${err.message}`, { cause: err });
-        }
+        return new S3RangeReadableStream(this.s3, bucket, key);
     }
 
     //

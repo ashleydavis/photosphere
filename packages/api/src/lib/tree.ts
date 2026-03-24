@@ -126,15 +126,7 @@ export async function buildFilesTree(
         if (!info) {
             throw new Error(`No info for file listed in storage: ${fileName}`);
         }
-        const hash = await retry(async () => {
-            const stream = await storage.readStream(fileName);
-            try {
-                return await computeHash(stream);
-            }
-            finally {
-                stream.destroy();
-            }
-        }, 3, 1_000, 2, LARGE_FILE_TIMEOUT, `Failed to hash file ${fileName}`);
+        const hash = await retry(async () => computeHash(await storage.readStream(fileName)), 3, 1_000, 2, LARGE_FILE_TIMEOUT, `Failed to hash file ${fileName}`);
         return { fileName, hash, length: info.length, lastModified: info.lastModified };
     }
 
