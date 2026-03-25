@@ -2,9 +2,14 @@ import { Readable } from "node:stream";
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
 //
-// Default chunk size for range requests: 10 MB.
+// Chunk sizes to attempt for range requests, in order.
+// On failure the stream falls back to the next smaller size.
 //
-const DEFAULT_CHUNK_SIZE = 10 * 1024 * 1024;
+const CHUNK_SIZES = [
+    100 * 1024 * 1024, // 100 MB — start large to minimise round-trips
+     20 * 1024 * 1024, // 20 MB
+     10 * 1024 * 1024, // 10 MB
+];
 
 //
 // A Node.js Readable stream that fetches an S3 object in fixed-size chunks
@@ -31,11 +36,16 @@ export class S3RangeReadableStream extends Readable {
     //
     private fetching: boolean = false;
 
+    //
+    // Index into CHUNK_SIZES for the current attempt. Advances on chunk failure
+    // so subsequent chunks use a smaller size.
+    //
+    private chunkSizeIndex: number = 0;
+
     constructor(
         private readonly s3: S3Client,
         private readonly bucket: string,
         private readonly key: string,
-        private readonly chunkSize: number = DEFAULT_CHUNK_SIZE
     ) {
         super();
     }
@@ -43,6 +53,8 @@ export class S3RangeReadableStream extends Readable {
     //
     // Called by Node.js when the consumer is ready for more data.
     // Fetches the next chunk via a range request and pushes it downstream.
+    // On failure, retries the same byte range with the next smaller chunk size
+    // before propagating the error.
     //
     async _read(): Promise<void> {
         if (this.fetching) {
@@ -58,44 +70,56 @@ export class S3RangeReadableStream extends Readable {
         this.fetching = true;
 
         try {
-            const rangeStart = this.offset;
-            const rangeEnd = rangeStart + this.chunkSize - 1;
+            let lastError: any;
 
-            const response = await this.s3.send(new GetObjectCommand({
-                Bucket: this.bucket,
-                Key: this.key,
-                Range: `bytes=${rangeStart}-${rangeEnd}`,
-            }));
+            while (this.chunkSizeIndex < CHUNK_SIZES.length) {
+                const chunkSize = CHUNK_SIZES[this.chunkSizeIndex];
+                const rangeStart = this.offset;
+                const rangeEnd = rangeStart + chunkSize - 1;
 
-            if (this.fileSize === undefined && response.ContentRange) {
-                const match = response.ContentRange.match(/\/(\d+)$/);
-                if (match) {
-                    this.fileSize = parseInt(match[1], 10);
+                try {
+                    const response = await this.s3.send(new GetObjectCommand({
+                        Bucket: this.bucket,
+                        Key: this.key,
+                        Range: `bytes=${rangeStart}-${rangeEnd}`,
+                    }));
+
+                    if (this.fileSize === undefined && response.ContentRange) {
+                        const match = response.ContentRange.match(/\/(\d+)$/);
+                        if (match) {
+                            this.fileSize = parseInt(match[1], 10);
+                        }
+                    }
+
+                    if (!response.Body) {
+                        this.push(null);
+                        return;
+                    }
+
+                    const bodyBytes = await response.Body.transformToByteArray();
+                    this.offset += bodyBytes.length;
+
+                    if (this.destroyed) {
+                        return;
+                    }
+
+                    this.push(Buffer.from(bodyBytes));
+
+                    // If this chunk brings us to the end of the file, signal end-of-stream.
+                    if (this.fileSize !== undefined && this.offset >= this.fileSize) {
+                        this.push(null);
+                    }
+
+                    return;
+                }
+                catch (err: any) {
+                    lastError = err;
+                    this.chunkSizeIndex++;
                 }
             }
 
-            if (!response.Body) {
-                this.push(null);
-                return;
-            }
-
-            const bodyBytes = await response.Body.transformToByteArray();
-            this.offset += bodyBytes.length;
-
-            if (this.destroyed) {
-                return;
-            }
-
-            this.push(Buffer.from(bodyBytes));
-
-            // If this chunk brings us to the end of the file, signal end-of-stream.
-            if (this.fileSize !== undefined && this.offset >= this.fileSize) {
-                this.push(null);
-            }
-        }
-        catch (err: any) {
             if (!this.destroyed) {
-                this.destroy(err);
+                this.destroy(lastError);
             }
         }
         finally {
