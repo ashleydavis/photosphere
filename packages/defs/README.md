@@ -8,7 +8,7 @@ Install dependencies for the monorep:
 
 ```bash
 cd photosphere
-pnpm install
+bun install
 ```
 
 Change to the defs package:
@@ -22,17 +22,17 @@ cd packages/defs
 Compile the code:
 
 ```bash
-pnpm compile
+bun run compile
 ```
 
 Compile with live reload:
 
 ```bash
-pnpm run compile:watch
+bun run compile:watch
 ```
 
 ## Run automated tests
 
 ```bash
-pnpm test
+bun test
 ```

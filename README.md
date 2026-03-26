@@ -3,15 +3,14 @@
 Photosphere is a cross-platform application for managing your database of digital media files (photos and videos). I like to think of it as the spiritual successor to [Picasa](https://en.wikipedia.org/wiki/Picasa) but with a UI more like modern Google Photos and backed by a Git-style database for immutable binary files like photos and videos that have editable metadata.
 
 Important features:
-- Local first so you own it and you control.
+- Local first so you own it and you control it.
 - Open source so you can understand what it does with your files.
-- Maintain data sovereignty: the storage and privacy of your files in under your control.
+- Maintain data sovereignty: the storage and privacy of your files are under your control.
 - Build a corruption resistant database of your digital media files.
 - Backup your database and keep your backup updated.
-- Bidirectional synchronization between devices.
+- Bidirectional synchronization between databases on different devices.
 - Detect and repair corrupt files.
-
-- Securely encrypt files that you store in the cloud vendor or your choice.
+- Securely encrypt files that you store in the cloud vendor of your choice.
 - Use the GUI to search, view and edit your photos and videos.
 
 Photosphere is a local-first application available as:
@@ -26,14 +25,13 @@ Contained herein are the code for Photosphere's:
 - Mobile apps
 - CLI tool
 
-Early development of Photosphere was covered in the book [The Feedback-Driven Developer](https://www.manning.com/books/the-feedback-driven-developer).
+Early development of Photosphere was covered in the book [The Feedback-Driven Developer](https://tfdd.codecapers.com.au/).
 
 See the [wiki](https://github.com/ashleydavis/photosphere/wiki) for installation and getting started.
 
 ## Ingesting assets
 
 Use the CLI tool `psi add` to scan a directory and do bulk uploads. Use `psi summary` to view database statistics, `psi verify` to check integrity, `psi replicate` to create backups, `psi sync` to synchronize databases between devices, and `psi compare` to verify backup consistency.  
-Use `psi encrypt` and `psi decrypt` to convert databases between plain and encrypted storage (or re-encrypt with new keys) without manually copying files. For encrypted workflows, `--key` accepts a comma-separated list; the first key is the default write key and legacy-read key, and the full list is used to read current-format encrypted files.
 
 To move assets from Google Photos:
 - Use Google Takeout to export all your assets to a series of large zip files.
@@ -43,26 +41,26 @@ To move assets from Google Photos:
 
 - photosphere/
     - apps/
-        - bdb-cli - BSON database CLI tool
+        - bdb-cli - BSON database CLI tool (for testing and debugging)
         - cli - Main CLI tool (psi)
         - desktop - Electron desktop application
         - desktop-frontend - React UI for Electron app
         - dev-frontend - Development web frontend
         - dev-server - WebSocket development server
-        - mk-cli - Merkle tree CLI tool
+        - mk-cli - Merkle tree CLI tool (for testing and debugging)
     - packages/
-        - api - Core API for media file database operations
+        - api - Core API for database operations
         - bdb - BSON database implementation
         - debug-server - Debug server utilities
         - defs - Type definitions
         - electron-defs - Electron-specific type definitions
         - merkle-tree - Merkle tree data structure
         - node-utils - Node.js utility functions
-        - rest-api - REST API server
+        - rest-api - REST API server (used by the desktop app to serve local photos)
         - serialization - Serialization utilities
         - storage - Storage abstraction layer
         - task-queue - Task queue system
-        - tools - Development tools
+        - tools - Tool management and media processing (ffmpeg, ffprobe, ImageMagick)
         - user-interface - Shared React UI components
         - utils - General utility functions
     - test - Data for testing.
@@ -71,7 +69,7 @@ To move assets from Google Photos:
 
 ### Pre-reqs
 
-You need [Bun](https://bun.sh/docs/installation) installed to run this code. Tested against Bun v1.3.3 on Ubuntu Linux, Windows 10/11 and MacOS.
+You need [Bun](https://bun.sh/docs/installation) installed to run this code. Tested against Bun v1.3.10 on Ubuntu Linux, Windows 10/11 and MacOS.
 
 ### Setup
 

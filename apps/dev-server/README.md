@@ -1,6 +1,6 @@
 # Dev-server
 
-A development server with for the Dev-frontend that's faster than developing directly wiht Electron.
+A development server with for the Dev-frontend that's faster than developing directly with Electron.
 
 ## Project Structure
 
@@ -14,12 +14,6 @@ dev-server/
 ├── package.json
 └── tsconfig.json
 ```
-
-## Features
-
-- WebSocket server running on port 3001
-- Bidirectional message exchange with the frontend
-- TypeScript support
 
 ## Usage
 

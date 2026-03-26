@@ -2,12 +2,39 @@
 
 A high-performance BSON-based database library for storing collections of documents with built-in sharding and indexing capabilities.
 
-## Features
+## Setup
 
-- **Sharded Collections**: Automatically distributes records across multiple shards for improved performance
-- **Sort Indexes**: B-tree based sort indexes with pagination support
-- **Type-Safe**: Full TypeScript support with type inference
-- **Flexible Storage**: Works with any storage backend (filesystem, S3, encrypted storage, etc.)
+Open a terminal and change directory to the bdb project:
+
+```bash
+cd photosphere/packages/bdb
+```
+
+Install dependencies:
+
+```bash
+bun install
+```
+
+## Compile
+
+Compile the code:
+
+```bash
+bun run compile
+```
+
+Compile with live reload:
+
+```bash
+bun run compile:watch
+```
+
+## Run automated tests
+
+```bash
+bun test
+```
 
 ## Usage
 
@@ -65,9 +92,4 @@ console.log(result.nextPageId); // ID for the next page
 ## CLI Tool
 
 The `bdb-cli` tool provides utilities for inspecting and managing BSON databases. See the `bdb-cli` package for more information.
-
-## License
-
-MIT
-
 

@@ -1,6 +1,6 @@
 # rest-api
 
-Implements the Photosphere REST API.
+Implements the Photosphere REST API used to serve local photos to the desktop app.
 
 ## Setup
 
