@@ -30,6 +30,7 @@ import { originCommand } from './src/cmd/origin';
 import { setOriginCommand, ISetOriginCommandOptions } from './src/cmd/set-origin';
 import { encryptCommand } from './src/cmd/encrypt';
 import { decryptCommand } from './src/cmd/decrypt';
+import { fixConfigCommand } from './src/cmd/fix-config';
 import { initContext } from './src/lib/init-cmd';
 import { MAIN_EXAMPLES, getCommandExamplesHelp } from './src/examples';
 import pc from "picocolors";
@@ -279,6 +280,16 @@ Resources:
         .option(...yesOption)
         .option(...cwdOption)
         .action(initContext(debugBuildFilesTreeCommand));
+
+    debugCommand
+        .command("fix-config")
+        .description("Decrypts .db/config.json in place if it was accidentally encrypted.")
+        .option(...dbOption)
+        .option(...keyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option(...cwdOption)
+        .action(initContext(fixConfigCommand));
 
     program
         .command("help [command]")
