@@ -1,18 +1,40 @@
 # Serialization Package
 
-Binary serialization and deserialization with versioning support.
-
-## Overview
-
 This package provides utilities for saving and loading data with version headers, allowing for backwards compatibility and data format evolution over time.
 
-## Features
+## Setup
 
-- **Version Header**: Automatically includes a 32-bit version number at the beginning of each file
-- **Flexible Serializers**: Use any serialization format (JSON, BSON, Protocol Buffers, etc.)
-- **Version Migration**: Support multiple deserializers for different data format versions
-- **Type Safety**: Full TypeScript support with generic types
-- **Error Handling**: Clear error messages for unsupported versions
+Open a terminal and change directory to the serialization project:
+
+```bash
+cd photosphere/packages/serialization
+```
+
+Install dependencies:
+
+```bash
+bun install
+```
+
+## Compile
+
+Compile the code:
+
+```bash
+bun run compile
+```
+
+Compile with live reload:
+
+```bash
+bun run compile:watch
+```
+
+## Run automated tests
+
+```bash
+bun test
+```
 
 ## Usage
 

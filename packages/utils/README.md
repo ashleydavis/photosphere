@@ -13,7 +13,7 @@ cd photosphere/packages/utils
 Install dependencies:
 
 ```bash
-pnpm install
+bun install
 ```
 
 ## Compile
@@ -21,17 +21,17 @@ pnpm install
 Compile the code:
 
 ```bash
-pnpm compile
+bun run compile
 ```
 
 Compile with live reload:
 
 ```bash
-pnpm run compile:watch
+bun run compile:watch
 ```
 
 ## Run automated tests
 
 ```bash
-pnpm test
+bun test
 ```

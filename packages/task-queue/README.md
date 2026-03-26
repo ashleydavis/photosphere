@@ -2,35 +2,38 @@
 
 A task queue system using Bun workers for parallel task execution. This package provides a simple interface for queuing and executing tasks in parallel using Bun's worker threads.
 
-## Todo
+## Setup
 
-- Default max workers to num cpus.
-- Each task needs to return json results.
-    - I need to be able to accumulate those.
-- Check all times and uuids come from the providers.
-- Crashed tasks.
-- Task timeout.
-- Dispatch next task when worker is idle.
-- Lazily create workers up to maximum.
-- Set max workers as an arg.
-- Allocate multiple tasks to each worker (maybe, can we see how loaded each task is).
-
-
-## Features
-
-- **Parallel Execution**: Execute multiple tasks concurrently using Bun workers
-- **Task Status Tracking**: Monitor task status (pending, running, completed, failed)
-- **Task Results**: Get full results including outputs, errors, and metadata
-- **Completion Callbacks**: Register callbacks to be notified when tasks complete
-- **Result Queries**: Get results for individual tasks, all tasks, successful tasks, or failed tasks
-- **Isolated Working Directories**: Each task gets its own temporary working directory
-- **Type-Safe**: Full TypeScript support with comprehensive type definitions
-- **Promise-Based**: Use async/await for task completion
-
-## Installation
+Open a terminal and change directory to the task-queue project:
 
 ```bash
-bun add task-queue
+cd photosphere/packages/task-queue
+```
+
+Install dependencies:
+
+```bash
+bun install
+```
+
+## Compile
+
+Compile the code:
+
+```bash
+bun run compile
+```
+
+Compile with live reload:
+
+```bash
+bun run compile:watch
+```
+
+## Run automated tests
+
+```bash
+bun test
 ```
 
 ## Usage
@@ -244,117 +247,4 @@ const queue = new TaskQueue(
 );
 ```
 
-## API Reference
-
-### `ITaskQueue`
-
-The main interface for the task queue.
-
-#### Methods
-
-- **`addTask(type: string, data: any): string`**
-  - Adds a task to the queue
-  - Returns the task ID (UUID)
-  - Parameters:
-    - `type`: The task type (must have a registered handler)
-    - `data`: Task inputs (any serializable data)
-
-- **`registerHandler(type: string, handler: TaskHandler): void`**
-  - Registers a handler for a task type
-  - Parameters:
-    - `type`: The task type name
-    - `handler`: Async function that processes the task
-      - Signature: `(data: any) => Promise<any>`
-      - Returns the result outputs (can be any type: object, string, number, etc.)
-
-- **`onTaskComplete(callback: TaskCompletionCallback): void`**
-  - Registers a callback that will be invoked when any task completes (success or failure)
-  - Parameters:
-    - `callback`: Function that receives the task result
-      - Signature: `(result: ITaskResult) => void`
-
-- **`taskStatus(id: string): ITaskResult | undefined`**
-  - Gets the current status of a task without waiting
-  - Returns `undefined` if task not found
-  - Returns full result including outputs, error, and metadata
-
-- **`getTaskResult(id: string): ITaskResult | undefined`**
-  - Gets the full result of a specific task (including outputs)
-  - Returns `undefined` if task not found
-  - Same as `taskStatus()` but more explicit about returning full results
-
-- **`getAllTaskResults(): ITaskResult[]`**
-  - Gets results for all tasks (pending, running, completed, and failed)
-  - Returns an array of all task results
-
-- **`getSuccessfulTaskResults(): ITaskResult[]`**
-  - Gets results for all successfully completed tasks
-  - Returns an array of completed task results
-
-- **`getFailedTaskResults(): ITaskResult[]`**
-  - Gets results for all failed tasks
-  - Returns an array of failed task results with error details
-
-- **`awaitAllTasks(): Promise<void>`**
-  - Waits for all pending and running tasks to complete
-  - Resolves when the queue is empty
-
-- **`getStatus(): IQueueStatus`**
-  - Gets overall queue status
-  - Returns an object with:
-    - `pending`: Number of pending tasks
-    - `running`: Number of running tasks
-    - `completed`: Number of completed tasks
-    - `failed`: Number of failed tasks
-    - `total`: Total number of tasks
-
-### `TaskStatus`
-
-Enumeration of task statuses:
-- `Pending`: Task is queued but not yet started
-- `Running`: Task is currently executing
-- `Completed`: Task completed successfully
-- `Failed`: Task failed with an error
-
-### `ITaskResult`
-
-Task result object:
-```typescript
-{
-    status: TaskStatus;
-    message?: string;      // Status message (auto-generated if outputs is string)
-    error?: string;        // Serialized error object as JSON string (if failed)
-    outputs?: any;         // The actual result data returned by the handler
-    inputs: any;           // The original arguments/data sent to the task
-    taskId: string;        // The task ID
-    taskType: string;      // The task type
-    createdAt: Date;       // When the task was created
-    startedAt?: Date;      // When the task started executing
-    completedAt?: Date;    // When the task completed (or failed)
-}
-```
-
-**Note**: The `error` field contains a JSON-serialized error object with `message`, `stack`, `name`, and other error properties. You can parse it with `JSON.parse(result.error)` to access the full error details.
-
-### `IQueueStatus`
-
-Queue status object:
-```typescript
-{
-    pending: number;
-    running: number;
-    completed: number;
-    failed: number;
-    total: number;
-}
-```
-
-## Requirements
-
-- Bun runtime (this package uses Bun workers)
-- TypeScript 5.6+ (for type definitions)
-
-## License
-
-MIT
 

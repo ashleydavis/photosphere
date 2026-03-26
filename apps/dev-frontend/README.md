@@ -11,6 +11,7 @@ dev-frontend/
 │   ├── app.tsx                                # Main app component
 │   ├── tailwind.css                           # Tailwind CSS
 │   ├── lib/
+│   │   ├── platform-provider-web.tsx          # Web platform provider
 │   │   ├── task-queue-provider-websocket.ts   # WebSocket task queue provider
 │   │   ├── worker-backend-websocket.ts        # WebSocket worker backend
 │   │   └── use-web-socket.ts                  # WebSocket hook
@@ -20,6 +21,7 @@ dev-frontend/
 ├── index.html                                 # HTML template
 ├── package.json
 ├── vite.config.ts                             # Vite configuration
+├── playwright.config.js                       # Playwright configuration
 ├── tailwind.config.js                         # Tailwind configuration
 ├── postcss.config.js                          # PostCSS configuration
 └── tsconfig.json
@@ -37,9 +39,9 @@ cd apps/dev-frontend
 
 To enable the frontend you must first run the [dev-server](../dev-server/README.md).
 
-## Run the Vite dev server
+## Run the frontend
 
-Run the dev server like this:
+Run the frontend like this:
 
 ```bash
 bun start
@@ -76,7 +78,7 @@ After building the static web page, you can test it locally using `live-server`.
 First install live-server globally:
 
 ```bash
-pnpm install -g live-server
+bun install -g live-server
 ```
 
 Now change into the directory where the static web page is generated:
