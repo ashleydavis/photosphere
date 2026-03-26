@@ -4,7 +4,7 @@
 //
 
 import { IStorage } from "storage";
-import { retry } from "utils";
+import { retry, WrappedError } from "utils";
 
 const CONFIG_PATH = ".db/config.json";
 
@@ -31,7 +31,13 @@ export async function loadDatabaseConfig(rawStorage: IStorage): Promise<IDatabas
         return null;
     }
     const text = data.toString("utf8");
-    const parsed = JSON.parse(text) as IDatabaseConfig;
+    let parsed: IDatabaseConfig;
+    try {
+        parsed = JSON.parse(text) as IDatabaseConfig;
+    }
+    catch (err) {
+        throw new WrappedError(`Failed to parse database config at ${CONFIG_PATH}`, { cause: err as Error });
+    }
     return parsed;
 }
 
