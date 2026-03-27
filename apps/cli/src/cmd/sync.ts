@@ -113,7 +113,7 @@ export async function syncCommand(context: ICommandContext, options: ISyncComman
     };
     const { assetStorage: targetAssetStorage, rawAssetStorage: targetRawAssetStorage, bsonDatabase: targetBsonDatabase } = await loadDatabase(targetOptions.db, targetOptions, uuidGenerator, timestampProvider, sessionId);
 
-    await syncDatabases(sourceAssetStorage, sourceAssetStorage, sourceBsonDatabase, sessionId, sourceRawAssetStorage, targetAssetStorage, targetAssetStorage, targetBsonDatabase, sessionId, targetRawAssetStorage);
+    await syncDatabases(sourceAssetStorage, sourceRawAssetStorage, sourceBsonDatabase, targetAssetStorage, targetRawAssetStorage, targetBsonDatabase, sessionId);
 
     const lastSyncedAt = new Date().toISOString();
     await updateDatabaseConfig(sourceRawAssetStorage, { lastSyncedAt });
