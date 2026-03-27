@@ -2,6 +2,8 @@ import pc from "picocolors";
 import { exit } from "node-utils";
 import path from "path";
 import * as fs from "fs/promises";
+import { createWriteStream } from "fs";
+import { pipeline } from "stream/promises";
 import { ensureDir } from "node-utils";
 import { log } from "utils";
 import { loadDatabase, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
@@ -83,15 +85,9 @@ export async function exportCommand(context: ICommandContext, assetId: string, o
         return outputPath;
     });
 
-    // Read the asset from storage and write to output
-    const assetBuffer = await assetStorage.read(assetStoragePath);
-    if (!assetBuffer) {
-        log.error(`Asset ${assetId} not found in database.`)
-        await exit(1);
-        return;
-    }
-
-    await fs.writeFile(outputFilePath, assetBuffer);
+    // Stream the asset from storage to the output file
+    const assetStream = await assetStorage.readStream(assetStoragePath);
+    await pipeline(assetStream, createWriteStream(outputFilePath));
 
     log.info(pc.green(`✓ Successfully exported ${assetType} version of asset ${assetId} to ${outputFilePath}`));
 
