@@ -48,7 +48,7 @@ async function processPendingDatabaseUpdates(
         return true;
     }
     
-    if (!await acquireWriteLock(assetStorage, sessionId, 1)) {
+    if (!await acquireWriteLock(rawStorage, sessionId, 1)) {
         // Couldn't acquire lock
         return false;
     }
@@ -121,7 +121,7 @@ async function processPendingDatabaseUpdates(
         return true;
     }
     finally {
-        await releaseWriteLock(assetStorage);
+        await releaseWriteLock(rawStorage);
 
         log.verbose(`Released write lock, processed ${itemsToProcess.length} items to update database.`);
     }
