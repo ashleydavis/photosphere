@@ -16,16 +16,18 @@ export async function syncDatabases(
     sourceMetadataStorage: IStorage,
     sourceBsonDatabase: IBsonDatabase,
     sourceSessionId: string,
+    sourceRawMetadataStorage: IStorage,
     targetAssetStorage: IStorage,
     targetMetadataStorage: IStorage,
     targetBsonDatabase: IBsonDatabase,
-    targetSessionId: string
+    targetSessionId: string,
+    targetRawMetadataStorage: IStorage
 ): Promise<void> {
 
     //
     // Pull incoming files.
     //
-    if (!await acquireWriteLock(sourceMetadataStorage, sourceSessionId)) { //todo: Don't need write lock if nothing to pull.
+    if (!await acquireWriteLock(sourceRawMetadataStorage, sourceSessionId)) { //todo: Don't need write lock if nothing to pull.
         throw new Error(`Failed to acquire write lock for source database.`);
     }
 
@@ -36,13 +38,13 @@ export async function syncDatabases(
         await syncDatabase(targetAssetStorage, targetBsonDatabase, sourceAssetStorage, sourceBsonDatabase);
     }
     finally {
-        await releaseWriteLock(sourceMetadataStorage);
+        await releaseWriteLock(sourceRawMetadataStorage);
     }
 
     //
     // Push outgoing files.
     //
-    if (!await acquireWriteLock(targetMetadataStorage, targetSessionId)) { //todo: Don't need write lock if nothing to push.
+    if (!await acquireWriteLock(targetRawMetadataStorage, targetSessionId)) { //todo: Don't need write lock if nothing to push.
         throw new Error(`Failed to acquire write lock for target database.`);
     }
 
@@ -53,7 +55,7 @@ export async function syncDatabases(
         await syncDatabase(sourceAssetStorage, sourceBsonDatabase, targetAssetStorage, targetBsonDatabase);
     } 
     finally {
-        await releaseWriteLock(targetMetadataStorage);
+        await releaseWriteLock(targetRawMetadataStorage);
     }
 }
 

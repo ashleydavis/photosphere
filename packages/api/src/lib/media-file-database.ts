@@ -377,7 +377,7 @@ export async function writeAsset(
 ): Promise<void> {
     const assetPath = `${assetType}/${assetId}`;
 
-    if (!await acquireWriteLock(assetStorage, sessionId)) {
+    if (!await acquireWriteLock(rawStorage, sessionId)) {
         throw new Error(`Failed to acquire write lock.`);
     }
 
@@ -396,7 +396,7 @@ export async function writeAsset(
 
         const hashedAsset = await retry(async () => computeAssetHash(await assetStorage.readStream(assetPath), assetInfo));
 
-        await refreshWriteLock(assetStorage, sessionId);
+        await refreshWriteLock(rawStorage, sessionId);
 
         merkleTree = addItem(merkleTree, {
             name: assetPath,
@@ -421,7 +421,7 @@ export async function writeAsset(
         throw err;
     }
     finally {
-        await releaseWriteLock(assetStorage);
+        await releaseWriteLock(rawStorage);
     }
 }
 
@@ -441,7 +441,7 @@ export async function removeAsset(
     assetId: string,
     recordDeleted: boolean
 ): Promise<void> {
-    if (!await acquireWriteLock(assetStorage, sessionId)) {
+    if (!await acquireWriteLock(rawStorage, sessionId)) {
         throw new Error(`Failed to acquire write lock.`);
     }
 
@@ -496,7 +496,7 @@ export async function removeAsset(
         await updateDatabaseConfig(rawStorage, { lastModifiedAt: new Date().toISOString() });
     }
     finally {
-        await releaseWriteLock(assetStorage);
+        await releaseWriteLock(rawStorage);
     }
 }
 
