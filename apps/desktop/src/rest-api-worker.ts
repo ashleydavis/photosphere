@@ -87,6 +87,7 @@ async function startServer(port: number): Promise<void> {
         port,
         uuidGenerator,
         timestampProvider,
+        sessionId: `rest-api-worker-${uuidGenerator.generate()}`,
     });
 
     server = result.server;

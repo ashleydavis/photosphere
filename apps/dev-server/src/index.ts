@@ -42,6 +42,7 @@ await createAssetServer({
     app,
     uuidGenerator,
     timestampProvider,
+    sessionId,
 });
 
 // Create HTTP server from Express app

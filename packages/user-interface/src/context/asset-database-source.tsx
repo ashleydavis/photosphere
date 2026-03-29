@@ -104,6 +104,19 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
     const onNewItems = useRef<IObservable<IGalleryItem[]>>(new Observable<IGalleryItem[]>());
 
     //
+    // Persists metadata operations via the local REST API (same process as GET /asset in Electron).
+    //
+    async function persistDatabaseOps(ops: IDatabaseOp[]): Promise<void> {
+        if (ops.length === 0) {
+            return;
+        }
+
+        await axios.post(`${restApiUrl}/apply-database-ops`, { ops }, {
+            headers: { "Content-Type": "application/json" },
+        });
+    }
+
+    //
     // Invokes subscriptions for new assets.
     //
     function _onNewItems(assets: IAsset[]) {
@@ -139,7 +152,7 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
             }
         ];
 
-        //todo: send to main process to apply to the current database.
+        await persistDatabaseOps(ops);
     }
 
     //
@@ -166,7 +179,7 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
             },
         }];
 
-        //todo: send to main process to apply to the current database.
+        await persistDatabaseOps(ops);
     }
 
     //
@@ -195,9 +208,9 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
                 type: "set",
                 fields: partialAsset,
             },
-        }));        
+        }));
 
-        //todo: send to main process to apply to the current database.
+        await persistDatabaseOps(ops);
     }
 
     //
@@ -231,7 +244,7 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
             },
         }];
 
-        //todo: apply operations to the current database.
+        await persistDatabaseOps(ops);
     }
 
     //
@@ -264,7 +277,7 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
             },
         }];
 
-        //todo: apply operations to the current database.        
+        await persistDatabaseOps(ops);
     }
 
     //

@@ -4,7 +4,19 @@ import type { Request, Response, Application } from "express";
 import { createServer, type Server } from "http";
 import { createStorage } from "storage";
 import { createMediaFileDatabase, loadDatabase, streamAsset } from "api/src/lib/media-file-database";
+import { applyDatabaseOps } from "api/src/lib/apply-database-ops";
+import type { IDatabaseOp } from "defs";
 import { type IUuidGenerator, type ITimestampProvider, log } from "utils";
+
+//
+// JSON body for POST /apply-database-ops (only ops; UUID/timestamp/session come from the server).
+//
+interface IApplyDatabaseOpsRequestBody {
+    //
+    // Metadata operations from the client; passed as ops to applyDatabaseOps.
+    //
+    ops: IDatabaseOp[];
+}
 
 //
 // Options for creating the asset server.
@@ -31,6 +43,11 @@ export interface IAssetServerOptions {
     //
     timestampProvider: ITimestampProvider;
 
+    //
+    // Write-lock owner for apply-database-ops (see acquireWriteLock). 
+    //
+    sessionId: string;
+
 }
 
 //
@@ -52,7 +69,7 @@ export interface IAssetServerResult {
 // Creates and starts an asset server.
 //
 export async function createAssetServer(options: IAssetServerOptions): Promise<IAssetServerResult> {
-    const { port, app: existingApp, uuidGenerator, timestampProvider } = options;
+    const { port, app: existingApp, uuidGenerator, timestampProvider, sessionId } = options;
 
     //
     // Helper function to load an asset and return it as a stream
@@ -77,6 +94,8 @@ export async function createAssetServer(options: IAssetServerOptions): Promise<I
 
     // Use existing app or create new one
     const app = existingApp || express();
+
+    app.use(express.json());
 
     // Enable CORS for all routes (only if we created a new app)
     if (!existingApp) {
@@ -125,6 +144,33 @@ export async function createAssetServer(options: IAssetServerOptions): Promise<I
             log.exception(`Error loading asset ${assetId}`, error);
             if (!res.headersSent) {
                 res.status(500).send("Error loading asset");
+            }
+        }
+    });
+
+    //
+    // POST /apply-database-ops — applies metadata changes to one or more on-disk databases (BSON collections).
+    // Used by the gallery UI to persist set / push / pull operations via the same local server as GET /asset.
+    //
+    // Request body: JSON { ops: IDatabaseOp[] } where each op targets a database path (databaseId), collection, record id, and operation.
+    // Responses: 400 if ops is missing or not an array; 204 on success; 500 if applying ops fails.
+    //
+    app.post("/apply-database-ops", async (req: Request, res: Response) => {
+        const body = req.body as IApplyDatabaseOpsRequestBody | undefined;
+        const ops = body?.ops;
+        if (!ops || !Array.isArray(ops)) {
+            res.status(400).send("Request body must be a JSON object with an \"ops\" array.");
+            return;
+        }
+
+        try {
+            await applyDatabaseOps(uuidGenerator, timestampProvider, sessionId, ops);
+            res.status(204).end();
+        }
+        catch (error: any) {
+            log.exception("Error applying database ops", error);
+            if (!res.headersSent) {
+                res.status(500).send(error?.message || "Error applying database ops");
             }
         }
     });
