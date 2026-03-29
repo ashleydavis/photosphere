@@ -791,10 +791,13 @@ jobs:
             VERSION="${{ github.ref_name }}"
             VERSION="${VERSION#v}"
             IS_NIGHTLY="false"
+            DESKTOP_PACKAGE_VERSION="$VERSION"
           else
             TIMESTAMP=$(date -u +"%Y%m%dT%H%M%S")
             VERSION="dev-nightly.$TIMESTAMP"
             IS_NIGHTLY="true"
+            # electron-builder requires semver in package.json; keep dev-nightly.* in config only.
+            DESKTOP_PACKAGE_VERSION="0.0.0-nightly.$TIMESTAMP"
           fi
           BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           COMMIT_HASH="${{ github.sha }}"
@@ -810,6 +813,7 @@ jobs:
             echo "};"
           } > packages/config/src/index.ts
           echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "DESKTOP_PACKAGE_VERSION=$DESKTOP_PACKAGE_VERSION" >> $GITHUB_ENV
           echo "Config set to:"
           cat packages/config/src/index.ts
 
@@ -817,17 +821,17 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          jq ".version = \"${{ env.VERSION }}\"" apps/desktop/package.json > apps/desktop/package.tmp.json && mv apps/desktop/package.tmp.json apps/desktop/package.json
-          echo "Desktop package.json version set to: ${{ env.VERSION }}"
+          jq ".version = \"${{ env.DESKTOP_PACKAGE_VERSION }}\"" apps/desktop/package.json > apps/desktop/package.tmp.json && mv apps/desktop/package.tmp.json apps/desktop/package.json
+          echo "Desktop package.json version set to: ${{ env.DESKTOP_PACKAGE_VERSION }} (app config version: ${{ env.VERSION }})"
 
       - name: Set desktop package.json version (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $json = Get-Content apps/desktop/package.json | ConvertFrom-Json
-          $json.version = "${{ env.VERSION }}"
+          $json.version = "${{ env.DESKTOP_PACKAGE_VERSION }}"
           $json | ConvertTo-Json -Depth 10 | Set-Content apps/desktop/package.json
-          Write-Host "Desktop package.json version set to: ${{ env.VERSION }}"
+          Write-Host "Desktop package.json version set to: ${{ env.DESKTOP_PACKAGE_VERSION }} (app config version: ${{ env.VERSION }})"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
