@@ -51,6 +51,7 @@
     "storage": "workspace:*",
     "tools": "workspace:*",
     "utils": "workspace:*",
+    "config": "workspace:*",
     "wrap-ansi": "^9.0.0",
     "bdb": "workspace:*",
     "defs": "workspace:*",

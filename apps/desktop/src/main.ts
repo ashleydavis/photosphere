@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, utilityProcess, type UtilityProcess, dialog, Menu, shell } from 'electron';
 import { join, dirname } from 'path';
 import { cpus, platform, arch, release } from 'os';
+import { version } from 'config';
 import { existsSync, readdirSync, statSync, readFileSync } from 'fs';
 import type { ITask, ITaskQueue, IWorkerBackend } from 'task-queue';
 import { TaskQueue } from 'task-queue';
@@ -47,6 +48,7 @@ async function createMainWindow() {
     mainWindow = new BrowserWindow({
         width: 1200,
         height: 800,
+        title: `Photosphere ${version}`,
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,

@@ -36,7 +36,7 @@ import { MAIN_EXAMPLES, getCommandExamplesHelp } from './src/examples';
 import pc from "picocolors";
 import { exit } from 'node-utils';
 import { log, FatalError } from 'utils';
-import { version } from './src/lib/version';
+import { version } from 'config';
 import { startDebugServer } from 'debug-server';
 
 async function main() {

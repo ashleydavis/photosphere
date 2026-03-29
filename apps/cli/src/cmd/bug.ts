@@ -7,7 +7,7 @@ import pc from "picocolors";
 import { exit } from "node-utils";
 import { text, isCancel, intro, outro } from '../lib/clack/prompts';
 import { Image, Video } from "tools";
-import { version } from "../lib/version";
+import { version } from "config";
 
 export interface IBugReportCommandOptions {
     //
