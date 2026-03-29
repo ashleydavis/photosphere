@@ -53,6 +53,7 @@
     "react-dom": "^18.2.0",
     "react-fps-stats": "^0.3.1",
     "react-router-dom": "^6.4.1",
-    "utils": "workspace:*"
+    "utils": "workspace:*",
+    "config": "workspace:*"
   }
 }

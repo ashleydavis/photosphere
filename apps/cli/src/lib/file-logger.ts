@@ -5,8 +5,8 @@ import os from "os";
 import { ILog, formatErrorChain } from "utils";
 import { registerTerminationCallback } from "node-utils";
 import { Image, Video } from "tools";
-import { version } from "./version";
-import { buildMetadata } from "./build-metadata";
+import { version } from "config";
+import { buildMetadata } from "config";
 
 //
 // File logger that writes all logs to files in the Photosphere temp directory

@@ -1,4 +1,4 @@
-name: Release CLI
+name: Release
 
 env:
   BUN_VERSION: "1.3.10"
@@ -9,16 +9,10 @@ on:
       - "*"
     tags:
       - 'v*.*.*'
-    paths:
-      - 'apps/cli/**'
-      - 'packages/**'
 
   pull_request:
     branches:
       - main
-    paths:
-      - 'apps/cli/**'
-      - 'packages/**'
 
   workflow_dispatch:
 
@@ -237,33 +231,31 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set version
+      - name: Set config
         run: |
-          cd apps/cli
           if [ "${{ github.ref_type }}" = "tag" ]; then
-            TAG_VERSION="${{ github.ref_name }}"
-            TAG_VERSION="${TAG_VERSION#v}"
-            echo "export const version = \"$TAG_VERSION\";" > src/lib/version.ts
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"
+            IS_NIGHTLY="false"
           else
-            NIGHTLY_TIMESTAMP=$(date -u +"%Y%m%dT%H%M%S")
-            echo "export const version = \"dev-nightly.$NIGHTLY_TIMESTAMP\";" > src/lib/version.ts
+            TIMESTAMP=$(date -u +"%Y%m%dT%H%M%S")
+            VERSION="dev-nightly.$TIMESTAMP"
+            IS_NIGHTLY="true"
           fi
-          echo "Version set to:"
-          cat src/lib/version.ts
-
-      - name: Capture build metadata
-        run: |
-          cd apps/cli
-          
-          # Create build metadata file
-          echo "export const buildMetadata = {" > src/lib/build-metadata.ts
-          echo "  commitHash: \"${{ github.sha }}\"," >> src/lib/build-metadata.ts
-          echo "  buildDate: \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\"," >> src/lib/build-metadata.ts
-          echo "  isNightly: ${{ github.ref_type != 'tag' }}" >> src/lib/build-metadata.ts
-          echo "};" >> src/lib/build-metadata.ts
-          
-          echo "Generated build metadata:"
-          cat src/lib/build-metadata.ts
+          BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          {
+            echo "// Version is set by the CI build process. \"dev\" is used for local development."
+            echo "export const version = \"$VERSION\";"
+            echo ""
+            echo "// Build metadata is set by the CI build process."
+            echo "export const buildMetadata = {"
+            echo "    commitHash: \"${{ github.sha }}","
+            echo "    buildDate: \"$BUILD_DATE\","
+            echo "    isNightly: $IS_NIGHTLY,"
+            echo "};"
+          } > packages/config/src/index.ts
+          echo "Config set to:"
+          cat packages/config/src/index.ts
 
       - name: Verify runner architecture
         run: |
@@ -359,35 +351,32 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set version
+      - name: Set config
         shell: bash
         run: |
-          cd apps/cli
           if [ "${{ github.ref_type }}" = "tag" ]; then
-            TAG_VERSION="${{ github.ref_name }}"
-            TAG_VERSION="${TAG_VERSION#v}"
-            echo "export const version = \"$TAG_VERSION\";" > src/lib/version.ts
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"
+            IS_NIGHTLY="false"
           else
-            NIGHTLY_TIMESTAMP=$(date -u +"%Y%m%dT%H%M%S")
-            echo "export const version = \"dev-nightly.$NIGHTLY_TIMESTAMP\";" > src/lib/version.ts
+            TIMESTAMP=$(date -u +"%Y%m%dT%H%M%S")
+            VERSION="dev-nightly.$TIMESTAMP"
+            IS_NIGHTLY="true"
           fi
-          echo "Version set to:"
-          cat src/lib/version.ts
-
-      - name: Capture build metadata
-        shell: bash
-        run: |
-          cd apps/cli
-          
-          # Create build metadata file
-          echo "export const buildMetadata = {" > src/lib/build-metadata.ts
-          echo "  commitHash: \"${{ github.sha }}\"," >> src/lib/build-metadata.ts
-          echo "  buildDate: \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\"," >> src/lib/build-metadata.ts
-          echo "  isNightly: ${{ github.ref_type != 'tag' }}" >> src/lib/build-metadata.ts
-          echo "};" >> src/lib/build-metadata.ts
-          
-          echo "Generated build metadata:"
-          cat src/lib/build-metadata.ts
+          BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          {
+            echo "// Version is set by the CI build process. \"dev\" is used for local development."
+            echo "export const version = \"$VERSION\";"
+            echo ""
+            echo "// Build metadata is set by the CI build process."
+            echo "export const buildMetadata = {"
+            echo "    commitHash: \"${{ github.sha }}","
+            echo "    buildDate: \"$BUILD_DATE\","
+            echo "    isNightly: $IS_NIGHTLY,"
+            echo "};"
+          } > packages/config/src/index.ts
+          echo "Config set to:"
+          cat packages/config/src/index.ts
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -474,35 +463,32 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set version
+      - name: Set config
         shell: bash
         run: |
-          cd apps/cli
           if [ "${{ github.ref_type }}" = "tag" ]; then
-            TAG_VERSION="${{ github.ref_name }}"
-            TAG_VERSION="${TAG_VERSION#v}"
-            echo "export const version = \"$TAG_VERSION\";" > src/lib/version.ts
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"
+            IS_NIGHTLY="false"
           else
-            NIGHTLY_TIMESTAMP=$(date -u +"%Y%m%dT%H%M%S")
-            echo "export const version = \"dev-nightly.$NIGHTLY_TIMESTAMP\";" > src/lib/version.ts
+            TIMESTAMP=$(date -u +"%Y%m%dT%H%M%S")
+            VERSION="dev-nightly.$TIMESTAMP"
+            IS_NIGHTLY="true"
           fi
-          echo "Version set to:"
-          cat src/lib/version.ts
-
-      - name: Capture build metadata
-        shell: bash
-        run: |
-          cd apps/cli
-          
-          # Create build metadata file
-          echo "export const buildMetadata = {" > src/lib/build-metadata.ts
-          echo "  commitHash: \"${{ github.sha }}\"," >> src/lib/build-metadata.ts
-          echo "  buildDate: \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\"," >> src/lib/build-metadata.ts
-          echo "  isNightly: ${{ github.ref_type != 'tag' }}" >> src/lib/build-metadata.ts
-          echo "};" >> src/lib/build-metadata.ts
-          
-          echo "Generated build metadata:"
-          cat src/lib/build-metadata.ts
+          BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          {
+            echo "// Version is set by the CI build process. \"dev\" is used for local development."
+            echo "export const version = \"$VERSION\";"
+            echo ""
+            echo "// Build metadata is set by the CI build process."
+            echo "export const buildMetadata = {"
+            echo "    commitHash: \"${{ github.sha }}","
+            echo "    buildDate: \"$BUILD_DATE\","
+            echo "    isNightly: $IS_NIGHTLY,"
+            echo "};"
+          } > packages/config/src/index.ts
+          echo "Config set to:"
+          cat packages/config/src/index.ts
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -540,33 +526,31 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set version
+      - name: Set config
         run: |
-          cd apps/cli
           if [ "${{ github.ref_type }}" = "tag" ]; then
-            TAG_VERSION="${{ github.ref_name }}"
-            TAG_VERSION="${TAG_VERSION#v}"
-            echo "export const version = \"$TAG_VERSION\";" > src/lib/version.ts
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"
+            IS_NIGHTLY="false"
           else
-            NIGHTLY_TIMESTAMP=$(date -u +"%Y%m%dT%H%M%S")
-            echo "export const version = \"dev-nightly.$NIGHTLY_TIMESTAMP\";" > src/lib/version.ts
+            TIMESTAMP=$(date -u +"%Y%m%dT%H%M%S")
+            VERSION="dev-nightly.$TIMESTAMP"
+            IS_NIGHTLY="true"
           fi
-          echo "Version set to:"
-          cat src/lib/version.ts
-
-      - name: Capture build metadata
-        run: |
-          cd apps/cli
-
-          # Create build metadata file
-          echo "export const buildMetadata = {" > src/lib/build-metadata.ts
-          echo "  commitHash: \"${{ github.sha }}\"," >> src/lib/build-metadata.ts
-          echo "  buildDate: \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\"," >> src/lib/build-metadata.ts
-          echo "  isNightly: ${{ github.ref_type != 'tag' }}" >> src/lib/build-metadata.ts
-          echo "};" >> src/lib/build-metadata.ts
-
-          echo "Generated build metadata:"
-          cat src/lib/build-metadata.ts
+          BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          {
+            echo "// Version is set by the CI build process. \"dev\" is used for local development."
+            echo "export const version = \"$VERSION\";"
+            echo ""
+            echo "// Build metadata is set by the CI build process."
+            echo "export const buildMetadata = {"
+            echo "    commitHash: \"${{ github.sha }}","
+            echo "    buildDate: \"$BUILD_DATE\","
+            echo "    isNightly: $IS_NIGHTLY,"
+            echo "};"
+          } > packages/config/src/index.ts
+          echo "Config set to:"
+          cat packages/config/src/index.ts
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -661,33 +645,31 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set version
+      - name: Set config
         run: |
-          cd apps/cli
           if [ "${{ github.ref_type }}" = "tag" ]; then
-            TAG_VERSION="${{ github.ref_name }}"
-            TAG_VERSION="${TAG_VERSION#v}"
-            echo "export const version = \"$TAG_VERSION\";" > src/lib/version.ts
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"
+            IS_NIGHTLY="false"
           else
-            NIGHTLY_TIMESTAMP=$(date -u +"%Y%m%dT%H%M%S")
-            echo "export const version = \"dev-nightly.$NIGHTLY_TIMESTAMP\";" > src/lib/version.ts
+            TIMESTAMP=$(date -u +"%Y%m%dT%H%M%S")
+            VERSION="dev-nightly.$TIMESTAMP"
+            IS_NIGHTLY="true"
           fi
-          echo "Version set to:"
-          cat src/lib/version.ts
-
-      - name: Capture build metadata
-        run: |
-          cd apps/cli
-          
-          # Create build metadata file
-          echo "export const buildMetadata = {" > src/lib/build-metadata.ts
-          echo "  commitHash: \"${{ github.sha }}\"," >> src/lib/build-metadata.ts
-          echo "  buildDate: \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\"," >> src/lib/build-metadata.ts
-          echo "  isNightly: ${{ github.ref_type != 'tag' }}" >> src/lib/build-metadata.ts
-          echo "};" >> src/lib/build-metadata.ts
-          
-          echo "Generated build metadata:"
-          cat src/lib/build-metadata.ts
+          BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          {
+            echo "// Version is set by the CI build process. \"dev\" is used for local development."
+            echo "export const version = \"$VERSION\";"
+            echo ""
+            echo "// Build metadata is set by the CI build process."
+            echo "export const buildMetadata = {"
+            echo "    commitHash: \"${{ github.sha }}","
+            echo "    buildDate: \"$BUILD_DATE\","
+            echo "    isNightly: $IS_NIGHTLY,"
+            echo "};"
+          } > packages/config/src/index.ts
+          echo "Config set to:"
+          cat packages/config/src/index.ts
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -779,9 +761,119 @@ jobs:
           name: psi-macos-arm64
           path: ./apps/cli/bin/arm64/mac/psi
 
+  build-desktop:
+    timeout-minutes: 60
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            files: |
+              apps/desktop/release/*.deb
+              apps/desktop/release/*.zip
+          - os: windows-latest
+            files: |
+              apps/desktop/release/*.exe
+              apps/desktop/release/*.zip
+          - os: macos-15-intel
+            files: |
+              apps/desktop/release/*.dmg
+              apps/desktop/release/*.zip
+          - os: macos-latest
+            files: |
+              apps/desktop/release/*.dmg
+              apps/desktop/release/*.zip
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set config
+        shell: bash
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"
+            IS_NIGHTLY="false"
+          else
+            TIMESTAMP=$(date -u +"%Y%m%dT%H%M%S")
+            VERSION="dev-nightly.$TIMESTAMP"
+            IS_NIGHTLY="true"
+          fi
+          BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          {
+            echo "// Version is set by the CI build process. \"dev\" is used for local development."
+            echo "export const version = \"$VERSION\";"
+            echo ""
+            echo "// Build metadata is set by the CI build process."
+            echo "export const buildMetadata = {"
+            echo "    commitHash: \"${{ github.sha }}","
+            echo "    buildDate: \"$BUILD_DATE\","
+            echo "    isNightly: $IS_NIGHTLY,"
+            echo "};"
+          } > packages/config/src/index.ts
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "Config set to:"
+          cat packages/config/src/index.ts
+
+      - name: Set desktop package.json version (Linux/macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          jq ".version = \"${{ env.VERSION }}\"" apps/desktop/package.json > apps/desktop/package.tmp.json && mv apps/desktop/package.tmp.json apps/desktop/package.json
+          echo "Desktop package.json version set to: ${{ env.VERSION }}"
+
+      - name: Set desktop package.json version (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $json = Get-Content apps/desktop/package.json | ConvertFrom-Json
+          $json.version = "${{ env.VERSION }}"
+          $json | ConvertTo-Json -Depth 10 | Set-Content apps/desktop/package.json
+          Write-Host "Desktop package.json version set to: ${{ env.VERSION }}"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build Electron app
+        run: bun run build
+
+      - name: Show release directory contents
+        run: |
+          echo "Release directory structure:"
+          ls apps/desktop/release
+
+      - name: Install Xvfb (Linux only)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+
+      - name: Run smoke tests (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a bun run --filter=photosphere test:smoke
+
+      - name: Run smoke tests (Not Linux)
+        if: runner.os != 'Linux'
+        run: bun run --filter=photosphere test:smoke
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.os }}-build
+          path: ${{ matrix.files }}
+          if-no-files-found: warn
+          retention-days: 2
+
   create-release:
     timeout-minutes: 20
-    needs: [build-linux, build-windows, build-windows-baseline, build-macos-x64, build-macos-arm64, smoke-test, smoke-test-encrypted, write-lock-tests, sync-tests]
+    needs: [compile, unit-tests, build-linux, build-windows, build-windows-baseline, build-macos-x64, build-macos-arm64, build-desktop, smoke-test, smoke-test-encrypted, write-lock-tests, sync-tests]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -820,6 +912,13 @@ jobs:
         with:
           name: psi-macos-arm64
           path: ./artifacts/macos-arm64
+
+      - name: Download desktop artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-*-build
+          path: ./artifacts/desktop
+          merge-multiple: true
 
       - name: Create compressed archives
         run: |
@@ -900,7 +999,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'nightly' }}
-          name: ${{ github.ref_type == 'tag' && format('Photosphere CLI {0}', github.ref_name) || 'Photosphere CLI Nightly' }}
+          name: ${{ github.ref_type == 'tag' && format('Photosphere {0}', github.ref_name) || 'Photosphere Nightly' }}
           draft: false
           prerelease: ${{ github.ref_type != 'tag' }}
           files: |
@@ -909,24 +1008,30 @@ jobs:
             ./artifacts/psi-windows-x64-baseline.zip
             ./artifacts/psi-macos-x64.tar.gz
             ./artifacts/psi-macos-arm64.tar.gz
+            ./artifacts/desktop/**/*
           body: |
-            ${{ github.ref_type == 'tag' && format('Photosphere CLI release {0}', github.ref_name) || format('Photosphere CLI nightly build - {0}', github.sha) }}
-            
+            ${{ github.ref_type == 'tag' && format('Photosphere release {0}', github.ref_name) || format('Photosphere nightly build - {0}', github.sha) }}
+
             ${{ github.ref_type != 'tag' && '⚠️ **This is a nightly build and may be unstable**' || '' }}
             ${{ github.ref_type != 'tag' && format('Built from commit: {0}', github.sha) || '' }}
-            
+
             ## What's Changed
             ${{ steps.release-notes.outputs.RELEASE_NOTES }}
-            
-            ## Download
+
+            ## CLI Download
             - **Linux**: `psi-linux-x64.tar.gz`
             - **Windows modern**: `psi-windows-x64.zip` (for modern processors, try this one first)
             - **Windows baseline**: `psi-windows-x64-baseline.zip` (for older processors, try this one next)
             - **macOS (Intel)**: `psi-macos-x64.tar.gz`
             - **macOS (Apple Silicon)**: `psi-macos-arm64.tar.gz`
-            
-            ## Installation
+
+            ## CLI Installation
             1. Download the appropriate file for your platform
             2. Extract the archive
             3. Make the binary executable (Linux/macOS): `chmod +x psi`
             4. Move to your PATH or run directly
+
+            ## Desktop Download
+            - **Linux**: `.deb` package or `.zip`
+            - **Windows**: `.exe` installer or `.zip`
+            - **macOS**: `.dmg` disk image or `.zip`

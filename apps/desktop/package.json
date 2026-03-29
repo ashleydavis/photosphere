@@ -29,6 +29,7 @@
     "task-queue": "workspace:*",
     "api": "workspace:*",
     "utils": "workspace:*",
+    "config": "workspace:*",
     "node-utils": "workspace:*",
     "electron-defs": "workspace:*",
     "serialize-error": "^11.0.0",
