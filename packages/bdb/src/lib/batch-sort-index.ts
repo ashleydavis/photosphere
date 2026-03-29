@@ -365,6 +365,7 @@ export class BatchSortIndex implements IBatchSortIndex {
         this.totalPages = treeData.totalPages;
         this.rootPageId = treeData.rootPageId || this.rootPageId;
         this.treeNodes = treeData.treeNodes;
+        this.type = treeData.type;
         
         this.reconstructParentChildRelationships();
         
