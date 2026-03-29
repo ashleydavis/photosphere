@@ -2,13 +2,12 @@ import React, { ReactNode, createContext, useContext, useEffect, useRef, useStat
 import { IGalleryItem } from "../lib/gallery-item";
 import { GallerySourceContext, IItemsUpdate, IGalleryItemMap, IGallerySource } from "./gallery-source";
 import { IAsset, IDatabaseOp } from "defs";
-import dayjs from "dayjs";
 import { RandomUuidGenerator } from "utils";
 import { IObservable, Observable } from "../lib/subscription";
 import { loadAssets as loadAssetsApi } from "api/src/lib/load-assets";
+import type { IAssetPageMessage, ILoadAssetsData, ILoadAssetsResult } from "api/src/lib/load-assets.types";
 import axios from "axios";
 import { TaskStatus } from "task-queue";
-import type { ILoadAssetsData, ILoadAssetsResult, IAssetPageMessage } from "api/src/lib/load-assets.types";
 import type { ITaskQueueProvider, ITaskQueue } from "task-queue";
 import { usePlatform } from "./platform-context";
 
@@ -328,7 +327,7 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
     //
     // Moves assets to another database.
     //
-    async function moveToDatabase(assetIds: string[], destSetId: string): Promise<void> {
+    async function moveToDatabase(assetIds: string[], destDatabasePath: string): Promise<void> {
 
         try {
             setIsWorking(true);
@@ -344,14 +343,14 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
                 for (const assetType of assetTypes) {
                     const assetData = await loadAsset(assetId, assetType);
                     if (assetData) {
-                        await storeAssetToDatabase(newAssetId, assetType, assetData, destSetId);
+                        await storeAssetToDatabase(newAssetId, assetType, assetData, destDatabasePath);
                     }
                 }
     
                 //
                 // Adds new asset to the database.
                 //
-                await addAssetToDatabase({ ...asset, _id: newAssetId }, destSetId);
+                await addAssetToDatabase({ ...asset, _id: newAssetId }, destDatabasePath);
             }
     
             //
@@ -390,22 +389,16 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
     }
 
     //
-    // Stores an asset to the current database.
-    //
-    async function storeAsset(assetId: string, assetType: string, assetData: Blob): Promise<void> {
-        if (!databasePath) {
-            throw new Error("No database path provided.");
-        }
-
-        await storeAssetToDatabase(assetId, assetType, assetData, databasePath);
-    }
-
-    //
-    // Stores an asset to a particular database.
+    // Stores binary asset data (thumb / display / original) into a database via the local REST API.
+    // Used by moveToDatabase and by storeAsset for the current database.
     //
     async function storeAssetToDatabase(assetId: string, assetType: string, assetData: Blob, databasePath: string): Promise<void> {
-        //todo: store asset data to the current database.
-        //todo: what uses this?
+        const params = new URLSearchParams({
+            id: assetId,
+            type: assetType,
+            db: databasePath,
+        });
+        await axios.post(`${restApiUrl}/asset?${params.toString()}`, assetData);
     }
 
     //
@@ -558,7 +551,6 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
         removeArrayValue,
         deleteAssets,
         loadAsset,
-        storeAsset,
         getItemById,
 
         // Asset database source.

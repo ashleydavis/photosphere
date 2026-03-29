@@ -244,7 +244,7 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
         onNewItems: __onNewItems,
         onItemsUpdated: __onItemsUpdated,
         onItemsDeleted: __onItemsDeleted,
-        loadAsset: _loadAsset, storeAsset,
+        loadAsset: _loadAsset,
         addArrayValue: _addArrayValue,
         removeArrayValue: _removeArrayValue,
         deleteAssets: _deleteAssets,

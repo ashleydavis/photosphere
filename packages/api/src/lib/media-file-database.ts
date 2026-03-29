@@ -372,7 +372,7 @@ export async function writeAsset(
     sessionId: string,
     assetId: string,
     assetType: string,
-    contentType: string,
+    contentType: string | undefined,
     buffer: Buffer
 ): Promise<void> {
     const assetPath = `${assetType}/${assetId}`;
@@ -417,6 +417,70 @@ export async function writeAsset(
     }
     catch (err: any) {
         log.exception(`Failed to add asset "${assetPath}" from buffer`, err);
+        await retry(() => assetStorage.deleteFile(assetPath));
+        throw err;
+    }
+    finally {
+        await releaseWriteLock(rawStorage);
+    }
+}
+
+//
+// Writes an asset from a readable byte stream (same lock / merkle behavior as writeAsset).
+// Callers that know the byte length (e.g. from Content-Length) should pass it for storage backends that use a size hint.
+//
+export async function writeAssetStream(
+    assetStorage: IStorage,
+    rawStorage: IStorage,
+    sessionId: string,
+    assetId: string,
+    assetType: string,
+    contentType: string | undefined,
+    inputStream: NodeJS.ReadableStream,
+    contentLength: number | undefined,
+): Promise<void> {
+    const assetPath = `${assetType}/${assetId}`;
+
+    if (!await acquireWriteLock(rawStorage, sessionId)) {
+        throw new Error(`Failed to acquire write lock.`);
+    }
+
+    try {
+        let merkleTree = await retry(() => loadMerkleTree(assetStorage));
+        if (!merkleTree) {
+            throw new Error(`Failed to load media file database.`);
+        }
+
+        await retry(() => assetStorage.writeStream(assetPath, contentType, inputStream, contentLength));
+
+        const assetInfo = await retry(() => assetStorage.info(assetPath));
+        if (!assetInfo || assetInfo.length === 0) {
+            throw new Error("Asset data is empty");
+        }
+
+        const hashedAsset = await retry(async () => computeAssetHash(await assetStorage.readStream(assetPath), assetInfo));
+
+        await refreshWriteLock(rawStorage, sessionId);
+
+        merkleTree = addItem(merkleTree, {
+            name: assetPath,
+            hash: hashedAsset.hash,
+            length: hashedAsset.length,
+            lastModified: hashedAsset.lastModified,
+        });
+
+        if (assetType === "asset") {
+            if (!merkleTree.databaseMetadata) {
+                merkleTree.databaseMetadata = { filesImported: 0 };
+            }
+            merkleTree.databaseMetadata.filesImported++;
+        }
+
+        await retry(() => saveMerkleTree(merkleTree, assetStorage));
+        await updateDatabaseConfig(rawStorage, { lastModifiedAt: new Date().toISOString() });
+    }
+    catch (err: any) {
+        log.exception(`Failed to add asset "${assetPath}" from stream`, err);
         await retry(() => assetStorage.deleteFile(assetPath));
         throw err;
     }
