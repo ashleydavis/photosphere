@@ -2,7 +2,16 @@ import type { ITask, ITaskResult, IWorkerBackend, WorkerTaskCompletionCallback, 
 import { TaskStatus } from "task-queue";
 import { utilityProcess, type UtilityProcess } from 'electron';
 import { deserializeError } from "serialize-error";
-import type { IWorkerOptions } from "./worker-init";
+
+//
+// Options passed to each worker process via WORKER_OPTIONS environment variable
+//
+export interface IWorkerOptions {
+    workerId: number;
+    verbose: boolean;
+    tools: boolean;
+    sessionId: string;
+}
 
 //
 // Options for configuring a worker backend (does not include workerId, which is assigned per worker)
@@ -47,8 +56,6 @@ export interface IWorkerTaskMessage {
     message: unknown;
 }
 
-export type IWorkerResponseMessage = IWorkerReadyMessage | IWorkerTaskCompletedMessage | IWorkerTaskMessage;
-
 //
 // Worker state interface
 //
@@ -80,16 +87,18 @@ export class WorkerBackendElectronMain implements IWorkerBackend {
     private completionCallbacks: WorkerTaskCompletionCallback[] = [];
     private messageCallbacks: Array<{ messageType: string; callback: TaskMessageCallback }> = [];
     private anyMessageCallbacks: TaskMessageCallback[] = [];
+    private workerLogCallback: (message: any) => void;
     private isShuttingDown: boolean = false;
 
     //
     // Creates a new worker backend with the specified number of utility process workers
     //
-    constructor(workerPath: string, maxWorkers: number, taskTimeout: number, backendOptions: IWorkerBackendOptions) {
+    constructor(workerPath: string, maxWorkers: number, taskTimeout: number, backendOptions: IWorkerBackendOptions, workerLogCallback: (message: any) => void) {
         this.workerPath = workerPath;
         this.maxWorkers = maxWorkers;
         this.taskTimeout = taskTimeout;
         this.backendOptions = backendOptions;
+        this.workerLogCallback = workerLogCallback;
     }
 
     //
@@ -250,7 +259,7 @@ export class WorkerBackendElectronMain implements IWorkerBackend {
             taskStartTime: null,
         };
 
-        worker.on('message', (message: IWorkerResponseMessage) => {
+        worker.on('message', (message: any) => {
             this.handleWorkerMessage(workerState, message).catch((error: any) => {
                 console.error("Error handling worker message", error);
             });
@@ -284,9 +293,9 @@ export class WorkerBackendElectronMain implements IWorkerBackend {
     //
     // Handles messages from utility process workers (ready, task-completed, task-message)
     //
-    private async handleWorkerMessage(workerState: IWorkerState, data: IWorkerResponseMessage): Promise<void> {
+    private async handleWorkerMessage(workerState: IWorkerState, data: any): Promise<void> {
         // Handle worker ready message
-        if (data && typeof data === "object" && "type" in data && data.type === "worker-ready") {
+        if (data.type === "worker-ready") {
             workerState.isReady = true;
             workerState.isIdle = true;
             this.notifyWorkerAvailable(); // Try to process pending tasks now that worker is ready
@@ -294,7 +303,7 @@ export class WorkerBackendElectronMain implements IWorkerBackend {
         }
 
         // Handle task result (both success and failure)
-        if (data && typeof data === "object" && "type" in data && data.type === "task-completed") {
+        if (data.type === "task-completed") {
             const { taskId, result } = data;
 
             // Clear timeout since task completed
@@ -347,11 +356,16 @@ export class WorkerBackendElectronMain implements IWorkerBackend {
         }
 
         // Handle task messages
-        if (data && typeof data === "object" && "type" in data && data.type === "task-message") {
+        if (data.type === "task-message") {
             const { taskId, message } = data;
 
             // Notify message callbacks
             await this.notifyMessageCallbacks(taskId, message);
+            return;
+        }
+
+        if (data.type === "log") {
+            this.workerLogCallback(data);
             return;
         }
     }
@@ -482,7 +496,7 @@ export class WorkerBackendElectronMain implements IWorkerBackend {
             taskStartTime: null,
         };
 
-        worker.on('message', (message: IWorkerResponseMessage) => {
+        worker.on('message', (message: any) => {
             this.handleWorkerMessage(newWorkerState, message).catch((error: any) => {
                 console.error("Error handling worker message", error);
             });
