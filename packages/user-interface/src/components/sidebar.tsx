@@ -490,7 +490,7 @@ export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
                 level="body-xs"
                 sx={{ textTransform: 'uppercase', fontWeight: 'lg', mt: 2 }}
                 >
-                Sets
+                Databases
             </Typography>
 
             <List>
@@ -525,7 +525,7 @@ export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
                                         : <Folder />
                                     }
                                 </ListItemDecorator>
-                                <ListItemContent>{dbPath}</ListItemContent>
+                                <ListItemContent>{dbPath.split(/[\\/]/).filter(Boolean).pop() ?? dbPath}</ListItemContent>
                             </ListItemButton>
                         </ListItem>
                     );
