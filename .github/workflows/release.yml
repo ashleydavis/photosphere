@@ -243,14 +243,15 @@ jobs:
             IS_NIGHTLY="true"
           fi
           BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          COMMIT_HASH="${{ github.sha }}"
           {
-            echo "// Version is set by the CI build process. \"dev\" is used for local development."
-            echo "export const version = \"$VERSION\";"
+            echo '// Version is set by the CI build process. "dev" is used for local development.'
+            echo 'export const version = "'"$VERSION"'";'
             echo ""
             echo "// Build metadata is set by the CI build process."
             echo "export const buildMetadata = {"
-            echo "    commitHash: \"${{ github.sha }}","
-            echo "    buildDate: \"$BUILD_DATE\","
+            echo '    commitHash: "'"$COMMIT_HASH"'",'
+            echo '    buildDate: "'"$BUILD_DATE"'",'
             echo "    isNightly: $IS_NIGHTLY,"
             echo "};"
           } > packages/config/src/index.ts
@@ -364,14 +365,15 @@ jobs:
             IS_NIGHTLY="true"
           fi
           BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          COMMIT_HASH="${{ github.sha }}"
           {
-            echo "// Version is set by the CI build process. \"dev\" is used for local development."
-            echo "export const version = \"$VERSION\";"
+            echo '// Version is set by the CI build process. "dev" is used for local development.'
+            echo 'export const version = "'"$VERSION"'";'
             echo ""
             echo "// Build metadata is set by the CI build process."
             echo "export const buildMetadata = {"
-            echo "    commitHash: \"${{ github.sha }}","
-            echo "    buildDate: \"$BUILD_DATE\","
+            echo '    commitHash: "'"$COMMIT_HASH"'",'
+            echo '    buildDate: "'"$BUILD_DATE"'",'
             echo "    isNightly: $IS_NIGHTLY,"
             echo "};"
           } > packages/config/src/index.ts
@@ -476,14 +478,15 @@ jobs:
             IS_NIGHTLY="true"
           fi
           BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          COMMIT_HASH="${{ github.sha }}"
           {
-            echo "// Version is set by the CI build process. \"dev\" is used for local development."
-            echo "export const version = \"$VERSION\";"
+            echo '// Version is set by the CI build process. "dev" is used for local development.'
+            echo 'export const version = "'"$VERSION"'";'
             echo ""
             echo "// Build metadata is set by the CI build process."
             echo "export const buildMetadata = {"
-            echo "    commitHash: \"${{ github.sha }}","
-            echo "    buildDate: \"$BUILD_DATE\","
+            echo '    commitHash: "'"$COMMIT_HASH"'",'
+            echo '    buildDate: "'"$BUILD_DATE"'",'
             echo "    isNightly: $IS_NIGHTLY,"
             echo "};"
           } > packages/config/src/index.ts
@@ -538,14 +541,15 @@ jobs:
             IS_NIGHTLY="true"
           fi
           BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          COMMIT_HASH="${{ github.sha }}"
           {
-            echo "// Version is set by the CI build process. \"dev\" is used for local development."
-            echo "export const version = \"$VERSION\";"
+            echo '// Version is set by the CI build process. "dev" is used for local development.'
+            echo 'export const version = "'"$VERSION"'";'
             echo ""
             echo "// Build metadata is set by the CI build process."
             echo "export const buildMetadata = {"
-            echo "    commitHash: \"${{ github.sha }}","
-            echo "    buildDate: \"$BUILD_DATE\","
+            echo '    commitHash: "'"$COMMIT_HASH"'",'
+            echo '    buildDate: "'"$BUILD_DATE"'",'
             echo "    isNightly: $IS_NIGHTLY,"
             echo "};"
           } > packages/config/src/index.ts
@@ -657,14 +661,15 @@ jobs:
             IS_NIGHTLY="true"
           fi
           BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          COMMIT_HASH="${{ github.sha }}"
           {
-            echo "// Version is set by the CI build process. \"dev\" is used for local development."
-            echo "export const version = \"$VERSION\";"
+            echo '// Version is set by the CI build process. "dev" is used for local development.'
+            echo 'export const version = "'"$VERSION"'";'
             echo ""
             echo "// Build metadata is set by the CI build process."
             echo "export const buildMetadata = {"
-            echo "    commitHash: \"${{ github.sha }}","
-            echo "    buildDate: \"$BUILD_DATE\","
+            echo '    commitHash: "'"$COMMIT_HASH"'",'
+            echo '    buildDate: "'"$BUILD_DATE"'",'
             echo "    isNightly: $IS_NIGHTLY,"
             echo "};"
           } > packages/config/src/index.ts
@@ -802,14 +807,15 @@ jobs:
             IS_NIGHTLY="true"
           fi
           BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          COMMIT_HASH="${{ github.sha }}"
           {
-            echo "// Version is set by the CI build process. \"dev\" is used for local development."
-            echo "export const version = \"$VERSION\";"
+            echo '// Version is set by the CI build process. "dev" is used for local development.'
+            echo 'export const version = "'"$VERSION"'";'
             echo ""
             echo "// Build metadata is set by the CI build process."
             echo "export const buildMetadata = {"
-            echo "    commitHash: \"${{ github.sha }}","
-            echo "    buildDate: \"$BUILD_DATE\","
+            echo '    commitHash: "'"$COMMIT_HASH"'",'
+            echo '    buildDate: "'"$BUILD_DATE"'",'
             echo "    isNightly: $IS_NIGHTLY,"
             echo "};"
           } > packages/config/src/index.ts
