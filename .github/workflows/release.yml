@@ -225,8 +225,6 @@ jobs:
   build-linux:
     timeout-minutes: 20
     runs-on: ubuntu-24.04
-    needs: [unit-tests, compile]
-    if: always() && needs.unit-tests.result == 'success' && needs.compile.result == 'success'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -346,8 +344,6 @@ jobs:
   build-windows:
     timeout-minutes: 20
     runs-on: windows-latest
-    needs: [unit-tests, compile]
-    if: always() && needs.unit-tests.result == 'success' && needs.compile.result == 'success'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -459,8 +455,6 @@ jobs:
   build-windows-baseline:
     timeout-minutes: 20
     runs-on: ubuntu-24.04
-    needs: [unit-tests, compile]
-    if: always() && needs.unit-tests.result == 'success' && needs.compile.result == 'success'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -523,8 +517,6 @@ jobs:
   build-macos-x64:
     timeout-minutes: 20
     runs-on: macos-15-intel # x64 architecture
-    needs: [unit-tests, compile]
-    if: always() && needs.unit-tests.result == 'success' && needs.compile.result == 'success'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -643,8 +635,6 @@ jobs:
   build-macos-arm64:
     timeout-minutes: 20
     runs-on: macos-latest # ARM64 architecture
-    needs: [unit-tests, compile]
-    if: always() && needs.unit-tests.result == 'success' && needs.compile.result == 'success'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
