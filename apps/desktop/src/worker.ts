@@ -5,10 +5,11 @@
 import { serializeError } from "serialize-error";
 import { executeTaskHandler } from "task-queue";
 import type { ITaskContext } from "task-queue";
-import { initWorkerContext, setWorkerTaskId, type IWorkerContext, type IWorkerOptions } from "./lib/worker-init";
+import { type IWorkerOptions } from "./lib/worker-backend-electron-main";
 import { initTaskHandlers } from "api";
 import type { IWorkerMessage, IWorkerTaskCompletedMessage, IWorkerTaskMessage, IWorkerReadyMessage } from "./lib/worker-backend-electron-main";
-import { setLog, log } from "utils";
+import { RandomUuidGenerator, TimestampProvider, setLog, log } from "utils";
+import { TestUuidGenerator, TestTimestampProvider } from "node-utils";
 import { createWorkerLog } from "./lib/worker-log-electron";
 
 //
@@ -44,27 +45,15 @@ if (!parentPort) {
 }
 
 //
-// Initialize IPC-based logging to send messages to main process
-// This must be done early so all logs (including errors) are captured
-//
-setLog(createWorkerLog(workerOptions.verbose, workerOptions.tools));
-
-//
 // Execute a task handler in the worker
 //
 async function executeTask(message: IWorkerMessage, taskContext: ITaskContext): Promise<void> {
     const { taskId, taskType, data } = message;
 
     try {
-        // Set task ID for logging prefix and progress messages
-        setWorkerTaskId(taskId);
-
         // Execute the handler with task-specific context
         const outputs = await executeTaskHandler(taskType, data, taskContext);
-        
-        // Clear task ID from logging and progress
-        setWorkerTaskId(null);
-        
+
         // Send success result back to main thread
         const successMessage: IWorkerTaskCompletedMessage = {
             type: "task-completed",
@@ -77,9 +66,6 @@ async function executeTask(message: IWorkerMessage, taskContext: ITaskContext): 
         parentPort.postMessage(successMessage);
     }
     catch (error: any) {
-        // Clear task ID from logging and progress
-        setWorkerTaskId(null);
-        
         // Send error result back to main thread as task-completed with status failed
         const errorMessage: IWorkerTaskCompletedMessage = {
             type: "task-completed",
@@ -94,10 +80,18 @@ async function executeTask(message: IWorkerMessage, taskContext: ITaskContext): 
 }
 
 //
-// Initialize the worker message listener
-// workerContext: Worker context (uuidGenerator, timestampProvider, sessionId, etc.)
+// Initialize IPC-based logging to send messages to main process
 //
-function initWorker(workerContext: IWorkerContext): void {
+setLog(createWorkerLog(workerOptions.verbose, workerOptions.tools));
+
+const uuidGenerator = process.env.NODE_ENV === "testing" ? new TestUuidGenerator() : new RandomUuidGenerator();
+const timestampProvider = process.env.NODE_ENV === "testing" ? new TestTimestampProvider() : new TimestampProvider();
+const sessionId = workerOptions.sessionId;
+
+//
+// Initialize the worker message listener
+//
+function initWorker(): void {
     parentPort.on('message', async (event: any) => {
         const message = event.data;
 
@@ -115,9 +109,10 @@ function initWorker(workerContext: IWorkerContext): void {
                 parentPort.postMessage(taskMessage);
             };
 
-            // Create a task-specific context with the task-specific sendMessage
             const taskContext: ITaskContext = {
-                ...workerContext,
+                uuidGenerator,
+                timestampProvider,
+                sessionId,
                 sendMessage: taskSpecificSendMessage,
             };
 
@@ -134,11 +129,10 @@ function initWorker(workerContext: IWorkerContext): void {
 }
 
 //
-// Initialize worker context and message listener
+// Initialize worker and message listener
 //
 try {
-    const context = initWorkerContext(workerOptions);
-    initWorker(context);
+    initWorker();
 }
 catch (error: any) {
     log.exception('Failed to initialize worker', error);

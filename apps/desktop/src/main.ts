@@ -218,7 +218,7 @@ function initWorkers() {
         tools: false,
         sessionId: uuidGenerator.generate(),
     };
-    workerBackend = new WorkerBackendElectronMain(workerPath, maxWorkers, taskTimeout, workerOptions);
+    workerBackend = new WorkerBackendElectronMain(workerPath, maxWorkers, taskTimeout, workerOptions, (message: any) => handleWorkerLogMessage(message, 'Worker'));
     taskQueue = new TaskQueue(uuidGenerator, timestampProvider, taskTimeout, workerBackend);
     console.log('Task queue initialized');
 
@@ -244,9 +244,9 @@ function initWorkers() {
 }
 
 //
-// Handles log messages from the REST API worker and forwards them to the file logger and console.
+// Handles log messages from a worker and forwards them to the file logger and console.
 //
-function handleWorkerLogMessage(message: any, source: string = 'REST API'): void {
+function handleWorkerLogMessage(message: any, source: string): void {
     if (fileLogger) {
         fileLogger.handleWorkerLogMessage(message, source);
     }
@@ -365,7 +365,7 @@ async function initRestApi(): Promise<void> {
             }
             else if (message.type === 'log') {
                 // Handle log messages from worker
-                handleWorkerLogMessage(message);
+                handleWorkerLogMessage(message, 'REST API Worker');
             }
         };
 
@@ -394,7 +394,7 @@ async function initRestApi(): Promise<void> {
     // Set up persistent log message handler (not just for startup)
     restApiWorker.on('message', (message: any) => {
         if (message.type === 'log') {
-            handleWorkerLogMessage(message);
+            handleWorkerLogMessage(message, 'REST API Worker');
         }
     });
 }
