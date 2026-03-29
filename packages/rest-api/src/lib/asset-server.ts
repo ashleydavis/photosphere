@@ -3,8 +3,13 @@ import express from "express";
 import type { Request, Response, Application } from "express";
 import { createServer, type Server } from "http";
 import { createStorage } from "storage";
-import { createMediaFileDatabase, loadDatabase, streamAsset } from "api/src/lib/media-file-database";
-import { applyDatabaseOps } from "api/src/lib/apply-database-ops";
+import {
+    applyDatabaseOps,
+    createMediaFileDatabase,
+    loadDatabase,
+    streamAsset,
+    writeAssetStream,
+} from "api";
 import type { IDatabaseOp } from "defs";
 import { type IUuidGenerator, type ITimestampProvider, log } from "utils";
 
@@ -95,8 +100,6 @@ export async function createAssetServer(options: IAssetServerOptions): Promise<I
     // Use existing app or create new one
     const app = existingApp || express();
 
-    app.use(express.json());
-
     // Enable CORS for all routes (only if we created a new app)
     if (!existingApp) {
         app.use((req: Request, res: Response, next: express.NextFunction) => {
@@ -112,7 +115,7 @@ export async function createAssetServer(options: IAssetServerOptions): Promise<I
     }
 
     // Handle HTTP GET requests for assets
-    app.get("/asset", async (req: Request, res: Response) => {
+    app.get("/asset", express.json(), async (req: Request, res: Response) => {
         const assetId = req.query.id as string;
         const databasePath = req.query.db as string;
         const assetType = req.query.type as string;
@@ -149,15 +152,51 @@ export async function createAssetServer(options: IAssetServerOptions): Promise<I
     });
 
     //
+    // POST /asset — writes raw bytes for one asset variant (thumb | display | asset) into a database directory.
+    // Same query params as GET: id, type, db. Body: raw bytes. Content-Type: MIME of the blob.
+    // Used when moving/copying assets between databases (gallery) so file data matches metadata applied via apply-database-ops.
+    //
+    app.post("/asset", async (req: Request, res: Response) => {
+        
+        const assetId = req.query.id as string | undefined;
+        const databasePath = req.query.db as string | undefined;
+        const assetType = req.query.type as string | undefined;
+
+        if (!assetId || !databasePath || !assetType) {
+            res.status(400).send("Missing id, db, or type query parameter.");
+            return;
+        }
+
+        try {
+            const { storage, rawStorage } = createStorage(databasePath, undefined, undefined);
+            await writeAssetStream(
+                storage,
+                rawStorage,
+                sessionId,
+                assetId,
+                assetType,
+                req.headers["content-type"],
+                req,
+                req.headers["content-type"] && parseInt(req.headers["content-length"] as string) || undefined
+            );
+            res.status(204).end();
+        }
+        catch (error: any) {
+            log.exception(`Error storing asset ${assetId} (${assetType})`, error);
+            res.status(500).send(error?.message || "Error storing asset");
+        }
+    });
+
+    //
     // POST /apply-database-ops — applies metadata changes to one or more on-disk databases (BSON collections).
-    // Used by the gallery UI to persist set / push / pull operations via the same local server as GET /asset.
+    // Used by the gallery UI to persist set / push / pull operations via the same local server as /asset.
     //
     // Request body: JSON { ops: IDatabaseOp[] } where each op targets a database path (databaseId), collection, record id, and operation.
     // Responses: 400 if ops is missing or not an array; 204 on success; 500 if applying ops fails.
     //
-    app.post("/apply-database-ops", async (req: Request, res: Response) => {
-        const body = req.body as IApplyDatabaseOpsRequestBody | undefined;
-        const ops = body?.ops;
+    app.post("/apply-database-ops", express.json(), async (req: Request, res: Response) => {
+        const body = req.body as IApplyDatabaseOpsRequestBody;
+        const ops = body.ops;
         if (!ops || !Array.isArray(ops)) {
             res.status(400).send("Request body must be a JSON object with an \"ops\" array.");
             return;

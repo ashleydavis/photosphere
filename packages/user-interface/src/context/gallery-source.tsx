@@ -92,11 +92,6 @@ export interface IGallerySource {
     loadAsset(assetId: string, assetType: string): Promise<Blob | undefined>;
 
     //
-    // Stores an asset.
-    //
-    storeAsset(assetId: string, assetType: string, assetData: Blob): Promise<void>;    
-
-    //
     // Gets a gallery item by id.
     //
     getItemById(assetId: string): IGalleryItem | undefined;
