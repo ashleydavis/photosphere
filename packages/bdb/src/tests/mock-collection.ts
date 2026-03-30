@@ -259,4 +259,11 @@ export class MockCollection<T extends IRecord> implements IBsonCollection<T> {
     getSortIndexOptions(): ISortIndexCreationOptions {
         throw new Error('getSortIndexOptions not supported by MockCollection');
     }
+
+    //
+    // No-op: MockCollection has no sort index cache.
+    //
+    invalidateSortIndexCache(): void {
+        // No-op
+    }
 }
