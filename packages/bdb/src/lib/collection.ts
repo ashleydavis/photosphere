@@ -354,6 +354,12 @@ export interface IBsonCollection<RecordT extends IRecord> {
     // Options needed to construct a sort index. Used by callers that manage indexes (e.g. BatchSortIndexManager).
     //
     getSortIndexOptions(): ISortIndexCreationOptions;
+
+    //
+    // Invalidates all cached sort index instances, forcing a reload from disk on next use.
+    // Call this after external code (e.g. BatchSortIndexManager) has written new sort index data to disk.
+    //
+    invalidateSortIndexCache(): void;
 }
 
 export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<RecordT> {
@@ -378,6 +384,12 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     // Current version for shard file format
     //
     private static readonly SHARD_FILE_VERSION = 2;
+
+    //
+    // Cache of loaded sort index instances, keyed by "fieldName_direction".
+    // Prevents re-reading the tree.dat file from disk on every getSorted() call.
+    //
+    private readonly sortIndexCache = new Map<string, SortIndex>();
 
     constructor(private readonly name: string, private readonly bsonDbPath: string, options: IBsonCollectionOptions) {
         this.storage = options.storage;
@@ -441,11 +453,17 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     // Creates a new instance and tries to load it from disk.
     //
     async loadSortIndex(fieldName: string, direction: SortDirection): Promise<SortIndex | undefined> {
+        const cacheKey = `${fieldName}_${direction}`;
+        const cached = this.sortIndexCache.get(cacheKey);
+        if (cached) {
+            return cached;
+        }
         const sortIndex = this.createSortIndex(fieldName, direction);
         const loaded = await sortIndex.load();
         if (!loaded) {
             return undefined;
         }
+        this.sortIndexCache.set(cacheKey, sortIndex);
         return sortIndex;
     }
 
@@ -455,9 +473,8 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     private async addRecordToSortIndexes(record: IInternalRecord): Promise<void> {
         const indexes = await this.listSortIndexes();
         for (const indexInfo of indexes) {
-            const sortIndex = this.createSortIndex(indexInfo.fieldName, indexInfo.direction);
-            const loaded = await sortIndex.load();
-            if (loaded) {
+            const sortIndex = await this.loadSortIndex(indexInfo.fieldName, indexInfo.direction);
+            if (sortIndex) {
                 await sortIndex.addRecord(record);
             }
         }
@@ -469,9 +486,8 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     private async updateRecordInSortIndexes(updatedRecord: IInternalRecord, oldRecord: IInternalRecord | undefined): Promise<void> {
         const indexes = await this.listSortIndexes();
         for (const indexInfo of indexes) {
-            const sortIndex = this.createSortIndex(indexInfo.fieldName, indexInfo.direction);
-            const loaded = await sortIndex.load();
-            if (loaded) {
+            const sortIndex = await this.loadSortIndex(indexInfo.fieldName, indexInfo.direction);
+            if (sortIndex) {
                 await sortIndex.updateRecord(updatedRecord, oldRecord);
             }
         }
@@ -483,9 +499,8 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     private async deleteRecordFromSortIndexes(recordId: string, record: IInternalRecord): Promise<void> {
         const indexes = await this.listSortIndexes();
         for (const indexInfo of indexes) {
-            const sortIndex = this.createSortIndex(indexInfo.fieldName, indexInfo.direction);
-            const loaded = await sortIndex.load();
-            if (loaded) {
+            const sortIndex = await this.loadSortIndex(indexInfo.fieldName, indexInfo.direction);
+            if (sortIndex) {
                 await sortIndex.deleteRecord(recordId, record);
             }
         }
@@ -936,6 +951,13 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     }
 
     //
+    // Invalidates all cached sort index instances, forcing a reload from disk on next use.
+    //
+    invalidateSortIndexCache(): void {
+        this.sortIndexCache.clear();
+    }
+
+    //
     // Insert a new record into the collection.
     // Throws an error if a document with the same ID already exists.
     //
@@ -1261,10 +1283,16 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     // Loads the sort index.
     //
     private async loadSortIndexInternal(fieldName: string, direction: SortDirection, type: SortDataType): Promise<void> {
+        const cacheKey = `${fieldName}_${direction}`;
+        if (this.sortIndexCache.has(cacheKey)) {
+            return;
+        }
         const sortIndex = await this.createSortIndex(fieldName, direction, type, this.defaultPageSize);
         if (!await sortIndex.load()) {
             console.error(`Sort index for field "${fieldName}" in direction "${direction}" does not exist on disk.`);
+            return;
         }
+        this.sortIndexCache.set(cacheKey, sortIndex);
     }
 
     //
@@ -1314,6 +1342,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             // Create instance to call delete() which handles cleanup
             const sortIndex = this.createSortIndex(fieldName, direction);
             await sortIndex.delete();
+            this.sortIndexCache.delete(`${fieldName}_${direction}`);
             return true;
         }
         
@@ -1329,7 +1358,8 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         if (await this.storage.dirExists(collectionIndexPath)) {
             await this.storage.deleteDir(collectionIndexPath);
         }
-        
+        this.sortIndexCache.clear();
+
         // Delete the collection directory (which includes merkle trees)
         await this.storage.deleteDir(pathJoin(this.bsonDbPath, "collections", this.name));
     }

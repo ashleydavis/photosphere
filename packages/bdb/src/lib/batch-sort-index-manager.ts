@@ -13,6 +13,7 @@ import { BatchSortIndex } from './batch-sort-index';
 export interface ISortIndexBatchProvider {
     listSortIndexes(): Promise<Array<{ fieldName: string; direction: SortDirection }>>;
     getSortIndexOptions(): ISortIndexCreationOptions;
+    invalidateSortIndexCache(): void;
 }
 
 //
@@ -75,5 +76,6 @@ export class BatchSortIndexManager {
             await index.commitChanges();
         }
         this.indexes.clear();
+        this.provider.invalidateSortIndexCache();
     }
 }

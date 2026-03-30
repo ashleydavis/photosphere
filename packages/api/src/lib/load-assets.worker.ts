@@ -5,7 +5,7 @@
 import { createStorage } from "storage";
 import { resolve } from "node:path";
 import type { ITaskContext } from "task-queue";
-import { createMediaFileDatabase, loadDatabase } from "./media-file-database";
+import { createMediaFileDatabase } from "./media-file-database";
 import type { ILoadAssetsData, ILoadAssetsResult } from "./load-assets.types";
 
 //
@@ -31,8 +31,8 @@ export async function loadAssetsHandler(
     // Create database instance
     const database = createMediaFileDatabase(storage, uuidGenerator, timestampProvider);
     
-    // Load the database
-    await loadDatabase(storage, database.metadataCollection);
+    // Load only the sort index needed for page iteration
+    await database.metadataCollection.loadSortIndexFromStorage("photoDate", "desc", "date");
     
     const metadataCollection = database.metadataCollection;
     
