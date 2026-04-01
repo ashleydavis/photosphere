@@ -152,7 +152,7 @@ export class FileStorage implements IStorage {
     //
     // Streams a file from stroage.
     //
-        async readStream(filePath: string): Promise<Readable> {
+    async readStream(filePath: string): Promise<Readable> {
         return createReadStream(filePath);
     }
 
