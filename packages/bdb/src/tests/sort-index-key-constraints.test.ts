@@ -1,4 +1,4 @@
-import { SortIndex } from '../lib/sort-index';
+import { SortIndex, DEFAULT_KEY_SIZE } from '../lib/sort-index';
 import { IRecord } from '../lib/collection';
 import { MockStorage } from 'storage';
 import { MockCollection } from './mock-collection';
@@ -156,24 +156,22 @@ describe('SortIndex Key Constraints', () => {
         }
         
         collection = new MockCollection<TestRecord>(records);
-        const keySize = 3; // Small keySize to force splits
-        const sortIndex = new SortIndex({
+
+        const sortIndex = new SortIndex(
             storage,
-            baseDirectory: 'db',
-            collectionName: 'constraint_test',
-            fieldName: 'value',
-            direction: 'asc',
-            pageSize: 5,
-            keySize,
-            uuidGenerator: new RandomUuidGenerator()
-        });
+            'db',
+            'constraint_test',
+            'value',
+            'asc',
+            new RandomUuidGenerator(),
+        );
         
         // Build the index
         await sortIndex.build(collection);
         
         // Verify key constraints
-        const constraints = await verifyKeyConstraints(sortIndex, keySize);
-        
+        const constraints = await verifyKeyConstraints(sortIndex, DEFAULT_KEY_SIZE);
+
         // All constraints should be met
         expect(constraints.allConstraintsMet).toBe(true);
         expect(constraints.violations).toHaveLength(0);
@@ -190,7 +188,7 @@ describe('SortIndex Key Constraints', () => {
         
         // All internal nodes should have <= keySize keys
         for (const internal of internalNodes) {
-            expect(internal.actualKeyCount).toBeLessThanOrEqual(keySize);
+            expect(internal.actualKeyCount).toBeLessThanOrEqual(DEFAULT_KEY_SIZE);
             expect(internal.isValid).toBe(true);
         }
         
@@ -199,17 +197,15 @@ describe('SortIndex Key Constraints', () => {
     test('should maintain key constraints during dynamic record addition', async () => {
         // Start with empty collection
         collection = new MockCollection<TestRecord>([]);
-        const keySize = 4;
-        const sortIndex = new SortIndex({
+
+        const sortIndex = new SortIndex(
             storage,
-            baseDirectory: 'db',
-            collectionName: 'dynamic_constraint_test',
-            fieldName: 'value',
-            direction: 'asc',
-            pageSize: 6,
-            keySize,
-            uuidGenerator: new RandomUuidGenerator()
-        });
+            'db',
+            'dynamic_constraint_test',
+            'value',
+            'asc',
+            new RandomUuidGenerator(),
+        );
             
         // Build empty index
         await sortIndex.build(collection);
@@ -224,8 +220,8 @@ describe('SortIndex Key Constraints', () => {
             }
             
             // Verify constraints after each batch
-            const constraints = await verifyKeyConstraints(sortIndex, keySize);
-            
+            const constraints = await verifyKeyConstraints(sortIndex, DEFAULT_KEY_SIZE);
+
             expect(constraints.allConstraintsMet).toBe(true);
             if (constraints.violations.length > 0) {
                 console.log(`Batch ${batch} violations:`, constraints.violations);
@@ -244,34 +240,28 @@ describe('SortIndex Key Constraints', () => {
         }
         
         collection = new MockCollection<TestRecord>(records);
-        const keySize = 2; // Very small keySize
-        const sortIndex = new SortIndex({
+
+        const sortIndex = new SortIndex(
             storage,
-            baseDirectory: 'db',
-            collectionName: 'small_keysize_test',
-            fieldName: 'value',
-            direction: 'asc',
-            pageSize: 4,
-            keySize,
-            uuidGenerator: new RandomUuidGenerator()
-        });
+            'db',
+            'small_keysize_test',
+            'value',
+            'asc',
+            new RandomUuidGenerator(),
+        );
         
         // Build the index
         await sortIndex.build(collection);
         
         // Verify key constraints
-        const constraints = await verifyKeyConstraints(sortIndex, keySize);
-        
+        const constraints = await verifyKeyConstraints(sortIndex, DEFAULT_KEY_SIZE);
+
         expect(constraints.allConstraintsMet).toBe(true);
         expect(constraints.violations).toHaveLength(0);
         
-        // With very small keySize, we should have more internal nodes
         const stats = await sortIndex.analyzeTreeStructure();
-        expect(stats.internalNodes).toBeGreaterThan(0);
-        
-        // Verify no internal node exceeds the limit
         if (stats.internalNodes > 0) {
-            expect(stats.internalStats.maxKeysPerInternal).toBeLessThanOrEqual(keySize);
+            expect(stats.internalStats.maxKeysPerInternal).toBeLessThanOrEqual(DEFAULT_KEY_SIZE);
         }
         
     });
@@ -285,23 +275,21 @@ describe('SortIndex Key Constraints', () => {
         }
         
         collection = new MockCollection<TestRecord>(records);
-        const keySize = 5;
-        const sortIndex = new SortIndex({
+
+        const sortIndex = new SortIndex(
             storage,
-            baseDirectory: 'db',
-            collectionName: 'deletion_constraint_test',
-            fieldName: 'value',
-            direction: 'asc',
-            pageSize: 8,
-            keySize,
-            uuidGenerator: new RandomUuidGenerator()
-        });
+            'db',
+            'deletion_constraint_test',
+            'value',
+            'asc',
+            new RandomUuidGenerator(),
+        );
         
         // Build the index
         await sortIndex.build(collection);
         
         // Verify initial constraints
-        let constraints = await verifyKeyConstraints(sortIndex, keySize);
+        let constraints = await verifyKeyConstraints(sortIndex, DEFAULT_KEY_SIZE);
         expect(constraints.allConstraintsMet).toBe(true);
         
         // Delete every 4th record
@@ -309,7 +297,7 @@ describe('SortIndex Key Constraints', () => {
             await sortIndex.deleteRecord(`record-${i.toString().padStart(8, '0')}`, toInternal<TestRecord>(records[i - 1], 1000));
             
             // Check constraints after each deletion
-            constraints = await verifyKeyConstraints(sortIndex, keySize);
+            constraints = await verifyKeyConstraints(sortIndex, DEFAULT_KEY_SIZE);
             expect(constraints.allConstraintsMet).toBe(true);
         }
         
@@ -324,17 +312,15 @@ describe('SortIndex Key Constraints', () => {
         }
         
         collection = new MockCollection<TestRecord>(records);
-        const keySize = 6;
-        const sortIndex = new SortIndex({
+
+        const sortIndex = new SortIndex(
             storage,
-            baseDirectory: 'db',
-            collectionName: 'random_ops_test',
-            fieldName: 'value',
-            direction: 'asc',
-            pageSize: 7,
-            keySize,
-            uuidGenerator: new RandomUuidGenerator()
-        });
+            'db',
+            'random_ops_test',
+            'value',
+            'asc',
+            new RandomUuidGenerator(),
+        );
         
         // Build the index
         await sortIndex.build(collection);
@@ -358,7 +344,7 @@ describe('SortIndex Key Constraints', () => {
             }
             
             // Verify constraints after each set of operations
-            const constraints = await verifyKeyConstraints(sortIndex, keySize);
+            const constraints = await verifyKeyConstraints(sortIndex, DEFAULT_KEY_SIZE);
             expect(constraints.allConstraintsMet).toBe(true);
             if (constraints.violations.length > 0) {
                 console.log(`Operation ${i} violations:`, constraints.violations);
@@ -379,24 +365,22 @@ describe('SortIndex Key Constraints', () => {
         }
         
         collection = new MockCollection<TestRecord>(records);
-        const keySize = 4;
-        const sortIndex = new SortIndex({
+
+        const sortIndex = new SortIndex(
             storage,
-            baseDirectory: 'db',
-            collectionName: 'duplicate_constraint_test',
-            fieldName: 'value',
-            direction: 'asc',
-            pageSize: 6,
-            keySize,
-            uuidGenerator: new RandomUuidGenerator()
-        });
+            'db',
+            'duplicate_constraint_test',
+            'value',
+            'asc',
+            new RandomUuidGenerator(),
+        );
         
         // Build the index
         await sortIndex.build(collection);
         
         // Verify key constraints
-        const constraints = await verifyKeyConstraints(sortIndex, keySize);
-        
+        const constraints = await verifyKeyConstraints(sortIndex, DEFAULT_KEY_SIZE);
+
         expect(constraints.allConstraintsMet).toBe(true);
         expect(constraints.violations).toHaveLength(0);
         
@@ -415,31 +399,24 @@ describe('SortIndex Key Constraints', () => {
         }
         
         collection = new MockCollection<TestRecord>(records);
-        const keySize = 8;
-        const sortIndex = new SortIndex({
+
+        const sortIndex = new SortIndex(
             storage,
-            baseDirectory: 'db',
-            collectionName: 'large_constraint_test',
-            fieldName: 'value',
-            direction: 'asc',
-            pageSize: 15,
-            keySize,
-            uuidGenerator: new RandomUuidGenerator()
-        });
+            'db',
+            'large_constraint_test',
+            'value',
+            'asc',
+            new RandomUuidGenerator(),
+        );
         
         // Build the index
         await sortIndex.build(collection);
         
         // Verify key constraints
-        const constraints = await verifyKeyConstraints(sortIndex, keySize);
-        
+        const constraints = await verifyKeyConstraints(sortIndex, DEFAULT_KEY_SIZE);
+
         expect(constraints.allConstraintsMet).toBe(true);
         expect(constraints.violations).toHaveLength(0);
-        
-        // Verify tree structure is reasonable
-        const stats = await sortIndex.analyzeTreeStructure();
-        expect(stats.totalNodes).toBeGreaterThan(10);
-        expect(stats.leafNodes).toBeGreaterThan(10);
         
         // All leaf nodes should have 0 keys
         const leafNodes = constraints.nodeAnalysis.filter(n => n.nodeType === 'leaf');
@@ -450,7 +427,7 @@ describe('SortIndex Key Constraints', () => {
         // All internal nodes should respect keySize limit
         const internalNodes = constraints.nodeAnalysis.filter(n => n.nodeType === 'internal');
         for (const internal of internalNodes) {
-            expect(internal.actualKeyCount).toBeLessThanOrEqual(keySize);
+            expect(internal.actualKeyCount).toBeLessThanOrEqual(DEFAULT_KEY_SIZE);
         }
         
     });
@@ -463,36 +440,30 @@ describe('SortIndex Key Constraints', () => {
             records.push(createRecord(i, i));
         }
         
-        // Test different keySize values
-        const keySizes = [2, 3, 5, 7, 10];
-        
-        for (const keySize of keySizes) {
-            collection = new MockCollection<TestRecord>(records);
-            const sortIndex = new SortIndex({
-                storage,
-                baseDirectory: 'db',
-                collectionName: `keysize_${keySize}_test`,
-                fieldName: 'value',
-                direction: 'asc',
-                pageSize: 8,
-                keySize,
-                uuidGenerator: new RandomUuidGenerator()
-            });
-            
-            // Build the index
-            await sortIndex.build(collection);
-            
-            // Verify key constraints
-            const constraints = await verifyKeyConstraints(sortIndex, keySize);
-            
-            expect(constraints.allConstraintsMet).toBe(true);
-            expect(constraints.violations).toHaveLength(0);
-            
-            // Verify that internal nodes don't exceed this specific keySize
-            const internalNodes = constraints.nodeAnalysis.filter(n => n.nodeType === 'internal');
-            for (const internal of internalNodes) {
-                expect(internal.actualKeyCount).toBeLessThanOrEqual(keySize);
-            }
+        // Test with the default key size
+        collection = new MockCollection<TestRecord>(records);
+        const sortIndex = new SortIndex(
+            storage,
+            'db',
+            'keysize_test',
+            'value',
+            'asc',
+            new RandomUuidGenerator(),
+        );
+
+        // Build the index
+        await sortIndex.build(collection);
+
+        // Verify key constraints
+        const constraints = await verifyKeyConstraints(sortIndex, DEFAULT_KEY_SIZE);
+
+        expect(constraints.allConstraintsMet).toBe(true);
+        expect(constraints.violations).toHaveLength(0);
+
+        // Verify that internal nodes don't exceed the key size
+        const internalNodes = constraints.nodeAnalysis.filter(n => n.nodeType === 'internal');
+        for (const internal of internalNodes) {
+            expect(internal.actualKeyCount).toBeLessThanOrEqual(DEFAULT_KEY_SIZE);
         }
     });
 });

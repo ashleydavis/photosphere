@@ -4,136 +4,75 @@
 
 import { pathJoin, type IStorage } from 'storage';
 import type { IUuidGenerator, ITimestampProvider } from 'utils';
-import { save, load } from 'serialization';
-import type { ISerializer, IDeserializer } from 'serialization';
-import { SortIndex } from './sort-index';
-import type { IRangeOptions, SortDataType, SortDirection, ISortIndexResult } from './sort-index';
+import { SortIndex, type ISortIndex, type SortDirection } from './sort-index';
 import { updateMetadata } from './update-metadata';
 import { updateFields } from './update-fields';
 import {
-    buildShardMerkleTree,
-    saveShardMerkleTree,
-    loadShardMerkleTree,
-    buildCollectionMerkleTree,
     saveCollectionMerkleTree,
     loadCollectionMerkleTree,
-    buildDatabaseMerkleTree,
-    loadDatabaseMerkleTree,
-    saveDatabaseMerkleTree,
-    hashRecord,
     deleteCollectionMerkleTree,
-    deleteDatabaseMerkleTree,
-    deleteShardMerkleTree,
 } from './merkle-tree';
-import { deleteItem, upsertItem, IMerkleTree } from 'merkle-tree';
+import { createTree } from 'merkle-tree';
+import { IMerkleRef, MerkleRef } from './merkle-tree-ref';
 import * as crypto from 'crypto';
-import path from 'path';
-
-export interface ISortResult<RecordT extends IRecord> {
-    // Records for the requested page
-    records: RecordT[];
-
-    // Total number of records in the collection
-    totalRecords: number;
-    
-    // Current page ID
-    currentPageId: string;
-    
-    // Total number of leaf pages (navigable data pages)
-    totalPages: number;
-    
-    // Next page ID or undefined if this is the last page
-    nextPageId?: string;
-    
-    // Previous page ID or undefined if this is the first page
-    previousPageId?: string;
-}
-
-//
-// Options when creating a BSON collection.
-//
-export interface IBsonCollectionOptions {
-    //
-    // Interface to the file storage system.
-    //
-    storage: IStorage;
-
-    //
-    // The directory where the collection is stored (v6: collections/<name>).
-    //
-    directory: string; //fio:
-
-    //
-    // BSON database root (v6: "" = storage root; used for indexes path).
-    //
-    baseDirectory: string; //fio:
-
-    //
-    // UUID generator for creating unique identifiers.
-    //
-    uuidGenerator: IUuidGenerator;
-
-    //
-    // Timestamp provider for generating timestamps.
-    //
-    timestampProvider: ITimestampProvider;
-
-    //
-    // The number of shards to use for the collection.
-    //
-    numShards?: number;
-
-    //
-    // The maximum number of shards to keep in memory.
-    //
-    maxCachedShards?: number;
-}
+import { BsonShard, type IInternalRecord, type IShard } from './shard';
 
 //
 // Options needed to construct a sort index (caller adds fieldName and direction).
 //
 export interface ISortIndexCreationOptions {
+    //
+    // Storage backend for sort index files.
+    //
     storage: IStorage;
+
+    //
+    // BSON database root directory (indexes live under this tree).
+    //
     baseDirectory: string;
+
+    //
+    // Collection name segment in index paths.
+    //
     collectionName: string;
+
+    //
+    // UUID generator for new sort index node IDs.
+    //
     uuidGenerator: IUuidGenerator;
-    pageSize: number;
 }
 
+//
+// Public document shape: required id plus arbitrary application fields.
+//
 export interface IRecord {
+    //
+    // Document id (UUID string).
+    //
     _id: string;
+
+    //
+    // Application-defined fields (everything except _id).
+    //
     [key: string]: any;
 }
 
 //
-// Records the metadata for a primitive value.
+// Per-field version metadata: root timestamp plus optional nested field metadata (recursive).
 //
-export type Metadata = {
-    // Timestamp that shows the last time the value was modified.
-    timestamp?: number; 
+export interface Metadata {
+    //
+    // Last modification time for this value or subtree (Unix ms or logical clock).
+    //
+    timestamp?: number;
 
-    // Metadata for nested fields.
+    //
+    // Nested field metadata keyed by field name (same structure as values).
+    //
     fields?: {
         [key: string]: Metadata;
-    }
-}
-
-//
-// Internal record structure with fields separated into a subobject.
-// Used internally for storage, but converted to/from IRecord at API boundaries.
-//
-export interface IInternalRecord {
-    // The record ID.
-    _id: string;
-
-    // The record fields.
-    fields: {
-        [key: string]: any;
     };
-
-    // The metadata for the record.
-    metadata: Metadata;
-}
+};
 
 //
 // Convert external IRecord to internal IInternalRecord format
@@ -164,18 +103,28 @@ export function toExternal<RecordT extends IRecord>(internal: IInternalRecord): 
 }
 
 //
-// Internal shard - stores records in internal format
+// One page of records from getAll plus an optional continuation token for the next shard slice.
 //
-export interface IShard {
-    id: string;
-    records: Map<string, IInternalRecord>;
-}
-
 export interface IGetAllResult<RecordT extends IRecord> {
+    //
+    // Records returned for this request.
+    //
     records: RecordT[];
+
+    //
+    // Opaque token to pass to getAll() to fetch the next page, if any.
+    //
     next?: string;
 }
 
+//
+// Number of shard buckets for record distribution (record id hash mod NUM_SHARDS).
+//
+const NUM_SHARDS = 100;
+
+//
+// BSON collection API: CRUD, sort indexes, sharding, and deferred commit/flush.
+//
 export interface IBsonCollection<RecordT extends IRecord> {
 
     //
@@ -194,7 +143,6 @@ export interface IBsonCollection<RecordT extends IRecord> {
     //
     iterateRecords(): AsyncGenerator<IInternalRecord, void, unknown>;
 
-
     //
     // Iterate each shared in the collection without loading all into memory.
     //
@@ -208,57 +156,17 @@ export interface IBsonCollection<RecordT extends IRecord> {
     getAll(next?: string): Promise<IGetAllResult<RecordT>>;
 
     //
-    // Get records sorted by a specified field.
-    // @param fieldName The field to sort by
-    // @param direction The sort direction (asc or desc)
-    // @param pageId Optional page ID for pagination
-    // @returns Paginated sorted records with metadata
-    //
-    getSorted(
-        fieldName: string,
-        direction: SortDirection,
-        pageId?: string
-    ): Promise<{
-        records: RecordT[];
-        totalRecords: number;
-        currentPageId: string;
-        totalPages: number;
-        nextPageId?: string;
-        previousPageId?: string;
-    }>;
-
-    //
-    // Create or rebuild a sort index for the specified field
-    // @param fieldName The field to create a sort index for
-    // @param direction The sort direction
-    // @param progressCallback Optional callback to report progress during build (called every 1000 records)
-    //
-    ensureSortIndex(fieldName: string, direction: SortDirection, type: SortDataType, progressCallback?: (message: string) => void): Promise<void>;
-
-
-    //
-    // Load a sort index from storage.
-    //
-    loadSortIndexFromStorage(fieldName: string, direction: SortDirection, type: SortDataType): Promise<void>;
-
-    //
     // List all sort indexes for this collection
     //
-    listSortIndexes(): Promise<Array<{
+    sortIndexes(): Promise<Array<{
         fieldName: string;
         direction: SortDirection;
     }>>;
 
     //
-    // Delete a sort index
+    // Returns the sort index for the given field and direction (lazily loaded on first use).
     //
-    deleteSortIndex(fieldName: string, direction: SortDirection): Promise<boolean>;
-
-    //
-    // Loads a sort index by field name and direction.
-    // Returns the SortIndex instance if it exists, undefined otherwise.
-    //
-    loadSortIndex(fieldName: string, direction: SortDirection): Promise<SortIndex | undefined>;
+    sortIndex(fieldName: string, direction: SortDirection): ISortIndex<RecordT>;
 
     //
     // Updates a record.
@@ -283,27 +191,7 @@ export interface IBsonCollection<RecordT extends IRecord> {
     //
     // Deletes a record.
     //
-    deleteOne(id: string): Promise<boolean>;
-
-    //
-    // Checks if a sort index exists for the given field name
-    //
-    hasIndex(fieldName: string, direction: SortDirection): Promise<boolean>;
-
-    //
-    // Find records by index
-    //
-    findByIndex(fieldName: string, value: any): Promise<RecordT[]>;
-    
-    //
-    // Find records where the indexed field is within a range
-    //
-    findByRange(fieldName: string, direction: SortDirection, options: IRangeOptions): Promise<RecordT[]>;
-    
-    //
-    // Deletes an index
-    //
-    deleteIndex(fieldName: string): Promise<boolean>;
+    deleteOne(recordId: string): Promise<boolean>;
 
     //
     // Drops the whole collection.
@@ -311,14 +199,9 @@ export interface IBsonCollection<RecordT extends IRecord> {
     drop(): Promise<void>;
 
     //
-    // Gets the number of shards in the collection.
+    // Returns the shard bucket for shardId (cached; call load() or merkle to read BSON from disk).
     //
-    getNumShards(): number;
-
-    //
-    // Loads the requested shard from cache or from storage.
-    //
-    loadShard(shardId: string): Promise<IShard>;
+    shard(shardId: string): IShard;
 
     //
     // Returns the shard id for a record (for replication batching).
@@ -326,49 +209,42 @@ export interface IBsonCollection<RecordT extends IRecord> {
     getShardId(recordId: string): string;
 
     //
-    // Saves the shard to storage (for replication after batch updates).
+    // Collection merkle ref (lazily loads from disk or builds on first use).
     //
-    saveShard(shard: IShard): Promise<void>;
+    merkleTree(): IMerkleRef;
 
     //
-    // Gets a record from an already-loaded shard (for replication).
+    // True if this collection has uncommitted changes since the last commit.
     //
-    getRecordFromShard(recordId: string, shard: IShard): IInternalRecord | undefined;
+    dirty(): boolean;
 
     //
-    // Sets a record in an already-loaded shard (for replication).
+    // Flushes all pending writes to disk: dirty shards, merkle trees, and sort index pages.
+    // Dirty flags are cleared; the in-memory cache remains populated for fast subsequent reads.
+    // Returns the current collection merkle tree for the database to incorporate.
     //
-    setRecordInShard(recordId: string, record: IInternalRecord, shard: IShard): void;
+    commit(): Promise<void>;
 
     //
-    // Deletes a record from an already-loaded shard (for replication).
+    // Flushes the cache.
     //
-    deleteRecordFromShard(recordId: string, shard: IShard): void;
-
-    //
-    // Rebuilds and saves the shard merkle tree from the shard's records, then updates collection and database trees (for replication).
-    //
-    rebuildAndSaveShardMerkleTree(shard: IShard): Promise<void>;
-
-    //
-    // Options needed to construct a sort index. Used by callers that manage indexes (e.g. BatchSortIndexManager).
-    //
-    getSortIndexOptions(): ISortIndexCreationOptions;
-
-    //
-    // Invalidates all cached sort index instances, forcing a reload from disk on next use.
-    // Call this after external code (e.g. BatchSortIndexManager) has written new sort index data to disk.
-    //
-    invalidateSortIndexCache(): void;
+    flush(): void;
 }
 
+//
+// Sharded BSON document store: records partitioned into shard files, sort indexes, and merkle trees.
+// Writes are buffered until commit(); flush() drops caches after a successful commit.
+//
 export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<RecordT> {
+    //
+    // Backing storage for shard files, merkle files, and sort indexes.
+    //
     private storage: IStorage;
-    private directory: string;
 
+    //
+    // Root passed to sort indexes (indexes/...); usually the same path as bsonDbPath.
+    //
     private readonly baseDirectory: string;
-    private numShards: number;
-    private readonly defaultPageSize: number = 1000;
 
     //
     // UUID generator for creating unique identifiers.
@@ -381,102 +257,101 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     private readonly timestampProvider: ITimestampProvider;
 
     //
-    // Current version for shard file format
-    //
-    private static readonly SHARD_FILE_VERSION = 2;
-
-    //
-    // Cache of loaded sort index instances, keyed by "fieldName_direction".
-    // Prevents re-reading the tree.dat file from disk on every getSorted() call.
+    // Cache of sort indexes, keyed by "fieldName_direction".
+    // Each sort index lazily loads from disk on first use.
     //
     private readonly sortIndexCache = new Map<string, SortIndex>();
 
-    constructor(private readonly name: string, private readonly bsonDbPath: string, options: IBsonCollectionOptions) {
-        this.storage = options.storage;
-        this.directory = options.directory;
-        this.baseDirectory = options.baseDirectory;
-        this.numShards = options.numShards || 100;
-        this.uuidGenerator = options.uuidGenerator;
-        this.timestampProvider = options.timestampProvider;
+    // Shard cache; each shard carries a dirty flag until commit (BSON + merkle).
+    private readonly shardCache = new Map<string, BsonShard>();
+
+    // Lazily-created ref for this collection's merkle tree.
+    private _merkleRef: MerkleRef | undefined = undefined;
+
+    // Aggregate dirty flag — true if any child is dirty since last commit
+    private _dirty = false;
+
+    // Callback to notify the database when this collection first becomes dirty; receives the collection name.
+    private readonly onDirtyCallback: () => void;
+
+    //
+    // name — collection id; bsonDbPath — database root in storage (shard/merkle paths use bsonDbPath/collections/name/...).
+    // baseDirectory — BSON root passed to sort indexes (usually same as bsonDbPath).
+    // onDirty — invoked on first transition to dirty each commit cycle.
+    //
+    constructor(
+        private readonly name: string,
+        private readonly bsonDbPath: string,
+        storage: IStorage,
+        baseDirectory: string,
+        uuidGenerator: IUuidGenerator,
+        timestampProvider: ITimestampProvider,
+        onDirty: () => void,
+    ) {
+        this.storage = storage;
+        this.baseDirectory = baseDirectory;
+        this.uuidGenerator = uuidGenerator;
+        this.timestampProvider = timestampProvider;
+        this.onDirtyCallback = onDirty;
     }
-    
+
     //
-    // Check the format of uuids.
+    // True if this collection has uncommitted changes since the last commit.
     //
-    private expectValidUuid(id: string): void {
-        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-        if (!uuidRegex.test(id)) {
-            throw new Error(`Invalid UUID format: ${id}`);
+    dirty(): boolean {
+        return this._dirty;
+    }
+
+    //
+    // Sets the dirty flag and fires the onDirty callback on first transition per commit cycle.
+    //
+    private markDirty(): void {
+        if (!this._dirty) {
+            this._dirty = true;
+            this.onDirtyCallback();
         }
     }
 
     //
-    // Put id through a buffer and be sure it's in standarized v4 format.
+    // Clears the dirty flag after a successful commit or drop.
     //
-    private normalizeId(id: string) {
-        //TODO: Would like to have this if my data wasn't full of invalid UUIDs.
-        // this.expectValidUuid(id);
-
-        const idBuffer = Buffer.from(id.replace(/-/g, ''), "hex");
-        if (idBuffer.length !== 16) {
-            throw new Error(`Invalid record ID ${id} with length ${idBuffer.length}`);
-        }
-
-        return idBuffer.toString("hex");
+    private clearDirty(): void {
+        this._dirty = false;
     }
 
     //
-    // Gets the base directory for sort indexes (v6: BSON root = indexes/).
+    // Returns the sort index for the given field and direction (lazily loaded on first use).
+    // The sort index is created and cached synchronously; disk access is deferred until first operation.
     //
-    private getSortIndexBaseDirectory(): string {
-        return this.baseDirectory;
-    }
-
-    //
-    // Creates a sort index instance.
-    //
-    private createSortIndex(fieldName: string, direction: SortDirection, type?: SortDataType, pageSize?: number): SortIndex {
-        return new SortIndex({
-            storage: this.storage,
-            baseDirectory: this.getSortIndexBaseDirectory(),
-            collectionName: this.name,
-            fieldName,
-            direction,
-            uuidGenerator: this.uuidGenerator,
-            pageSize: pageSize || this.defaultPageSize,
-            type
-        });
-    }
-
-    //
-    // Loads a sort index by field name and direction.
-    // Creates a new instance and tries to load it from disk.
-    //
-    async loadSortIndex(fieldName: string, direction: SortDirection): Promise<SortIndex | undefined> {
+    sortIndex(fieldName: string, direction: SortDirection): ISortIndex<RecordT> {
         const cacheKey = `${fieldName}_${direction}`;
         const cached = this.sortIndexCache.get(cacheKey);
         if (cached) {
-            return cached;
+            return cached as unknown as ISortIndex<RecordT>;
         }
-        const sortIndex = this.createSortIndex(fieldName, direction);
-        const loaded = await sortIndex.load();
-        if (!loaded) {
-            return undefined;
-        }
+        const sortIndex = new SortIndex(
+            this.storage,
+            this.baseDirectory,
+            this.name,
+            fieldName,
+            direction,
+            this.uuidGenerator,
+            undefined, //todo: Might be good if the data type was passed into sortIndex as well!
+            () => this.markDirty(),
+            () => this.sortIndexCache.delete(cacheKey),
+        );
+
         this.sortIndexCache.set(cacheKey, sortIndex);
-        return sortIndex;
+        return sortIndex as unknown as ISortIndex<RecordT>;
     }
 
     //
     // Adds a record to all sort indexes for this collection.
     //
     private async addRecordToSortIndexes(record: IInternalRecord): Promise<void> {
-        const indexes = await this.listSortIndexes();
+        const indexes = await this.sortIndexes();
         for (const indexInfo of indexes) {
-            const sortIndex = await this.loadSortIndex(indexInfo.fieldName, indexInfo.direction);
-            if (sortIndex) {
-                await sortIndex.addRecord(record);
-            }
+            await this.sortIndex(indexInfo.fieldName, indexInfo.direction).addRecord(record);
         }
     }
 
@@ -484,12 +359,9 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     // Updates a record in all sort indexes.
     //
     private async updateRecordInSortIndexes(updatedRecord: IInternalRecord, oldRecord: IInternalRecord | undefined): Promise<void> {
-        const indexes = await this.listSortIndexes();
+        const indexes = await this.sortIndexes();
         for (const indexInfo of indexes) {
-            const sortIndex = await this.loadSortIndex(indexInfo.fieldName, indexInfo.direction);
-            if (sortIndex) {
-                await sortIndex.updateRecord(updatedRecord, oldRecord);
-            }
+            await this.sortIndex(indexInfo.fieldName, indexInfo.direction).updateRecord(updatedRecord, oldRecord);
         }
     }
 
@@ -497,51 +369,45 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     // Deletes a record from all existing sort indexes.
     //
     private async deleteRecordFromSortIndexes(recordId: string, record: IInternalRecord): Promise<void> {
-        const indexes = await this.listSortIndexes();
+        const indexes = await this.sortIndexes();
         for (const indexInfo of indexes) {
-            const sortIndex = await this.loadSortIndex(indexInfo.fieldName, indexInfo.direction);
-            if (sortIndex) {
-                await sortIndex.deleteRecord(recordId, record);
-            }
+            await this.sortIndex(indexInfo.fieldName, indexInfo.direction).deleteRecord(recordId, record);
         }
     }
 
     //
-    // Saves the shard.
+    // Returns the collection merkle ref (lazily loads from disk or builds on first use).
     //
-    async saveShard(shard: IShard): Promise<void> {
-        const filePath = pathJoin(this.bsonDbPath, "collections", this.name, "shards", shard.id);
-        await this.saveShardFile(filePath, shard);
+    merkleTree(): IMerkleRef {
+        if (!this._merkleRef) {
+            this._merkleRef = new MerkleRef(
+                async () => loadCollectionMerkleTree(this.storage, this.bsonDbPath, this.name),
+                async (tree) => saveCollectionMerkleTree(this.storage, this.bsonDbPath, this.name, tree),
+                async () => deleteCollectionMerkleTree(this.storage, this.bsonDbPath, this.name),
+                async () => createTree<undefined>(this.uuidGenerator.generate()),
+            );
+        }
+        return this._merkleRef;
+    }
+
+
+    //
+    // Returns the shard bucket for shardId (creates and caches a BsonShard; BSON reads are lazy).
+    //
+    shard(shardId: string): IShard {
+        const cached = this.shardCache.get(shardId);
+        if (cached) {
+            return cached;
+        }
+        const bsonShard = new BsonShard(shardId, this.storage, this.bsonDbPath, this.name, this.uuidGenerator);
+        this.shardCache.set(shardId, bsonShard);
+        return bsonShard;
     }
 
     //
-    // Adds a record to the shard cache.
+    // Returns the shard id for a record (hash of id mod numShards).
     //
-    private async setRecord(id: string, record: IInternalRecord, shard: IShard): Promise<void> {
-        const normalizedId = this.normalizeId(id);
-        shard.records.set(normalizedId, record);
-    }
-
-    //
-    // Gets a record from the shard cache.
-    //
-    private getRecord(id: string, shard: IShard): IInternalRecord | undefined {
-        const normalizedId = this.normalizeId(id);
-        return shard.records.get(normalizedId);
-    }
-
-    //
-    // Deletes a record from the shard cache.
-    //
-    private deleteRecord(id: string, shard: IShard): void {
-        const normalizedId = this.normalizeId(id);
-        shard.records.delete(normalizedId);
-    }
-
-    //
-    // Determines the shard ID for a record based on its ID.
-    //
-    private generateShardId(recordId: string): string {
+    getShardId(recordId: string): string {
         const recordIdBuffer = Buffer.from(recordId.replace(/-/g, ''), 'hex');
         if (recordIdBuffer.length !== 16) {
             throw new Error(`Invalid record ID ${recordId} with length ${recordIdBuffer.length}`);
@@ -549,412 +415,7 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
 
         const hash = crypto.createHash('md5').update(recordIdBuffer).digest('hex');
         const decimal = parseInt(hash.substring(0, 8), 16);
-        return (decimal % this.numShards).toString();
-    }
-
-    //
-    // Saves the shard file to storage.
-    //
-    private async saveShardFile(shardFilePath: string, shard: IShard): Promise<void> {
-        if (shard.records.size === 0) {
-            if (await this.storage.fileExists(shardFilePath)) {
-                //
-                // Delete empty files.
-                //
-                await this.storage.deleteFile(shardFilePath);
-            }
-        }
-        else {
-            await this.writeBsonFile(shardFilePath, shard);
-        }
-    }
-
-    //
-    // Upserts a record in the shard merkle tree (adds if doesn't exist, updates if it does).
-    //
-    private async upsertRecordInShardTree(shardId: string, record: IInternalRecord, shard: IShard): Promise<void> {
-        let shardTree = await loadShardMerkleTree(this.storage, this.bsonDbPath, this.name, shardId);
-        if (!shardTree) {
-            // Tree doesn't exist, build it from the shard.
-            const records = Array.from(shard.records.values());
-            shardTree = await buildShardMerkleTree(records, this.uuidGenerator);
-        }
-        else {
-            // Upsert the record hash in the existing tree (adds if doesn't exist, updates if it does)
-            shardTree = upsertItem(shardTree, hashRecord(record));
-        }
-        
-        await saveShardMerkleTree(this.storage, this.bsonDbPath, this.name, shardId, shardTree);        
-        await this.updateCollectionTree(shardId, shardTree);
-    }
-
-    //
-    // Updates the shard merkle tree by deleting a record hash.
-    //
-    private async deleteRecordFromShardTree(shardId: string, recordId: string, shard: IShard): Promise<void> {
-
-        let shardTree = await loadShardMerkleTree(this.storage, this.bsonDbPath, this.name, shardId);        
-        if (!shardTree) {
-            // Tree doesn't exist, but if shard still has records, build it.
-            const records = Array.from(shard.records.values());
-            if (records.length > 0) {
-                // Only bother building it if we have more than one record.
-                shardTree = await buildShardMerkleTree(records, this.uuidGenerator);
-            }
-        }
-
-        if (shardTree && shardTree.sort) {
-            // Delete the record hash from the tree.
-            deleteItem(shardTree, recordId);
-        }
-
-        if (!shardTree || !shardTree.sort) {
-            // Shard tree is empty, delete it.
-            shardTree = undefined;
-            await deleteShardMerkleTree(this.storage, this.bsonDbPath, this.name, shardId);
-        }
-        else {
-            await saveShardMerkleTree(this.storage, this.bsonDbPath, this.name, shardId, shardTree);
-        }
-        
-        await this.updateCollectionTree(shardId, shardTree);
-    }
-
-    //
-    // Updates the collection merkle tree with the updated shard hash.
-    //
-    private async updateCollectionTree(shardId: string, shardTree: IMerkleTree<undefined> | undefined): Promise<void> {
-        
-        let collectionTree = await loadCollectionMerkleTree(this.storage, this.bsonDbPath, this.name);        
-        if (!collectionTree) {
-            // Collection tree doesn't exist, build it.
-            collectionTree = await buildCollectionMerkleTree(this.storage, this.bsonDbPath, this.name, this.uuidGenerator, false);
-        }
-
-        if (shardTree && shardTree.merkle) {
-            // Update the shard hash in the collection tree.
-            const hashedItem = {
-                name: shardId.toString(),
-                hash: shardTree.merkle.hash,
-                length: shardTree.merkle.nodeCount,
-                lastModified: new Date(),
-            };
-            
-            collectionTree = upsertItem(collectionTree, hashedItem);
-        } 
-        else {
-            // Shard tree is empty or missing, remove shard from collection tree.
-            deleteItem(collectionTree, shardId.toString());
-        }
-
-        if (!collectionTree.sort) {
-            // Collection tree is empty, delete it.
-            collectionTree = undefined;
-            await deleteCollectionMerkleTree(this.storage, this.bsonDbPath, this.name);
-        }        
-        else {
-            await saveCollectionMerkleTree(this.storage, this.bsonDbPath, this.name, collectionTree);
-        }
-        
-        await this.updateDatabaseTree(collectionTree);
-    }
-
-    //
-    // Updates the database merkle tree with the updated collection hash.
-    //
-    private async updateDatabaseTree(collectionTree: IMerkleTree<undefined> | undefined): Promise<void> {
-        
-        let databaseTree = await loadDatabaseMerkleTree(this.storage, this.bsonDbPath);
-        if (!databaseTree) {
-            // Database tree doesn't exist, rebuild it from all collections.
-            databaseTree = await buildDatabaseMerkleTree(
-                this.storage,
-                this.bsonDbPath,
-                this.uuidGenerator,
-                this.name,
-                collectionTree,
-                false
-            );            
-        }
-
-        // Update the collection hash in the database tree.
-        if (collectionTree && collectionTree.merkle) {
-            const hashedItem = {
-                name: this.name,
-                hash: collectionTree.merkle.hash,
-                length: collectionTree.merkle.nodeCount,
-                lastModified: new Date(),
-            };
-            databaseTree = upsertItem(databaseTree, hashedItem);
-        } 
-        else {
-            // Collection tree is empty or missing, remove collection from database tree.
-            deleteItem(databaseTree, this.name);
-        }
-
-        if (!databaseTree.sort) {
-            // Database tree is empty, delete it.
-            await deleteDatabaseMerkleTree(this.storage, this.bsonDbPath);
-        }
-        else {
-            await saveDatabaseMerkleTree(this.storage, this.bsonDbPath, databaseTree);
-        }
-    }
-
-    //
-    // Serializes a single record to the serializer
-    //
-    private serializeRecord(record: IInternalRecord, serializer: ISerializer): void {
-        const recordIdBuffer = Buffer.from(record._id.replace(/-/g, ''), 'hex');
-        if (recordIdBuffer.length !== 16) {
-            throw new Error(`Invalid record ID ${record._id} with length ${recordIdBuffer.length}`);
-        }
-        // Write record ID (16 bytes raw, no length prefix)
-        serializer.writeBytes(recordIdBuffer);
-
-        // Write the fields (not _id) - record is already in internal format
-        serializer.writeBSON(record.fields);
-        
-        // Write metadata (version 2+)
-        serializer.writeBSON(record.metadata);
-    }
-
-    //
-    // Writes a shard to disk.
-    //
-    private serializeShard(shard: IShard, serializer: ISerializer): void {
-        // Write record count (4 bytes LE)
-        serializer.writeUInt32(shard.records.size);
-
-        // Sort records by ID to ensure deterministic output
-        const sortedRecords = Array.from(shard.records.values()).sort((a, b) => a._id.localeCompare(b._id));
-        
-        for (const record of sortedRecords) {
-            this.serializeRecord(record, serializer);
-        }
-    }
-
-    private async writeBsonFile(filePath: string, shard: IShard): Promise<void> {
-        await save(
-            this.storage,
-            filePath,
-            shard,
-            BsonCollection.SHARD_FILE_VERSION,
-            'SHAR',
-            (shardData, serializer) => this.serializeShard(shardData, serializer)
-        );
-    }
-
-    //
-    // Deserializes a version 1 record (fields only, no metadata)
-    //
-    private deserializeRecordV1(deserializer: IDeserializer): IInternalRecord {
-        // Read 16 byte uuid
-        const recordIdBuffer = deserializer.readBytes(16);
-        const hexString = recordIdBuffer.toString('hex');
-        const recordId = [
-            hexString.substring(0, 8),
-            hexString.substring(8, 12),
-            hexString.substring(12, 16),
-            hexString.substring(16, 20),
-            hexString.substring(20)
-        ].join('-');
-
-        // Read and deserialize the record fields
-        const fields = deserializer.readBSON<any>();
-        
-        return { 
-            _id: recordId,
-            fields,
-            metadata: {},
-        };
-    }
-
-    //
-    // Deserializes a version 2 record (fields and metadata)
-    //
-    private deserializeRecordV2(deserializer: IDeserializer): IInternalRecord {
-        // Read 16 byte uuid
-        const recordIdBuffer = deserializer.readBytes(16);
-        const hexString = recordIdBuffer.toString('hex');
-        const recordId = [
-            hexString.substring(0, 8),
-            hexString.substring(8, 12),
-            hexString.substring(12, 16),
-            hexString.substring(16, 20),
-            hexString.substring(20)
-        ].join('-');
-
-        // Read and deserialize the record fields
-        const fields = deserializer.readBSON<any>();
-
-        // Read and deserialize metadata
-        const metadata = deserializer.readBSON<Metadata>();
-        
-        return { 
-            _id: recordId,
-            fields,
-            metadata,
-        };
-    }
-
-    //
-    // Deserializes a single record from the deserializer.
-    // Delegates to version-specific deserialization functions.
-    //
-    private deserializeRecord(deserializer: IDeserializer, fileVersion: number): IInternalRecord {
-        if (fileVersion === 2) {
-            return this.deserializeRecordV2(deserializer);
-        } else if (fileVersion === 1) {
-            return this.deserializeRecordV1(deserializer);
-        } else {
-            throw new Error(`Invalid file version: ${fileVersion}`);
-        }
-    }
-
-    //
-    // Migrates old flat format to new format with fields subobject
-    // Deserializer function for version 1 shard data
-    //
-    private deserializeShardV1(deserializer: IDeserializer): IInternalRecord[] {
-        const records: IInternalRecord[] = [];
-
-        // Read record count (4 bytes LE)
-        const recordCount = deserializer.readUInt32();
-
-        for (let i = 0; i < recordCount; i++) {
-            records.push(this.deserializeRecordV1(deserializer));
-        }
-
-        return records;
-    }
-
-    //
-    // Deserializer function for version 2 shard data
-    // Returns records in internal format.
-    //
-    private deserializeShardV2(deserializer: IDeserializer): IInternalRecord[] {
-        const records: IInternalRecord[] = [];
-
-        // Read record count (4 bytes LE)
-        const recordCount = deserializer.readUInt32();
-
-        for (let i = 0; i < recordCount; i++) {
-            records.push(this.deserializeRecordV2(deserializer));
-        }
-
-        return records;
-    }
-
-    //
-    // Loads all records from a shard file.
-    // Supports version 1 and 2.
-    // Returns records in internal format.
-    //
-    async loadRecords(shardFilePath: string): Promise<IInternalRecord[]> {
-        const records = await load<IInternalRecord[]>(
-            this.storage,
-            shardFilePath,
-            'SHAR',
-            {
-                1: (deserializer) => this.deserializeShardV1(deserializer),
-                2: (deserializer) => this.deserializeShardV2(deserializer)
-            }
-        );
-        
-        // Return empty array if file doesn't exist (load returns undefined)
-        return records || [];
-    }
-
-    //
-    // Gets the number of shards in the collection.
-    //
-    getNumShards(): number {
-        return this.numShards;
-    }
-
-    //
-    // Loads the requested shard from cache or from storage.
-    //
-    async loadShard(shardId: string): Promise<IShard> {
-        const filePath = pathJoin(this.bsonDbPath, "collections", this.name, "shards", shardId);
-        const records = await this.loadRecords(filePath); //todo: It would be good if we could load a shard without deserializing all the records. Then we can just lazy dersialize the ones we want.
-        const shard: IShard = {
-            id: shardId,
-            records: new Map<string, IInternalRecord>(),
-        };
-
-        for (const record of records) {
-            const normalizedId = this.normalizeId(record._id);
-            shard.records.set(normalizedId, record);
-        }
-
-        return shard;
-    }
-
-    //
-    // Returns the shard id for a record (for replication batching).
-    //
-    getShardId(recordId: string): string {
-        return this.generateShardId(recordId);
-    }
-
-    //
-    // Gets a record from an already-loaded shard (for replication).
-    //
-    getRecordFromShard(recordId: string, shard: IShard): IInternalRecord | undefined {
-        return this.getRecord(recordId, shard);
-    }
-
-    //
-    // Sets a record in an already-loaded shard (for replication).
-    //
-    setRecordInShard(recordId: string, record: IInternalRecord, shard: IShard): void {
-        const normalizedId = this.normalizeId(recordId);
-        shard.records.set(normalizedId, record);
-    }
-
-    //
-    // Deletes a record from an already-loaded shard (for replication).
-    //
-    deleteRecordFromShard(recordId: string, shard: IShard): void {
-        this.deleteRecord(recordId, shard);
-    }
-
-    //
-    // Rebuilds the shard merkle tree from the shard's records, saves it, and updates collection and database trees (for replication).
-    //
-    async rebuildAndSaveShardMerkleTree(shard: IShard): Promise<void> {
-        const records = Array.from(shard.records.values());
-        if (records.length === 0) {
-            await deleteShardMerkleTree(this.storage, this.bsonDbPath, this.name, shard.id);
-            await this.updateCollectionTree(shard.id, undefined);
-        }
-        else {
-            const shardTree = await buildShardMerkleTree(records, this.uuidGenerator);
-            await saveShardMerkleTree(this.storage, this.bsonDbPath, this.name, shard.id, shardTree);
-            await this.updateCollectionTree(shard.id, shardTree);
-        }
-    }
-
-    //
-    // Options needed to construct a sort index.
-    //
-    getSortIndexOptions(): ISortIndexCreationOptions {
-        return {
-            storage: this.storage,
-            baseDirectory: this.getSortIndexBaseDirectory(),
-            collectionName: this.name,
-            uuidGenerator: this.uuidGenerator,
-            pageSize: this.defaultPageSize
-        };
-    }
-
-    //
-    // Invalidates all cached sort index instances, forcing a reload from disk on next use.
-    //
-    invalidateSortIndexCache(): void {
-        this.sortIndexCache.clear();
+        return (decimal % NUM_SHARDS).toString();
     }
 
     //
@@ -966,37 +427,28 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             record._id = this.uuidGenerator.generate();
         }
 
-        const shardId = this.generateShardId(record._id);
-        const shard = await this.loadShard(shardId);
-
-        if (this.getRecord(record._id, shard)) {
+        const shardId = this.getShardId(record._id);
+        const shard = this.shard(shardId);
+        if (await shard.record(record._id)) {
             throw new Error(`Document with ID ${record._id} already exists in shard ${shardId}`);
         }
 
-        // Use provided timestamp or current time
         const versionTimestamp = options?.timestamp ?? this.timestampProvider.now();
         const internalRecord = toInternal<RecordT>(record, versionTimestamp);
-        await this.setRecord(record._id, internalRecord, shard);
-        await this.saveShard(shard);
-
+        await shard.setRecord(record._id, internalRecord);
         await this.addRecordToSortIndexes(internalRecord);
-        
-        // Update merkle trees
-        await this.upsertRecordInShardTree(shardId, internalRecord, shard);
+
+        this.markDirty();
     }
 
     //
     // Gets one record by ID.
     //
     async getOne(id: string): Promise<RecordT | undefined> {
+        const shardId = this.getShardId(id);
+        const shard = this.shard(shardId);
 
-        const shardId = this.generateShardId(id);
-        const shard = await this.loadShard(shardId);
-        if (shard.records.size === 0) {
-            return undefined; // Empty file.
-        }
-
-        const record = this.getRecord(id, shard);
+        const record = await shard.record(id);
         if (!record) {
             return undefined; // Record not found
         }
@@ -1008,9 +460,10 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     // Iterate all records in the collection without loading all into memory.
     //
     async *iterateRecords(): AsyncGenerator<IInternalRecord, void, unknown> {
-        for (let shardId = 0; shardId < this.numShards; shardId++) {
-            const records = await this.loadRecords(pathJoin(this.bsonDbPath, "collections", this.name, "shards", shardId.toString()));
-            for (const record of records) {
+        for (let shardId = 0; shardId < NUM_SHARDS; shardId++) {
+            const shard = this.shard(shardId.toString());
+            const records = await shard.records();
+            for (const record of records.values()) {
                 yield record;
             }
         }
@@ -1018,13 +471,14 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
 
     //
     // Iterate each shard in the collection without loading all into memory.
-    // Yields only shards that have records (same as when reading versioned files directly).
+    // Yields only shards that have records.
     //
     async *iterateShards(): AsyncGenerator<Iterable<IInternalRecord>, void, unknown> {
-        for (let shardId = 0; shardId < this.numShards; shardId++) {
-            const records = await this.loadRecords(pathJoin(this.bsonDbPath, "collections", this.name, "shards", shardId.toString()));
-            if (records.length > 0) {
-                yield records;
+        for (let shardId = 0; shardId < NUM_SHARDS; shardId++) {
+            const shard = this.shard(shardId.toString());
+            const records = await shard.records();
+            if (records.size > 0) {
+                yield records.values();
             }
         }
     }
@@ -1035,16 +489,15 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     // @returns An object containing records from one shard and a continuation token for the next query
     //
     async getAll(next?: string): Promise<IGetAllResult<RecordT>> {
-
         let shardId = next ? parseInt(next) : 0;
-        while (shardId < this.numShards) {
-            // Load records from storage
-            const filePath = pathJoin(this.bsonDbPath, "collections", this.name, "shards", shardId.toString());
-            const internalRecords = await this.loadRecords(filePath);
-            if (internalRecords.length > 0) {
-                // Convert to external format
-                const records = internalRecords.map(internal => toExternal<RecordT>(internal));
-                return { records, next: `${shardId + 1}` };
+        while (shardId < NUM_SHARDS) {
+            const shard = this.shard(shardId.toString());
+            const records = await shard.records();
+            if (records.size > 0) {
+                return { 
+                    records: Array.from(records.values()).map(internal => toExternal<RecordT>(internal)),
+                    next: `${shardId + 1}` 
+                };
             }
 
             shardId += 1;
@@ -1057,10 +510,10 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     // Updates a record.
     //
     async updateOne(id: string, updates: Partial<Omit<RecordT, '_id'>>, options?: { upsert?: boolean; timestamp?: number }): Promise<boolean> {
-        const shardId = this.generateShardId(id);
-        const shard = await this.loadShard(shardId);
+        const shardId = this.getShardId(id);
+        const shard = this.shard(shardId);
 
-        let existingRecord = this.getRecord(id, shard);
+        let existingRecord = await shard.record(id);
 
         if (!options?.upsert) {
             //
@@ -1091,15 +544,10 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             metadata: updateMetadata(existingRecord.fields, updates, existingRecord.metadata, timestamp),
         };
 
-        await this.setRecord(id, updatedRecord, shard);
-        await this.saveShard(shard);
-
+        await shard.setRecord(id, updatedRecord);
         await this.updateRecordInSortIndexes(updatedRecord, existingRecord);
 
-        //
-        // Update merkle trees.
-        //
-        await this.upsertRecordInShardTree(shardId, updatedRecord, shard);
+        this.markDirty();
 
         return true;
     }
@@ -1108,10 +556,10 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     // Replaces a record with completely new data.
     //
     async replaceOne(id: string, record: RecordT, options?: { upsert?: boolean; timestamp?: number }): Promise<boolean> {
-        const shardId = this.generateShardId(id);
-        const shard = await this.loadShard(shardId);
+        const shardId = this.getShardId(id);
+        const shard = this.shard(shardId);
 
-        const existingRecord = this.getRecord(id, shard);
+        const existingRecord = await shard.record(id);
 
         if (!options?.upsert && !existingRecord) {
             //
@@ -1125,15 +573,10 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         //
         const versionTimestamp = options?.timestamp ?? Date.now();
         const internalRecord = toInternal<RecordT>(record, versionTimestamp);
-        await this.setRecord(id, internalRecord, shard);
-        await this.saveShard(shard);
-
+        await shard.setRecord(id, internalRecord);
         await this.updateRecordInSortIndexes(internalRecord, existingRecord);
 
-        //
-        // Update merkle trees.
-        //
-        await this.upsertRecordInShardTree(shardId, internalRecord, shard);
+        this.markDirty();
 
         return true;
     }
@@ -1144,30 +587,29 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     // Always upserts (creates if doesn't exist, updates if it does).
     //
     async setInternalRecord(record: IInternalRecord): Promise<void> {
-        const shardId = this.generateShardId(record._id);
-        const shard = await this.loadShard(shardId);
+        const shardId = this.getShardId(record._id);
+        const shard = this.shard(shardId);
 
-        const existingRecord = this.getRecord(record._id, shard);
+        const existingRecord = await shard.record(record._id);
 
         // Set the record directly with all its metadata preserved
-        await this.setRecord(record._id, record, shard);
-        await this.saveShard(shard);
-
+        await shard.setRecord(record._id, record);
         await this.updateRecordInSortIndexes(record, existingRecord);
-        await this.upsertRecordInShardTree(shardId, record, shard);
+
+        this.markDirty();
     }
 
     //
     // Deletes a record.
     //
-    async deleteOne(id: string): Promise<boolean> {
-        const shardId = this.generateShardId(id);
-        const shard = await this.loadShard(shardId);
+    async deleteOne(recordId: string): Promise<boolean> {
+        const shardId = this.getShardId(recordId);
+        const shard = this.shard(shardId);
 
         //
         // Find the record to delete.
         //
-        const existingRecord = this.getRecord(id, shard);
+        const existingRecord = await shard.record(recordId);
         if (!existingRecord) {
             return false; // Record not found
         }
@@ -1175,138 +617,18 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
         //
         // Delete the record.
         //
-        this.deleteRecord(id, shard);
-        await this.saveShard(shard);
-
-        await this.deleteRecordFromSortIndexes(id, existingRecord);
-
-        // Update merkle trees
-        await this.deleteRecordFromShardTree(shardId, id, shard);
+        await shard.deleteRecord(recordId);
+        await this.deleteRecordFromSortIndexes(recordId, existingRecord);
+        this.markDirty(); 
 
         return true;
     }   
 
     //
-    // Checks if a sort index exists for the given field name
-    //
-    async hasIndex(fieldName: string, direction: SortDirection): Promise<boolean> {
-        // Check if the index exists on disk (v6: indexes/).
-        const indexPath = `${this.getSortIndexBaseDirectory()}/indexes/${this.name}/${fieldName}_${direction}`;
-        return await this.storage.dirExists(indexPath);
-    }
-        
-    //
-    // Find records by index using SortIndex
-    //
-    async findByIndex(fieldName: string, value: any): Promise<RecordT[]> {
-       
-        // Try to find an existing sort index for the field (check both asc and desc)
-        const ascIndex = await this.loadSortIndex(fieldName, 'asc');
-        if (ascIndex) {
-            // Use the sort index for faster search with binary search
-            return (await ascIndex.findByValue(value)).map(sortIndexEntry => ({
-                _id: sortIndexEntry._id,
-                ...sortIndexEntry.fields
-            } as RecordT));
-        }
-        
-        const descIndex = await this.loadSortIndex(fieldName, 'desc');
-        if (descIndex) {
-            // Use the sort index for faster search with binary search
-            return (await descIndex.findByValue(value)).map(sortIndexEntry => ({
-                _id: sortIndexEntry._id,
-                ...sortIndexEntry.fields
-            } as RecordT));
-        }
-        
-        throw new Error(`No sort index found for field "${fieldName}" in either direction`);
-    }
-    
-    //
-    // Find records where the indexed field is within a range
-    //
-    async findByRange(fieldName: string, direction: SortDirection, options: IRangeOptions): Promise<RecordT[]> {
-        const sortIndex = await this.loadSortIndex(fieldName, direction);
-        if (!sortIndex) {
-            throw new Error(`Failed to create sort index for field '${fieldName}'`);
-        }
-        
-        return (await sortIndex.findByRange(options)).map(sortIndexEntry => ({
-            _id: sortIndexEntry._id,
-            ...sortIndexEntry.fields
-        } as RecordT));
-    }
-    
-    //
-    // Deletes all indexes for a field (both asc and desc)
-    //
-    async deleteIndex(fieldName: string): Promise<boolean> {
-        const deleteAsc = await this.deleteSortIndex(fieldName, 'asc');
-        const deleteDesc = await this.deleteSortIndex(fieldName, 'desc');
-        return deleteAsc || deleteDesc;
-    }
-    
-    //
-    // Get records sorted by a specified field
-    //
-    async getSorted(fieldName: string, direction: SortDirection, pageId?: string): Promise<ISortResult<RecordT>> {
-        const sortIndex = await this.loadSortIndex(fieldName, direction);
-        if (!sortIndex) {
-            throw new Error(`Sort index for field "${fieldName}" in direction "${direction}" does not exist.`);
-        }
-        
-        const sortedRecords = await sortIndex.getPage(pageId);
-        return {
-            records: sortedRecords.records.map(sortEntry => ({
-                _id: sortEntry._id,
-                ...sortEntry.fields
-            }) as RecordT),
-            totalRecords: sortedRecords.totalRecords,
-            currentPageId: sortedRecords.currentPageId,
-            totalPages: sortedRecords.totalPages,
-            nextPageId: sortedRecords.nextPageId,
-            previousPageId: sortedRecords.previousPageId
-        };
-    }
-
-    //
-    // Create or rebuild a sort index for the specified field
-    //
-    async ensureSortIndex(fieldName: string, direction: SortDirection, type: SortDataType, progressCallback?: (message: string) => void): Promise<void> {
-        const sortIndex = await this.createSortIndex(fieldName, direction, type, this.defaultPageSize);
-        if (!await sortIndex.load()) {
-            await sortIndex.build(this, progressCallback);
-        }
-    }
-
-    //
-    // Loads the sort index.
-    //
-    private async loadSortIndexInternal(fieldName: string, direction: SortDirection, type: SortDataType): Promise<void> {
-        const cacheKey = `${fieldName}_${direction}`;
-        if (this.sortIndexCache.has(cacheKey)) {
-            return;
-        }
-        const sortIndex = await this.createSortIndex(fieldName, direction, type, this.defaultPageSize);
-        if (!await sortIndex.load()) {
-            console.error(`Sort index for field "${fieldName}" in direction "${direction}" does not exist on disk.`);
-            return;
-        }
-        this.sortIndexCache.set(cacheKey, sortIndex);
-    }
-
-    //
-    // Load a sort index from storage.
-    //
-    async loadSortIndexFromStorage(fieldName: string, direction: SortDirection, type: SortDataType): Promise<void> {
-        await this.loadSortIndexInternal(fieldName, direction, type);
-    }
-
-    //
     // List all sort indexes for this collection
     //
-    async listSortIndexes(): Promise<Array<{ fieldName: string; direction: SortDirection; }>> {              
-        const collectionIndexPath = `${this.getSortIndexBaseDirectory()}/indexes/${this.name}`;
+    async sortIndexes(): Promise<Array<{ fieldName: string; direction: SortDirection; }>> {              
+        const collectionIndexPath = `${this.baseDirectory}/indexes/${this.name}`;
 
         if (!await this.storage.dirExists(collectionIndexPath)) {
             return [];
@@ -1333,28 +655,11 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     }
 
     //
-    // Delete a sort index
-    //
-    async deleteSortIndex(fieldName: string, direction: SortDirection): Promise<boolean> {
-        // Try to delete from disk.
-        const indexPath = `${this.getSortIndexBaseDirectory()}/indexes/${this.name}/${fieldName}_${direction}`;
-        if (await this.storage.dirExists(indexPath)) {
-            // Create instance to call delete() which handles cleanup
-            const sortIndex = this.createSortIndex(fieldName, direction);
-            await sortIndex.delete();
-            this.sortIndexCache.delete(`${fieldName}_${direction}`);
-            return true;
-        }
-        
-        return false; // The index doesn't exist
-    }
-
-    //
     // Drops the whole collection.
     //
     async drop(): Promise<void> {       
         // Delete sort indexes if any (v6: indexes/<collectionName>)
-        const collectionIndexPath = `${this.getSortIndexBaseDirectory()}/indexes/${this.name}`;
+        const collectionIndexPath = `${this.baseDirectory}/indexes/${this.name}`;
         if (await this.storage.dirExists(collectionIndexPath)) {
             await this.storage.deleteDir(collectionIndexPath);
         }
@@ -1362,5 +667,69 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
 
         // Delete the collection directory (which includes merkle trees)
         await this.storage.deleteDir(pathJoin(this.bsonDbPath, "collections", this.name));
+
+        // Clear all caches and dirty state
+        this.shardCache.clear();
+        this._merkleRef = undefined;
+        this.clearDirty();
+    }
+
+    //
+    // Flushes all pending writes to disk: dirty shards, merkle trees, and sort index pages.
+    // Dirty flags are cleared; the in-memory cache remains populated for fast subsequent reads.
+    // Returns the current collection merkle tree for the database to incorporate.
+    //
+    async commit(): Promise<void> {
+
+        for (const [shardId, shard] of this.shardCache.entries()) {
+            if (!shard.dirty()) {
+                continue;
+            }
+
+            await shard.commit();
+
+            const shardTree = await shard.merkleTree().get();
+            if (shardTree && shardTree.merkle) {
+                await this.merkleTree().upsert({
+                    name: shardId,
+                    hash: shardTree.merkle.hash,
+                    length: shardTree.merkle.nodeCount,
+                    lastModified: new Date(),
+                });
+            }
+            else {
+                await this.merkleTree().remove(shardId);
+            }
+        }
+
+        for (const sortIndex of this.sortIndexCache.values()) {
+            await sortIndex.commit();
+        }
+
+        await this.merkleTree().commit();
+
+        this.clearDirty();
+    }
+
+    //
+    // Flushes the cache.
+    //
+    flush(): void {
+        if (this._dirty) {
+            throw new Error(`Collection ${this.name} is dirty, can't flush the cache.`);
+        }
+
+        for (const shard of this.shardCache.values()) {
+            shard.flush();
+        }
+
+        for (const sortIndex of this.sortIndexCache.values()) {
+            sortIndex.flush();
+        }
+
+        this.sortIndexCache.clear();
+        this.shardCache.clear();
+        this._merkleRef?.flush();
+        this._merkleRef = undefined;
     }
 }

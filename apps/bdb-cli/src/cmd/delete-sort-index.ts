@@ -26,7 +26,7 @@ export async function deleteSortIndexCommand(
     const collection = database.collection(collectionName);
     
     // Check if the index exists
-    const hasIndex = await collection.hasIndex(fieldName, direction as SortDirection);
+    const hasIndex = await collection.sortIndex(fieldName, direction as SortDirection).exists();
     
     if (!hasIndex) {
         console.log(pc.yellow(`Sort index for ${fieldName}/${direction} does not exist.`));
@@ -35,7 +35,7 @@ export async function deleteSortIndexCommand(
     }
 
     console.log(pc.yellow(`Deleting sort index for ${fieldName}/${direction}...`));
-    const deleted = await collection.deleteSortIndex(fieldName, direction as SortDirection);
+    const deleted = await collection.sortIndex(fieldName, direction as SortDirection).drop();
     
     if (deleted) {
         console.log(pc.green(`✓ Sort index deleted successfully!`));

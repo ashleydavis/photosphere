@@ -94,6 +94,7 @@ Frontend:
 - **Formatting**: 4-space indentation, braces on same line as control statements
 - **Comments**: Line comments with `//` preceded by blank line, method docs above function. Use `//` comments for method docs.
 - All global symbols (functions, types, interfaces, classes, constants) must have a `//` comment block above them explaining their intent.
+- All fields in interfaces and classes must have a `//` comment explaining their purpose.
 - Never use single-character variable names, including arrow function parameters (e.g. use `fileName => ...` not `f => ...`).
 - Avoid single line if statements. All if statements should have curly brackets around the function body.
 - Never put multiple statements on one line. Each statement should be on its own line.

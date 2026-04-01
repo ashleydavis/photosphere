@@ -136,7 +136,7 @@ export async function hashFileHandler(data: IHashFileData, context: ITaskContext
 
     // Check if file is already in database
     const localHashStr = hashedFile.hash.toString("hex");
-    const records = await metadataCollection.findByIndex("hash", localHashStr); //TODO: If this lookup were fast (I need to optimize it) then we could do it after the has is returned to the main thread.
+    const records = await metadataCollection.sortIndex("hash", "asc").findByValue(localHashStr); //TODO: If this lookup were fast (I need to optimize it) then we could do it after the has is returned to the main thread.
 
     // Buffer is backed by ArrayBuffer; slice so it can be transferred (Buffer itself is not transferable).
     const hashArrayBuffer = hashedFile.hash.buffer.slice(

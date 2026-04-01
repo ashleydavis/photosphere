@@ -37,7 +37,7 @@ export async function buildSortIndexCommand(
     const collection = database.collection(collectionName);
     
     // Check if the index already exists
-    const hasIndex = await collection.hasIndex(fieldName, direction as SortDirection);
+    const hasIndex = await collection.sortIndex(fieldName, direction as SortDirection).exists();
     
     if (hasIndex && !options.rebuild) {
         console.log(pc.yellow(`Sort index for ${fieldName}/${direction} already exists.`));
@@ -49,7 +49,7 @@ export async function buildSortIndexCommand(
     if (hasIndex && options.rebuild) {
         console.log(pc.yellow(`Rebuilding sort index for ${fieldName}/${direction}...`));
         // Delete the existing index first
-        await collection.deleteSortIndex(fieldName, direction as SortDirection);
+        await collection.sortIndex(fieldName, direction as SortDirection).drop();
     } else if (!hasIndex) {
         console.log(pc.green(`Building sort index for ${fieldName}/${direction}...`));
     }
@@ -57,7 +57,7 @@ export async function buildSortIndexCommand(
     const startTime = Date.now();
     
     // Build the index with progress reporting
-    await collection.ensureSortIndex(fieldName, direction as SortDirection, type, (message) => {
+    await collection.sortIndex(fieldName, direction as SortDirection).ensure(collection, type, (message: string) => {
         console.log(pc.cyan(message));
     });
     
@@ -65,18 +65,12 @@ export async function buildSortIndexCommand(
     const duration = endTime - startTime;
 
     // Load the index to get statistics
-    const finalIndex = await collection.loadSortIndex(fieldName, direction as SortDirection);
-    if (finalIndex) {
-        const sortedRecords = await collection.getSorted(fieldName, direction as SortDirection);
-        console.log(pc.green("\n✓ Sort index built successfully!"));
-        console.log(pc.cyan("\nIndex statistics:"));
-        console.log(pc.white(`  Total records: ${sortedRecords.totalRecords}`));
-        console.log(pc.white(`  Total pages: ${sortedRecords.totalPages}`));
-        console.log(pc.white(`  Time taken: ${(duration / 1000).toFixed(2)}s`));
-    } else {
-        console.log(pc.green("\n✓ Sort index built successfully!"));
-        console.log(pc.white(`  Time taken: ${(duration / 1000).toFixed(2)}s`));
-    }
+    const sortedRecords = await collection.sortIndex(fieldName, direction as SortDirection).getPage();
+    console.log(pc.green("\n✓ Sort index built successfully!"));
+    console.log(pc.cyan("\nIndex statistics:"));
+    console.log(pc.white(`  Total records: ${sortedRecords.totalRecords}`));
+    console.log(pc.white(`  Total pages: ${sortedRecords.totalPages}`));
+    console.log(pc.white(`  Time taken: ${(duration / 1000).toFixed(2)}s`));
     
     process.exit(0);
 }

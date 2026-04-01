@@ -302,7 +302,7 @@ describe('replicate', () => {
     test('throws when source merkle tree fails to load', async () => {
         const sourceAsset = new MockStorage();
         const destAsset = new MockStorage();
-        const sourceBdb = new BsonDatabase({ storage: new MockStorage(), bsonDbPath: "", uuidGenerator, timestampProvider });
+        const sourceBdb = new BsonDatabase(new MockStorage(), "", uuidGenerator, timestampProvider);
         await expect(
             replicate(
                 sourceAsset,
@@ -320,7 +320,7 @@ describe('replicate', () => {
     test('throws when dest has different database ID and force is not set', async () => {
         const sourceAsset = new MockStorage();
         const destAsset = new MockStorage();
-        const sourceBdb = new BsonDatabase({ storage: new MockStorage(), bsonDbPath: "", uuidGenerator, timestampProvider });
+        const sourceBdb = new BsonDatabase(new MockStorage(), "", uuidGenerator, timestampProvider);
         let sourceTree = createTree<IDatabaseMetadata>(dbId);
         sourceTree.databaseMetadata = { filesImported: 0 };
         sourceTree.merkle = buildMerkleTree(sourceTree.sort);
@@ -349,7 +349,7 @@ describe('replicate', () => {
     test('succeeds when force is true and database IDs differ', async () => {
         const sourceAsset = new MockStorage();
         const destAsset = new MockStorage();
-        const sourceBdb = new BsonDatabase({ storage: new MockStorage(), bsonDbPath: "", uuidGenerator, timestampProvider });
+        const sourceBdb = new BsonDatabase(new MockStorage(), "", uuidGenerator, timestampProvider);
         const destBdbStorage = new MockStorage();
         let sourceTree = createTree<IDatabaseMetadata>(dbId);
         sourceTree.databaseMetadata = { filesImported: 0 };
@@ -383,7 +383,7 @@ describe('replicate', () => {
         const sourceAsset = new MockStorage();
         const destAsset = new MockStorage();
         const sourceBdbStorage = new MockStorage();
-        const sourceBdb = new BsonDatabase({ storage: sourceBdbStorage, bsonDbPath: "", uuidGenerator, timestampProvider });
+        const sourceBdb = new BsonDatabase(sourceBdbStorage, "", uuidGenerator, timestampProvider);
         let sourceTree = createTree<IDatabaseMetadata>(dbId);
         sourceTree.databaseMetadata = { filesImported: 0 };
         sourceTree.merkle = buildMerkleTree(sourceTree.sort);

@@ -1,5 +1,6 @@
 import { MockStorage } from 'storage';
-import { BsonCollection, type IRecord, type IInternalRecord } from '../lib/collection';
+import { BsonCollection, type IRecord } from '../lib/collection';
+import type { IInternalRecord } from '../lib/shard';
 import { MockTimestampProvider, RandomUuidGenerator } from 'utils';
 
 // Test interfaces
@@ -38,14 +39,15 @@ describe('Collection Metadata and Timestamps', () => {
     beforeEach(() => {
         storage = new MockStorage();
         timestampProvider = new MockTimestampProvider(1000);
-        collection = new BsonCollection<TestRecord>('test', '', {
+        collection = new BsonCollection<TestRecord>(
+            'test',
+            '',
             storage,
-            directory: 'collections/test',
-            baseDirectory: '',
-            uuidGenerator: new RandomUuidGenerator(),
+            '',
+            new RandomUuidGenerator(),
             timestampProvider,
-            numShards: 10
-        });
+            () => {},
+        );
     });
 
     test('inserting puts a timestamp on the entire record', async () => {

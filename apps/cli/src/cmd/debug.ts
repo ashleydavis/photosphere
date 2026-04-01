@@ -143,13 +143,15 @@ export async function debugMerkleTreeCommand(context: ICommandContext, options: 
                     
                     // Show records if --records flag is set (even if no shard tree)
                     if (options.records) {
-                        const shard = await collection.loadShard(shardId);
-                        if (shard.records.size > 0) {
+                        const shard = collection.shard(shardId);
+
+                        const shardRecords = await shard.records();
+                        if (shardRecords.size > 0) {
                             log.info('');
                             log.info(pc.cyan(`    Records in shard ${shardId}:`));
-                            for (const [recordId, record] of shard.records) {
+                            for (const [recordId, record] of shardRecords) {
                                 // Compute hash for the record
-                                const hashedItem = hashRecord(record);
+                                const hashedItem = hashRecord(record._id, record.fields);
                                 const hashHex = hashedItem.hash.toString('hex');
                                 
                                 log.info(pc.white(`      ${recordId}:`));
@@ -446,7 +448,7 @@ export async function debugRemoveDuplicatesCommand(context: ICommandContext, opt
         dbDir = await getDirectoryForCommand("existing", nonInteractive, options.cwd || process.cwd());
     }
 
-    const { assetStorage, rawAssetStorage, metadataCollection, databaseDir: dbDirResolved } = await loadDatabase(dbDir, options, uuidGenerator, timestampProvider, sessionId);
+    const { assetStorage, rawAssetStorage, bsonDatabase, metadataCollection, databaseDir: dbDirResolved } = await loadDatabase(dbDir, options, uuidGenerator, timestampProvider, sessionId);
 
     // Get input file path (default to duplicates.json in database directory)
     const inputPath = options.input
@@ -505,7 +507,7 @@ export async function debugRemoveDuplicatesCommand(context: ICommandContext, opt
     for (let i = 0; i < assetIdsToRemove.length; i++) {
         const assetId = assetIdsToRemove[i];
         try {
-            await removeAsset(assetStorage, rawAssetStorage, sessionId, metadataCollection, assetId, false);
+            await removeAsset(assetStorage, rawAssetStorage, sessionId, bsonDatabase, metadataCollection, assetId, false);
             removed++;
             if ((i + 1) % 10 === 0) {
                 writeProgress(`Removing duplicate assets... (${i + 1}/${assetIdsToRemove.length})`);
@@ -543,7 +545,7 @@ export async function debugBuildSortIndexCommand(context: ICommandContext, optio
     
     // List all existing sort indexes
     writeProgress('Listing existing sort indexes...');
-    const existingIndexes = await metadataCollection.listSortIndexes();
+    const existingIndexes = await metadataCollection.sortIndexes();
     clearProgressMessage();
     
     if (existingIndexes.length > 0) {
@@ -557,7 +559,7 @@ export async function debugBuildSortIndexCommand(context: ICommandContext, optio
         writeProgress('Deleting existing sort indexes...');
         let deletedCount = 0;
         for (const index of existingIndexes) {
-            const deleted = await metadataCollection.deleteSortIndex(index.fieldName, index.direction);
+            const deleted = await metadataCollection.sortIndex(index.fieldName, index.direction).drop();
             if (deleted) {
                 deletedCount++;
             }

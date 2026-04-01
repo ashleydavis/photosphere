@@ -66,7 +66,7 @@ export async function checkFileHandler(data: ICheckFileData, context: ITaskConte
 
     // Check if file is already in database
     const localHashStr = hashedFile.hash.toString("hex");
-    const records = await metadataCollection.findByIndex("hash", localHashStr); //TODO: This is very slow, especially when the hash is not found.
+    const records = await metadataCollection.sortIndex("hash", "asc").findByValue(localHashStr); //TODO: This is very slow, especially when the hash is not found.
     const matchingRecordsCount = records.length;
     
     return {

@@ -1,7 +1,29 @@
-import { IMerkleTree } from 'merkle-tree';
-import { IShard, toExternal, toInternal, type IBsonCollection, type IGetAllResult, type IInternalRecord, type IRecord, type ISortIndexCreationOptions } from '../lib/collection';
-import type { SortDirection, SortDataType, IRangeOptions } from '../lib/sort-index';
-import type { SortIndex } from '../lib/sort-index';
+import { IMerkleTree, type HashedItem } from 'merkle-tree';
+import { toExternal, toInternal, type IBsonCollection, type IGetAllResult, type IRecord } from '../lib/collection';
+import { type IInternalRecord, type IShard } from '../lib/shard';
+import type { SortDirection, ISortIndex } from '../lib/sort-index';
+import type { IMerkleRef } from '../lib/merkle-tree-ref';
+
+//
+// No-op IMerkleRef for mock collections that have no real merkle tree.
+//
+export class NoopMerkleRef implements IMerkleRef {
+    async get(): Promise<IMerkleTree<undefined> | undefined> {
+        return undefined;
+    }
+
+    async upsert(_item: HashedItem): Promise<void> {
+    }
+
+    async remove(_name: string): Promise<void> {
+    }
+
+    async commit(): Promise<void> {
+    }
+
+    flush(): void {
+    }
+}
 
 // Mock BsonCollection for testing
 export class MockCollection<T extends IRecord> implements IBsonCollection<T> {
@@ -38,40 +60,12 @@ export class MockCollection<T extends IRecord> implements IBsonCollection<T> {
         return { records: this.records.map(internal => toExternal<T>(internal)), next: undefined };
     }
 
-    async getSorted(
-        fieldName: string,
-        direction: SortDirection,
-        pageId?: string
-    ): Promise<{
-        records: T[];
-        totalRecords: number;
-        currentPageId: string;
-        totalPages: number;
-        nextPageId?: string;
-        previousPageId?: string;
-    }> {
+    async sortIndexes(): Promise<Array<{ fieldName: string; direction: SortDirection }>> {
         throw new Error('Method not implemented.');
     }
 
-    async ensureSortIndex(fieldName: string, direction: SortDirection, type: SortDataType): Promise<void> {
-        // Mock implementation - no-op for testing
-    }
-
-    async loadSortIndexFromStorage(fieldName: string, direction: SortDirection, type: SortDataType): Promise<void> {
-        // Mock implementation - no-op for testing
-    }
-
-    async listSortIndexes(): Promise<Array<{ fieldName: string; direction: SortDirection }>> {
+    sortIndex(_fieldName: string, _direction: SortDirection): ISortIndex<T> {
         throw new Error('Method not implemented.');
-    }
-
-    async deleteSortIndex(fieldName: string, direction: SortDirection): Promise<boolean> {
-        throw new Error('Method not implemented.');
-    }
-
-    async loadSortIndex(fieldName: string, direction: SortDirection): Promise<SortIndex | undefined> {
-        // Mock implementation - return undefined for testing
-        return undefined;
     }
 
     async updateOne(id: string, updates: Partial<T>, options?: { upsert?: boolean; timestamp?: number }): Promise<boolean> {
@@ -135,64 +129,6 @@ export class MockCollection<T extends IRecord> implements IBsonCollection<T> {
         throw new Error('Method not implemented.');
     }
 
-    async hasIndex(fieldName: string, direction: SortDirection): Promise<boolean> {
-        throw new Error('Method not implemented.');
-    }
-
-    async findByIndex(fieldName: string, value: any): Promise<T[]> {
-        return this.records.filter(r => r.fields[fieldName] === value).map(internal => toExternal<T>(internal));
-    }
-
-    async findByRange(fieldName: string, direction: SortDirection, options: IRangeOptions): Promise<T[]> {
-        // Mock implementation for testing - filter records based on range
-        let filteredRecords = this.records.filter(record => {
-            const fieldValue = record.fields[fieldName];
-            if (fieldValue === undefined || fieldValue === null) {
-                return false;
-            }
-
-            // Check min constraint
-            if (options.min !== undefined) {
-                if (options.minInclusive === false) {
-                    if (fieldValue <= options.min) return false;
-                } else {
-                    if (fieldValue < options.min) return false;
-                }
-            }
-
-            // Check max constraint
-            if (options.max !== undefined) {
-                if (options.maxInclusive === false) {
-                    if (fieldValue >= options.max) return false;
-                } else {
-                    if (fieldValue > options.max) return false;
-                }
-            }
-
-            return true;
-        });
-
-        // Sort the results according to direction
-        filteredRecords.sort((a, b) => {
-            const aValue = a.fields[fieldName];
-            const bValue = b.fields[fieldName];
-            
-            if (aValue < bValue) {
-                return direction === 'asc' ? -1 : 1;
-            }
-            if (aValue > bValue) {
-                return direction === 'asc' ? 1 : -1;
-            }
-            return 0;
-        });
-
-        return filteredRecords.map(internal => toExternal<T>(internal));
-    }
-
-    async deleteIndex(fieldName: string): Promise<boolean> {
-        throw new Error('Method not implemented.');
-    }
-
     async shutdown(): Promise<void> {
         // No-op for testing
     }
@@ -201,11 +137,8 @@ export class MockCollection<T extends IRecord> implements IBsonCollection<T> {
         this.records = [];
     }
 
-    getNumShards(): number {
-        return Math.ceil(this.records.length / 2);
-    }
 
-    loadShard(shardId: string): Promise<IShard> {
+    shard(_shardId: string): IShard {
         throw new Error('Method not implemented.');
     }
 
@@ -217,53 +150,24 @@ export class MockCollection<T extends IRecord> implements IBsonCollection<T> {
     }
 
     //
-    // Saves the shard (mock no-op).
+    // Stub dirty — always false for mock.
     //
-    saveShard(shard: IShard): Promise<void> {
-        return Promise.resolve();
+    dirty(): boolean {
+        return false;
+    }
+
+    // Stub commit — no-op for mock.
+    //
+    async commit(): Promise<void> {
     }
 
     //
-    // Gets a record from an already-loaded shard (mock reads from shard.records).
+    // Stub flush — no-op for mock.
     //
-    getRecordFromShard(recordId: string, shard: IShard): IInternalRecord | undefined {
-        return shard.records.get(recordId.replace(/-/g, '')) ?? undefined;
+    flush(): void {
     }
 
-    //
-    // Sets a record in an already-loaded shard (mock writes to shard.records).
-    //
-    setRecordInShard(recordId: string, record: IInternalRecord, shard: IShard): void {
-        const normalizedId = recordId.replace(/-/g, '');
-        shard.records.set(normalizedId, record);
-    }
-
-    //
-    // Deletes a record from an already-loaded shard (mock removes from shard.records).
-    //
-    deleteRecordFromShard(recordId: string, shard: IShard): void {
-        const normalizedId = recordId.replace(/-/g, '');
-        shard.records.delete(normalizedId);
-    }
-
-    //
-    // Rebuilds and saves shard merkle tree (mock no-op).
-    //
-    async rebuildAndSaveShardMerkleTree(shard: IShard): Promise<void> {
-        // No-op for mock
-    }
-
-    //
-    // Options to construct a sort index (mock: not supported).
-    //
-    getSortIndexOptions(): ISortIndexCreationOptions {
-        throw new Error('getSortIndexOptions not supported by MockCollection');
-    }
-
-    //
-    // No-op: MockCollection has no sort index cache.
-    //
-    invalidateSortIndexCache(): void {
-        // No-op
+    merkleTree(): IMerkleRef {
+        return new NoopMerkleRef();
     }
 }

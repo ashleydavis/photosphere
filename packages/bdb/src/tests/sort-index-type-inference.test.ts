@@ -31,16 +31,12 @@ describe('SortIndex type inference', () => {
         
         // Create sort index without specifying type
         const index = new SortIndex(
-            {
-                storage,
-                baseDirectory: 'test',
-                collectionName: 'products',
-                fieldName: 'name',
-                direction: 'asc',
-                pageSize: 10,
-                uuidGenerator: new RandomUuidGenerator()
-                // Note: no type specified, should be inferred
-            }
+            storage,
+            'test',
+            'products',
+            'name',
+            'asc',
+            new RandomUuidGenerator(),
         );
         
         // Initialize the index
@@ -51,9 +47,9 @@ describe('SortIndex type inference', () => {
         
         // Should be sorted alphabetically
         expect(results.records.length).toBe(3);
-        expect(results.records[0].fields.name).toBe('Apple');
-        expect(results.records[1].fields.name).toBe('Banana');
-        expect(results.records[2].fields.name).toBe('Cherry');
+        expect(results.records[0].name).toBe('Apple');
+        expect(results.records[1].name).toBe('Banana');
+        expect(results.records[2].name).toBe('Cherry');
     });
 
     test('should infer number type when no type is specified', async () => {
@@ -67,16 +63,12 @@ describe('SortIndex type inference', () => {
         
         // Create sort index without specifying type
         const index = new SortIndex(
-            {
-                storage,
-                baseDirectory: 'test',
-                collectionName: 'scores',
-                fieldName: 'score',
-                direction: 'asc',
-                pageSize: 10,
-                uuidGenerator: new RandomUuidGenerator()
-                // Note: no type specified, should be inferred
-            }
+            storage,
+            'test',
+            'scores',
+            'score',
+            'asc',
+            new RandomUuidGenerator(),
         );
         
         // Initialize the index
@@ -87,9 +79,9 @@ describe('SortIndex type inference', () => {
         
         // Should be sorted numerically
         expect(results.records.length).toBe(3);
-        expect(results.records[0].fields.score).toBe(50);
-        expect(results.records[1].fields.score).toBe(100);
-        expect(results.records[2].fields.score).toBe(200);
+        expect(results.records[0].score).toBe(50);
+        expect(results.records[1].score).toBe(100);
+        expect(results.records[2].score).toBe(200);
     });
 
     test('should infer date type when no type is specified', async () => {
@@ -107,16 +99,12 @@ describe('SortIndex type inference', () => {
         
         // Create sort index without specifying type
         const index = new SortIndex(
-            {
-                storage,
-                baseDirectory: 'test',
-                collectionName: 'events',
-                fieldName: 'eventDate',
-                direction: 'asc',
-                pageSize: 10,
-                uuidGenerator: new RandomUuidGenerator()
-                // Note: no type specified, should be inferred
-            }
+            storage,
+            'test',
+            'events',
+            'eventDate',
+            'asc',
+            new RandomUuidGenerator(),
         );
         
         // Initialize the index
@@ -127,9 +115,9 @@ describe('SortIndex type inference', () => {
         
         // Should be sorted chronologically
         expect(results.records.length).toBe(3);
-        expect(results.records[0].fields.eventDate).toEqual(date1);
-        expect(results.records[1].fields.eventDate).toEqual(date3);
-        expect(results.records[2].fields.eventDate).toEqual(date2);
+        expect(results.records[0].eventDate).toEqual(date1);
+        expect(results.records[1].eventDate).toEqual(date3);
+        expect(results.records[2].eventDate).toEqual(date2);
     });
 
     test('should throw error when comparing incompatible types', async () => {
@@ -143,16 +131,12 @@ describe('SortIndex type inference', () => {
         
         // Create sort index without specifying type
         const index = new SortIndex(
-            {
-                storage,
-                baseDirectory: 'test',
-                collectionName: 'mixed',
-                fieldName: 'value',
-                direction: 'asc',
-                pageSize: 1,  // Small page size to force comparison
-                uuidGenerator: new RandomUuidGenerator()
-                // Note: no type specified, should be inferred
-            }
+            storage,
+            'test',
+            'mixed',
+            'value',
+            'asc',
+            new RandomUuidGenerator(),
         );
         
         // This should throw an error during initialization when comparing values
@@ -170,15 +154,12 @@ describe('SortIndex type inference', () => {
         
         // Create sort index without specifying type - should infer string
         const index = new SortIndex(
-            {
-                storage,
-                baseDirectory: 'test',
-                collectionName: 'consistent',
-                fieldName: 'value',
-                direction: 'asc',
-                pageSize: 10,
-                uuidGenerator: new RandomUuidGenerator()
-            }
+            storage,
+            'test',
+            'consistent',
+            'value',
+            'asc',
+            new RandomUuidGenerator(),
         );
         
         // Should work fine since all values are strings

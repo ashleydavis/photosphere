@@ -29,7 +29,7 @@ export interface IRepairCommandOptions extends IBaseCommandOptions {
 export async function repairCommand(context: ICommandContext, options: IRepairCommandOptions): Promise<void> {
     const { uuidGenerator, timestampProvider, sessionId } = context;
     
-    const { assetStorage, rawAssetStorage, databaseDir: targetDir, metadataCollection } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
+    const { assetStorage, rawAssetStorage, bsonDatabase, databaseDir: targetDir, metadataCollection } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
 
     let sourcePath = options.source;
     if (sourcePath === undefined) {
@@ -56,7 +56,7 @@ export async function repairCommand(context: ICommandContext, options: IRepairCo
 
     writeProgress(`🔧 Repairing database...`);
 
-    const result = await repair(assetStorage, sourceAssetStorage, metadataCollection, {
+    const result = await repair(assetStorage, sourceAssetStorage, bsonDatabase, metadataCollection, {
         source: sourcePath,
         sourceKey: options.sourceKey,
         full: options.full,

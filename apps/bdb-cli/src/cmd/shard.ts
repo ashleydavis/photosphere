@@ -14,23 +14,23 @@ export async function shardCommand(dbPath: string, collectionName: string, shard
     const database = await loadDatabase(dbPath, options.verbose);
     const collection = database.collection(collectionName);
     
-    // Load the specific shard
-    const shard = await collection.loadShard(shardId);
-    
     console.log(pc.green(`Collection: ${collectionName}`));
     console.log(pc.green(`Shard ID: ${shardId}`));
-    console.log(pc.green(`Records in shard: ${shard.records.size}`));
     
-    if (shard.records.size > 0) {
+    const shard = collection.shard(shardId);
+    const shardRecords = await shard.records();
+    console.log(pc.green(`Records in shard: ${shardRecords.size}`));
+
+    if (shardRecords.size > 0) {
         if (options.records) {
             console.log(pc.cyan("\nRecord IDs:"));
-            for (const [recordId] of shard.records) {
+            for (const [recordId] of shardRecords) {
                 console.log(pc.white(`  ${recordId}`));
             }
         } 
         else {
             console.log(pc.cyan("\nRecords:"));
-            for (const [recordId, record] of shard.records) {
+            for (const [recordId, record] of shardRecords) {
                 console.log(pc.white(`  ${recordId}:`));
                 const truncatedRecord = truncateLongStrings(record, 100, 5, options.all);
                 console.log(`    ${JSON.stringify(truncatedRecord, null, 4).split('\n').join('\n    ')}`);

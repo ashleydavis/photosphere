@@ -14,19 +14,19 @@ import {
     HashedItem,
     compareNames,
 } from "merkle-tree";
-import path from "path";
-import { BsonCollection, IInternalRecord } from "./collection";
+import { BsonCollection } from "./collection";
+import type { IInternalRecord } from "./shard";
 import { IStorage, pathJoin } from "storage";
 import { IUuidGenerator, TimestampProvider } from "utils";
 
 //
 // Hashes a record and returns a HashedItem.
 //
-export function hashRecord(record: IInternalRecord): HashedItem {
-    const jsonString = stringify(record.fields) || '';
+export function hashRecord(recordId: string, fields: any): HashedItem {
+    const jsonString = stringify(fields) || '';
     const recordHash = crypto.createHash('sha256').update(jsonString, 'utf8').digest();
     return {
-        name: record._id,
+        name: recordId,
         hash: recordHash,
         length: jsonString.length,
         lastModified: new Date(),
@@ -42,7 +42,7 @@ export async function buildShardMerkleTree(records: IInternalRecord[], uuidGener
     let merkleTree = createTree<undefined>(uuidGenerator.generate());
     
     for (const record of records) {
-        const hashedItem = hashRecord(record);
+        const hashedItem = hashRecord(record._id, record.fields);
         merkleTree = addItem(merkleTree, hashedItem);
     }
 
@@ -118,32 +118,32 @@ export async function buildCollectionMerkleTree(
     const shardIds = await listShards(storage, bsonDbPath, collectionName);
     let collectionTree = createTree<undefined>(uuidGenerator.generate());
 
-    const baseDirectory = path.dirname(path.dirname(collectionName));
-
     for (const shardId of shardIds) {
-        const collection = new BsonCollection<any>(collectionName, bsonDbPath, {
+        const collection = new BsonCollection<any>(
+            collectionName,
+            bsonDbPath,
             storage,
-            directory: collectionName,
-            baseDirectory,
+            bsonDbPath,
             uuidGenerator,
-            timestampProvider: new TimestampProvider()
-        });
-        const records: IInternalRecord[] = await collection.loadRecords(pathJoin(bsonDbPath, "collections", collectionName, 'shards', shardId));
+            new TimestampProvider(),
+            () => {},
+        );
+        const records = await collection.shard(shardId).records();
         let shardTree: IMerkleTree<undefined> | undefined;
 
-        if (records.length === 0) {
+        if (records.size === 0) {
             // If the shard is empty, delete the tree file instead of saving it
             await deleteShardMerkleTree(storage, bsonDbPath, collectionName, shardId);
         }
         else if (rebuild) {
-            shardTree = await buildShardMerkleTree(records, uuidGenerator);
+            shardTree = await buildShardMerkleTree(Array.from(records.values()), uuidGenerator);
             await saveShardMerkleTree(storage, bsonDbPath, collectionName, shardId, shardTree);
         }
         else {
             shardTree = await loadShardMerkleTree(storage, bsonDbPath, collectionName, shardId);
             if (!shardTree) {
                 // Shard tree doesn't exist, build it.
-                shardTree = await buildShardMerkleTree(records, uuidGenerator);
+                shardTree = await buildShardMerkleTree(Array.from(records.values()), uuidGenerator);
                 await saveShardMerkleTree(storage, bsonDbPath, collectionName, shardId, shardTree);
             }
         }
