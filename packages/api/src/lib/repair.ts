@@ -4,7 +4,7 @@ import { computeHash, computeAssetHash } from "./hash";
 import { log, retry } from "utils";
 import { IMerkleTree, SortNode, traverseTreeAsync } from "merkle-tree";
 import { loadMerkleTree } from "./tree";
-import type { IBsonCollection } from "bdb";
+import type { IBsonCollection, IBsonDatabase } from "bdb";
 import type { IAsset } from "defs";
 
 //
@@ -100,6 +100,7 @@ export interface IRepairResult {
 export async function repair(
     assetStorage: IStorage,
     sourceAssetStorage: IStorage,
+    bsonDatabase: IBsonDatabase,
     metadataCollection: IBsonCollection<IAsset>,
     options: IRepairOptions,
     progressCallback?: ProgressCallback
@@ -306,6 +307,8 @@ export async function repair(
 
         return true;
     });
+
+    await bsonDatabase.commit();
 
     return result;
 }

@@ -1,4 +1,4 @@
-import { BsonDatabase, IBsonCollection, getDatabaseRootHash } from "bdb";
+import { BsonDatabase, IBsonDatabase, IBsonCollection, getDatabaseRootHash } from "bdb";
 import { saveDatabaseConfig, updateDatabaseConfig } from "./database-config";
 import { IStorage, pathJoin, StoragePrefixWrapper } from "storage";
 import { ILocation, log, retry, IUuidGenerator, ITimestampProvider } from "utils";
@@ -247,12 +247,7 @@ export function createMediaFileDatabase(
     uuidGenerator: IUuidGenerator,
     timestampProvider: ITimestampProvider
 ) {
-    const bsonDatabase = new BsonDatabase({
-        storage: assetStorage,
-        bsonDbPath: ".db/bson",
-        uuidGenerator: uuidGenerator,
-        timestampProvider: timestampProvider
-    });
+    const bsonDatabase = new BsonDatabase(assetStorage, ".db/bson", uuidGenerator, timestampProvider);
 
     const metadataCollection = bsonDatabase.collection<IAsset>("metadata");
 
@@ -293,15 +288,12 @@ export async function createDatabase(
 }
 
 //
-// Loads the existing media file database.
+// Loads sort indexes for an existing media file database.
 //
-export async function loadDatabase(
+export async function loadSortIndexes(
     assetStorage: IStorage,
-    metadataCollection: IBsonCollection<IAsset>
+    _metadataCollection: IBsonCollection<IAsset>
 ): Promise<void> {
-    await retry(() => metadataCollection.loadSortIndexFromStorage("hash", "asc", "string"));
-    await retry(() => metadataCollection.loadSortIndexFromStorage("photoDate", "desc", "date"));
-
     log.verbose(`Loaded existing media file database from: ${assetStorage.location}`);
 }
 
@@ -309,8 +301,8 @@ export async function loadDatabase(
 // Ensures the sort index exists.
 //
 export async function ensureSortIndex(metadataCollection: IBsonCollection<IAsset>): Promise<void> {
-    await retry(() => metadataCollection.ensureSortIndex("hash", "asc", "string"));
-    await retry(() => metadataCollection.ensureSortIndex("photoDate", "desc", "date"));
+    await retry(() => metadataCollection.sortIndex("hash", "asc").ensure(metadataCollection, "string"));
+    await retry(() => metadataCollection.sortIndex("photoDate", "desc").ensure(metadataCollection, "date"));
 }
 
 //
@@ -501,10 +493,16 @@ export async function removeAsset(
     assetStorage: IStorage,
     rawStorage: IStorage,
     sessionId: string,
+    bsonDatabase: IBsonDatabase,
     metadataCollection: IBsonCollection<IAsset>,
     assetId: string,
     recordDeleted: boolean
 ): Promise<void> {
+    //
+    // Flush the cache so we reload data after acquiring the write lock.
+    //
+    await bsonDatabase.flush();
+
     if (!await acquireWriteLock(rawStorage, sessionId)) {
         throw new Error(`Failed to acquire write lock.`);
     }
@@ -544,6 +542,9 @@ export async function removeAsset(
             }
         }
         
+        // Commit accumulated changes to bsondb.
+        await bsonDatabase.commit();
+
         // Merkle tree has to be saved after all modifications to it are made.
         await retry(() => saveMerkleTree(merkleTree, assetStorage));
 

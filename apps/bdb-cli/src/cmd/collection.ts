@@ -22,7 +22,7 @@ export async function collectionCommand(dbPath: string, collectionName: string, 
     console.log(pc.cyan(`Number of shards: ${existingShards.length}`));
     
     // Get sort indexes
-    const sortIndexes = await collection.listSortIndexes();
+    const sortIndexes = await collection.sortIndexes();
     console.log(pc.cyan(`Number of sort indexes: ${sortIndexes.length}`));
     
     // Count total records (approximately, by iterating)

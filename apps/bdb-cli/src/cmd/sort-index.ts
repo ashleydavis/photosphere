@@ -20,7 +20,7 @@ export async function sortIndexCommand(dbPath: string, collectionName: string, f
     const collection = database.collection(collectionName);
     
     // Check if the index exists
-    const hasIndex = await collection.hasIndex(fieldName, direction as SortDirection);
+    const hasIndex = await collection.sortIndex(fieldName, direction as SortDirection).exists();
     
     console.log(pc.green(`Collection: ${collectionName}`));
     console.log(pc.green(`Field: ${fieldName}`));
@@ -29,7 +29,7 @@ export async function sortIndexCommand(dbPath: string, collectionName: string, f
     
     if (hasIndex) {       
         // Try to get some records to show index structure
-        const sortedRecords = await collection.getSorted(fieldName, direction as SortDirection);
+        const sortedRecords = await collection.sortIndex(fieldName, direction as SortDirection).getPage();
         
         console.log(pc.cyan("\nIndex statistics:"));
         console.log(pc.white(`  Total records: ${sortedRecords.totalRecords}`));
@@ -46,7 +46,7 @@ export async function sortIndexCommand(dbPath: string, collectionName: string, f
         }
 
         // Load the sort index from the collection
-        const sortIndex = await collection.loadSortIndex(fieldName, direction as SortDirection);        
+        const sortIndex = collection.sortIndex(fieldName, direction as SortDirection);
         if (sortIndex) {
             // Display the btree structure
             const treeVisualization = await sortIndex.visualizeTree();
@@ -55,14 +55,14 @@ export async function sortIndexCommand(dbPath: string, collectionName: string, f
 
             // Collect all page IDs by traversing through all pages
             const pageIds: string[] = [];
-            let currentPage = await collection.getSorted(fieldName, direction as SortDirection);
-            
+            let currentPage = await collection.sortIndex(fieldName, direction as SortDirection).getPage();
+
             if (currentPage.currentPageId) {
                 pageIds.push(currentPage.currentPageId);
                 
                 // Traverse through all pages using nextPageId
                 while (currentPage.nextPageId) {
-                    currentPage = await collection.getSorted(fieldName, direction as SortDirection, currentPage.nextPageId);
+                    currentPage = await collection.sortIndex(fieldName, direction as SortDirection).getPage(currentPage.nextPageId);
                     if (currentPage.currentPageId) {
                         pageIds.push(currentPage.currentPageId);
                     }

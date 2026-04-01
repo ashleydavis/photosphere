@@ -13,7 +13,7 @@ export async function sortIndexesCommand(dbPath: string, collectionName: string,
     const collection = database.collection(collectionName);
     
     // Get list of sort indexes
-    const sortIndexes = await collection.listSortIndexes();
+    const sortIndexes = await collection.sortIndexes();
     
     console.log(pc.green(`Collection: ${collectionName}`));
     console.log(pc.green(`Number of sort indexes: ${sortIndexes.length}`));

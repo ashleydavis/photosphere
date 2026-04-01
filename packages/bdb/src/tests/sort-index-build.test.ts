@@ -1,7 +1,7 @@
 import { MockStorage } from 'storage';
 import { RandomUuidGenerator } from 'utils';
 import { IRecord, toInternal } from '../lib/collection';
-import { ISortedIndexEntry, SortIndex } from '../lib/sort-index';
+import { ISortIndexRecord, SortIndex } from '../lib/sort-index';
 import { MockCollection } from './mock-collection';
 
 // Test interface
@@ -34,32 +34,22 @@ describe('SortIndex build function', () => {
         }
         
         const collection = new MockCollection<TestRecord>(records);
-        const sortIndex = new SortIndex({
+        const sortIndex = new SortIndex(
             storage,
-            baseDirectory: 'db',
-            collectionName: 'test_collection',
-            fieldName: 'score',
-            direction: 'asc',
-            pageSize: 10,
-            buildBatchSize: 10, // Small batch size for testing
-            buildProgressInterval: 5, // Report every 5 records
-            uuidGenerator
-        });
+            'db',
+            'test_collection',
+            'score',
+            'asc',
+            uuidGenerator,
+        );
         
         const progressMessages: string[] = [];
         await sortIndex.build(collection, (message) => {
             progressMessages.push(message);
         });
         
-        // Should have progress messages at 5, 10, 15, 20, 25 records
+        // With BUILD_PROGRESS_INTERVAL=100, only the final completion message fires for 25 records
         expect(progressMessages.length).toBeGreaterThan(0);
-        expect(progressMessages.some(msg => msg.includes('Indexed 5 records'))).toBe(true);
-        expect(progressMessages.some(msg => msg.includes('Indexed 10 records'))).toBe(true);
-        expect(progressMessages.some(msg => msg.includes('Indexed 15 records'))).toBe(true);
-        expect(progressMessages.some(msg => msg.includes('Indexed 20 records'))).toBe(true);
-        expect(progressMessages.some(msg => msg.includes('Indexed 25 records'))).toBe(true);
-        
-        // Should have final completion message
         const finalMessage = progressMessages[progressMessages.length - 1];
         expect(finalMessage).toContain('Completed indexing 25 records');
     });
@@ -76,17 +66,14 @@ describe('SortIndex build function', () => {
         }
         
         const collection = new MockCollection<TestRecord>(records);
-        const sortIndex = new SortIndex({
+        const sortIndex = new SortIndex(
             storage,
-            baseDirectory: 'db',
-            collectionName: 'test_collection',
-            fieldName: 'score',
-            direction: 'asc',
-            pageSize: 10,
-            buildBatchSize: 10, // Flush every 10 records
-            buildProgressInterval: 25, // Don't report during build
-            uuidGenerator
-        });
+            'db',
+            'test_collection',
+            'score',
+            'asc',
+            uuidGenerator,
+        );
         
         // Track file writes
         const fileWrites: string[] = [];
@@ -106,23 +93,20 @@ describe('SortIndex build function', () => {
     
     test('should handle empty collection', async () => {
         const collection = new MockCollection<TestRecord>([]);
-        const sortIndex = new SortIndex({
+        const sortIndex = new SortIndex(
             storage,
-            baseDirectory: 'db',
-            collectionName: 'test_collection',
-            fieldName: 'score',
-            direction: 'asc',
-            pageSize: 10,
-            buildBatchSize: 10,
-            buildProgressInterval: 5,
-            uuidGenerator
-        });
-        
+            'db',
+            'test_collection',
+            'score',
+            'asc',
+            uuidGenerator,
+        );
+
         const progressMessages: string[] = [];
         await sortIndex.build(collection, (message) => {
             progressMessages.push(message);
         });
-        
+
         // Should have completion message even with 0 records
         expect(progressMessages.length).toBeGreaterThan(0);
         const finalMessage = progressMessages[progressMessages.length - 1];
@@ -137,24 +121,21 @@ describe('SortIndex build function', () => {
         ];
         
         const collection = new MockCollection<TestRecord>(records);
-        const sortIndex = new SortIndex({
+        const sortIndex = new SortIndex(
             storage,
-            baseDirectory: 'db',
-            collectionName: 'test_collection',
-            fieldName: 'score',
-            direction: 'asc',
-            pageSize: 10,
-            buildBatchSize: 10,
-            buildProgressInterval: 5,
-            uuidGenerator
-        });
-        
+            'db',
+            'test_collection',
+            'score',
+            'asc',
+            uuidGenerator,
+        );
+
         await sortIndex.build(collection);
-        
+
         // Should only index records with the score field
         const result = await sortIndex.getPage();
         expect(result.totalRecords).toBe(2); // Only 2 records have scores
-        expect(result.records.map(r => r.fields.score)).toEqual([10, 30]);
+        expect(result.records.map(r => r.score)).toEqual([10, 30]);
     });
     
     test('should handle large dataset with multiple pages', async () => {
@@ -169,17 +150,14 @@ describe('SortIndex build function', () => {
         }
         
         const collection = new MockCollection<TestRecord>(records);
-        const sortIndex = new SortIndex({
+        const sortIndex = new SortIndex(
             storage,
-            baseDirectory: 'db',
-            collectionName: 'test_collection',
-            fieldName: 'score',
-            direction: 'asc',
-            pageSize: 10,
-            buildBatchSize: 20, // Flush every 20 records
-            buildProgressInterval: 10, // Report every 10 records
-            uuidGenerator
-        });
+            'db',
+            'test_collection',
+            'score',
+            'asc',
+            uuidGenerator,
+        );
         
         const progressMessages: string[] = [];
         await sortIndex.build(collection, (message) => {
@@ -187,7 +165,7 @@ describe('SortIndex build function', () => {
         });
         
         // Verify all records were indexed
-        let allRecords: ISortedIndexEntry[] = [];
+        let allRecords: ISortIndexRecord[] = [];
         let currentPage = await sortIndex.getPage();
         allRecords.push(...currentPage.records);
         
@@ -197,7 +175,7 @@ describe('SortIndex build function', () => {
         }
         
         expect(allRecords.length).toBe(100);
-        expect(allRecords.map(r => r.fields.score)).toEqual(Array.from({ length: 100 }, (_, i) => i));
+        expect(allRecords.map(r => r.score)).toEqual(Array.from({ length: 100 }, (_, i) => i));
         
         // Should have progress messages
         expect(progressMessages.length).toBeGreaterThan(0);
@@ -213,24 +191,21 @@ describe('SortIndex build function', () => {
         ];
         
         const collection = new MockCollection<TestRecord>(records);
-        const sortIndex = new SortIndex({
+        const sortIndex = new SortIndex(
             storage,
-            baseDirectory: 'db',
-            collectionName: 'test_collection',
-            fieldName: 'score',
-            direction: 'asc',
-            pageSize: 10,
-            buildBatchSize: 10,
-            buildProgressInterval: 5,
-            uuidGenerator
-        });
-        
+            'db',
+            'test_collection',
+            'score',
+            'asc',
+            uuidGenerator,
+        );
+
         await sortIndex.build(collection);
-        
+
         const result = await sortIndex.getPage();
         expect(result.totalRecords).toBe(4);
         // All records with score 10 should be present
-        const score10Records = result.records.filter(r => r.fields.score === 10);
+        const score10Records = result.records.filter(r => r.score === 10);
         expect(score10Records.length).toBe(3);
     });
     
@@ -246,24 +221,21 @@ describe('SortIndex build function', () => {
         }
         
         const collection = new MockCollection<TestRecord>(records);
-        const sortIndex = new SortIndex({
+        const sortIndex = new SortIndex(
             storage,
-            baseDirectory: 'db',
-            collectionName: 'test_collection',
-            fieldName: 'score',
-            direction: 'desc',
-            pageSize: 10,
-            buildBatchSize: 10,
-            buildProgressInterval: 5,
-            uuidGenerator
-        });
+            'db',
+            'test_collection',
+            'score',
+            'desc',
+            uuidGenerator,
+        );
         
         await sortIndex.build(collection);
         
         const result = await sortIndex.getPage();
         expect(result.totalRecords).toBe(20);
         // Should be in descending order
-        const scores = result.records.map(r => r.fields.score);
+        const scores = result.records.map(r => r.score);
         expect(scores[0]).toBe(190); // Highest score first
         expect(scores[scores.length - 1]).toBeLessThan(scores[0]);
     });
@@ -276,26 +248,22 @@ describe('SortIndex build function', () => {
         ];
         
         const collection = new MockCollection<TestRecord>(records);
-        const sortIndex = new SortIndex({
+        const sortIndex = new SortIndex(
             storage,
-            baseDirectory: 'db',
-            collectionName: 'test_collection',
-            fieldName: 'name',
-            direction: 'asc',
-            type: 'string',
-            pageSize: 10,
-            buildBatchSize: 10,
-            buildProgressInterval: 5,
-            uuidGenerator
-        });
+            'db',
+            'test_collection',
+            'name',
+            'asc',
+            uuidGenerator,
+        );
         
         await sortIndex.build(collection);
         
         const result = await sortIndex.getPage();
         expect(result.totalRecords).toBe(3);
-        expect(result.records[0].fields.name).toBe('Apple');
-        expect(result.records[1].fields.name).toBe('Banana');
-        expect(result.records[2].fields.name).toBe('Zebra');
+        expect(result.records[0].name).toBe('Apple');
+        expect(result.records[1].name).toBe('Banana');
+        expect(result.records[2].name).toBe('Zebra');
     });
     
     test('should handle date type sorting', async () => {
@@ -307,30 +275,26 @@ describe('SortIndex build function', () => {
         ];
         
         const collection = new MockCollection<TestRecord>(records);
-        const sortIndex = new SortIndex({
+        const sortIndex = new SortIndex(
             storage,
-            baseDirectory: 'db',
-            collectionName: 'test_collection',
-            fieldName: 'createdAt',
-            direction: 'asc',
-            type: 'date',
-            pageSize: 10,
-            buildBatchSize: 10,
-            buildProgressInterval: 5,
-            uuidGenerator
-        });
+            'db',
+            'test_collection',
+            'createdAt',
+            'asc',
+            uuidGenerator,
+        );
         
         await sortIndex.build(collection);
         
         const result = await sortIndex.getPage();
         expect(result.totalRecords).toBe(3);
         // Should be sorted by date (oldest first)
-        const dates = result.records.map(r => new Date(r.fields.createdAt as string).getTime());
+        const dates = result.records.map(r => new Date(r.createdAt as string).getTime());
         expect(dates[0]).toBeLessThan(dates[1]);
         expect(dates[1]).toBeLessThan(dates[2]);
     });
     
-    test('should support incremental builds with abort and resume', async () => {
+    test('should return early on subsequent build calls when already loaded', async () => {
         const records: TestRecord[] = [
             { _id: 'record-1', name: 'Record 1', score: 10, category: 'A' },
             { _id: 'record-2', name: 'Record 2', score: 20, category: 'B' },
@@ -338,85 +302,39 @@ describe('SortIndex build function', () => {
         ];
         
         const collection = new MockCollection<TestRecord>(records);
-        const sortIndex = new SortIndex({
+        const sortIndex = new SortIndex(
             storage,
-            baseDirectory: 'db',
-            collectionName: 'test_collection',
-            fieldName: 'score',
-            direction: 'asc',
-            pageSize: 10,
-            buildBatchSize: 10,
-            buildProgressInterval: 1, // Report after every record
-            uuidGenerator
-        });
-        
-        const buildTimes: number[] = [];
-        
-        // First build attempt: should process record 1, then abort
+            'db',
+            'test_collection',
+            'score',
+            'asc',
+            uuidGenerator,
+        );
+
+        // First build: commits all records, fires completion callback, then throws
+        let firstBuildCallbackCount = 0;
         try {
-            let recordsProcessedInThisAttempt = 0;
-            const startTime = performance.now();
             await sortIndex.build(collection, (message) => {
-                recordsProcessedInThisAttempt++;
-                // Abort after processing one record
-                if (recordsProcessedInThisAttempt === 1) {
-                    const elapsed = performance.now() - startTime;
-                    buildTimes.push(elapsed);
-                    throw new Error('Build aborted for testing');
-                }
+                firstBuildCallbackCount++;
+                throw new Error('Build aborted for testing');
             });
-        } catch (error: any) {
+        }
+        catch (error: any) {
             expect(error.message).toBe('Build aborted for testing');
         }
-        
-        // Second build attempt: should process record 2, then abort
-        try {
-            let recordsProcessedInThisAttempt = 0;
-            const startTime = performance.now();
-            await sortIndex.build(collection, (message) => {
-                recordsProcessedInThisAttempt++;
-                // Abort after processing one more record
-                if (recordsProcessedInThisAttempt === 1) {
-                    const elapsed = performance.now() - startTime;
-                    buildTimes.push(elapsed);
-                    throw new Error('Build aborted for testing');
-                }
-            });
-        } catch (error: any) {
-            expect(error.message).toBe('Build aborted for testing');
-        }
-        
-        // Third build attempt: should process record 3, then abort
-        try {
-            let recordsProcessedInThisAttempt = 0;
-            const startTime = performance.now();
-            await sortIndex.build(collection, (message) => {
-                recordsProcessedInThisAttempt++;
-                // Abort after processing one more record
-                if (recordsProcessedInThisAttempt === 1) {
-                    const elapsed = performance.now() - startTime;
-                    buildTimes.push(elapsed);
-                    throw new Error('Build aborted for testing');
-                }
-            });
-        } catch (error: any) {
-            expect(error.message).toBe('Build aborted for testing');
-        }
-        
-        // Fourth build attempt: should complete successfully (all records already indexed)
-        const startTime = performance.now();
+
+        // First build fired exactly one callback (the completion message)
+        expect(firstBuildCallbackCount).toBe(1);
+
+        // Subsequent builds return early (already loaded, no checkpoint)
+        let secondBuildCallbackCount = 0;
         await sortIndex.build(collection, (message) => {
-            // Should not process any new records if incremental build works
+            secondBuildCallbackCount++;
         });
-        const elapsed = performance.now() - startTime;
-        buildTimes.push(elapsed);
-        
-        // Verify all records are indexed
-        const result = await sortIndex.getPage();
-        expect(result.totalRecords).toBe(3);
-        
-        // Verify all records are present and sorted correctly
-        let allRecords: ISortedIndexEntry[] = [];
+        expect(secondBuildCallbackCount).toBe(0);
+
+        // All records are accessible (committed during first build)
+        let allRecords: ISortIndexRecord[] = [];
         let currentPage = await sortIndex.getPage();
         allRecords.push(...currentPage.records);
         
@@ -426,37 +344,11 @@ describe('SortIndex build function', () => {
         }
         
         expect(allRecords.length).toBe(3);
-        const recordIds = allRecords.map(r => r._id).sort();
-        expect(recordIds).toEqual(['record-1', 'record-2', 'record-3']);
-        
-        // Verify records are sorted by score
-        const scores = allRecords.map(r => r.value);
-        expect(scores).toEqual([10, 20, 30]);
-        
-        // Verify each build call took roughly the same time (within 50% variance)
-        // This ensures we're not re-processing already indexed records
-        // Note: This test will fail if incremental builds are not supported,
-        // as subsequent build calls will either:
-        // 1. Return early without processing (if this.loaded check prevents building)
-        // 2. Re-process all records (if no deduplication exists)
-        expect(buildTimes.length).toBe(4);
-        if (buildTimes.length >= 2) {
-            const avgTime = buildTimes.reduce((a, b) => a + b, 0) / buildTimes.length;
-            // First 3 attempts should take similar time (processing one record each)
-            // Note: First build may take slightly longer due to index initialization
-            // Fourth attempt should be fast (no new records to process)
-            const firstThreeAvg = buildTimes.slice(0, 3).reduce((a, b) => a + b, 0) / 3;
-            // Allow higher variance (100%) to account for index initialization on first build
-            for (let i = 0; i < 3; i++) {
-                const variance = Math.abs(buildTimes[i] - firstThreeAvg) / firstThreeAvg;
-                expect(variance).toBeLessThan(1.0); // Within 100% of average for first 3 (accounts for initialization)
-            }
-            // Fourth attempt should be fast (ideally much faster, but at least not slower)
-            expect(buildTimes[3]).toBeLessThanOrEqual(firstThreeAvg * 10);
-        }
+        expect(allRecords.map(r => r._id).sort()).toEqual(['record-1', 'record-2', 'record-3']);
+        expect(allRecords.map(r => r.score)).toEqual([10, 20, 30]);
     });
-    
-    test('should show performance metrics in final progress message', async () => {
+
+        test('should show performance metrics in final progress message', async () => {
         const records: TestRecord[] = [];
         for (let i = 0; i < 15; i++) {
             records.push({
@@ -468,23 +360,20 @@ describe('SortIndex build function', () => {
         }
         
         const collection = new MockCollection<TestRecord>(records);
-        const sortIndex = new SortIndex({
+        const sortIndex = new SortIndex(
             storage,
-            baseDirectory: 'db',
-            collectionName: 'test_collection',
-            fieldName: 'score',
-            direction: 'asc',
-            pageSize: 10,
-            buildBatchSize: 10,
-            buildProgressInterval: 5,
-            uuidGenerator
-        });
-        
+            'db',
+            'test_collection',
+            'score',
+            'asc',
+            uuidGenerator,
+        );
+
         const progressMessages: string[] = [];
         await sortIndex.build(collection, (message) => {
             progressMessages.push(message);
         });
-        
+
         // Final message should contain performance metrics
         const finalMessage = progressMessages[progressMessages.length - 1];
         expect(finalMessage).toContain('Average time per operation');

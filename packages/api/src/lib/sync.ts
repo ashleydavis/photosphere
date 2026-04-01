@@ -1,6 +1,5 @@
-import { IBsonCollection, IBsonDatabase, IInternalRecord, IRecord, loadDatabaseMerkleTree, mergeRecords } from "bdb";
-import { loadCollectionMerkleTree, loadShardMerkleTree } from "./tree";
-import { deleteItem, findMerkleTreeDifferences, getItemInfo, IMerkleTree, MerkleNode, upsertItem } from "merkle-tree";
+import { IBsonCollection, IBsonDatabase, IInternalRecord, IRecord, mergeRecords } from "bdb";
+import { deleteItem, findMerkleTreeDifferences, getItemInfo, IMerkleTree, MerkleNode, upsertItem, buildMerkleTree } from "merkle-tree";
 import { IStorage, pathJoin } from "storage";
 import { IDatabaseMetadata } from "./media-file-database";
 import { acquireWriteLock, releaseWriteLock } from "./write-lock";
@@ -24,6 +23,8 @@ export async function syncDatabases(
     //
     // Pull incoming files.
     //
+    await sourceBsonDatabase.flush();
+
     if (!await acquireWriteLock(sourceRawStorage, sessionId)) { //todo: Don't need write lock if nothing to pull.
         throw new Error(`Failed to acquire write lock for source database.`);
     }
@@ -32,7 +33,10 @@ export async function syncDatabases(
         // Push files from target to source (effectively pulls files from target into source).
         // We are pulling files into the sourceDb, so need the write lock on the source db.
         await pushFiles(targetAssetStorage, sourceAssetStorage, sourceBsonDatabase);
-        await syncDatabase(targetAssetStorage, targetBsonDatabase, sourceAssetStorage, sourceBsonDatabase);
+        const sourceMerkleTree = await retry(() => loadMerkleTree(sourceAssetStorage));
+        const sourceDeletedIds = new Set(sourceMerkleTree?.databaseMetadata?.deletedAssetIds || []);
+        await syncDatabase(targetBsonDatabase, sourceBsonDatabase, sourceDeletedIds);
+        await sourceBsonDatabase.commit();
     }
     finally {
         await releaseWriteLock(sourceRawStorage);
@@ -41,6 +45,8 @@ export async function syncDatabases(
     //
     // Push outgoing files.
     //
+    await targetBsonDatabase.flush();
+
     if (!await acquireWriteLock(targetRawStorage, sessionId)) { //todo: Don't need write lock if nothing to push.
         throw new Error(`Failed to acquire write lock for target database.`);
     }
@@ -49,8 +55,11 @@ export async function syncDatabases(
         // Push files from source to target.
         // Need the write lock in the target database.
         await pushFiles(sourceAssetStorage, targetAssetStorage, targetBsonDatabase);
-        await syncDatabase(sourceAssetStorage, sourceBsonDatabase, targetAssetStorage, targetBsonDatabase);
-    } 
+        const targetMerkleTree = await retry(() => loadMerkleTree(targetAssetStorage));
+        const targetDeletedIds = new Set(targetMerkleTree?.databaseMetadata?.deletedAssetIds || []);
+        await syncDatabase(sourceBsonDatabase, targetBsonDatabase, targetDeletedIds);
+        await targetBsonDatabase.commit();
+    }
     finally {
         await releaseWriteLock(targetRawStorage);
     }
@@ -337,15 +346,18 @@ async function* iterateShardDifferences(
     sourceShardTree: IMerkleTree<undefined> | undefined,
     targetShardTree: IMerkleTree<undefined> | undefined
 ): AsyncGenerator<ISyncDiffRecord> {
+
     const diff = findMerkleTreeDifferences(sourceShardTree?.merkle, targetShardTree?.merkle);
-    
-    const sourceShard = await sourceCollection.loadShard(shardId);
-    const targetShard = await targetCollection.loadShard(shardId);
-    
+    const sourceShard = sourceCollection.shard(shardId);
+    const targetShard = targetCollection.shard(shardId);
+
     // Extract record IDs from both sets to detect modifications
     const recordIdsInTree1 = new Set(iterateLeaves(diff.onlyInTree1));
     const recordIdsInTree2 = new Set(iterateLeaves(diff.onlyInTree2));
-    
+
+    const sourceRecords = await sourceShard.records();
+    const targetRecords = await targetShard.records();
+
     // Track record IDs we've already yielded to avoid duplicates
     const seenRecordIds = new Set<string>();
     
@@ -353,9 +365,9 @@ async function* iterateShardDifferences(
     for (const recordId of recordIdsInTree1) {
         seenRecordIds.add(recordId);
         const normalizedId = recordId.replace(/-/g, ''); //todo: This is a bit ugly.
-        const sourceRecord = sourceShard.records.get(normalizedId);
-        const targetRecord = targetShard.records.get(normalizedId);
-        
+        const sourceRecord = sourceRecords.get(normalizedId);
+        const targetRecord = targetRecords.get(normalizedId);
+
         // If record ID appears in both trees, it's modified (different hash)
         // Otherwise, it's only in source
         yield {
@@ -373,8 +385,8 @@ async function* iterateShardDifferences(
         }
         
         const normalizedId = recordId.replace(/-/g, ''); //todo: This is a bit ugly.
-        const sourceRecord = sourceShard.records.get(normalizedId);
-        const targetRecord = targetShard.records.get(normalizedId);        
+        const sourceRecord = sourceRecords.get(normalizedId);
+        const targetRecord = targetRecords.get(normalizedId);
         yield {
             collectionName,
             recordId,
@@ -389,16 +401,11 @@ async function* iterateShardDifferences(
 //
 async function* iterateCollectionDifferences(
     collectionName: string,
-    sourceStorage: IStorage,
-    targetStorage: IStorage,
-    sourceDb: IBsonDatabase,
-    targetDb: IBsonDatabase,
+    sourceCollection: IBsonCollection<IRecord>,
+    targetCollection: IBsonCollection<IRecord>,
     sourceCollectionTree: IMerkleTree<undefined> | undefined,
     targetCollectionTree: IMerkleTree<undefined> | undefined
 ): AsyncGenerator<ISyncDiffRecord> {
-    const sourceCollection = sourceDb.collection(collectionName);
-    const targetCollection = targetDb.collection(collectionName);
-    
     const diff = findMerkleTreeDifferences(sourceCollectionTree?.merkle, targetCollectionTree?.merkle);
     
     // Track shard keys we've seen to avoid duplicates (only track, don't collect all)
@@ -408,8 +415,8 @@ async function* iterateCollectionDifferences(
     for (const shardId of iterateLeaves(diff.onlyInTree1)) {
         seenShardKeys.add(shardId);
 
-        const sourceShardTree = await loadShardMerkleTree(sourceStorage, collectionName, shardId);
-        const targetShardTree = await loadShardMerkleTree(targetStorage, collectionName, shardId);
+        const sourceShardTree = await sourceCollection.shard(shardId).merkleTree().get();
+        const targetShardTree = await targetCollection.shard(shardId).merkleTree().get();
         if (!sourceShardTree && !targetShardTree) {
             continue;
         }
@@ -422,9 +429,9 @@ async function* iterateCollectionDifferences(
         if (seenShardKeys.has(shardId)) {
             continue; // Already processed
         }
-        
-        const sourceShardTree = await loadShardMerkleTree(sourceStorage, collectionName, shardId);
-        const targetShardTree = await loadShardMerkleTree(targetStorage, collectionName, shardId);
+
+        const sourceShardTree = await sourceCollection.shard(shardId).merkleTree().get();
+        const targetShardTree = await targetCollection.shard(shardId).merkleTree().get();
         if (!sourceShardTree && !targetShardTree) {
             continue;
         }
@@ -437,13 +444,11 @@ async function* iterateCollectionDifferences(
 // Yields differing records in the BSON database.
 //
 async function* iterateDatabaseDifferences( //todo: todo this could be in the bdb package and tested.
-    sourceStorage: IStorage,
-    targetStorage: IStorage,
     sourceDb: IBsonDatabase,
     targetDb: IBsonDatabase,
 ): AsyncGenerator<ISyncDiffRecord> {
-    const sourceDbTree = await loadDatabaseMerkleTree(sourceStorage, ".db/bson");
-    const targetDbTree = await loadDatabaseMerkleTree(targetStorage, ".db/bson");    
+    const sourceDbTree = await sourceDb.merkleTree().get();
+    const targetDbTree = await targetDb.merkleTree().get();
     if (!sourceDbTree && !targetDbTree) {
         return;
     }
@@ -457,14 +462,22 @@ async function* iterateDatabaseDifferences( //todo: todo this could be in the bd
     for (const collectionName of iterateLeaves(diff.onlyInTree1)) {
         seenCollections.add(collectionName);
 
-        const sourceCollectionTree = await loadCollectionMerkleTree(sourceStorage, collectionName);
-        const targetCollectionTree = await loadCollectionMerkleTree(targetStorage, collectionName);
-        
+        const sourceCollection = sourceDb.collection(collectionName);
+        const targetCollection = targetDb.collection(collectionName);
+        const sourceCollectionTree = await sourceCollection.merkleTree().get();
+        const targetCollectionTree = await targetCollection.merkleTree().get();
+
         if (!sourceCollectionTree && !targetCollectionTree) {
             continue;
         }
         
-        yield* iterateCollectionDifferences(collectionName, sourceStorage, targetStorage, sourceDb, targetDb, sourceCollectionTree, targetCollectionTree);
+        yield* iterateCollectionDifferences(
+            collectionName,
+            sourceCollection,
+            targetCollection,
+            sourceCollectionTree,
+            targetCollectionTree,
+        );
     }
     
     // Process collections only in target or modified
@@ -473,31 +486,38 @@ async function* iterateDatabaseDifferences( //todo: todo this could be in the bd
             continue; // Already processed
         }
         
-        const sourceCollectionTree = await loadCollectionMerkleTree(sourceStorage, collectionName);
-        const targetCollectionTree = await loadCollectionMerkleTree(targetStorage, collectionName);
+        const sourceCollection = sourceDb.collection(collectionName);
+        const targetCollection = targetDb.collection(collectionName);
+        const sourceCollectionTree = await sourceCollection.merkleTree().get();
+        const targetCollectionTree = await targetCollection.merkleTree().get();
 
         if (!sourceCollectionTree && !targetCollectionTree) {
             continue;
         }
 
-        yield* iterateCollectionDifferences(collectionName, sourceStorage, targetStorage, sourceDb, targetDb, sourceCollectionTree, targetCollectionTree);
+        yield* iterateCollectionDifferences(
+            collectionName,
+            sourceCollection,
+            targetCollection,
+            sourceCollectionTree,
+            targetCollectionTree,
+        );
     }
 }
 
 //
 // Syncs database records from source to target using hierarchical merkle-tree based diffing.
+// targetDeletedIds: asset IDs that have been intentionally deleted from the target database.
+// Records whose IDs are in this set will not be inserted into the target even if they exist in source.
 //
 export async function syncDatabase(
-    sourceAssetStorage: IStorage,
     sourceBsonDatabase: IBsonDatabase,
-    targetAssetStorage: IStorage,
-    targetBsonDatabase: IBsonDatabase
+    targetBsonDatabase: IBsonDatabase,
+    targetDeletedIds: Set<string>
 ): Promise<void> {
-    // Load database merkle trees (v6 layout: .db/bson)
-    const sourceDbTree = await loadDatabaseMerkleTree(sourceAssetStorage, ".db/bson");
-    const targetDbTree = await loadDatabaseMerkleTree(targetAssetStorage, ".db/bson");
-    
-    // Compare root hashes to see if databases are identical
+    const sourceDbTree = await sourceBsonDatabase.merkleTree().get();
+    const targetDbTree = await targetBsonDatabase.merkleTree().get();
+
     if (sourceDbTree?.merkle && targetDbTree?.merkle) { //todo: move this comparison to the iterateDatabaseDifferences function.
         if (Buffer.compare(sourceDbTree.merkle.hash, targetDbTree.merkle.hash) === 0) {
             log.verbose("Databases are identical, no sync needed.");
@@ -510,7 +530,7 @@ export async function syncDatabase(
     let mergedCount = 0;
     
     // Process differing records as they're found (using generator)
-    for await (const diff of iterateDatabaseDifferences(sourceAssetStorage, targetAssetStorage, sourceBsonDatabase, targetBsonDatabase)) {
+    for await (const diff of iterateDatabaseDifferences(sourceBsonDatabase, targetBsonDatabase)) {
 
         const targetCollection = targetBsonDatabase.collection(diff.collectionName);        
 
@@ -521,9 +541,11 @@ export async function syncDatabase(
             await targetCollection.setInternalRecord(merged);
             mergedCount++;
         } else if (diff.sourceRecord) {
-            // Record only in source, insert it with all timestamps preserved
-            await targetCollection.setInternalRecord(diff.sourceRecord);
-            mergedCount++;
+            // Record only in source - insert it unless the target intentionally deleted it.
+            if (!targetDeletedIds.has(diff.sourceRecord._id)) {
+                await targetCollection.setInternalRecord(diff.sourceRecord);
+                mergedCount++;
+            }
         } else if (diff.targetRecord) {
             // Record only in target, nothing to do (target already has it)
             // This case is less common in sync scenarios

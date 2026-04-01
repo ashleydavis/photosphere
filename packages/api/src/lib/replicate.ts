@@ -3,8 +3,8 @@ import { computeHash } from "./hash";
 import { IStorage } from "storage";
 import { retry, FatalError, ITimestampProvider, IUuidGenerator, log } from "utils";
 import { LARGE_FILE_TIMEOUT } from "./constants";
-import { IDatabaseMetadata, ProgressCallback, createMediaFileDatabase, loadDatabase, createDatabase } from "./media-file-database";
-import { BsonDatabase, BatchSortIndexManager } from "bdb";
+import { IDatabaseMetadata, ProgressCallback, createMediaFileDatabase, loadSortIndexes, createDatabase } from "./media-file-database";
+import { BsonDatabase } from "bdb";
 import { findDifferingNodes, findMerkleTreeDifferences, getItemInfo, IMerkleTree, MerkleNode, pruneTree, upsertItem } from "merkle-tree";
 import { loadMerkleTree, merkleTreeExists, saveMerkleTree } from "./tree";
 import { loadCollectionMerkleTree, loadShardMerkleTree } from "./tree";
@@ -413,7 +413,6 @@ async function replicateBsonDatabase(
         }
         set.add(diff.recordId);
     }
-    const toCopyTotal = [...toCopyByCollection.values()].reduce((n, s) => n + s.size, 0);
 
     for await (const diff of iterateDatabaseDifferences(destAssetStorage, sourceAssetStorage)) {
         let set = toDeleteByCollection.get(diff.collectionName);
@@ -423,7 +422,6 @@ async function replicateBsonDatabase(
         }
         set.add(diff.recordId);
     }
-    const toDeleteTotal = [...toDeleteByCollection.values()].reduce((n, s) => n + s.size, 0);
 
     const collectionNames = new Set<string>([...toCopyByCollection.keys(), ...toDeleteByCollection.keys()]);
 
@@ -434,64 +432,28 @@ async function replicateBsonDatabase(
         const toCopy = toCopyByCollection.get(collectionName) ?? new Set<string>();
         const toDelete = toDeleteByCollection.get(collectionName) ?? new Set<string>();
 
-        const batchSortIndexManager = new BatchSortIndexManager(destColl);
-        await batchSortIndexManager.startBatch();
-
-        // 2. Group record ids by shard
-        const byShard = new Map<string, { toCopy: Set<string>; toDelete: Set<string> }>();
-        function addToShard(recordId: string, kind: 'toCopy' | 'toDelete'): void {
-            const shardId = destColl.getShardId(recordId);
-            let entry = byShard.get(shardId);
-            if (!entry) {
-                entry = { toCopy: new Set<string>(), toDelete: new Set<string>() };
-                byShard.set(shardId, entry);
+        for (const recordId of toCopy) {
+            const shardId = sourceColl.getShardId(recordId);
+            const sourceShard = sourceColl.shard(shardId);
+            const sourceRecord = await sourceShard.record(recordId);
+            if (!sourceRecord) {
+                continue;
             }
-            entry[kind].add(recordId);
-        }
-        for (const id of toCopy) {
-            addToShard(id, 'toCopy');
-        }
-        for (const id of toDelete) {
-            addToShard(id, 'toDelete');
+            await retry(() => destColl.setInternalRecord(sourceRecord)); //todo: maybe database retries should below the api.
+            result.copiedRecords++;
         }
 
-        for (const [shardId, { toCopy: toCopyInShard, toDelete: toDeleteInShard }] of byShard) {
-            const sourceShard = await retry(() => sourceColl.loadShard(shardId));
-
-            const destShard = await retry(() => destColl.loadShard(shardId));
-
-            for (const recordId of toCopyInShard) {
-                const sourceRecord = sourceColl.getRecordFromShard(recordId, sourceShard);
-                if (!sourceRecord) {
-                    continue;
-                }
-                const oldDest = destColl.getRecordFromShard(recordId, destShard);
-                destColl.setRecordInShard(recordId, sourceRecord, destShard);
-                await retry(() => batchSortIndexManager.syncRecord(sourceRecord, oldDest));
-                result.copiedRecords++;
-            }
-
-            for (const recordId of toDeleteInShard) {
-                const oldDest = destColl.getRecordFromShard(recordId, destShard);
-                if (!oldDest) {
-                    continue;
-                }
-                destColl.deleteRecordFromShard(recordId, destShard);
-                await retry(() => batchSortIndexManager.removeRecord(recordId, oldDest));
-                result.copiedRecords++;
-            }
-
-            await retry(() => destColl.saveShard(destShard));
-
-            await retry(() => destColl.rebuildAndSaveShardMerkleTree(destShard));
-
-            if (progressCallback) {
-                progressCallback(`Copied ${result.copiedFiles} files, ${result.copiedRecords} records`);
-            }
+        for (const recordId of toDelete) {
+            await retry(() => destColl.deleteOne(recordId));
+            result.copiedRecords++;
         }
 
-        await batchSortIndexManager.commitChanges();
+        if (progressCallback) {
+            progressCallback(`Copied ${result.copiedFiles} files, ${result.copiedRecords} records`);
+        }
     }
+
+    await destBsonDatabase.commit();
 }
 
 //
@@ -535,7 +497,7 @@ export async function replicate(
     const treeExists = await retry(() => merkleTreeExists(destAssetStorage));
     if (treeExists) {
         log.verbose("Loading existing destination database...");
-        await loadDatabase(destDb.assetStorage, destDb.metadataCollection);
+        await loadSortIndexes(destDb.assetStorage, destDb.metadataCollection);
     }
     else {
         log.verbose("Creating new destination database...");

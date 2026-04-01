@@ -119,7 +119,7 @@ export async function infoCommand(context: ICommandContext, inputs: string[], op
                 }
             }
             else {
-                const assets = await metadataCollection.findByIndex("hash", input);
+                const assets = await metadataCollection.sortIndex("hash", "asc").findByValue(input);
                 if (assets.length === 0) {
                     results.push({
                         path: "",

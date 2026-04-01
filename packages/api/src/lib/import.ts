@@ -6,7 +6,7 @@ import { TaskStatus } from "task-queue";
 import { IImportFileData, IImportFileResult, IImportFileDatabaseData, IHashFileResult } from "./import.worker";
 import type { ITaskQueueProvider } from "task-queue";
 import { IStorage, IStorageDescriptor, IS3Credentials } from "storage";
-import { IBsonCollection } from "bdb";
+import { IBsonCollection, IBsonDatabase } from "bdb";
 import { IAsset } from "defs";
 import { acquireWriteLock, releaseWriteLock } from "./write-lock";
 import { loadMerkleTree, saveMerkleTree } from "./tree";
@@ -40,6 +40,7 @@ async function processPendingDatabaseUpdates(
     assetStorage: IStorage,
     rawStorage: IStorage,
     sessionId: string,
+    bsonDatabase: IBsonDatabase,
     metadataCollection: IBsonCollection<IAsset>,
     summary: IAddSummary,
     dryRun: boolean
@@ -48,6 +49,11 @@ async function processPendingDatabaseUpdates(
         return true;
     }
     
+    //
+    // Flush cached data. After we acquire the write lock we want to load fresh data.
+    //
+    await bsonDatabase.flush();
+
     if (!await acquireWriteLock(rawStorage, sessionId, 1)) {
         // Couldn't acquire lock
         return false;
@@ -115,6 +121,7 @@ async function processPendingDatabaseUpdates(
         // Save merkle tree (skip in dry-run mode)
         if (!dryRun) {
             await retry(() => saveMerkleTree(merkleTree, assetStorage));
+            await bsonDatabase.commit();
             await updateDatabaseConfig(rawStorage, { lastModifiedAt: new Date().toISOString() });
         }
 
@@ -136,6 +143,7 @@ export async function addPaths(
     googleApiKey: string | undefined,
     uuidGenerator: IUuidGenerator,
     sessionId: string,
+    bsonDatabase: IBsonDatabase,
     metadataCollection: IBsonCollection<IAsset>,
     localHashCache: HashCache,
     paths: string[],
@@ -200,7 +208,7 @@ export async function addPaths(
             pendingDatabaseUpdates = [];
             
             // Process items (processPendingDatabaseUpdates will handle lock acquisition)
-            const processed = await processPendingDatabaseUpdates(itemsToProcess, assetStorage, rawStorage, sessionId, metadataCollection, summary, dryRun);
+            const processed = await processPendingDatabaseUpdates(itemsToProcess, assetStorage, rawStorage, sessionId, bsonDatabase, metadataCollection, summary, dryRun);
             if (!processed) {
                 // Lock acquisition failed - re-queue items.
                 // This operation is atomic and no other JS code will be running at this point.
@@ -366,7 +374,7 @@ export async function addPaths(
         log.verbose(`Queue processing complete, processing final ${pendingDatabaseUpdates.length} pending database updates.`);
 
         if (pendingDatabaseUpdates.length !== 0) {
-            const processed = await processPendingDatabaseUpdates(pendingDatabaseUpdates, assetStorage, rawStorage, sessionId, metadataCollection, summary, dryRun);
+            const processed = await processPendingDatabaseUpdates(pendingDatabaseUpdates, assetStorage, rawStorage, sessionId, bsonDatabase, metadataCollection, summary, dryRun);
             if (!processed) {
                 log.error(`Failed to process final ${pendingDatabaseUpdates.length} pending database updates.`);
             }

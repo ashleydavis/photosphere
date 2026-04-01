@@ -20,7 +20,7 @@ export async function sortPageCommand(dbPath: string, collectionName: string, fi
     const collection = database.collection(collectionName);
     
     // Get the specific page
-    const sortedRecords = await collection.getSorted(fieldName, direction as SortDirection, pageId);
+    const sortedRecords = await collection.sortIndex(fieldName, direction as SortDirection).getPage(pageId);
     
     console.log(pc.green(`Collection: ${collectionName}`));
     console.log(pc.green(`Field: ${fieldName}`));

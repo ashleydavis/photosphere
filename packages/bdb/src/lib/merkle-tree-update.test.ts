@@ -15,12 +15,7 @@ describe('Merkle tree updates', () => {
         uuidGenerator = new TestUuidGenerator();
         const timestampProvider = new MockTimestampProvider();
 
-        database = new BsonDatabase({
-            storage,
-            bsonDbPath: "",
-            uuidGenerator,
-            timestampProvider,
-        });
+        database = new BsonDatabase(storage, "", uuidGenerator, timestampProvider);
 
         collection = database.collection('test');
     });
@@ -32,6 +27,7 @@ describe('Merkle tree updates', () => {
             name: 'John',
             age: 30,
         });
+        await database.commit();
 
         // Determine which shard the record went to (v6: collection dir = collections/test)
         const shardIds = await listShards(storage, "", "test");
@@ -63,6 +59,7 @@ describe('Merkle tree updates', () => {
             name: 'John',
             age: 30,
         });
+        await database.commit();
 
         // Determine which shard the record went to
         const shardIds = await listShards(storage, "", "test");
@@ -80,6 +77,7 @@ describe('Merkle tree updates', () => {
             name: 'Jane',
             age: 31,
         });
+        await database.commit();
 
         // Get updated shard tree hash
         const updatedShardTree = await loadShardMerkleTree(storage, "", "test", shardId);
@@ -105,6 +103,7 @@ describe('Merkle tree updates', () => {
             name: 'John',
             age: 30,
         });
+        await database.commit();
 
         // Determine which shard the record went to
         const shardIds = await listShards(storage, "", "test");
@@ -120,6 +119,7 @@ describe('Merkle tree updates', () => {
         // Delete the record
         const deleted = await collection.deleteOne(recordId);
         expect(deleted).toBe(true);
+        await database.commit();
 
         // Get updated shard tree
         const updatedShardTree = await loadShardMerkleTree(storage, "", "test", shardId);
@@ -130,6 +130,20 @@ describe('Merkle tree updates', () => {
         // Collection tree is also deleted when the collection becomes empty (no shards with records)
         const collectionTree = await loadCollectionMerkleTree(storage, "", "test");
         expect(collectionTree).toBeUndefined();
+    });
+
+    test('getDatabaseMerkleTree matches persisted database merkle after commit', async () => {
+        const recordId = uuidGenerator.generate();
+        await collection.insertOne({
+            _id: recordId,
+            name: 'John',
+            age: 30,
+        });
+        await database.commit();
+        const memoryTree = await database.merkleTree().get();
+        const diskTree = await loadDatabaseMerkleTree(storage, "");
+        expect(memoryTree?.merkle && diskTree?.merkle).toBeDefined();
+        expect(Buffer.compare(memoryTree!.merkle!.hash, diskTree!.merkle!.hash)).toBe(0);
     });
 });
 

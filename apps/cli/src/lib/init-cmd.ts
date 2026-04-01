@@ -1,4 +1,4 @@
-import { createMediaFileDatabase, loadDatabase as loadMediaDatabase, createDatabase as createMediaDatabase } from "api";
+import { createMediaFileDatabase, createDatabase as createMediaDatabase, loadSortIndexes } from "api";
 import { createStorage, loadEncryptionKeys, pathJoin, IStorage } from "storage";
 import type { BsonDatabase, IBsonCollection } from "bdb";
 import type { IUuidGenerator, ITimestampProvider } from "utils";
@@ -512,8 +512,7 @@ export async function loadDatabase(
     // Create database instance (v6 layout: BSON under .db/bson)
     const database = createMediaFileDatabase(assetStorage, uuidGenerator, timestampProvider);
 
-    // Load the database
-    await loadMediaDatabase(database.assetStorage, database.metadataCollection);
+    await loadSortIndexes(database.assetStorage, database.metadataCollection);
 
     return {
         databaseDir: dbDir,

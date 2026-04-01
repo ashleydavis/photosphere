@@ -6,7 +6,7 @@ import { createStorage } from "storage";
 import {
     applyDatabaseOps,
     createMediaFileDatabase,
-    loadDatabase,
+    loadSortIndexes,
     streamAsset,
     writeAssetStream,
 } from "api";
@@ -91,7 +91,7 @@ export async function createAssetServer(options: IAssetServerOptions): Promise<I
         const database = createMediaFileDatabase(assetStorage, uuidGenerator, timestampProvider);
         
         // Load the database
-        await loadDatabase(assetStorage, database.metadataCollection);
+        await loadSortIndexes(assetStorage, database.metadataCollection);
         
         // Stream the asset
         return await streamAsset(assetStorage, assetId, assetType);

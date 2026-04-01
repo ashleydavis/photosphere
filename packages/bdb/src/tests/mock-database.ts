@@ -1,7 +1,7 @@
 import type { IBsonDatabase } from '../lib/database';
 import type { IBsonCollection, IRecord } from '../lib/collection';
-import { MockCollection } from './mock-collection';
-import { IMerkleTree } from 'merkle-tree';
+import { MockCollection, NoopMerkleRef } from './mock-collection';
+import type { IMerkleRef } from '../lib/merkle-tree-ref';
 
 // Mock BsonDatabase for testing
 export class MockDatabase implements IBsonDatabase {
@@ -16,6 +16,25 @@ export class MockDatabase implements IBsonDatabase {
 
     async collections(): Promise<string[]> {
         return Array.from(this.collectionsMap.keys());
+    }
+
+    //
+    // Stub commit — delegates to all mock collections.
+    //
+    async commit(): Promise<void> {
+        for (const coll of this.collectionsMap.values()) {
+            await coll.commit();
+        }
+    }
+
+    //
+    // Stub flush — no-op for mock.
+    //
+    flush(): void {
+    }
+
+    merkleTree(): IMerkleRef {
+        return new NoopMerkleRef();
     }
 
     // Helper method for testing - get the underlying mock collection

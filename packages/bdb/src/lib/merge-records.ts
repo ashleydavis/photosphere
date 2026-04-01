@@ -1,4 +1,5 @@
-import { IInternalRecord, Metadata } from "./collection";
+import type { Metadata } from "./collection";
+import type { IInternalRecord } from "./shard";
 
 //
 // Checks if a value is a primitive, undefined or null.

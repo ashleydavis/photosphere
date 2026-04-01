@@ -1,5 +1,6 @@
 import { MockStorage } from 'storage';
-import { BsonCollection, type IRecord, type IInternalRecord } from '../lib/collection';
+import { BsonCollection, type IRecord } from '../lib/collection';
+import type { IInternalRecord } from '../lib/shard';
 import { RandomUuidGenerator, TimestampProvider } from 'utils';
 
 // Test interfaces
@@ -17,14 +18,15 @@ describe('BsonCollection.iterateShards', () => {
     
     beforeEach(() => {
         storage = new MockStorage();
-        collection = new BsonCollection<TestUser>('users', '', {
+        collection = new BsonCollection<TestUser>(
+            'users',
+            '',
             storage,
-            directory: 'collections/users',
-            baseDirectory: '',
-            uuidGenerator: new RandomUuidGenerator(),
-            timestampProvider: new TimestampProvider(),
-            numShards: 10
-        });
+            '',
+            new RandomUuidGenerator(),
+            new TimestampProvider(),
+            () => {},
+        );
     });
         
     test('should iterate through empty collection shards', async () => {
