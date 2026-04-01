@@ -3071,7 +3071,19 @@ test_sync_delete_asset() {
     else
         log_success "Asset file still exists in copy database (as expected)"
     fi
-    
+
+    # Verify the BSON record has been deleted from the original database
+    log_info "Verifying BSON record has been deleted from original database"
+    local original_record_output
+    original_record_output=$($(get_bdb_command) record $original_dir/.db/bson metadata $test_asset_id --all 2>&1)
+    if echo "$original_record_output" | grep -q "Record not found"; then
+        log_success "BSON record has been deleted from original database"
+    else
+        log_error "BSON record should have been deleted from original database but it still exists"
+        echo "$original_record_output"
+        exit 1
+    fi
+
     # Sync from original to copy (should delete the asset in copy)
     log_info "Syncing from original to copy (should delete asset in copy)"
     local sync_output
@@ -3080,6 +3092,18 @@ test_sync_delete_asset() {
     # Verify sync completed
     expect_output_string "$sync_output" "Sync completed successfully" "Sync completed successfully"
     
+    # Verify the BSON record has been deleted from the copy database after sync
+    log_info "Verifying BSON record has been deleted from copy database after sync"
+    local copy_record_output
+    copy_record_output=$($(get_bdb_command) record $copy_dir/.db/bson metadata $test_asset_id --all 2>&1)
+    if echo "$copy_record_output" | grep -q "Record not found"; then
+        log_success "BSON record has been deleted from copy database"
+    else
+        log_error "BSON record should have been deleted from copy database but it still exists"
+        echo "$copy_record_output"
+        exit 1
+    fi
+
     # Verify the asset has been deleted from the copy database
     log_info "Verifying asset has been deleted from copy database after sync"
     if [ -f "$copy_asset_file" ]; then
@@ -3088,7 +3112,19 @@ test_sync_delete_asset() {
     else
         log_success "Asset file has been deleted from copy database"
     fi
-    
+
+    # Verify the BSON record has not been restored in the original database after sync
+    log_info "Verifying BSON record has not been restored in original database after sync"
+    local original_record_after_sync_output
+    original_record_after_sync_output=$($(get_bdb_command) record $original_dir/.db/bson metadata $test_asset_id --all 2>&1)
+    if echo "$original_record_after_sync_output" | grep -q "Record not found"; then
+        log_success "BSON record remains deleted from original database after sync"
+    else
+        log_error "BSON record was restored in original database after sync but should remain deleted"
+        echo "$original_record_after_sync_output"
+        exit 1
+    fi
+
     # Get root hashes and verify they are now the same again (sync is bidirectional)
     log_info "Verifying original and copy have the same root hash after bidirectional sync"
     invoke_command "Get original database root hash after bidirectional sync" "$(get_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
@@ -3216,7 +3252,19 @@ test_sync_delete_asset_reverse() {
     else
         log_success "Asset file still exists in original database (as expected)"
     fi
-    
+
+    # Verify the BSON record has been deleted from the copy database
+    log_info "Verifying BSON record has been deleted from copy database"
+    local copy_record_output
+    copy_record_output=$($(get_bdb_command) record $copy_dir/.db/bson metadata $test_asset_id --all 2>&1)
+    if echo "$copy_record_output" | grep -q "Record not found"; then
+        log_success "BSON record has been deleted from copy database"
+    else
+        log_error "BSON record should have been deleted from copy database but it still exists"
+        echo "$copy_record_output"
+        exit 1
+    fi
+
     # Sync from copy to original (should delete the asset in original)
     log_info "Syncing from copy to original (should delete asset in original)"
     local sync_output
@@ -3225,6 +3273,30 @@ test_sync_delete_asset_reverse() {
     # Verify sync completed
     expect_output_string "$sync_output" "Sync completed successfully" "Sync completed successfully"
     
+    # Verify the BSON record has been deleted from the original database after sync
+    log_info "Verifying BSON record has been deleted from original database after sync"
+    local original_record_output
+    original_record_output=$($(get_bdb_command) record $original_dir/.db/bson metadata $test_asset_id --all 2>&1)
+    if echo "$original_record_output" | grep -q "Record not found"; then
+        log_success "BSON record has been deleted from original database"
+    else
+        log_error "BSON record should have been deleted from original database but it still exists"
+        echo "$original_record_output"
+        exit 1
+    fi
+
+    # Verify the BSON record has not been restored in the copy database after sync
+    log_info "Verifying BSON record has not been restored in copy database after sync"
+    local copy_record_after_sync_output
+    copy_record_after_sync_output=$($(get_bdb_command) record $copy_dir/.db/bson metadata $test_asset_id --all 2>&1)
+    if echo "$copy_record_after_sync_output" | grep -q "Record not found"; then
+        log_success "BSON record remains deleted from copy database after sync"
+    else
+        log_error "BSON record was restored in copy database after sync but should remain deleted"
+        echo "$copy_record_after_sync_output"
+        exit 1
+    fi
+
     # Verify the asset has been deleted from the original database
     log_info "Verifying asset has been deleted from original database after sync"
     if [ -f "$original_asset_file" ]; then

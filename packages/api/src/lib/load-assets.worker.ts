@@ -31,9 +31,6 @@ export async function loadAssetsHandler(
     // Create database instance
     const database = createMediaFileDatabase(storage, uuidGenerator, timestampProvider);
     
-    // Load only the sort index needed for page iteration
-    await database.metadataCollection.loadSortIndexFromStorage("photoDate", "desc", "date");
-    
     const metadataCollection = database.metadataCollection;
     
     // Iterate through assets in sorted order (by photoDate, descending)
@@ -44,7 +41,7 @@ export async function loadAssetsHandler(
     
     while (true) {
         //todo: The sort order should be configurable.
-        const result = await metadataCollection.getSorted("photoDate", "desc", nextPageId);
+        const result = await metadataCollection.sortIndex("photoDate", "desc").getPage(nextPageId);
         
         if (result.records.length === 0) {
             break;

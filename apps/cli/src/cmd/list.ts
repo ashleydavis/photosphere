@@ -35,7 +35,7 @@ export async function listCommand(context: ICommandContext, options: IListComman
     let totalDisplayed = 0;
 
     while (true) {
-        const result = await metadataCollection.getSorted("photoDate", "desc", nextPageId);
+        const result = await metadataCollection.sortIndex("photoDate", "desc").getPage(nextPageId);
         
         if (result.records.length === 0) {
             if (totalDisplayed === 0) {
@@ -46,9 +46,7 @@ export async function listCommand(context: ICommandContext, options: IListComman
             break;
         }
 
-        // Cast to IAsset and slice the results to match our page size
-        const records = result.records;
-        const pageRecords = records.slice(0, pageSize);
+        const pageRecords = result.records.slice(0, pageSize);
 
         // Read encryption headers for each record
         const encryptionHeaders = new Map<string, Buffer | undefined>();

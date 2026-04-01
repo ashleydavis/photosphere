@@ -7,7 +7,7 @@ import { createStorage } from "storage";
 import { TestUuidGenerator } from "node-utils";
 import { MockTimestampProvider } from "utils";
 import { applyDatabaseOps, applyMetadataDatabaseOps, groupOpsByDatabaseId } from "../../lib/apply-database-ops";
-import { createMediaFileDatabase, createDatabase, loadDatabase } from "../../lib/media-file-database";
+import { createMediaFileDatabase, createDatabase, loadSortIndexes } from "../../lib/media-file-database";
 
 //
 // Valid BSON document id (16-byte hex) for tests that hit the real collection implementation.
@@ -244,7 +244,7 @@ describe("applyDatabaseOps", () => {
 
             const { storage: verifyStorage } = createStorage(tmpDir, undefined, undefined);
             const verifyDb = createMediaFileDatabase(verifyStorage, uuidGenerator, timestampProvider);
-            await loadDatabase(verifyStorage, verifyDb.metadataCollection);
+            await loadSortIndexes(verifyStorage, verifyDb.metadataCollection);
             const loaded = await verifyDb.metadataCollection.getOne(BSON_RECORD_ID);
             expect(loaded?.origFileName).toBe(asset.origFileName);
         }

@@ -26,12 +26,7 @@ export async function loadDatabase(dbPath: string, verbose: boolean = false): Pr
     const storage = storageResult.storage;
 
     // Create the BSON database
-    const database = new BsonDatabase({
-        storage,
-        bsonDbPath: "",
-        uuidGenerator,
-        timestampProvider: new TimestampProvider()
-    });
+    const database = new BsonDatabase(storage, "", uuidGenerator, new TimestampProvider());
 
     if (verbose) {
         console.log(pc.green('✓ Database loaded successfully'));

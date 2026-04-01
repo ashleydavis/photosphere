@@ -110,6 +110,8 @@ export async function editCommand(
         process.exit(1);
     }
 
+    await database.commit();
+
     console.log(pc.green(`✓ Successfully updated field '${fieldName}' in record '${recordId}'`));
     
     if (options.verbose) {

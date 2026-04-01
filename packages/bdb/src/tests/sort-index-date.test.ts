@@ -1,5 +1,5 @@
-import { SortIndex, ISortedIndexEntry } from '../lib/sort-index';
-import { IBsonCollection, IRecord, IShard } from '../lib/collection';
+import { SortIndex, ISortIndexRecord } from '../lib/sort-index';
+import { IBsonCollection, IRecord } from '../lib/collection';
 import { MockStorage } from 'storage';
 import { MockCollection } from './mock-collection';
 import { BSON } from 'bson';
@@ -68,28 +68,26 @@ describe('SortIndex with date type', () => {
         collection = new MockCollection<TestRecord>(testRecords);
         
         // Create ascending index on createdAt field
-        sortIndexAsc = new SortIndex({
+        sortIndexAsc = new SortIndex(
             storage,
-            baseDirectory: 'db',
-            collectionName: 'test_collection',
-            fieldName: 'createdAt',
-            direction: 'asc',
-            pageSize: 2,
-            type: 'date', // Specify date type for proper comparison
-            uuidGenerator: new RandomUuidGenerator()
-        });
-        
+            'db',
+            'test_collection',
+            'createdAt',
+            'asc',
+            new RandomUuidGenerator(),
+            'date',
+        );
+
         // Create descending index on updatedAt field
-        sortIndexDesc = new SortIndex({
+        sortIndexDesc = new SortIndex(
             storage,
-            baseDirectory: 'db',
-            collectionName: 'test_collection',
-            fieldName: 'updatedAt',
-            direction: 'desc',
-            pageSize: 2,
-            type: 'date', // Specify date type for proper comparison
-            uuidGenerator: new RandomUuidGenerator()
-        });
+            'db',
+            'test_collection',
+            'updatedAt',
+            'desc',
+            new RandomUuidGenerator(),
+            'date',
+        );
     });
     
     test('should initialize the date sort indexes with records', async () => {
@@ -107,7 +105,7 @@ describe('SortIndex with date type', () => {
         await sortIndexAsc.build(collection);
         
         // Get all records by traversing pages
-        let allRecords: ISortedIndexEntry[] = [];
+        let allRecords: ISortIndexRecord[] = [];
         let currentPage = await sortIndexAsc.getPage('');
         
         // Add records from first page
@@ -121,8 +119,8 @@ describe('SortIndex with date type', () => {
         
         // Verify records are in ascending date order
         for (let i = 1; i < allRecords.length; i++) {
-            const prevDate = new Date(allRecords[i-1].fields.createdAt);
-            const currDate = new Date(allRecords[i].fields.createdAt);
+            const prevDate = new Date(allRecords[i-1].createdAt);
+            const currDate = new Date(allRecords[i].createdAt);
             expect(prevDate.getTime()).toBeLessThanOrEqual(currDate.getTime());
         }
         
@@ -138,7 +136,7 @@ describe('SortIndex with date type', () => {
         await sortIndexDesc.build(collection);
         
         // Get all records by traversing pages
-        let allRecords: ISortedIndexEntry[] = [];
+        let allRecords: ISortIndexRecord[] = [];
         let currentPage = await sortIndexDesc.getPage('');
         
         // Add records from first page
@@ -152,8 +150,8 @@ describe('SortIndex with date type', () => {
         
         // Verify records are in descending date order
         for (let i = 1; i < allRecords.length; i++) {
-            const prevDate = new Date(allRecords[i-1].fields.updatedAt);
-            const currDate = new Date(allRecords[i].fields.updatedAt);
+            const prevDate = new Date(allRecords[i-1].updatedAt);
+            const currDate = new Date(allRecords[i].updatedAt);
             expect(prevDate.getTime()).toBeGreaterThanOrEqual(currDate.getTime());
         }
         
@@ -203,7 +201,7 @@ describe('SortIndex with date type', () => {
         
         // All records should have createdAt between 3 days ago and 1 day ago
         for (const record of result) {
-            const date = new Date(record.fields.createdAt).getTime();
+            const date = new Date(record.createdAt).getTime();
             const minDate = new Date(threeDay).getTime();
             const maxDate = new Date(oneDay).getTime();
             expect(date).toBeGreaterThanOrEqual(minDate);
@@ -249,14 +247,14 @@ describe('SortIndex with date type', () => {
         // Should find the updated record with the new date
         expect(result.length).toBe(1);
         expect(result[0]._id).toBe('123e4567-e89b-12d3-a456-426614174003');
-        expect(result[0].fields.createdAt).toBe(newDate);
+        expect(result[0].createdAt).toBe(newDate);
         
         // Original date should no longer have this record
         const oldDateResult = await sortIndexAsc.findByValue(testRecords[2].createdAt);
         expect(oldDateResult.length).toBe(0);
         
         // Get all records and verify proper sorting
-        let allRecords: ISortedIndexEntry[] = [];
+        let allRecords: ISortIndexRecord[] = [];
         let currentPage = await sortIndexAsc.getPage('');
         
         // Add records from first page
@@ -296,7 +294,7 @@ describe('SortIndex with date type', () => {
         expect(result[0]._id).toBe('123e4567-e89b-12d3-a456-426614174006');
         
         // Get all records and verify the new record is in the correct position
-        let allRecords: ISortedIndexEntry[] = [];
+        let allRecords: ISortIndexRecord[] = [];
         let currentPage = await sortIndexAsc.getPage('');
         
         // Add records from first page

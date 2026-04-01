@@ -1,5 +1,5 @@
 import { mergeRecords } from '../lib/merge-records';
-import type { IInternalRecord } from '../lib/collection';
+import type { IInternalRecord } from '../lib/shard';
 
 describe('mergeRecords', () => {
     test('should merge two records with same _id', () => {

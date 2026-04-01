@@ -324,16 +324,11 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
 
         // Delete and rebuild sort indexes under .db/bson so they use v6 format (type code + checksum).
         log.info(pc.blue(`Rebuilding sort indexes.`));
-        const bsonDb = new BsonDatabase({
-            storage: assetStorage,
-            bsonDbPath: ".db/bson",
-            uuidGenerator,
-            timestampProvider,
-        });
+        const bsonDb = new BsonDatabase(assetStorage, ".db/bson", uuidGenerator, timestampProvider);
         const v6MetadataCollection = bsonDb.collection<IAsset>("metadata");
-        const existingIndexes = await v6MetadataCollection.listSortIndexes();
+        const existingIndexes = await v6MetadataCollection.sortIndexes();
         for (const index of existingIndexes) {
-            await v6MetadataCollection.deleteSortIndex(index.fieldName, index.direction);
+            await v6MetadataCollection.sortIndex(index.fieldName, index.direction).drop();
         }
         await ensureSortIndex(v6MetadataCollection);
         log.info(pc.green(`✓ Sort indexes rebuilt successfully`));

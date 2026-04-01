@@ -1,7 +1,7 @@
 import { MockStorage } from 'storage';
 import { RandomUuidGenerator } from 'utils';
 import { IRecord, toExternal, toInternal } from '../lib/collection';
-import { ISortedIndexEntry, SortIndex } from '../lib/sort-index';
+import { ISortIndexRecord, SortIndex } from '../lib/sort-index';
 import { MockCollection } from './mock-collection';
 
 // Test interface
@@ -29,15 +29,14 @@ describe('SortIndex', () => {
     beforeEach(() => {
         storage = new MockStorage();
         collection = new MockCollection<TestRecord>(testRecords);        
-        sortIndex = new SortIndex({
+        sortIndex = new SortIndex(
             storage,
-            baseDirectory: 'db',
-            collectionName: 'test_collection',
-            fieldName: 'score',
-            direction: 'asc',
-            pageSize: 2,
-            uuidGenerator: new RandomUuidGenerator()
-        });
+            'db',
+            'test_collection',
+            'score',
+            'asc',
+            new RandomUuidGenerator(),
+        );
     });
     
     test('should initialize the sort index with records', async () => {
@@ -52,7 +51,7 @@ describe('SortIndex', () => {
         expect(await storage.fileExists('db/indexes/test_collection/score_asc/tree.dat')).toBe(true);
         
         // Force metadata save
-        await sortIndex.saveTree();
+        await sortIndex.commit();
     });
     
     test('should retrieve a page of sorted records', async () => {
@@ -63,23 +62,19 @@ describe('SortIndex', () => {
         const result = await sortIndex.getPage('');
         
         // Check page contents
-        expect(result.records.length).toBeLessThanOrEqual(3);
+        expect(result.records.length).toBe(5);
         expect(result.totalRecords).toBe(5);
         expect(result.currentPageId).toBeTruthy();
-        expect(result.totalPages).toBe(2);
-        
-        // Check pagination links exist as expected
-        if (result.records.length < 5) {
-            expect(result.nextPageId).toBeTruthy();
-        }
+        expect(result.totalPages).toBe(1);
+        expect(result.nextPageId).toBeUndefined();
         expect(result.previousPageId).toBeUndefined();
         
         // Check records are sorted by score (ascending)
         if (result.records.length > 0) {
             // The first page should have the lowest score
-            expect(result.records[0].fields.score).toBe(65); // Record 4
+            expect(result.records[0].score).toBe(65); // Record 4
             if (result.records.length > 1) {
-                expect(result.records[1].fields.score).toBe(72); // Record 2
+                expect(result.records[1].score).toBe(72); // Record 2
             }
         }
         
@@ -97,7 +92,7 @@ describe('SortIndex', () => {
         expect(allRecords.length).toBe(5);
         
         // Verify they are in the correct sorted order
-        const scores = allRecords.map(r => r.fields.score);
+        const scores = allRecords.map(r => r.score);
         expect(scores).toEqual([65, 72, 85, 85, 90]);
     });
     
@@ -110,14 +105,14 @@ describe('SortIndex', () => {
         
         // Should find 2 records with score 85
         expect(result.length).toBe(2);
-        expect(result.every(r => r.fields.score === 85)).toBe(true);
+        expect(result.every(r => r.score === 85)).toBe(true);
         
         // Find records with score 90
         const result2 = await sortIndex.findByValue(90);
         
         // Should find 1 record with score 90
         expect(result2.length).toBe(1);
-        expect(result2[0].fields.score).toBe(90);
+        expect(result2[0].score).toBe(90);
         
         // Find records with a non-existent score
         const result3 = await sortIndex.findByValue(100);
@@ -140,7 +135,7 @@ describe('SortIndex', () => {
         
         // Should find 3 records with score in range
         expect(result.length).toBe(3);
-        expect(result.every(r => r.fields.score >= 70 && r.fields.score <= 85)).toBe(true);
+        expect(result.every(r => r.score >= 70 && r.score <= 85)).toBe(true);
         
         // Find records with score > 85
         const result2 = await sortIndex.findByRange({
@@ -150,7 +145,7 @@ describe('SortIndex', () => {
         
         // Should find 1 record with score > 85
         expect(result2.length).toBe(1);
-        expect(result2[0].fields.score).toBe(90);
+        expect(result2[0].score).toBe(90);
         
         // Find records with score < 70
         const result3 = await sortIndex.findByRange({
@@ -160,7 +155,7 @@ describe('SortIndex', () => {
         
         // Should find 1 record with score < 70
         expect(result3.length).toBe(1);
-        expect(result3[0].fields.score).toBe(65);
+        expect(result3[0].score).toBe(65);
     });
     
     test('should update and delete records in the index', async () => {
@@ -182,8 +177,8 @@ describe('SortIndex', () => {
         
         // Should find 1 record with the new score
         expect(result.length).toBe(1);
-        expect(result[0].fields.score).toBe(95);
-        expect(result[0].fields.name).toBe('Record 1 Updated');
+        expect(result[0].score).toBe(95);
+        expect(result[0].name).toBe('Record 1 Updated');
         
         // Old score should have one less record
         const oldScoreResult = await sortIndex.findByValue(85);
@@ -215,7 +210,7 @@ describe('SortIndex', () => {
         // by checking if it exists in the collection through the index methods
         
         // Check by traversing all pages
-        let allRecords: ISortedIndexEntry[] = [];
+        let allRecords: ISortIndexRecord[] = [];
         let currentPage = await sortIndex.getPage('');
         
         // Add records from first page
@@ -228,9 +223,9 @@ describe('SortIndex', () => {
         }
         
         // Find the record we added
-        const foundRecord = allRecords.find(r => r.fields.name === 'Record 6');
+        const foundRecord = allRecords.find(r => r.name === 'Record 6');
         expect(foundRecord).toBeDefined();
-        expect(foundRecord?.fields.score).toBe(80);
+        expect(foundRecord?.score).toBe(80);
     });
     
     test('should delete the entire index', async () => {
@@ -238,42 +233,43 @@ describe('SortIndex', () => {
         await sortIndex.build(collection);
         
         // Delete the index
-        await sortIndex.delete();
+        await sortIndex.drop();
         
         // Check that the index directory no longer exists
         const exists = await storage.dirExists('db/indexes/test_collection/score_asc');
         expect(exists).toBe(false);        
     });
 
-    test('should throw error when calling getPage without loading', async () => {
-        // Don't build the index
-        await expect(sortIndex.getPage()).rejects.toThrow('Sort index is not loaded');
+    test('should return empty result when calling getPage on non-existent index', async () => {
+        const result = await sortIndex.getPage();
+        expect(result.records).toEqual([]);
+        expect(result.totalRecords).toBe(0);
     });
 
-    test('should throw error when calling findByValue without loading', async () => {
-        // Don't build the index
-        await expect(sortIndex.findByValue(85)).rejects.toThrow('Sort index is not loaded');
+    test('should return empty array when calling findByValue on non-existent index', async () => {
+        const result = await sortIndex.findByValue(85);
+        expect(result).toEqual([]);
     });
 
-    test('should throw error when calling findByRange without loading', async () => {
-        // Don't build the index
-        await expect(sortIndex.findByRange({ min: 70, max: 85 })).rejects.toThrow('Sort index is not loaded');
+    test('should return empty array when calling findByRange on non-existent index', async () => {
+        const result = await sortIndex.findByRange({ min: 70, max: 85 });
+        expect(result).toEqual([]);
     });
 
-    test('should throw error when calling updateRecord without loading', async () => {
-        // Don't build the index
-        await expect(sortIndex.updateRecord(
+    test('should no-op when calling updateRecord without loading', async () => {
+        // Don't build the index — updateRecord is a no-op on an unloaded index
+        await sortIndex.updateRecord(
             toInternal<TestRecord>(testRecords[0], 1000),
             undefined
-        )).rejects.toThrow('Sort index is not loaded');
+        );
     });
 
-    test('should throw error when calling deleteRecord without loading', async () => {
-        // Don't build the index
-        await expect(sortIndex.deleteRecord(
+    test('should no-op when calling deleteRecord without loading', async () => {
+        // Don't build the index — deleteRecord is a no-op on an unloaded index
+        await sortIndex.deleteRecord(
             testRecords[0]._id,
             toInternal<TestRecord>(testRecords[0], 1000)
-        )).rejects.toThrow('Sort index is not loaded');
+        );
     });
 
     test('should handle empty collection', async () => {
@@ -297,7 +293,7 @@ describe('SortIndex', () => {
         expect(result.records.length).toBe(1);
         expect(result.totalRecords).toBe(1);
         expect(result.totalPages).toBe(1);
-        expect(result.records[0].fields.score).toBe(85);
+        expect(result.records[0].score).toBe(85);
     });
 
     test('should handle collection with all same values', async () => {
@@ -312,10 +308,10 @@ describe('SortIndex', () => {
         
         const result = await sortIndex.findByValue(100);
         expect(result.length).toBe(4);
-        expect(result.every(r => r.fields.score === 100)).toBe(true);
+        expect(result.every(r => r.score === 100)).toBe(true);
         
         // All records should be accessible via pagination
-        let allRecords: ISortedIndexEntry[] = [];
+        let allRecords: ISortIndexRecord[] = [];
         let currentPage = await sortIndex.getPage('');
         allRecords = [...allRecords, ...currentPage.records];
         
@@ -342,22 +338,21 @@ describe('SortIndex', () => {
         ];
         const collectionWithUndefined = new MockCollection<RecordWithOptionalScore>(recordsWithUndefined);
         
-        const indexWithUndefined = new SortIndex({
+        const indexWithUndefined = new SortIndex(
             storage,
-            baseDirectory: 'db',
-            collectionName: 'test_collection',
-            fieldName: 'score',
-            direction: 'asc',
-            pageSize: 2,
-            uuidGenerator: new RandomUuidGenerator()
-        });
+            'db',
+            'test_collection',
+            'score',
+            'asc',
+            new RandomUuidGenerator(),
+        );
         
         await indexWithUndefined.build(collectionWithUndefined);
         
         const result = await indexWithUndefined.getPage();
         // Should only have 2 records (those with score defined)
         expect(result.totalRecords).toBe(2);
-        expect(result.records.every(r => r.fields.score !== undefined)).toBe(true);
+        expect(result.records.every(r => r.score !== undefined)).toBe(true);
     });
 
     test('should load index from disk', async () => {
@@ -365,15 +360,14 @@ describe('SortIndex', () => {
         await sortIndex.build(collection);
         
         // Create a new index instance pointing to the same location
-        const loadedIndex = new SortIndex({
+        const loadedIndex = new SortIndex(
             storage,
-            baseDirectory: 'db',
-            collectionName: 'test_collection',
-            fieldName: 'score',
-            direction: 'asc',
-            pageSize: 2,
-            uuidGenerator: new RandomUuidGenerator()
-        });
+            'db',
+            'test_collection',
+            'score',
+            'asc',
+            new RandomUuidGenerator(),
+        );
         
         // Load the index
         const loaded = await loadedIndex.load();
@@ -386,15 +380,14 @@ describe('SortIndex', () => {
     });
 
     test('should return false when loading non-existent index', async () => {
-        const newIndex = new SortIndex({
+        const newIndex = new SortIndex(
             storage,
-            baseDirectory: 'db',
-            collectionName: 'nonexistent',
-            fieldName: 'score',
-            direction: 'asc',
-            pageSize: 2,
-            uuidGenerator: new RandomUuidGenerator()
-        });
+            'db',
+            'nonexistent',
+            'score',
+            'asc',
+            new RandomUuidGenerator(),
+        );
         
         const loaded = await newIndex.load();
         expect(loaded).toBe(false);
@@ -416,7 +409,7 @@ describe('SortIndex', () => {
         const newCollection = new MockCollection<TestRecord>(newRecords);
         
         // Delete the index first to allow rebuild
-        await sortIndex.delete();
+        await sortIndex.drop();
         
         // Build again with new data - this should clear treeNodes
         await sortIndex.build(newCollection);
@@ -424,8 +417,8 @@ describe('SortIndex', () => {
         // Verify we have the new data, not the old
         const secondResult = await sortIndex.getPage();
         expect(secondResult.totalRecords).toBe(2);
-        expect(secondResult.records[0].fields.score).toBe(10);
-        expect(secondResult.records[1].fields.score).toBe(20);
+        expect(secondResult.records[0].score).toBe(10);
+        expect(secondResult.records[1].score).toBe(20);
     });
 
     test('should not rebuild if already loaded', async () => {
@@ -450,7 +443,7 @@ describe('SortIndex', () => {
         const firstRootPageId = firstResult.currentPageId;
         
         // Delete and rebuild with different data
-        await sortIndex.delete();
+        await sortIndex.drop();
         
         const newRecords: TestRecord[] = [
             { _id: 'new1', name: 'New 1', score: 10, category: 'A' },

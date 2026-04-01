@@ -1,5 +1,6 @@
 import { MockStorage } from 'storage';
-import { BsonCollection, type IRecord, type IInternalRecord } from '../lib/collection';
+import { BsonCollection, type IRecord } from '../lib/collection';
+import type { IInternalRecord } from '../lib/shard';
 import { RandomUuidGenerator, TimestampProvider } from 'utils';
 
 // Test interfaces
@@ -17,14 +18,15 @@ describe('BsonCollection', () => {
     
     beforeEach(() => {
         storage = new MockStorage();
-        collection = new BsonCollection<TestUser>('users', '', {
+        collection = new BsonCollection<TestUser>(
+            'users',
+            '',
             storage,
-            directory: 'collections/users',
-            baseDirectory: '',
-            uuidGenerator: new RandomUuidGenerator(),
-            timestampProvider: new TimestampProvider(),
-            numShards: 10
-        });
+            '',
+            new RandomUuidGenerator(),
+            new TimestampProvider(),
+            () => {},
+        );
     });
         
     test('should insert and retrieve a record', async () => {
@@ -295,11 +297,11 @@ describe('BsonCollection', () => {
         }
                 
         // Create an index on the age field
-        await collection.ensureSortIndex('age', 'asc', 'number');
-        
+        await collection.sortIndex('age', 'asc').ensure(collection, 'number');
+
         // Get sorted records
-        const result = await collection.getSorted('age', 'asc');
-        
+        const result = await collection.sortIndex('age', 'asc').getPage();
+
         // Check that the records are sorted by age
         expect(result.records.length).toBe(users.length);
         expect(result.records[0].age).toBe(25); // Alice
@@ -338,35 +340,35 @@ describe('BsonCollection', () => {
         }
                 
         // Create an index on the role field
-        await collection.ensureSortIndex('role', 'asc', 'string');
-        
+        await collection.sortIndex('role', 'asc').ensure(collection, 'string');
+
         // Find users with role 'user'
-        const userRoleResults = await collection.findByIndex('role', 'user');
+        const userRoleResults = await collection.sortIndex('role', 'asc').findByValue('user') as TestUser[];
         expect(userRoleResults.length).toBe(2);
         expect(userRoleResults.every(u => u.role === 'user')).toBe(true);
         
         // Find users with role 'admin'
-        const adminRoleResults = await collection.findByIndex('role', 'admin');
+        const adminRoleResults = await collection.sortIndex('role', 'asc').findByValue('admin') as TestUser[];
         expect(adminRoleResults.length).toBe(1);
         expect(adminRoleResults[0].role).toBe('admin');
         
         // Create an index on the age field
-        await collection.ensureSortIndex('age', 'asc', 'number');
-        
+        await collection.sortIndex('age', 'asc').ensure(collection, 'number');
+
         // Find users with age 30
-        const age30Results = await collection.findByIndex('age', 30);
+        const age30Results = await collection.sortIndex('age', 'asc').findByValue(30) as TestUser[];
         expect(age30Results.length).toBe(2);
         expect(age30Results.every(u => u.age === 30)).toBe(true);
     });
     
     test('should list and delete sort indexes', async () => {
         // Create some indexes
-        await collection.ensureSortIndex('age', 'asc', 'number');
-        await collection.ensureSortIndex('role', 'asc', 'string');
-        await collection.ensureSortIndex('name', 'desc', 'string');
-        
+        await collection.sortIndex('age', 'asc').ensure(collection, 'number');
+        await collection.sortIndex('role', 'asc').ensure(collection, 'string');
+        await collection.sortIndex('name', 'desc').ensure(collection, 'string');
+
         // List indexes
-        const indexes = await collection.listSortIndexes();
+        const indexes = await collection.sortIndexes();
         
         // Check that all indexes are listed
         expect(indexes.length).toBe(3);
@@ -375,11 +377,11 @@ describe('BsonCollection', () => {
         expect(indexes.some(idx => idx.fieldName === 'name' && idx.direction === 'desc')).toBe(true);
         
         // Delete an index
-        const deleteResult = await collection.deleteSortIndex('age', 'asc');
+        const deleteResult = await collection.sortIndex('age', 'asc').drop();
         expect(deleteResult).toBe(true);
         
         // Check that the index is deleted
-        const indexesAfterDelete = await collection.listSortIndexes();
+        const indexesAfterDelete = await collection.sortIndexes();
         expect(indexesAfterDelete.length).toBe(2);
         expect(indexesAfterDelete.some(idx => idx.fieldName === 'age' && idx.direction === 'asc')).toBe(false);
     });
@@ -408,10 +410,10 @@ describe('BsonCollection', () => {
         }
         
         // Create an index on age
-        await collection.ensureSortIndex('age', 'asc', 'number');
-        
+        await collection.sortIndex('age', 'asc').ensure(collection, 'number');
+
         // Verify initial sort order
-        let result = await collection.getSorted('age', 'asc');
+        let result = await collection.sortIndex('age', 'asc').getPage();
         expect(result.records[0].age).toBe(25); // Alice first
         expect(result.records[1].age).toBe(30); // John second
         
@@ -419,7 +421,7 @@ describe('BsonCollection', () => {
         await collection.updateOne(users[0]._id, { age: 20 });
         
         // Verify sort order is updated
-        result = await collection.getSorted('age', 'asc');
+        result = await collection.sortIndex('age', 'asc').getPage();
         expect(result.records[0].age).toBe(20); // John first now
         expect(result.records[1].age).toBe(25); // Alice second now
     });
@@ -448,10 +450,10 @@ describe('BsonCollection', () => {
         }
         
         // Create an index on age
-        await collection.ensureSortIndex('age', 'asc', 'number');
-        
+        await collection.sortIndex('age', 'asc').ensure(collection, 'number');
+
         // Verify initial sort order
-        let result = await collection.getSorted('age', 'asc');
+        let result = await collection.sortIndex('age', 'asc').getPage();
         expect(result.records.length).toBe(2);
         expect(result.totalRecords).toBe(2);
         
@@ -459,7 +461,7 @@ describe('BsonCollection', () => {
         await collection.deleteOne(users[1]._id);
         
         // Verify sort index is updated
-        result = await collection.getSorted('age', 'asc');
+        result = await collection.sortIndex('age', 'asc').getPage();
         expect(result.records.length).toBe(1);
         expect(result.totalRecords).toBe(1);
         expect(result.records[0].age).toBe(30); // Only John remains
@@ -496,20 +498,20 @@ describe('BsonCollection', () => {
         }
         
         // Create an index on age
-        await collection.ensureSortIndex('age', 'asc', 'number');
-        
+        await collection.sortIndex('age', 'asc').ensure(collection, 'number');
+
         // Get first page
-        let result = await collection.getSorted('age', 'asc');
+        let result = await collection.sortIndex('age', 'asc').getPage();
         expect(result.records.length).toBeGreaterThan(0);
         expect(result.totalRecords).toBe(3);
         expect(result.totalPages).toBeGreaterThan(0);
         
         // Collect all records across pages
-        const allRecords: TestUser[] = [...result.records];
+        const allRecords = [...result.records];
         let currentPageId = result.nextPageId;
         
         while (currentPageId) {
-            result = await collection.getSorted('age', 'asc', currentPageId);
+            result = await collection.sortIndex('age', 'asc').getPage(currentPageId);
             allRecords.push(...result.records);
             currentPageId = result.nextPageId;
         }
@@ -554,11 +556,11 @@ describe('BsonCollection', () => {
         }
         
         // Create a descending index on age
-        await collection.ensureSortIndex('age', 'desc', 'number');
-        
+        await collection.sortIndex('age', 'desc').ensure(collection, 'number');
+
         // Get sorted records in descending order
-        const result = await collection.getSorted('age', 'desc');
-        
+        const result = await collection.sortIndex('age', 'desc').getPage();
+
         // Verify records are sorted in descending order
         expect(result.records.length).toBe(users.length);
         expect(result.records[0].age).toBe(35); // Bob first
@@ -574,21 +576,285 @@ describe('BsonCollection', () => {
             age: 30,
             role: 'user'
         };
-        
+
         await collection.insertOne(user);
-        
+
         // Create an index
-        await collection.ensureSortIndex('role', 'asc', 'string');
-        
+        await collection.sortIndex('role', 'asc').ensure(collection, 'string');
+
         // Drop the collection
         await collection.drop();
-        
+
         // Check that the record is gone
         const dropped = await collection.getOne(user._id);
         expect(dropped).toBeUndefined();
-        
+
         // Check that indexes are gone
-        const indexes = await collection.listSortIndexes();
+        const indexes = await collection.sortIndexes();
         expect(indexes.length).toBe(0);
+    });
+
+    test('should throw when inserting a record with a duplicate ID', async () => {
+        const user: TestUser = {
+            _id: '123e4567-e89b-12d3-a456-426614174000',
+            name: 'John Doe',
+            email: 'john@example.com',
+            age: 30,
+            role: 'user'
+        };
+
+        await collection.insertOne(user);
+
+        await expect(collection.insertOne(user)).rejects.toThrow();
+    });
+
+    test('should set an internal record preserving metadata', async () => {
+        const internalRecord: IInternalRecord = {
+            _id: '123e4567-e89b-12d3-a456-426614174000',
+            fields: { name: 'Sync User', age: 42 },
+            metadata: { timestamp: 1000000, fields: { name: { timestamp: 999 } } }
+        };
+
+        await collection.setInternalRecord(internalRecord);
+
+        const retrieved = await collection.getOne(internalRecord._id);
+        expect(retrieved).toBeDefined();
+        expect(retrieved!.name).toBe('Sync User');
+        expect(retrieved!.age).toBe(42);
+    });
+
+    test('setInternalRecord should upsert (update existing record)', async () => {
+        const user: TestUser = {
+            _id: '123e4567-e89b-12d3-a456-426614174000',
+            name: 'Original',
+            email: 'orig@example.com',
+            age: 20,
+            role: 'user'
+        };
+
+        await collection.insertOne(user);
+
+        const updated: IInternalRecord = {
+            _id: user._id,
+            fields: { name: 'Updated', email: 'updated@example.com', age: 21, role: 'admin' },
+            metadata: { timestamp: 9999999 }
+        };
+
+        await collection.setInternalRecord(updated);
+
+        const retrieved = await collection.getOne(user._id);
+        expect(retrieved!.name).toBe('Updated');
+        expect(retrieved!.age).toBe(21);
+    });
+
+    test('hasIndex should return true when index exists and false otherwise', async () => {
+        expect(await collection.sortIndex('age', 'asc').exists()).toBe(false);
+
+        await collection.sortIndex('age', 'asc').ensure(collection, 'number');
+
+        expect(await collection.sortIndex('age', 'asc').exists()).toBe(true);
+        expect(await collection.sortIndex('age', 'desc').exists()).toBe(false);
+    });
+
+    test('should find records by range', async () => {
+        const users = [
+            { _id: '123e4567-e89b-12d3-a456-426614174001', name: 'A', email: 'a@x.com', age: 10, role: 'user' },
+            { _id: '123e4567-e89b-12d3-a456-426614174002', name: 'B', email: 'b@x.com', age: 20, role: 'user' },
+            { _id: '123e4567-e89b-12d3-a456-426614174003', name: 'C', email: 'c@x.com', age: 30, role: 'user' },
+            { _id: '123e4567-e89b-12d3-a456-426614174004', name: 'D', email: 'd@x.com', age: 40, role: 'user' },
+        ];
+
+        for (const user of users) {
+            await collection.insertOne(user);
+        }
+
+        await collection.sortIndex('age', 'asc').ensure(collection, 'number');
+
+        const results = await collection.sortIndex('age', 'asc').findByRange({ min: 15, max: 35, minInclusive: true, maxInclusive: true }) as TestUser[];
+
+        expect(results.length).toBe(2);
+        expect(results.every(record => record.age >= 15 && record.age <= 35)).toBe(true);
+    });
+
+    test('findByRange should return empty when index does not exist', async () => {
+        const result = await collection.sortIndex('age', 'asc').findByRange({ min: 0, max: 100 });
+        expect(result).toEqual([]);
+    });
+
+    test('deleteIndex should delete both asc and desc indexes', async () => {
+        await collection.sortIndex('age', 'asc').ensure(collection, 'number');
+        await collection.sortIndex('age', 'desc').ensure(collection, 'number');
+
+        expect(await collection.sortIndex('age', 'asc').exists()).toBe(true);
+        expect(await collection.sortIndex('age', 'desc').exists()).toBe(true);
+
+        const resultAsc = await collection.sortIndex('age', 'asc').drop();
+        const resultDesc = await collection.sortIndex('age', 'desc').drop();
+        const result = resultAsc || resultDesc;
+        expect(result).toBe(true);
+
+        expect(await collection.sortIndex('age', 'asc').exists()).toBe(false);
+        expect(await collection.sortIndex('age', 'desc').exists()).toBe(false);
+    });
+
+    test('deleteIndex should return false when neither index exists', async () => {
+        const resultAsc = await collection.sortIndex('nonexistent', 'asc').drop();
+        const resultDesc = await collection.sortIndex('nonexistent', 'desc').drop();
+        expect(resultAsc).toBe(false);
+        expect(resultDesc).toBe(false);
+    });
+
+    test('drop should return false for non-existent index', async () => {
+        const result = await collection.sortIndex('nonexistent', 'asc').drop();
+        expect(result).toBe(false);
+    });
+
+    test('getSorted should return empty when sort index does not exist', async () => {
+        const result = await collection.sortIndex('age', 'asc').getPage();
+        expect(result.records).toEqual([]);
+        expect(result.totalRecords).toBe(0);
+    });
+
+    test('findByIndex should return empty when no index exists on either direction', async () => {
+        const result = await collection.sortIndex('role', 'asc').findByValue('user');
+        expect(result).toEqual([]);
+    });
+
+
+    test('getShardId should return consistent shard IDs for the same record', () => {
+        const id = '123e4567-e89b-12d3-a456-426614174000';
+
+        const shardId1 = collection.getShardId(id);
+        const shardId2 = collection.getShardId(id);
+
+        expect(shardId1).toBe(shardId2);
+        expect(Number(shardId1)).toBeGreaterThanOrEqual(0);
+        expect(Number(shardId1)).toBeLessThan(100);
+    });
+
+    test('getShardId should throw for an invalid record ID', () => {
+        expect(() => collection.getShardId('not-a-valid-uuid')).toThrow();
+    });
+
+    test('iterateShards should only yield non-empty shards', async () => {
+        const users = [
+            { _id: '123e4567-e89b-12d3-a456-426614174001', name: 'A', email: 'a@x.com', age: 10, role: 'user' },
+            { _id: '123e4567-e89b-12d3-a456-426614174002', name: 'B', email: 'b@x.com', age: 20, role: 'user' },
+        ];
+
+        for (const user of users) {
+            await collection.insertOne(user);
+        }
+
+        const shards: IInternalRecord[][] = [];
+        for await (const shard of collection.iterateShards()) {
+            shards.push(Array.from(shard));
+        }
+
+        // All yielded shards must be non-empty
+        expect(shards.every(shard => shard.length > 0)).toBe(true);
+
+        // Total records across all shards matches
+        const totalRecords = shards.reduce((sum, shard) => sum + shard.length, 0);
+        expect(totalRecords).toBe(users.length);
+    });
+
+    test('replaceOne with upsert should create a new record', async () => {
+        const id = '123e4567-e89b-12d3-a456-426614174099';
+        const replacement: TestUser = {
+            _id: id,
+            name: 'New User',
+            email: 'new@example.com',
+            age: 22,
+            role: 'guest'
+        };
+
+        const result = await collection.replaceOne(id, replacement, { upsert: true });
+        expect(result).toBe(true);
+
+        const retrieved = await collection.getOne(id);
+        expect(retrieved).toEqual(replacement);
+    });
+
+    test('replaceOne should return false for non-existent record without upsert', async () => {
+        const id = '123e4567-e89b-12d3-a456-000000000099';
+        const replacement: TestUser = {
+            _id: id,
+            name: 'Ghost',
+            email: 'ghost@example.com',
+            age: 0,
+            role: 'none'
+        };
+
+        const result = await collection.replaceOne(id, replacement);
+        expect(result).toBe(false);
+    });
+
+    test('commit should flush dirty state and allow flush to succeed', async () => {
+        const user: TestUser = {
+            _id: '123e4567-e89b-12d3-a456-426614174000',
+            name: 'Committed',
+            email: 'commit@example.com',
+            age: 30,
+            role: 'user'
+        };
+
+        await collection.insertOne(user);
+
+        // commit should not throw
+        await collection.commit();
+
+        // flush should succeed after commit
+        expect(() => collection.flush()).not.toThrow();
+    });
+
+    test('flush should throw when collection is dirty', async () => {
+        const user: TestUser = {
+            _id: '123e4567-e89b-12d3-a456-426614174000',
+            name: 'Dirty',
+            email: 'dirty@example.com',
+            age: 30,
+            role: 'user'
+        };
+
+        await collection.insertOne(user);
+
+        // flush without commit should throw because the collection is dirty
+        expect(() => collection.flush()).toThrow();
+    });
+
+    test('merkleTree should return a usable IMerkleRef', async () => {
+        const merkleRef = collection.merkleTree();
+        expect(merkleRef).toBeDefined();
+
+        // A fresh uncommitted collection has no persisted tree yet
+        const tree = await merkleRef.get();
+        expect(tree).toBeUndefined();
+    });
+
+    test('sortIndex load should populate the sort index cache', async () => {
+        const users = [
+            { _id: '123e4567-e89b-12d3-a456-426614174001', name: 'A', email: 'a@x.com', age: 10, role: 'user' },
+            { _id: '123e4567-e89b-12d3-a456-426614174002', name: 'B', email: 'b@x.com', age: 20, role: 'user' },
+        ];
+
+        for (const user of users) {
+            await collection.insertOne(user);
+        }
+
+        await collection.sortIndex('age', 'asc').ensure(collection, 'number');
+
+        // load on a non-existent index should be a no-op (no throw)
+        await collection.sortIndex('name', 'asc').load();
+
+        // load on an existing index should succeed
+        await collection.sortIndex('age', 'asc').load();
+    });
+
+    test('shard should return the same cached instance for the same shardId', () => {
+        const shardA = collection.shard('0');
+        const shardB = collection.shard('0');
+
+        expect(shardA).toBe(shardB);
     });
 });
