@@ -5,12 +5,12 @@ import type { IUuidGenerator } from "utils";
 // Lazily-loaded, committable handle for a merkle tree.
 // Works at shard, collection, and database level via injected callbacks.
 //
-export interface IMerkleRef {
+export interface IMerkleRef<T = undefined> {
     //
     // Returns the underlying merkle tree, invoking the loader on first access.
     // Returns undefined when there is no tree (empty shard/collection/database).
     //
-    get(): Promise<IMerkleTree<undefined> | undefined>;
+    get(): Promise<IMerkleTree<T> | undefined>;
 
     //
     // Inserts or updates a hashed item in the tree, creating the tree if needed.
@@ -40,11 +40,11 @@ export interface IMerkleRef {
 // (shard, collection, or database). An optional creator callback is needed
 // when upsert() may be called on a level whose tree starts empty (e.g. database).
 //
-export class MerkleRef implements IMerkleRef {
+export class MerkleRef<T = undefined> implements IMerkleRef<T> {
     //
     // Cached tree; undefined when empty or not yet loaded.
     //
-    private _tree: IMerkleTree<undefined> | undefined = undefined;
+    private _tree: IMerkleTree<T> | undefined = undefined;
 
     //
     // True once get() has completed at least once.
@@ -60,12 +60,12 @@ export class MerkleRef implements IMerkleRef {
         //
         // Loads (and, if needed, builds) the tree. Returns undefined when there is no tree.
         //
-        private readonly loader: () => Promise<IMerkleTree<undefined> | undefined>,
+        private readonly loader: () => Promise<IMerkleTree<T> | undefined>,
 
         //
         // Saves the tree to storage.
         //
-        private readonly saver: (tree: IMerkleTree<undefined>) => Promise<void>,
+        private readonly saver: (tree: IMerkleTree<T>) => Promise<void>,
 
         //
         // Deletes the tree from storage.
@@ -76,14 +76,14 @@ export class MerkleRef implements IMerkleRef {
         // Creates a new empty tree when upsert() is called and the tree is undefined.
         // Required when the tree may not exist yet (e.g. first collection in a database).
         //
-        private readonly creator: () => Promise<IMerkleTree<undefined>>,
+        private readonly creator: () => Promise<IMerkleTree<T>>,
     ) {
     }
 
     //
     // Returns the tree, invoking the loader on first access.
     //
-    async get(): Promise<IMerkleTree<undefined> | undefined> {
+    async get(): Promise<IMerkleTree<T> | undefined> {
         if (!this._loaded) {
             this._tree = await this.loader();
             this._loaded = true;

@@ -10,7 +10,7 @@ import {
     listShards,
     hashRecord
 } from "bdb";
-import { loadMerkleTree, getDatabaseSummary, removeAsset, ensureSortIndex, buildFilesTree } from "api";
+import { loadMerkleTree, ensureSortIndex, buildFilesTree } from "api";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import { getDirectoryForCommand } from '../lib/directory-picker';
 import * as fs from 'fs/promises';
@@ -63,14 +63,15 @@ function truncateLongStrings(obj: any, maxLength: number = 100, maxFields: numbe
 //
 export async function debugMerkleTreeCommand(context: ICommandContext, options: IDebugMerkleTreeCommandOptions): Promise<void> {
     const { uuidGenerator, timestampProvider, sessionId } = context;
-    const { assetStorage, bsonDatabase } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
-    
+    const { assetStorage, psi } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId); // assetStorage used below for loadMerkleTree etc.
+
+
     log.info('');
     log.info(pc.bold(pc.blue(`🌳 Merkle Trees Visualization`)));
     log.info('');
-    
+
     // Get and display the aggregate root hash
-    const summary = await getDatabaseSummary(assetStorage);
+    const summary = await psi.summary();
     log.info(pc.cyan('Aggregate Root Hash:'));
     log.info('='.repeat(60));
     log.info(pc.white(summary.fullHash));
@@ -102,7 +103,7 @@ export async function debugMerkleTreeCommand(context: ICommandContext, options: 
         log.info(pc.cyan('Collection Merkle Trees:'));
         log.info('='.repeat(60));
         
-        const collections = await bsonDatabase.collections();
+        const collections = await psi.database().collections();
         
         if (collections.length === 0) {
             log.info(pc.yellow('No collections found in database.'));
@@ -121,7 +122,7 @@ export async function debugMerkleTreeCommand(context: ICommandContext, options: 
                     log.info(pc.yellow('  (no merkle tree found)'));
                 }
                 
-                const collection = bsonDatabase.collection(collectionName);
+                const collection = psi.database().collection(collectionName);
 
                 // Show all shard trees for this collection
                 const shardIds = await listShards(assetStorage, ".db/bson", collectionName);
@@ -448,7 +449,7 @@ export async function debugRemoveDuplicatesCommand(context: ICommandContext, opt
         dbDir = await getDirectoryForCommand("existing", nonInteractive, options.cwd || process.cwd());
     }
 
-    const { assetStorage, rawAssetStorage, bsonDatabase, metadataCollection, databaseDir: dbDirResolved } = await loadDatabase(dbDir, options, uuidGenerator, timestampProvider, sessionId);
+    const { databaseDir: dbDirResolved, psi } = await loadDatabase(dbDir, options, uuidGenerator, timestampProvider, sessionId);
 
     // Get input file path (default to duplicates.json in database directory)
     const inputPath = options.input
@@ -507,7 +508,7 @@ export async function debugRemoveDuplicatesCommand(context: ICommandContext, opt
     for (let i = 0; i < assetIdsToRemove.length; i++) {
         const assetId = assetIdsToRemove[i];
         try {
-            await removeAsset(assetStorage, rawAssetStorage, sessionId, bsonDatabase, metadataCollection, assetId, false);
+            await psi.remove(assetId, false);
             removed++;
             if ((i + 1) % 10 === 0) {
                 writeProgress(`Removing duplicate assets... (${i + 1}/${assetIdsToRemove.length})`);

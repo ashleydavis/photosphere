@@ -1,6 +1,6 @@
-import { createMediaFileDatabase, createDatabase as createMediaDatabase, loadSortIndexes } from "api";
+import { createDatabase as createMediaDatabase, loadSortIndexes, Psi, IPsi } from "api";
 import { createStorage, loadEncryptionKeys, pathJoin, IStorage } from "storage";
-import type { BsonDatabase, IBsonCollection } from "bdb";
+import type { IBsonDatabase, IBsonCollection } from "bdb";
 import type { IUuidGenerator, ITimestampProvider } from "utils";
 import type { IAsset } from "defs";
 import type { ITaskQueueProvider } from "task-queue";
@@ -410,7 +410,7 @@ export interface IInitResult {
     //
     rawAssetStorage: IStorage;
 
-    bsonDatabase: BsonDatabase;
+    bsonDatabase: IBsonDatabase;
     sessionId: string;
     metadataCollection: IBsonCollection<IAsset>;
 
@@ -418,6 +418,11 @@ export interface IInitResult {
     // The resolved metadata path
     //
     metaPath: string;
+
+    //
+    // Unified database wrapper providing access to all subsystems and convenience methods.
+    //
+    psi: IPsi;
 }
 
 //
@@ -509,19 +514,19 @@ export async function loadDatabase(
         }
     }
 
-    // Create database instance (v6 layout: BSON under .db/bson)
-    const database = createMediaFileDatabase(assetStorage, uuidGenerator, timestampProvider);
+    const psi = new Psi(assetStorage, rawAssetStorage, sessionId, uuidGenerator, timestampProvider);
 
-    await loadSortIndexes(database.assetStorage, database.metadataCollection);
+    await loadSortIndexes(assetStorage, psi.metadata());
 
     return {
         databaseDir: dbDir,
         metaPath,
         assetStorage,
         rawAssetStorage,
-        bsonDatabase: database.bsonDatabase,
+        bsonDatabase: psi.database(),
         sessionId,
-        metadataCollection: database.metadataCollection,
+        metadataCollection: psi.metadata(),
+        psi,
     };
 }
 
@@ -606,11 +611,10 @@ export async function createDatabase(
         await exit(1);
     }
 
-    // Create database instance (v6 layout: BSON under .db/bson)
-    const database = createMediaFileDatabase(assetStorage, uuidGenerator, timestampProvider);
+    const psi = new Psi(assetStorage, rawAssetStorage, sessionId, uuidGenerator, timestampProvider);
 
     // Create the database (instead of loading)
-    await createMediaDatabase(assetStorage, rawAssetStorage, uuidGenerator, database.metadataCollection);
+    await createMediaDatabase(assetStorage, rawAssetStorage, uuidGenerator, psi.metadata());
 
     // If database is encrypted, copy the public key to the .db directory as a marker
     if (isEncrypted && resolvedKeyPaths.length > 0) {
@@ -631,9 +635,10 @@ export async function createDatabase(
         metaPath,
         assetStorage,
         rawAssetStorage,
-        bsonDatabase: database.bsonDatabase,
+        bsonDatabase: psi.database(),
         sessionId,
-        metadataCollection: database.metadataCollection,
+        metadataCollection: psi.metadata(),
+        psi,
     };
 }
 

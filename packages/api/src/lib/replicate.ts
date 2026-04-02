@@ -4,7 +4,7 @@ import { IStorage } from "storage";
 import { retry, FatalError, ITimestampProvider, IUuidGenerator, log } from "utils";
 import { LARGE_FILE_TIMEOUT } from "./constants";
 import { IDatabaseMetadata, ProgressCallback, createMediaFileDatabase, loadSortIndexes, createDatabase } from "./media-file-database";
-import { BsonDatabase } from "bdb";
+import { IBsonDatabase } from "bdb";
 import { findDifferingNodes, findMerkleTreeDifferences, getItemInfo, IMerkleTree, MerkleNode, pruneTree, upsertItem } from "merkle-tree";
 import { loadMerkleTree, merkleTreeExists, saveMerkleTree } from "./tree";
 import { loadCollectionMerkleTree, loadShardMerkleTree } from "./tree";
@@ -387,8 +387,8 @@ export async function* iterateDatabaseDifferences(tree1Storage: IStorage, tree2S
 // apply updates to dest shard's records map, update sort indexes, save shard once, update merkle trees.
 //
 async function replicateBsonDatabase(
-    sourceBsonDatabase: BsonDatabase,
-    destBsonDatabase: BsonDatabase,
+    sourceBsonDatabase: IBsonDatabase,
+    destBsonDatabase: IBsonDatabase,
     sourceAssetStorage: IStorage,
     destAssetStorage: IStorage,
     progressCallback: ProgressCallback | undefined,
@@ -461,7 +461,7 @@ async function replicateBsonDatabase(
 //
 export async function replicate(
     sourceAssetStorage: IStorage,
-    sourceBsonDatabase: BsonDatabase,
+    sourceBsonDatabase: IBsonDatabase,
     sourceUuidGenerator: IUuidGenerator,
     sourceTimestampProvider: ITimestampProvider,
     destAssetStorage: IStorage,

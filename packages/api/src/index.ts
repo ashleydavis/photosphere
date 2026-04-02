@@ -22,3 +22,4 @@ export * from "./lib/load-assets";
 export * from "./lib/load-assets.types";
 export * from "./lib/database-config";
 export * from "./lib/apply-database-ops";
+export * from "./lib/photosphere";
