@@ -250,14 +250,25 @@ export async function verify(storageDescriptor: IStorageDescriptor, databaseStor
                     },
                 });
 
-                // Check asset nodes have a database record with the correct id and hash
+                // Check asset nodes have a database record with the correct id and hash.
                 if (node.name.startsWith("asset/") && node.contentHash) {
                     const assetId = node.name.slice("asset/".length);
                     const expectedHashHex = node.contentHash.toString("hex");
                     const dbHash = recordIdToHash.get(assetId);
-                    if (dbHash === undefined || dbHash !== expectedHashHex) {
+                    if (dbHash === undefined) {
+                        // Record is absent. For partial databases this is expected — BSON shard
+                        // data may not have been copied yet. For full databases it is an error.
+                        if (!isPartial) {
+                            result.recordMismatches!.push(node.name);
+                            log.verbose(`Record missing for ${node.name}.`);
+                        }
+                        else {
+                            log.verbose(`Record missing for ${node.name}, but not an issue because this is a partial database.`);
+                        }
+                    }
+                    else if (dbHash !== expectedHashHex) {
+                        // Record exists but its hash is wrong — always an error, even for partial databases.
                         result.recordMismatches!.push(node.name);
-
                         log.verbose(`Record mismatch for ${node.name}. Expected hash ${expectedHashHex}, found hash ${dbHash}.`);
                     }
                 }

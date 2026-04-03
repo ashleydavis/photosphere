@@ -1,9 +1,10 @@
 
 import { computeHash } from "./hash";
-import { IStorage } from "storage";
+import { IStorage, walkDirectory } from "storage";
 import { retry, FatalError, ITimestampProvider, IUuidGenerator, log } from "utils";
 import { LARGE_FILE_TIMEOUT } from "./constants";
 import { IDatabaseMetadata, ProgressCallback, createMediaFileDatabase, loadSortIndexes, createDatabase } from "./media-file-database";
+import { updateDatabaseConfig } from "./database-config";
 import { BsonDatabase } from "bdb";
 import { findDifferingNodes, findMerkleTreeDifferences, getItemInfo, IMerkleTree, MerkleNode, pruneTree, upsertItem } from "merkle-tree";
 import { loadMerkleTree, merkleTreeExists, saveMerkleTree } from "./tree";
@@ -194,17 +195,6 @@ Copied hash: ${copiedHash.toString("hex")}
                     
                     // Check if the file matches the filter (exact match or starts with filter + '/')
                     if (fileName !== pathFilter && !fileName.startsWith(pathFilter + '/')) {
-                        return;
-                    }
-                }
-                
-                // In partial mode, only copy thumb directory files and root-level files (like README.md)
-                if (options?.partial) {
-                    const fileName = merkleNode.name.replace(/\\/g, '/');
-                    const isThumbFile = fileName.startsWith('thumb/');
-                    const isRootFile = !fileName.includes('/');
-                    if (!isThumbFile && !isRootFile) {
-                        log.verbose(`Skipped ${fileName} (partial mode, only thumb files and root files are copied)`);
                         return;
                     }
                 }
@@ -457,6 +447,35 @@ async function replicateBsonDatabase(
 }
 
 //
+// Copies a single file from source to dest storage if it exists in source.
+//
+async function copyFileIfExists(fileName: string, sourceStorage: IStorage, destStorage: IStorage): Promise<void> {
+    if (!await sourceStorage.fileExists(fileName)) {
+        return;
+    }
+    const info = await retry(() => sourceStorage.info(fileName));
+    if (!info) {
+        return;
+    }
+    await retry(async () => {
+        const readStream = await sourceStorage.readStream(fileName);
+        await destStorage.writeStream(fileName, info.contentType, readStream);
+    }, 3, 1_000, 2, LARGE_FILE_TIMEOUT);
+}
+
+//
+// Copies all BSON database merkle tree files (.dat) from source to dest storage.
+// Skips shard data files (no extension) — only the merkle trees are needed for a partial replica.
+//
+async function copyBsonMerkleTrees(sourceStorage: IStorage, destStorage: IStorage): Promise<void> {
+    for await (const { fileName } of walkDirectory(sourceStorage, ".db/bson", [])) {
+        if (fileName.endsWith(".dat")) {
+            await copyFileIfExists(fileName, sourceStorage, destStorage);
+        }
+    }
+}
+
+//
 // Replicates the media file database to another storage.
 //
 export async function replicate(
@@ -532,42 +551,67 @@ export async function replicate(
         destMerkleTree.id = merkleTree.id;
     }
     
-    //
-    // Copy database metadata from source to destination.
-    //
-    if (merkleTree.databaseMetadata) {
-        destMerkleTree.databaseMetadata = { ...merkleTree.databaseMetadata };
+    if (options?.partial) {
+        //
+        // Partial mode: directly copy only the known small set of files rather than
+        // traversing the entire merkle tree (which could be 100k+ entries).
+        //
+        await copyFileIfExists("README.md", sourceAssetStorage, destAssetStorage);
+        await copyFileIfExists(".db/files.dat", sourceAssetStorage, destAssetStorage);
+        await copyBsonMerkleTrees(sourceAssetStorage, destAssetStorage);
+
+        //
+        // Reload the dest merkle tree (now a copy of the source tree) and mark it partial.
+        //
+        destMerkleTree = await retry(() => loadMerkleTree(destAssetStorage));
+        if (!destMerkleTree) {
+            throw new FatalError(`Failed to load merkle tree from destination database after partial copy.`);
+        }
+        destMerkleTree.databaseMetadata = merkleTree.databaseMetadata
+            ? { ...merkleTree.databaseMetadata, isPartial: true }
+            : { filesImported: 0, isPartial: true };
+        await retry(() => saveMerkleTree(destMerkleTree!, destAssetStorage));
     }
     else {
-        destMerkleTree.databaseMetadata = { filesImported: 0 };
-    }
-    
-    //
-    // Set isPartial flag if partial replication is enabled.
-    //
-    if (options?.partial) {
-        destMerkleTree.databaseMetadata.isPartial = true;
+        //
+        // Full mode: copy database metadata from source to destination, then replicate all files.
+        //
+        if (merkleTree.databaseMetadata) {
+            destMerkleTree.databaseMetadata = { ...merkleTree.databaseMetadata };
+        }
+        else {
+            destMerkleTree.databaseMetadata = { filesImported: 0 };
+        }
+
+        await replicateFiles(
+            merkleTree,
+            destMerkleTree,
+            destAssetStorage,
+            destAssetStorage,
+            sourceAssetStorage,
+            options,
+            progressCallback,
+            result
+        );
+
+        await replicateBsonDatabase(
+            sourceBsonDatabase,
+            destDb.bsonDatabase,
+            sourceAssetStorage,
+            destAssetStorage,
+            progressCallback,
+            result
+        );
+
     }
 
-    await replicateFiles(
-        merkleTree,
-        destMerkleTree,
-        destAssetStorage,
-        destAssetStorage,
-        sourceAssetStorage,
-        options,
-        progressCallback,
-        result
-    );
+    //
+    // Generate or update config.json in the destination database.
+    //
+    await updateDatabaseConfig(destRawAssetStorage, {
+        origin: sourceAssetStorage.location,
+        lastReplicatedAt: sourceTimestampProvider.dateNow().toISOString(),
+    });
 
-    await replicateBsonDatabase(
-        sourceBsonDatabase,
-        destDb.bsonDatabase,
-        sourceAssetStorage,
-        destAssetStorage,
-        progressCallback,
-        result
-    );
-    
     return result;
 }
