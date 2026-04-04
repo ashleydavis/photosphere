@@ -21,6 +21,10 @@ import { useSearch } from '../context/search-context';
 import Slider from '@mui/joy/Slider/Slider';
 import Stack from '@mui/joy/Stack/Stack';
 import dayjs from 'dayjs';
+import { usePlatform } from '../context/platform-context';
+import { useColorScheme } from '@mui/joy/styles/CssVarsProvider';
+import ToggleButtonGroup from '@mui/joy/ToggleButtonGroup/ToggleButtonGroup';
+import Button from '@mui/joy/Button/Button';
 
 export interface ISidebarProps {
     //
@@ -388,6 +392,9 @@ export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
     const { search, setSortBy } = useGallery();
     const { scrollTo, layout, targetRowHeight, setTargetRowHeight } = useGalleryLayout();
 
+    const platform = usePlatform();
+    const { mode, setMode } = useColorScheme();
+
     const [menuPath, setMenuPath] = useState<string[]>([]);
     const [breadcrumbs, setBreadCrumbs] = useState<IBreadcrumb[]>([]);
 
@@ -631,8 +638,29 @@ export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
            <Stack
                 sx={{ mt: 2, mr: 2 }}
                 >
-                <Typography level="body-xs">Row Height</Typography>                
-                <Slider 
+                <Typography level="body-xs">Theme</Typography>
+                <ToggleButtonGroup
+                    value={mode}
+                    onChange={async (_event, value) => {
+                        if (value) {
+                            const newTheme = value as 'light' | 'dark' | 'system';
+                            setMode(newTheme);
+                            await platform.setTheme(newTheme);
+                        }
+                    }}
+                    sx={{ mt: 1 }}
+                    >
+                    <Button value="light">Light</Button>
+                    <Button value="dark">Dark</Button>
+                    <Button value="system">System</Button>
+                </ToggleButtonGroup>
+            </Stack>
+
+           <Stack
+                sx={{ mt: 2, mr: 2 }}
+                >
+                <Typography level="body-xs">Row Height</Typography>
+                <Slider
                     min={50}
                     max={500}
                     value={targetRowHeight}
