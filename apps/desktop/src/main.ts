@@ -69,6 +69,19 @@ async function createMainWindow() {
     mainWindow.on('closed', () => {
         mainWindow = null;
     });
+
+    // Open all external links in the system's default web browser instead of Electron.
+    mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+        shell.openExternal(url);
+        return { action: 'deny' };
+    });
+
+    mainWindow.webContents.on('will-navigate', (event, url) => {
+        if (!url.startsWith('file://')) {
+            event.preventDefault();
+            shell.openExternal(url);
+        }
+    });
 }
 
 app.whenReady().then(async () => {
