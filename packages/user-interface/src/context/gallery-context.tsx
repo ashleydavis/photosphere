@@ -1,6 +1,7 @@
 import React, { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { IGalleryItem } from "../lib/gallery-item";
 import { IItemsUpdate, useGallerySource } from "./gallery-source";
+import { applySearch } from "../lib/gallery-search";
 import { IObservable, Observable } from "../lib/subscription";
 import { useAssetDatabase } from "./asset-database-source";
 import dayjs from "dayjs";
@@ -649,96 +650,6 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     //
     function removeDeletedAssets(items: IGalleryItem[]): IGalleryItem[] {
         return items.filter(item => !item.deleted);
-    }
-
-    //
-    // Determine if a field value matches the search text.
-    //
-    function valueMatches(fieldValue: any, searchTextLwr: string): boolean {
-        if (Array.isArray(fieldValue)) {
-            for (const elementValue of fieldValue) {
-                if (elementValue.toLowerCase().includes(searchTextLwr)) {
-                    return true;
-                }
-            }
-            return false;
-        }
-        else {
-            return fieldValue.toLowerCase().includes(searchTextLwr);
-        }
-    }
-
-    //
-    // Searches for a term in fields of assets.
-    //
-    function applySearchTerm(searchText: string, items: IGalleryItem[], searchFields: string[]) {
-        const searchedItems: IGalleryItem[] = [];
-        const searchTextLwr = searchText.toLowerCase();
-
-        searchFields = searchFields.map(field => field.toLowerCase());
-
-        for (const item of items) {
-
-            let matches = false;
-
-            for (const searchedFieldName of searchFields) {
-                //
-                // Find the lower case field name in the item.
-                //
-                for (const [actualFieldName, fieldValue] of Object.entries(item)) {
-                    if (actualFieldName.toLowerCase().includes(searchedFieldName)) {
-                        if (valueMatches(fieldValue, searchTextLwr)) {
-                            matches = true;
-                            break;
-                        }
-                    }
-                }
-
-                if (matches) {
-                    break;
-                }
-            }
-
-            if (matches) {
-                searchedItems.push(item);
-            }
-        }
-
-        return searchedItems;
-    }
-
-    const defaultSearchFields = [ "_id", "hash", "location", "description", "labels", "origFileName", "origPath", "contentType" ];
-
-    //
-    // Search for assets based on text input.
-    // 
-    function applySearch(items: IGalleryItem[], searchText: string): IGalleryItem[] {
-        
-        searchText = searchText.trim();
-
-        if (searchText === "") {
-            return items.slice(); // Clone the array to make sure state update triggers a render.
-        }
-
-        const terms = searchText.split(' ').map(term => term.trim());
-
-        let searchFields = defaultSearchFields;
-
-        for (let term of terms) {
-            if (term.startsWith(".")) {
-                term = term.substring(1);
-                const parts = term.split("=").map(part => part.trim());
-                if (parts.length !== 2) {
-                    continue; // Bad formatting.
-                }
-                searchFields = [ parts[0] ];
-                term = parts[1];
-            }
-
-            items = applySearchTerm(term, items, searchFields);
-        }
-        
-        return items;
     }
 
     //
