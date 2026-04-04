@@ -217,6 +217,15 @@ export function Navbar({
                                 }
                             }}
                         />
+                        <a
+                            className="w-10 text-xl text-center"
+                            href="https://github.com/ashleydavis/photosphere/wiki/Gallery-Search"
+                            target="_blank"
+                            rel="noreferrer"
+                            title="Search help"
+                        >
+                            <i className="fa-solid fa-circle-question"></i>
+                        </a>
                         <button
                             className="w-10 text-xl"
                             onClick={onCloseSearch}
