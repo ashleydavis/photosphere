@@ -2,7 +2,7 @@ import React, { useCallback, useEffect } from "react";
 import dayjs from "dayjs";
 import { useGalleryItem } from "../../../context/gallery-item-context";
 import _ from "lodash";
-import { Textarea, IconButton, Button, Chip, Typography, Sheet } from "@mui/joy";
+import { Textarea, IconButton, Button, Chip, Typography, Sheet, Input } from "@mui/joy";
 
 export interface IAssetInfoProps { 
 
@@ -30,15 +30,25 @@ export function AssetInfo({ onClose, onDeleted }: IAssetInfoProps) {
     const [description, setDescription] = React.useState(asset?.description);
 
     //
-    // Adds a new label to the asset.
+    // Controls visibility of the inline add-label input.
     //
-    async function onAddLabel(): Promise<void> {
-        const labelName = window.prompt("Enter the new label:");
-        if (!labelName) {
-            return;
-        }
+    const [addingLabel, setAddingLabel] = React.useState(false);
 
-        await addArrayValue("labels", labelName);
+    //
+    // The text currently typed into the add-label input.
+    //
+    const [newLabelName, setNewLabelName] = React.useState("");
+
+    //
+    // Confirms the new label and adds it to the asset.
+    //
+    async function onConfirmLabel(): Promise<void> {
+        const trimmed = newLabelName.trim();
+        if (trimmed) {
+            await addArrayValue("labels", trimmed);
+        }
+        setNewLabelName("");
+        setAddingLabel(false);
     }
     
 	//
@@ -182,14 +192,34 @@ export function AssetInfo({ onClose, onDeleted }: IAssetInfoProps) {
                                         return renderLabel(label);
                                     })}
 
-                                    <IconButton
-                                        className="ml-2"
-                                        variant="plain"
-                                        color="neutral"
-                                        onClick={onAddLabel}
-                                        >
-                                        <i className="fa-solid fa-square-plus" />
-                                    </IconButton>
+                                    {addingLabel
+                                        ? <Input
+                                            autoFocus
+                                            size="sm"
+                                            className="ml-2 mt-1"
+                                            placeholder="Label name"
+                                            value={newLabelName}
+                                            onChange={event => setNewLabelName(event.target.value)}
+                                            onKeyDown={async event => {
+                                                if (event.key === "Enter") {
+                                                    await onConfirmLabel();
+                                                }
+                                                else if (event.key === "Escape") {
+                                                    setNewLabelName("");
+                                                    setAddingLabel(false);
+                                                }
+                                            }}
+                                            onBlur={onConfirmLabel}
+                                            />
+                                        : <IconButton
+                                            className="ml-2"
+                                            variant="plain"
+                                            color="neutral"
+                                            onClick={() => setAddingLabel(true)}
+                                            >
+                                            <i className="fa-solid fa-square-plus" />
+                                        </IconButton>
+                                    }
                                 </div>
                             </div>
                         </div>
