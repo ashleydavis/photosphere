@@ -29,20 +29,11 @@ const electronAPI: IElectronAPI = {
     notifyDatabaseClosed: (): Promise<void> => {
         return ipcRenderer.invoke('notify-database-closed');
     },
-    getTheme: (): Promise<'light' | 'dark' | 'system'> => {
-        return ipcRenderer.invoke('get-theme');
+    getConfig: (key: string): Promise<unknown> => {
+        return ipcRenderer.invoke('get-config', key);
     },
-    setTheme: (theme: 'light' | 'dark' | 'system'): Promise<void> => {
-        return ipcRenderer.invoke('set-theme', theme);
-    },
-    getRecentSearches: (): Promise<string[]> => {
-        return ipcRenderer.invoke('get-recent-searches');
-    },
-    addRecentSearch: (searchText: string): Promise<void> => {
-        return ipcRenderer.invoke('add-recent-search', searchText);
-    },
-    removeRecentSearch: (searchText: string): Promise<void> => {
-        return ipcRenderer.invoke('remove-recent-search', searchText);
+    setConfig: (key: string, value: unknown): Promise<void> => {
+        return ipcRenderer.invoke('set-config', key, value);
     },
     log: (message: IRendererLogMessage): void => {
         ipcRenderer.send('renderer-log', message);

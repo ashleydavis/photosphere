@@ -7,7 +7,7 @@ import type { ITask, ITaskQueue, IWorkerBackend } from 'task-queue';
 import { TaskQueue } from 'task-queue';
 import { WorkerBackendElectronMain } from './lib/worker-backend-electron-main';
 import { RandomUuidGenerator, TimestampProvider, logExceptions } from 'utils';
-import { findAvailablePort, loadDesktopConfig, addRecentDatabase, removeRecentDatabase, updateLastFolder, clearLastDatabase, getTheme, setTheme, getRecentSearches, addRecentSearch, removeRecentSearch } from 'node-utils';
+import { findAvailablePort, loadDesktopConfig, saveDesktopConfig, addRecentDatabase, removeRecentDatabase, updateLastFolder, clearLastDatabase, getTheme, setTheme } from 'node-utils';
 import type { IWorkerBackendOptions } from './lib/worker-backend-electron-main';
 import type { IRestApiWorkerStopMessage, IRestApiWorkerStartMessage } from './rest-api-worker';
 import { FileLoggerElectron } from './lib/file-logger-electron';
@@ -192,34 +192,22 @@ ipcMain.handle('notify-database-closed', logExceptions(async () => {
     await updateMenu();
 }, 'Error notifying database closed'));
 
-// IPC handler for getting theme preference
-ipcMain.handle('get-theme', logExceptions(async () => {
-    return await getTheme();
-}, 'Error getting theme'));
+// IPC handler for reading a value from the desktop config file
+ipcMain.handle('get-config', logExceptions(async (_event, key: string) => {
+    const config = await loadDesktopConfig();
+    return (config as Record<string, unknown>)[key];
+}, 'Error getting config value'));
 
-// IPC handler for setting theme preference
-ipcMain.handle('set-theme', logExceptions(async (event, theme: 'light' | 'dark' | 'system') => {
-    await setTheme(theme);
-    // Notify frontend of theme change
-    if (mainWindow) {
-        mainWindow.webContents.send('theme-changed', theme);
+// IPC handler for writing a value to the desktop config file
+ipcMain.handle('set-config', logExceptions(async (_event, key: string, value: unknown) => {
+    const config = await loadDesktopConfig();
+    (config as Record<string, unknown>)[key] = value;
+    await saveDesktopConfig(config);
+    // Keep the theme-changed event so the menu bar can react to theme changes
+    if (key === 'theme' && mainWindow) {
+        mainWindow.webContents.send('theme-changed', value);
     }
-}, 'Error setting theme'));
-
-// IPC handler for getting recent searches
-ipcMain.handle('get-recent-searches', logExceptions(async () => {
-    return await getRecentSearches();
-}, 'Error getting recent searches'));
-
-// IPC handler for adding a recent search
-ipcMain.handle('add-recent-search', logExceptions(async (_event, searchText: string) => {
-    await addRecentSearch(searchText);
-}, 'Error adding recent search'));
-
-// IPC handler for removing a recent search
-ipcMain.handle('remove-recent-search', logExceptions(async (_event, searchText: string) => {
-    await removeRecentSearch(searchText);
-}, 'Error removing recent search'));
+}, 'Error setting config value'));
 
 // IPC handler for renderer log messages
 ipcMain.on('renderer-log', (event, message: IRendererLogMessage) => {

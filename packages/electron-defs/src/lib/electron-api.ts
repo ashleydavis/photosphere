@@ -26,11 +26,8 @@ export interface IElectronAPI {
     removeDatabase: (databasePath: string) => Promise<void>;
     notifyDatabaseOpened: (databasePath: string) => Promise<void>;
     notifyDatabaseClosed: () => Promise<void>;
-    getTheme: () => Promise<'light' | 'dark' | 'system'>;
-    setTheme: (theme: 'light' | 'dark' | 'system') => Promise<void>;
-    getRecentSearches: () => Promise<string[]>;
-    addRecentSearch: (searchText: string) => Promise<void>;
-    removeRecentSearch: (searchText: string) => Promise<void>;
+    getConfig: (key: string) => Promise<unknown>;
+    setConfig: (key: string, value: unknown) => Promise<void>;
 
     // Logging methods - forward logs from renderer to main process for file logging
     log: (message: IRendererLogMessage) => void;
