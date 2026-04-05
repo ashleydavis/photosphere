@@ -25,11 +25,17 @@ export interface IDesktopConfig {
     // The theme preference: 'light', 'dark', or 'system'.
     //
     theme?: 'light' | 'dark' | 'system';
+
+    //
+    // List of recently executed searches (max 10).
+    //
+    recentSearches?: string[];
 }
 
 const CONFIG_DIR = path.join(os.homedir(), ".config", "photosphere");
 const CONFIG_FILE = path.join(CONFIG_DIR, "desktop.json");
 const MAX_RECENT_DATABASES = 20;
+const MAX_RECENT_SEARCHES = 10;
 
 //
 // Gets the path to the config file.
@@ -151,6 +157,33 @@ export async function getTheme(): Promise<'light' | 'dark' | 'system'> {
 export async function setTheme(theme: 'light' | 'dark' | 'system'): Promise<void> {
     const config = await loadDesktopConfig();
     config.theme = theme;
+    await saveDesktopConfig(config);
+}
+
+//
+// Gets the recent searches list.
+//
+export async function getRecentSearches(): Promise<string[]> {
+    const config = await loadDesktopConfig();
+    return config.recentSearches || [];
+}
+
+//
+// Adds a search to the recent searches list, deduplicating and capping at MAX_RECENT_SEARCHES.
+//
+export async function addRecentSearch(searchText: string): Promise<void> {
+    const config = await loadDesktopConfig();
+    const filtered = (config.recentSearches || []).filter(item => item !== searchText);
+    config.recentSearches = [searchText, ...filtered].slice(0, MAX_RECENT_SEARCHES);
+    await saveDesktopConfig(config);
+}
+
+//
+// Removes a search from the recent searches list.
+//
+export async function removeRecentSearch(searchText: string): Promise<void> {
+    const config = await loadDesktopConfig();
+    config.recentSearches = (config.recentSearches || []).filter(item => item !== searchText);
     await saveDesktopConfig(config);
 }
 

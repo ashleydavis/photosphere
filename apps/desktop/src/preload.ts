@@ -35,6 +35,15 @@ const electronAPI: IElectronAPI = {
     setTheme: (theme: 'light' | 'dark' | 'system'): Promise<void> => {
         return ipcRenderer.invoke('set-theme', theme);
     },
+    getRecentSearches: (): Promise<string[]> => {
+        return ipcRenderer.invoke('get-recent-searches');
+    },
+    addRecentSearch: (searchText: string): Promise<void> => {
+        return ipcRenderer.invoke('add-recent-search', searchText);
+    },
+    removeRecentSearch: (searchText: string): Promise<void> => {
+        return ipcRenderer.invoke('remove-recent-search', searchText);
+    },
     log: (message: IRendererLogMessage): void => {
         ipcRenderer.send('renderer-log', message);
     },

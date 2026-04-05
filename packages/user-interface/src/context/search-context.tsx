@@ -1,5 +1,6 @@
 import React, { ReactNode, createContext, useContext, useEffect, useState } from "react";
 import { useGallery } from "./gallery-context";
+import { usePlatform } from "./platform-context";
 
 export interface ISearchContext {
     //
@@ -23,6 +24,16 @@ export interface ISearchContext {
     // Cancels/closes the search.
     //
     onCloseSearch: () => Promise<void>;
+
+    //
+    // The list of recent searches, most recent first, capped at 10.
+    //
+    recentSearches: string[];
+
+    //
+    // Removes a search from the recent searches list.
+    //
+    removeRecentSearch: (searchText: string) => Promise<void>;
 }
 
 
@@ -43,7 +54,22 @@ export function SearchContextProvider({ children }: ISearchContextProviderProps)
     //
     const [searchInput, setSearchInput] = useState<string>("");
 
+    //
+    // Recent searches list, loaded from the configuration file, most recent first, capped at 10.
+    //
+    const [recentSearches, setRecentSearches] = useState<string[]>([]);
+
     const { search, clearSearch, searchText } = useGallery();
+    const platform = usePlatform();
+
+    //
+    // Load recent searches from the configuration file on mount.
+    //
+    useEffect(() => {
+        platform.getRecentSearches().then(searches => {
+            setRecentSearches(searches);
+        });
+    }, []);
 
     //
     // Sync searchText from gallery context with search input.
@@ -56,10 +82,23 @@ export function SearchContextProvider({ children }: ISearchContextProviderProps)
     }, [searchText, openSearch, setSearchInput, setOpenSearch]);
 
     //
-    // Commits the search the user has typed in.
+    // Commits the search the user has typed in and saves it to the configuration file.
     //
     async function onCommitSearch() {
         await search(searchInput);
+        if (searchInput.trim().length > 0) {
+            await platform.addRecentSearch(searchInput);
+            const updated = [searchInput, ...recentSearches.filter(item => item !== searchInput)].slice(0, 10);
+            setRecentSearches(updated);
+        }
+    }
+
+    //
+    // Removes a search from the recent searches list in the configuration file.
+    //
+    async function removeRecentSearch(searchText: string) {
+        await platform.removeRecentSearch(searchText);
+        setRecentSearches(recentSearches.filter(item => item !== searchText));
     }
 
     //
@@ -78,6 +117,8 @@ export function SearchContextProvider({ children }: ISearchContextProviderProps)
         setSearchInput,
         onCommitSearch,
         onCloseSearch,
+        recentSearches,
+        removeRecentSearch,
     };
     
     return (

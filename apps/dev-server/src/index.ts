@@ -7,7 +7,7 @@ import { WebSocketServer, type WebSocket } from "ws";
 import { createAssetServer } from "rest-api";
 import { exec } from "child_process";
 import { promisify } from "util";
-import { loadDesktopConfig, addRecentDatabase, removeRecentDatabase, updateLastFolder, clearLastDatabase } from "node-utils";
+import { loadDesktopConfig, addRecentDatabase, removeRecentDatabase, updateLastFolder, clearLastDatabase, getRecentSearches, addRecentSearch, removeRecentSearch } from "node-utils";
 import * as path from "path";
 
 const execAsync = promisify(exec);
@@ -116,6 +116,15 @@ wss.on("connection", (ws: WebSocket) => {
             else if (messageData.type === "clear-last-database") {
                 // Handle request to clear last database
                 await handleClearLastDatabase(ws);
+            }
+            else if (messageData.type === "get-recent-searches") {
+                await handleGetRecentSearches(ws);
+            }
+            else if (messageData.type === "add-recent-search") {
+                await handleAddRecentSearch(ws, messageData.searchText);
+            }
+            else if (messageData.type === "remove-recent-search") {
+                await handleRemoveRecentSearch(ws, messageData.searchText);
             }
         }
         catch (error) {
@@ -249,6 +258,61 @@ async function handleClearLastDatabase(ws: WebSocket): Promise<void> {
         ws.send(JSON.stringify({
             type: "error",
             message: error instanceof Error ? error.message : "Unknown error clearing last database",
+        }));
+    }
+}
+
+//
+// Handles request for the recent searches list.
+//
+async function handleGetRecentSearches(ws: WebSocket): Promise<void> {
+    try {
+        const searches = await getRecentSearches();
+        ws.send(JSON.stringify({
+            type: "recent-searches",
+            searches,
+        }));
+    }
+    catch (error: any) {
+        ws.send(JSON.stringify({
+            type: "error",
+            message: error instanceof Error ? error.message : "Unknown error getting recent searches",
+        }));
+    }
+}
+
+//
+// Handles request to add a search to the recent searches list.
+//
+async function handleAddRecentSearch(ws: WebSocket, searchText: string): Promise<void> {
+    try {
+        await addRecentSearch(searchText);
+        ws.send(JSON.stringify({
+            type: "search-added",
+        }));
+    }
+    catch (error: any) {
+        ws.send(JSON.stringify({
+            type: "error",
+            message: error instanceof Error ? error.message : "Unknown error adding recent search",
+        }));
+    }
+}
+
+//
+// Handles request to remove a search from the recent searches list.
+//
+async function handleRemoveRecentSearch(ws: WebSocket, searchText: string): Promise<void> {
+    try {
+        await removeRecentSearch(searchText);
+        ws.send(JSON.stringify({
+            type: "search-removed",
+        }));
+    }
+    catch (error: any) {
+        ws.send(JSON.stringify({
+            type: "error",
+            message: error instanceof Error ? error.message : "Unknown error removing recent search",
         }));
     }
 }

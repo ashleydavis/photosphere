@@ -7,7 +7,7 @@ import type { ITask, ITaskQueue, IWorkerBackend } from 'task-queue';
 import { TaskQueue } from 'task-queue';
 import { WorkerBackendElectronMain } from './lib/worker-backend-electron-main';
 import { RandomUuidGenerator, TimestampProvider, logExceptions } from 'utils';
-import { findAvailablePort, loadDesktopConfig, addRecentDatabase, removeRecentDatabase, updateLastFolder, clearLastDatabase, getTheme, setTheme } from 'node-utils';
+import { findAvailablePort, loadDesktopConfig, addRecentDatabase, removeRecentDatabase, updateLastFolder, clearLastDatabase, getTheme, setTheme, getRecentSearches, addRecentSearch, removeRecentSearch } from 'node-utils';
 import type { IWorkerBackendOptions } from './lib/worker-backend-electron-main';
 import type { IRestApiWorkerStopMessage, IRestApiWorkerStartMessage } from './rest-api-worker';
 import { FileLoggerElectron } from './lib/file-logger-electron';
@@ -205,6 +205,21 @@ ipcMain.handle('set-theme', logExceptions(async (event, theme: 'light' | 'dark' 
         mainWindow.webContents.send('theme-changed', theme);
     }
 }, 'Error setting theme'));
+
+// IPC handler for getting recent searches
+ipcMain.handle('get-recent-searches', logExceptions(async () => {
+    return await getRecentSearches();
+}, 'Error getting recent searches'));
+
+// IPC handler for adding a recent search
+ipcMain.handle('add-recent-search', logExceptions(async (_event, searchText: string) => {
+    await addRecentSearch(searchText);
+}, 'Error adding recent search'));
+
+// IPC handler for removing a recent search
+ipcMain.handle('remove-recent-search', logExceptions(async (_event, searchText: string) => {
+    await removeRecentSearch(searchText);
+}, 'Error removing recent search'));
 
 // IPC handler for renderer log messages
 ipcMain.on('renderer-log', (event, message: IRendererLogMessage) => {
