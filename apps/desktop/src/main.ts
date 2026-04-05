@@ -56,6 +56,8 @@ async function createMainWindow() {
         },
     });
 
+    // mainWindow.webContents.openDevTools();
+
     // Load theme preference to pass to frontend
     const theme = await getTheme();
 
