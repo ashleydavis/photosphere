@@ -9,7 +9,7 @@ import { pathExists } from 'node-utils';
 import { readFile } from 'fs/promises';
 import { getDirectoryForCommand } from "../lib/directory-picker";
 import { replicate, merkleTreeExists, loadDatabaseConfig, updateDatabaseConfig } from "api";
-import { confirm, isCancel } from '../lib/clack/prompts';
+import { confirm, select, isCancel } from '../lib/clack/prompts';
 
 export interface IReplicateCommandOptions extends IBaseCommandOptions { 
     //
@@ -41,6 +41,11 @@ export interface IReplicateCommandOptions extends IBaseCommandOptions {
     // If true, only copy thumb directory assets. Asset and display files will be lazily copied when needed.
     //
     partial?: boolean;
+
+    //
+    // If true, perform a full replication (copies all asset, display, and thumb files).
+    //
+    full?: boolean;
 }
 
 //
@@ -50,6 +55,12 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
     const { uuidGenerator, timestampProvider, sessionId } = context;
 
     const nonInteractive = options.yes || false;
+
+    if (options.partial && options.full) {
+        log.error(pc.red(`✗ --partial and --full cannot be used together. Please specify only one.`));
+        await exit(1);
+        return;
+    }
 
     const { assetStorage: sourceAssetStorage, rawAssetStorage: sourceRawAssetStorage, bsonDatabase: sourceBsonDatabase, databaseDir: srcDir } = await loadDatabase(options.db, {
         db: options.db,
@@ -67,6 +78,42 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
         }
     }
     
+    //
+    // If neither --partial nor --full was specified, prompt the user to choose.
+    // In non-interactive (--yes) mode, default to full replication.
+    //
+    if (!options.partial && !options.full) {
+        if (nonInteractive) {
+            options.full = true;
+        }
+        else {
+            const mode = await select({
+                message: 'How would you like to replicate the database?',
+                options: [
+                    {
+                        value: 'full',
+                        label: 'Full',
+                        hint: 'Copy everything — all original, display, and thumbnail files',
+                    },
+                    {
+                        value: 'partial',
+                        label: 'Partial',
+                        hint: 'Copy only metadata and structure; asset files are fetched on demand from origin',
+                    },
+                ],
+            });
+
+            if (isCancel(mode)) {
+                log.info('Replication cancelled.');
+                await exit(0);
+                return;
+            }
+
+            options.partial = mode === 'partial';
+            options.full = mode === 'full';
+        }
+    }
+
     const destMetaPath = pathJoin(destDir, '.db');
 
     if (destDir.startsWith("s3:")) {
