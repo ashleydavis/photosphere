@@ -23,11 +23,10 @@ export interface IElectronAPI {
     onMessage: (messageType: string, callback: (data: any) => void) => void;
     removeAllListeners: (messageType: string) => void;
     openDatabase: () => Promise<void>;
-    getRecentDatabases: () => Promise<string[]>;
     removeDatabase: (databasePath: string) => Promise<void>;
     notifyDatabaseOpened: (databasePath: string) => Promise<void>;
     notifyDatabaseClosed: () => Promise<void>;
-    getConfig: (key: string) => Promise<unknown>;
+    getConfig: (key: string) => Promise<any | undefined>;
     setConfig: (key: string, value: unknown) => Promise<void>;
 
     // Logging methods - forward logs from renderer to main process for file logging

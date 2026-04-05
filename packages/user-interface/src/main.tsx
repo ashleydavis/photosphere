@@ -3,6 +3,7 @@ import { Route, Routes, Navigate } from "react-router-dom";
 import { GalleryPage } from "./pages/gallery/gallery";
 import classNames from "classnames";
 import { usePlatform } from "./context/platform-context";
+import { useConfig } from "./context/config-context";
 import { useAssetDatabase } from "./context/asset-database-source";
 import { useSearch } from "./context/search-context";
 import { FullscreenSpinner } from "./components/full-screen-spinnner";
@@ -44,6 +45,7 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
     const { openSearch } = useSearch();
 
     const platform = usePlatform();
+    const config = useConfig();
 
     const theme = useTheme();
 
@@ -93,11 +95,8 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
             }
 
             try {
-                const recentDatabases = await platform.getRecentDatabases();
-                // The first database in the list is the most recently opened (lastDatabase)
-                if (recentDatabases.length > 0) {
-                    const lastDatabase = recentDatabases[0];
-                    // Call openDatabase to properly update the lastDatabase in config
+                const lastDatabase = await config.get<string>('lastDatabase');
+                if (lastDatabase) {
                     await openDatabase(lastDatabase);
                 }
             }
