@@ -34,6 +34,21 @@ export interface ISearchContext {
     // Removes a search from the recent searches list.
     //
     removeRecentSearch: (searchText: string) => Promise<void>;
+
+    //
+    // The list of saved searches.
+    //
+    savedSearches: string[];
+
+    //
+    // Saves a search to the saved searches list.
+    //
+    saveSearch: (searchText: string) => Promise<void>;
+
+    //
+    // Removes a search from the saved searches list.
+    //
+    unsaveSearch: (searchText: string) => Promise<void>;
 }
 
 
@@ -59,15 +74,23 @@ export function SearchContextProvider({ children }: ISearchContextProviderProps)
     //
     const [recentSearches, setRecentSearches] = useState<string[]>([]);
 
+    //
+    // Saved searches list, loaded from the configuration file.
+    //
+    const [savedSearches, setSavedSearches] = useState<string[]>([]);
+
     const { search, clearSearch, searchText } = useGallery();
     const config = useConfig();
 
     //
-    // Load recent searches from the configuration file on mount.
+    // Load recent searches and saved searches from the configuration file on mount.
     //
     useEffect(() => {
         config.get<string[]>("recentSearches").then(searches => {
             setRecentSearches(searches || []);
+        });
+        config.get<string[]>("savedSearches").then(searches => {
+            setSavedSearches(searches || []);
         });
     }, []);
 
@@ -86,7 +109,7 @@ export function SearchContextProvider({ children }: ISearchContextProviderProps)
     //
     async function onCommitSearch() {
         await search(searchInput);
-        if (searchInput.trim().length > 0) {
+        if (searchInput.trim().length > 0 && !savedSearches.includes(searchInput.trim())) {
             await config.add<string>("recentSearches", searchInput, 10);
             const updated = [searchInput, ...recentSearches.filter(item => item !== searchInput)].slice(0, 10);
             setRecentSearches(updated);
@@ -99,6 +122,24 @@ export function SearchContextProvider({ children }: ISearchContextProviderProps)
     async function removeRecentSearch(recentSearch: string) {
         await config.remove<string>("recentSearches", recentSearch);
         setRecentSearches(recentSearches.filter(item => item !== recentSearch));
+    }
+
+    //
+    // Saves a search to the saved searches list.
+    //
+    async function saveSearch(searchText: string) {
+        await config.add<string>("savedSearches", searchText);
+        setSavedSearches(prev => [searchText, ...prev.filter(item => item !== searchText)]);
+        await config.remove<string>("recentSearches", searchText);
+        setRecentSearches(prev => prev.filter(item => item !== searchText));
+    }
+
+    //
+    // Removes a search from the saved searches list.
+    //
+    async function unsaveSearch(searchText: string) {
+        await config.remove<string>("savedSearches", searchText);
+        setSavedSearches(prev => prev.filter(item => item !== searchText));
     }
 
     //
@@ -119,6 +160,9 @@ export function SearchContextProvider({ children }: ISearchContextProviderProps)
         onCloseSearch,
         recentSearches,
         removeRecentSearch,
+        savedSearches,
+        saveSearch,
+        unsaveSearch,
     };
     
     return (

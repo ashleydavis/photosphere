@@ -11,6 +11,8 @@ import ListDivider from '@mui/joy/ListDivider';
 import ListSubheader from "@mui/joy/ListSubheader";
 import Delete from "@mui/icons-material/Delete";
 import ExitToApp from "@mui/icons-material/ExitToApp";
+import Star from "@mui/icons-material/Star";
+import StarBorder from "@mui/icons-material/StarBorder";
 import Input from "@mui/joy/Input/Input";
 import { useTheme } from "@mui/joy/styles/ThemeProvider";
 import classNames from "classnames";
@@ -36,7 +38,7 @@ export function Navbar({
     setSidebarOpen,
 }: INavbarProps) {
     const theme = useTheme();
-    const { openSearch, setOpenSearch, searchInput, setSearchInput, onCommitSearch, onCloseSearch } = useSearch();
+    const { openSearch, setOpenSearch, searchInput, setSearchInput, onCommitSearch, onCloseSearch, savedSearches, saveSearch, unsaveSearch } = useSearch();
     const { sortedItems, selectedItems, clearMultiSelection, moveSelectedToDatabase } = useGallery();
     const { isLoading, databasePath, closeDatabase } = useAssetDatabase();
     const { dbs } = useApp();
@@ -217,6 +219,27 @@ export function Navbar({
                                 }
                             }}
                         />
+                        {searchInput.trim().length > 0 && (
+                            <IconButton
+                                size="sm"
+                                variant="plain"
+                                color="neutral"
+                                title={savedSearches.includes(searchInput.trim()) ? "Unsave search" : "Save search"}
+                                onClick={async () => {
+                                    if (savedSearches.includes(searchInput.trim())) {
+                                        await unsaveSearch(searchInput.trim());
+                                    }
+                                    else {
+                                        await saveSearch(searchInput.trim());
+                                    }
+                                }}
+                            >
+                                {savedSearches.includes(searchInput.trim())
+                                    ? <Star fontSize="small" />
+                                    : <StarBorder fontSize="small" />
+                                }
+                            </IconButton>
+                        )}
                         <a
                             className="w-10 text-xl text-center"
                             href="https://github.com/ashleydavis/photosphere/wiki/Gallery-Search"

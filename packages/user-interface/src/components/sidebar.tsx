@@ -7,7 +7,7 @@ import { useTheme } from '@mui/joy/styles/ThemeProvider';
 import List from '@mui/joy/List/List';
 import ListItem from '@mui/joy/ListItem/ListItem';
 import ListItemDecorator from '@mui/joy/ListItemDecorator/ListItemDecorator';
-import { Event, List as ListIcon, CalendarMonth, Category, Cloud, Folder, FolderOpen, History, Home, KeyboardArrowRight, Label, Map, MoreHoriz, Navigation, People, Place, Search, Star, VerticalAlignBottom, VerticalAlignTop, DateRange, Delete, Add } from '@mui/icons-material';
+import { Event, List as ListIcon, CalendarMonth, Category, Cloud, Folder, FolderOpen, History, Home, KeyboardArrowRight, Label, Map, MoreHoriz, Navigation, People, Place, Search, Star, StarBorder, VerticalAlignBottom, VerticalAlignTop, DateRange, Delete, Add } from '@mui/icons-material';
 import ListItemContent from '@mui/joy/ListItemContent/ListItemContent';
 import ListItemButton from '@mui/joy/ListItemButton/ListItemButton';
 import IconButton from '@mui/joy/IconButton/IconButton';
@@ -384,7 +384,7 @@ function makeFullMenu(navMenu: IMenuItem[], years: string[], locations: string[]
 // Renders the sidebar for the app.
 //
 export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
-    const { setOpenSearch, recentSearches, removeRecentSearch } = useSearch();
+    const { setOpenSearch, recentSearches, removeRecentSearch, savedSearches, saveSearch, unsaveSearch } = useSearch();
     const { openDatabase } = useAssetDatabase();
     const config = useConfig();
 
@@ -509,18 +509,41 @@ export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
                             <ListItem
                                 key={recentSearch}
                                 endAction={
-                                    <IconButton
-                                        size="sm"
-                                        variant="plain"
-                                        color="neutral"
-                                        onClick={async (e) => {
-                                            e.stopPropagation();
-                                            await removeRecentSearch(recentSearch);
-                                        }}
-                                        sx={{ minHeight: '32px', minWidth: '32px' }}
-                                    >
-                                        <Delete fontSize="small" />
-                                    </IconButton>
+                                    <>
+                                        <IconButton
+                                            size="sm"
+                                            variant="plain"
+                                            color="neutral"
+                                            title={savedSearches.includes(recentSearch) ? "Unsave search" : "Save search"}
+                                            onClick={async (e) => {
+                                                e.stopPropagation();
+                                                if (savedSearches.includes(recentSearch)) {
+                                                    await unsaveSearch(recentSearch);
+                                                }
+                                                else {
+                                                    await saveSearch(recentSearch);
+                                                }
+                                            }}
+                                            sx={{ minHeight: '32px', minWidth: '32px' }}
+                                        >
+                                            {savedSearches.includes(recentSearch)
+                                                ? <Star fontSize="small" />
+                                                : <StarBorder fontSize="small" />
+                                            }
+                                        </IconButton>
+                                        <IconButton
+                                            size="sm"
+                                            variant="plain"
+                                            color="neutral"
+                                            onClick={async (e) => {
+                                                e.stopPropagation();
+                                                await removeRecentSearch(recentSearch);
+                                            }}
+                                            sx={{ minHeight: '32px', minWidth: '32px' }}
+                                        >
+                                            <Delete fontSize="small" />
+                                        </IconButton>
+                                    </>
                                 }
                                 >
                                 <ListItemButton
@@ -531,6 +554,51 @@ export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
                                     >
                                     <ListItemDecorator><History /></ListItemDecorator>
                                     <ListItemContent>{recentSearch}</ListItemContent>
+                                </ListItemButton>
+                            </ListItem>
+                        ))}
+                    </List>
+                </>
+            }
+
+            {savedSearches.length > 0 &&
+                <>
+                    <Divider />
+
+                    <Typography
+                        level="body-xs"
+                        sx={{ textTransform: 'uppercase', fontWeight: 'lg', mt: 2 }}
+                        >
+                        Saved Searches
+                    </Typography>
+
+                    <List>
+                        {savedSearches.map(savedSearch => (
+                            <ListItem
+                                key={savedSearch}
+                                endAction={
+                                    <IconButton
+                                        size="sm"
+                                        variant="plain"
+                                        color="neutral"
+                                        onClick={async (e) => {
+                                            e.stopPropagation();
+                                            await unsaveSearch(savedSearch);
+                                        }}
+                                        sx={{ minHeight: '32px', minWidth: '32px' }}
+                                    >
+                                        <Star fontSize="small" />
+                                    </IconButton>
+                                }
+                                >
+                                <ListItemButton
+                                    onClick={() => {
+                                        search(savedSearch);
+                                        setSidebarOpen(false);
+                                    }}
+                                    >
+                                    <ListItemDecorator><StarBorder /></ListItemDecorator>
+                                    <ListItemContent>{savedSearch}</ListItemContent>
                                 </ListItemButton>
                             </ListItem>
                         ))}
