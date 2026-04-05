@@ -17,9 +17,10 @@ export class MockWorkerBackend implements IWorkerBackend {
     private queueTaskCallbacks: Array<(type: string, data: any, source: string) => void> = [];
     private activeTasks: Map<string, ITask<any>> = new Map();
     private maxConcurrent: number;
-    private baseContext: Omit<ITaskContext, "sendMessage" | "queueTask">;
+    private cancelledSources: Set<string> = new Set();
+    private baseContext: Omit<ITaskContext, "sendMessage" | "queueTask" | "isCancelled">;
 
-    constructor(maxConcurrent: number = 2, baseContext?: Partial<Omit<ITaskContext, "sendMessage" | "queueTask">>) {
+    constructor(maxConcurrent: number = 2, baseContext?: Partial<Omit<ITaskContext, "sendMessage" | "queueTask" | "isCancelled">>) {
         this.maxConcurrent = maxConcurrent;
         this.baseContext = {
             uuidGenerator: baseContext?.uuidGenerator || new TestUuidGenerator(),
@@ -59,6 +60,7 @@ export class MockWorkerBackend implements IWorkerBackend {
                         callback(type, data, source);
                     }
                 },
+                isCancelled: (): boolean => this.cancelledSources.has(task.source),
             };
 
             const outputs = await executeTaskHandler(task.type, task.data, taskContext);
@@ -141,6 +143,10 @@ export class MockWorkerBackend implements IWorkerBackend {
                 this.queueTaskCallbacks.splice(index, 1);
             }
         };
+    }
+
+    cancelTasks(source: string): void {
+        this.cancelledSources.add(source);
     }
 
     isIdle(): boolean {

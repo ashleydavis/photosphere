@@ -95,11 +95,16 @@ async function executeTask(message: IWorkerMessage, taskContext: ITaskContext): 
 // workerContext: Worker context (uuidGenerator, timestampProvider, sessionId, etc.)
 //
 function initWorker(workerContext: IWorkerContext): void {
-    self.onmessage = async (event: MessageEvent<IWorkerMessage>) => {
+    let currentTaskSource: string | null = null;
+    let cancelled = false;
+
+    self.onmessage = async (event: MessageEvent<any>) => {
         const message = event.data;
 
         if (message.type === "execute") {
-            const { taskId } = message;
+            const { taskId, source } = message as IWorkerMessage;
+            currentTaskSource = source;
+            cancelled = false;
 
             // Create a task-specific sendMessage function that captures the task ID in a closure
             // This ensures messages are correctly associated with the current task
@@ -128,9 +133,16 @@ function initWorker(workerContext: IWorkerContext): void {
                 ...workerContext,
                 sendMessage: taskSpecificSendMessage,
                 queueTask: taskSpecificQueueTask,
+                isCancelled: () => cancelled,
             };
 
             await executeTask(message, taskContext);
+            currentTaskSource = null;
+        }
+        else if (message.type === "cancel-tasks") {
+            if (currentTaskSource === message.source) {
+                cancelled = true;
+            }
         }
     };
     

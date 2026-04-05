@@ -164,23 +164,23 @@ export class TaskQueue implements ITaskQueue {
 
     //
     // Cancels all pending tasks with the given source tag.
-    // Tasks already running are not interrupted.
+    // Also signals running tasks with that source so they can exit early.
     //
     cancelTasks(source: string): void {
-        const cancelledIds = this.pendingTasks.filter(taskId => {
+        const remainingTasks: string[] = [];
+        for (const taskId of this.pendingTasks) {
             const task = this.tasks.get(taskId);
-            return task?.source === source;
-        });
-
-        this.pendingTasks = this.pendingTasks.filter(taskId => {
-            const task = this.tasks.get(taskId);
-            return task?.source !== source;
-        });
-
-        for (const taskId of cancelledIds) {
-            this.tasks.delete(taskId);
-            this.tasksPending--;
+            if (task?.source === source) {
+                this.tasks.delete(taskId);
+                this.tasksPending--;
+            }
+            else {
+                remainingTasks.push(taskId);
+            }
         }
+        this.pendingTasks = remainingTasks;
+
+        this.workerBackend.cancelTasks(source);
     }
 
     //

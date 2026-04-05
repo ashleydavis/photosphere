@@ -88,6 +88,9 @@ wss.on("connection", (ws: WebSocket) => {
                 const taskId = queue.addTask(messageData.taskType, messageData.data, messageData.source, messageData.taskId);
                 console.log(`Queued task ${taskId} of type ${messageData.taskType}`);
             }
+            else if (messageData.type === "cancel-tasks") {
+                queue.cancelTasks(messageData.source);
+            }
             else if (messageData.type === "open-database") {
                 // Handle database opening request
                 await handleOpenDatabase(ws);

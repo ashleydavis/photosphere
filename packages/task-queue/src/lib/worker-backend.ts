@@ -115,6 +115,12 @@ export interface IWorkerBackend {
     isIdle(): boolean;
 
     //
+    // Broadcasts a cancel signal to all workers. Each worker cancels its running task
+    // if that task's source matches the given source.
+    //
+    cancelTasks(source: string): void;
+
+    //
     // Shuts down all the workers.
     //
     shutdown(): void; //todo: Prefer not to expose this.
