@@ -65,6 +65,21 @@ export interface IPlatformContext {
     // Returns an unsubscribe function.
     //
     onThemeChanged: (callback: (theme: 'light' | 'dark' | 'system') => void) => Unsubscribe;
+
+    //
+    // Gets the list of recent searches from the configuration file.
+    //
+    getRecentSearches: () => Promise<string[]>;
+
+    //
+    // Adds a search to the recent searches list in the configuration file.
+    //
+    addRecentSearch: (searchText: string) => Promise<void>;
+
+    //
+    // Removes a search from the recent searches list in the configuration file.
+    //
+    removeRecentSearch: (searchText: string) => Promise<void>;
 }
 
 const PlatformContext = createContext<IPlatformContext | undefined>(undefined);

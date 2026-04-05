@@ -129,6 +129,18 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         };
     }, []);
 
+    const getRecentSearches = useCallback(async (): Promise<string[]> => {
+        return await electronAPI.getRecentSearches();
+    }, [electronAPI]);
+
+    const addRecentSearch = useCallback(async (searchText: string): Promise<void> => {
+        await electronAPI.addRecentSearch(searchText);
+    }, [electronAPI]);
+
+    const removeRecentSearch = useCallback(async (searchText: string): Promise<void> => {
+        await electronAPI.removeRecentSearch(searchText);
+    }, [electronAPI]);
+
     const platformContext: IPlatformContext = {
         openDatabase,
         onDatabaseOpened,
@@ -140,6 +152,9 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         getTheme,
         setTheme,
         onThemeChanged,
+        getRecentSearches,
+        addRecentSearch,
+        removeRecentSearch,
     };
 
     return (

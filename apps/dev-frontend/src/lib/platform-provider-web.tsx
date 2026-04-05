@@ -224,6 +224,96 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         };
     }, []);
 
+    const getRecentSearches = useCallback(async (): Promise<string[]> => {
+        return new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                reject(new Error("Timeout waiting for recent searches"));
+            }, 5000);
+
+            const handleMessage = (event: MessageEvent) => {
+                try {
+                    const messageData = JSON.parse(event.data.toString());
+                    if (messageData.type === "recent-searches") {
+                        clearTimeout(timeout);
+                        ws.removeEventListener('message', handleMessage);
+                        resolve(messageData.searches || []);
+                    }
+                    else if (messageData.type === "error") {
+                        clearTimeout(timeout);
+                        ws.removeEventListener('message', handleMessage);
+                        reject(new Error(messageData.message || "Unknown error"));
+                    }
+                }
+                catch (error) {
+                    // Ignore parse errors for other message types
+                }
+            };
+
+            ws.addEventListener('message', handleMessage);
+            ws.send(JSON.stringify({ type: "get-recent-searches" }));
+        });
+    }, [ws]);
+
+    const addRecentSearch = useCallback(async (searchText: string): Promise<void> => {
+        return new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                reject(new Error("Timeout waiting for add recent search"));
+            }, 5000);
+
+            const handleMessage = (event: MessageEvent) => {
+                try {
+                    const messageData = JSON.parse(event.data.toString());
+                    if (messageData.type === "search-added") {
+                        clearTimeout(timeout);
+                        ws.removeEventListener('message', handleMessage);
+                        resolve();
+                    }
+                    else if (messageData.type === "error") {
+                        clearTimeout(timeout);
+                        ws.removeEventListener('message', handleMessage);
+                        reject(new Error(messageData.message || "Unknown error"));
+                    }
+                }
+                catch (error) {
+                    // Ignore parse errors for other message types
+                }
+            };
+
+            ws.addEventListener('message', handleMessage);
+            ws.send(JSON.stringify({ type: "add-recent-search", searchText }));
+        });
+    }, [ws]);
+
+    const removeRecentSearch = useCallback(async (searchText: string): Promise<void> => {
+        return new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                reject(new Error("Timeout waiting for remove recent search"));
+            }, 5000);
+
+            const handleMessage = (event: MessageEvent) => {
+                try {
+                    const messageData = JSON.parse(event.data.toString());
+                    if (messageData.type === "search-removed") {
+                        clearTimeout(timeout);
+                        ws.removeEventListener('message', handleMessage);
+                        resolve();
+                    }
+                    else if (messageData.type === "error") {
+                        clearTimeout(timeout);
+                        ws.removeEventListener('message', handleMessage);
+                        reject(new Error(messageData.message || "Unknown error"));
+                    }
+                }
+                catch (error) {
+                    // Ignore parse errors for other message types
+                }
+            };
+
+            ws.addEventListener('message', handleMessage);
+            ws.send(JSON.stringify({ type: "remove-recent-search", searchText }));
+        });
+    }, [ws]);
+
     const platformContext: IPlatformContext = {
         openDatabase,
         onDatabaseOpened,
@@ -235,6 +325,9 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         getTheme,
         setTheme,
         onThemeChanged,
+        getRecentSearches,
+        addRecentSearch,
+        removeRecentSearch,
     };
 
     return (

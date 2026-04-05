@@ -383,7 +383,7 @@ function makeFullMenu(navMenu: IMenuItem[], years: string[], locations: string[]
 // Renders the sidebar for the app.
 //
 export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
-    const { setOpenSearch } = useSearch();
+    const { setOpenSearch, recentSearches, removeRecentSearch } = useSearch();
     const { openDatabase } = useAssetDatabase();
 
     const { dbs, removeDatabase } = useApp();
@@ -490,6 +490,51 @@ export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
                     </ListItem>
                 </NavLink>
             </List>
+
+            {recentSearches.length > 0 &&
+                <>
+                    <Divider />
+
+                    <Typography
+                        level="body-xs"
+                        sx={{ textTransform: 'uppercase', fontWeight: 'lg', mt: 2 }}
+                        >
+                        Recent Searches
+                    </Typography>
+
+                    <List>
+                        {recentSearches.map(recentSearch => (
+                            <ListItem
+                                key={recentSearch}
+                                endAction={
+                                    <IconButton
+                                        size="sm"
+                                        variant="plain"
+                                        color="neutral"
+                                        onClick={async (e) => {
+                                            e.stopPropagation();
+                                            await removeRecentSearch(recentSearch);
+                                        }}
+                                        sx={{ minHeight: '32px', minWidth: '32px' }}
+                                    >
+                                        <Delete fontSize="small" />
+                                    </IconButton>
+                                }
+                                >
+                                <ListItemButton
+                                    onClick={() => {
+                                        search(recentSearch);
+                                        setSidebarOpen(false);
+                                    }}
+                                    >
+                                    <ListItemDecorator><History /></ListItemDecorator>
+                                    <ListItemContent>{recentSearch}</ListItemContent>
+                                </ListItemButton>
+                            </ListItem>
+                        ))}
+                    </List>
+                </>
+            }
 
             <Divider />
 
