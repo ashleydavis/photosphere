@@ -3,7 +3,7 @@ import dayjs from "dayjs";
 import { useGalleryItem } from "../../../context/gallery-item-context";
 import _ from "lodash";
 import { Textarea, IconButton, Button, Chip, Typography, Sheet, Input } from "@mui/joy";
-import { Star, StarBorder } from "@mui/icons-material";
+import { Flag, FlagOutlined, Star, StarBorder } from "@mui/icons-material";
 
 export interface IAssetInfoProps { 
 
@@ -160,6 +160,26 @@ export function AssetInfo({ onClose, onDeleted }: IAssetInfoProps) {
                         {asset.labels?.includes("starred")
                             ? <Star sx={{ color: "gold" }} />
                             : <StarBorder />
+                        }
+                    </IconButton>
+
+                    <IconButton
+                        variant="plain"
+                        color="neutral"
+                        title={asset.labels?.includes("flagged") ? "Unflag" : "Flag"}
+                        onClick={async () => {
+                            if (asset.labels?.includes("flagged")) {
+                                await removeArrayValue("labels", "flagged");
+                            }
+                            else {
+                                await addArrayValue("labels", "flagged");
+                            }
+                        }}
+                        sx={{ mr: 1 }}
+                        >
+                        {asset.labels?.includes("flagged")
+                            ? <Flag sx={{ color: "red" }} />
+                            : <FlagOutlined />
                         }
                     </IconButton>
                 </div>

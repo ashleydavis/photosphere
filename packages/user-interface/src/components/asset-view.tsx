@@ -5,7 +5,7 @@ import { FullImage } from "./full-image";
 import { Video } from "./video";
 import { useGallery } from "../context/gallery-context";
 import { Drawer, IconButton } from "@mui/joy";
-import { Star, StarBorder } from "@mui/icons-material";
+import { Flag, FlagOutlined, Star, StarBorder } from "@mui/icons-material";
 
 export interface IAssetViewProps { 
 
@@ -119,6 +119,27 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                         {asset.labels?.includes("starred")
                             ? <Star />
                             : <StarBorder />
+                        }
+                    </IconButton>
+
+                    <IconButton
+                        className="pointer-events-auto"
+                        variant="outlined"
+                        color="neutral"
+                        sx={asset.labels?.includes("flagged") ? { ml: 1, color: "red" } : { ml: 1 }}
+                        title={asset.labels?.includes("flagged") ? "Unflag" : "Flag"}
+                        onClick={async () => {
+                            if (asset.labels?.includes("flagged")) {
+                                await removeArrayValue("labels", "flagged");
+                            }
+                            else {
+                                await addArrayValue("labels", "flagged");
+                            }
+                        }}
+                        >
+                        {asset.labels?.includes("flagged")
+                            ? <Flag />
+                            : <FlagOutlined />
                         }
                     </IconButton>
 
