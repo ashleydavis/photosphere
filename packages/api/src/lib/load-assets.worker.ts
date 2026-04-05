@@ -66,7 +66,7 @@ export async function loadAssetsHandler(
     
     // Queue thumb prefetch only for partial databases.
     if (isPartial) {
-        context.queueTask("prefetch-thumbs", { databasePath: data.databasePath }, data.databasePath);
+        context.queueTask("prefetch-database", { databasePath: data.databasePath }, data.databasePath);
     }
 
     return {

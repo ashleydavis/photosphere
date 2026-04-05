@@ -476,10 +476,10 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
                             unsubscribeCurrentLoad.current = undefined;
                         }
                     }
-                    // On success, keep callbacks alive — prefetch-thumbs was queued by the worker itself.
+                    // On success, keep callbacks alive — prefetch-database was queued by the worker itself.
                 }
             }
-            else if (task.type === "prefetch-thumbs") {
+            else if (task.type === "prefetch-database") {
                 // Prefetch finished — unsubscribe callbacks, nothing more to do.
                 if (unsubscribeCurrentLoad.current) {
                     unsubscribeCurrentLoad.current();
