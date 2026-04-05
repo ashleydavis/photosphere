@@ -1,5 +1,5 @@
 import Typography from '@mui/joy/Typography/Typography';
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useApp } from '../context/app-context';
 import { useAssetDatabase } from '../context/asset-database-source';
@@ -7,7 +7,8 @@ import { useTheme } from '@mui/joy/styles/ThemeProvider';
 import List from '@mui/joy/List/List';
 import ListItem from '@mui/joy/ListItem/ListItem';
 import ListItemDecorator from '@mui/joy/ListItemDecorator/ListItemDecorator';
-import { Event, List as ListIcon, CalendarMonth, Category, Cloud, ExpandMore, Folder, FolderOpen, History, Home, KeyboardArrowRight, Label, Map, MoreHoriz, Navigation, People, Place, Search, Star, StarBorder, VerticalAlignBottom, VerticalAlignTop, DateRange, Delete, Add } from '@mui/icons-material';
+import { Event, List as ListIcon, CalendarMonth, Category, Cloud, Folder, FolderOpen, History, Home, KeyboardArrowRight, Label, Map, MoreHoriz, Navigation, People, Place, Search, Star, StarBorder, VerticalAlignBottom, VerticalAlignTop, DateRange, Delete, Add } from '@mui/icons-material';
+import { CollapsibleSection } from './collapsible-section';
 import ListItemContent from '@mui/joy/ListItemContent/ListItemContent';
 import ListItemButton from '@mui/joy/ListItemButton/ListItemButton';
 import IconButton from '@mui/joy/IconButton/IconButton';
@@ -380,35 +381,6 @@ function makeFullMenu(navMenu: IMenuItem[], years: string[], locations: string[]
     return topMenu;
 }
 
-//
-// The collapsed/expanded state of each sidebar section, persisted to config.
-//
-interface ISidebarCollapsedState {
-    //
-    // Whether the recent searches section is collapsed.
-    //
-    recentSearches: boolean;
-
-    //
-    // Whether the saved searches section is collapsed.
-    //
-    savedSearches: boolean;
-
-    //
-    // Whether the databases section is collapsed.
-    //
-    databases: boolean;
-
-    //
-    // Whether the content section is collapsed.
-    //
-    content: boolean;
-
-    //
-    // Whether the configuration section is collapsed.
-    //
-    configuration: boolean;
-}
 
 //
 // Renders the sidebar for the app.
@@ -430,36 +402,6 @@ export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
     const [menuPath, setMenuPath] = useState<string[]>([]);
     const [breadcrumbs, setBreadCrumbs] = useState<IBreadcrumb[]>([]);
 
-    //
-    // The collapsed state of each sidebar section, persisted to config.
-    //
-    const [collapsedSections, setCollapsedSections] = useState<ISidebarCollapsedState>({
-        recentSearches: false,
-        savedSearches: false,
-        databases: false,
-        content: false,
-        configuration: false,
-    });
-
-    //
-    // Load collapsed section state from config on mount.
-    //
-    useEffect(() => {
-        config.get<ISidebarCollapsedState>("sidebarCollapsed").then(state => {
-            if (state) {
-                setCollapsedSections(state);
-            }
-        });
-    }, []);
-
-    //
-    // Toggles a section's collapsed state and persists the change.
-    //
-    async function toggleSection(section: keyof ISidebarCollapsedState) {
-        const updated = { ...collapsedSections, [section]: !collapsedSections[section] };
-        setCollapsedSections(updated);
-        await config.set<ISidebarCollapsedState>("sidebarCollapsed", updated);
-    }
 
     const navMenu = layout ? buildNavMenu(layout, position => {
         scrollTo(position);
@@ -557,109 +499,111 @@ export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
             {recentSearches.length > 0 &&
                 <>
                     <Divider />
-
-                    <div
-                        className="flex flex-row items-center mt-4 cursor-pointer"
-                        onClick={() => toggleSection('recentSearches')}
-                        >
-                        <Typography
-                            level="body-xs"
-                            sx={{ textTransform: 'uppercase', fontWeight: 'lg' }}
-                            >
-                            Recent Searches
-                        </Typography>
-                        <div className="flex-grow" />
-                        {collapsedSections.recentSearches
-                            ? <KeyboardArrowRight fontSize="small" />
-                            : <ExpandMore fontSize="small" />
-                        }
-                    </div>
-
-                    {!collapsedSections.recentSearches &&
-                    <List>
-                        {recentSearches.map(recentSearch => (
-                            <ListItem
-                                key={recentSearch}
-                                endAction={
-                                    <>
-                                        <IconButton
-                                            size="sm"
-                                            variant="plain"
-                                            color="neutral"
-                                            title={savedSearches.includes(recentSearch) ? "Unsave search" : "Save search"}
-                                            onClick={async (e) => {
-                                                e.stopPropagation();
-                                                if (savedSearches.includes(recentSearch)) {
-                                                    await unsaveSearch(recentSearch);
+                    <CollapsibleSection configKey="sidebar-collapsed-recentSearches" label="Recent Searches">
+                        <List>
+                            {recentSearches.map(recentSearch => (
+                                <ListItem
+                                    key={recentSearch}
+                                    endAction={
+                                        <>
+                                            <IconButton
+                                                size="sm"
+                                                variant="plain"
+                                                color="neutral"
+                                                title={savedSearches.includes(recentSearch) ? "Unsave search" : "Save search"}
+                                                onClick={async (e) => {
+                                                    e.stopPropagation();
+                                                    if (savedSearches.includes(recentSearch)) {
+                                                        await unsaveSearch(recentSearch);
+                                                    }
+                                                    else {
+                                                        await saveSearch(recentSearch);
+                                                    }
+                                                }}
+                                                sx={{ minHeight: '32px', minWidth: '32px' }}
+                                            >
+                                                {savedSearches.includes(recentSearch)
+                                                    ? <Star fontSize="small" />
+                                                    : <StarBorder fontSize="small" />
                                                 }
-                                                else {
-                                                    await saveSearch(recentSearch);
-                                                }
-                                            }}
-                                            sx={{ minHeight: '32px', minWidth: '32px' }}
-                                        >
-                                            {savedSearches.includes(recentSearch)
-                                                ? <Star fontSize="small" />
-                                                : <StarBorder fontSize="small" />
-                                            }
-                                        </IconButton>
-                                        <IconButton
-                                            size="sm"
-                                            variant="plain"
-                                            color="neutral"
-                                            onClick={async (e) => {
-                                                e.stopPropagation();
-                                                await removeRecentSearch(recentSearch);
-                                            }}
-                                            sx={{ minHeight: '32px', minWidth: '32px' }}
-                                        >
-                                            <Delete fontSize="small" />
-                                        </IconButton>
-                                    </>
-                                }
-                                >
-                                <ListItemButton
-                                    onClick={() => {
-                                        search(recentSearch);
-                                        setSidebarOpen(false);
-                                    }}
+                                            </IconButton>
+                                            <IconButton
+                                                size="sm"
+                                                variant="plain"
+                                                color="neutral"
+                                                onClick={async (e) => {
+                                                    e.stopPropagation();
+                                                    await removeRecentSearch(recentSearch);
+                                                }}
+                                                sx={{ minHeight: '32px', minWidth: '32px' }}
+                                            >
+                                                <Delete fontSize="small" />
+                                            </IconButton>
+                                        </>
+                                    }
                                     >
-                                    <ListItemDecorator><History /></ListItemDecorator>
-                                    <ListItemContent>{recentSearch}</ListItemContent>
-                                </ListItemButton>
-                            </ListItem>
-                        ))}
-                    </List>
-                    }
+                                    <ListItemButton
+                                        onClick={() => {
+                                            search(recentSearch);
+                                            setSidebarOpen(false);
+                                        }}
+                                        >
+                                        <ListItemDecorator><History /></ListItemDecorator>
+                                        <ListItemContent>{recentSearch}</ListItemContent>
+                                    </ListItemButton>
+                                </ListItem>
+                            ))}
+                        </List>
+                    </CollapsibleSection>
                 </>
             }
 
             {savedSearches.length > 0 &&
                 <>
                     <Divider />
+                    <CollapsibleSection configKey="sidebar-collapsed-savedSearches" label="Saved Searches">
+                        <List>
+                            {savedSearches.map(savedSearch => (
+                                <ListItem
+                                    key={savedSearch}
+                                    endAction={
+                                        <IconButton
+                                            size="sm"
+                                            variant="plain"
+                                            color="neutral"
+                                            onClick={async (e) => {
+                                                e.stopPropagation();
+                                                await unsaveSearch(savedSearch);
+                                            }}
+                                            sx={{ minHeight: '32px', minWidth: '32px' }}
+                                        >
+                                            <Star fontSize="small" />
+                                        </IconButton>
+                                    }
+                                    >
+                                    <ListItemButton
+                                        onClick={() => {
+                                            search(savedSearch);
+                                            setSidebarOpen(false);
+                                        }}
+                                        >
+                                        <ListItemDecorator><StarBorder /></ListItemDecorator>
+                                        <ListItemContent>{savedSearch}</ListItemContent>
+                                    </ListItemButton>
+                                </ListItem>
+                            ))}
+                        </List>
+                    </CollapsibleSection>
+                </>
+            }
 
-                    <div
-                        className="flex flex-row items-center mt-4 cursor-pointer"
-                        onClick={() => toggleSection('savedSearches')}
-                        >
-                        <Typography
-                            level="body-xs"
-                            sx={{ textTransform: 'uppercase', fontWeight: 'lg' }}
-                            >
-                            Saved Searches
-                        </Typography>
-                        <div className="flex-grow" />
-                        {collapsedSections.savedSearches
-                            ? <KeyboardArrowRight fontSize="small" />
-                            : <ExpandMore fontSize="small" />
-                        }
-                    </div>
-
-                    {!collapsedSections.savedSearches &&
-                    <List>
-                        {savedSearches.map(savedSearch => (
+            <Divider />
+            <CollapsibleSection configKey="sidebar-collapsed-databases" label="Databases">
+                <List>
+                    {dbs.map(dbPath => {
+                        return (
                             <ListItem
-                                key={savedSearch}
+                                key={dbPath}
                                 endAction={
                                     <IconButton
                                         size="sm"
@@ -667,116 +611,41 @@ export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
                                         color="neutral"
                                         onClick={async (e) => {
                                             e.stopPropagation();
-                                            await unsaveSearch(savedSearch);
+                                            await removeDatabase(dbPath);
                                         }}
                                         sx={{ minHeight: '32px', minWidth: '32px' }}
                                     >
-                                        <Star fontSize="small" />
+                                        <Delete fontSize="small" />
                                     </IconButton>
                                 }
                                 >
                                 <ListItemButton
-                                    onClick={() => {
-                                        search(savedSearch);
+                                    onClick={async () => {
                                         setSidebarOpen(false);
+                                        await openDatabase(dbPath);
                                     }}
                                     >
-                                    <ListItemDecorator><StarBorder /></ListItemDecorator>
-                                    <ListItemContent>{savedSearch}</ListItemContent>
+                                    <ListItemDecorator>
+                                        {dbPath === databasePath
+                                            ? <FolderOpen />
+                                            : <Folder />
+                                        }
+                                    </ListItemDecorator>
+                                    <ListItemContent>{dbPath.split(/[\\/]/).filter(Boolean).pop() ?? dbPath}</ListItemContent>
                                 </ListItemButton>
                             </ListItem>
-                        ))}
-                    </List>
-                    }
-                </>
-            }
+                        );
+                    })}
+                </List>
+            </CollapsibleSection>
 
             <Divider />
-
-            <div
-                className="flex flex-row items-center mt-4 cursor-pointer"
-                onClick={() => toggleSection('databases')}
-                >
-                <Typography
-                    level="body-xs"
-                    sx={{ textTransform: 'uppercase', fontWeight: 'lg' }}
-                    >
-                    Databases
-                </Typography>
-                <div className="flex-grow" />
-                {collapsedSections.databases
-                    ? <KeyboardArrowRight fontSize="small" />
-                    : <ExpandMore fontSize="small" />
-                }
-            </div>
-
-            {!collapsedSections.databases &&
-            <List>
-                {dbs.map(dbPath => {
-                    return (
-                        <ListItem
-                            key={dbPath}
-                            endAction={
-                                <IconButton
-                                    size="sm"
-                                    variant="plain"
-                                    color="neutral"
-                                    onClick={async (e) => {
-                                        e.stopPropagation();
-                                        await removeDatabase(dbPath);
-                                    }}
-                                    sx={{ minHeight: '32px', minWidth: '32px' }}
-                                >
-                                    <Delete fontSize="small" />
-                                </IconButton>
-                            }
-                            >
-                            <ListItemButton
-                                onClick={async () => {
-                                    setSidebarOpen(false);
-                                    await openDatabase(dbPath);
-                                }}
-                                >
-                                <ListItemDecorator>
-                                    {dbPath === databasePath
-                                        ? <FolderOpen />
-                                        : <Folder />
-                                    }
-                                </ListItemDecorator>
-                                <ListItemContent>{dbPath.split(/[\\/]/).filter(Boolean).pop() ?? dbPath}</ListItemContent>
-                            </ListItemButton>
-                        </ListItem>
-                    );
-                })}
-            </List>
-            }
-
-            <Divider />
-
-            <div
-                className="flex flex-row items-center mt-4 cursor-pointer"
-                onClick={() => toggleSection('content')}
-                >
-                <Typography
-                    level="body-xs"
-                    sx={{ textTransform: 'uppercase', fontWeight: 'lg' }}
-                    >
-                    Content
-                </Typography>
-                <div className="flex-grow" />
-                {collapsedSections.content
-                    ? <KeyboardArrowRight fontSize="small" />
-                    : <ExpandMore fontSize="small" />
-                }
-            </div>
-
-            {!collapsedSections.content &&
+            <CollapsibleSection configKey="sidebar-collapsed-content" label="Content">
                 <>
                     {breadcrumbs.length > 0 &&
                         <Breadcrumbs
                             separator={<KeyboardArrowRight />}
                             >
-
                             <Link
                                 onClick={() => {
                                     setMenuPath([]);
@@ -850,28 +719,10 @@ export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
                         })}
                     </List>
                 </>
-            }
+            </CollapsibleSection>
 
             <Divider />
-
-            <div
-                className="flex flex-row items-center mt-4 cursor-pointer"
-                onClick={() => toggleSection('configuration')}
-                >
-                <Typography
-                    level="body-xs"
-                    sx={{ textTransform: 'uppercase', fontWeight: 'lg' }}
-                    >
-                    Configuration
-                </Typography>
-                <div className="flex-grow" />
-                {collapsedSections.configuration
-                    ? <KeyboardArrowRight fontSize="small" />
-                    : <ExpandMore fontSize="small" />
-                }
-            </div>
-
-            {!collapsedSections.configuration &&
+            <CollapsibleSection configKey="sidebar-collapsed-configuration" label="Configuration">
                 <>
                     <Stack
                         sx={{ mt: 2, mr: 2 }}
@@ -906,7 +757,7 @@ export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
                             />
                     </Stack>
                 </>
-            }
+            </CollapsibleSection>
 
       </div>
     );
