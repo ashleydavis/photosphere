@@ -1,5 +1,6 @@
 import React, { ReactNode, createContext, useContext, useEffect, useState } from "react";
 import { usePlatform } from "./platform-context";
+import { useConfig } from "./config-context";
 
 export interface IAppContext {
     //
@@ -21,7 +22,8 @@ export interface IProps {
 
 export function AppContextProvider({ children }: IProps) {
     const platform = usePlatform();
-    
+    const config = useConfig();
+
     //
     // Available media file databases (list of database paths).
     //
@@ -32,7 +34,7 @@ export function AppContextProvider({ children }: IProps) {
     //
     async function load(): Promise<void> {
         try {
-            const databases = await platform.getRecentDatabases();
+            const databases = await config.get<string[]>('recentDatabases') || [];
             setDbs(databases);
         }
         catch (err) {
@@ -46,7 +48,7 @@ export function AppContextProvider({ children }: IProps) {
     // Removes a database from the recent databases list.
     //
     async function removeDatabase(databasePath: string): Promise<void> {
-        await platform.removeDatabase(databasePath);
+        await config.remove<string>('recentDatabases', databasePath);
         // Reload the list
         await load();
     }

@@ -76,71 +76,6 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         };
     }, []);
 
-    const getRecentDatabases = useCallback(async (): Promise<string[]> => {
-        return new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                reject(new Error("Timeout waiting for recent databases"));
-            }, 5000);
-
-            const handleMessage = (event: MessageEvent) => {
-                try {
-                    const messageData = JSON.parse(event.data.toString());
-                    if (messageData.type === "recent-databases") {
-                        clearTimeout(timeout);
-                        ws.removeEventListener('message', handleMessage);
-                        resolve(messageData.databases || []);
-                    }
-                    else if (messageData.type === "error") {
-                        clearTimeout(timeout);
-                        ws.removeEventListener('message', handleMessage);
-                        reject(new Error(messageData.message || "Unknown error"));
-                    }
-                }
-                catch (error) {
-                    // Ignore parse errors for other message types
-                }
-            };
-
-            ws.addEventListener('message', handleMessage);
-            ws.send(JSON.stringify({
-                type: "get-recent-databases",
-            }));
-        });
-    }, [ws]);
-
-    const removeDatabase = useCallback(async (databasePath: string): Promise<void> => {
-        return new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                reject(new Error("Timeout waiting for database removal"));
-            }, 5000);
-
-            const handleMessage = (event: MessageEvent) => {
-                try {
-                    const messageData = JSON.parse(event.data.toString());
-                    if (messageData.type === "database-removed") {
-                        clearTimeout(timeout);
-                        ws.removeEventListener('message', handleMessage);
-                        resolve();
-                    }
-                    else if (messageData.type === "error") {
-                        clearTimeout(timeout);
-                        ws.removeEventListener('message', handleMessage);
-                        reject(new Error(messageData.message || "Unknown error"));
-                    }
-                }
-                catch (error) {
-                    // Ignore parse errors for other message types
-                }
-            };
-
-            ws.addEventListener('message', handleMessage);
-            ws.send(JSON.stringify({
-                type: "remove-database",
-                databasePath: databasePath,
-            }));
-        });
-    }, [ws]);
-
     const notifyDatabaseOpened = useCallback(async (databasePath: string): Promise<void> => {
         // Add to recent databases for web platform
         return new Promise((resolve, reject) => {
@@ -217,8 +152,6 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         openDatabase,
         onDatabaseOpened,
         onDatabaseClosed,
-        getRecentDatabases,
-        removeDatabase,
         notifyDatabaseOpened,
         notifyDatabaseClosed,
         onThemeChanged,

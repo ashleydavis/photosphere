@@ -321,6 +321,12 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
     // Closes the current database.
     //
     async function closeDatabase(): Promise<void> {
+        if (databasePath) {
+            cancelDatabaseLoad(databasePath);
+        }
+
+        setIsLoading(false);
+        loadingDatabasePath.current = undefined;
         setDatabasePath(undefined);
         loadedAssets.current = {};
         onReset.current.invoke();
@@ -412,6 +418,17 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
     }
 
     //
+    // Cancels an in-progress database load and cleans up its subscriptions.
+    //
+    function cancelDatabaseLoad(dbPath: string): void {
+        taskQueueProvider.get().cancelTasks(dbPath);
+        if (unsubscribeCurrentLoad.current) {
+            unsubscribeCurrentLoad.current();
+            unsubscribeCurrentLoad.current = undefined;
+        }
+    }
+
+    //
     // Load assets into memory.
     //
     async function loadAssets(dbPath: string) {
@@ -428,11 +445,7 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
         // If a load is in progress for a different database path, cancel it
         if (loadingDatabasePath.current !== undefined) {
             console.log(`[loadAssets] Cancelling previous load for database: ${loadingDatabasePath.current}`);
-            taskQueueProvider.get().cancelTasks(loadingDatabasePath.current);
-            if (unsubscribeCurrentLoad.current) {
-                unsubscribeCurrentLoad.current();
-                unsubscribeCurrentLoad.current = undefined;
-            }
+            cancelDatabaseLoad(loadingDatabasePath.current);
         }
     
         console.log(`[loadAssets] Starting load for database: ${dbPath}`);
@@ -473,20 +486,16 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
 
                     if (result.status !== TaskStatus.Succeeded) {
                         // Loading failed — cancel pending tasks and unsubscribe.
-                        queue.cancelTasks(currentDatabasePath);
+                        cancelDatabaseLoad(currentDatabasePath);
+                    }
+                    else {
+                        // Loading succeeded — unsubscribe callbacks. Any prefetch task will still
+                        // run in the queue but we don't need to track its completion.
                         if (unsubscribeCurrentLoad.current) {
                             unsubscribeCurrentLoad.current();
                             unsubscribeCurrentLoad.current = undefined;
                         }
                     }
-                    // On success, keep callbacks alive — prefetch-database was queued by the worker itself.
-                }
-            }
-            else if (task.type === "prefetch-database") {
-                // Prefetch finished — unsubscribe callbacks, nothing more to do.
-                if (unsubscribeCurrentLoad.current) {
-                    unsubscribeCurrentLoad.current();
-                    unsubscribeCurrentLoad.current = undefined;
                 }
             }
         });
@@ -554,11 +563,7 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
         // Cleanup: cancel tasks and unsubscribe if component unmounts or database path changes
         return () => {
             if (databasePath) {
-                taskQueueProvider.get().cancelTasks(databasePath);
-            }
-            if (unsubscribeCurrentLoad.current) {
-                unsubscribeCurrentLoad.current();
-                unsubscribeCurrentLoad.current = undefined;
+                cancelDatabaseLoad(databasePath);
             }
             loadingDatabasePath.current = undefined;
         };

@@ -29,16 +29,6 @@ export interface IPlatformContext {
     onDatabaseClosed: (callback: () => void) => Unsubscribe;
 
     //
-    // Gets the list of recent databases.
-    //
-    getRecentDatabases: () => Promise<string[]>;
-
-    //
-    // Removes a database from the recent databases list.
-    //
-    removeDatabase: (databasePath: string) => Promise<void>;
-
-    //
     // Notifies the platform that the database was opened.
     // This adds the database to recent databases and updates UI state (e.g., menu items in Electron).
     //

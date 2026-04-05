@@ -182,10 +182,6 @@ ipcMain.handle('remove-database', logExceptions(async (event, databasePath: stri
 }, 'Error removing database'));
 
 // IPC handler for getting recent databases list
-ipcMain.handle('get-recent-databases', logExceptions(async () => {
-    const config = await loadDesktopConfig();
-    return config.recentDatabases || [];
-}, 'Error getting recent databases'));
 
 // IPC handler for notifying that database was opened from frontend
 ipcMain.handle('notify-database-opened', logExceptions(async (event, databasePath: string) => {
@@ -479,7 +475,8 @@ async function openDatabase(): Promise<void> {
 //
 async function closeDatabase(): Promise<void> {
     if (mainWindow) {
-        // Notify frontend to close the database
+        // Notify frontend to close the database.
+        // This sends a message back to the main process to update the state here.
         mainWindow.webContents.send('database-closed');
     }
 }

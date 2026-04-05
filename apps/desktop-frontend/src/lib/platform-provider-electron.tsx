@@ -93,14 +93,6 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         };
     }, []);
 
-    const getRecentDatabases = useCallback(async (): Promise<string[]> => {
-        return await electronAPI.getRecentDatabases();
-    }, [electronAPI]);
-
-    const removeDatabase = useCallback(async (databasePath: string): Promise<void> => {
-        return await electronAPI.removeDatabase(databasePath);
-    }, [electronAPI]);
-
     const notifyDatabaseOpened = useCallback(async (databasePath: string): Promise<void> => {
         // Notify main process to add to recent databases and update menu
         await electronAPI.notifyDatabaseOpened(databasePath);
@@ -122,8 +114,6 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         openDatabase,
         onDatabaseOpened,
         onDatabaseClosed,
-        getRecentDatabases,
-        removeDatabase,
         notifyDatabaseOpened,
         notifyDatabaseClosed,
         onThemeChanged,
