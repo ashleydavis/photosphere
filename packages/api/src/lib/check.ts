@@ -40,7 +40,7 @@ export async function checkPaths(
         totalSize: 0,
         averageSize: 0,
     };
-    const queue = await taskQueueProvider.create();
+    const queue = taskQueueProvider.get();
     let filesAddedToCache = 0;
 
     try {
@@ -118,7 +118,7 @@ export async function checkPaths(
                 hashCacheDir,
                 s3Config,
                 logicalPath: result.logicalPath, // Use logicalPath for display to user
-            } as ICheckFileData);
+            } as ICheckFileData, storageDescriptor.dbDir);
         }, (currentlyScanning, state) => {
             summary.filesIgnored = state.numFilesIgnored;
             if (progressCallback) {

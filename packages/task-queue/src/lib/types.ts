@@ -13,6 +13,13 @@ export interface ITaskContext {
     timestampProvider: ITimestampProvider;
     sessionId: string;
     sendMessage: (message: any) => void;
+
+    //
+    // Queues a new task to run after the current task completes.
+    // The task is added to the same queue that is running the current task.
+    // source tags the task so it can be cancelled via cancelTasks().
+    //
+    queueTask: (type: string, data: any, source: string) => void;
 }
 
 //

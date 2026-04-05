@@ -1,4 +1,4 @@
-import type { ITask, ITaskResult, IWorkerBackend, WorkerTaskCompletionCallback, TaskMessageCallback } from "task-queue";
+import type { ITask, ITaskResult, IWorkerBackend, WorkerTaskCompletionCallback, TaskMessageCallback, UnsubscribeFn } from "task-queue";
 import { TaskStatus } from "task-queue";
 import { utilityProcess, type UtilityProcess } from 'electron';
 import { deserializeError } from "serialize-error";
@@ -57,6 +57,20 @@ export interface IWorkerTaskMessage {
 }
 
 //
+// Message sent from worker to main thread to request queuing a new task.
+//
+export interface IWorkerQueueTaskMessage {
+    type: "queue-task";
+    taskType: string;
+    data: any;
+
+    //
+    // Source tag to associate the new task with a logical group (e.g. database path).
+    //
+    source: string;
+}
+
+//
 // Worker state interface
 //
 interface IWorkerState {
@@ -85,8 +99,9 @@ export class WorkerBackendElectronMain implements IWorkerBackend {
     private taskTimeouts: Map<string, NodeJS.Timeout> = new Map();
     private workerAvailableCallbacks: (() => void)[] = [];
     private completionCallbacks: WorkerTaskCompletionCallback[] = [];
-    private messageCallbacks: Array<{ messageType: string; callback: TaskMessageCallback }> = [];
+    private messageCallbacks: Array<{ messageType: string; callback: TaskMessageCallback }> = []; //todo: anon type.
     private anyMessageCallbacks: TaskMessageCallback[] = [];
+    private queueTaskCallbacks: Array<(type: string, data: any, source: string) => void> = [];
     private workerLogCallback: (message: any) => void;
     private isShuttingDown: boolean = false;
 
@@ -166,11 +181,33 @@ export class WorkerBackendElectronMain implements IWorkerBackend {
     }
 
     //
+    // Registers a callback that will be called when a task requests another task to be queued.
+    //
+    onQueueTask(callback: (type: string, data: any, source: string) => void): UnsubscribeFn {
+        this.queueTaskCallbacks.push(callback);
+        return () => {
+            const index = this.queueTaskCallbacks.indexOf(callback);
+            if (index !== -1) {
+                this.queueTaskCallbacks.splice(index, 1);
+            }
+        };
+    }
+
+    //
     // Notifies callback of worker availability.
     //
     private notifyWorkerAvailable(): void {
         for (const callback of this.workerAvailableCallbacks) {
             callback();
+        }
+    }
+
+    //
+    // Notifies all registered queue-task callbacks.
+    //
+    private notifyQueueTaskCallbacks(type: string, data: any, source: string): void {
+        for (const callback of this.queueTaskCallbacks) {
+            callback(type, data, source);
         }
     }
 
@@ -366,6 +403,13 @@ export class WorkerBackendElectronMain implements IWorkerBackend {
 
         if (data.type === "log") {
             this.workerLogCallback(data);
+            return;
+        }
+
+        // Handle queue-task request from worker
+        if (data.type === "queue-task") {
+            const msg = data as IWorkerQueueTaskMessage;
+            this.notifyQueueTaskCallbacks(msg.taskType, msg.data, msg.source);
             return;
         }
     }

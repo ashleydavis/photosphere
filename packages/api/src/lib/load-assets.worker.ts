@@ -3,7 +3,8 @@
 //
 
 import type { ITaskContext } from "task-queue";
-import { createLazyDatabaseStorage, createMediaFileDatabase } from "./media-file-database";
+import { createLazyDatabaseStorage, createMediaFileDatabase, isDatabasePartial } from "./media-file-database";
+import { createStorage } from "storage";
 import type { ILoadAssetsData, ILoadAssetsResult } from "./load-assets.types";
 
 //
@@ -23,7 +24,12 @@ export async function loadAssetsHandler(
 
     console.log(`Loading assets from database ${data.databasePath}`);
 
-    const storage = await createLazyDatabaseStorage(data.databasePath);
+    const isPartial = await isDatabasePartial(data.databasePath);
+
+    // Only wrap in lazy storage for partial databases; plain storage otherwise.
+    const storage = isPartial
+        ? await createLazyDatabaseStorage(data.databasePath)
+        : createStorage(data.databasePath, undefined, undefined).storage;
 
     // Create database instance
     const database = createMediaFileDatabase(storage, uuidGenerator, timestampProvider);
@@ -49,7 +55,7 @@ export async function loadAssetsHandler(
         batchesSent++;
         
         // Send page via message
-        context.sendMessage({ type: "asset-page", batch: result.records });
+        context.sendMessage({ type: "asset-page", databasePath: data.databasePath, batch: result.records });
         
         if (!result.nextPageId) {
             break;
@@ -58,6 +64,11 @@ export async function loadAssetsHandler(
         nextPageId = result.nextPageId;
     }
     
+    // Queue thumb prefetch only for partial databases.
+    if (isPartial) {
+        context.queueTask("prefetch-thumbs", { databasePath: data.databasePath }, data.databasePath);
+    }
+
     return {
         totalAssets,
         batchesSent,

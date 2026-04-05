@@ -148,7 +148,7 @@ export async function verify(storageDescriptor: IStorageDescriptor, databaseStor
     // Handlers are registered in the worker file (apps/cli/src/lib/worker.ts).
     // maxWorkers is set in the provider constructor (defaults to number of CPUs).
     //
-    const queue = await taskQueueProvider.create();
+    const queue = taskQueueProvider.get();
 
     try {
         //
@@ -248,7 +248,7 @@ export async function verify(storageDescriptor: IStorageDescriptor, databaseStor
                     options: {
                         full: options?.full,
                     },
-                });
+                }, storageDescriptor.dbDir);
 
                 // Check asset nodes have a database record with the correct id and hash.
                 if (node.name.startsWith("asset/") && node.contentHash) {

@@ -121,6 +121,14 @@ export class WorkerBackendElectronRenderer implements IWorkerBackend {
     }
 
     //
+    // Registers a callback that will be called when a task requests another task to be queued.
+    // For the Electron renderer backend, task queuing happens in the main process, so this is a no-op.
+    //
+    onQueueTask(_callback: (type: string, data: any, source: string) => void): () => void {
+        return () => {};
+    }
+
+    //
     // Internal: Handles task completion messages from the main process.
     // Updates statistics, resolves pending promises, and notifies callbacks.
     //
@@ -199,7 +207,7 @@ export class WorkerBackendElectronRenderer implements IWorkerBackend {
     dispatchTask(task: ITask<any>): boolean {
         // In renderer, we always dispatch via IPC (no real workers)
         this.activeTasksCount++;
-        this.electronAPI.addTask(task.type, task.data, task.id);
+        this.electronAPI.addTask(task.type, task.data, task.source, task.id);
         return true;
     }
 

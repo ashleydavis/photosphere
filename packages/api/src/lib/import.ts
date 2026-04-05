@@ -167,7 +167,7 @@ export async function addPaths(
         averageSize: 0,
     };
     // Queue for background import tasks.
-    const queue = await taskQueueProvider.create();
+    const queue = taskQueueProvider.get();
 
     // Counts the number of files added to the cache.
     let filesAddedToCache = 0;
@@ -278,7 +278,7 @@ export async function addPaths(
                             queue.addTask("import-file", {
                                 ...taskData,
                                 expectedHash: hashResult.hash,
-                            });
+                            }, storageDescriptor.dbDir);
                         }
                     }
                 }
@@ -342,7 +342,7 @@ export async function addPaths(
                 sessionId,
                 dryRun,
                 assetId: uuidGenerator.generate(), //todo: Hash file shouldn't need asset id.
-            });
+            }, storageDescriptor.dbDir);
         }, (currentlyScanning, state) => {
             summary.filesIgnored = state.numFilesIgnored;
             if (progressCallback) {

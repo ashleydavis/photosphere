@@ -152,13 +152,13 @@ app.on('before-quit', async () => {
 });
 
 // IPC handler for adding tasks
-ipcMain.on('add-task', (event, taskType: string, data: any, taskId?: string) => {
+ipcMain.on('add-task', (event, taskType: string, data: any, source: string, taskId?: string) => {
     if (!taskQueue) {
         console.error('Task queue not initialized');
         return;
     }
-    
-    taskQueue.addTask(taskType, data, taskId);
+
+    taskQueue.addTask(taskType, data, source, taskId);
 });
 
 // IPC handler for opening file dialog

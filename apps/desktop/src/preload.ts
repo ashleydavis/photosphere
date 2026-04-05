@@ -3,8 +3,8 @@ import type { IElectronAPI, IRendererLogMessage } from 'electron-defs';
 
 // Expose generic task queue API
 const electronAPI: IElectronAPI = {
-    addTask: (taskType: string, data: any, taskId?: string): void => {
-        ipcRenderer.send('add-task', taskType, data, taskId);
+    addTask: (taskType: string, data: any, source: string, taskId?: string): void => {
+        ipcRenderer.send('add-task', taskType, data, source, taskId);
     },
     onMessage: (messageType: string, callback: (data: any) => void) => {
         ipcRenderer.on(messageType, (_event, data) => {

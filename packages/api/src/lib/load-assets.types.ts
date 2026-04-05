@@ -11,6 +11,11 @@ export interface ILoadAssetsResult {
 
 export interface IAssetPageMessage {
     type: "asset-page";
+    //
+    // The database path this batch belongs to. Used by the frontend to discard messages
+    // that arrive after the database has been switched or closed.
+    //
+    databasePath: string;
     batch: IAsset[];
 }
 

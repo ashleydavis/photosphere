@@ -18,7 +18,7 @@ export interface IRendererLogMessage {
 // Shared between desktop main process and desktop frontend
 //
 export interface IElectronAPI {
-    addTask: (taskType: string, data: any, taskId?: string) => void;
+    addTask: (taskType: string, data: any, source: string, taskId?: string) => void;
     onMessage: (messageType: string, callback: (data: any) => void) => void;
     removeAllListeners: (messageType: string) => void;
     openDatabase: () => Promise<void>;

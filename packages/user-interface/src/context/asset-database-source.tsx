@@ -8,7 +8,7 @@ import { loadAssets as loadAssetsApi } from "api/src/lib/load-assets";
 import type { IAssetPageMessage, ILoadAssetsData, ILoadAssetsResult } from "api/src/lib/load-assets.types";
 import axios from "axios";
 import { TaskStatus } from "task-queue";
-import type { ITaskQueueProvider, ITaskQueue } from "task-queue";
+import type { ITaskQueueProvider } from "task-queue";
 import { usePlatform } from "./platform-context";
 
 //
@@ -66,9 +66,9 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
     const loadingDatabasePath = useRef<string | undefined>(undefined);
 
     //
-    // The queue currently being used for loading assets.
+    // Unsubscribe function for the current load's task queue callbacks.
     //
-    const currentQueue = useRef<ITaskQueue | undefined>(undefined);
+    const unsubscribeCurrentLoad = useRef<(() => void) | undefined>(undefined);
 
     //
     // Set to true while working on something.
@@ -423,10 +423,13 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
         }
 
         // If a load is in progress for a different database path, cancel it
-        if (currentQueue.current !== undefined) {
+        if (loadingDatabasePath.current !== undefined) {
             console.log(`[loadAssets] Cancelling previous load for database: ${loadingDatabasePath.current}`);
-            currentQueue.current.shutdown();
-            currentQueue.current = undefined;
+            taskQueueProvider.get().cancelTasks(loadingDatabasePath.current);
+            if (unsubscribeCurrentLoad.current) {
+                unsubscribeCurrentLoad.current();
+                unsubscribeCurrentLoad.current = undefined;
+            }
         }
     
         console.log(`[loadAssets] Starting load for database: ${dbPath}`);
@@ -446,38 +449,49 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
         //
         onReset.current.invoke();
 
-        // Create the queue once and reuse it
-        const queue = await taskQueueProvider.create();
-        currentQueue.current = queue;
+        const queue = taskQueueProvider.get();
 
-        // Store the database path at the time the queue was created
+        // Store the database path at the time the load started
         const currentDatabasePath = dbPath;
 
         // Set up listener for task completion before queuing the task
-        queue.onTaskComplete<ILoadAssetsData, ILoadAssetsResult>((task, result) => {
-            if (result.status === TaskStatus.Succeeded) {
-                // Task completed successfully
-                console.log(`Load assets task completed: ${result.outputs?.totalAssets} assets loaded`);
-            }
-            else if (result.status === TaskStatus.Failed) {
-                console.error("Load assets task failed:", result.errorMessage);
-            }
-
-            // Mark loading as complete when the task finishes (succeeded or failed)
-            if (loadingDatabasePath.current === currentDatabasePath) {
-                loadingDatabasePath.current = undefined;
-                if (currentQueue.current) {
-                    currentQueue.current.shutdown();
-                    currentQueue.current = undefined;
+        const unsubscribeComplete = queue.onTaskComplete<ILoadAssetsData, ILoadAssetsResult>((task, result) => {
+            if (task.type === "load-assets") {
+                if (result.status === TaskStatus.Succeeded) {
+                    console.log(`Load assets task completed: ${result.outputs?.totalAssets} assets loaded`);
                 }
-                setIsLoading(false);
+                else {
+                    console.error("Load assets task failed:", result.errorMessage);
+                }
+
+                if (task.data.databasePath === currentDatabasePath) {
+                    loadingDatabasePath.current = undefined;
+                    setIsLoading(false);
+
+                    if (result.status !== TaskStatus.Succeeded) {
+                        // Loading failed — cancel pending tasks and unsubscribe.
+                        queue.cancelTasks(currentDatabasePath);
+                        if (unsubscribeCurrentLoad.current) {
+                            unsubscribeCurrentLoad.current();
+                            unsubscribeCurrentLoad.current = undefined;
+                        }
+                    }
+                    // On success, keep callbacks alive — prefetch-thumbs was queued by the worker itself.
+                }
+            }
+            else if (task.type === "prefetch-thumbs") {
+                // Prefetch finished — unsubscribe callbacks, nothing more to do.
+                if (unsubscribeCurrentLoad.current) {
+                    unsubscribeCurrentLoad.current();
+                    unsubscribeCurrentLoad.current = undefined;
+                }
             }
         });
 
         // Receive asset pages.
-        queue.onTaskMessage<IAssetPageMessage>("asset-page", data => {
-            // Only process messages if we're still on the current load operation
-            if (loadingDatabasePath.current !== currentDatabasePath) {
+        const unsubscribeMessage = queue.onTaskMessage<IAssetPageMessage>("asset-page", data => {
+            // Discard messages that belong to a different (now-closed) database.
+            if (data.message.databasePath !== currentDatabasePath) {
                 return;
             }
 
@@ -486,7 +500,12 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
                 _onNewItems(data.message.batch);
             }
         });
-        
+
+        unsubscribeCurrentLoad.current = () => {
+            unsubscribeComplete();
+            unsubscribeMessage();
+        };
+
         // Queue the load-assets task using the same queue instance with database path
         loadAssetsApi(queue, dbPath);
     }
@@ -524,12 +543,15 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
                 });
         }
 
-        // Cleanup: shut down queue if component unmounts or database path changes
+        // Cleanup: cancel tasks and unsubscribe if component unmounts or database path changes
         return () => {
-            if (currentQueue.current !== undefined) {
-                console.log(`[useEffect cleanup] Shutting down queue for database: ${loadingDatabasePath.current}`);
-                currentQueue.current.shutdown();
-                currentQueue.current = undefined;
+            if (loadingDatabasePath.current !== undefined) {
+                console.log(`[useEffect cleanup] Cancelling tasks for database: ${loadingDatabasePath.current}`);
+                taskQueueProvider.get().cancelTasks(loadingDatabasePath.current);
+                if (unsubscribeCurrentLoad.current) {
+                    unsubscribeCurrentLoad.current();
+                    unsubscribeCurrentLoad.current = undefined;
+                }
             }
             loadingDatabasePath.current = undefined;
         };

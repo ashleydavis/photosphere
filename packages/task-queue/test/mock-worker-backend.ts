@@ -14,11 +14,12 @@ export class MockWorkerBackend implements IWorkerBackend {
     private messageCallbacks: Array<{ messageType: string; callback: TaskMessageCallback }> = [];
     private anyMessageCallbacks: TaskMessageCallback[] = [];
     private workerAvailableCallbacks: (() => void)[] = [];
+    private queueTaskCallbacks: Array<(type: string, data: any, source: string) => void> = [];
     private activeTasks: Map<string, ITask<any>> = new Map();
     private maxConcurrent: number;
-    private baseContext: Omit<ITaskContext, "sendMessage">;
+    private baseContext: Omit<ITaskContext, "sendMessage" | "queueTask">;
 
-    constructor(maxConcurrent: number = 2, baseContext?: Partial<Omit<ITaskContext, "sendMessage">>) {
+    constructor(maxConcurrent: number = 2, baseContext?: Partial<Omit<ITaskContext, "sendMessage" | "queueTask">>) {
         this.maxConcurrent = maxConcurrent;
         this.baseContext = {
             uuidGenerator: baseContext?.uuidGenerator || new TestUuidGenerator(),
@@ -50,9 +51,14 @@ export class MockWorkerBackend implements IWorkerBackend {
             };
 
             // Create task context
-            const taskContext = {
+            const taskContext: ITaskContext = {
                 ...this.baseContext,
                 sendMessage: taskSpecificSendMessage,
+                queueTask: (type: string, data: any, source: string): void => {
+                    for (const callback of this.queueTaskCallbacks) {
+                        callback(type, data, source);
+                    }
+                },
             };
 
             const outputs = await executeTaskHandler(task.type, task.data, taskContext);
@@ -123,6 +129,16 @@ export class MockWorkerBackend implements IWorkerBackend {
             const index = this.anyMessageCallbacks.indexOf(callback);
             if (index !== -1) {
                 this.anyMessageCallbacks.splice(index, 1);
+            }
+        };
+    }
+
+    onQueueTask(callback: (type: string, data: any, source: string) => void): () => void {
+        this.queueTaskCallbacks.push(callback);
+        return () => {
+            const index = this.queueTaskCallbacks.indexOf(callback);
+            if (index !== -1) {
+                this.queueTaskCallbacks.splice(index, 1);
             }
         };
     }

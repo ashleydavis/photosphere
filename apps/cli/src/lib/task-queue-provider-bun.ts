@@ -15,6 +15,7 @@ export class TaskQueueProviderBun implements ITaskQueueProvider {
     private debug: boolean;
     private uuidGenerator: IUuidGenerator;
     private timestampProvider: ITimestampProvider;
+    private queue: ITaskQueue | undefined;
 
     constructor(maxWorkers: number, taskTimeout: number, workerOptions: IWorkerBackendOptions, debug: boolean, uuidGenerator: IUuidGenerator, timestampProvider: ITimestampProvider) {
         this.maxWorkers = maxWorkers;
@@ -25,9 +26,14 @@ export class TaskQueueProviderBun implements ITaskQueueProvider {
         this.timestampProvider = timestampProvider;
     }
 
-    async create(): Promise<ITaskQueue> {
+    get(): ITaskQueue {
+        if (this.queue) {
+            return this.queue;
+        }
+
         const workerBackend = new WorkerBackendBun(this.maxWorkers, this.taskTimeout, this.workerOptions);
         const taskQueue = new TaskQueue(this.uuidGenerator, this.timestampProvider, this.taskTimeout, workerBackend);
+        this.queue = taskQueue;
         
         // If debug mode is enabled, register state provider for polling
         if (this.debug) {
@@ -72,7 +78,7 @@ export class TaskQueueProviderBun implements ITaskQueueProvider {
             });
         }
         
-        return taskQueue;
+        return this.queue;
     }
 
     //
