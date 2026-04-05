@@ -3,7 +3,7 @@ import type { IAsset, IDatabaseOp } from "defs";
 import type { IUuidGenerator, ITimestampProvider } from "utils";
 import { createStorage } from "storage";
 import { acquireWriteLock, releaseWriteLock } from "./write-lock";
-import { createMediaFileDatabase, loadSortIndexes } from "./media-file-database";
+import { createLazyDatabaseStorage, createMediaFileDatabase, loadSortIndexes } from "./media-file-database";
 
 //
 // Groups operations by target database path (databaseId on each op).
@@ -75,7 +75,8 @@ export async function applyDatabaseOps(uuidGenerator: IUuidGenerator, timestampP
 
     const groups = groupOpsByDatabaseId(ops);
     for (const [ databasePath, pathOps ] of groups) {
-        const { storage: assetStorage, rawStorage } = createStorage(databasePath, undefined, undefined);
+        const { rawStorage } = createStorage(databasePath, undefined, undefined);
+        const assetStorage = await createLazyDatabaseStorage(databasePath);
         const database = createMediaFileDatabase(assetStorage, uuidGenerator, timestampProvider);
         await loadSortIndexes(assetStorage, database.metadataCollection);
 
