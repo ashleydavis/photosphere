@@ -7,7 +7,7 @@ import { useTheme } from '@mui/joy/styles/ThemeProvider';
 import List from '@mui/joy/List/List';
 import ListItem from '@mui/joy/ListItem/ListItem';
 import ListItemDecorator from '@mui/joy/ListItemDecorator/ListItemDecorator';
-import { Event, List as ListIcon, CalendarMonth, Category, Cloud, Folder, FolderOpen, History, Home, KeyboardArrowRight, Label, Map, MoreHoriz, Navigation, People, Place, Search, Star, StarBorder, VerticalAlignBottom, VerticalAlignTop, DateRange, Delete, Add } from '@mui/icons-material';
+import { Event, List as ListIcon, CalendarMonth, Category, Cloud, ExpandMore, Folder, FolderOpen, History, Home, KeyboardArrowRight, Label, Map, MoreHoriz, Navigation, People, Place, Search, Star, StarBorder, VerticalAlignBottom, VerticalAlignTop, DateRange, Delete, Add } from '@mui/icons-material';
 import ListItemContent from '@mui/joy/ListItemContent/ListItemContent';
 import ListItemButton from '@mui/joy/ListItemButton/ListItemButton';
 import IconButton from '@mui/joy/IconButton/IconButton';
@@ -381,6 +381,36 @@ function makeFullMenu(navMenu: IMenuItem[], years: string[], locations: string[]
 }
 
 //
+// The collapsed/expanded state of each sidebar section, persisted to config.
+//
+interface ISidebarCollapsedState {
+    //
+    // Whether the recent searches section is collapsed.
+    //
+    recentSearches: boolean;
+
+    //
+    // Whether the saved searches section is collapsed.
+    //
+    savedSearches: boolean;
+
+    //
+    // Whether the databases section is collapsed.
+    //
+    databases: boolean;
+
+    //
+    // Whether the content section is collapsed.
+    //
+    content: boolean;
+
+    //
+    // Whether the configuration section is collapsed.
+    //
+    configuration: boolean;
+}
+
+//
 // Renders the sidebar for the app.
 //
 export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
@@ -399,6 +429,37 @@ export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
 
     const [menuPath, setMenuPath] = useState<string[]>([]);
     const [breadcrumbs, setBreadCrumbs] = useState<IBreadcrumb[]>([]);
+
+    //
+    // The collapsed state of each sidebar section, persisted to config.
+    //
+    const [collapsedSections, setCollapsedSections] = useState<ISidebarCollapsedState>({
+        recentSearches: false,
+        savedSearches: false,
+        databases: false,
+        content: false,
+        configuration: false,
+    });
+
+    //
+    // Load collapsed section state from config on mount.
+    //
+    useEffect(() => {
+        config.get<ISidebarCollapsedState>("sidebarCollapsed").then(state => {
+            if (state) {
+                setCollapsedSections(state);
+            }
+        });
+    }, []);
+
+    //
+    // Toggles a section's collapsed state and persists the change.
+    //
+    async function toggleSection(section: keyof ISidebarCollapsedState) {
+        const updated = { ...collapsedSections, [section]: !collapsedSections[section] };
+        setCollapsedSections(updated);
+        await config.set<ISidebarCollapsedState>("sidebarCollapsed", updated);
+    }
 
     const navMenu = layout ? buildNavMenu(layout, position => {
         scrollTo(position);
@@ -497,13 +558,24 @@ export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
                 <>
                     <Divider />
 
-                    <Typography
-                        level="body-xs"
-                        sx={{ textTransform: 'uppercase', fontWeight: 'lg', mt: 2 }}
+                    <div
+                        className="flex flex-row items-center mt-4 cursor-pointer"
+                        onClick={() => toggleSection('recentSearches')}
                         >
-                        Recent Searches
-                    </Typography>
+                        <Typography
+                            level="body-xs"
+                            sx={{ textTransform: 'uppercase', fontWeight: 'lg' }}
+                            >
+                            Recent Searches
+                        </Typography>
+                        <div className="flex-grow" />
+                        {collapsedSections.recentSearches
+                            ? <KeyboardArrowRight fontSize="small" />
+                            : <ExpandMore fontSize="small" />
+                        }
+                    </div>
 
+                    {!collapsedSections.recentSearches &&
                     <List>
                         {recentSearches.map(recentSearch => (
                             <ListItem
@@ -558,6 +630,7 @@ export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
                             </ListItem>
                         ))}
                     </List>
+                    }
                 </>
             }
 
@@ -565,13 +638,24 @@ export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
                 <>
                     <Divider />
 
-                    <Typography
-                        level="body-xs"
-                        sx={{ textTransform: 'uppercase', fontWeight: 'lg', mt: 2 }}
+                    <div
+                        className="flex flex-row items-center mt-4 cursor-pointer"
+                        onClick={() => toggleSection('savedSearches')}
                         >
-                        Saved Searches
-                    </Typography>
+                        <Typography
+                            level="body-xs"
+                            sx={{ textTransform: 'uppercase', fontWeight: 'lg' }}
+                            >
+                            Saved Searches
+                        </Typography>
+                        <div className="flex-grow" />
+                        {collapsedSections.savedSearches
+                            ? <KeyboardArrowRight fontSize="small" />
+                            : <ExpandMore fontSize="small" />
+                        }
+                    </div>
 
+                    {!collapsedSections.savedSearches &&
                     <List>
                         {savedSearches.map(savedSearch => (
                             <ListItem
@@ -603,18 +687,30 @@ export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
                             </ListItem>
                         ))}
                     </List>
+                    }
                 </>
             }
 
             <Divider />
 
-            <Typography
-                level="body-xs"
-                sx={{ textTransform: 'uppercase', fontWeight: 'lg', mt: 2 }}
+            <div
+                className="flex flex-row items-center mt-4 cursor-pointer"
+                onClick={() => toggleSection('databases')}
                 >
-                Databases
-            </Typography>
+                <Typography
+                    level="body-xs"
+                    sx={{ textTransform: 'uppercase', fontWeight: 'lg' }}
+                    >
+                    Databases
+                </Typography>
+                <div className="flex-grow" />
+                {collapsedSections.databases
+                    ? <KeyboardArrowRight fontSize="small" />
+                    : <ExpandMore fontSize="small" />
+                }
+            </div>
 
+            {!collapsedSections.databases &&
             <List>
                 {dbs.map(dbPath => {
                     return (
@@ -653,135 +749,164 @@ export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
                     );
                 })}
             </List>
-
-            <Divider />
-
-            <Typography
-                level="body-xs"
-                sx={{ textTransform: 'uppercase', fontWeight: 'lg', mt: 2 }}
-                >
-                Content
-            </Typography>
-
-            {breadcrumbs.length > 0 &&
-                <Breadcrumbs 
-                    separator={<KeyboardArrowRight />}
-                    >
-
-                    <Link
-                        onClick={() => {
-                            setMenuPath([]);
-                            setBreadCrumbs([]);
-                        }}
-                        >
-                        <Home />
-                    </Link>
-
-                    {breadcrumbs.length > 2 &&
-                        <Typography level="body-xs">•••</Typography>
-                    }
-
-                    {breadcrumbs.length > 1 &&
-                        <Link 
-                            onClick={() => {
-                                setMenuPath(breadcrumbs[breadcrumbs.length-1].menuPath);
-                                setBreadCrumbs(breadcrumbs.slice(0, breadcrumbs.length-1));
-                            }}
-                            >
-                            {breadcrumbs[breadcrumbs.length-2].icon}
-                            {breadcrumbs[breadcrumbs.length-2].text &&
-                                <Typography>                                    
-                                    {breadcrumbs[breadcrumbs.length-2].text}
-                                </Typography>
-                            }
-                        </Link>                
-                    }
-                    
-                    {breadcrumbs[breadcrumbs.length-1].icon}
-
-                    {breadcrumbs[breadcrumbs.length-1].text &&
-                        <Typography>
-                            {breadcrumbs[breadcrumbs.length-1].text}
-                        </Typography>
-                    }
-                </Breadcrumbs>
             }
 
-            <List>
-                {curMenu.map((menuItem, index) => {
-                    return (
-                        <ListItem 
-                            key={`${index}-${menuItem.text}`}
-                            onClick={() => {
-                                if (menuItem.children && menuItem.children.length > 0) {
-                                    setBreadCrumbs([...breadcrumbs, {
-                                        text: menuItem.text,
-                                        menuPath,
-                                    }]);
-                                    setMenuPath([...menuPath, menuItem.text]);
-                                }
+            <Divider />
 
-                                if (menuItem.onClick) {
-                                    menuItem.onClick();
-                                }
-                            }}
+            <div
+                className="flex flex-row items-center mt-4 cursor-pointer"
+                onClick={() => toggleSection('content')}
+                >
+                <Typography
+                    level="body-xs"
+                    sx={{ textTransform: 'uppercase', fontWeight: 'lg' }}
+                    >
+                    Content
+                </Typography>
+                <div className="flex-grow" />
+                {collapsedSections.content
+                    ? <KeyboardArrowRight fontSize="small" />
+                    : <ExpandMore fontSize="small" />
+                }
+            </div>
+
+            {!collapsedSections.content &&
+                <>
+                    {breadcrumbs.length > 0 &&
+                        <Breadcrumbs
+                            separator={<KeyboardArrowRight />}
                             >
-                            <ListItemButton>
-                                <ListItemDecorator>{menuItem.icon}</ListItemDecorator>
-                                <ListItemContent>{menuItem.text}</ListItemContent>
-                                {menuItem.children && menuItem.children.length > 0 &&
-                                    <KeyboardArrowRight />
-                                }
-                                {menuItem.more &&
-                                    <MoreHoriz />
-                                }
-                            </ListItemButton>
-                        </ListItem>
-                    );
-                })}
-            </List>
+
+                            <Link
+                                onClick={() => {
+                                    setMenuPath([]);
+                                    setBreadCrumbs([]);
+                                }}
+                                >
+                                <Home />
+                            </Link>
+
+                            {breadcrumbs.length > 2 &&
+                                <Typography level="body-xs">•••</Typography>
+                            }
+
+                            {breadcrumbs.length > 1 &&
+                                <Link
+                                    onClick={() => {
+                                        setMenuPath(breadcrumbs[breadcrumbs.length-1].menuPath);
+                                        setBreadCrumbs(breadcrumbs.slice(0, breadcrumbs.length-1));
+                                    }}
+                                    >
+                                    {breadcrumbs[breadcrumbs.length-2].icon}
+                                    {breadcrumbs[breadcrumbs.length-2].text &&
+                                        <Typography>
+                                            {breadcrumbs[breadcrumbs.length-2].text}
+                                        </Typography>
+                                    }
+                                </Link>
+                            }
+
+                            {breadcrumbs[breadcrumbs.length-1].icon}
+
+                            {breadcrumbs[breadcrumbs.length-1].text &&
+                                <Typography>
+                                    {breadcrumbs[breadcrumbs.length-1].text}
+                                </Typography>
+                            }
+                        </Breadcrumbs>
+                    }
+
+                    <List>
+                        {curMenu.map((menuItem, index) => {
+                            return (
+                                <ListItem
+                                    key={`${index}-${menuItem.text}`}
+                                    onClick={() => {
+                                        if (menuItem.children && menuItem.children.length > 0) {
+                                            setBreadCrumbs([...breadcrumbs, {
+                                                text: menuItem.text,
+                                                menuPath,
+                                            }]);
+                                            setMenuPath([...menuPath, menuItem.text]);
+                                        }
+
+                                        if (menuItem.onClick) {
+                                            menuItem.onClick();
+                                        }
+                                    }}
+                                    >
+                                    <ListItemButton>
+                                        <ListItemDecorator>{menuItem.icon}</ListItemDecorator>
+                                        <ListItemContent>{menuItem.text}</ListItemContent>
+                                        {menuItem.children && menuItem.children.length > 0 &&
+                                            <KeyboardArrowRight />
+                                        }
+                                        {menuItem.more &&
+                                            <MoreHoriz />
+                                        }
+                                    </ListItemButton>
+                                </ListItem>
+                            );
+                        })}
+                    </List>
+                </>
+            }
 
             <Divider />
 
-            <Typography
-                level="body-xs"
-                sx={{ textTransform: 'uppercase', fontWeight: 'lg', mt: 2 }}
+            <div
+                className="flex flex-row items-center mt-4 cursor-pointer"
+                onClick={() => toggleSection('configuration')}
                 >
-                Configuration
-            </Typography>
-
-           <Stack
-                sx={{ mt: 2, mr: 2 }}
-                >
-                <Typography level="body-xs">Theme</Typography>
-                <ToggleButtonGroup
-                    value={mode}
-                    onChange={async (_event, value) => {
-                        if (value) {
-                            const newTheme = value as 'light' | 'dark' | 'system';
-                            setMode(newTheme);
-                            await config.set("theme", newTheme);
-                        }
-                    }}
-                    sx={{ mt: 1 }}
+                <Typography
+                    level="body-xs"
+                    sx={{ textTransform: 'uppercase', fontWeight: 'lg' }}
                     >
-                    <Button value="light">Light</Button>
-                    <Button value="dark">Dark</Button>
-                    <Button value="system">System</Button>
-                </ToggleButtonGroup>
-            </Stack>
+                    Configuration
+                </Typography>
+                <div className="flex-grow" />
+                {collapsedSections.configuration
+                    ? <KeyboardArrowRight fontSize="small" />
+                    : <ExpandMore fontSize="small" />
+                }
+            </div>
 
-           <Stack
-                sx={{ mt: 2, mr: 2 }}
-                >
-                <Typography level="body-xs">Row Height</Typography>
-                <Slider
-                    min={50}
-                    max={500}
-                    value={targetRowHeight}
-                    onChange={(e, value) => setTargetRowHeight(value as number)}
-                    />
-            </Stack>
+            {!collapsedSections.configuration &&
+                <>
+                    <Stack
+                        sx={{ mt: 2, mr: 2 }}
+                        >
+                        <Typography level="body-xs">Theme</Typography>
+                        <ToggleButtonGroup
+                            value={mode}
+                            onChange={async (_event, value) => {
+                                if (value) {
+                                    const newTheme = value as 'light' | 'dark' | 'system';
+                                    setMode(newTheme);
+                                    await config.set("theme", newTheme);
+                                }
+                            }}
+                            sx={{ mt: 1 }}
+                            >
+                            <Button value="light">Light</Button>
+                            <Button value="dark">Dark</Button>
+                            <Button value="system">System</Button>
+                        </ToggleButtonGroup>
+                    </Stack>
+
+                    <Stack
+                        sx={{ mt: 2, mr: 2 }}
+                        >
+                        <Typography level="body-xs">Row Height</Typography>
+                        <Slider
+                            min={50}
+                            max={500}
+                            value={targetRowHeight}
+                            onChange={(e, value) => setTargetRowHeight(value as number)}
+                            />
+                    </Stack>
+                </>
+            }
 
       </div>
     );
