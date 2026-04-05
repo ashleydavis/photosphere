@@ -279,6 +279,47 @@ export function GalleryImage({ item, onClick, x, y, width, height, isDragging }:
                 </div>
             }
 
+            {/* Flag toggle. */}
+
+            {(isHovered || item.labels?.includes("flagged")) &&
+                <div
+                    style={{
+                        position: "absolute",
+                        right: "6px",
+                        bottom: "6px",
+                        width: "24px",
+                        height: "24px",
+                        borderRadius: "50%",
+                        backgroundColor: "rgba(0, 0, 0, 0.35)",
+                        display: "flex",
+                        justifyContent: "center",
+                        alignItems: "center",
+                        cursor: "pointer",
+                    }}
+                    onClick={async (event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        const isFlagged = item.labels?.includes("flagged") ?? false;
+                        if (isFlagged) {
+                            await removeArrayValue(item._id, "labels", "flagged");
+                        }
+                        else {
+                            await addArrayValue(item._id, "labels", "flagged");
+                        }
+                    }}
+                    >
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill={item.labels?.includes("flagged") ? "red" : "rgba(255,255,255,0.7)"}
+                        width="15px"
+                        height="15px"
+                        >
+                        <path d="M14.4 6L14 4H5v17h2v-7h5.6l.4 2h7V6z"/>
+                    </svg>
+                </div>
+            }
+
             {/* Image number. */}
 
             {/* <div
