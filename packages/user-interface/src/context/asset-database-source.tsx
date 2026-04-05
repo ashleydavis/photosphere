@@ -321,21 +321,12 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
     // Closes the current database.
     //
     async function closeDatabase(): Promise<void> {
-        if (databasePath) {
-            taskQueueProvider.get().cancelTasks(databasePath);
-        }
-        if (unsubscribeCurrentLoad.current) {
-            unsubscribeCurrentLoad.current();
-            unsubscribeCurrentLoad.current = undefined;
-        }
-        loadingDatabasePath.current = undefined;
         setDatabasePath(undefined);
         loadedAssets.current = {};
         onReset.current.invoke();
         await platform.notifyDatabaseClosed();
     }
    
-
     //
     // Moves assets to another database.
     //
@@ -562,13 +553,12 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
 
         // Cleanup: cancel tasks and unsubscribe if component unmounts or database path changes
         return () => {
-            if (loadingDatabasePath.current !== undefined) {
-                console.log(`[useEffect cleanup] Cancelling tasks for database: ${loadingDatabasePath.current}`);
-                taskQueueProvider.get().cancelTasks(loadingDatabasePath.current);
-                if (unsubscribeCurrentLoad.current) {
-                    unsubscribeCurrentLoad.current();
-                    unsubscribeCurrentLoad.current = undefined;
-                }
+            if (databasePath) {
+                taskQueueProvider.get().cancelTasks(databasePath);
+            }
+            if (unsubscribeCurrentLoad.current) {
+                unsubscribeCurrentLoad.current();
+                unsubscribeCurrentLoad.current = undefined;
             }
             loadingDatabasePath.current = undefined;
         };
