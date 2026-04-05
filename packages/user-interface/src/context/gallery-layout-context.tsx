@@ -1,6 +1,7 @@
 import React, { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { computePartialLayout, IGalleryLayout } from "../lib/create-layout";
 import { useGallery } from "./gallery-context";
+import { IGalleryItem } from "../lib/gallery-item";
 
 //
 // Manages the layout of the gallery.
@@ -69,9 +70,14 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
     //
     const [layout, setLayout] = useState<IGalleryLayout | undefined>(undefined);
 
-    const { sortedItems, onReset, onNewItems, onItemsDeleted, searchText, sortBy, sorting } = useGallery();
+    const { sortedItems, onReset, onNewItems, onItemsDeleted, onItemsUpdated, getItemById, searchText, sortBy, sorting } = useGallery();
 
     const scrollToHandler = useRef<(scrollTop: number) => void>();
+
+    //
+    // Maps assetId to its position in the layout for O(1) item replacement on update.
+    //
+    const layoutItemsIndex = useRef<Map<string, { rowIndex: number; itemIndex: number }>>(new Map());
 
     //
     // Scrolls the gallery to the specified location.
@@ -113,7 +119,18 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
             return;
         }
         const _sorting = sorting();
-        setLayout(computePartialLayout(undefined, sortedItems(), galleryWidth, targetRowHeight, _sorting.group, _sorting.heading));
+        const newLayout = computePartialLayout(undefined, sortedItems(), galleryWidth, targetRowHeight, _sorting.group, _sorting.heading);
+
+        const newIndex = new Map<string, { rowIndex: number; itemIndex: number }>();
+        for (let rowIndex = 0; rowIndex < newLayout.rows.length; rowIndex++) {
+            const row = newLayout.rows[rowIndex];
+            for (let itemIndex = 0; itemIndex < row.items.length; itemIndex++) {
+                newIndex.set(row.items[itemIndex]._id, { rowIndex, itemIndex });
+            }
+        }
+        layoutItemsIndex.current = newIndex;
+
+        setLayout(newLayout);
     }
 
     useEffect(() => {
@@ -134,9 +151,39 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
                 rebuildLayout();
             });
 
+            //
+            // Updates item references in-place when items are updated, without rebuilding the layout.
+            //
+            const subscription3 = onItemsUpdated.subscribe(({ assetIds }) => {
+                setLayout(prev => {
+                    if (!prev) {
+                        return prev;
+                    }
+                    const newRows = prev.rows.slice();
+                    let changed = false;
+                    for (const assetId of assetIds) {
+                        const position = layoutItemsIndex.current.get(assetId);
+                        if (position === undefined) {
+                            continue;
+                        }
+                        const updatedItem = getItemById(assetId);
+                        if (updatedItem === undefined) {
+                            continue;
+                        }
+                        const row = newRows[position.rowIndex];
+                        const newItems = row.items.slice() as IGalleryItem[];
+                        newItems[position.itemIndex] = updatedItem;
+                        newRows[position.rowIndex] = { ...row, items: newItems };
+                        changed = true;
+                    }
+                    return changed ? { ...prev, rows: newRows } : prev;
+                });
+            });
+
             return () => {
                 subscription1.unsubscribe();
                 subscription2.unsubscribe();
+                subscription3.unsubscribe();
             };
         }
 

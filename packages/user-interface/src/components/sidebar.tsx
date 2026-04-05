@@ -494,6 +494,18 @@ export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
                         </ListItemButton>
                     </ListItem>
                 </NavLink>
+
+                <ListItem
+                    onClick={() => {
+                        search(".labels=starred");
+                        setSidebarOpen(false);
+                    }}
+                    >
+                    <ListItemButton>
+                        <ListItemDecorator><Star sx={{ color: "gold" }} /></ListItemDecorator>
+                        <ListItemContent>Starred</ListItemContent>
+                    </ListItemButton>
+                </ListItem>
             </List>
 
             {recentSearches.length > 0 &&
@@ -577,7 +589,7 @@ export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
                                             }}
                                             sx={{ minHeight: '32px', minWidth: '32px' }}
                                         >
-                                            <Star fontSize="small" />
+                                            <Star fontSize="small" sx={{ color: "gold" }} />
                                         </IconButton>
                                     }
                                     >

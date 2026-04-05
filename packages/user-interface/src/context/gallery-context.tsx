@@ -265,6 +265,27 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     const allItemsIndex = useRef<Map<string, number>>(new Map<string, number>());
 
     //
+    // Map from asset id to index in searchedItems for O(1) lookup during updates.
+    //
+    const searchedItemsIndex = useRef<Map<string, number>>(new Map<string, number>());
+
+    //
+    // Map from asset id to index in sortedItems for O(1) lookup during updates.
+    //
+    const sortedItemsIndex = useRef<Map<string, number>>(new Map<string, number>());
+
+    //
+    // Builds an index map from asset id to array index for O(1) lookup.
+    //
+    function buildItemsIndex(items: IGalleryItem[]): Map<string, number> {
+        const index = new Map<string, number>();
+        for (let i = 0; i < items.length; i++) {
+            index.set(items[i]._id, i);
+        }
+        return index;
+    }
+
+    //
     // Items found by search (unsorted).
     //
     const searchedItems = useRef<IGalleryItem[]>([]);
@@ -392,7 +413,9 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
         allItems.current = [];
         allItemsIndex.current.clear();
         searchedItems.current = [];
+        searchedItemsIndex.current.clear();
         sortedItems.current = [];
+        sortedItemsIndex.current.clear();
         setSelectedItems(new Set<string>());
         setSearchText("");
         setTime(Date.now());
@@ -418,13 +441,19 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
         }
 
         const newSearchedItems = applySearch(newItems, searchText);
+        const baseSearchedIndex = searchedItems.current.length;
         searchedItems.current = searchedItems.current.concat(newSearchedItems);
+        for (let i = 0; i < newSearchedItems.length; i++) {
+            searchedItemsIndex.current.set(newSearchedItems[i]._id, baseSearchedIndex + i);
+        }
+
         const sorting = sortingMap[sortByRef.current];
         if (!sorting) {
             throw new Error(`Unknown sorting value: ${sortByRef.current}`);
         }
 
         sortedItems.current = applySort(searchedItems.current, sorting);
+        sortedItemsIndex.current = buildItemsIndex(sortedItems.current);
 
         setTime(Date.now());
 
@@ -452,6 +481,16 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
                 if (itemIndex !== undefined) {
                     allItems.current[itemIndex] = updatedItem;
                 }
+
+                const searchedIndex = searchedItemsIndex.current.get(assetId);
+                if (searchedIndex !== undefined) {
+                    searchedItems.current[searchedIndex] = updatedItem;
+                }
+
+                const sortedIndex = sortedItemsIndex.current.get(assetId);
+                if (sortedIndex !== undefined) {
+                    sortedItems.current[sortedIndex] = updatedItem;
+                }
             }
         }
 
@@ -477,7 +516,9 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     function _onItemsDeleted(itemsRemoved: IItemsUpdate) { 
         allItems.current = removeItemsFromArray(allItems.current, itemsRemoved.assetIds);
         searchedItems.current = removeItemsFromArray(searchedItems.current, itemsRemoved.assetIds);
+        searchedItemsIndex.current = buildItemsIndex(searchedItems.current);
         sortedItems.current = removeItemsFromArray(sortedItems.current, itemsRemoved.assetIds);
+        sortedItemsIndex.current = buildItemsIndex(sortedItems.current);
         setTime(Date.now());
 
         onItemsDeleted.current.invoke(itemsRemoved);
@@ -650,6 +691,7 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
         }
 
         searchedItems.current = applySearch(allItems.current, newSearchText);
+        searchedItemsIndex.current = buildItemsIndex(searchedItems.current);
 
         const sorting = sortingMap[sortByRef.current];
         if (!sorting) {
@@ -657,6 +699,7 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
         }
 
         sortedItems.current = applySort(searchedItems.current, sorting);
+        sortedItemsIndex.current = buildItemsIndex(sortedItems.current);
 
         setSelectedItems(new Set<string>());
         setSearchText(newSearchText); // Triggers layout update.
@@ -737,6 +780,7 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
         }
 
         sortedItems.current = applySort(searchedItems.current, sorting);
+        sortedItemsIndex.current = buildItemsIndex(sortedItems.current);
 
         sortByRef.current = sortBy;
         setTime(Date.now());

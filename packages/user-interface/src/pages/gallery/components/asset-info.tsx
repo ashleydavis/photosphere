@@ -3,6 +3,7 @@ import dayjs from "dayjs";
 import { useGalleryItem } from "../../../context/gallery-item-context";
 import _ from "lodash";
 import { Textarea, IconButton, Button, Chip, Typography, Sheet, Input } from "@mui/joy";
+import { Star, StarBorder } from "@mui/icons-material";
 
 export interface IAssetInfoProps { 
 
@@ -139,6 +140,28 @@ export function AssetInfo({ onClose, onDeleted }: IAssetInfoProps) {
                     </IconButton>
 
                     <Typography level="title-lg" className="ml-2">Info</Typography>
+
+                    <div className="flex-grow" />
+
+                    <IconButton
+                        variant="plain"
+                        color="neutral"
+                        title={asset.labels?.includes("starred") ? "Unstar" : "Star"}
+                        onClick={async () => {
+                            if (asset.labels?.includes("starred")) {
+                                await removeArrayValue("labels", "starred");
+                            }
+                            else {
+                                await addArrayValue("labels", "starred");
+                            }
+                        }}
+                        sx={{ mr: 1 }}
+                        >
+                        {asset.labels?.includes("starred")
+                            ? <Star sx={{ color: "gold" }} />
+                            : <StarBorder />
+                        }
+                    </IconButton>
                 </div>
             </div>
 

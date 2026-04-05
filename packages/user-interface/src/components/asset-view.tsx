@@ -5,6 +5,7 @@ import { FullImage } from "./full-image";
 import { Video } from "./video";
 import { useGallery } from "../context/gallery-context";
 import { Drawer, IconButton } from "@mui/joy";
+import { Star, StarBorder } from "@mui/icons-material";
 
 export interface IAssetViewProps { 
 
@@ -30,7 +31,7 @@ export interface IAssetViewProps {
 export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
 
     const { getNext, getPrev } = useGallery();
-    const { asset } = useGalleryItem();
+    const { asset, addArrayValue, removeArrayValue } = useGalleryItem();
 
     // 
     // Set to true to open the info modal.
@@ -101,11 +102,32 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                     </IconButton>
 
                     <IconButton
+                        className="pointer-events-auto"
+                        variant="outlined"
+                        color="neutral"
+                        sx={asset.labels?.includes("starred") ? { ml: 'auto', color: "gold" } : { ml: 'auto' }}
+                        title={asset.labels?.includes("starred") ? "Unstar" : "Star"}
+                        onClick={async () => {
+                            if (asset.labels?.includes("starred")) {
+                                await removeArrayValue("labels", "starred");
+                            }
+                            else {
+                                await addArrayValue("labels", "starred");
+                            }
+                        }}
+                        >
+                        {asset.labels?.includes("starred")
+                            ? <Star />
+                            : <StarBorder />
+                        }
+                    </IconButton>
+
+                    <IconButton
                         data-testid="open-info-button"
                         className="pointer-events-auto"
                         variant="outlined"
                         color="neutral"
-                        sx={{ ml: 'auto' }}
+                        sx={{ ml: 1 }}
                         onClick={() => {
                             setOpenInfo(true);
                         }}
