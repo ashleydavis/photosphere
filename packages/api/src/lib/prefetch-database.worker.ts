@@ -29,7 +29,7 @@ export interface IPrefetchDatabaseData {
 //
 export async function prefetchDatabaseHandler(
     data: IPrefetchDatabaseData,
-    _context: ITaskContext
+    context: ITaskContext
 ): Promise<void> {
     if (!data.databasePath) {
         throw new Error("databasePath is required");
@@ -72,6 +72,9 @@ export async function prefetchDatabaseHandler(
     // Fetch missing files PREFETCH_CONCURRENCY at a time without accumulating them in memory.
     //
     for await (const batch of batchGenerator(missingFiles(), PREFETCH_CONCURRENCY)) {
+        if (context.isCancelled()) {
+            break;
+        }
         await Promise.all(batch.map(async filePath => {
             await retry(async () => {
                 const stream = await originStorage.readStream(filePath);

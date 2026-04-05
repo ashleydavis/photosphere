@@ -20,6 +20,11 @@ export interface ITaskContext {
     // source tags the task so it can be cancelled via cancelTasks().
     //
     queueTask: (type: string, data: any, source: string) => void;
+
+    //
+    // Returns true if this task has been cancelled and should stop as soon as possible.
+    //
+    isCancelled: () => boolean;
 }
 
 //

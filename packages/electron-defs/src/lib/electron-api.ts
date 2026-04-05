@@ -19,6 +19,7 @@ export interface IRendererLogMessage {
 //
 export interface IElectronAPI {
     addTask: (taskType: string, data: any, source: string, taskId?: string) => void;
+    cancelTasks: (source: string) => void;
     onMessage: (messageType: string, callback: (data: any) => void) => void;
     removeAllListeners: (messageType: string) => void;
     openDatabase: () => Promise<void>;

@@ -24,6 +24,7 @@ export class WorkerBackendInline implements IWorkerBackend {
     private maxConcurrent: number;
     private tasksRunning: number = 0;
     private baseContext: IBaseTaskContext;
+    private cancelledSources: Set<string> = new Set();
 
     // Initializes the inline worker backend with max concurrent tasks and working directory
     constructor(maxConcurrent: number, uuidGenerator: IUuidGenerator, timestampProvider: ITimestampProvider, workerOptions: { verbose: boolean; sessionId: string }) {
@@ -228,6 +229,7 @@ export class WorkerBackendInline implements IWorkerBackend {
                 queueTask: (type: string, data: any, source: string): void => {
                     this.notifyQueueTaskCallbacks(type, data, source);
                 },
+                isCancelled: (): boolean => this.cancelledSources.has(task.source),
             };
 
             const outputs = await executeTaskHandler(task.type, task.data, taskContextWithSendMessage);
@@ -264,6 +266,13 @@ export class WorkerBackendInline implements IWorkerBackend {
     //
     isIdle(): boolean {
         return this.tasksRunning === 0;
+    }
+
+    //
+    // Signals running tasks with the given source to cancel.
+    //
+    cancelTasks(source: string): void {
+        this.cancelledSources.add(source);
     }
 
     //

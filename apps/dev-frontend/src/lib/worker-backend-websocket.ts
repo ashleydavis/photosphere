@@ -142,6 +142,13 @@ export class WorkerBackendWebSocket implements IWorkerBackend {
     }
 
     //
+    // Sends a cancel-tasks message to the server so it can cancel running tasks with the given source.
+    //
+    cancelTasks(source: string): void {
+        this.ws.send(JSON.stringify({ type: "cancel-tasks", source }));
+    }
+
+    //
     // Checks if all workers are idle (no active tasks).
     //
     isIdle(): boolean {

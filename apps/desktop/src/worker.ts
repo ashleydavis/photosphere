@@ -92,30 +92,35 @@ const sessionId = workerOptions.sessionId;
 // Initialize the worker message listener
 //
 function initWorker(): void {
+    let currentTaskSource: string | null = null;
+    let cancelled = false;
+
     parentPort.on('message', async (event: any) => {
         const message = event.data;
 
         if (message.type === 'execute') {
-            const { taskId } = message;
+            const { taskId, source } = message;
+            currentTaskSource = source;
+            cancelled = false;
 
             // Create a task-specific sendMessage function that captures the task ID in a closure
             // This ensures messages are correctly associated with the current task
-            const taskSpecificSendMessage = (message: any): void => {
+            const taskSpecificSendMessage = (msg: any): void => {
                 const taskMessage: IWorkerTaskMessage = {
                     type: "task-message",
                     taskId,
-                    message
+                    message: msg
                 };
                 parentPort.postMessage(taskMessage);
             };
 
             // Create a task-specific queueTask function that sends a queue-task message to the main thread
-            const taskSpecificQueueTask = (type: string, data: any, source: string): void => {
+            const taskSpecificQueueTask = (type: string, data: any, taskSource: string): void => {
                 const queueTaskMsg: IWorkerQueueTaskMessage = {
                     type: "queue-task",
                     taskType: type,
                     data,
-                    source,
+                    source: taskSource,
                 };
                 parentPort.postMessage(queueTaskMsg);
             };
@@ -126,9 +131,16 @@ function initWorker(): void {
                 sessionId,
                 sendMessage: taskSpecificSendMessage,
                 queueTask: taskSpecificQueueTask,
+                isCancelled: () => cancelled,
             };
 
             await executeTask(message, taskContext);
+            currentTaskSource = null;
+        }
+        else if (message.type === 'cancel-tasks') {
+            if (currentTaskSource === message.source) {
+                cancelled = true;
+            }
         }
         else {
             throw new Error(`Unknown message type: ${message.type}`);

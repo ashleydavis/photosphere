@@ -42,7 +42,7 @@ export async function loadAssetsHandler(
     let totalAssets = 0;
     let batchesSent = 0;
     
-    while (true) {
+    while (!context.isCancelled()) {
         //todo: The sort order should be configurable.
         const result = await metadataCollection.sortIndex("photoDate", "desc").getPage(nextPageId);
         

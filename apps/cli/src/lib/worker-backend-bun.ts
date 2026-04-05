@@ -53,6 +53,19 @@ export interface IWorkerMessage {
     taskId: string;
     taskType: string;
     data: any;
+
+    //
+    // Source tag of the task, used to match cancellation signals.
+    //
+    source: string;
+}
+
+//
+// Message sent from main thread to worker to cancel tasks with a given source.
+//
+export interface IWorkerCancelTasksMessage {
+    type: "cancel-tasks";
+    source: string;
 }
 
 //
@@ -616,6 +629,7 @@ export class WorkerBackendBun implements IWorkerBackend {
                 taskId: task.id,
                 taskType: task.type,
                 data: task.data,
+                source: task.source,
             };
             availableWorker.worker.postMessage(executeMsg);
         } 
@@ -632,6 +646,20 @@ export class WorkerBackendBun implements IWorkerBackend {
         }
 
         return true;
+    }
+
+    //
+    // Broadcasts a cancel-tasks message to all workers.
+    // Each worker cancels its running task if its source matches.
+    //
+    cancelTasks(source: string): void {
+        const cancelMsg: IWorkerCancelTasksMessage = {
+            type: "cancel-tasks",
+            source,
+        };
+        for (const workerState of this.workers) {
+            workerState.worker.postMessage(cancelMsg);
+        }
     }
 
     //

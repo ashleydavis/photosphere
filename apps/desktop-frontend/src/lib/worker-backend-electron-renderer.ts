@@ -212,6 +212,13 @@ export class WorkerBackendElectronRenderer implements IWorkerBackend {
     }
 
     //
+    // Forwards the cancel signal to the main process via IPC.
+    //
+    cancelTasks(source: string): void {
+        this.electronAPI.cancelTasks(source);
+    }
+
+    //
     // Checks if all workers are idle.
     //
     isIdle(): boolean {

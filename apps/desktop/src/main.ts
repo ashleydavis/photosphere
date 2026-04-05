@@ -161,6 +161,15 @@ ipcMain.on('add-task', (event, taskType: string, data: any, source: string, task
     taskQueue.addTask(taskType, data, source, taskId);
 });
 
+// IPC handler for cancelling tasks
+ipcMain.on('cancel-tasks', (_event, source: string) => {
+    if (!taskQueue) {
+        return;
+    }
+
+    taskQueue.cancelTasks(source);
+});
+
 // IPC handler for opening file dialog
 // Note: ipcMain.handle automatically catches errors from async functions and sends them to the renderer.
 // If the handler throws or returns a rejected promise, Electron serializes the error and sends it to the renderer.
