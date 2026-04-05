@@ -46,8 +46,9 @@ export interface IGalleryImageProps {
 export function GalleryImage({ item, onClick, x, y, width, height, isDragging }: IGalleryImageProps) {
     const [microDataURL, setMicroDataURL] = useState<string | undefined>(item.micro != undefined ? `data:image/jpeg;base64,${item.micro}` : undefined);
     const [thumbObjectURL, setThumbObjectURL] = useState<string | undefined>(undefined);
+    const [isHovered, setIsHovered] = useState<boolean>(false);
 
-    const { loadAsset, unloadAsset, addToMultipleSelection, removeFromMultipleSelection, selectedItems, isSelecting, enableSelecting } = useGallery();
+    const { loadAsset, unloadAsset, addToMultipleSelection, removeFromMultipleSelection, selectedItems, isSelecting, enableSelecting, addArrayValue, removeArrayValue } = useGallery();
 
     useEffect(() => {
         if (thumbObjectURL) {
@@ -112,6 +113,8 @@ export function GalleryImage({ item, onClick, x, y, width, height, isDragging }:
                 height: `${height}px`,
                 overflow: "hidden",
             }}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
             >
             {item.color
                 && <div                    
@@ -231,6 +234,47 @@ export function GalleryImage({ item, onClick, x, y, width, height, isDragging }:
                         height="32px"
                         >
                         <path d="M8 5v14l11-7z"/>
+                    </svg>
+                </div>
+            }
+
+            {/* Star toggle. */}
+
+            {(isHovered || item.labels?.includes("starred")) &&
+                <div
+                    style={{
+                        position: "absolute",
+                        right: "6px",
+                        top: "6px",
+                        width: "24px",
+                        height: "24px",
+                        borderRadius: "50%",
+                        backgroundColor: "rgba(0, 0, 0, 0.35)",
+                        display: "flex",
+                        justifyContent: "center",
+                        alignItems: "center",
+                        cursor: "pointer",
+                    }}
+                    onClick={async (event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        const isStarred = item.labels?.includes("starred") ?? false;
+                        if (isStarred) {
+                            await removeArrayValue(item._id, "labels", "starred");
+                        }
+                        else {
+                            await addArrayValue(item._id, "labels", "starred");
+                        }
+                    }}
+                    >
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill={item.labels?.includes("starred") ? "gold" : "rgba(255,255,255,0.7)"}
+                        width="15px"
+                        height="15px"
+                        >
+                        <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
                     </svg>
                 </div>
             }
