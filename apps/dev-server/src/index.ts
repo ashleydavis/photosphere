@@ -7,7 +7,7 @@ import { WebSocketServer, type WebSocket } from "ws";
 import { createAssetServer } from "rest-api";
 import { exec } from "child_process";
 import { promisify } from "util";
-import { loadDesktopConfig, addRecentDatabase, removeRecentDatabase, updateLastFolder, clearLastDatabase, getRecentSearches, addRecentSearch, removeRecentSearch } from "node-utils";
+import { loadDesktopConfig, saveDesktopConfig, addRecentDatabase, removeRecentDatabase, updateLastFolder, clearLastDatabase } from "node-utils";
 import * as path from "path";
 
 const execAsync = promisify(exec);
@@ -117,14 +117,11 @@ wss.on("connection", (ws: WebSocket) => {
                 // Handle request to clear last database
                 await handleClearLastDatabase(ws);
             }
-            else if (messageData.type === "get-recent-searches") {
-                await handleGetRecentSearches(ws);
+            else if (messageData.type === "get-config") {
+                await handleGetConfig(ws, messageData.key);
             }
-            else if (messageData.type === "add-recent-search") {
-                await handleAddRecentSearch(ws, messageData.searchText);
-            }
-            else if (messageData.type === "remove-recent-search") {
-                await handleRemoveRecentSearch(ws, messageData.searchText);
+            else if (messageData.type === "set-config") {
+                await handleSetConfig(ws, messageData.key, messageData.value);
             }
         }
         catch (error) {
@@ -263,59 +260,42 @@ async function handleClearLastDatabase(ws: WebSocket): Promise<void> {
 }
 
 //
-// Handles request for the recent searches list.
+// Handles a request to read one value from the desktop config file.
 //
-async function handleGetRecentSearches(ws: WebSocket): Promise<void> {
+async function handleGetConfig(ws: WebSocket, key: string): Promise<void> {
     try {
-        const searches = await getRecentSearches();
+        const config = await loadDesktopConfig();
         ws.send(JSON.stringify({
-            type: "recent-searches",
-            searches,
+            type: "config-value",
+            value: (config as Record<string, unknown>)[key],
         }));
     }
     catch (error: any) {
         ws.send(JSON.stringify({
             type: "error",
-            message: error instanceof Error ? error.message : "Unknown error getting recent searches",
+            message: error instanceof Error ? error.message : "Unknown error getting config",
         }));
     }
 }
 
 //
-// Handles request to add a search to the recent searches list.
+// Handles a request to write one value to the desktop config file.
 //
-async function handleAddRecentSearch(ws: WebSocket, searchText: string): Promise<void> {
+async function handleSetConfig(ws: WebSocket, key: string, value: unknown): Promise<void> {
     try {
-        await addRecentSearch(searchText);
-        ws.send(JSON.stringify({
-            type: "search-added",
-        }));
+        const config = await loadDesktopConfig();
+        (config as Record<string, unknown>)[key] = value;
+        await saveDesktopConfig(config);
+        ws.send(JSON.stringify({ type: "config-set" }));
     }
     catch (error: any) {
         ws.send(JSON.stringify({
             type: "error",
-            message: error instanceof Error ? error.message : "Unknown error adding recent search",
+            message: error instanceof Error ? error.message : "Unknown error setting config",
         }));
     }
 }
 
-//
-// Handles request to remove a search from the recent searches list.
-//
-async function handleRemoveRecentSearch(ws: WebSocket, searchText: string): Promise<void> {
-    try {
-        await removeRecentSearch(searchText);
-        ws.send(JSON.stringify({
-            type: "search-removed",
-        }));
-    }
-    catch (error: any) {
-        ws.send(JSON.stringify({
-            type: "error",
-            message: error instanceof Error ? error.message : "Unknown error removing recent search",
-        }));
-    }
-}
 
 //
 // Shows a directory picker dialog using platform-specific tools.

@@ -1,6 +1,6 @@
 import React, { ReactNode, createContext, useContext, useEffect, useState } from "react";
 import { useGallery } from "./gallery-context";
-import { usePlatform } from "./platform-context";
+import { useConfig } from "./config-context";
 
 export interface ISearchContext {
     //
@@ -60,14 +60,14 @@ export function SearchContextProvider({ children }: ISearchContextProviderProps)
     const [recentSearches, setRecentSearches] = useState<string[]>([]);
 
     const { search, clearSearch, searchText } = useGallery();
-    const platform = usePlatform();
+    const config = useConfig();
 
     //
     // Load recent searches from the configuration file on mount.
     //
     useEffect(() => {
-        platform.getRecentSearches().then(searches => {
-            setRecentSearches(searches);
+        config.get<string[]>("recentSearches").then(searches => {
+            setRecentSearches(searches || []);
         });
     }, []);
 
@@ -87,7 +87,7 @@ export function SearchContextProvider({ children }: ISearchContextProviderProps)
     async function onCommitSearch() {
         await search(searchInput);
         if (searchInput.trim().length > 0) {
-            await platform.addRecentSearch(searchInput);
+            await config.add<string>("recentSearches", searchInput, 10);
             const updated = [searchInput, ...recentSearches.filter(item => item !== searchInput)].slice(0, 10);
             setRecentSearches(updated);
         }
@@ -96,9 +96,9 @@ export function SearchContextProvider({ children }: ISearchContextProviderProps)
     //
     // Removes a search from the recent searches list in the configuration file.
     //
-    async function removeRecentSearch(searchText: string) {
-        await platform.removeRecentSearch(searchText);
-        setRecentSearches(recentSearches.filter(item => item !== searchText));
+    async function removeRecentSearch(recentSearch: string) {
+        await config.remove<string>("recentSearches", recentSearch);
+        setRecentSearches(recentSearches.filter(item => item !== recentSearch));
     }
 
     //

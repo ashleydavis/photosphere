@@ -16,3 +16,4 @@ export * from "./lib/image";
 export * from "./context/gallery-source";
 export * from "./context/asset-database-source";
 export * from "./context/platform-context";
+export * from "./context/config-context";

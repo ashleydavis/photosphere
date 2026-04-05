@@ -18,6 +18,7 @@ import { useGalleryLayout } from '../context/gallery-layout-context';
 import { IGalleryLayout } from '../lib/create-layout';
 import { useGallery } from '../context/gallery-context';
 import { useSearch } from '../context/search-context';
+import { useConfig } from '../context/config-context';
 import Slider from '@mui/joy/Slider/Slider';
 import Stack from '@mui/joy/Stack/Stack';
 import dayjs from 'dayjs';
@@ -385,6 +386,7 @@ function makeFullMenu(navMenu: IMenuItem[], years: string[], locations: string[]
 export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
     const { setOpenSearch, recentSearches, removeRecentSearch } = useSearch();
     const { openDatabase } = useAssetDatabase();
+    const config = useConfig();
 
     const { dbs, removeDatabase } = useApp();
     const theme = useTheme();
@@ -690,7 +692,7 @@ export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
                         if (value) {
                             const newTheme = value as 'light' | 'dark' | 'system';
                             setMode(newTheme);
-                            await platform.setTheme(newTheme);
+                            await config.set("theme", newTheme);
                         }
                     }}
                     sx={{ mt: 1 }}

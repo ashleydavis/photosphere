@@ -1,5 +1,5 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
-import { PlatformContextProvider, type IPlatformContext } from "user-interface";
+import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext } from "user-interface";
 import type { IElectronAPI } from "electron-defs";
 
 export interface IPlatformProviderElectronProps {
@@ -111,35 +111,12 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         await electronAPI.notifyDatabaseClosed();
     }, [electronAPI]);
 
-    const getTheme = useCallback(async (): Promise<'light' | 'dark' | 'system'> => {
-        return await electronAPI.getTheme();
-    }, [electronAPI]);
-
-    const setTheme = useCallback(async (theme: 'light' | 'dark' | 'system'): Promise<void> => {
-        await electronAPI.setTheme(theme);
-    }, [electronAPI]);
-
     const onThemeChanged = useCallback((callback: (theme: 'light' | 'dark' | 'system') => void): (() => void) => {
-        // Add callback to set
         themeCallbacksRef.current.add(callback);
-
-        // Return unsubscribe function
         return () => {
             themeCallbacksRef.current.delete(callback);
         };
     }, []);
-
-    const getRecentSearches = useCallback(async (): Promise<string[]> => {
-        return await electronAPI.getRecentSearches();
-    }, [electronAPI]);
-
-    const addRecentSearch = useCallback(async (searchText: string): Promise<void> => {
-        await electronAPI.addRecentSearch(searchText);
-    }, [electronAPI]);
-
-    const removeRecentSearch = useCallback(async (searchText: string): Promise<void> => {
-        await electronAPI.removeRecentSearch(searchText);
-    }, [electronAPI]);
 
     const platformContext: IPlatformContext = {
         openDatabase,
@@ -149,18 +126,20 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         removeDatabase,
         notifyDatabaseOpened,
         notifyDatabaseClosed,
-        getTheme,
-        setTheme,
         onThemeChanged,
-        getRecentSearches,
-        addRecentSearch,
-        removeRecentSearch,
     };
 
+    const config = createConfig(
+        (key) => electronAPI.getConfig(key),
+        (key, value) => electronAPI.setConfig(key, value)
+    );
+
     return (
-        <PlatformContextProvider value={platformContext}>
-            {children}
-        </PlatformContextProvider>
+        <ConfigContextProvider value={config}>
+            <PlatformContextProvider value={platformContext}>
+                {children}
+            </PlatformContextProvider>
+        </ConfigContextProvider>
     );
 }
 

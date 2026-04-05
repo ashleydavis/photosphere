@@ -1,5 +1,5 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
-import { PlatformContextProvider, type IPlatformContext } from "user-interface";
+import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext } from "user-interface";
 
 export interface IPlatformProviderWebProps {
     children: ReactNode | ReactNode[];
@@ -208,111 +208,10 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         });
     }, [ws]);
 
-    const getTheme = useCallback(async (): Promise<'light' | 'dark' | 'system'> => {
-        // No-op for web platform, default to system
-        return 'system';
-    }, []);
-
-    const setTheme = useCallback(async (theme: 'light' | 'dark' | 'system'): Promise<void> => {
-        // No-op for web platform
-    }, []);
-
     const onThemeChanged = useCallback((callback: (theme: 'light' | 'dark' | 'system') => void): (() => void) => {
         // No-op for web platform
-        return () => {
-            // No-op
-        };
+        return () => {};
     }, []);
-
-    const getRecentSearches = useCallback(async (): Promise<string[]> => {
-        return new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                reject(new Error("Timeout waiting for recent searches"));
-            }, 5000);
-
-            const handleMessage = (event: MessageEvent) => {
-                try {
-                    const messageData = JSON.parse(event.data.toString());
-                    if (messageData.type === "recent-searches") {
-                        clearTimeout(timeout);
-                        ws.removeEventListener('message', handleMessage);
-                        resolve(messageData.searches || []);
-                    }
-                    else if (messageData.type === "error") {
-                        clearTimeout(timeout);
-                        ws.removeEventListener('message', handleMessage);
-                        reject(new Error(messageData.message || "Unknown error"));
-                    }
-                }
-                catch (error) {
-                    // Ignore parse errors for other message types
-                }
-            };
-
-            ws.addEventListener('message', handleMessage);
-            ws.send(JSON.stringify({ type: "get-recent-searches" }));
-        });
-    }, [ws]);
-
-    const addRecentSearch = useCallback(async (searchText: string): Promise<void> => {
-        return new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                reject(new Error("Timeout waiting for add recent search"));
-            }, 5000);
-
-            const handleMessage = (event: MessageEvent) => {
-                try {
-                    const messageData = JSON.parse(event.data.toString());
-                    if (messageData.type === "search-added") {
-                        clearTimeout(timeout);
-                        ws.removeEventListener('message', handleMessage);
-                        resolve();
-                    }
-                    else if (messageData.type === "error") {
-                        clearTimeout(timeout);
-                        ws.removeEventListener('message', handleMessage);
-                        reject(new Error(messageData.message || "Unknown error"));
-                    }
-                }
-                catch (error) {
-                    // Ignore parse errors for other message types
-                }
-            };
-
-            ws.addEventListener('message', handleMessage);
-            ws.send(JSON.stringify({ type: "add-recent-search", searchText }));
-        });
-    }, [ws]);
-
-    const removeRecentSearch = useCallback(async (searchText: string): Promise<void> => {
-        return new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                reject(new Error("Timeout waiting for remove recent search"));
-            }, 5000);
-
-            const handleMessage = (event: MessageEvent) => {
-                try {
-                    const messageData = JSON.parse(event.data.toString());
-                    if (messageData.type === "search-removed") {
-                        clearTimeout(timeout);
-                        ws.removeEventListener('message', handleMessage);
-                        resolve();
-                    }
-                    else if (messageData.type === "error") {
-                        clearTimeout(timeout);
-                        ws.removeEventListener('message', handleMessage);
-                        reject(new Error(messageData.message || "Unknown error"));
-                    }
-                }
-                catch (error) {
-                    // Ignore parse errors for other message types
-                }
-            };
-
-            ws.addEventListener('message', handleMessage);
-            ws.send(JSON.stringify({ type: "remove-recent-search", searchText }));
-        });
-    }, [ws]);
 
     const platformContext: IPlatformContext = {
         openDatabase,
@@ -322,18 +221,53 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         removeDatabase,
         notifyDatabaseOpened,
         notifyDatabaseClosed,
-        getTheme,
-        setTheme,
         onThemeChanged,
-        getRecentSearches,
-        addRecentSearch,
-        removeRecentSearch,
     };
 
+    //
+    // Sends a request over WebSocket and waits for a response matching the given type.
+    //
+    function sendAndWait<T>(request: object, responseType: string): Promise<T> {
+        return new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                reject(new Error(`Timeout waiting for ${responseType}`));
+            }, 5000);
+
+            const handleMessage = (event: MessageEvent) => {
+                try {
+                    const messageData = JSON.parse(event.data.toString());
+                    if (messageData.type === responseType) {
+                        clearTimeout(timeout);
+                        ws.removeEventListener('message', handleMessage);
+                        resolve(messageData.value as T);
+                    }
+                    else if (messageData.type === "error") {
+                        clearTimeout(timeout);
+                        ws.removeEventListener('message', handleMessage);
+                        reject(new Error(messageData.message || "Unknown error"));
+                    }
+                }
+                catch (error) {
+                    // Ignore parse errors for other message types
+                }
+            };
+
+            ws.addEventListener('message', handleMessage);
+            ws.send(JSON.stringify(request));
+        });
+    }
+
+    const config = createConfig(
+        (key) => sendAndWait<unknown>({ type: "get-config", key }, "config-value"),
+        (key, value) => sendAndWait<void>({ type: "set-config", key, value }, "config-set")
+    );
+
     return (
-        <PlatformContextProvider value={platformContext}>
-            {children}
-        </PlatformContextProvider>
+        <ConfigContextProvider value={config}>
+            <PlatformContextProvider value={platformContext}>
+                {children}
+            </PlatformContextProvider>
+        </ConfigContextProvider>
     );
 }
 
