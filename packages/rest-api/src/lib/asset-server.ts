@@ -5,6 +5,7 @@ import { createServer, type Server } from "http";
 import { createStorage } from "storage";
 import {
     applyDatabaseOps,
+    createLazyDatabaseStorage,
     createMediaFileDatabase,
     loadSortIndexes,
     streamAsset,
@@ -83,10 +84,9 @@ export async function createAssetServer(options: IAssetServerOptions): Promise<I
     async function loadAssetStream(assetId: string, assetType: string, databasePath: string): Promise<NodeJS.ReadableStream> {
 
         // log.info(`Loading asset stream ${assetId} of type ${assetType} from database ${databasePath}`);
-        
-        // Create storage without encryption
-        const { storage: assetStorage } = createStorage(databasePath, undefined, undefined);
-        
+
+        const assetStorage = await createLazyDatabaseStorage(databasePath);
+
         // Create database instance
         const database = createMediaFileDatabase(assetStorage, uuidGenerator, timestampProvider);
         

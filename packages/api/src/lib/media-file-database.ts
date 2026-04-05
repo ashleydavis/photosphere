@@ -1,6 +1,7 @@
 import { BsonDatabase, IBsonDatabase, IBsonCollection, getDatabaseRootHash } from "bdb";
-import { saveDatabaseConfig, updateDatabaseConfig } from "./database-config";
-import { IStorage, pathJoin, StoragePrefixWrapper } from "storage";
+import { loadDatabaseConfig, saveDatabaseConfig, updateDatabaseConfig } from "./database-config";
+import { createStorage, IStorage, pathJoin, StoragePrefixWrapper } from "storage";
+import { LazyOriginStorage } from "./lazy-origin-storage";
 import { ILocation, log, retry, IUuidGenerator, ITimestampProvider } from "utils";
 import dayjs from "dayjs";
 import { IAsset } from "defs";
@@ -563,6 +564,28 @@ export async function removeAsset(
     finally {
         await releaseWriteLock(rawStorage);
     }
+}
+
+//
+// Creates storage for the given database path. If the database is a partial replica with a
+// known origin, wraps the local storage in a LazyOriginStorage so that missing files are
+// fetched from the origin and cached locally on first access.
+//
+export async function createLazyDatabaseStorage(databasePath: string): Promise<IStorage> {
+    const { storage, rawStorage } = createStorage(databasePath, undefined, undefined);
+
+    const config = await loadDatabaseConfig(rawStorage);
+    if (!config?.origin) {
+        return storage;
+    }
+
+    const merkleTree = await loadMerkleTree(storage);
+    if (!merkleTree?.databaseMetadata?.isPartial) {
+        return storage;
+    }
+
+    const originStorage = createStorage(config.origin, undefined, undefined).storage;
+    return new LazyOriginStorage(storage, originStorage);
 }
 
 //

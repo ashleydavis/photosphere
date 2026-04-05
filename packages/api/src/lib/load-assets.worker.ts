@@ -2,10 +2,8 @@
 // Load assets worker handler - loads assets from database in pages
 //
 
-import { createStorage } from "storage";
-import { resolve } from "node:path";
 import type { ITaskContext } from "task-queue";
-import { createMediaFileDatabase } from "./media-file-database";
+import { createLazyDatabaseStorage, createMediaFileDatabase } from "./media-file-database";
 import type { ILoadAssetsData, ILoadAssetsResult } from "./load-assets.types";
 
 //
@@ -25,9 +23,8 @@ export async function loadAssetsHandler(
 
     console.log(`Loading assets from database ${data.databasePath}`);
 
-    // Create storage without encryption
-    const { storage } = createStorage(data.databasePath, undefined, undefined);
-    
+    const storage = await createLazyDatabaseStorage(data.databasePath);
+
     // Create database instance
     const database = createMediaFileDatabase(storage, uuidGenerator, timestampProvider);
     
