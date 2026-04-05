@@ -260,6 +260,11 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     const allItems = useRef<IGalleryItem[]>([]);
 
     //
+    // Map from asset id to index in allItems for O(1) lookup during updates.
+    //
+    const allItemsIndex = useRef<Map<string, number>>(new Map<string, number>());
+
+    //
     // Items found by search (unsorted).
     //
     const searchedItems = useRef<IGalleryItem[]>([]);
@@ -385,6 +390,7 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     //
     function _onReset(): void {
         allItems.current = [];
+        allItemsIndex.current.clear();
         searchedItems.current = [];
         sortedItems.current = [];
         setSelectedItems(new Set<string>());
@@ -405,7 +411,11 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     function _onNewItems(items: IGalleryItem[]) { 
 
         const newItems = removeDeletedAssets(items);
+        const baseIndex = allItems.current.length;
         allItems.current = allItems.current.concat(newItems);
+        for (let i = 0; i < newItems.length; i++) {
+            allItemsIndex.current.set(newItems[i]._id, baseIndex + i);
+        }
 
         const newSearchedItems = applySearch(newItems, searchText);
         searchedItems.current = searchedItems.current.concat(newSearchedItems);
@@ -429,7 +439,22 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     //
     // Invokes subscriptions for updated items.
     //
-    function _onItemsUpdated(itemUpdated: IItemsUpdate) { 
+    function _onItemsUpdated(itemUpdated: IItemsUpdate) {
+        //
+        // Sync allItems with the latest data from the source, because updates
+        // (e.g. addArrayValue) replace the object in the source store rather than
+        // mutating it in place, leaving allItems with a stale reference.
+        //
+        for (const assetId of itemUpdated.assetIds) {
+            const updatedItem = _getItemById(assetId);
+            if (updatedItem) {
+                const itemIndex = allItemsIndex.current.get(assetId);
+                if (itemIndex !== undefined) {
+                    allItems.current[itemIndex] = updatedItem;
+                }
+            }
+        }
+
         setTime(Date.now());
         onItemsUpdated.current.invoke(itemUpdated);
     }
