@@ -73,6 +73,7 @@ export class WorkerBackendWebSocket implements IWorkerBackend {
             taskId: task.id,
             taskType: task.type,
             data: task.data,
+            source: task.source,
         }));
         
         return true;
@@ -130,6 +131,14 @@ export class WorkerBackendWebSocket implements IWorkerBackend {
                 this.anyMessageCallbacks.splice(index, 1);
             }
         };
+    }
+
+    //
+    // Registers a callback that will be called when a task requests another task to be queued.
+    // For the WebSocket backend, task queuing happens server-side, so this is a no-op.
+    //
+    onQueueTask(_callback: (type: string, data: any, source: string) => void): () => void {
+        return () => {};
     }
 
     //

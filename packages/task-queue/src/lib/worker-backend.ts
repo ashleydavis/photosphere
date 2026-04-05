@@ -16,6 +16,11 @@ export interface ITask<TData> {
     type: string;
     status: TaskStatus;
     data: TData;
+
+    //
+    // Source tag used to group and cancel related tasks (e.g. a database path).
+    //
+    source: string;
     createdAt: Date;
     startedAt?: Date;
     completedAt?: Date;
@@ -97,6 +102,12 @@ export interface IWorkerBackend {
     // Returns an unsubscribe function.
     //
     onAnyTaskMessage(callback: TaskMessageCallback): UnsubscribeFn;
+
+    //
+    // Registers a callback that will be called when a task requests another task to be queued.
+    // Returns an unsubscribe function.
+    //
+    onQueueTask(callback: (type: string, data: any, source: string) => void): UnsubscribeFn;
 
     //
     // Checks if all workers are idle.

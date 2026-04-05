@@ -20,6 +20,7 @@ export class WorkerBackendInline implements IWorkerBackend {
     private messageCallbacks: Array<{ messageType: string; callback: TaskMessageCallback }> = [];
     private anyMessageCallbacks: TaskMessageCallback[] = [];
     private workerAvailableCallbacks: (() => void)[] = [];
+    private queueTaskCallbacks: Array<(type: string, data: any, source: string) => void> = [];
     private maxConcurrent: number;
     private tasksRunning: number = 0;
     private baseContext: IBaseTaskContext;
@@ -106,11 +107,33 @@ export class WorkerBackendInline implements IWorkerBackend {
     }
 
     //
+    // Registers a callback that will be called when a task requests another task to be queued.
+    //
+    onQueueTask(callback: (type: string, data: any, source: string) => void): () => void {
+        this.queueTaskCallbacks.push(callback);
+        return () => {
+            const index = this.queueTaskCallbacks.indexOf(callback);
+            if (index !== -1) {
+                this.queueTaskCallbacks.splice(index, 1);
+            }
+        };
+    }
+
+    //
     // Notifies callback of worker availability.
     //
     private notifyWorkerAvailable(): void {
         for (const callback of this.workerAvailableCallbacks) {
             callback();
+        }
+    }
+
+    //
+    // Notifies all registered queue-task callbacks.
+    //
+    private notifyQueueTaskCallbacks(type: string, data: any, source: string): void {
+        for (const callback of this.queueTaskCallbacks) {
+            callback(type, data, source);
         }
     }
 
@@ -198,10 +221,13 @@ export class WorkerBackendInline implements IWorkerBackend {
                 });
             };
 
-            // Create a task-specific context with the task-specific sendMessage
+            // Create a task-specific context with the task-specific sendMessage and queueTask
             const taskContextWithSendMessage: ITaskContext = {
                 ...this.baseContext,
                 sendMessage: taskSpecificSendMessage,
+                queueTask: (type: string, data: any, source: string): void => {
+                    this.notifyQueueTaskCallbacks(type, data, source);
+                },
             };
 
             const outputs = await executeTaskHandler(task.type, task.data, taskContextWithSendMessage);

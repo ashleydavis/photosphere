@@ -1,4 +1,3 @@
-import type { ITaskQueue } from "task-queue";
 import { RandomUuidGenerator, TimestampProvider } from "utils";
 import { TaskQueueProviderInline } from "./lib/task-queue-provider-inline";
 import express from "express";
@@ -19,8 +18,6 @@ const timestampProvider = new TimestampProvider();
 const sessionId = uuidGenerator.generate();
 const taskQueueProvider = new TaskQueueProviderInline(uuidGenerator, timestampProvider, sessionId);
 
-// Map of WebSocket connections to their task queues
-const wsTaskQueues = new Map<WebSocket, ITaskQueue>();
 
 // Create Express app for HTTP routes
 const app = express();
@@ -54,47 +51,41 @@ const wss = new WebSocketServer({ server });
 wss.on("connection", (ws: WebSocket) => {
     console.log("WebSocket connection opened");
 
+    const queue = taskQueueProvider.get();
+
+    // Set up task completion handler to send results back to this client
+    const unsubscribeTaskComplete = queue.onTaskComplete(async (task, result) => {
+        ws.send(JSON.stringify({
+            type: "task-completed",
+            taskId: result.taskId,
+            task: {
+                id: task.id,
+                type: task.type,
+                status: task.status,
+                data: task.data,
+                createdAt: task.createdAt.toISOString(),
+                startedAt: task.startedAt?.toISOString(),
+                completedAt: task.completedAt?.toISOString(),
+            },
+            result: result,
+        }));
+    });
+
+    // Set up task message handler to send messages back to this client
+    const unsubscribeTaskMessage = queue.onAnyTaskMessage(data => {
+        ws.send(JSON.stringify({
+            type: "task-message",
+            ...data,
+        }));
+    });
+
     ws.on("message", async (message: Buffer) => {
         try {
             const messageData = JSON.parse(message.toString());
 
             if (messageData.type === "add-task") {
-                // Get or create task queue for this WebSocket connection
-                let queue = wsTaskQueues.get(ws);
-                if (!queue) {
-                    queue = await taskQueueProvider.create();
-                    wsTaskQueues.set(ws, queue);
-
-                    // Set up task completion handler to send results back to client
-                    queue.onTaskComplete(async (task, result) => {
-                        ws.send(JSON.stringify({
-                            type: "task-completed",
-                            taskId: result.taskId,
-                            task: {
-                                id: task.id,
-                                type: task.type,
-                                status: task.status,
-                                data: task.data,
-                                createdAt: task.createdAt.toISOString(),
-                                startedAt: task.startedAt?.toISOString(),
-                                completedAt: task.completedAt?.toISOString(),
-                            },
-                            result: result,
-                        }));
-                    });
-
-                    // Set up task message handler to send messages back to client
-                    // Register for all message types
-                    queue.onAnyTaskMessage(data => {
-                        ws.send(JSON.stringify({
-                            type: "task-message",
-                            ...data, // TODO: might be better to just copy reference without spreading.
-                        }));
-                    });
-                }
-
-                // Queue the task using the client-provided task ID
-                const taskId = queue.addTask(messageData.taskType, messageData.data, messageData.taskId);
+                // Queue the task using the client-provided task ID and source
+                const taskId = queue.addTask(messageData.taskType, messageData.data, messageData.source, messageData.taskId);
                 console.log(`Queued task ${taskId} of type ${messageData.taskType}`);
             }
             else if (messageData.type === "open-database") {
@@ -135,12 +126,8 @@ wss.on("connection", (ws: WebSocket) => {
 
     ws.on("close", () => {
         console.log("WebSocket connection closed");
-        // Clean up task queue for this connection
-        const queue = wsTaskQueues.get(ws);
-        if (queue) {
-            queue.shutdown();
-            wsTaskQueues.delete(ws);
-        }
+        unsubscribeTaskComplete();
+        unsubscribeTaskMessage();
     });
 });
 

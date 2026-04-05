@@ -27,26 +27,36 @@ export interface ITaskQueue {
     //
     // Adds a task to the queue to be run. Returns uuid of the task.
     // If taskId is provided, it will be used instead of generating a new one.
+    // The source tags the task so it can be cancelled via cancelTasks().
     //
-    addTask(type: string, data: any, taskId?: string): string;
+    addTask(type: string, data: any, source: string, taskId?: string): string;
+
+    //
+    // Cancels all pending tasks with the given source tag.
+    // Tasks already running are not interrupted; their results will be ignored by filtered callbacks.
+    //
+    cancelTasks(source: string): void;
 
     //
     // Registers a callback that will be called when any task completes (success or failure).
+    // Returns an unsubscribe function to remove the callback.
     //
-    onTaskComplete<TInputs, TOutputs>(callback: TaskCompletionCallback<TInputs, TOutputs>): void;
+    onTaskComplete<TInputs, TOutputs>(callback: TaskCompletionCallback<TInputs, TOutputs>): UnsubscribeFn;
 
     //
     // Registers a callback that will be called when a task sends messages to the client.
     // The callback receives the task ID and the message data.
     // Only messages with the specified messageType will be passed to the callback.
+    // Returns an unsubscribe function to remove the callback.
     //
-    onTaskMessage<TMessage>(messageType: string, callback: TaskMessageCallback): void;
+    onTaskMessage<TMessage>(messageType: string, callback: TaskMessageCallback): UnsubscribeFn;
 
     //
     // Registers a callback that will be called for any task message, regardless of type.
     // The callback receives the task ID and the message data.
+    // Returns an unsubscribe function to remove the callback.
     //
-    onAnyTaskMessage<TMessage>(callback: TaskMessageCallback): void;
+    onAnyTaskMessage<TMessage>(callback: TaskMessageCallback): UnsubscribeFn;
 
     //
     // Awaits the completion of all tasks and an empty queue.
@@ -60,17 +70,17 @@ export interface ITaskQueue {
     getStatus(): IQueueStatus;
 
     //
-    // Shuts down the task queue and cleans up queue-specific resources.
-    // Note: This does NOT shut down the worker backend.
+    // Shuts down the task queue and its worker backend, terminating any running tasks.
+    // Should only be called when the queue is no longer needed (e.g. app exit, connection close).
     //
     shutdown(): void;
 }
 
 //
-// Provider object that creates and manages task queues.
+// Provider object that holds a task queue.
 //
 export interface ITaskQueueProvider {
-    create(): Promise<ITaskQueue>;
+    get(): ITaskQueue;
 }
 
 //
@@ -120,13 +130,18 @@ export class TaskQueue implements ITaskQueue {
                 this.dispatchNextTask();
             })
         );
+        this.unsubscribeFunctions.push(
+            this.workerBackend.onQueueTask((type: string, data: any, source: string) => {
+                this.addTask(type, data, source);
+            })
+        );
     }
 
     //
     // Adds a task to the queue to be executed. Returns the task ID (UUID).
     // The task will be executed when a worker becomes available.
     //
-    addTask(type: string, data: any, taskId?: string): string {
+    addTask(type: string, data: any, source: string, taskId?: string): string {
         const id = taskId || this.uuidGenerator.generate();
 
         const task: ITask<any> = {
@@ -134,6 +149,7 @@ export class TaskQueue implements ITaskQueue {
             type,
             status: TaskStatus.Pending,
             data,
+            source,
             createdAt: this.timestampProvider.dateNow()
         };
 
@@ -147,26 +163,70 @@ export class TaskQueue implements ITaskQueue {
     }
 
     //
+    // Cancels all pending tasks with the given source tag.
+    // Tasks already running are not interrupted.
+    //
+    cancelTasks(source: string): void {
+        const cancelledIds = this.pendingTasks.filter(taskId => {
+            const task = this.tasks.get(taskId);
+            return task?.source === source;
+        });
+
+        this.pendingTasks = this.pendingTasks.filter(taskId => {
+            const task = this.tasks.get(taskId);
+            return task?.source !== source;
+        });
+
+        for (const taskId of cancelledIds) {
+            this.tasks.delete(taskId);
+            this.tasksPending--;
+        }
+    }
+
+    //
     // Registers a callback that will be invoked whenever any task completes (success or failure).
     // Multiple callbacks can be registered and will all be called.
+    // Returns an unsubscribe function to remove the callback.
     //
-    onTaskComplete<TInputs, TOutputs>(callback: TaskCompletionCallback<TInputs, TOutputs>): void {
-        this.completionCallbacks.push(callback as TaskCompletionCallback<any, any>);
+    onTaskComplete<TInputs, TOutputs>(callback: TaskCompletionCallback<TInputs, TOutputs>): UnsubscribeFn {
+        const cb = callback as TaskCompletionCallback<any, any>;
+        this.completionCallbacks.push(cb);
+        return () => {
+            const index = this.completionCallbacks.indexOf(cb);
+            if (index !== -1) {
+                this.completionCallbacks.splice(index, 1);
+            }
+        };
     }
 
     //
     // Registers a callback that will be called when a task sends messages to the client.
     // If messageType is provided, only messages with that type will be passed to the callback.
+    // Returns an unsubscribe function to remove the callback.
     //
-    onTaskMessage<TMessage>(messageType: string, callback: TaskMessageCallback): void {
-        this.messageCallbacks.push({ messageType, callback });
+    onTaskMessage<TMessage>(messageType: string, callback: TaskMessageCallback): UnsubscribeFn {
+        const entry = { messageType, callback };
+        this.messageCallbacks.push(entry);
+        return () => {
+            const index = this.messageCallbacks.indexOf(entry);
+            if (index !== -1) {
+                this.messageCallbacks.splice(index, 1);
+            }
+        };
     }
 
     //
     // Registers a callback that will be called for any task message, regardless of type.
+    // Returns an unsubscribe function to remove the callback.
     //
-    onAnyTaskMessage<TMessage>(callback: TaskMessageCallback): void {
+    onAnyTaskMessage<TMessage>(callback: TaskMessageCallback): UnsubscribeFn {
         this.anyMessageCallbacks.push(callback);
+        return () => {
+            const index = this.anyMessageCallbacks.indexOf(callback);
+            if (index !== -1) {
+                this.anyMessageCallbacks.splice(index, 1);
+            }
+        };
     }
 
     //
@@ -321,11 +381,8 @@ export class TaskQueue implements ITaskQueue {
     }
 
     //
-    // Shuts down the task queue and cleans up queue-specific resources.
-    // Clears all tasks, pending tasks, and callbacks.
-    // Unsubscribes from worker backend events.
-    // Note: This does NOT shut down the worker backend. Worker backend shutdown
-    // should be handled separately by the code that manages the backend lifecycle.
+    // Shuts down the task queue and its worker backend, terminating any running tasks.
+    // Should only be called when the queue is no longer needed (e.g. app exit, connection close).
     //
     shutdown(): void {
         // Unsubscribe from worker backend events
@@ -333,7 +390,10 @@ export class TaskQueue implements ITaskQueue {
             unsubscribe();
         }
         this.unsubscribeFunctions = [];
-        
+
+        // Terminate all workers to cancel any running tasks
+        this.workerBackend.shutdown(); //fio: this is not good.
+
         this.tasks.clear();
         this.pendingTasks = [];
         this.messageCallbacks = [];

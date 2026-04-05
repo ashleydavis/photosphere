@@ -24,14 +24,14 @@ describe("TaskQueue", () => {
 
     describe("addTask", () => {
         it("should add a task and return a UUID", () => {
-            const taskId = queue.addTask("test-task", { data: "test" });
+            const taskId = queue.addTask("test-task", { data: "test" }, "test");
             expect(taskId).toBeDefined();
             expect(typeof taskId).toBe("string");
         });
 
         it("should add multiple tasks with unique IDs", () => {
-            const id1 = queue.addTask("test-task", { data: "test1" });
-            const id2 = queue.addTask("test-task", { data: "test2" });
+            const id1 = queue.addTask("test-task", { data: "test1" }, "test");
+            const id2 = queue.addTask("test-task", { data: "test2" }, "test");
             expect(id1).not.toBe(id2);
         });
     });
@@ -45,9 +45,9 @@ describe("TaskQueue", () => {
                 return `Task ${data.id} completed`;
             });
 
-            queue.addTask("test-task", { id: 1 });
-            queue.addTask("test-task", { id: 2 });
-            queue.addTask("test-task", { id: 3 });
+            queue.addTask("test-task", { id: 1 }, "test");
+            queue.addTask("test-task", { id: 2 }, "test");
+            queue.addTask("test-task", { id: 3 }, "test");
 
             await queue.awaitAllTasks();
 
@@ -66,9 +66,9 @@ describe("TaskQueue", () => {
                 throw new Error("Failed");
             });
 
-            queue.addTask("test-task", {});
-            queue.addTask("test-task", {});
-            queue.addTask("failing-task", {});
+            queue.addTask("test-task", {}, "test");
+            queue.addTask("test-task", {}, "test");
+            queue.addTask("failing-task", {}, "test");
 
             await queue.awaitAllTasks();
             
@@ -92,9 +92,9 @@ describe("TaskQueue", () => {
                 return "done";
             });
 
-            queue.addTask("slow-task", {});
-            queue.addTask("slow-task", {});
-            queue.addTask("slow-task", {});
+            queue.addTask("slow-task", {}, "test");
+            queue.addTask("slow-task", {}, "test");
+            queue.addTask("slow-task", {}, "test");
 
             const status = queue.getStatus();
             expect(status.total).toBe(3);
@@ -120,8 +120,8 @@ describe("TaskQueue", () => {
             const initialStatus = queue.getStatus();
             expect(initialStatus.total).toBe(0);
 
-            queue.addTask("test-task", {});
-            queue.addTask("test-task", {});
+            queue.addTask("test-task", {}, "test");
+            queue.addTask("test-task", {}, "test");
 
             // Check status while tasks are processing
             await new Promise(resolve => setTimeout(resolve, 10));
@@ -150,9 +150,9 @@ describe("TaskQueue", () => {
             });
 
             // Add 3 tasks - with 1 worker, 2 should remain pending
-            const taskId1 = singleWorkerQueue.addTask("slow-task", { id: 1 });
-            const taskId2 = singleWorkerQueue.addTask("slow-task", { id: 2 });
-            const taskId3 = singleWorkerQueue.addTask("slow-task", { id: 3 });
+            const taskId1 = singleWorkerQueue.addTask("slow-task", { id: 1 }, "test");
+            const taskId2 = singleWorkerQueue.addTask("slow-task", { id: 2 }, "test");
+            const taskId3 = singleWorkerQueue.addTask("slow-task", { id: 3 }, "test");
 
             // Give tasks a moment to be dispatched
             await new Promise(resolve => setTimeout(resolve, 10));
@@ -190,7 +190,7 @@ describe("TaskQueue", () => {
             // Add 5 tasks with 2 workers - should execute in batches
             const taskIds = [];
             for (let i = 1; i <= 5; i++) {
-                queue.addTask("test-task", { id: i });
+                queue.addTask("test-task", { id: i }, "test");
             }
 
             await queue.awaitAllTasks();
@@ -219,7 +219,7 @@ describe("TaskQueue", () => {
 
             // Add 10 tasks with maxWorkers=2
             for (let i = 1; i <= 10; i++) {
-                queueWithLimit.addTask("test-task", { id: i });
+                queueWithLimit.addTask("test-task", { id: i }, "test");
             }
 
             await queueWithLimit.awaitAllTasks();
@@ -239,7 +239,7 @@ describe("TaskQueue", () => {
 
             // Add tasks in order
             for (let i = 1; i <= 5; i++) {
-                queue.addTask("test-task", { id: i });
+                queue.addTask("test-task", { id: i }, "test");
             }
 
             await queue.awaitAllTasks();
@@ -264,7 +264,7 @@ describe("TaskQueue", () => {
                 metadata: { author: "test" }
             };
 
-            queue.addTask("test-task", taskData);
+            queue.addTask("test-task", taskData, "test");
             await queue.awaitAllTasks();
 
             expect(receivedData).toEqual(taskData);
@@ -286,7 +286,7 @@ describe("TaskQueue", () => {
                 date: new Date().toISOString()
             };
 
-            queue.addTask("test-task", complexData);
+            queue.addTask("test-task", complexData, "test");
             await queue.awaitAllTasks();
 
             expect(receivedData.nested.array).toEqual([1, 2, 3]);
@@ -301,7 +301,7 @@ describe("TaskQueue", () => {
                 return "done";
             });
 
-            queue.addTask("test-task", null);
+            queue.addTask("test-task", null, "test");
             await queue.awaitAllTasks();
 
             expect(receivedData).toBeNull();
@@ -315,7 +315,7 @@ describe("TaskQueue", () => {
                 return "done";
             });
 
-            queue.addTask("test-task", undefined);
+            queue.addTask("test-task", undefined, "test");
             await queue.awaitAllTasks();
 
             expect(receivedData).toBeUndefined();
@@ -329,7 +329,7 @@ describe("TaskQueue", () => {
                 return "done";
             });
 
-            queue.addTask("test-task", {});
+            queue.addTask("test-task", {}, "test");
             await queue.awaitAllTasks();
 
             expect(receivedData).toEqual({});
@@ -344,7 +344,7 @@ describe("TaskQueue", () => {
             });
 
             const arrayData = [1, 2, 3, "test", { key: "value" }];
-            queue.addTask("test-task", arrayData);
+            queue.addTask("test-task", arrayData, "test");
             await queue.awaitAllTasks();
 
             expect(receivedData).toEqual(arrayData);
@@ -373,8 +373,8 @@ describe("TaskQueue", () => {
             const workerBackend = new MockWorkerBackend(2);
             const customQueue = new TaskQueue(customUuidGenerator, timestampProvider, taskTimeout, workerBackend);
 
-            const taskId1 = customQueue.addTask("test-task", {});
-            const taskId2 = customQueue.addTask("test-task", {});
+            const taskId1 = customQueue.addTask("test-task", {}, "test");
+            const taskId2 = customQueue.addTask("test-task", {}, "test");
 
             // TestUuidGenerator creates deterministic UUIDs
             expect(taskId1).toBeDefined();
@@ -390,8 +390,8 @@ describe("TaskQueue", () => {
             const workerBackend = new MockWorkerBackend(2);
             const defaultQueue = new TaskQueue(uuidGenerator, timestampProvider, taskTimeout, workerBackend);
 
-            const taskId1 = defaultQueue.addTask("test-task", {});
-            const taskId2 = defaultQueue.addTask("test-task", {});
+            const taskId1 = defaultQueue.addTask("test-task", {}, "test");
+            const taskId2 = defaultQueue.addTask("test-task", {}, "test");
 
             expect(taskId1).toBeDefined();
             expect(taskId2).toBeDefined();
@@ -408,9 +408,9 @@ describe("TaskQueue", () => {
                 throw new Error("Failed");
             });
 
-            queue.addTask("success-task", {});
-            queue.addTask("fail-task", {});
-            queue.addTask("success-task", {});
+            queue.addTask("success-task", {}, "test");
+            queue.addTask("fail-task", {}, "test");
+            queue.addTask("success-task", {}, "test");
 
             await queue.awaitAllTasks();
 
@@ -433,9 +433,9 @@ describe("TaskQueue", () => {
                 return "done";
             });
 
-            queue.addTask("slow-task", {});
-            queue.addTask("slow-task", {});
-            queue.addTask("slow-task", {});
+            queue.addTask("slow-task", {}, "test");
+            queue.addTask("slow-task", {}, "test");
+            queue.addTask("slow-task", {}, "test");
 
             const startTime = Date.now();
             await queue.awaitAllTasks();
@@ -459,7 +459,7 @@ describe("TaskQueue", () => {
                 results.push(result);
             });
 
-            queue.addTask("throw-string", {});
+            queue.addTask("throw-string", {}, "test");
             await queue.awaitAllTasks();
 
             expect(results.length).toBe(1);
@@ -478,7 +478,7 @@ describe("TaskQueue", () => {
                 results.push(result);
             });
 
-            queue.addTask("throw-null", {});
+            queue.addTask("throw-null", {}, "test");
             await queue.awaitAllTasks();
 
             expect(results.length).toBe(1);
@@ -498,7 +498,7 @@ describe("TaskQueue", () => {
                 results.push(result);
             });
 
-            queue.addTask("custom-error", {});
+            queue.addTask("custom-error", {}, "test");
             await queue.awaitAllTasks();
 
             expect(results.length).toBe(1);
@@ -520,7 +520,7 @@ describe("TaskQueue", () => {
             // Shutdown the queue
             queue.shutdown();
 
-            queue.addTask("test-task", {});
+            queue.addTask("test-task", {}, "test");
             // Wait a bit to ensure any async callbacks would have fired
             await new Promise(resolve => setTimeout(resolve, 100));
 
@@ -543,7 +543,7 @@ describe("TaskQueue", () => {
             // Shutdown the queue
             queue.shutdown();
 
-            queue.addTask("test-task", {});
+            queue.addTask("test-task", {}, "test");
             // Wait a bit to ensure any async callbacks would have fired
             await new Promise(resolve => setTimeout(resolve, 100));
 
@@ -555,10 +555,12 @@ describe("TaskQueue", () => {
             let onTaskCompleteUnsubscribeCalled = false;
             let onAnyTaskMessageUnsubscribeCalled = false;
             let onWorkerAvailableUnsubscribeCalled = false;
+            let onQueueTaskUnsubscribeCalled = false;
 
             const onTaskCompleteUnsubscribe = () => { onTaskCompleteUnsubscribeCalled = true; };
             const onAnyTaskMessageUnsubscribe = () => { onAnyTaskMessageUnsubscribeCalled = true; };
             const onWorkerAvailableUnsubscribe = () => { onWorkerAvailableUnsubscribeCalled = true; };
+            const onQueueTaskUnsubscribe = () => { onQueueTaskUnsubscribeCalled = true; };
 
             // Create a mock worker backend that tracks unsubscribe calls
             const mockBackend = {
@@ -566,6 +568,7 @@ describe("TaskQueue", () => {
                 onTaskComplete: () => onTaskCompleteUnsubscribe,
                 onAnyTaskMessage: () => onAnyTaskMessageUnsubscribe,
                 onWorkerAvailable: () => onWorkerAvailableUnsubscribe,
+                onQueueTask: () => onQueueTaskUnsubscribe,
                 isIdle: () => true,
                 shutdown: () => {},
             };
@@ -578,6 +581,7 @@ describe("TaskQueue", () => {
             expect(onTaskCompleteUnsubscribeCalled).toBe(true);
             expect(onAnyTaskMessageUnsubscribeCalled).toBe(true);
             expect(onWorkerAvailableUnsubscribeCalled).toBe(true);
+            expect(onQueueTaskUnsubscribeCalled).toBe(true);
         });
     });
 });

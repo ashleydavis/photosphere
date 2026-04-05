@@ -13,6 +13,7 @@ export class TaskQueueProviderElectron implements ITaskQueueProvider {
     private electronAPI: IElectronAPI;
     private uuidGenerator: IUuidGenerator;
     private timestampProvider: ITimestampProvider;
+    private queue: ITaskQueue | undefined;
 
     constructor(electronAPI: IElectronAPI, uuidGenerator: IUuidGenerator, timestampProvider: ITimestampProvider) {
         this.electronAPI = electronAPI;
@@ -20,9 +21,14 @@ export class TaskQueueProviderElectron implements ITaskQueueProvider {
         this.timestampProvider = timestampProvider;
     }
 
-    async create(): Promise<ITaskQueue> {
+    get(): ITaskQueue {
+        if (this.queue) {
+            return this.queue;
+        }
+
         const workerBackend = new WorkerBackendElectronRenderer(this.electronAPI);
-        return new TaskQueue(this.uuidGenerator, this.timestampProvider, 0, workerBackend);
+        this.queue = new TaskQueue(this.uuidGenerator, this.timestampProvider, 0, workerBackend);
+        return this.queue;
     }
 }
 

@@ -8,7 +8,7 @@ import { serializeError } from "serialize-error";
 import { executeTaskHandler, TaskStatus } from "task-queue";
 import type { ITaskContext } from "task-queue";
 import { initWorkerContext, setWorkerTaskId, type IWorkerContext, type IWorkerOptions } from "./src/lib/worker-init";
-import type { IWorkerMessage, IWorkerTaskCompletedMessage, IWorkerTaskMessage, IWorkerReadyMessage } from "./src/lib/worker-backend-bun";
+import type { IWorkerMessage, IWorkerTaskCompletedMessage, IWorkerTaskMessage, IWorkerReadyMessage, IWorkerQueueTaskMessage } from "./src/lib/worker-backend-bun";
 import { initTaskHandlers } from "api";
 import { log } from "utils";
 
@@ -112,10 +112,22 @@ function initWorker(workerContext: IWorkerContext): void {
                 self.postMessage(taskMessage);
             };
 
+            // Create a task-specific queueTask function that sends a queue-task message to the main thread
+            const taskSpecificQueueTask = (type: string, data: any, source: string): void => {
+                const queueTaskMsg: IWorkerQueueTaskMessage = {
+                    type: "queue-task",
+                    taskType: type,
+                    data,
+                    source,
+                };
+                self.postMessage(queueTaskMsg);
+            };
+
             // Create a task-specific context with the task-specific sendMessage
             const taskContext: ITaskContext = {
                 ...workerContext,
                 sendMessage: taskSpecificSendMessage,
+                queueTask: taskSpecificQueueTask,
             };
 
             await executeTask(message, taskContext);

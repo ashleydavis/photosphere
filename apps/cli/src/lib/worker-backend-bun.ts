@@ -74,7 +74,21 @@ export interface IWorkerTaskMessage {
     message: any;
 }
 
-type IWorkerResponseMessage = IWorkerReadyMessage | IWorkerTaskCompletedMessage | IWorkerTaskMessage;
+//
+// Message sent from worker to main thread to request queuing a new task.
+//
+export interface IWorkerQueueTaskMessage {
+    type: "queue-task";
+    taskType: string;
+    data: any;
+
+    //
+    // Source tag to associate the new task with a logical group (e.g. database path).
+    //
+    source: string;
+}
+
+type IWorkerResponseMessage = IWorkerReadyMessage | IWorkerTaskCompletedMessage | IWorkerTaskMessage | IWorkerQueueTaskMessage;
 
 //
 // Manages workers on Bun.
@@ -90,8 +104,9 @@ export class WorkerBackendBun implements IWorkerBackend {
     private taskTimeouts: Map<string, NodeJS.Timeout> = new Map();
     private workerAvailableCallbacks: (() => void)[] = [];
     private completionCallbacks: WorkerTaskCompletionCallback[] = [];
-    private messageCallbacks: Array<{ messageType: string; callback: TaskMessageCallback }> = [];
+    private messageCallbacks: Array<{ messageType: string; callback: TaskMessageCallback }> = []; //todo: anon type?
     private anyMessageCallbacks: TaskMessageCallback[] = [];
+    private queueTaskCallbacks: Array<(type: string, data: any, source: string) => void> = [];
 
     //
     // Creates a new task queue with the specified number of workers.
@@ -167,6 +182,19 @@ export class WorkerBackendBun implements IWorkerBackend {
     }
 
     //
+    // Registers a callback that will be called when a task requests another task to be queued.
+    //
+    onQueueTask(callback: (type: string, data: any, source: string) => void): () => void {
+        this.queueTaskCallbacks.push(callback);
+        return () => {
+            const index = this.queueTaskCallbacks.indexOf(callback);
+            if (index !== -1) {
+                this.queueTaskCallbacks.splice(index, 1);
+            }
+        };
+    }
+
+    //
     // Gets current state of all workers for debugging.
     //
     getWorkerState(): IWorkerInfo[] {
@@ -200,6 +228,15 @@ export class WorkerBackendBun implements IWorkerBackend {
     private notifyWorkerAvailable(): void {
         for (const callback of this.workerAvailableCallbacks) {
             callback();
+        }
+    }
+
+    //
+    // Notifies all registered queue-task callbacks.
+    //
+    private notifyQueueTaskCallbacks(type: string, data: any, source: string): void {
+        for (const callback of this.queueTaskCallbacks) {
+            callback(type, data, source);
         }
     }
 
@@ -378,7 +415,7 @@ export class WorkerBackendBun implements IWorkerBackend {
     //
     private async handleWorkerMessage(workerState: IWorkerState, data: IWorkerResponseMessage): Promise<void> {
         // Handle worker ready message
-        if (data && typeof data === "object" && "type" in data && data.type === "worker-ready") {
+        if (data.type === "worker-ready") {
             workerState.isReady = true;
             workerState.isIdle = true;
             this.notifyWorkerStateChange();
@@ -387,7 +424,7 @@ export class WorkerBackendBun implements IWorkerBackend {
         }
 
         // Handle task result (both success and failure)
-        if (data && typeof data === "object" && "type" in data && data.type === "task-completed") {
+        if (data.type === "task-completed") {
             const { taskId, result } = data;
 
             // Clear timeout since task completed
@@ -420,9 +457,16 @@ export class WorkerBackendBun implements IWorkerBackend {
         }
 
         // Handle task message
-        if (data && typeof data === "object" && "type" in data && data.type === "task-message") {
+        if (data.type === "task-message") {
             const { taskId, message } = data;
             await this.notifyMessageCallbacks(taskId, message);
+            return;
+        }
+
+        // Handle queue-task request from worker
+        if (data.type === "queue-task") {
+            const msg = data as IWorkerQueueTaskMessage;
+            this.notifyQueueTaskCallbacks(msg.taskType, msg.data, msg.source);
             return;
         }
     }

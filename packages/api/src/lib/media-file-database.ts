@@ -567,6 +567,16 @@ export async function removeAsset(
 }
 
 //
+// Returns true if the database at the given path is a partial replica (lazy database).
+// Checks the isPartial flag stored in the merkle tree's database metadata.
+//
+export async function isDatabasePartial(databasePath: string): Promise<boolean> {
+    const { storage } = createStorage(databasePath, undefined, undefined);
+    const merkleTree = await loadMerkleTree(storage);
+    return merkleTree?.databaseMetadata?.isPartial === true;
+}
+
+//
 // Creates storage for the given database path. If the database is a partial replica with a
 // known origin, wraps the local storage in a LazyOriginStorage so that missing files are
 // fetched from the origin and cached locally on first access.

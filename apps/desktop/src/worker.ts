@@ -7,7 +7,7 @@ import { executeTaskHandler } from "task-queue";
 import type { ITaskContext } from "task-queue";
 import { type IWorkerOptions } from "./lib/worker-backend-electron-main";
 import { initTaskHandlers } from "api";
-import type { IWorkerMessage, IWorkerTaskCompletedMessage, IWorkerTaskMessage, IWorkerReadyMessage } from "./lib/worker-backend-electron-main";
+import type { IWorkerMessage, IWorkerTaskCompletedMessage, IWorkerTaskMessage, IWorkerReadyMessage, IWorkerQueueTaskMessage } from "./lib/worker-backend-electron-main";
 import { RandomUuidGenerator, TimestampProvider, setLog, log } from "utils";
 import { TestUuidGenerator, TestTimestampProvider } from "node-utils";
 import { createWorkerLog } from "./lib/worker-log-electron";
@@ -109,11 +109,23 @@ function initWorker(): void {
                 parentPort.postMessage(taskMessage);
             };
 
+            // Create a task-specific queueTask function that sends a queue-task message to the main thread
+            const taskSpecificQueueTask = (type: string, data: any, source: string): void => {
+                const queueTaskMsg: IWorkerQueueTaskMessage = {
+                    type: "queue-task",
+                    taskType: type,
+                    data,
+                    source,
+                };
+                parentPort.postMessage(queueTaskMsg);
+            };
+
             const taskContext: ITaskContext = {
                 uuidGenerator,
                 timestampProvider,
                 sessionId,
                 sendMessage: taskSpecificSendMessage,
+                queueTask: taskSpecificQueueTask,
             };
 
             await executeTask(message, taskContext);

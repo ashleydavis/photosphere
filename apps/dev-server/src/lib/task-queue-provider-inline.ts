@@ -13,6 +13,7 @@ export class TaskQueueProviderInline implements ITaskQueueProvider {
     private timestampProvider: ITimestampProvider;
     private sessionId: string;
     private maxConcurrent = 10;
+    private queue: ITaskQueue | undefined;
 
     constructor(uuidGenerator: IUuidGenerator, timestampProvider: ITimestampProvider, sessionId: string) {
         this.uuidGenerator = uuidGenerator;
@@ -20,8 +21,11 @@ export class TaskQueueProviderInline implements ITaskQueueProvider {
         this.sessionId = sessionId;
     }
 
-    async create(): Promise<ITaskQueue> {
-        // Create a new queue for each WebSocket connection
+    get(): ITaskQueue {
+        if (this.queue) {
+            return this.queue;
+        }
+
         const workerBackend = new WorkerBackendInline(
             this.maxConcurrent,
             this.uuidGenerator,
@@ -31,7 +35,8 @@ export class TaskQueueProviderInline implements ITaskQueueProvider {
                 sessionId: this.sessionId,
             }
         );
-        return new TaskQueue(this.uuidGenerator, this.timestampProvider, 0, workerBackend);
+        this.queue = new TaskQueue(this.uuidGenerator, this.timestampProvider, 0, workerBackend);
+        return this.queue;
     }
 }
 

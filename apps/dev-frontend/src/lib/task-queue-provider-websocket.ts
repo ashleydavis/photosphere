@@ -12,6 +12,7 @@ export class TaskQueueProviderWebSocket implements ITaskQueueProvider {
     private ws: WebSocket;
     private uuidGenerator: IUuidGenerator;
     private timestampProvider: ITimestampProvider;
+    private queue: ITaskQueue | undefined;
 
     constructor(ws: WebSocket, uuidGenerator: IUuidGenerator, timestampProvider: ITimestampProvider) {
         this.ws = ws;
@@ -19,9 +20,14 @@ export class TaskQueueProviderWebSocket implements ITaskQueueProvider {
         this.timestampProvider = timestampProvider;
     }
 
-    async create(): Promise<ITaskQueue> {
+    get(): ITaskQueue {
+        if (this.queue) {
+            return this.queue;
+        }
+
         const workerBackend = new WorkerBackendWebSocket(this.ws);
-        return new TaskQueue(this.uuidGenerator, this.timestampProvider, 0, workerBackend);
+        this.queue = new TaskQueue(this.uuidGenerator, this.timestampProvider, 0, workerBackend);
+        return this.queue;
     }
 }
 
