@@ -306,6 +306,10 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
     // Opens a database by path directly (without showing file dialog).
     //
     async function openDatabase(dbPath: string): Promise<void> {
+        if (databasePath) {
+            await closeDatabase();
+        }
+
         // Directly set the database path to trigger loading
         setDatabasePath(dbPath);
 
@@ -317,6 +321,14 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
     // Closes the current database.
     //
     async function closeDatabase(): Promise<void> {
+        if (databasePath) {
+            taskQueueProvider.get().cancelTasks(databasePath);
+        }
+        if (unsubscribeCurrentLoad.current) {
+            unsubscribeCurrentLoad.current();
+            unsubscribeCurrentLoad.current = undefined;
+        }
+        loadingDatabasePath.current = undefined;
         setDatabasePath(undefined);
         loadedAssets.current = {};
         onReset.current.invoke();
@@ -516,6 +528,11 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
     useEffect(() => {
         // Subscribe to database events
         const unsubscribeOpened = platform.onDatabaseOpened((dbPath: string) => {
+            if (databasePath) {
+                closeDatabase().catch(err => {
+                    console.error('Error closing database:', err);
+                });
+            }
             setDatabasePath(dbPath);
         });
 
