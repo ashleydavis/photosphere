@@ -2,10 +2,11 @@ import type { Metadata } from "./collection";
 import type { IInternalRecord } from "./shard";
 
 //
-// Checks if a value is a primitive, undefined or null.
+// Checks if a value is a primitive, undefined, null, or array.
+// Arrays are treated as atomic values (winner-takes-all) rather than merged field-by-field.
 //
 function isPrimitive(value: any): boolean {
-    return typeof value !== 'object' || value === null || value === undefined;
+    return typeof value !== 'object' || value === null || value === undefined || Array.isArray(value);
 }
 
 //

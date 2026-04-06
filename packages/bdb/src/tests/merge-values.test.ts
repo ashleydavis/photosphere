@@ -172,7 +172,7 @@ describe('mergeValues', () => {
         expect(result.metadata.timestamp).toBe(2000);
     });
 
-    test('should handle arrays as objects (not primitives)', () => {
+    test('should handle arrays as primitives (winner-takes-all by timestamp)', () => {
         const value1: MergeValue = {
             value: [1, 2, 3],
             metadata: { timestamp: 1000 }
@@ -182,12 +182,28 @@ describe('mergeValues', () => {
             metadata: { timestamp: 2000 }
         };
 
-        // Arrays are objects (not primitives), so they should be merged
+        // Arrays are treated as primitives: the newer timestamp wins entirely
         const result = mergeValues(value1, value2);
 
-        // Arrays will be treated as objects and merged by keys
-        expect(result.value).toBeDefined();
-        expect(result.metadata.fields).toBeDefined();
+        expect(result.value).toEqual([4, 5]);
+        expect(result.metadata.timestamp).toBe(2000);
+    });
+
+    test('should preserve array type when merging labels fields', () => {
+        const value1: MergeValue = {
+            value: ["starred"],
+            metadata: { timestamp: 1000 }
+        };
+        const value2: MergeValue = {
+            value: ["starred"],
+            metadata: { timestamp: 2000 }
+        };
+
+        const result = mergeValues(value1, value2);
+
+        // Result must remain an array, not become a plain object with numeric keys
+        expect(Array.isArray(result.value)).toBe(true);
+        expect(result.value).toEqual(["starred"]);
     });
 
     test('should handle empty objects', () => {
