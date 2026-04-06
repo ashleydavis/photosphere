@@ -179,7 +179,7 @@ function determineLocations(layout: IGalleryLayout): string[] {
 //
 // Creates the full nav meu.
 //
-function makeFullMenu(navMenu: IMenuItem[], years: string[], locations: string[], search: (searchText: string) => void, setSortBy: (sortBy: string) => void) : IMenuItem[] {
+function makeFullMenu(navMenu: IMenuItem[], years: string[], locations: string[], search: (searchText: string) => void, setSortBy: (sortBy: string) => void, isLoading: boolean) : IMenuItem[] {
     const topMenu = [
         {
             icon: <Map />,
@@ -336,7 +336,7 @@ function makeFullMenu(navMenu: IMenuItem[], years: string[], locations: string[]
                 {
                     icon: <CalendarMonth />,
                     text: "Date",
-                    onClick: () => {
+                    onClick: isLoading ? undefined : () => {
                         setSortBy("date");
                     },
                 },
@@ -348,7 +348,7 @@ function makeFullMenu(navMenu: IMenuItem[], years: string[], locations: string[]
                 {
                     icon: <Place />,
                     text: "Place",
-                    onClick: () => {
+                    onClick: isLoading ? undefined : () => {
                         setSortBy("location");
                     },
                 },
@@ -384,7 +384,7 @@ export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
     const { dbs, removeDatabase } = useApp();
     const theme = useTheme();
     const { databasePath, selectAndOpenDatabase } = useAssetDatabase();
-    const { search, setSortBy } = useGallery();
+    const { search, setSortBy, isLoading } = useGallery();
     const { scrollTo, layout, targetRowHeight, setTargetRowHeight } = useGalleryLayout();
 
     const platform = usePlatform();
@@ -411,7 +411,8 @@ export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
         (sortBy) => {
             setSortBy(sortBy);
             setSidebarOpen(false);
-        }
+        },
+        isLoading
     );
 
     let curMenu = fullMenu;

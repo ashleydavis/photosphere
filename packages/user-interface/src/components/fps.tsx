@@ -1,7 +1,7 @@
 // @ts-ignore
 import FPSStats from "react-fps-stats";
 
-const isProduction: boolean = (import.meta.env.MODE === "production");
+const isProduction: boolean = false; //(import.meta.env.MODE === "production");
 
 export function Fps() {
     return (

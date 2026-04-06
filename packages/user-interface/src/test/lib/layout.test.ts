@@ -1,4 +1,4 @@
-import { computePartialLayout } from "../../lib/create-layout";
+import { computePartialLayout, deleteFromLayout } from "../../lib/create-layout";
 
 describe("layout", () => {
 
@@ -144,5 +144,111 @@ describe("layout", () => {
         const item3 = secondRow.items[0];
         expect(item3.thumbWidth).toBeCloseTo(items[2].width);
         expect(item3.thumbHeight).toBeCloseTo(items[2].height);
+    });
+});
+
+describe("deleteFromLayout", () => {
+
+    const galleryWidth = 600;
+    const targetRowHeight = 200;
+    const noGroup = () => [];
+    const noHeading = () => "";
+
+    //
+    // Builds a layout from items using computePartialLayout.
+    //
+    function buildLayout(items: any[]) {
+        return computePartialLayout(undefined, items, galleryWidth, targetRowHeight, noGroup, noHeading);
+    }
+
+    test("returns the same layout when none of the deleted IDs are present", () => {
+
+        const items: any[] = [
+            { _id: "a", width: 100, height: 200 },
+            { _id: "b", width: 100, height: 200 },
+        ];
+        const layout = buildLayout(items);
+        const result = deleteFromLayout(layout, ["z"], galleryWidth, targetRowHeight, noGroup, noHeading);
+
+        expect(result).toBe(layout);
+    });
+
+    test("returns empty layout when the only item is deleted", () => {
+
+        const items: any[] = [
+            { _id: "a", width: 100, height: 200 },
+        ];
+        const layout = buildLayout(items);
+        const result = deleteFromLayout(layout, ["a"], galleryWidth, targetRowHeight, noGroup, noHeading);
+
+        expect(result.rows.length).toBe(0);
+        expect(result.galleryHeight).toBe(0);
+    });
+
+    test("removes a deleted item and keeps remaining items in the layout", () => {
+
+        const items: any[] = [
+            { _id: "a", width: 100, height: 200 },
+            { _id: "b", width: 100, height: 200 },
+            { _id: "c", width: 100, height: 200 },
+        ];
+        const layout = buildLayout(items);
+        const result = deleteFromLayout(layout, ["b"], galleryWidth, targetRowHeight, noGroup, noHeading);
+
+        const allResultItems = result.rows.flatMap(row => row.items);
+        const resultIds = allResultItems.map(item => item._id);
+
+        expect(resultIds).not.toContain("b");
+        expect(resultIds).toContain("a");
+        expect(resultIds).toContain("c");
+    });
+
+    test("reflows items from later rows when an item is deleted from an earlier row", () => {
+
+        // Three items where the first two fill row 1 and the third wraps to row 2.
+        const items: any[] = [
+            { _id: "a", width: 400, height: 200 },
+            { _id: "b", width: 400, height: 200 },
+            { _id: "c", width: 400, height: 200 },
+        ];
+        const layout = buildLayout(items);
+        expect(layout.rows.length).toBeGreaterThan(1);
+
+        // Delete one item from the first row — "c" should reflow up.
+        const result = deleteFromLayout(layout, ["a"], galleryWidth, targetRowHeight, noGroup, noHeading);
+
+        const allResultItems = result.rows.flatMap(row => row.items);
+        expect(allResultItems.map(item => item._id)).toEqual(["b", "c"]);
+    });
+
+    test("re-adds heading row correctly when a deletion falls within a grouped section", () => {
+
+        const groupA = () => ["A"];
+        const groupB = (item: any) => item._id.startsWith("b") ? ["B"] : ["A"];
+        const heading = (group: string[]) => group[0];
+
+        const items: any[] = [
+            { _id: "a1", width: 100, height: 200 },
+            { _id: "a2", width: 100, height: 200 },
+            { _id: "b1", width: 100, height: 200 },
+            { _id: "b2", width: 100, height: 200 },
+        ];
+
+        const layout = computePartialLayout(undefined, items, galleryWidth, targetRowHeight, groupB, heading);
+
+        // Confirm headings were inserted.
+        const headingRows = layout.rows.filter(row => row.type === "heading");
+        expect(headingRows.length).toBeGreaterThan(0);
+
+        // Delete an item from group B.
+        const result = deleteFromLayout(layout, ["b1"], galleryWidth, targetRowHeight, groupB, heading);
+
+        const resultHeadings = result.rows.filter(row => row.type === "heading");
+        const resultItemIds = result.rows.flatMap(row => row.items).map(item => item._id);
+
+        // b2 should still be present under a heading.
+        expect(resultItemIds).toContain("b2");
+        expect(resultHeadings.length).toBeGreaterThan(0);
+        expect(resultItemIds).not.toContain("b1");
     });
 });

@@ -1,5 +1,5 @@
 import React, { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
-import { computePartialLayout, IGalleryLayout } from "../lib/create-layout";
+import { computePartialLayout, deleteFromLayout, IGalleryLayout } from "../lib/create-layout";
 import { useGallery } from "./gallery-context";
 import { IGalleryItem } from "../lib/gallery-item";
 
@@ -138,17 +138,48 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
 
         if (galleryWidth > 0) {
             //
-            // Rebuilds the layout when items are added.
+            // Incrementally appends new items to the existing layout.
             //
-            const newItemsSubscription = onNewItems.subscribe(items => {
-                rebuildLayout();
+            const newItemsSubscription = onNewItems.subscribe(newItems => {
+                const _sorting = sorting();
+                setLayout(prev => {
+                    const startingRowIndex = (prev && prev.rows.length > 0) ? prev.rows.length - 1 : 0;
+                    const newLayout = computePartialLayout(prev, newItems, galleryWidth, targetRowHeight, _sorting.group, _sorting.heading);
+                    const rowsAdded = newLayout.rows.length - startingRowIndex;
+                    console.log(`Gallery layout: batch of ${newItems.length} items added ${rowsAdded} rows (total rows: ${newLayout.rows.length})`);
+                    for (let rowIndex = startingRowIndex; rowIndex < newLayout.rows.length; rowIndex++) {
+                        const row = newLayout.rows[rowIndex];
+                        for (let itemIndex = 0; itemIndex < row.items.length; itemIndex++) {
+                            layoutItemsIndex.current.set(row.items[itemIndex]._id, { rowIndex, itemIndex });
+                        }
+                    }
+                    return newLayout;
+                });
             });
 
             //
-            // Rebuilds the layout when items are deleted.
+            // Incrementally reflows the layout from the earliest affected row when items are deleted.
             //
-            const deletedItemsSubscription = onItemsDeleted.subscribe(() => {
-                rebuildLayout();
+            const deletedItemsSubscription = onItemsDeleted.subscribe(({ assetIds }) => {
+                const _sorting = sorting();
+                setLayout(prev => {
+                    if (!prev) {
+                        return prev;
+                    }
+                    const newLayout = deleteFromLayout(prev, assetIds, galleryWidth, targetRowHeight, _sorting.group, _sorting.heading);
+                    if (newLayout === prev) {
+                        return prev;
+                    }
+                    const newIndex = new Map<string, { rowIndex: number; itemIndex: number }>();
+                    for (let rowIndex = 0; rowIndex < newLayout.rows.length; rowIndex++) {
+                        const row = newLayout.rows[rowIndex];
+                        for (let itemIndex = 0; itemIndex < row.items.length; itemIndex++) {
+                            newIndex.set(row.items[itemIndex]._id, { rowIndex, itemIndex });
+                        }
+                    }
+                    layoutItemsIndex.current = newIndex;
+                    return newLayout;
+                });
             });
 
             //

@@ -197,6 +197,11 @@ export interface IGalleryContext {
     clearMultiSelection(): void;
 
     //
+    // True while assets are being loaded from the database.
+    //
+    isLoading: boolean;
+
+    //
     // The current search text.
     //
     searchText: string;
@@ -241,6 +246,7 @@ export interface IGalleryContextProviderProps {
 export function GalleryContextProvider({ children }: IGalleryContextProviderProps) {
 
     const { updateAsset,
+        isLoading,
         onReset: __onReset,
         onNewItems: __onNewItems,
         onItemsUpdated: __onItemsUpdated,
@@ -822,6 +828,7 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
         addToMultipleSelection,
         removeFromMultipleSelection,
         clearMultiSelection,
+        isLoading,
         search,
         clearSearch,
         sortBy: sortByRef.current,
