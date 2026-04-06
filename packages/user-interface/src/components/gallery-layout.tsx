@@ -180,10 +180,43 @@ export function GalleryLayout({ onItemClick }: IGalleryLayoutProps) {
             setScrollTop(container.scrollTop);
         }
 
+        function onKeyDown(event: KeyboardEvent) {
+            const tag = (document.activeElement as HTMLElement)?.tagName?.toLowerCase();
+            if (tag === "input" || tag === "textarea" || tag === "select" || tag === "button") {
+                return;
+            }
+            if (event.key === "ArrowDown") {
+                event.preventDefault();
+                container.scrollBy({ top: 10, behavior: "instant" } as any);
+            }
+            else if (event.key === "ArrowUp") {
+                event.preventDefault();
+                container.scrollBy({ top: -10, behavior: "instant" } as any);
+            }
+            else if (event.key === "PageDown") {
+                event.preventDefault();
+                container.scrollBy({ top: container.clientHeight, behavior: "instant" } as any);
+            }
+            else if (event.key === "PageUp") {
+                event.preventDefault();
+                container.scrollBy({ top: -container.clientHeight, behavior: "instant" } as any);
+            }
+            else if (event.key === "Home") {
+                event.preventDefault();
+                container.scrollTo({ top: 0, behavior: "instant" } as any);
+            }
+            else if (event.key === "End") {
+                event.preventDefault();
+                container.scrollTo({ top: container.scrollHeight, behavior: "instant" } as any);
+            }
+        }
+
         container.addEventListener('scroll', onScroll);
+        window.addEventListener("keydown", onKeyDown);
 
         return () => {
             container.removeEventListener('scroll', onScroll);
+            window.removeEventListener("keydown", onKeyDown);
         };
     }, []);
 
