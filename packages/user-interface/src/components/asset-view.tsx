@@ -5,7 +5,7 @@ import { FullImage } from "./full-image";
 import { Video } from "./video";
 import { useGallery } from "../context/gallery-context";
 import { Drawer, IconButton } from "@mui/joy";
-import { Flag, FlagOutlined, Star, StarBorder } from "@mui/icons-material";
+import { Flag, Star } from "@mui/icons-material";
 
 export interface IAssetViewProps { 
 
@@ -30,7 +30,7 @@ export interface IAssetViewProps {
 //
 export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
 
-    const { getNext, getPrev } = useGallery();
+    const { getNext, getPrev, selectedItems, addToMultipleSelection, removeFromMultipleSelection, enableSelecting } = useGallery();
     const { asset, addArrayValue, removeArrayValue } = useGalleryItem();
 
     // 
@@ -42,8 +42,9 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
         return null; // Waiting for asset to be loaded.
     }
 
-    const isStarred = asset.labels && Array.isArray(asset.labels) && asset.labels?.includes("starred");
-    const isFlagged = asset.labels && Array.isArray(asset.labels) && asset.labels?.includes("flagged");
+    const isStarred = asset.labels && Array.isArray(asset.labels) && asset.labels.includes("starred");
+    const isFlagged = asset.labels && Array.isArray(asset.labels) && asset.labels.includes("flagged");
+    const isSelected = selectedItems.has(asset._id);
 
     return (
         <div className="photo text-xl">
@@ -104,6 +105,40 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                         <i className="fa-solid fa-close"></i>
                     </IconButton>
 
+                    <div
+                        className={isSelected ? "asset-view-select-btn selected" : "asset-view-select-btn"}
+                        style={{
+                            marginLeft: "16px",
+                            width: "24px",
+                            height: "24px",
+                            borderRadius: "50%",
+                            display: "flex",
+                            justifyContent: "center",
+                            alignItems: "center",
+                            cursor: "pointer",
+                        }}
+                        title={isSelected ? "Deselect" : "Select"}
+                        onClick={() => {
+                            if (isSelected) {
+                                removeFromMultipleSelection(asset);
+                            }
+                            else {
+                                enableSelecting(true);
+                                addToMultipleSelection(asset);
+                            }
+                        }}
+                        >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            fill="white"
+                            width="16px"
+                            height="16px"
+                            >
+                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+                        </svg>
+                    </div>
+
                     <IconButton
                         className="pointer-events-auto"
                         variant="outlined"
@@ -119,10 +154,7 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                             }
                         }}
                         >
-                        {isStarred
-                            ? <Star />
-                            : <StarBorder />
-                        }
+                        <Star />
                     </IconButton>
 
                     <IconButton
@@ -140,10 +172,7 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                             }
                         }}
                         >
-                        {isFlagged
-                            ? <Flag />
-                            : <FlagOutlined />
-                        }
+                        <Flag />
                     </IconButton>
 
                     <IconButton

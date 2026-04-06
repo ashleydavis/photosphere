@@ -164,6 +164,22 @@ body.mobile #navbar {
     display: none;
 }
 
+.asset-view-select-btn {
+    background-color: rgba(255, 255, 255, 0.15);
+}
+
+.asset-view-select-btn:hover {
+    background-color: rgba(255, 255, 255, 0.5);
+}
+
+.asset-view-select-btn.selected {
+    background-color: rgba(0, 0, 255, 1);
+}
+
+.asset-view-select-btn.selected:hover {
+    background-color: rgba(0, 0, 200, 1);
+}
+
 .gallery-thumb-container:hover .selection-tick {
     display: flex;
 }
