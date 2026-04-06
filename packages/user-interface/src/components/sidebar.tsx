@@ -190,15 +190,6 @@ function makeFullMenu(navMenu: IMenuItem[], years: string[], locations: string[]
             icon: <Search />,
             text: "Search",
             children: [
-                //todo:
-                // {
-                //     icon: <History />,
-                //     text: "Recent",
-                // },
-                // {
-                //     icon: <Star />,
-                //     text: "Starred",
-                // },
                 {
                     icon: <CalendarMonth />, //todo: How do I generate this?
                     text: "Date",
@@ -502,7 +493,7 @@ export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
                     }}
                     >
                     <ListItemButton>
-                        <ListItemDecorator><Star sx={{ color: "gold" }} /></ListItemDecorator>
+                        <ListItemDecorator><Star /></ListItemDecorator>
                         <ListItemContent>Starred</ListItemContent>
                     </ListItemButton>
                 </ListItem>
@@ -514,7 +505,7 @@ export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
                     }}
                     >
                     <ListItemButton>
-                        <ListItemDecorator><Flag sx={{ color: "red" }} /></ListItemDecorator>
+                        <ListItemDecorator><Flag /></ListItemDecorator>
                         <ListItemContent>Flagged</ListItemContent>
                     </ListItemButton>
                 </ListItem>
