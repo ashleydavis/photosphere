@@ -139,7 +139,7 @@ function startPeriodicSync(state: IConnectionSyncState): void {
     }
     state.syncPeriodicTimer = setInterval(() => {
         enqueueSyncTask(state);
-    }, 60 * 1_000);
+    }, 5 * 60 * 1_000);
 }
 
 //
