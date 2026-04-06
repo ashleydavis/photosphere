@@ -17,6 +17,12 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
     // Store callbacks for database-closed events
     const closedCallbacksRef = useRef<Set<() => void>>(new Set());
 
+    // Store callbacks for sync-started events
+    const syncStartedCallbacksRef = useRef<Set<() => void>>(new Set());
+
+    // Store callbacks for sync-completed events
+    const syncCompletedCallbacksRef = useRef<Set<() => void>>(new Set());
+
     // Set up message listener for database-opened events
     useEffect(() => {
         const handleMessage = (event: MessageEvent) => {
@@ -34,6 +40,12 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
                     closedCallbacksRef.current.forEach(callback => {
                         callback();
                     });
+                }
+                else if (messageData.type === "sync-started") {
+                    syncStartedCallbacksRef.current.forEach(cb => cb());
+                }
+                else if (messageData.type === "sync-completed") {
+                    syncCompletedCallbacksRef.current.forEach(cb => cb());
                 }
             }
             catch (error) {
@@ -89,6 +101,24 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         return () => {};
     }, []);
 
+    const notifyDatabaseEdited = useCallback((): void => {
+        ws.send(JSON.stringify({ type: "notify-database-edited" }));
+    }, [ws]);
+
+    const onSyncStarted = useCallback((callback: () => void): (() => void) => {
+        syncStartedCallbacksRef.current.add(callback);
+        return () => {
+            syncStartedCallbacksRef.current.delete(callback);
+        };
+    }, []);
+
+    const onSyncCompleted = useCallback((callback: () => void): (() => void) => {
+        syncCompletedCallbacksRef.current.add(callback);
+        return () => {
+            syncCompletedCallbacksRef.current.delete(callback);
+        };
+    }, []);
+
     const platformContext: IPlatformContext = {
         openDatabase,
         onDatabaseOpened,
@@ -96,6 +126,9 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         notifyDatabaseOpened,
         notifyDatabaseClosed,
         onThemeChanged,
+        notifyDatabaseEdited,
+        onSyncStarted,
+        onSyncCompleted,
     };
 
     //

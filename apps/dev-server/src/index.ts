@@ -1,4 +1,5 @@
-import { RandomUuidGenerator, TimestampProvider } from "utils";
+import { RandomUuidGenerator, TimestampProvider, log } from "utils";
+import { TaskStatus, type ITaskQueue } from "task-queue";
 import { TaskQueueProviderInline } from "./lib/task-queue-provider-inline";
 import express from "express";
 import { createServer } from "http";
@@ -48,10 +49,124 @@ const server = createServer(app);
 // Create WebSocket server attached to the same HTTP server
 const wss = new WebSocketServer({ server });
 
+//
+// Holds the sync scheduling state for a single WebSocket connection.
+// Created per connection and passed to the global sync helpers below.
+//
+interface IConnectionSyncState {
+    //
+    // Absolute path of the database currently open on this connection, or null.
+    //
+    currentDatabasePath: string | null;
+
+    //
+    // Timer for the debounced sync triggered by edit notifications.
+    //
+    syncDebounceTimer: NodeJS.Timeout | null;
+
+    //
+    // Timer for the periodic sync interval.
+    //
+    syncPeriodicTimer: NodeJS.Timeout | null;
+
+    //
+    // True while a sync task is queued or running; prevents concurrent syncs.
+    //
+    isSyncRunning: boolean;
+
+    //
+    // The task queue for this connection.
+    //
+    queue: ITaskQueue;
+}
+
+//
+// Queues a sync-database task if a database is open and no sync is already running.
+//
+function enqueueSyncTask(state: IConnectionSyncState): void {
+    if (!state.currentDatabasePath || state.isSyncRunning) {
+        return;
+    }
+    state.isSyncRunning = true;
+    log.info(`Queuing sync task for ${state.currentDatabasePath}`);
+    state.queue.addTask("sync-database", { databasePath: state.currentDatabasePath }, state.currentDatabasePath);
+}
+
+//
+// Marks that the sync task has stopped, allowing the next sync to be queued.
+//
+function syncStopped(state: IConnectionSyncState): void {
+    state.isSyncRunning = false;
+}
+
+//
+// Cancels any running sync task, clears the running flag, and clears the debounce timer.
+// Call this whenever the active database changes or the connection closes.
+//
+function resetSyncState(state: IConnectionSyncState): void {
+    if (state.currentDatabasePath) {
+        state.queue.cancelTasks(state.currentDatabasePath);
+    }
+    syncStopped(state);
+    if (state.syncDebounceTimer !== null) {
+        clearTimeout(state.syncDebounceTimer);
+        state.syncDebounceTimer = null;
+    }
+}
+
+//
+// Schedules a debounced sync 10 seconds after the last edit notification.
+// Resets the debounce timer if called again before it fires.
+//
+function scheduleSync(state: IConnectionSyncState): void {
+    if (state.syncDebounceTimer !== null) {
+        clearTimeout(state.syncDebounceTimer);
+    }
+    log.info("Sync debounce triggered");
+    state.syncDebounceTimer = setTimeout(() => {
+        state.syncDebounceTimer = null;
+        enqueueSyncTask(state);
+    }, 10_000);
+}
+
+//
+// Starts a periodic sync timer that fires every 60 seconds.
+// No-op if the timer is already running.
+//
+function startPeriodicSync(state: IConnectionSyncState): void {
+    if (state.syncPeriodicTimer !== null) {
+        return;
+    }
+    state.syncPeriodicTimer = setInterval(() => {
+        enqueueSyncTask(state);
+    }, 60 * 1_000);
+}
+
+//
+// Stops the periodic sync timer.
+//
+function stopPeriodicSync(state: IConnectionSyncState): void {
+    if (state.syncPeriodicTimer !== null) {
+        clearInterval(state.syncPeriodicTimer);
+        state.syncPeriodicTimer = null;
+    }
+}
+
 wss.on("connection", (ws: WebSocket) => {
     console.log("WebSocket connection opened");
 
     const queue = taskQueueProvider.get();
+
+    // Per-connection sync state — automatically cleaned up when the client disconnects.
+    const syncState: IConnectionSyncState = {
+        currentDatabasePath: null,
+        syncDebounceTimer: null,
+        syncPeriodicTimer: null,
+        isSyncRunning: false,
+        queue,
+    };
+
+    startPeriodicSync(syncState);
 
     // Set up task completion handler to send results back to this client
     const unsubscribeTaskComplete = queue.onTaskComplete(async (task, result) => {
@@ -69,6 +184,12 @@ wss.on("connection", (ws: WebSocket) => {
             },
             result: result,
         }));
+        if (task.type === "sync-database") {
+            syncStopped(syncState);
+            if (result.status !== TaskStatus.Succeeded) {
+                ws.send(JSON.stringify({ type: "sync-completed" }));
+            }
+        }
     });
 
     // Set up task message handler to send messages back to this client
@@ -77,6 +198,14 @@ wss.on("connection", (ws: WebSocket) => {
             type: "task-message",
             ...data,
         }));
+        if (data.message.type === "sync-started") {
+            log.info("Sync started");
+            ws.send(JSON.stringify({ type: "sync-started" }));
+        }
+        else if (data.message.type === "sync-completed") {
+            log.info("Sync completed");
+            ws.send(JSON.stringify({ type: "sync-completed" }));
+        }
     });
 
     ws.on("message", async (message: Buffer) => {
@@ -104,10 +233,17 @@ wss.on("connection", (ws: WebSocket) => {
                 await handleGetRecentDatabases(ws);
             }
             else if (messageData.type === "notify-database-opened") {
+                resetSyncState(syncState);
+                syncState.currentDatabasePath = messageData.databasePath;
                 await handleNotifyDatabaseOpened(ws, messageData.databasePath);
             }
             else if (messageData.type === "notify-database-closed") {
+                resetSyncState(syncState);
+                syncState.currentDatabasePath = null;
                 await handleNotifyDatabaseClosed(ws);
+            }
+            else if (messageData.type === "notify-database-edited") {
+                scheduleSync(syncState);
             }
             else if (messageData.type === "get-config") {
                 await handleGetConfig(ws, messageData.key);
@@ -129,6 +265,8 @@ wss.on("connection", (ws: WebSocket) => {
         console.log("WebSocket connection closed");
         unsubscribeTaskComplete();
         unsubscribeTaskMessage();
+        resetSyncState(syncState);
+        stopPeriodicSync(syncState);
     });
 });
 

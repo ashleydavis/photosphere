@@ -21,6 +21,12 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
     // Store callbacks for theme-changed events
     const themeCallbacksRef = useRef<Set<(theme: 'light' | 'dark' | 'system') => void>>(new Set());
 
+    // Store callbacks for sync-started events
+    const syncStartedCallbacksRef = useRef<Set<() => void>>(new Set());
+
+    // Store callbacks for sync-completed events
+    const syncCompletedCallbacksRef = useRef<Set<() => void>>(new Set());
+
     // Set up message listener for database-opened events
     useEffect(() => {
         const handleDatabaseOpened = (databasePath: string) => {
@@ -69,6 +75,32 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         };
     }, [electronAPI]);
 
+    // Set up message listener for sync-started events
+    useEffect(() => {
+        const handleSyncStarted = () => {
+            syncStartedCallbacksRef.current.forEach(cb => cb());
+        };
+
+        electronAPI.onMessage('sync-started', handleSyncStarted);
+
+        return () => {
+            electronAPI.removeAllListeners('sync-started');
+        };
+    }, [electronAPI]);
+
+    // Set up message listener for sync-completed events
+    useEffect(() => {
+        const handleSyncCompleted = () => {
+            syncCompletedCallbacksRef.current.forEach(cb => cb());
+        };
+
+        electronAPI.onMessage('sync-completed', handleSyncCompleted); //todo: it might be better just to have one event that all these separate events are chanelled through.
+
+        return () => {
+            electronAPI.removeAllListeners('sync-completed');
+        };
+    }, [electronAPI]);
+
     const openDatabase = useCallback(async (): Promise<void> => {
         await electronAPI.openDatabase();
     }, [electronAPI]);
@@ -110,6 +142,24 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         };
     }, []);
 
+    const notifyDatabaseEdited = useCallback((): void => {
+        electronAPI.notifyDatabaseEdited();
+    }, [electronAPI]);
+
+    const onSyncStarted = useCallback((callback: () => void): (() => void) => {
+        syncStartedCallbacksRef.current.add(callback);
+        return () => {
+            syncStartedCallbacksRef.current.delete(callback);
+        };
+    }, []);
+
+    const onSyncCompleted = useCallback((callback: () => void): (() => void) => {
+        syncCompletedCallbacksRef.current.add(callback);
+        return () => {
+            syncCompletedCallbacksRef.current.delete(callback);
+        };
+    }, []);
+
     const platformContext: IPlatformContext = {
         openDatabase,
         onDatabaseOpened,
@@ -117,6 +167,9 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         notifyDatabaseOpened,
         notifyDatabaseClosed,
         onThemeChanged,
+        notifyDatabaseEdited,
+        onSyncStarted,
+        onSyncCompleted,
     };
 
     const config = createConfig(

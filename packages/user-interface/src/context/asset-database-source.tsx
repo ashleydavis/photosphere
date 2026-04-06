@@ -6,6 +6,7 @@ import { RandomUuidGenerator } from "utils";
 import { IObservable, Observable } from "../lib/subscription";
 import { loadAssets as loadAssetsApi } from "api/src/lib/load-assets";
 import type { IAssetPageMessage, ILoadAssetsData, ILoadAssetsResult } from "api/src/lib/load-assets.types";
+import type { ISyncBatchMessage } from "api/src/lib/sync-database.types";
 import axios from "axios";
 import { TaskStatus } from "task-queue";
 import type { ITaskQueueProvider } from "task-queue";
@@ -44,6 +45,11 @@ export interface IAssetDatabase extends IGallerySource {
     // Opens a database by path directly (without showing file dialog).
     //
     openDatabase(dbPath: string): Promise<void>;
+
+    //
+    // True while a background sync with the origin database is in progress.
+    //
+    isSyncing: boolean;
 }
 
 export interface IAssetDatabaseProviderProps {
@@ -59,6 +65,11 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
     // Set to true while loading assets.
     //
     const [ isLoading, setIsLoading ] = useState(false);
+
+    //
+    // Set to true while a background sync with the origin database is in progress.
+    //
+    const [ isSyncing, setIsSyncing ] = useState(false);
 
     //
     // The database path currently being loaded (if any).
@@ -113,6 +124,7 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
         await axios.post(`${restApiUrl}/apply-database-ops`, { ops }, {
             headers: { "Content-Type": "application/json" },
         });
+        platform.notifyDatabaseEdited();
     }
 
     //
@@ -326,6 +338,7 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
         }
 
         setIsLoading(false);
+        setIsSyncing(false);
         loadingDatabasePath.current = undefined;
         setDatabasePath(undefined);
         loadedAssets.current = {};
@@ -549,6 +562,57 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
     }, [platform]);
 
     //
+    // Subscribe to sync-started and sync-completed events from the platform.
+    //
+    useEffect(() => {
+        const unsubscribeStarted = platform.onSyncStarted(() => {
+            setIsSyncing(true);
+        });
+
+        const unsubscribeCompleted = platform.onSyncCompleted(() => {
+            setIsSyncing(false);
+        });
+
+        return () => {
+            unsubscribeStarted();
+            unsubscribeCompleted();
+        };
+    }, [platform]);
+
+    //
+    // Subscribe to incremental sync-batch task messages and apply changes live to the gallery.
+    //
+    useEffect(() => {
+        const queue = taskQueueProvider.get();
+        const unsubscribeSyncBatch = queue.onTaskMessage<ISyncBatchMessage>("sync-batch", (data) => {
+            const batch = data.message as ISyncBatchMessage;
+            if (batch.databasePath !== databasePath) {
+                return;
+            }
+
+            if (batch.added.length > 0) {
+                _onNewItems(batch.added);
+            }
+
+            if (batch.updated.length > 0) {
+                for (const asset of batch.updated) {
+                    loadedAssets.current[asset._id] = asset;
+                }
+                onItemsUpdated.current.invoke({ assetIds: batch.updated.map(asset => asset._id) });
+            }
+
+            if (batch.deletedIds.length > 0) {
+                for (const assetId of batch.deletedIds) {
+                    delete loadedAssets.current[assetId];
+                }
+                onItemsDeleted.current.invoke({ assetIds: batch.deletedIds });
+            }
+        });
+
+        return () => { unsubscribeSyncBatch(); };
+    }, [databasePath]);
+
+    //
     // Load assets when database path changes.
     //
     useEffect(() => {
@@ -572,6 +636,7 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
     const value: IAssetDatabase = {
         // Gallery source.
         isLoading,
+        isSyncing,
         isWorking,
         isReadOnly: false,
         getAssets,

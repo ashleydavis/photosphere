@@ -29,6 +29,12 @@ export interface IElectronAPI {
     getConfig: (key: string) => Promise<any | undefined>;
     setConfig: (key: string, value: unknown) => Promise<void>;
 
+    //
+    // Notifies the main process that the database was edited.
+    // The main process debounces this signal and triggers a background sync.
+    //
+    notifyDatabaseEdited: () => void;
+
     // Logging methods - forward logs from renderer to main process for file logging
     log: (message: IRendererLogMessage) => void;
 }
