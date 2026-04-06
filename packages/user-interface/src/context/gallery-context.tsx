@@ -566,7 +566,7 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
             };
         }
 
-        console.log(`[loadAsset] CACHE MISS: ${assetType}:${assetId}`, new Error().stack);
+        // console.log(`[loadAsset] CACHE MISS: ${assetType}:${assetId}`, new Error().stack);
         const assetData = await _loadAsset(assetId, assetType);
         if (!assetData) {
             // console.log(`[loadAsset] NO DATA: ${assetType}:${assetId}`);

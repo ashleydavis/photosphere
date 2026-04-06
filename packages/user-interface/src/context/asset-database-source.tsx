@@ -234,7 +234,7 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
         }
 
         const updatedAsset: any = { ...loadedAssets.current[assetId] };
-        if (updatedAsset[field] === undefined) {
+        if (updatedAsset[field] === undefined || !Array.isArray(updatedAsset[field])) {
             updatedAsset[field] = [];
         }
         updatedAsset[field] = (updatedAsset[field] as any[]).filter(item => item !== value)

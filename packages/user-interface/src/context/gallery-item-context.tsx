@@ -93,7 +93,7 @@ export function GalleryItemContextProvider({ children, assetId }: IProps) {
         }
 
         const updatedAsset: any = { ...asset };
-        if (updatedAsset[field] === undefined) {
+        if (updatedAsset[field] === undefined || !Array.isArray(updatedAsset[field])) {
             updatedAsset[field] = [];
         }
         updatedAsset[field] = updatedAsset[field].filter((item: any) => item !== value);
