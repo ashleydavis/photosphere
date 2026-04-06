@@ -112,7 +112,7 @@ app.whenReady().then(async () => {
     // Start up the background workers
     initWorkers();
 
-    // Start periodic sync timer (runs for app lifetime; no-op when no database is open)
+    // Start periodic sync timer (runs for app lifetime; no-op when no database is not open)
     startPeriodicSync();
 
     await createMainWindow();
@@ -134,7 +134,7 @@ app.on('before-quit', async () => {
     isShuttingDown = true;
 
     stopPeriodicSync();
-    if (syncDebounceTimer !== null) {
+    if (syncDebounceTimer !== null) { //todo: this should be a function call to clean up.
         clearTimeout(syncDebounceTimer);
         syncDebounceTimer = null;
     }
