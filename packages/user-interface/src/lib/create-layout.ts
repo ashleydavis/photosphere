@@ -380,6 +380,75 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
 }
 
 //
+// Computes a new layout after deleting the specified assets.
+// Reflows only from the earliest affected row, leaving earlier rows unchanged.
+// Returns the original layout unchanged if none of the asset IDs were found.
+//
+export function deleteFromLayout(
+    layout: IGalleryLayout,
+    assetIds: string[],
+    galleryWidth: number,
+    targetRowHeight: number,
+    getGroup: GetGroupFn,
+    getHeading: GetHeadingFn
+): IGalleryLayout {
+    const deletedSet = new Set(assetIds);
+
+    //
+    // Find the minimum row index containing a deleted item (scan in order, stop early).
+    //
+    let minRowIndex = -1;
+    outer:
+    for (let rowIndex = 0; rowIndex < layout.rows.length; rowIndex++) {
+        for (const item of layout.rows[rowIndex].items) {
+            if (deletedSet.has(item._id)) {
+                minRowIndex = rowIndex;
+                break outer;
+            }
+        }
+    }
+
+    if (minRowIndex === -1) {
+        return layout;
+    }
+
+    //
+    // Collect items from minRowIndex onwards, excluding deleted ones.
+    //
+    const tailItems: IGalleryItem[] = [];
+    for (let rowIndex = minRowIndex; rowIndex < layout.rows.length; rowIndex++) {
+        for (const item of layout.rows[rowIndex].items) {
+            if (!deletedSet.has(item._id)) {
+                tailItems.push(item);
+            }
+        }
+    }
+
+    //
+    // Truncate rows at minRowIndex; also strip any trailing heading row so
+    // computePartialLayout can re-insert it correctly.
+    //
+    let truncateAt = minRowIndex;
+    while (truncateAt > 0 && layout.rows[truncateAt - 1].type === "heading") {
+        truncateAt -= 1;
+    }
+    const newRows = layout.rows.slice(0, truncateAt);
+
+    if (tailItems.length === 0) {
+        const lastRow = newRows.length > 0 ? newRows[newRows.length - 1] : undefined;
+        return {
+            rows: newRows,
+            galleryHeight: lastRow ? lastRow.offsetY + lastRow.height : 0,
+        };
+    }
+
+    const truncatedLayout: IGalleryLayout | undefined = newRows.length === 0
+        ? undefined
+        : { rows: newRows, galleryHeight: 0 };
+    return computePartialLayout(truncatedLayout, tailItems, galleryWidth, targetRowHeight, getGroup, getHeading);
+}
+
+//
 // Compute thumbnail resolution from a requested height.
 //
 function computeFromHeight(row: IGalleryRow, height: number, horizonalGutter: number): void {
