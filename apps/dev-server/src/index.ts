@@ -103,13 +103,11 @@ wss.on("connection", (ws: WebSocket) => {
                 // Handle request for recent databases list
                 await handleGetRecentDatabases(ws);
             }
-            else if (messageData.type === "add-recent-database") {
-                // Handle request to add database to recent list
-                await handleAddRecentDatabase(ws, messageData.databasePath);
+            else if (messageData.type === "notify-database-opened") {
+                await handleNotifyDatabaseOpened(ws, messageData.databasePath);
             }
-            else if (messageData.type === "clear-last-database") {
-                // Handle request to clear last database
-                await handleClearLastDatabase(ws);
+            else if (messageData.type === "notify-database-closed") {
+                await handleNotifyDatabaseClosed(ws);
             }
             else if (messageData.type === "get-config") {
                 await handleGetConfig(ws, messageData.key);
@@ -211,40 +209,33 @@ async function handleGetRecentDatabases(ws: WebSocket): Promise<void> {
 }
 
 //
-// Handles request to add database to recent list.
+// Handles notification that a database was opened by the frontend.
 //
-async function handleAddRecentDatabase(ws: WebSocket, databasePath: string): Promise<void> {
+async function handleNotifyDatabaseOpened(ws: WebSocket, databasePath: string): Promise<void> {
     try {
         await addRecentDatabase(databasePath);
-        ws.send(JSON.stringify({
-            type: "database-added",
-            databasePath: databasePath,
-        }));
+        ws.send(JSON.stringify({ type: "notify-database-opened-ack" }));
     }
     catch (error: any) {
-        console.error("Error adding recent database:", error);
         ws.send(JSON.stringify({
             type: "error",
-            message: error instanceof Error ? error.message : "Unknown error adding recent database",
+            message: error instanceof Error ? error.message : "Unknown error notifying database opened",
         }));
     }
 }
 
 //
-// Handles request to clear last database.
+// Handles notification that the database was closed by the frontend.
 //
-async function handleClearLastDatabase(ws: WebSocket): Promise<void> {
+async function handleNotifyDatabaseClosed(ws: WebSocket): Promise<void> {
     try {
         await clearLastDatabase();
-        ws.send(JSON.stringify({
-            type: "last-database-cleared",
-        }));
+        ws.send(JSON.stringify({ type: "notify-database-closed-ack" }));
     }
     catch (error: any) {
-        console.error("Error clearing last database:", error);
         ws.send(JSON.stringify({
             type: "error",
-            message: error instanceof Error ? error.message : "Unknown error clearing last database",
+            message: error instanceof Error ? error.message : "Unknown error notifying database closed",
         }));
     }
 }

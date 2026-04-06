@@ -77,70 +77,11 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
     }, []);
 
     const notifyDatabaseOpened = useCallback(async (databasePath: string): Promise<void> => {
-        // Add to recent databases for web platform
-        return new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                reject(new Error("Timeout waiting for adding recent database"));
-            }, 5000);
-
-            const handleMessage = (event: MessageEvent) => {
-                try {
-                    const messageData = JSON.parse(event.data.toString());
-                    if (messageData.type === "database-added") {
-                        clearTimeout(timeout);
-                        ws.removeEventListener('message', handleMessage);
-                        resolve();
-                    }
-                    else if (messageData.type === "error") {
-                        clearTimeout(timeout);
-                        ws.removeEventListener('message', handleMessage);
-                        reject(new Error(messageData.message || "Unknown error"));
-                    }
-                }
-                catch (error) {
-                    // Ignore parse errors for other message types
-                }
-            };
-
-            ws.addEventListener('message', handleMessage);
-            ws.send(JSON.stringify({
-                type: "add-recent-database",
-                databasePath: databasePath,
-            }));
-        });
+        await sendAndWait<void>({ type: "notify-database-opened", databasePath }, "notify-database-opened-ack");
     }, [ws]);
 
     const notifyDatabaseClosed = useCallback(async (): Promise<void> => {
-        // Clear the last database
-        return new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                reject(new Error("Timeout waiting for clearing last database"));
-            }, 5000);
-
-            const handleMessage = (event: MessageEvent) => {
-                try {
-                    const messageData = JSON.parse(event.data.toString());
-                    if (messageData.type === "last-database-cleared") {
-                        clearTimeout(timeout);
-                        ws.removeEventListener('message', handleMessage);
-                        resolve();
-                    }
-                    else if (messageData.type === "error") {
-                        clearTimeout(timeout);
-                        ws.removeEventListener('message', handleMessage);
-                        reject(new Error(messageData.message || "Unknown error"));
-                    }
-                }
-                catch (error) {
-                    // Ignore parse errors for other message types
-                }
-            };
-
-            ws.addEventListener('message', handleMessage);
-            ws.send(JSON.stringify({
-                type: "clear-last-database",
-            }));
-        });
+        await sendAndWait<void>({ type: "notify-database-closed" }, "notify-database-closed-ack");
     }, [ws]);
 
     const onThemeChanged = useCallback((callback: (theme: 'light' | 'dark' | 'system') => void): (() => void) => {
