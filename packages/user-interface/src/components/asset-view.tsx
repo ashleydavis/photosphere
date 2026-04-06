@@ -42,6 +42,9 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
         return null; // Waiting for asset to be loaded.
     }
 
+    const isStarred = asset.labels && Array.isArray(asset.labels) && asset.labels?.includes("starred");
+    const isFlagged = asset.labels && Array.isArray(asset.labels) && asset.labels?.includes("flagged");
+
     return (
         <div className="photo text-xl">
             <div className="w-full h-full flex flex-col justify-center items-center">
@@ -105,10 +108,10 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                         className="pointer-events-auto"
                         variant="outlined"
                         color="neutral"
-                        sx={asset.labels?.includes("starred") ? { ml: 'auto', color: "gold" } : { ml: 'auto' }}
-                        title={asset.labels?.includes("starred") ? "Unstar" : "Star"}
+                        sx={isStarred ? { ml: 'auto', color: "gold" } : { ml: 'auto' }}
+                        title={isStarred ? "Unstar" : "Star"}
                         onClick={async () => {
-                            if (asset.labels?.includes("starred")) {
+                            if (isStarred) {
                                 await removeArrayValue("labels", "starred");
                             }
                             else {
@@ -116,7 +119,7 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                             }
                         }}
                         >
-                        {asset.labels?.includes("starred")
+                        {isStarred
                             ? <Star />
                             : <StarBorder />
                         }
@@ -126,10 +129,10 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                         className="pointer-events-auto"
                         variant="outlined"
                         color="neutral"
-                        sx={asset.labels?.includes("flagged") ? { ml: 1, color: "red" } : { ml: 1 }}
-                        title={asset.labels?.includes("flagged") ? "Unflag" : "Flag"}
+                        sx={isFlagged ? { ml: 1, color: "red" } : { ml: 1 }}
+                        title={isFlagged ? "Unflag" : "Flag"}
                         onClick={async () => {
-                            if (asset.labels?.includes("flagged")) {
+                            if (isFlagged) {
                                 await removeArrayValue("labels", "flagged");
                             }
                             else {
@@ -137,7 +140,7 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                             }
                         }}
                         >
-                        {asset.labels?.includes("flagged")
+                        {isFlagged
                             ? <Flag />
                             : <FlagOutlined />
                         }

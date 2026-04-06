@@ -102,6 +102,9 @@ export function GalleryImage({ item, onClick, x, y, width, height, isDragging }:
         delay: 500,
     });
 
+    const isStarred = item.labels && Array.isArray(item.labels) && item.labels.includes("starred");
+    const isFlagged = item.labels && Array.isArray(item.labels) && item.labels.includes("flagged");
+
     return (
         <div
             className="gallery-thumb-container"
@@ -240,7 +243,7 @@ export function GalleryImage({ item, onClick, x, y, width, height, isDragging }:
 
             {/* Star toggle. */}
 
-            {(isHovered || item.labels?.includes("starred")) &&
+            {(isHovered || isStarred) &&
                 <div
                     style={{
                         position: "absolute",
@@ -258,7 +261,6 @@ export function GalleryImage({ item, onClick, x, y, width, height, isDragging }:
                     onClick={async (event) => {
                         event.preventDefault();
                         event.stopPropagation();
-                        const isStarred = item.labels?.includes("starred") ?? false;
                         if (isStarred) {
                             await removeArrayValue(item._id, "labels", "starred");
                         }
@@ -270,7 +272,7 @@ export function GalleryImage({ item, onClick, x, y, width, height, isDragging }:
                     <svg
                         xmlns="http://www.w3.org/2000/svg"
                         viewBox="0 0 24 24"
-                        fill={item.labels?.includes("starred") ? "gold" : "rgba(255,255,255,0.7)"}
+                        fill={isStarred ? "gold" : "rgba(255,255,255,0.7)"}
                         width="15px"
                         height="15px"
                         >
@@ -281,7 +283,7 @@ export function GalleryImage({ item, onClick, x, y, width, height, isDragging }:
 
             {/* Flag toggle. */}
 
-            {(isHovered || item.labels?.includes("flagged")) &&
+            {(isHovered || isFlagged) &&
                 <div
                     style={{
                         position: "absolute",
@@ -299,7 +301,6 @@ export function GalleryImage({ item, onClick, x, y, width, height, isDragging }:
                     onClick={async (event) => {
                         event.preventDefault();
                         event.stopPropagation();
-                        const isFlagged = item.labels?.includes("flagged") ?? false;
                         if (isFlagged) {
                             await removeArrayValue(item._id, "labels", "flagged");
                         }
@@ -311,7 +312,7 @@ export function GalleryImage({ item, onClick, x, y, width, height, isDragging }:
                     <svg
                         xmlns="http://www.w3.org/2000/svg"
                         viewBox="0 0 24 24"
-                        fill={item.labels?.includes("flagged") ? "red" : "rgba(255,255,255,0.7)"}
+                        fill={isFlagged ? "red" : "rgba(255,255,255,0.7)"}
                         width="15px"
                         height="15px"
                         >
