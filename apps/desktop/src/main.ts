@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain, utilityProcess, type UtilityProcess, dialog, Menu, shell } from 'electron';
+import { appendFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { cpus, platform, arch, release } from 'os';
 import { version } from 'config';
@@ -171,6 +172,15 @@ app.on('before-quit', async () => {
         fileLogger = null;
     }
 });
+
+// IPC handler for FPS measurements — only active when FPS_LOGGING=1
+if (process.env.FPS_LOGGING === '1') {
+    const fpsLogPath = '/tmp/photosphere-fps.csv';
+    appendFileSync(fpsLogPath, 'timestamp,fps\n');
+    ipcMain.on('fps-measurement', (_event, fps: number) => {
+        appendFileSync(fpsLogPath, `${Date.now()},${fps}\n`);
+    });
+}
 
 // IPC handler for adding tasks
 ipcMain.on('add-task', (event, taskType: string, data: any, source: string, taskId?: string) => {

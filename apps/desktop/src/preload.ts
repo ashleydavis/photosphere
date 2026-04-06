@@ -41,6 +41,9 @@ const electronAPI: IElectronAPI = {
     log: (message: IRendererLogMessage): void => {
         ipcRenderer.send('renderer-log', message);
     },
+    sendFps: (fps: number): void => {
+        ipcRenderer.send('fps-measurement', fps);
+    },
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);
