@@ -91,8 +91,8 @@ export function Navbar({
                         to="/cloud"
                     >
                         <div className="flex flex-row items-center">
-                            <i className="w-5 text-center fa-solid fa-cloud"></i>
-                            <div className="hidden sm:block ml-2">Cloud</div>
+                            <i className="w-5 text-center fa-solid fa-images"></i>
+                            <div className="hidden sm:block ml-2">Gallery</div>
                         </div>
                     </NavLink>
 
