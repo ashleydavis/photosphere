@@ -372,7 +372,7 @@ function startPeriodicSync(): void {
     }
     syncPeriodicTimer = setInterval(() => {
         enqueueSyncTask();
-    }, 60 * 1_000);
+    }, 5 * 60 * 1_000);
 }
 
 //
