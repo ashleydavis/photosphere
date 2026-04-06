@@ -140,21 +140,21 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
             //
             // Rebuilds the layout when items are added.
             //
-            const subscription1 = onNewItems.subscribe(items => {
+            const newItemsSubscription = onNewItems.subscribe(items => {
                 rebuildLayout();
             });
 
             //
             // Rebuilds the layout when items are deleted.
             //
-            const subscription2 = onItemsDeleted.subscribe(() => {
+            const deletedItemsSubscription = onItemsDeleted.subscribe(() => {
                 rebuildLayout();
             });
 
             //
             // Updates item references in-place when items are updated, without rebuilding the layout.
             //
-            const subscription3 = onItemsUpdated.subscribe(({ assetIds }) => {
+            const updatedItemsSubscription = onItemsUpdated.subscribe(({ assetIds }) => {
                 setLayout(prev => {
                     if (!prev) {
                         return prev;
@@ -181,9 +181,9 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
             });
 
             return () => {
-                subscription1.unsubscribe();
-                subscription2.unsubscribe();
-                subscription3.unsubscribe();
+                newItemsSubscription.unsubscribe();
+                deletedItemsSubscription.unsubscribe();
+                updatedItemsSubscription.unsubscribe();
             };
         }
 
