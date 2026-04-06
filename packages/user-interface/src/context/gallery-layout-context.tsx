@@ -119,7 +119,7 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
             return;
         }
         const _sorting = sorting();
-        const newLayout = computePartialLayout(undefined, sortedItems(), galleryWidth, targetRowHeight, _sorting.group, _sorting.heading);
+        const newLayout = computePartialLayout(undefined, sortedItems(), galleryWidth, targetRowHeight, _sorting.group, _sorting.heading); //todo: this needs to be partial again.
 
         const newIndex = new Map<string, { rowIndex: number; itemIndex: number }>();
         for (let rowIndex = 0; rowIndex < newLayout.rows.length; rowIndex++) {
