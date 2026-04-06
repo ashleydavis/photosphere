@@ -45,6 +45,22 @@ export interface IPlatformContext {
     // Returns an unsubscribe function.
     //
     onThemeChanged: (callback: (theme: 'light' | 'dark' | 'system') => void) => Unsubscribe;
+
+    //
+    // Notifies the platform that the user has edited the database.
+    // Used to trigger a debounced background sync.
+    //
+    notifyDatabaseEdited: () => void;
+
+    //
+    // Subscribes to sync-started events. Returns an unsubscribe function.
+    //
+    onSyncStarted: (callback: () => void) => Unsubscribe;
+
+    //
+    // Subscribes to sync-completed events. Returns an unsubscribe function.
+    //
+    onSyncCompleted: (callback: () => void) => Unsubscribe;
 }
 
 const PlatformContext = createContext<IPlatformContext | undefined>(undefined);

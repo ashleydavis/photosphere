@@ -16,7 +16,7 @@ import { IResolution } from "./image";
 import _ from "lodash";
 import { acquireWriteLock, refreshWriteLock, releaseWriteLock } from "./write-lock";
 import { computeAssetHash } from "./hash";
-import { loadMerkleTree, saveMerkleTree } from "./tree";
+import { loadMerkleTree, merkleTreeExists, saveMerkleTree } from "./tree";
 import { addItem, createTree, deleteItem, combineHashes, IMerkleTree } from "merkle-tree";
 
 //
@@ -596,6 +596,21 @@ export async function createLazyDatabaseStorage(databasePath: string): Promise<I
 
     const originStorage = createStorage(config.origin, undefined, undefined).storage;
     return new LazyOriginStorage(storage, originStorage);
+}
+
+//
+// Returns true if the database at the given path is accessible.
+// Works for any storage path (local filesystem, S3, network).
+// Used by sync scheduling to avoid queuing tasks when the target is unreachable.
+//
+export async function checkConnectivity(databasePath: string): Promise<boolean> {
+    try {
+        const { storage } = createStorage(databasePath, undefined, undefined);
+        return await merkleTreeExists(storage);
+    }
+    catch {
+        return false;
+    }
 }
 
 //

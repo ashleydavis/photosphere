@@ -35,6 +35,9 @@ const electronAPI: IElectronAPI = {
     setConfig: (key: string, value: unknown): Promise<void> => {
         return ipcRenderer.invoke('set-config', key, value);
     },
+    notifyDatabaseEdited: (): void => {
+        ipcRenderer.send('notify-database-edited');
+    },
     log: (message: IRendererLogMessage): void => {
         ipcRenderer.send('renderer-log', message);
     },

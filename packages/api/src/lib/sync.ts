@@ -1,4 +1,6 @@
-import { IBsonCollection, IBsonDatabase, IInternalRecord, IRecord, mergeRecords } from "bdb";
+import { IBsonCollection, IBsonDatabase, IInternalRecord, IRecord, mergeRecords, toExternal } from "bdb";
+import type { IAsset } from "defs";
+import type { ISyncChange } from "./sync-database.types";
 import { deleteItem, findMerkleTreeDifferences, getItemInfo, IMerkleTree, MerkleNode, upsertItem, buildMerkleTree } from "merkle-tree";
 import { IStorage, pathJoin } from "storage";
 import { IDatabaseMetadata } from "./media-file-database";
@@ -17,7 +19,8 @@ export async function syncDatabases(
     targetAssetStorage: IStorage,
     targetRawStorage: IStorage,
     targetBsonDatabase: IBsonDatabase,
-    sessionId: string
+    sessionId: string,
+    onLocalChange?: (change: ISyncChange) => void
 ): Promise<void> {
 
     //
@@ -35,7 +38,7 @@ export async function syncDatabases(
         await pushFiles(targetAssetStorage, sourceAssetStorage, sourceBsonDatabase);
         const sourceMerkleTree = await retry(() => loadMerkleTree(sourceAssetStorage));
         const sourceDeletedIds = new Set(sourceMerkleTree?.databaseMetadata?.deletedAssetIds || []);
-        await syncDatabase(targetBsonDatabase, sourceBsonDatabase, sourceDeletedIds);
+        await syncDatabase(targetBsonDatabase, sourceBsonDatabase, sourceDeletedIds, onLocalChange);
         await sourceBsonDatabase.commit();
     }
     finally {
@@ -513,7 +516,8 @@ async function* iterateDatabaseDifferences( //todo: todo this could be in the bd
 export async function syncDatabase(
     sourceBsonDatabase: IBsonDatabase,
     targetBsonDatabase: IBsonDatabase,
-    targetDeletedIds: Set<string>
+    targetDeletedIds: Set<string>,
+    onLocalChange?: (change: ISyncChange) => void
 ): Promise<void> {
     const sourceDbTree = await sourceBsonDatabase.merkleTree().get();
     const targetDbTree = await targetBsonDatabase.merkleTree().get();
@@ -540,13 +544,26 @@ export async function syncDatabase(
             // Use setInternalRecord to preserve all timestamps exactly
             await targetCollection.setInternalRecord(merged);
             mergedCount++;
-        } else if (diff.sourceRecord) {
+            if (onLocalChange && diff.collectionName === "metadata") {
+                onLocalChange({ type: "updated", asset: toExternal<IAsset>(merged) });
+            }
+        }
+        else if (diff.sourceRecord) {
             // Record only in source - insert it unless the target intentionally deleted it.
             if (!targetDeletedIds.has(diff.sourceRecord._id)) {
                 await targetCollection.setInternalRecord(diff.sourceRecord);
                 mergedCount++;
+                if (onLocalChange && diff.collectionName === "metadata") {
+                    onLocalChange({ type: "added", asset: toExternal<IAsset>(diff.sourceRecord) });
+                }
             }
-        } else if (diff.targetRecord) {
+            else {
+                if (onLocalChange && diff.collectionName === "metadata") {
+                    onLocalChange({ type: "deleted", assetId: diff.sourceRecord._id });
+                }
+            }
+        }
+        else if (diff.targetRecord) {
             // Record only in target, nothing to do (target already has it)
             // This case is less common in sync scenarios
         }

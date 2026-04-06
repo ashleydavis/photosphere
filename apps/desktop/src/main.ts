@@ -4,9 +4,9 @@ import { cpus, platform, arch, release } from 'os';
 import { version } from 'config';
 import { existsSync, readdirSync, statSync, readFileSync } from 'fs';
 import type { ITask, ITaskQueue, IWorkerBackend } from 'task-queue';
-import { TaskQueue } from 'task-queue';
+import { TaskQueue, TaskStatus } from 'task-queue';
 import { WorkerBackendElectronMain } from './lib/worker-backend-electron-main';
-import { RandomUuidGenerator, TimestampProvider, logExceptions } from 'utils';
+import { RandomUuidGenerator, TimestampProvider, logExceptions, log } from 'utils';
 import { findAvailablePort, loadDesktopConfig, saveDesktopConfig, addRecentDatabase, removeRecentDatabase, updateLastFolder, clearLastDatabase, getTheme, setTheme } from 'node-utils';
 import type { IWorkerBackendOptions } from './lib/worker-backend-electron-main';
 import type { IRestApiWorkerStopMessage, IRestApiWorkerStartMessage } from './rest-api-worker';
@@ -33,6 +33,18 @@ let restApiPort: number | null = null;
 
 // Tracks whether a database is currently open (used for menu state)
 let isDatabaseOpen: boolean = false;
+
+// Path of the currently open database; null when none.
+let currentDatabasePath: string | null = null;
+
+// Debounce timer for edit-triggered sync (10 seconds).
+let syncDebounceTimer: NodeJS.Timeout | null = null;
+
+// Periodic sync timer (5 minutes), runs for app lifetime.
+let syncPeriodicTimer: NodeJS.Timeout | null = null;
+
+// Prevents concurrent sync tasks; set by enqueueSyncTask(), cleared by syncStopped().
+let isSyncRunning: boolean = false;
 
 // File logger for writing logs to files
 let fileLogger: FileLoggerElectron | null = null;
@@ -99,7 +111,10 @@ app.whenReady().then(async () => {
     
     // Start up the background workers
     initWorkers();
-    
+
+    // Start periodic sync timer (runs for app lifetime; no-op when no database is open)
+    startPeriodicSync();
+
     await createMainWindow();
 
     app.on('activate', async () => {
@@ -117,7 +132,13 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', async () => {
     isShuttingDown = true;
-    
+
+    stopPeriodicSync();
+    if (syncDebounceTimer !== null) {
+        clearTimeout(syncDebounceTimer);
+        syncDebounceTimer = null;
+    }
+
     if (fileLogger) {
         fileLogger.info('Photosphere Desktop shutting down...', 'Main');
     }
@@ -188,6 +209,8 @@ ipcMain.handle('notify-database-opened', logExceptions(async (event, databasePat
     await addRecentDatabase(databasePath);
     isDatabaseOpen = true;
     await updateMenu();
+    resetSyncState();
+    currentDatabasePath = databasePath;
 }, 'Error notifying database opened'));
 
 // IPC handler for notifying that database was closed from frontend
@@ -195,7 +218,14 @@ ipcMain.handle('notify-database-closed', logExceptions(async () => {
     await clearLastDatabase();
     isDatabaseOpen = false;
     await updateMenu();
+    resetSyncState();
+    currentDatabasePath = null;
 }, 'Error notifying database closed'));
+
+// IPC handler for notifying that the database was edited (triggers debounced sync)
+ipcMain.on('notify-database-edited', () => {
+    scheduleSync();
+});
 
 // IPC handler for reading a value from the desktop config file
 ipcMain.handle('get-config', logExceptions(async (_event, key: string) => {
@@ -253,6 +283,12 @@ function initWorkers() {
                 result
             });
         }
+        if (task.type === "sync-database") {
+            syncStopped();
+            if (result.status !== TaskStatus.Succeeded && mainWindow) {
+                mainWindow.webContents.send('sync-completed');
+            }
+        }
     });
 
     // Forward task messages to renderer
@@ -262,8 +298,91 @@ function initWorkers() {
                 taskId: data.taskId,
                 message: data.message
             });
+            if (data.message.type === "sync-started") {
+                log.info("Sync started");
+                mainWindow.webContents.send('sync-started');
+            }
+            else if (data.message.type === "sync-completed") {
+                log.info("Sync completed");
+                mainWindow.webContents.send('sync-completed');
+            }
         }
     });
+}
+
+//
+// Queues a sync task if a database is open and no sync is already running.
+// Connectivity checking and sync-started/sync-completed messages are the worker's responsibility.
+//
+function enqueueSyncTask(): void {
+    if (!currentDatabasePath || !taskQueue || isSyncRunning) {
+        return;
+    }
+    isSyncRunning = true;
+    log.info(`Queuing sync task for ${currentDatabasePath}`);
+    taskQueue.addTask("sync-database", { databasePath: currentDatabasePath }, currentDatabasePath);
+}
+
+//
+// Resets the isSyncRunning flag.
+// Called from onTaskComplete when a sync task finishes (success, skip, or failure).
+//
+function syncStopped(): void {
+    isSyncRunning = false;
+}
+
+//
+// Cancels any running sync task for the current database, resets the running flag,
+// and clears the debounce timer. Call this whenever the active database changes.
+//
+function resetSyncState(): void {
+    if (currentDatabasePath && taskQueue) {
+        taskQueue.cancelTasks(currentDatabasePath);
+    }
+    syncStopped();
+    if (syncDebounceTimer !== null) {
+        clearTimeout(syncDebounceTimer);
+        syncDebounceTimer = null;
+    }
+}
+
+//
+// Schedules a debounced sync 10 seconds after the last edit notification.
+// Resets the debounce timer if called again before it fires.
+//
+function scheduleSync(): void {
+    log.info("Sync debounce triggered");
+    if (syncDebounceTimer !== null) {
+        clearTimeout(syncDebounceTimer);
+    }
+    syncDebounceTimer = setTimeout(() => {
+        syncDebounceTimer = null;
+        enqueueSyncTask();
+    }, 10_000);
+}
+
+//
+// Starts the periodic sync timer (every 5 minutes).
+// The timer runs for the lifetime of the app.
+// enqueueSyncTask is a no-op when no database is open or a sync is already running.
+//
+function startPeriodicSync(): void {
+    if (syncPeriodicTimer !== null) {
+        return;
+    }
+    syncPeriodicTimer = setInterval(() => {
+        enqueueSyncTask();
+    }, 60 * 1_000);
+}
+
+//
+// Stops the periodic sync timer.
+//
+function stopPeriodicSync(): void {
+    if (syncPeriodicTimer !== null) {
+        clearInterval(syncPeriodicTimer);
+        syncPeriodicTimer = null;
+    }
 }
 
 //

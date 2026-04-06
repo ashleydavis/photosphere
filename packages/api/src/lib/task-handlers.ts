@@ -4,6 +4,7 @@ import { checkFileHandler } from "./check.worker";
 import { loadAssetsHandler } from "./load-assets.worker";
 import { hashFileHandler, importFileHandler } from "./import.worker";
 import { prefetchDatabaseHandler } from "./prefetch-database.worker";
+import { syncDatabaseHandler } from "./sync-database.worker";
 
 //
 // Register all task handlers
@@ -16,4 +17,5 @@ export function initTaskHandlers(): void {
     registerHandler("prefetch-database", prefetchDatabaseHandler);
     registerHandler("hash-file", hashFileHandler);
     registerHandler("import-file", importFileHandler);
+    registerHandler("sync-database", syncDatabaseHandler);
 }

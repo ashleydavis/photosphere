@@ -40,7 +40,7 @@ export function Navbar({
     const theme = useTheme();
     const { openSearch, setOpenSearch, searchInput, setSearchInput, onCommitSearch, onCloseSearch, savedSearches, saveSearch, unsaveSearch } = useSearch();
     const { sortedItems, selectedItems, clearMultiSelection, moveSelectedToDatabase } = useGallery();
-    const { isLoading, databasePath, closeDatabase } = useAssetDatabase();
+    const { isLoading, isSyncing, databasePath, closeDatabase } = useAssetDatabase();
     const { dbs } = useApp();
     const { setDeleteConfirmationOpen } = useDeleteConfirmation();
 
@@ -111,6 +111,15 @@ export function Navbar({
                     {(isLoading)
                         && <div className="flex flex-row items-center ml-1 mr-2">
                             <span className="text-sm hidden sm:block mr-1">Loading</span>
+                            <div className="mx-1 sm:mx-2">
+                                <Spinner show={true} />
+                            </div>
+                        </div>
+                    }
+
+                    {isSyncing && !isLoading
+                        && <div className="flex flex-row items-center ml-1 mr-2">
+                            <span className="text-sm hidden sm:block mr-1">Syncing</span>
                             <div className="mx-1 sm:mx-2">
                                 <Spinner show={true} />
                             </div>
