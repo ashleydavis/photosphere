@@ -37,5 +37,10 @@ export interface IElectronAPI {
 
     // Logging methods - forward logs from renderer to main process for file logging
     log: (message: IRendererLogMessage) => void;
+
+    //
+    // Sends an FPS measurement to the main process for writing to a log file.
+    //
+    sendFps: (fps: number) => void;
 }
 

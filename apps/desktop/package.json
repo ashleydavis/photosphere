@@ -12,6 +12,7 @@
   "main": "bundle/main.js",
   "scripts": {
     "dev": "bun run bundle && electron . --no-sandbox",
+    "dev:fps": "bun run bundle && FPS_LOGGING=1 electron . --no-sandbox",
     "compile": "tsc --noEmit",
     "c": "bun run compile",
     "bundle:main": "bun build ./src/main.ts --outdir ./bundle --target node --format cjs --external electron",
