@@ -66,9 +66,17 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
     const [targetRowHeight, _setTargetRowHeight] = useState(savedHeight ? parseInt(savedHeight) : 80);
     
     //
-    // The current layout of the gallery.
+    // The current layout of the gallery, stored in a ref so updates during incremental loading
+    // do not trigger a React re-render on every batch. Renders are instead driven by setTime
+    // at most once per animation frame.
     //
-    const [layout, setLayout] = useState<IGalleryLayout | undefined>(undefined);
+    const layoutRef = useRef<IGalleryLayout | undefined>(undefined);
+
+    //
+    // A simple counter used to trigger re-renders when the layout changes outside of
+    // the incremental-loading path (e.g. rebuild, delete, update).
+    //
+    const [_time, setTime] = useState<number>(0);
 
     const { sortedItems, onReset, onNewItems, onItemsDeleted, onItemsUpdated, getItemById, searchText, sortBy, sorting } = useGallery();
 
@@ -100,7 +108,8 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
     //
     useEffect(() => {
         const subscription = onReset.subscribe(() => {
-            setLayout(undefined);
+            layoutRef.current = undefined;
+            setTime(Date.now());
         });
         return () => {
             subscription.unsubscribe();
@@ -119,7 +128,7 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
             return;
         }
         const _sorting = sorting();
-        const newLayout = computePartialLayout(undefined, sortedItems(), galleryWidth, targetRowHeight, _sorting.group, _sorting.heading); //todo: this needs to be partial again.
+        const newLayout = computePartialLayout(undefined, sortedItems(), galleryWidth, targetRowHeight, _sorting.group, _sorting.heading);
 
         const newIndex = new Map<string, { rowIndex: number; itemIndex: number }>();
         for (let rowIndex = 0; rowIndex < newLayout.rows.length; rowIndex++) {
@@ -130,7 +139,8 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
         }
         layoutItemsIndex.current = newIndex;
 
-        setLayout(newLayout);
+        layoutRef.current = newLayout;
+        setTime(Date.now());
     }
 
     useEffect(() => {
@@ -141,74 +151,73 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
             // Incrementally appends new items to the existing layout.
             //
             const newItemsSubscription = onNewItems.subscribe(newItems => {
+                // Compute layout into the ref synchronously — no React state update yet.
                 const _sorting = sorting();
-                setLayout(prev => {
-                    const startingRowIndex = (prev && prev.rows.length > 0) ? prev.rows.length - 1 : 0;
-                    const newLayout = computePartialLayout(prev, newItems, galleryWidth, targetRowHeight, _sorting.group, _sorting.heading);
-                    const rowsAdded = newLayout.rows.length - startingRowIndex;
-                    console.log(`Gallery layout: batch of ${newItems.length} items added ${rowsAdded} rows (total rows: ${newLayout.rows.length})`);
-                    for (let rowIndex = startingRowIndex; rowIndex < newLayout.rows.length; rowIndex++) {
-                        const row = newLayout.rows[rowIndex];
-                        for (let itemIndex = 0; itemIndex < row.items.length; itemIndex++) {
-                            layoutItemsIndex.current.set(row.items[itemIndex]._id, { rowIndex, itemIndex });
-                        }
+                const startingRowIndex = (layoutRef.current && layoutRef.current.rows.length > 0) ? layoutRef.current.rows.length - 1 : 0;
+                layoutRef.current = computePartialLayout(layoutRef.current, newItems, galleryWidth, targetRowHeight, _sorting.group, _sorting.heading);
+                for (let rowIndex = startingRowIndex; rowIndex < layoutRef.current.rows.length; rowIndex++) {
+                    const row = layoutRef.current.rows[rowIndex];
+                    for (let itemIndex = 0; itemIndex < row.items.length; itemIndex++) {
+                        layoutItemsIndex.current.set(row.items[itemIndex]._id, { rowIndex, itemIndex });
                     }
-                    return newLayout;
-                });
+                }
+                // No state update here. The rAF-throttled setTime in gallery-context cascades
+                // through (GalleryLayoutContextProvider re-renders as a consumer of useGallery()),
+                // which picks up the latest layoutRef.current at that point.
             });
 
             //
             // Incrementally reflows the layout from the earliest affected row when items are deleted.
             //
             const deletedItemsSubscription = onItemsDeleted.subscribe(({ assetIds }) => {
+                if (!layoutRef.current) {
+                    return;
+                }
                 const _sorting = sorting();
-                setLayout(prev => {
-                    if (!prev) {
-                        return prev;
+                const newLayout = deleteFromLayout(layoutRef.current, assetIds, galleryWidth, targetRowHeight, _sorting.group, _sorting.heading);
+                if (newLayout === layoutRef.current) {
+                    return;
+                }
+                const newIndex = new Map<string, { rowIndex: number; itemIndex: number }>();
+                for (let rowIndex = 0; rowIndex < newLayout.rows.length; rowIndex++) {
+                    const row = newLayout.rows[rowIndex];
+                    for (let itemIndex = 0; itemIndex < row.items.length; itemIndex++) {
+                        newIndex.set(row.items[itemIndex]._id, { rowIndex, itemIndex });
                     }
-                    const newLayout = deleteFromLayout(prev, assetIds, galleryWidth, targetRowHeight, _sorting.group, _sorting.heading);
-                    if (newLayout === prev) {
-                        return prev;
-                    }
-                    const newIndex = new Map<string, { rowIndex: number; itemIndex: number }>();
-                    for (let rowIndex = 0; rowIndex < newLayout.rows.length; rowIndex++) {
-                        const row = newLayout.rows[rowIndex];
-                        for (let itemIndex = 0; itemIndex < row.items.length; itemIndex++) {
-                            newIndex.set(row.items[itemIndex]._id, { rowIndex, itemIndex });
-                        }
-                    }
-                    layoutItemsIndex.current = newIndex;
-                    return newLayout;
-                });
+                }
+                layoutItemsIndex.current = newIndex;
+                layoutRef.current = newLayout;
+                setTime(Date.now());
             });
 
             //
             // Updates item references in-place when items are updated, without rebuilding the layout.
             //
             const updatedItemsSubscription = onItemsUpdated.subscribe(({ assetIds }) => {
-                setLayout(prev => {
-                    if (!prev) {
-                        return prev;
+                if (!layoutRef.current) {
+                    return;
+                }
+                const newRows = layoutRef.current.rows.slice();
+                let changed = false;
+                for (const assetId of assetIds) {
+                    const position = layoutItemsIndex.current.get(assetId);
+                    if (position === undefined) {
+                        continue;
                     }
-                    const newRows = prev.rows.slice();
-                    let changed = false;
-                    for (const assetId of assetIds) {
-                        const position = layoutItemsIndex.current.get(assetId);
-                        if (position === undefined) {
-                            continue;
-                        }
-                        const updatedItem = getItemById(assetId);
-                        if (updatedItem === undefined) {
-                            continue;
-                        }
-                        const row = newRows[position.rowIndex];
-                        const newItems = row.items.slice() as IGalleryItem[];
-                        newItems[position.itemIndex] = updatedItem;
-                        newRows[position.rowIndex] = { ...row, items: newItems };
-                        changed = true;
+                    const updatedItem = getItemById(assetId);
+                    if (updatedItem === undefined) {
+                        continue;
                     }
-                    return changed ? { ...prev, rows: newRows } : prev;
-                });
+                    const row = newRows[position.rowIndex];
+                    const newItems = row.items.slice() as IGalleryItem[];
+                    newItems[position.itemIndex] = updatedItem;
+                    newRows[position.rowIndex] = { ...row, items: newItems };
+                    changed = true;
+                }
+                if (changed) {
+                    layoutRef.current = { ...layoutRef.current, rows: newRows };
+                    setTime(Date.now());
+                }
             });
 
             return () => {
@@ -230,7 +239,7 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
         setGalleryWidth,
         targetRowHeight,
         setTargetRowHeight,
-        layout,
+        layout: layoutRef.current,
         scrollTo,
         setScrollToHandler,
     };

@@ -2,12 +2,10 @@ import { pipeline } from "stream/promises";
 import express from "express";
 import type { Request, Response, Application } from "express";
 import { createServer, type Server } from "http";
-import { createStorage } from "storage";
+import { createStorage, type IStorage } from "storage";
 import {
     applyDatabaseOps,
     createLazyDatabaseStorage,
-    createMediaFileDatabase,
-    loadSortIndexes,
     streamAsset,
     writeAssetStream,
 } from "api";
@@ -78,22 +76,30 @@ export async function createAssetServer(options: IAssetServerOptions): Promise<I
     const { port, app: existingApp, uuidGenerator, timestampProvider, sessionId } = options;
 
     //
-    // Helper function to load an asset and return it as a stream
-    // databasePath parameter is the path to the database directory
+    // Cache of lazy database storage instances keyed by database path.
+    // Avoids recreating storage (and re-reading the config/merkle-tree files) on every asset request.
+    //
+    const storageCache = new Map<string, IStorage>();
+
+    //
+    // Returns a cached lazy storage instance for the given database path, creating one if needed.
+    //
+    async function getAssetStorage(databasePath: string): Promise<IStorage> {
+        const cached = storageCache.get(databasePath);
+        if (cached) {
+            return cached;
+        }
+        const storage = await createLazyDatabaseStorage(databasePath);
+        storageCache.set(databasePath, storage);
+        return storage;
+    }
+
+    //
+    // Helper function to load an asset and return it as a stream.
+    // databasePath parameter is the path to the database directory.
     //
     async function loadAssetStream(assetId: string, assetType: string, databasePath: string): Promise<NodeJS.ReadableStream> {
-
-        // log.info(`Loading asset stream ${assetId} of type ${assetType} from database ${databasePath}`);
-
-        const assetStorage = await createLazyDatabaseStorage(databasePath);
-
-        // Create database instance
-        const database = createMediaFileDatabase(assetStorage, uuidGenerator, timestampProvider);
-        
-        // Load the database
-        await loadSortIndexes(assetStorage, database.metadataCollection);
-        
-        // Stream the asset
+        const assetStorage = await getAssetStorage(databasePath);
         return await streamAsset(assetStorage, assetId, assetType);
     }
 
