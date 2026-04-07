@@ -197,6 +197,21 @@ export interface IGalleryContext {
     clearMultiSelection(): void;
 
     //
+    // The last item clicked for selection, used as the anchor for shift+click range selection.
+    //
+    lastSelectedItemId: string | undefined;
+
+    //
+    // Sets the last selected item id.
+    //
+    setLastSelectedItemId(id: string | undefined): void;
+
+    //
+    // Selects all items between fromItemId and toItemId (inclusive) in sorted order.
+    //
+    selectRange(fromItemId: string, toItemId: string): void;
+
+    //
     // True while assets are being loaded from the database.
     //
     isLoading: boolean;
@@ -315,6 +330,11 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     // Set to true when the user is selecting multiple items.
     //
     const [isSelecting, setIsSelecting] = useState<boolean>(false);
+
+    //
+    // The last item the user clicked for selection, used as the anchor for shift+click range selection.
+    //
+    const [lastSelectedItemId, setLastSelectedItemId] = useState<string | undefined>(undefined);
 
     //
     // A simple way to force state to update.
@@ -679,6 +699,22 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     function clearMultiSelection(): void {        
         setIsSelecting(false);
         setSelectedItems(new Set<string>());
+        setLastSelectedItemId(undefined);
+    }
+
+    //
+    // Selects all items between fromItemId and toItemId (inclusive) in sorted order.
+    //
+    function selectRange(fromItemId: string, toItemId: string): void {
+        const fromIndex = sortedItemsIndex.current.get(fromItemId);
+        const toIndex = sortedItemsIndex.current.get(toItemId);
+        if (fromIndex === undefined || toIndex === undefined) {
+            return;
+        }
+        const start = Math.min(fromIndex, toIndex);
+        const end = Math.max(fromIndex, toIndex);
+        const rangeIds = sortedItems.current.slice(start, end + 1).map(item => item._id);
+        setSelectedItems(new Set([...selectedItems, ...rangeIds]));
     }
 
     //
@@ -829,6 +865,9 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
         addToMultipleSelection,
         removeFromMultipleSelection,
         clearMultiSelection,
+        lastSelectedItemId,
+        setLastSelectedItemId,
+        selectRange,
         isLoading,
         search,
         clearSearch,
