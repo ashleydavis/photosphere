@@ -14,6 +14,26 @@ export interface IRendererLogMessage {
 }
 
 //
+// Identifies a single asset to be saved to disk.
+//
+export interface ISaveAssetItem {
+    //
+    // The ID of the asset.
+    //
+    assetId: string;
+
+    //
+    // The asset type to fetch (e.g. "asset").
+    //
+    assetType: string;
+
+    //
+    // The original filename to save as.
+    //
+    filename: string;
+}
+
+//
 // Type definition for Electron API exposed via preload script
 // Shared between desktop main process and desktop frontend
 //
@@ -42,5 +62,20 @@ export interface IElectronAPI {
     // Sends an FPS measurement to the main process for writing to a log file.
     //
     sendFps: (fps: number) => void;
+
+    //
+    // Opens a save dialog and, if confirmed, enqueues a background task to stream the asset to the chosen file.
+    //
+    saveAsset: (assetId: string, assetType: string, filename: string, databasePath: string) => Promise<void>;
+
+    //
+    // Opens a folder picker and, if confirmed, enqueues background tasks to save all assets into it.
+    //
+    saveAssets: (assets: ISaveAssetItem[], databasePath: string) => Promise<void>;
+
+    //
+    // Opens the given path in the system's file manager.
+    //
+    openPath: (path: string) => Promise<void>;
 }
 

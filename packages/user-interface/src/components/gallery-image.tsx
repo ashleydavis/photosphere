@@ -141,6 +141,7 @@ export function GalleryImage({ item, onClick, x, y, width, height, isDragging }:
             }}
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
+            {...longPressHandlers}
             >
             {item.color
                 && <div                    
@@ -162,7 +163,6 @@ export function GalleryImage({ item, onClick, x, y, width, height, isDragging }:
                     data-testid="gallery-thumb"
                     className="gallery-thumb"
                     src={microDataURL}
-                    {...longPressHandlers}
                     style={{
                         position: "absolute",
                         left: "0",
@@ -181,7 +181,6 @@ export function GalleryImage({ item, onClick, x, y, width, height, isDragging }:
                     data-testid="gallery-thumb"
                     className="gallery-thumb fade-in-thumb"
                     src={thumbObjectURL}
-                    {...longPressHandlers}
                     style={{
                         position: "absolute",
                         left: "0",
@@ -212,6 +211,8 @@ export function GalleryImage({ item, onClick, x, y, width, height, isDragging }:
                     cursor: "pointer",
                     display: (isSelecting || isSelected) ? "flex" : undefined,
                 }}
+                onMouseDown={event => event.stopPropagation()}
+                onMouseUp={event => event.stopPropagation()}
                 onClick={event => {
                     event.preventDefault();
                     event.stopPropagation();
@@ -242,7 +243,6 @@ export function GalleryImage({ item, onClick, x, y, width, height, isDragging }:
 
             {item.contentType.startsWith("video")
                 && <div
-                    {...longPressHandlers}
                     style={{
                         position: "absolute",
                         left: "50%",
@@ -287,6 +287,8 @@ export function GalleryImage({ item, onClick, x, y, width, height, isDragging }:
                         alignItems: "center",
                         cursor: "pointer",
                     }}
+                    onMouseDown={event => event.stopPropagation()}
+                    onMouseUp={event => event.stopPropagation()}
                     onClick={async (event) => {
                         event.preventDefault();
                         event.stopPropagation();
@@ -327,6 +329,8 @@ export function GalleryImage({ item, onClick, x, y, width, height, isDragging }:
                         alignItems: "center",
                         cursor: "pointer",
                     }}
+                    onMouseDown={event => event.stopPropagation()}
+                    onMouseUp={event => event.stopPropagation()}
                     onClick={async (event) => {
                         event.preventDefault();
                         event.stopPropagation();

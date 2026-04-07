@@ -84,6 +84,31 @@ export interface IWorkerQueueTaskMessage {
 }
 
 //
+// Message sent from a utility process worker to request showing a toast notification in the renderer.
+//
+export interface IWorkerShowNotificationMessage {
+    //
+    // Message type discriminator.
+    //
+    type: "show-notification";
+
+    //
+    // The message to display in the toast.
+    //
+    message: string;
+
+    //
+    // Color variant of the toast.
+    //
+    color: 'success' | 'warning' | 'danger' | 'neutral';
+
+    //
+    // Duration in milliseconds before auto-dismiss. 0 means no auto-dismiss.
+    //
+    duration?: number;
+}
+
+//
 // Worker state interface
 //
 interface IWorkerState {
@@ -116,6 +141,7 @@ export class WorkerBackendElectronMain implements IWorkerBackend {
     private anyMessageCallbacks: TaskMessageCallback[] = [];
     private queueTaskCallbacks: Array<(type: string, data: any, source: string) => void> = [];
     private workerLogCallback: (message: any) => void;
+    private showNotificationCallbacks: Array<(data: IWorkerShowNotificationMessage) => void> = [];
     private isShuttingDown: boolean = false;
 
     //
@@ -202,6 +228,19 @@ export class WorkerBackendElectronMain implements IWorkerBackend {
             const index = this.queueTaskCallbacks.indexOf(callback);
             if (index !== -1) {
                 this.queueTaskCallbacks.splice(index, 1);
+            }
+        };
+    }
+
+    //
+    // Registers a callback that will be called when a worker sends a show-notification message.
+    //
+    onShowNotification(callback: (data: IWorkerShowNotificationMessage) => void): UnsubscribeFn {
+        this.showNotificationCallbacks.push(callback);
+        return () => {
+            const index = this.showNotificationCallbacks.indexOf(callback);
+            if (index !== -1) {
+                this.showNotificationCallbacks.splice(index, 1);
             }
         };
     }
@@ -416,6 +455,14 @@ export class WorkerBackendElectronMain implements IWorkerBackend {
 
         if (data.type === "log") {
             this.workerLogCallback(data);
+            return;
+        }
+
+        if (data.type === "show-notification") {
+            const msg = data as IWorkerShowNotificationMessage;
+            for (const callback of this.showNotificationCallbacks) {
+                callback(msg);
+            }
             return;
         }
 

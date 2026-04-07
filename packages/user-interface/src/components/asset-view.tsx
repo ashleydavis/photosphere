@@ -4,8 +4,12 @@ import { useGalleryItem } from "../context/gallery-item-context";
 import { FullImage } from "./full-image";
 import { Video } from "./video";
 import { useGallery } from "../context/gallery-context";
-import { Drawer, IconButton } from "@mui/joy";
-import { Flag, Star } from "@mui/icons-material";
+import { useGallerySource } from "../context/gallery-source";
+import { usePlatform } from "../context/platform-context";
+import { useAssetDatabase } from "../context/asset-database-source";
+import { Chip, Drawer, IconButton, Input } from "@mui/joy";
+import { ContentCopy, Delete, Download, Flag, Star } from "@mui/icons-material";
+import { DeleteConfirmationDialog } from "./delete-confirmation-dialog";
 
 export interface IAssetViewProps { 
 
@@ -30,13 +34,76 @@ export interface IAssetViewProps {
 //
 export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
 
-    const { getNext, getPrev, selectedItems, addToMultipleSelection, removeFromMultipleSelection, enableSelecting } = useGallery();
-    const { asset, addArrayValue, removeArrayValue } = useGalleryItem();
+    const { getNext, getPrev, selectedItems, addToMultipleSelection, removeFromMultipleSelection, enableSelecting, search } = useGallery();
+    const { loadAsset } = useGallerySource();
+    const { downloadAsset, copyToClipboard } = usePlatform();
+    const { databasePath } = useAssetDatabase();
+    const { asset, addArrayValue, removeArrayValue, deleteAsset } = useGalleryItem();
 
-    // 
+    //
     // Set to true to open the info modal.
     //
     const [openInfo, setOpenInfo] = useState<boolean>(false);
+
+    //
+    // Set to true to show the delete confirmation dialog.
+    //
+    const [confirmingDelete, setConfirmingDelete] = useState<boolean>(false);
+
+    //
+    // Controls visibility of the inline add-label input.
+    //
+    const [addingLabel, setAddingLabel] = useState<boolean>(false);
+
+    //
+    // The text currently typed into the add-label input.
+    //
+    const [newLabelName, setNewLabelName] = useState<string>("");
+
+    //
+    // Downloads the full-resolution asset.
+    //
+    async function handleDownload(): Promise<void> {
+        await downloadAsset(asset!._id, "asset", asset!.origFileName || asset!._id, asset!.contentType, databasePath!);
+    }
+
+    //
+    // Deletes the asset.
+    //
+    async function handleDelete(): Promise<void> {
+        await deleteAsset();
+        setConfirmingDelete(false);
+        onClose();
+    }
+
+    //
+    // Confirms the new label and adds it to the asset.
+    //
+    async function onConfirmLabel(): Promise<void> {
+        const trimmed = newLabelName.trim();
+        if (trimmed) {
+            await addArrayValue("labels", trimmed);
+        }
+        setNewLabelName("");
+        setAddingLabel(false);
+    }
+
+    //
+    // Removes a label from the asset.
+    //
+    async function onRemoveLabel(labelName: string): Promise<void> {
+        await removeArrayValue("labels", labelName);
+    }
+
+    //
+    // Copies the display version of the asset to the clipboard.
+    //
+    async function handleCopyToClipboard(): Promise<void> {
+        const blob = await loadAsset(asset!._id, "display");
+        if (blob) {
+            await copyToClipboard(blob, asset!.contentType);
+        }
+    }
 
     if (!asset) {
         return null; // Waiting for asset to be loaded.
@@ -45,6 +112,7 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
     const isStarred = asset.labels && Array.isArray(asset.labels) && asset.labels.includes("starred");
     const isFlagged = asset.labels && Array.isArray(asset.labels) && asset.labels.includes("flagged");
     const isSelected = selectedItems.has(asset._id);
+    const customLabels = (asset.labels || []).filter(label => label !== "starred" && label !== "flagged");
 
     return (
         <div className="photo text-xl">
@@ -93,57 +161,61 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
             
             <div className="photo-header">
                 <div className="flex flex-row items-center pl-3 pr-3 pt-3 pb-2">
-                    <IconButton
-                        className="pointer-events-auto"
-                        variant="outlined"
-                        color="neutral"
-                        onClick={() => {
-                            onClose();
-                            setOpenInfo(false);
-                        }}
-                        >
-                        <i className="fa-solid fa-close"></i>
-                    </IconButton>
-
-                    <div
-                        className={isSelected ? "asset-view-select-btn selected" : "asset-view-select-btn"}
-                        style={{
-                            marginLeft: "16px",
-                            width: "24px",
-                            height: "24px",
-                            borderRadius: "50%",
-                            display: "flex",
-                            justifyContent: "center",
-                            alignItems: "center",
-                            cursor: "pointer",
-                        }}
-                        title={isSelected ? "Deselect" : "Select"}
-                        onClick={() => {
-                            if (isSelected) {
-                                removeFromMultipleSelection(asset);
-                            }
-                            else {
-                                enableSelecting(true);
-                                addToMultipleSelection(asset);
-                            }
-                        }}
-                        >
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            viewBox="0 0 24 24"
-                            fill="white"
-                            width="16px"
-                            height="16px"
+                    <div style={{ flex: 1, display: "flex", flexDirection: "row", alignItems: "center" }}>
+                        <IconButton
+                            className="pointer-events-auto"
+                            variant="outlined"
+                            color="neutral"
+                            onClick={() => {
+                                onClose();
+                                setOpenInfo(false);
+                            }}
                             >
-                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
-                        </svg>
+                            <i className="fa-solid fa-close"></i>
+                        </IconButton>
                     </div>
 
+                    <div style={{ flex: 1, display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "center" }}>
+                        <div
+                            className={isSelected ? "asset-view-select-btn selected" : "asset-view-select-btn"}
+                            style={{
+                                width: "24px",
+                                height: "24px",
+                                borderRadius: "50%",
+                                display: "flex",
+                                justifyContent: "center",
+                                alignItems: "center",
+                                cursor: "pointer",
+                            }}
+                            title={isSelected ? "Deselect" : "Select"}
+                            onClick={() => {
+                                if (isSelected) {
+                                    removeFromMultipleSelection(asset);
+                                }
+                                else {
+                                    enableSelecting(true);
+                                    addToMultipleSelection(asset);
+                                }
+                            }}
+                            >
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 24 24"
+                                fill="white"
+                                width="16px"
+                                height="16px"
+                                >
+                                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+                            </svg>
+                        </div>
+                    </div>
+
+                    <div style={{ flex: 1, display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "flex-end" }}>
                     <IconButton
                         className="pointer-events-auto"
                         variant="outlined"
                         color="neutral"
-                        sx={isStarred ? { ml: 'auto', '--Icon-color': 'gold', '&:hover': { '--Icon-color': 'gold' } } : { ml: 'auto' }}
+                        sx={isStarred ? { '--Icon-color': 'gold', '&:hover': { '--Icon-color': 'gold' } } : {}}
                         title={isStarred ? "Unstar" : "Star"}
                         onClick={async () => {
                             if (isStarred) {
@@ -176,6 +248,28 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                     </IconButton>
 
                     <IconButton
+                        className="pointer-events-auto"
+                        variant="outlined"
+                        color="neutral"
+                        sx={{ ml: 1 }}
+                        title="Download"
+                        onClick={handleDownload}
+                        >
+                        <Download />
+                    </IconButton>
+
+                    <IconButton
+                        className="pointer-events-auto"
+                        variant="outlined"
+                        color="neutral"
+                        sx={{ ml: 1 }}
+                        title="Copy to clipboard"
+                        onClick={handleCopyToClipboard}
+                        >
+                        <ContentCopy />
+                    </IconButton>
+
+                    <IconButton
                         data-testid="open-info-button"
                         className="pointer-events-auto"
                         variant="outlined"
@@ -187,7 +281,105 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                         >
                         <i className="fa-solid fa-circle-info"></i>
                     </IconButton>
+                    </div>
                 </div>
+            </div>
+
+
+            <div
+                className="pointer-events-auto"
+                style={{
+                    position: "absolute",
+                    bottom: "16px",
+                    right: "16px",
+                }}
+                >
+                <IconButton
+                    variant="outlined"
+                    color="danger"
+                    title="Delete"
+                    onClick={() => setConfirmingDelete(true)}
+                    >
+                    <Delete />
+                </IconButton>
+            </div>
+
+            <DeleteConfirmationDialog
+                open={confirmingDelete}
+                numItems={1}
+                onCancel={() => setConfirmingDelete(false)}
+                onDelete={handleDelete}
+                />
+
+            <div
+                className="pointer-events-auto"
+                style={{
+                    position: "absolute",
+                    bottom: "16px",
+                    left: "16px",
+                    display: "flex",
+                    flexDirection: "row",
+                    flexWrap: "wrap",
+                    alignItems: "center",
+                    gap: "4px",
+                    maxWidth: "60%",
+                }}
+                >
+                {customLabels.map(label => (
+                    <Chip
+                        key={label}
+                        variant="outlined"
+                        color="neutral"
+                        onClick={() => {
+                            search(`.labels="${label}"`);
+                            onClose();
+                        }}
+                        sx={{ cursor: "pointer" }}
+                        endDecorator={
+                            <IconButton
+                                size="sm"
+                                variant="plain"
+                                color="neutral"
+                                onClick={event => {
+                                    event.stopPropagation();
+                                    onRemoveLabel(label);
+                                }}
+                                sx={{ minHeight: "20px", minWidth: "20px", ml: 0.5 }}
+                                >
+                                <i className="fa-solid fa-close text-xs" />
+                            </IconButton>
+                        }
+                        >
+                        {label}
+                    </Chip>
+                ))}
+                {addingLabel
+                    ? <Input
+                        autoFocus
+                        size="sm"
+                        placeholder="Label name"
+                        value={newLabelName}
+                        onChange={event => setNewLabelName(event.target.value)}
+                        onKeyDown={async event => {
+                            if (event.key === "Enter") {
+                                await onConfirmLabel();
+                            }
+                            else if (event.key === "Escape") {
+                                setNewLabelName("");
+                                setAddingLabel(false);
+                            }
+                        }}
+                        onBlur={onConfirmLabel}
+                        />
+                    : <IconButton
+                        variant="outlined"
+                        color="neutral"
+                        title="Add label"
+                        onClick={() => setAddingLabel(true)}
+                        >
+                        <i className="fa-solid fa-tag" />
+                    </IconButton>
+                }
             </div>
 
             <Drawer
@@ -205,6 +397,10 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                         setOpenInfo(false);
                     }}
                     onDeleted={() => {
+                        setOpenInfo(false);
+                        onClose();
+                    }}
+                    onLabelSearch={() => {
                         setOpenInfo(false);
                         onClose();
                     }}

@@ -21,6 +21,9 @@ import { useGallery } from "../context/gallery-context";
 import { useAssetDatabase } from "../context/asset-database-source";
 import { useApp } from "../context/app-context";
 import { useDeleteConfirmation } from "../context/delete-confirmation-context";
+import { usePlatform } from "../context/platform-context";
+import type { IDownloadAssetItem } from "../context/platform-context";
+import Download from "@mui/icons-material/Download";
 
 export interface INavbarProps {
     //
@@ -39,14 +42,33 @@ export function Navbar({
 }: INavbarProps) {
     const theme = useTheme();
     const { openSearch, setOpenSearch, searchInput, setSearchInput, onCommitSearch, onCloseSearch, savedSearches, saveSearch, unsaveSearch } = useSearch();
-    const { sortedItems, selectedItems, clearMultiSelection, moveSelectedToDatabase } = useGallery();
+    const { sortedItems, selectedItems, clearMultiSelection, moveSelectedToDatabase, getItemById } = useGallery();
     const { isLoading, isSyncing, databasePath, closeDatabase } = useAssetDatabase();
     const { dbs } = useApp();
     const { setDeleteConfirmationOpen } = useDeleteConfirmation();
+    const { downloadAssets } = usePlatform();
 
     const sortedItemsCount = sortedItems().length;
     const selectedItemsCount = selectedItems.size;
 
+    //
+    // Downloads all selected assets.
+    //
+    async function onDownloadSelected(): Promise<void> {
+        const assets: IDownloadAssetItem[] = [];
+        for (const assetId of selectedItems) {
+            const item = getItemById(assetId);
+            if (!item) {
+                continue;
+            }
+            assets.push({ assetId, assetType: "asset", filename: item.origFileName || assetId, contentType: item.contentType });
+        }
+        await downloadAssets(assets, databasePath!);
+    }
+
+    //
+    // Copies all selected assets (display version) to the clipboard.
+    //
     //
     // Closes the current database.
     //
@@ -180,7 +202,12 @@ export function Navbar({
                                         >
                                             <Delete />
                                             Delete {selectedItemsCount} assets
-                                        </MenuItem>                                        
+                                        </MenuItem>
+                                        <ListDivider />
+                                        <MenuItem onClick={onDownloadSelected}>
+                                            <Download />
+                                            Download {selectedItemsCount} assets
+                                        </MenuItem>
                                     </>
                                 }                                    
                                 {databasePath && (
