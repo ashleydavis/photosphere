@@ -54,8 +54,31 @@ export async function loadAssetsHandler(
         totalAssets += result.records.length;
         batchesSent++;
         
+        // Whitelist only the fields needed for gallery display. The `properties` field (EXIF data)
+        // is intentionally excluded: structured clone deserialization of large EXIF objects blocks
+        // the renderer's main thread for hundreds of milliseconds per batch, causing 2-9fps during
+        // loading. `properties` can be fetched on demand when a detail view opens.
+        const batch = result.records.map(record => ({
+            _id: record._id,
+            origFileName: record.origFileName,
+            origPath: record.origPath,
+            contentType: record.contentType,
+            width: record.width,
+            height: record.height,
+            hash: record.hash,
+            location: record.location,
+            fileDate: record.fileDate,
+            photoDate: record.photoDate,
+            uploadDate: record.uploadDate,
+            labels: record.labels,
+            description: record.description,
+            deleted: record.deleted,
+            micro: record.micro,
+            color: record.color,
+        }));
+
         // Send page via message
-        context.sendMessage({ type: "asset-page", databasePath: data.databasePath, batch: result.records });
+        context.sendMessage({ type: "asset-page", databasePath: data.databasePath, batch });
         
         if (!result.nextPageId) {
             break;

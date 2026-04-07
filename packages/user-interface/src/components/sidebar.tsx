@@ -394,12 +394,12 @@ export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
     const [breadcrumbs, setBreadCrumbs] = useState<IBreadcrumb[]>([]);
 
 
-    const navMenu = layout ? buildNavMenu(layout, position => {
+    const navMenu = (layout && !isLoading) ? buildNavMenu(layout, position => {
         scrollTo(position);
         setSidebarOpen(false);
     }) : [];
-    const years = layout ? determineYears(layout) : [];
-    const locations = layout ? determineLocations(layout) : [];
+    const years = (layout && !isLoading) ? determineYears(layout) : [];
+    const locations = (layout && !isLoading) ? determineLocations(layout) : [];
     const fullMenu = makeFullMenu(
         navMenu, 
         years,

@@ -453,17 +453,18 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
             searchedItemsIndex.current.set(newSearchedItems[i]._id, baseSearchedIndex + i);
         }
 
-        const sorting = sortingMap[sortByRef.current];
-        if (!sorting) {
-            throw new Error(`Unknown sorting value: ${sortByRef.current}`);
+        // Assets arrive in sorted order from the database during initial load, so appending
+        // incrementally maintains correct order without a full O(n log n) re-sort each batch.
+        // Sorting is applied by setSortBy() when the user changes sort order after loading.
+        const baseSortedIndex = sortedItems.current.length;
+        sortedItems.current = sortedItems.current.concat(newSearchedItems);
+        for (let i = 0; i < newSearchedItems.length; i++) {
+            sortedItemsIndex.current.set(newSearchedItems[i]._id, baseSortedIndex + i);
         }
 
-        sortedItems.current = applySort(searchedItems.current, sorting);
-        sortedItemsIndex.current = buildItemsIndex(sortedItems.current);
+        onNewItems.current.invoke(newSearchedItems);
 
         setTime(Date.now());
-
-        onNewItems.current.invoke(newSearchedItems);
     };
 
     //

@@ -20,48 +20,123 @@ awk -F, 'NR>1 {sum+=$2; count++} END {print "avg fps:", sum/count}' /tmp/photosp
 
 FPS is measured in `fps.tsx` using a `requestAnimationFrame` loop and sent to the main process via `window.electronAPI.sendFps(fps)`.
 
-## What Has Been Tried (All Reverted)
+---
 
-Several optimisations were attempted but none fixed the 2fps issue:
+## Phase 1: Root Cause — IPC Properties Field
 
-1. **Incremental layout** (`gallery-layout-context.tsx`): Changed `onNewItems` handler from full `computePartialLayout(undefined, sortedItems(), ...)` rebuild to `computePartialLayout(prev, newItems, ...)` — appending only new items. Correct approach but didn't fix FPS.
+### Proven Root Cause
 
-2. **`startTransition`** (`gallery-layout-context.tsx`): Wrapped `setLayout` in `startTransition`. Didn't help — functional updaters still run synchronously; only the render is deferred.
+**The `properties` field (parsed EXIF/metadata) in `IGalleryItem` creates massive Electron IPC payloads that block the renderer's main thread during structured clone deserialization.**
 
-3. **`requestAnimationFrame` throttling** (`gallery-layout-context.tsx`): Buffered incoming items and processed at most once per frame. Didn't fix 2fps.
+### Evidence Table
 
-4. **Skipping `applySort` on new items** (`gallery-context.tsx`): `_onNewItems` calls `applySort(allSearchedItems, sorting)` on every batch — O(n log n) growing to 100k items. Replaced with O(k) append. Didn't fix 2fps.
+| Experiment | IPC Payload | FPS | Max Jank |
+|---|---|---|---|
+| Baseline | Full items (micro + properties) | 4–9fps | 3257ms |
+| Remove setTime only | Full items | 9fps | — |
+| Remove TanStack Virtual | Full items | 11fps | — |
+| Remove ALL React state updates | Full items | 9fps | — |
+| Remove O(n log n) sort + buildIndex | Full items | 9fps | — |
+| IPC callback completely disabled | Full items | 4–9fps | 3257ms |
+| **Empty batch `{}`** | Empty objects | **60fps** | 55ms |
+| Micro-only `{_id, micro}` | Small base64 strings | 60fps | 47ms |
+| **Properties-only `{_id, properties}`** | EXIF data | **4–9fps** | 2625ms |
 
-## Current State of the Code
+### Mechanism
 
-`gallery-context.tsx` and `gallery-layout-context.tsx` have been reverted to their pre-optimisation state. The FPS measurement infrastructure is the only new code present:
+1. The database worker sends ~800-item pages via IPC: worker → main process → renderer
+2. The `properties` field contains large parsed EXIF objects. At 800 items/batch, this creates **megabytes of nested object data** per IPC message
+3. Electron's **structured clone deserialization** of this payload runs on the **renderer's main thread**, blocking it for **hundreds to thousands of milliseconds per batch** — before any JavaScript callback fires
+4. As the sort-index B-tree page cache warms up, later pages arrive much faster (17ms intervals vs 260ms cold). Multiple IPC messages pile up in Chromium's IPC queue and are all drained before yielding to `requestAnimationFrame`, causing **snowballing multi-second freezes** (up to 3.7 seconds in one burst)
 
-- `packages/electron-defs/src/lib/electron-api.ts` — `sendFps` added to `IElectronAPI`
-- `apps/desktop/src/preload.ts` — `sendFps` exposed via `ipcRenderer.send('fps-measurement', fps)`
-- `apps/desktop/src/main.ts` — `ipcMain.on('fps-measurement', ...)` writes to `/tmp/photosphere-fps.csv` when `FPS_LOGGING=1`
-- `apps/desktop/package.json` — `dev:fps` script added
-- `packages/user-interface/src/components/fps.tsx` — `requestAnimationFrame` loop added to measure and send FPS
+A jank detector (setInterval at 4ms, logs gaps > 20ms) confirmed main-thread blocks of:
+55ms → 446ms → 800ms → 1411ms → 1948ms → **3706ms** → 1803ms across a single loading run.
 
-Key files to understand the loading pipeline:
+### Fix Applied
 
-- `packages/user-interface/src/context/gallery-context.tsx` — `_onNewItems()` (~line 440): calls `applySort` on ALL items every batch, then `buildItemsIndex`, then `setTime(Date.now())`
-- `packages/user-interface/src/context/gallery-layout-context.tsx` — `onNewItems` subscription (~line 143): calls `rebuildLayout()` → `computePartialLayout(undefined, sortedItems(), ...)`
-- `packages/user-interface/src/lib/create-layout.ts` — `computePartialLayout()`: supports incremental append when passed an existing layout
-- `packages/user-interface/src/components/gallery-layout.tsx` — gallery renderer using TanStack Virtual
+Whitelist only the fields needed for gallery display in `packages/api/src/lib/load-assets.worker.ts`. Strip `properties` (EXIF data) — it is the primary IPC blocking culprit. `properties` can be fetched on demand when a detail view opens.
 
-## Suspected Bottlenecks
+**Result after fix: 58fps average, loading dip reduced to 2–3 seconds at 9fps.** Target is no seconds below 15fps.
 
-None of the tried fixes helped, which suggests the real bottleneck is in rendering rather than computation. Top candidates:
+---
 
-1. **TanStack Virtual O(n) work**: `useVirtualizer` with `estimateSize: (i) => layout?.rows[i].height` — when `count` grows, TanStack Virtual may rebuild its cumulative-height offset array for all rows on every update.
+## Phase 2: Remaining Dip — Still Under Investigation
 
-2. **`setTime(Date.now())` cascading re-renders**: Called on every batch in `_onNewItems`, this triggers a state update in `gallery-context` that may cause all consumers to re-render.
+After stripping `properties`, a ~2–3 second dip to 9–13fps remains during the B-tree cache warmup phase (when IPC batches arrive at maximum rate, ~17ms intervals).
 
-3. **React reconciliation cost**: Every `setLayout` re-renders the gallery. If visible row/item components aren't memoised, React may destroy and recreate DOM nodes on every update.
+### What Has Been Ruled Out
 
-## Suggested Next Steps
+These have all been tried and confirmed NOT to be the remaining cause:
 
-1. Use `bun run dev:fps` to get a baseline average FPS, then measure again after each change.
-2. Profile with Chrome DevTools (`Developer → Toggle Developer Tools` in the Electron menu) — record a Performance trace during loading to see exactly where time is spent.
-3. Investigate whether TanStack Virtual is the bottleneck by temporarily replacing it with a plain non-virtualised list and comparing FPS.
-4. Investigate `setTime(Date.now())` — try removing or throttling it and measure the effect.
+| Experiment | Result | Conclusion |
+|---|---|---|
+| Strip `micro` field from IPC | Still 11–13fps dip | `micro` is a minor contributor (~2fps), not primary |
+| Skip all rendering (no setTime, no setLayout) | **60fps, zero dips** | JS processing in IPC callbacks is fast enough — render IS the bottleneck |
+| Skip `computePartialLayout`, call setLayout no-op | 60fps | layout computation alone is NOT the bottleneck |
+| Compute layout into ref, never render | 60fps | layout computation (even with growing prev) is NOT the bottleneck |
+| computePartialLayout inside `setLayout` functional updater | ~9fps dip | React double-invokes functional updaters — MOVED COMPUTATION OUT |
+| Replace O(n log n) `applySort` with O(k) incremental append | 10fps (minor improvement) | sort was a contributor but not primary |
+| Replace O(n) `buildItemsIndex` with O(k) incremental | 10fps (no improvement) | index rebuild was not the bottleneck |
+| Replace `concat` with `push` for item arrays | 12fps (minor improvement) | O(n) array allocation contributed slightly |
+| Move layout to ref, drive renders from layout-context setTime | 13fps (minor improvement) | Separates render from IPC callback, helps a little |
+| Move layout to ref, drive renders from gallery-context setTime | 12fps | Same as above, no meaningful difference |
+| `React.memo` on `GalleryRow` + stable `onItemClick` via `useCallback` | 12fps | Memoized rows help slightly but can't prevent context-driven re-renders |
+| `React.memo` on `GalleryLayout` | 12fps | Context subscription (`useGalleryLayout`) still causes re-renders, memo has no effect |
+| rAF-throttle `setTime` in layout-context (batch renders to 60fps) | 12fps | Throttling reduces render count but each render is more expensive (larger count jump) |
+| Per-batch `setTime` (no throttle) | 10–12fps | More renders but smaller count increments — similar net cost |
+| Skip all `computePartialLayout` phases except item loop (stretch/pullback/headings/offsets all `if (false)`) | 11fps | Those phases are NOT the bottleneck |
+| Replace `getGroup` with `() => []` (skip dayjs date parsing) | 11fps | `getGroup`/dayjs is NOT the bottleneck |
+| Skip `computePartialLayout` entirely, still fire rAF `setTime` | **60fps** | Bottleneck requires BOTH new rows being added AND renders firing |
+| Return before item loop in `computePartialLayout`, still fire rAF `setTime` | **60fps** | Confirms: item loop computation is NOT the bottleneck — rendering new rows is |
+| Timing CSV for `computePartialLayout` and `_onNewItems` | 1–4ms and 0–0.5ms, flat throughout loading | Both are O(k new items) — the cost is NOT growing with layout size |
+| Simplify to 1 item per row (EXP-M) | Still ~9fps dip | Row count alone is NOT the bottleneck (21k rows vs normal ~3k made no difference) |
+| Freeze TanStack Virtual at count=0 while `setTime` still fires (EXP-N) | Still ~9fps dip | TanStack Virtual O(n) `getMeasurements` is NOT the bottleneck |
+| Disable `setTime` entirely + count=0 (EXP-O) | **60fps** | React re-renders triggered by `setTime` ARE the cause — something in the render path is O(n) |
+| Add `!isLoading` guards to sidebar `buildNavMenu`/`determineYears`/`determineLocations` (EXP-P) | **60fps solid throughout loading** | **ROOT CAUSE CONFIRMED: sidebar O(n) scans** |
+
+### Confirmed Root Cause
+
+`setTime(Date.now())` fires in `gallery-context` on every IPC batch, triggering a React re-render of all `useGallery()` subscribers — including the **sidebar**.
+
+The sidebar runs three O(n) scans on every render with no memoization:
+
+- `buildNavMenu(layout)` — `layout.rows.filter(row => row.type === "heading")` — O(n rows)
+- `determineYears(layout)` — iterates all rows × all items — O(n items)
+- `determineLocations(layout)` — iterates all rows × all items — O(n items)
+
+As the layout grows to ~21,000 rows during loading of 100k assets, each render takes progressively longer, dropping FPS to 9. The layout computation itself (`computePartialLayout`) is flat at 1–4ms per batch — it was never the problem.
+
+---
+
+## Current State of the Code (Applied Fixes)
+
+### Fix 1: Strip `properties` from IPC batch
+**File:** `packages/api/src/lib/load-assets.worker.ts`  
+Whitelist of fields sent per batch — `properties` (EXIF) excluded.
+
+### Fix 2: No sort during loading
+**File:** `packages/user-interface/src/context/gallery-context.tsx`, `_onNewItems()`  
+Assets arrive in sorted order from the database. Replaced O(n log n) `applySort` + O(n) `buildItemsIndex` with O(k) incremental append + incremental index update. `applySort` is still called by `setSortBy()` when the user changes sort order after loading.
+
+### Fix 3: Layout as a ref
+**File:** `packages/user-interface/src/context/gallery-layout-context.tsx`  
+`layout` state replaced by `layoutRef` (a `useRef`). `computePartialLayout` writes into the ref synchronously in the `onNewItems` callback. A `setTime` call (driving a re-render) is issued to flush the ref to consumers. This decouples computation from React's functional updater invocation (eliminating double-computation in dev mode).
+
+~~**Fix 4: Memoized row component**~~ *(tried and reverted — didn't help enough)*
+
+~~**Fix 5: Stable `onItemClick` callback**~~ *(tried and reverted — didn't help enough)*
+
+### Fix 4: Skip sidebar O(n) scans during loading
+**File:** `packages/user-interface/src/components/sidebar.tsx`  
+Added `!isLoading` guards to the three O(n) layout scans in the sidebar component. When loading, all three return `[]` instantly. When loading completes, they run once against the final layout.
+
+```typescript
+const navMenu = (layout && !isLoading) ? buildNavMenu(layout, position => {
+    scrollTo(position);
+    setSidebarOpen(false);
+}) : [];
+const years = (layout && !isLoading) ? determineYears(layout) : [];
+const locations = (layout && !isLoading) ? determineLocations(layout) : [];
+```
+
+**Result: 60fps solid throughout loading. Investigation complete.**

@@ -6,7 +6,7 @@ const isProduction: boolean = false; //(import.meta.env.MODE === "production");
 
 export function Fps() {
 
-    useEffect(() => {
+    useEffect(() => { //todo: get rid of this.
         let frameCount = 0;
         let lastTime = performance.now();
         let rafHandle: number;
