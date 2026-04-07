@@ -48,7 +48,7 @@ export function GalleryImage({ item, onClick, x, y, width, height, isDragging }:
     const [thumbObjectURL, setThumbObjectURL] = useState<string | undefined>(undefined);
     const [isHovered, setIsHovered] = useState<boolean>(false);
 
-    const { loadAsset, unloadAsset, addToMultipleSelection, removeFromMultipleSelection, selectedItems, isSelecting, enableSelecting, addArrayValue, removeArrayValue } = useGallery();
+    const { loadAsset, unloadAsset, addToMultipleSelection, removeFromMultipleSelection, selectedItems, isSelecting, enableSelecting, addArrayValue, removeArrayValue, lastSelectedItemId, setLastSelectedItemId, selectRange } = useGallery();
 
     useEffect(() => {
         if (thumbObjectURL) {
@@ -93,10 +93,33 @@ export function GalleryImage({ item, onClick, x, y, width, height, isDragging }:
         onLongPress: () => {
             enableSelecting(true);
             addToMultipleSelection(item);
+            setLastSelectedItemId(item._id);
         },
-        onClick: () => {
-            if (onClick) {
-                onClick();
+        onClick: (modifiers) => {
+            if (modifiers.ctrlKey || modifiers.metaKey) {
+                enableSelecting(true);
+                if (isSelected) {
+                    removeFromMultipleSelection(item);
+                }
+                else {
+                    addToMultipleSelection(item);
+                }
+                setLastSelectedItemId(item._id);
+            }
+            else if (modifiers.shiftKey) {
+                enableSelecting(true);
+                if (lastSelectedItemId) {
+                    selectRange(lastSelectedItemId, item._id);
+                }
+                else {
+                    addToMultipleSelection(item);
+                    setLastSelectedItemId(item._id);
+                }
+            }
+            else {
+                if (onClick) {
+                    onClick();
+                }
             }
         },
         delay: 500,
@@ -192,11 +215,17 @@ export function GalleryImage({ item, onClick, x, y, width, height, isDragging }:
                 onClick={event => {
                     event.preventDefault();
                     event.stopPropagation();
-                    if (isSelected) {
-                        removeFromMultipleSelection(item);
+                    if (event.shiftKey && lastSelectedItemId) {
+                        selectRange(lastSelectedItemId, item._id);
                     }
                     else {
-                        addToMultipleSelection(item);
+                        if (isSelected) {
+                            removeFromMultipleSelection(item);
+                        }
+                        else {
+                            addToMultipleSelection(item);
+                            setLastSelectedItemId(item._id);
+                        }
                     }
                 }}
                 >

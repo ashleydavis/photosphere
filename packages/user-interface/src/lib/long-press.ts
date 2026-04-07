@@ -1,5 +1,25 @@
 import React, { useRef } from "react";
 
+//
+// Modifier keys that were held during a click.
+//
+export interface IClickModifiers {
+    //
+    // True if the shift key was held.
+    //
+    shiftKey: boolean;
+
+    //
+    // True if the ctrl key was held.
+    //
+    ctrlKey: boolean;
+
+    //
+    // True if the meta key was held (Cmd on Mac).
+    //
+    metaKey: boolean;
+}
+
 export interface ILongPressProps {
     //
     // Event raised when a long press has been detected.
@@ -9,7 +29,7 @@ export interface ILongPressProps {
     //
     // Event raised when a click has been detected.
     //
-    onClick: () => void;
+    onClick: (modifiers: IClickModifiers) => void;
 
     //
     // The delay before a long press is detected.
@@ -49,7 +69,7 @@ export function useLongPress({ onLongPress, onClick, delay }: ILongPressProps) {
         timeoutRef.current = undefined;
 
         if (!isLongPress.current) {
-            onClick();
+            onClick({ shiftKey: false, ctrlKey: false, metaKey: false });
         }
         isLongPress.current = false;
     }
@@ -108,7 +128,7 @@ export function useLongPress({ onLongPress, onClick, delay }: ILongPressProps) {
         timeoutRef.current = undefined;
 
         if (!isLongPress.current) {
-            onClick();
+            onClick({ shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey });
         }
         isLongPress.current = false;
     }
