@@ -5,6 +5,8 @@ import { loadAssetsHandler } from "./load-assets.worker";
 import { hashFileHandler, importFileHandler } from "./import.worker";
 import { prefetchDatabaseHandler } from "./prefetch-database.worker";
 import { syncDatabaseHandler } from "./sync-database.worker";
+import { saveAssetHandler } from "./save-asset.worker";
+import { saveAssetsBatchHandler } from "./save-assets-batch.worker";
 
 //
 // Register all task handlers
@@ -18,4 +20,6 @@ export function initTaskHandlers(): void {
     registerHandler("hash-file", hashFileHandler);
     registerHandler("import-file", importFileHandler);
     registerHandler("sync-database", syncDatabaseHandler);
+    registerHandler("save-asset", saveAssetHandler);
+    registerHandler("save-assets-batch", saveAssetsBatchHandler);
 }

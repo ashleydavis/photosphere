@@ -7,7 +7,7 @@ import { executeTaskHandler } from "task-queue";
 import type { ITaskContext } from "task-queue";
 import { type IWorkerOptions } from "./lib/worker-backend-electron-main";
 import { initTaskHandlers } from "api";
-import type { IWorkerMessage, IWorkerTaskCompletedMessage, IWorkerTaskMessage, IWorkerReadyMessage, IWorkerQueueTaskMessage } from "./lib/worker-backend-electron-main";
+import type { IWorkerMessage, IWorkerTaskCompletedMessage, IWorkerTaskMessage, IWorkerReadyMessage, IWorkerQueueTaskMessage, IWorkerShowNotificationMessage } from "./lib/worker-backend-electron-main";
 import { RandomUuidGenerator, TimestampProvider, setLog, log } from "utils";
 import { TestUuidGenerator, TestTimestampProvider } from "node-utils";
 import { createWorkerLog } from "./lib/worker-log-electron";
@@ -42,6 +42,19 @@ catch (error: any) {
 const parentPort = (process as any).parentPort;
 if (!parentPort) {
     throw new Error('parentPort not available - this must run in an Electron utility process');
+}
+
+//
+// Sends a show-notification message to the main process, which relays it to the renderer as a toast.
+//
+function sendNotification(message: string, color: IWorkerShowNotificationMessage['color'], duration?: number): void {
+    const notificationMessage: IWorkerShowNotificationMessage = {
+        type: "show-notification",
+        message,
+        color,
+        duration,
+    };
+    parentPort.postMessage(notificationMessage);
 }
 
 //

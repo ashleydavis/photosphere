@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, utilityProcess, type UtilityProcess, dialog, Menu, shell } from 'electron';
 import { appendFileSync } from 'fs';
-import { join, dirname } from 'path';
+import { join, dirname, basename } from 'path';
+import { randomUUID } from 'crypto';
 import { cpus, platform, arch, release } from 'os';
 import { version } from 'config';
 import { existsSync, readdirSync, statSync, readFileSync } from 'fs';
@@ -8,11 +9,11 @@ import type { ITask, ITaskQueue, IWorkerBackend } from 'task-queue';
 import { TaskQueue, TaskStatus } from 'task-queue';
 import { WorkerBackendElectronMain } from './lib/worker-backend-electron-main';
 import { RandomUuidGenerator, TimestampProvider, logExceptions, log } from 'utils';
-import { findAvailablePort, loadDesktopConfig, saveDesktopConfig, addRecentDatabase, removeRecentDatabase, updateLastFolder, clearLastDatabase, getTheme, setTheme } from 'node-utils';
+import { findAvailablePort, loadDesktopConfig, saveDesktopConfig, addRecentDatabase, removeRecentDatabase, updateLastFolder, clearLastDatabase, getTheme, setTheme, updateLastDownloadFolder } from 'node-utils';
 import type { IWorkerBackendOptions } from './lib/worker-backend-electron-main';
 import type { IRestApiWorkerStopMessage, IRestApiWorkerStartMessage } from './rest-api-worker';
 import { FileLoggerElectron } from './lib/file-logger-electron';
-import type { IRendererLogMessage } from 'electron-defs';
+import type { IRendererLogMessage, ISaveAssetItem } from 'electron-defs';
 
 // Main application window
 let mainWindow: BrowserWindow | null = null;
@@ -254,6 +255,59 @@ ipcMain.handle('set-config', logExceptions(async (_event, key: string, value: un
     }
 }, 'Error setting config value'));
 
+// IPC handler for saving an asset to a user-chosen file path via save dialog.
+// IPC handler for showing a save dialog and enqueuing a background task to stream the asset to the chosen file.
+ipcMain.handle('save-asset', logExceptions(async (_event, assetId: string, assetType: string, filename: string, databasePath: string): Promise<void> => {
+    const config = await loadDesktopConfig();
+    const defaultPath = config.lastDownloadFolder
+        ? join(config.lastDownloadFolder, filename)
+        : filename;
+
+    const result = await dialog.showSaveDialog(mainWindow!, {
+        defaultPath,
+    });
+
+    if (result.canceled || !result.filePath) {
+        return;
+    }
+
+    if (!taskQueue) {
+        throw new Error('Task queue not initialized');
+    }
+
+    const destPath = result.filePath;
+    await updateLastDownloadFolder(dirname(destPath));
+    taskQueue.addTask("save-asset", { assetId, assetType, destPath, databasePath }, databasePath);
+}, 'Error saving asset'));
+
+// IPC handler for showing a folder picker and enqueuing background tasks to save multiple assets.
+ipcMain.handle('save-assets', logExceptions(async (_event, assets: ISaveAssetItem[], databasePath: string): Promise<void> => {
+    const config = await loadDesktopConfig();
+
+    const result = await dialog.showOpenDialog(mainWindow!, {
+        properties: ['openDirectory', 'createDirectory'],
+        title: 'Choose folder to save assets',
+        defaultPath: config.lastDownloadFolder,
+    });
+
+    if (result.canceled || result.filePaths.length === 0) {
+        return;
+    }
+
+    if (!taskQueue) {
+        throw new Error('Task queue not initialized');
+    }
+
+    const folderPath = result.filePaths[0];
+    await updateLastDownloadFolder(folderPath);
+    taskQueue.addTask("save-assets-batch", { assets, folderPath, databasePath }, databasePath);
+}, 'Error saving assets'));
+
+// IPC handler for opening a folder in the system's file manager
+ipcMain.handle('open-path', logExceptions(async (_event, folderPath: string): Promise<void> => {
+    await shell.openPath(folderPath);
+}, 'Error opening path'));
+
 // IPC handler for renderer log messages
 ipcMain.on('renderer-log', (event, message: IRendererLogMessage) => {
     if (fileLogger) {
@@ -281,7 +335,17 @@ function initWorkers() {
         tools: false,
         sessionId: uuidGenerator.generate(),
     };
-    workerBackend = new WorkerBackendElectronMain(workerPath, maxWorkers, taskTimeout, workerOptions, (message: any) => handleWorkerLogMessage(message, 'Worker'));
+    const electronWorkerBackend = new WorkerBackendElectronMain(workerPath, maxWorkers, taskTimeout, workerOptions, (message: any) => handleWorkerLogMessage(message, 'Worker'));
+    electronWorkerBackend.onShowNotification((data) => {
+        if (mainWindow) {
+            mainWindow.webContents.send('show-notification', {
+                message: data.message,
+                color: data.color,
+                duration: data.duration,
+            });
+        }
+    });
+    workerBackend = electronWorkerBackend;
     taskQueue = new TaskQueue(uuidGenerator, timestampProvider, taskTimeout, workerBackend);
     console.log('Task queue initialized');
 
@@ -297,6 +361,51 @@ function initWorkers() {
             syncStopped();
             if (result.status !== TaskStatus.Succeeded && mainWindow) {
                 mainWindow.webContents.send('sync-completed');
+            }
+        }
+        if (task.type === "save-asset" && mainWindow) {
+            const { destPath } = task.data as unknown as { destPath: string };
+            const filename = basename(destPath);
+            const folderPath = dirname(destPath);
+            if (result.status === TaskStatus.Succeeded) {
+                mainWindow.webContents.send('show-notification', {
+                    message: `Downloaded "${filename}"`,
+                    color: 'success',
+                    folderPath,
+                });
+            }
+            else {
+                mainWindow.webContents.send('show-notification', {
+                    message: `Failed to download "${filename}": ${result.errorMessage || 'Unknown error'}`,
+                    color: 'danger',
+                    duration: 8000,
+                });
+            }
+        }
+        if (task.type === "save-assets-batch" && mainWindow) {
+            const { succeededFiles, failedFiles, folderPath } = result.outputs as { succeededFiles: string[]; failedFiles: Array<{ filename: string; error: string }>; folderPath: string };
+            const total = succeededFiles.length + failedFiles.length;
+            if (failedFiles.length === 0) {
+                mainWindow.webContents.send('show-notification', {
+                    message: `Downloaded ${total} asset${total !== 1 ? 's' : ''}`,
+                    color: 'success',
+                    folderPath,
+                });
+            }
+            else if (succeededFiles.length === 0) {
+                mainWindow.webContents.send('show-notification', {
+                    message: `Failed to download ${total} asset${total !== 1 ? 's' : ''}`,
+                    color: 'danger',
+                    duration: 8000,
+                });
+            }
+            else {
+                mainWindow.webContents.send('show-notification', {
+                    message: `Downloaded ${succeededFiles.length} of ${total} assets. ${failedFiles.length} failed.`,
+                    color: 'warning',
+                    duration: 8000,
+                    folderPath,
+                });
             }
         }
     });

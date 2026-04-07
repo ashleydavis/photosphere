@@ -30,6 +30,11 @@ export interface IDesktopConfig {
     // List of recently executed searches (max 10).
     //
     recentSearches?: string[];
+
+    //
+    // The last folder used when downloading assets.
+    //
+    lastDownloadFolder?: string;
 }
 
 const CONFIG_DIR = path.join(os.homedir(), ".config", "photosphere");
@@ -157,6 +162,15 @@ export async function getTheme(): Promise<'light' | 'dark' | 'system'> {
 export async function setTheme(theme: 'light' | 'dark' | 'system'): Promise<void> {
     const config = await loadDesktopConfig();
     config.theme = theme;
+    await saveDesktopConfig(config);
+}
+
+//
+// Updates the last folder used when downloading assets.
+//
+export async function updateLastDownloadFolder(folderPath: string): Promise<void> {
+    const config = await loadDesktopConfig();
+    config.lastDownloadFolder = folderPath;
     await saveDesktopConfig(config);
 }
 

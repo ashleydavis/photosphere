@@ -4,6 +4,7 @@ import { useGalleryItem } from "../../../context/gallery-item-context";
 import _ from "lodash";
 import { Textarea, IconButton, Button, Chip, Typography, Sheet, Input } from "@mui/joy";
 import { Flag, FlagOutlined, Star, StarBorder } from "@mui/icons-material";
+import { useGallery } from "../../../context/gallery-context";
 
 export interface IAssetInfoProps { 
 
@@ -16,17 +17,23 @@ export interface IAssetInfoProps {
     // Event raised when the asset has been deleted.
     //
     onDeleted: () => void;
+
+    //
+    // Event raised when the user clicks a label to search for it.
+    //
+    onLabelSearch: () => void;
 }
 
 //
 // Shows info for a particular asset.
 //
-export function AssetInfo({ onClose, onDeleted }: IAssetInfoProps) {
+export function AssetInfo({ onClose, onDeleted, onLabelSearch }: IAssetInfoProps) {
 
     //
     // Interface to the gallery item.
     //
     const { asset, updateAsset, addArrayValue, removeArrayValue, deleteAsset } = useGalleryItem();
+    const { search } = useGallery();
 
     const [description, setDescription] = React.useState(asset?.description);
 
@@ -101,12 +108,20 @@ export function AssetInfo({ onClose, onDeleted }: IAssetInfoProps) {
                 variant="outlined"
                 color="neutral"
                 className="ml-2 mt-1"
+                onClick={() => {
+                    search(`.labels="${name}"`);
+                    onLabelSearch();
+                }}
+                sx={{ cursor: "pointer" }}
                 endDecorator={
                     <IconButton
                         size="sm"
                         variant="plain"
                         color="neutral"
-                        onClick={() => onRemoveLabel(name)}
+                        onClick={event => {
+                            event.stopPropagation();
+                            onRemoveLabel(name);
+                        }}
                         sx={{ minHeight: '20px', minWidth: '20px', ml: 0.5 }}
                         >
                         <i className="fa-solid fa-close text-xs" />

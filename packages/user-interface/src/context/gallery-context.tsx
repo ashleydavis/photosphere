@@ -12,6 +12,11 @@ export interface IAssetDataLoad {
     // The object URL for the asset.
     //
     objectUrl: string;
+
+    //
+    // The raw blob data for the asset.
+    //
+    blob: Blob;
 }
 
 //
@@ -359,6 +364,11 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
         // Object URL for the asset.
         //
         objectUrl: string;
+
+        //
+        // The raw blob data for the asset.
+        //
+        blob: Blob;
     }
 
     //
@@ -590,6 +600,7 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
             existingCacheEntry.numRefs += 1;
             return {
                 objectUrl: existingCacheEntry.objectUrl,
+                blob: existingCacheEntry.blob,
             };
         }
 
@@ -601,14 +612,16 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
         }
 
         const objectUrl = URL.createObjectURL(assetData);
-        assetCache.current.set(key, { 
-            numRefs: 1, 
-            objectUrl, 
+        assetCache.current.set(key, {
+            numRefs: 1,
+            objectUrl,
+            blob: assetData,
         });
 
         // console.log(`[loadAsset] LOADED: ${assetType}:${assetId}`);
         return {
             objectUrl,
+            blob: assetData,
         };
     }
 

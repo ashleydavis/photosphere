@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { IElectronAPI, IRendererLogMessage } from 'electron-defs';
+import type { IElectronAPI, IRendererLogMessage, ISaveAssetItem } from 'electron-defs';
 
 // Expose generic task queue API
 const electronAPI: IElectronAPI = {
@@ -43,6 +43,15 @@ const electronAPI: IElectronAPI = {
     },
     sendFps: (fps: number): void => {
         ipcRenderer.send('fps-measurement', fps);
+    },
+    saveAsset: (assetId: string, assetType: string, filename: string, databasePath: string): Promise<void> => {
+        return ipcRenderer.invoke('save-asset', assetId, assetType, filename, databasePath);
+    },
+    saveAssets: (assets: ISaveAssetItem[], databasePath: string): Promise<void> => {
+        return ipcRenderer.invoke('save-assets', assets, databasePath);
+    },
+    openPath: (path: string): Promise<void> => {
+        return ipcRenderer.invoke('open-path', path);
     },
 };
 

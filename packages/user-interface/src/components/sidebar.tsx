@@ -664,7 +664,7 @@ export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
                                             : <Folder />
                                         }
                                     </ListItemDecorator>
-                                    <ListItemContent>{dbPath.split(/[\\/]/).filter(Boolean).pop() ?? dbPath}</ListItemContent>
+                                    <ListItemContent title={dbPath}>{dbPath.split(/[\\/]/).filter(Boolean).pop() ?? dbPath}</ListItemContent>
                                 </ListItemButton>
                             </ListItem>
                         );

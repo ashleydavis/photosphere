@@ -36,7 +36,7 @@ export function Fps() {
                 && <FPSStats
                     top="auto"
                     left="auto"
-                    right={30}
+                    right={70}
                     bottom={10}
                 />
             }

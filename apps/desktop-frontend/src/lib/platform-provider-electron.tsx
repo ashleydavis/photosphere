@@ -1,6 +1,6 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
-import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext } from "user-interface";
-import type { IElectronAPI } from "electron-defs";
+import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext, type IDownloadAssetItem, type IShowNotificationData, convertToPng } from "user-interface";
+import type { IElectronAPI, ISaveAssetItem } from "electron-defs";
 
 export interface IPlatformProviderElectronProps {
     children: ReactNode | ReactNode[];
@@ -26,6 +26,10 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
 
     // Store callbacks for sync-completed events
     const syncCompletedCallbacksRef = useRef<Set<() => void>>(new Set());
+
+
+    // Store callbacks for show-notification events
+    const showNotificationCallbacksRef = useRef<Set<(data: IShowNotificationData) => void>>(new Set());
 
     // Set up message listener for database-opened events
     useEffect(() => {
@@ -101,6 +105,19 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         };
     }, [electronAPI]);
 
+    // Set up message listener for show-notification events
+    useEffect(() => {
+        const handleShowNotification = (data: IShowNotificationData) => {
+            showNotificationCallbacksRef.current.forEach(cb => cb(data));
+        };
+
+        electronAPI.onMessage('show-notification', handleShowNotification);
+
+        return () => {
+            electronAPI.removeAllListeners('show-notification');
+        };
+    }, [electronAPI]);
+
     const openDatabase = useCallback(async (): Promise<void> => {
         await electronAPI.openDatabase();
     }, [electronAPI]);
@@ -160,6 +177,34 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         };
     }, []);
 
+    const onShowNotification = useCallback((callback: (data: IShowNotificationData) => void): (() => void) => {
+        showNotificationCallbacksRef.current.add(callback);
+        return () => {
+            showNotificationCallbacksRef.current.delete(callback);
+        };
+    }, []);
+
+    const openFolder = useCallback(async (folderPath: string): Promise<void> => {
+        await electronAPI.openPath(folderPath);
+    }, [electronAPI]);
+    const downloadAsset = useCallback(async (assetId: string, assetType: string, filename: string, _contentType: string, databasePath: string): Promise<void> => {
+        await electronAPI.saveAsset(assetId, assetType, filename, databasePath);
+    }, [electronAPI]);
+
+    const downloadAssets = useCallback(async (assets: IDownloadAssetItem[], databasePath: string): Promise<void> => {
+        const saveItems: ISaveAssetItem[] = assets.map(asset => ({
+            assetId: asset.assetId,
+            assetType: asset.assetType,
+            filename: asset.filename,
+        }));
+        await electronAPI.saveAssets(saveItems, databasePath);
+    }, [electronAPI]);
+
+    const copyToClipboard = useCallback(async (blob: Blob, _contentType: string): Promise<void> => {
+        const pngBlob = await convertToPng(blob);
+        await navigator.clipboard.write([new ClipboardItem({ "image/png": pngBlob })]);
+    }, []);
+
     const platformContext: IPlatformContext = {
         openDatabase,
         onDatabaseOpened,
@@ -170,6 +215,11 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         notifyDatabaseEdited,
         onSyncStarted,
         onSyncCompleted,
+        downloadAsset,
+        downloadAssets,
+        copyToClipboard,
+        onShowNotification,
+        openFolder,
     };
 
     const config = createConfig(

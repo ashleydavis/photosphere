@@ -14,6 +14,8 @@ import { Sidebar } from "./components/sidebar";
 import { Navbar } from "./components/navbar";
 import { Fps } from "./components/fps";
 import { AboutPage } from "./pages/about";
+import { ToastContextProvider, useToast } from "./context/toast-context";
+import { ToastContainer } from "./components/toast-container";
 
 export interface IMainProps {
     //
@@ -58,6 +60,25 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
         setMode(initialTheme);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []); // Only run once on mount - don't reset when mode changes
+
+    const { addToast } = useToast();
+
+    //
+    // Subscribe to show-notification events from the main process and display toasts.
+    //
+    useEffect(() => {
+        const unsubscribe = platform.onShowNotification((data) => {
+            addToast({
+                message: data.message,
+                color: data.color,
+                duration: data.duration,
+                action: data.folderPath
+                    ? { label: 'Open Folder', onClick: () => platform.openFolder(data.folderPath!) }
+                    : undefined,
+            });
+        });
+        return unsubscribe;
+    }, [platform, addToast]);
 
     //
     // Listen for theme changes from menu.
@@ -176,6 +197,8 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
             }
 
             <Fps />
+
+            <ToastContainer />
         </>
     );
 }
@@ -186,7 +209,9 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
 export function Main({ isMobile, initialTheme }: IMainProps) {
     return (
         <CssVarsProvider defaultMode={initialTheme}>
-            <__Main isMobile={isMobile} initialTheme={initialTheme} />
+            <ToastContextProvider>
+                <__Main isMobile={isMobile} initialTheme={initialTheme} />
+            </ToastContextProvider>
         </CssVarsProvider>
     );
 }

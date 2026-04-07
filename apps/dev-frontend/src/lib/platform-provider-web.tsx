@@ -1,5 +1,7 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
-import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext } from "user-interface";
+import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext, type IDownloadAssetItem, type IShowNotificationData, convertToPng } from "user-interface";
+
+const restApiUrl = "http://localhost:3001";
 
 export interface IPlatformProviderWebProps {
     children: ReactNode | ReactNode[];
@@ -119,6 +121,40 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         };
     }, []);
 
+    const downloadAsset = useCallback(async (assetId: string, assetType: string, filename: string, contentType: string, databasePath: string): Promise<void> => {
+        const url = `${restApiUrl}/asset?id=${encodeURIComponent(assetId)}&type=${encodeURIComponent(assetType)}&db=${encodeURIComponent(databasePath)}`;
+        const response = await fetch(url);
+        const blob = await response.blob();
+        const typedBlob = new Blob([blob], { type: contentType });
+        const downloadUrl = URL.createObjectURL(typedBlob);
+        const a = document.createElement("a");
+        a.href = downloadUrl;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(downloadUrl);
+    }, []);
+
+    const downloadAssets = useCallback(async (assets: IDownloadAssetItem[], databasePath: string): Promise<void> => {
+        for (const asset of assets) {
+            await downloadAsset(asset.assetId, asset.assetType, asset.filename, asset.contentType, databasePath);
+        }
+    }, [downloadAsset]);
+
+    const copyToClipboard = useCallback(async (blob: Blob, _contentType: string): Promise<void> => {
+        const pngBlob = await convertToPng(blob);
+        await navigator.clipboard.write([new ClipboardItem({ "image/png": pngBlob })]);
+    }, []);
+
+
+    const onShowNotification = useCallback((_callback: (data: IShowNotificationData) => void): (() => void) => {
+        // No-op for web platform.
+        return () => {};
+    }, []);
+
+    const openFolder = useCallback(async (_folderPath: string): Promise<void> => {
+        // Not applicable on web platform.
+    }, []);
+
     const platformContext: IPlatformContext = {
         openDatabase,
         onDatabaseOpened,
@@ -129,6 +165,11 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         notifyDatabaseEdited,
         onSyncStarted,
         onSyncCompleted,
+        downloadAsset,
+        downloadAssets,
+        copyToClipboard,
+        onShowNotification,
+        openFolder,
     };
 
     //
