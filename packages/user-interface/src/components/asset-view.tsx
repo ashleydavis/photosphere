@@ -143,7 +143,7 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                         className="pointer-events-auto"
                         variant="outlined"
                         color="neutral"
-                        sx={isStarred ? { ml: 'auto', color: "gold" } : { ml: 'auto' }}
+                        sx={isStarred ? { ml: 'auto', '--Icon-color': 'gold', '&:hover': { '--Icon-color': 'gold' } } : { ml: 'auto' }}
                         title={isStarred ? "Unstar" : "Star"}
                         onClick={async () => {
                             if (isStarred) {
@@ -161,7 +161,7 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                         className="pointer-events-auto"
                         variant="outlined"
                         color="neutral"
-                        sx={isFlagged ? { ml: 1, color: "red" } : { ml: 1 }}
+                        sx={isFlagged ? { ml: 1, '--Icon-color': 'red', '&:hover': { '--Icon-color': 'red' } } : { ml: 1 }}
                         title={isFlagged ? "Unflag" : "Flag"}
                         onClick={async () => {
                             if (isFlagged) {
