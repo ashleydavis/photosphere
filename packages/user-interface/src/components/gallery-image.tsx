@@ -33,17 +33,12 @@ export interface IGalleryImageProps {
     // Height of the image.
     //
     height: number;
-
-    //
-    // True if the scrollbar is being dragged.
-    //
-    isDragging: boolean;
 }
 
 //
 // Renders an image for the gallery.
 //
-export function GalleryImage({ item, onClick, x, y, width, height, isDragging }: IGalleryImageProps) {
+export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryImageProps) {
     const [microDataURL, setMicroDataURL] = useState<string | undefined>(item.micro != undefined ? `data:image/jpeg;base64,${item.micro}` : undefined);
     const [thumbObjectURL, setThumbObjectURL] = useState<string | undefined>(undefined);
     const [isHovered, setIsHovered] = useState<boolean>(false);
@@ -56,28 +51,24 @@ export function GalleryImage({ item, onClick, x, y, width, height, isDragging }:
             return;
         }
 
-        if (!isDragging) {       
-            loadAsset(item._id, "thumb")
-                .then(assetLoaded => {
-                    if (assetLoaded) {
-                        setThumbObjectURL(assetLoaded.objectUrl);
-                        setTimeout(() => {
-                            setMicroDataURL(undefined);
-                        }, 1200);
-                    }
-                })
-                .catch(err => {
-                    console.error(`Failed to load asset: thumb:${item._id}`);
-                    console.error(err);
-                });
-        }
+        loadAsset(item._id, "thumb")
+            .then(assetLoaded => {
+                if (assetLoaded) {
+                    setThumbObjectURL(assetLoaded.objectUrl);
+                    setTimeout(() => {
+                        setMicroDataURL(undefined);
+                    }, 1200);
+                }
+            })
+            .catch(err => {
+                console.error(`Failed to load asset: thumb:${item._id}`);
+                console.error(err);
+            });
 
         return () => {
-            if (!isDragging) {
-                unloadAsset(item._id, "thumb");
-            }
+            unloadAsset(item._id, "thumb");
         };
-    }, [isDragging]);
+    }, []);
 
     const isSelected = selectedItems.has(item._id);
 

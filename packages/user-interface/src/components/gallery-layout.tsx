@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef } from "react";
 import { IGalleryItem, IGalleryRow } from "../lib/gallery-item";
 import { GalleryScrollbar } from "./gallery-scrollbar";
 import { GalleryImage } from "./gallery-image";
@@ -10,9 +10,53 @@ import { Theme, useTheme } from "@mui/joy";
 export type ItemClickFn = ((item: IGalleryItem) => void);
 
 //
+// Minimum scroll speed in pixels per frame when an arrow key is first pressed.
+//
+const ARROW_SCROLL_MIN_SPEED = 3;
+
+//
+// Maximum scroll speed in pixels per frame after holding an arrow key.
+//
+const ARROW_SCROLL_MAX_SPEED = 40;
+
+//
+// Time in milliseconds to accelerate from min to max speed for arrow keys.
+//
+const ARROW_SCROLL_ACCEL_MS = 1200;
+
+//
+// Minimum scroll speed in pixels per frame when a page key is first pressed.
+//
+const PAGE_SCROLL_MIN_SPEED = 10;
+
+//
+// Maximum scroll speed in pixels per frame after holding a page key.
+//
+const PAGE_SCROLL_MAX_SPEED = 80;
+
+//
+// Time in milliseconds to accelerate from min to max speed for page keys.
+//
+const PAGE_SCROLL_ACCEL_MS = 200;
+
+//
+// State for the active arrow key scroll loop.
+//
+interface IArrowScroll {
+    // Direction of scroll: 1 for down, -1 for up.
+    direction: number;
+
+    // Animation frame ID for the current scroll loop.
+    rafId: number;
+
+    // Timestamp when the arrow key was first pressed.
+    startTime: number;
+}
+
+//
 // Renders a row of items in the gallery.
 //
-function renderRow(row: IGalleryRow, rowIndex: number, onItemClick: ItemClickFn | undefined, isDragging: boolean) {
+function renderRow(row: IGalleryRow, rowIndex: number, onItemClick: ItemClickFn | undefined) {
     if (row.type === "heading") {
         //
         // Renders a heading row.
@@ -65,7 +109,6 @@ function renderRow(row: IGalleryRow, rowIndex: number, onItemClick: ItemClickFn 
                         y={0}
                         width={item.thumbWidth!}
                         height={item.thumbHeight!}
-                        isDragging={isDragging}
                         />
                 );
             })}
@@ -145,17 +188,12 @@ export function GalleryLayout({ onItemClick }: IGalleryLayoutProps) {
 
     const { galleryWidth, layout, setScrollToHandler } = useGalleryLayout();
 
-    //
-    // The scroll position of the gallery.
-    //
-    const [ scrollTop, setScrollTop ] = useState(0);
+    const containerRef = useRef<HTMLDivElement>(null);
 
     //
-    // Set to true when the scrollbar is being dragged.
+    // Tracks the active arrow key scroll loop, if any.
     //
-    const [ isDragging, setIsDragging ] = useState(false);
-
-    const containerRef = useRef<HTMLDivElement>(null);  
+    const arrowScrollRef = useRef<IArrowScroll | undefined>(undefined);
 
     const theme = useTheme();
 
@@ -176,8 +214,30 @@ export function GalleryLayout({ onItemClick }: IGalleryLayoutProps) {
             container.scrollTo({ top: scrollTop, behavior: "instant" } as any); //TODO: Remove the "as any" when the types are updated in TS 5.1+.
         });        
 
-        function onScroll() {
-            setScrollTop(container.scrollTop);
+        function startAcceleratingScroll(direction: number, minSpeed: number, maxSpeed: number, accelMs: number) {
+            if (arrowScrollRef.current) {
+                return;
+            }
+            const startTime = performance.now();
+            function frame() {
+                const elapsed = performance.now() - startTime;
+                const t = Math.min(elapsed / accelMs, 1);
+                const speed = minSpeed + (maxSpeed - minSpeed) * t;
+                container.scrollBy({ top: direction * speed, behavior: "instant" } as any);
+                arrowScrollRef.current!.rafId = requestAnimationFrame(frame);
+            }
+            arrowScrollRef.current = {
+                direction,
+                rafId: requestAnimationFrame(frame),
+                startTime,
+            };
+        }
+
+        function stopArrowScroll() {
+            if (arrowScrollRef.current) {
+                cancelAnimationFrame(arrowScrollRef.current.rafId);
+                arrowScrollRef.current = undefined;
+            }
         }
 
         function onKeyDown(event: KeyboardEvent) {
@@ -187,19 +247,19 @@ export function GalleryLayout({ onItemClick }: IGalleryLayoutProps) {
             }
             if (event.key === "ArrowDown") {
                 event.preventDefault();
-                container.scrollBy({ top: 10, behavior: "instant" } as any);
+                startAcceleratingScroll(1, ARROW_SCROLL_MIN_SPEED, ARROW_SCROLL_MAX_SPEED, ARROW_SCROLL_ACCEL_MS);
             }
             else if (event.key === "ArrowUp") {
                 event.preventDefault();
-                container.scrollBy({ top: -10, behavior: "instant" } as any);
+                startAcceleratingScroll(-1, ARROW_SCROLL_MIN_SPEED, ARROW_SCROLL_MAX_SPEED, ARROW_SCROLL_ACCEL_MS);
             }
             else if (event.key === "PageDown") {
                 event.preventDefault();
-                container.scrollBy({ top: container.clientHeight, behavior: "instant" } as any);
+                startAcceleratingScroll(1, PAGE_SCROLL_MIN_SPEED, PAGE_SCROLL_MAX_SPEED, PAGE_SCROLL_ACCEL_MS);
             }
             else if (event.key === "PageUp") {
                 event.preventDefault();
-                container.scrollBy({ top: -container.clientHeight, behavior: "instant" } as any);
+                startAcceleratingScroll(-1, PAGE_SCROLL_MIN_SPEED, PAGE_SCROLL_MAX_SPEED, PAGE_SCROLL_ACCEL_MS);
             }
             else if (event.key === "Home") {
                 event.preventDefault();
@@ -211,12 +271,19 @@ export function GalleryLayout({ onItemClick }: IGalleryLayoutProps) {
             }
         }
 
-        container.addEventListener('scroll', onScroll);
+        function onKeyUp(event: KeyboardEvent) {
+            if (event.key === "ArrowDown" || event.key === "ArrowUp" || event.key === "PageDown" || event.key === "PageUp") {
+                stopArrowScroll();
+            }
+        }
+
         window.addEventListener("keydown", onKeyDown);
+        window.addEventListener("keyup", onKeyUp);
 
         return () => {
-            container.removeEventListener('scroll', onScroll);
             window.removeEventListener("keydown", onKeyDown);
+            window.removeEventListener("keyup", onKeyUp);
+            stopArrowScroll();
         };
     }, []);
 
@@ -224,7 +291,7 @@ export function GalleryLayout({ onItemClick }: IGalleryLayoutProps) {
         count: layout?.rows.length || 0,
         getScrollElement: () => containerRef.current,
         estimateSize: (i) => layout?.rows[i].height || 0,
-        overscan: 0,
+        overscan: 3,
     });
 
     //
@@ -312,30 +379,18 @@ export function GalleryLayout({ onItemClick }: IGalleryLayoutProps) {
                     }}
                     >
 
-                    {isDragging
-                        ? virtualRows.map(virtualRow => {
-                            return renderPreviewRow(layout!.rows[virtualRow.index], virtualRow.index);
-                        })
-                        : virtualRows.map(virtualRow => {
-                            return renderRow(layout!.rows[virtualRow.index], virtualRow.index, onItemClick, isDragging);
-                        })
-                    }
+                    {virtualRows.map(virtualRow => {
+                        return renderRow(layout!.rows[virtualRow.index], virtualRow.index, onItemClick);
+                    })}
                     
                 </div>
 
                 {layout
                     && <GalleryScrollbar
-                        galleryContainerHeight={containerRef.current?.clientHeight || 0}
+                        scrollContainerRef={containerRef}
                         galleryLayout={layout}
-                        scrollTop={scrollTop}
                         scrollTo={scrollPosition => {
                             containerRef.current!.scrollTo({ top: scrollPosition, behavior: "instant" } as any); //TODO: Remove the "as any" when the types are updated in TS 5.1+.
-                        }}
-                        onDraggingStarted={() => {
-                            setIsDragging(true);
-                        }}
-                        onDraggingEnded={() => {
-                            setIsDragging(false);
                         }}
                         />
                 }
