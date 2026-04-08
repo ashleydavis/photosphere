@@ -26,9 +26,9 @@ const MIN_SCROLLTHUMB_HEIGHT = 42;
 
 export interface IGalleryScrolbarProps {
     //
-    // The height of the div that contains the gallery.
+    // The ref to the scrollable gallery container.
     //
-    galleryContainerHeight: number;
+    scrollContainerRef: React.RefObject<HTMLDivElement>;
 
     //
     // The layout of the gallery.
@@ -36,30 +36,18 @@ export interface IGalleryScrolbarProps {
     galleryLayout: IGalleryLayout;
 
     //
-    // The current scroll position of the gallery.
-    //
-    scrollTop: number;
-
-    //
     // Scrolls the gallery to a specific position.
     //
     scrollTo: (scrollTop: number) => void;
-
-    //
-    // Event raised when dragging has started.
-    //
-    onDraggingStarted: () => void;
-
-    //
-    // Event raised when dragging has ended.
-    //
-    onDraggingEnded: () => void;
 }
 
 //
 // A custom scrollbar for the gallery.
 //
-export function GalleryScrollbar({ galleryContainerHeight, galleryLayout, scrollTop, scrollTo, onDraggingStarted, onDraggingEnded }: IGalleryScrolbarProps) {
+export function GalleryScrollbar({ scrollContainerRef, galleryLayout, scrollTo }: IGalleryScrolbarProps) {
+
+    const [scrollTop, setScrollTop] = useState(0);
+    const [galleryContainerHeight, setGalleryContainerHeight] = useState(0);
 
     const containerRef = useRef<HTMLDivElement>(null);
 
@@ -73,16 +61,38 @@ export function GalleryScrollbar({ galleryContainerHeight, galleryLayout, scroll
     const theme = useTheme();
 
     useEffect(() => {
-        // Check if it's a touch device
         const checkTouchDevice = () => {
             setIsTouchDevice('ontouchstart' in window || navigator.maxTouchPoints > 0);
         };
         checkTouchDevice();
         window.addEventListener('resize', checkTouchDevice);
-
-        // Cleanup event listener on unmount
         return () => window.removeEventListener('resize', checkTouchDevice);
     }, []);
+
+    useEffect(() => {
+        const container = scrollContainerRef.current;
+        if (!container) {
+            return;
+        }
+
+        setGalleryContainerHeight(container.clientHeight);
+
+        function onScroll() {
+            setScrollTop(container!.scrollTop);
+        }
+
+        function onResize() {
+            setGalleryContainerHeight(container!.clientHeight);
+        }
+
+        container.addEventListener('scroll', onScroll);
+        window.addEventListener('resize', onResize);
+
+        return () => {
+            container.removeEventListener('scroll', onScroll);
+            window.removeEventListener('resize', onResize);
+        };
+    }, [scrollContainerRef]);
 
     function updateThumbPos(thumbPos: number): void {
         setThumbPos(Math.min(Math.max(VERTICAL_GUTTER, thumbPos), scrollbarHeight - thumbHeight));
@@ -131,8 +141,6 @@ export function GalleryScrollbar({ galleryContainerHeight, galleryLayout, scroll
 
             function onMouseUp() {
                 setIsDraggingMouse(false);
-
-                onDraggingEnded();
             }
 
             document.addEventListener('mousemove', onMouseMove);
@@ -157,8 +165,6 @@ export function GalleryScrollbar({ galleryContainerHeight, galleryLayout, scroll
 
             function onTouchEnd() {
                 setIsDraggingTouch(false);
-                
-                onDraggingEnded();
             }
 
             document.addEventListener('touchmove', onTouchMove);
@@ -174,15 +180,11 @@ export function GalleryScrollbar({ galleryContainerHeight, galleryLayout, scroll
     function onMouseDown(e: React.MouseEvent) {
         deltaY.current = e.clientY - thumbPos;
         setIsDraggingMouse(true);
-
-        onDraggingStarted();
     };
 
     function onTouchStart(e: React.TouchEvent) {
         deltaY.current = e.touches[0].clientY - thumbPos;
         setIsDraggingTouch(true);
-
-        onDraggingStarted();
     };
 
     //
