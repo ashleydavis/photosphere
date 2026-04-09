@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { Spinner } from "./spinner";
 import Dropdown from '@mui/joy/Dropdown';
@@ -17,6 +17,7 @@ import Input from "@mui/joy/Input/Input";
 import { useTheme } from "@mui/joy/styles/ThemeProvider";
 import classNames from "classnames";
 import { useSearch } from "../context/search-context";
+import { useDebounce } from "../lib/use-debounce";
 import { useGallery } from "../context/gallery-context";
 import { useAssetDatabase } from "../context/asset-database-source";
 import { useApp } from "../context/app-context";
@@ -41,7 +42,24 @@ export function Navbar({
     setSidebarOpen,
 }: INavbarProps) {
     const theme = useTheme();
-    const { openSearch, setOpenSearch, searchInput, setSearchInput, onCommitSearch, onCloseSearch, savedSearches, saveSearch, unsaveSearch } = useSearch();
+    const { openSearch, setOpenSearch, searchInput, onCommitSearch, onCloseSearch, savedSearches, saveSearch, unsaveSearch } = useSearch();
+
+    //
+    // Local input state so keystrokes don't re-render all context consumers.
+    //
+    const [draftSearchInput, setLocalInput] = useState<string>(searchInput);
+
+    //
+    // Debounce helper for the search input.
+    //
+    const searchDebounce = useDebounce(500);
+
+    //
+    // Sync local input when searchInput changes externally (e.g., search triggered from sidebar).
+    //
+    useEffect(() => {
+        setLocalInput(searchInput);
+    }, [searchInput]);
     const { sortedItems, selectedItems, clearMultiSelection, moveSelectedToDatabase, getItemById } = useGallery();
     const { isLoading, isSyncing, databasePath, closeDatabase } = useAssetDatabase();
     const { dbs } = useApp();
@@ -233,44 +251,48 @@ export function Navbar({
                         </div>
                         <Input
                             size="sm"
-                            autoFocus 
+                            autoFocus
                             className="flex-grow ml-4 outline-none"
-                            placeholder="Type your search and press enter"
-                            value={searchInput} 
+                            placeholder="Type to search..."
+                            value={draftSearchInput}
                             onChange={event => {
-                                setSearchInput(event.target.value);
+                                const value = event.target.value;
+                                setLocalInput(value);
+                                searchDebounce.schedule(() => onCommitSearch(value));
                             }}
                             onKeyDown={async event => {
                                 if (event.key === "Enter") {
                                     //
-                                    // Commits the search.
+                                    // Commits the search immediately, cancelling any pending debounce.
                                     //
-                                    await onCommitSearch();
+                                    searchDebounce.cancel();
+                                    await onCommitSearch(draftSearchInput);
                                 }
                                 else if (event.key === "Escape") {
                                     //
                                     // Cancels the search.
                                     //
+                                    searchDebounce.cancel();
                                     await onCloseSearch();
                                 }
                             }}
                         />
-                        {searchInput.trim().length > 0 && (
+                        {draftSearchInput.trim().length > 0 && (
                             <IconButton
                                 size="sm"
                                 variant="plain"
                                 color="neutral"
-                                title={savedSearches.includes(searchInput.trim()) ? "Unsave search" : "Save search"}
+                                title={savedSearches.includes(draftSearchInput.trim()) ? "Unsave search" : "Save search"}
                                 onClick={async () => {
-                                    if (savedSearches.includes(searchInput.trim())) {
-                                        await unsaveSearch(searchInput.trim());
+                                    if (savedSearches.includes(draftSearchInput.trim())) {
+                                        await unsaveSearch(draftSearchInput.trim());
                                     }
                                     else {
-                                        await saveSearch(searchInput.trim());
+                                        await saveSearch(draftSearchInput.trim());
                                     }
                                 }}
                             >
-                                {savedSearches.includes(searchInput.trim())
+                                {savedSearches.includes(draftSearchInput.trim())
                                     ? <Star fontSize="small" />
                                     : <StarBorder fontSize="small" />
                                 }
@@ -287,7 +309,10 @@ export function Navbar({
                         </a>
                         <button
                             className="w-10 text-xl"
-                            onClick={onCloseSearch}
+                            onClick={() => {
+                                searchDebounce.cancel();
+                                onCloseSearch();
+                            }}
                         >
                             <i className="fa-solid fa-close"></i>
                         </button>

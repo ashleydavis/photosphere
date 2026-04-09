@@ -17,8 +17,9 @@ export interface ISearchContext {
 
     //
     // Commits the search the user has typed in.
+    // Accepts an optional text parameter; if omitted, uses the current searchInput.
     //
-    onCommitSearch: () => Promise<void>;
+    onCommitSearch: (text?: string) => Promise<void>;
 
     //
     // Cancels/closes the search.
@@ -106,12 +107,14 @@ export function SearchContextProvider({ children }: ISearchContextProviderProps)
 
     //
     // Commits the search the user has typed in and saves it to the configuration file.
+    // Accepts an optional text parameter; if omitted, uses the current searchInput.
     //
-    async function onCommitSearch() {
-        await search(searchInput);
-        if (searchInput.trim().length > 0 && !savedSearches.includes(searchInput.trim())) {
-            await config.add<string>("recentSearches", searchInput, 10);
-            const updated = [searchInput, ...recentSearches.filter(item => item !== searchInput)].slice(0, 10);
+    async function onCommitSearch(text?: string) {
+        const searchTerm = text !== undefined ? text : searchInput;
+        await search(searchTerm);
+        if (searchTerm.trim().length > 0 && !savedSearches.includes(searchTerm.trim())) {
+            await config.add<string>("recentSearches", searchTerm, 10);
+            const updated = [searchTerm, ...recentSearches.filter(item => item !== searchTerm)].slice(0, 10);
             setRecentSearches(updated);
         }
     }
