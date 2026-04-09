@@ -40,21 +40,24 @@
     "@mui/joy": "5.0.0-beta.48",
     "@react-hook/resize-observer": "^1.2.6",
     "@tanstack/react-virtual": "^3.11.2",
+    "@types/leaflet": "^1.9.21",
     "api": "workspace:*",
     "axios": "^0.27.2",
     "blob-util": "^2.0.2",
     "classnames": "^2.5.1",
     "colorthief": "^2.6.0",
+    "config": "workspace:*",
     "dayjs": "^1.11.7",
     "defs": "workspace:*",
     "jszip": "^3.10.1",
+    "leaflet": "^1.9.4",
     "lodash": "^4.17.21",
     "mime-types": "^2.1.35",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-fps-stats": "^0.3.1",
+    "react-leaflet": "4",
     "react-router-dom": "^6.4.1",
-    "utils": "workspace:*",
-    "config": "workspace:*"
+    "utils": "workspace:*"
   }
 }

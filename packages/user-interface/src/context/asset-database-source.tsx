@@ -50,6 +50,11 @@ export interface IAssetDatabase extends IGallerySource {
     // True while a background sync with the origin database is in progress.
     //
     isSyncing: boolean;
+
+    //
+    // Returns a direct URL for an asset, suitable for use in img src attributes.
+    //
+    assetUrl(assetId: string, assetType: string): string;
 }
 
 export interface IAssetDatabaseProviderProps {
@@ -653,6 +658,7 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
         getItemById,
 
         // Asset database source.
+        assetUrl: (assetId, assetType) => `${restApiUrl}/asset?id=${encodeURIComponent(assetId)}&type=${encodeURIComponent(assetType)}&db=${encodeURIComponent(databasePath || "")}`,
         databasePath,
         setDatabasePath,
         closeDatabase,

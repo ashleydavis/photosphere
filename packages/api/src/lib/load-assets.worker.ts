@@ -67,6 +67,7 @@ export async function loadAssetsHandler(
             height: record.height,
             hash: record.hash,
             location: record.location,
+            coordinates: record.coordinates,
             fileDate: record.fileDate,
             photoDate: record.photoDate,
             uploadDate: record.uploadDate,

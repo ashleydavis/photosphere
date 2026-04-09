@@ -14,6 +14,7 @@ import { Sidebar } from "./components/sidebar";
 import { Navbar } from "./components/navbar";
 import { Fps } from "./components/fps";
 import { AboutPage } from "./pages/about";
+import { MapPage } from "./pages/map/map-page";
 import { ToastContextProvider, useToast } from "./context/toast-context";
 import { ToastContainer } from "./components/toast-container";
 
@@ -158,31 +159,30 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
                 <div id="content" >
                     <Routes>
                         {/* TODO: Move to a DatabaseView component. */}
-                        <Route 
-                            path="/cloud/:assetId?" 
+                        <Route
+                            path="/gallery/:assetId?"
                             element={
                                 <GalleryPage
                                     />
                             }
                             />
 
-                        {/* Placeholder route to avoid the warning before the redirect. */}
                         <Route
-                            path="/cloud"
-                            element={<div/>}
+                            path="/map/:assetId?"
+                            element={<MapPage />}
                             />
 
-                        <Route 
-                            path="/about" 
-                            element={<AboutPage />} 
+                        <Route
+                            path="/about"
+                            element={<AboutPage />}
                             />
-                            
-                        <Route  
+
+                        <Route
                             path="/"
                             element={
                                 <Navigate
                                     replace
-                                    to="/cloud"
+                                    to="/gallery"
                                     />
                             }
                             />
