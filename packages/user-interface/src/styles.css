@@ -203,6 +203,14 @@ body.mobile #navbar {
     height: calc(100vh - 52px);
 }
 
+/* When the gallery is hosted inside a modal, the transform on .cluster-modal-gallery
+   captures position:fixed descendants so they are fixed relative to the modal container
+   instead of the viewport. Override top and height to fill the modal area. */
+.cluster-modal-gallery .gallery-scrollbar {
+    top: 0;
+    height: 100%;
+}
+
 .gallery-scrollbar-thumb {
     border-radius: 11px;
     border: 3px solid transparent;

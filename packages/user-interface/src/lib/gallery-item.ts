@@ -44,6 +44,14 @@ export interface IGalleryItem {
     location?: string;
 
     //
+    // The GPS coordinates of the asset, if known.
+    //
+    coordinates?: {
+        lat: number;
+        lng: number;
+    };
+
+    //
     // The date the file was created.
     //
     fileDate: string;

@@ -137,11 +137,21 @@ export function Navbar({
 
                     <NavLink
                         className="mr-1 sm:mr-3"
-                        to="/cloud"
+                        to="/gallery"
                     >
                         <div className="flex flex-row items-center">
                             <i className="w-5 text-center fa-solid fa-images"></i>
                             <div className="hidden sm:block ml-2">Gallery</div>
+                        </div>
+                    </NavLink>
+
+                    <NavLink
+                        className="mr-1 sm:mr-3"
+                        to="/map"
+                    >
+                        <div className="flex flex-row items-center">
+                            <i className="w-5 text-center fa-solid fa-map"></i>
+                            <div className="hidden sm:block ml-2">Map</div>
                         </div>
                     </NavLink>
 

@@ -476,7 +476,7 @@ export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
                 </ListItem>
 
                 <NavLink
-                    to="/cloud"
+                    to="/gallery"
                     onClick={() => setSidebarOpen(false)}
                     >
                     <ListItem>

@@ -72,6 +72,7 @@ async function createMainWindow() {
 
     // mainWindow.webContents.openDevTools();
 
+
     // Load theme preference to pass to frontend
     const theme = await getTheme();
 
@@ -96,6 +97,22 @@ async function createMainWindow() {
         if (!url.startsWith('file://')) {
             event.preventDefault();
             shell.openExternal(url);
+        }
+    });
+}
+
+// Enforce single instance: if another instance is already running, focus its window and quit.
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+    app.quit();
+}
+else {
+    app.on('second-instance', () => {
+        if (mainWindow) {
+            if (mainWindow.isMinimized()) {
+                mainWindow.restore();
+            }
+            mainWindow.focus();
         }
     });
 }
