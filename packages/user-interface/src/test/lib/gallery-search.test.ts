@@ -36,6 +36,18 @@ describe("valueMatches", () => {
     test("matching is case-insensitive", () => {
         expect(valueMatches("Sydney, Australia", "australia")).toBe(true);
     });
+
+    test("returns false when field value is undefined", () => {
+        expect(valueMatches(undefined, "hello")).toBe(false);
+    });
+
+    test("returns false when field value is a number", () => {
+        expect(valueMatches(42, "42")).toBe(false);
+    });
+
+    test("returns false when array contains non-string elements", () => {
+        expect(valueMatches([undefined, null, 42], "42")).toBe(false);
+    });
 });
 
 describe("applySearchTerm", () => {
