@@ -235,21 +235,21 @@ wss.on("connection", (ws: WebSocket) => {
             else if (messageData.type === "notify-database-opened") {
                 resetSyncState(syncState);
                 syncState.currentDatabasePath = messageData.databasePath;
-                await handleNotifyDatabaseOpened(ws, messageData.databasePath);
+                await handleNotifyDatabaseOpened(ws, messageData.databasePath, messageData.requestId);
             }
             else if (messageData.type === "notify-database-closed") {
                 resetSyncState(syncState);
                 syncState.currentDatabasePath = null;
-                await handleNotifyDatabaseClosed(ws);
+                await handleNotifyDatabaseClosed(ws, messageData.requestId);
             }
             else if (messageData.type === "notify-database-edited") {
                 scheduleSync(syncState);
             }
             else if (messageData.type === "get-config") {
-                await handleGetConfig(ws, messageData.key);
+                await handleGetConfig(ws, messageData.key, messageData.requestId);
             }
             else if (messageData.type === "set-config") {
-                await handleSetConfig(ws, messageData.key, messageData.value);
+                await handleSetConfig(ws, messageData.key, messageData.value, messageData.requestId);
             }
         }
         catch (error) {
@@ -349,14 +349,15 @@ async function handleGetRecentDatabases(ws: WebSocket): Promise<void> {
 //
 // Handles notification that a database was opened by the frontend.
 //
-async function handleNotifyDatabaseOpened(ws: WebSocket, databasePath: string): Promise<void> {
+async function handleNotifyDatabaseOpened(ws: WebSocket, databasePath: string, requestId: unknown): Promise<void> {
     try {
         await addRecentDatabase(databasePath);
-        ws.send(JSON.stringify({ type: "notify-database-opened-ack" }));
+        ws.send(JSON.stringify({ type: "notify-database-opened-ack", requestId }));
     }
     catch (error: any) {
         ws.send(JSON.stringify({
             type: "error",
+            requestId,
             message: error instanceof Error ? error.message : "Unknown error notifying database opened",
         }));
     }
@@ -365,14 +366,15 @@ async function handleNotifyDatabaseOpened(ws: WebSocket, databasePath: string): 
 //
 // Handles notification that the database was closed by the frontend.
 //
-async function handleNotifyDatabaseClosed(ws: WebSocket): Promise<void> {
+async function handleNotifyDatabaseClosed(ws: WebSocket, requestId: unknown): Promise<void> {
     try {
         await clearLastDatabase();
-        ws.send(JSON.stringify({ type: "notify-database-closed-ack" }));
+        ws.send(JSON.stringify({ type: "notify-database-closed-ack", requestId }));
     }
     catch (error: any) {
         ws.send(JSON.stringify({
             type: "error",
+            requestId,
             message: error instanceof Error ? error.message : "Unknown error notifying database closed",
         }));
     }
@@ -381,17 +383,19 @@ async function handleNotifyDatabaseClosed(ws: WebSocket): Promise<void> {
 //
 // Handles a request to read one value from the desktop config file.
 //
-async function handleGetConfig(ws: WebSocket, key: string): Promise<void> {
+async function handleGetConfig(ws: WebSocket, key: string, requestId: unknown): Promise<void> {
     try {
         const config = await loadDesktopConfig();
         ws.send(JSON.stringify({
             type: "config-value",
+            requestId,
             value: (config as Record<string, unknown>)[key],
         }));
     }
     catch (error: any) {
         ws.send(JSON.stringify({
             type: "error",
+            requestId,
             message: error instanceof Error ? error.message : "Unknown error getting config",
         }));
     }
@@ -400,16 +404,17 @@ async function handleGetConfig(ws: WebSocket, key: string): Promise<void> {
 //
 // Handles a request to write one value to the desktop config file.
 //
-async function handleSetConfig(ws: WebSocket, key: string, value: unknown): Promise<void> {
+async function handleSetConfig(ws: WebSocket, key: string, value: unknown, requestId: unknown): Promise<void> {
     try {
         const config = await loadDesktopConfig();
         (config as Record<string, unknown>)[key] = value;
         await saveDesktopConfig(config);
-        ws.send(JSON.stringify({ type: "config-set" }));
+        ws.send(JSON.stringify({ type: "config-set", requestId }));
     }
     catch (error: any) {
         ws.send(JSON.stringify({
             type: "error",
+            requestId,
             message: error instanceof Error ? error.message : "Unknown error setting config",
         }));
     }

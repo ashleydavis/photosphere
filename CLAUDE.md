@@ -13,6 +13,8 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 - `bun run test` (alias: `bun run t`) - Run all tests
 - `bun run test:watch` (alias: `bun run tw`) - Run tests in watch mode
 - `bun run clean` - Clean all build artifacts
+- `bun run dev` (alias: `bun run d`) - Build renderer and start the Electron desktop app in dev mode
+- `bun run dev:web` - Start the dev-server and dev-frontend concurrently (without Electron)
 
 ### Backend development (in apps/backend/):
 - `bun run dev` - Start with sample data (multi-set)
