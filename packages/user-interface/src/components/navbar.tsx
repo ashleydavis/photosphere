@@ -25,6 +25,9 @@ import { useDeleteConfirmation } from "../context/delete-confirmation-context";
 import { usePlatform } from "../context/platform-context";
 import type { IDownloadAssetItem } from "../context/platform-context";
 import Download from "@mui/icons-material/Download";
+import CalendarMonth from "@mui/icons-material/CalendarMonth";
+import { useGallerySource } from "../context/gallery-source";
+import { SetPhotoDateDialog } from "./set-photo-date-dialog";
 
 export interface INavbarProps {
     //
@@ -65,6 +68,12 @@ export function Navbar({
     const { dbs } = useApp();
     const { setDeleteConfirmationOpen } = useDeleteConfirmation();
     const { downloadAssets } = usePlatform();
+    const { updateAssets } = useGallerySource();
+
+    //
+    // Set to true to open the bulk set date dialog.
+    //
+    const [setDateDialogOpen, setSetDateDialogOpen] = useState<boolean>(false);
 
     const sortedItemsCount = sortedItems().length;
     const selectedItemsCount = selectedItems.size;
@@ -226,6 +235,11 @@ export function Navbar({
                                             <Download />
                                             Download {selectedItemsCount} assets
                                         </MenuItem>
+                                        <ListDivider />
+                                        <MenuItem onClick={() => setSetDateDialogOpen(true)}>
+                                            <CalendarMonth />
+                                            Set date for {selectedItemsCount} assets
+                                        </MenuItem>
                                     </>
                                 }                                    
                                 {databasePath && (
@@ -319,7 +333,21 @@ export function Navbar({
                     </div>
                 }                    
             </div>
-            
+
+            <SetPhotoDateDialog
+                open={setDateDialogOpen}
+                onClose={() => setSetDateDialogOpen(false)}
+                onSetDate={async (date) => {
+                    const assetUpdates = Array.from(selectedItems).map(assetId => ({
+                        assetId,
+                        partialAsset: { photoDate: date },
+                    }));
+                    await updateAssets(assetUpdates);
+                    clearMultiSelection();
+                    setSetDateDialogOpen(false);
+                }}
+                />
+
         </div>
     );
 }

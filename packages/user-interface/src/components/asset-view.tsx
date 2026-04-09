@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import dayjs from "dayjs";
 import { AssetInfo } from "../pages/gallery/components/asset-info";
 import { useGalleryItem } from "../context/gallery-item-context";
 import { FullImage } from "./full-image";
@@ -10,6 +11,7 @@ import { useAssetDatabase } from "../context/asset-database-source";
 import { Chip, Drawer, IconButton, Input } from "@mui/joy";
 import { ContentCopy, Delete, Download, Flag, Star } from "@mui/icons-material";
 import { DeleteConfirmationDialog } from "./delete-confirmation-dialog";
+import { SetPhotoDateDialog } from "./set-photo-date-dialog";
 
 export interface IAssetViewProps { 
 
@@ -38,12 +40,17 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
     const { loadAsset } = useGallerySource();
     const { downloadAsset, copyToClipboard } = usePlatform();
     const { databasePath } = useAssetDatabase();
-    const { asset, addArrayValue, removeArrayValue, deleteAsset } = useGalleryItem();
+    const { asset, updateAsset, addArrayValue, removeArrayValue, deleteAsset } = useGalleryItem();
 
     //
     // Set to true to open the info modal.
     //
     const [openInfo, setOpenInfo] = useState<boolean>(false);
+
+    //
+    // Set to true to open the set date dialog.
+    //
+    const [editingDate, setEditingDate] = useState<boolean>(false);
 
     //
     // Set to true to show the delete confirmation dialog.
@@ -311,6 +318,16 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                 onDelete={handleDelete}
                 />
 
+            <SetPhotoDateDialog
+                open={editingDate}
+                onClose={() => setEditingDate(false)}
+                currentDate={asset.photoDate}
+                onSetDate={async (date) => {
+                    await updateAsset({ photoDate: date });
+                    setEditingDate(false);
+                }}
+                />
+
             <div
                 className="pointer-events-auto"
                 style={{
@@ -318,13 +335,42 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                     bottom: "16px",
                     left: "16px",
                     display: "flex",
-                    flexDirection: "row",
-                    flexWrap: "wrap",
-                    alignItems: "center",
-                    gap: "4px",
+                    flexDirection: "column",
+                    gap: "8px",
                     maxWidth: "60%",
                 }}
                 >
+                <div
+                    style={{
+                        display: "flex",
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: "6px",
+                    }}
+                    >
+                    <span style={{ fontSize: "0.85rem", opacity: 0.85 }}>
+                        {asset.photoDate ? dayjs(asset.photoDate).format("MMM D, YYYY") : "No date"}
+                    </span>
+                    <IconButton
+                        size="sm"
+                        variant="outlined"
+                        color="neutral"
+                        title="Edit date"
+                        onClick={() => setEditingDate(true)}
+                        >
+                        <i className="fa-solid fa-pen text-xs" />
+                    </IconButton>
+                </div>
+
+                <div
+                    style={{
+                        display: "flex",
+                        flexDirection: "row",
+                        flexWrap: "wrap",
+                        alignItems: "center",
+                        gap: "4px",
+                    }}
+                    >
                 {customLabels.map(label => (
                     <Chip
                         key={label}
@@ -380,6 +426,7 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                         <i className="fa-solid fa-tag" />
                     </IconButton>
                 }
+                </div>
             </div>
 
             <Drawer
