@@ -5,6 +5,7 @@ import _ from "lodash";
 import { Textarea, IconButton, Button, Chip, Typography, Sheet, Input } from "@mui/joy";
 import { Flag, FlagOutlined, Star, StarBorder } from "@mui/icons-material";
 import { useGallery } from "../../../context/gallery-context";
+import { SetPhotoDateDialog } from "../../../components/set-photo-date-dialog";
 
 export interface IAssetInfoProps { 
 
@@ -36,6 +37,11 @@ export function AssetInfo({ onClose, onDeleted, onLabelSearch }: IAssetInfoProps
     const { search } = useGallery();
 
     const [description, setDescription] = React.useState(asset?.description);
+
+    //
+    // Controls visibility of the set date dialog.
+    //
+    const [editingDate, setEditingDate] = React.useState(false);
 
     //
     // Controls visibility of the inline add-label input.
@@ -286,7 +292,7 @@ export function AssetInfo({ onClose, onDeleted, onLabelSearch }: IAssetInfoProps
                             <div className="w-6 mt-2 flex flex-col items-center">
                                 <i className="text-2xl fa-solid fa-calendar-day" />
                             </div>
-                            <div className="flex flex-col ml-3">
+                            <div className="flex flex-col ml-3 flex-grow">
                                 <Typography level="body-md">
                                     {asset.photoDate ? dayjs(asset.photoDate).format("MMM D, YYYY") : "No date" }
                                 </Typography>
@@ -294,7 +300,26 @@ export function AssetInfo({ onClose, onDeleted, onLabelSearch }: IAssetInfoProps
                                     {asset.photoDate ? dayjs(asset.photoDate).format("HH:mm") : "No time" }
                                 </Typography>
                             </div>
+                            <IconButton
+                                size="sm"
+                                variant="plain"
+                                color="neutral"
+                                title="Edit date"
+                                onClick={() => setEditingDate(true)}
+                                >
+                                <i className="fa-solid fa-pen text-sm" />
+                            </IconButton>
                         </div>
+
+                        <SetPhotoDateDialog
+                            open={editingDate}
+                            onClose={() => setEditingDate(false)}
+                            currentDate={asset.photoDate}
+                            onSetDate={async (date) => {
+                                await updateAsset({ photoDate: date });
+                                setEditingDate(false);
+                            }}
+                            />
 
                         {asset.location
                             && <div className="text-base flex flex-row mt-4 pt-2">
