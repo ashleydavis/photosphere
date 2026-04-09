@@ -11,6 +11,18 @@ interface IBaseTaskContext {
     sessionId: string;
 }
 
+// Represents a task that is currently executing.
+interface IRunningTask {
+    // The unique ID of the task.
+    id: string;
+
+    // The source (database path) that owns the task.
+    source: string;
+
+    // Set to true when cancelTasks is called for this task's source.
+    cancelled: boolean;
+}
+
 //
 // Inline worker backend that executes tasks directly without workers
 // Supports up to maxConcurrent tasks running at once
@@ -22,9 +34,10 @@ export class WorkerBackendInline implements IWorkerBackend {
     private workerAvailableCallbacks: (() => void)[] = [];
     private queueTaskCallbacks: Array<(type: string, data: any, source: string) => void> = [];
     private maxConcurrent: number;
-    private tasksRunning: number = 0;
     private baseContext: IBaseTaskContext;
-    private cancelledSources: Set<string> = new Set();
+
+    // Tracks currently running tasks by ID so cancelTasks can mark them cancelled by source.
+    private runningTasks: Map<string, IRunningTask> = new Map();
 
     // Initializes the inline worker backend with max concurrent tasks and working directory
     constructor(maxConcurrent: number, uuidGenerator: IUuidGenerator, timestampProvider: ITimestampProvider, workerOptions: { verbose: boolean; sessionId: string }) {
@@ -193,13 +206,12 @@ export class WorkerBackendInline implements IWorkerBackend {
     // Returns true if the task was dispatched, false if no worker was available.
     //
     dispatchTask(task: ITask<any>): boolean {
-        if (this.tasksRunning >= this.maxConcurrent) {
+        if (this.runningTasks.size >= this.maxConcurrent) {
             // The maximum number of concurrent tasks is reached, so we don't process any more tasks yet.
             return false;
         }
 
-        // Mark task as running
-        this.tasksRunning++;
+        this.runningTasks.set(task.id, { id: task.id, source: task.source, cancelled: false });
 
         // Execute task inline
         this.executeTask(task).catch((error) => {
@@ -229,7 +241,7 @@ export class WorkerBackendInline implements IWorkerBackend {
                 queueTask: (type: string, data: any, source: string): void => {
                     this.notifyQueueTaskCallbacks(type, data, source);
                 },
-                isCancelled: (): boolean => this.cancelledSources.has(task.source),
+                isCancelled: (): boolean => this.runningTasks.get(task.id)?.cancelled ?? false,
             };
 
             const outputs = await executeTaskHandler(task.type, task.data, taskContextWithSendMessage);
@@ -241,7 +253,7 @@ export class WorkerBackendInline implements IWorkerBackend {
                 taskId: task.id,
             };
 
-            this.tasksRunning--;
+            this.runningTasks.delete(task.id);
             await this.notifyCompletionCallbacks(result);
             this.notifyWorkerAvailable();
         }
@@ -255,7 +267,7 @@ export class WorkerBackendInline implements IWorkerBackend {
                 taskId: task.id,
             };
 
-            this.tasksRunning--;
+            this.runningTasks.delete(task.id);
             await this.notifyCompletionCallbacks(result);
             this.notifyWorkerAvailable();
         }
@@ -265,14 +277,18 @@ export class WorkerBackendInline implements IWorkerBackend {
     // Checks if all workers are idle.
     //
     isIdle(): boolean {
-        return this.tasksRunning === 0;
+        return this.runningTasks.size === 0;
     }
 
     //
     // Signals running tasks with the given source to cancel.
     //
     cancelTasks(source: string): void {
-        this.cancelledSources.add(source);
+        for (const runningTask of this.runningTasks.values()) {
+            if (runningTask.source === source) {
+                runningTask.cancelled = true;
+            }
+        }
     }
 
     //

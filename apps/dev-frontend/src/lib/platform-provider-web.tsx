@@ -3,6 +3,9 @@ import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPla
 
 const restApiUrl = "http://localhost:3001";
 
+// Monotonically increasing counter used to correlate WebSocket request/response pairs.
+let nextRequestId = 0;
+
 export interface IPlatformProviderWebProps {
     children: ReactNode | ReactNode[];
     ws: WebSocket;
@@ -173,9 +176,12 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
     };
 
     //
-    // Sends a request over WebSocket and waits for a response matching the given type.
+    // Sends a request over WebSocket and waits for a response matching the given type and requestId.
+    // A unique requestId is added to every request so that concurrent calls do not resolve
+    // each other's promises when multiple "config-value" (or similar) messages are in flight.
     //
     function sendAndWait<T>(request: object, responseType: string): Promise<T> {
+        const requestId = nextRequestId++;
         return new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
                 reject(new Error(`Timeout waiting for ${responseType}`));
@@ -184,12 +190,12 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
             const handleMessage = (event: MessageEvent) => {
                 try {
                     const messageData = JSON.parse(event.data.toString());
-                    if (messageData.type === responseType) {
+                    if (messageData.type === responseType && messageData.requestId === requestId) {
                         clearTimeout(timeout);
                         ws.removeEventListener('message', handleMessage);
                         resolve(messageData.value as T);
                     }
-                    else if (messageData.type === "error") {
+                    else if (messageData.type === "error" && messageData.requestId === requestId) {
                         clearTimeout(timeout);
                         ws.removeEventListener('message', handleMessage);
                         reject(new Error(messageData.message || "Unknown error"));
@@ -201,7 +207,7 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
             };
 
             ws.addEventListener('message', handleMessage);
-            ws.send(JSON.stringify(request));
+            ws.send(JSON.stringify({ ...request, requestId }));
         });
     }
 

@@ -23,6 +23,7 @@
     "tw": "bun run test:watch",
     "dev": "bun run bundle:renderer && bun run --elide-lines=0 --filter=photosphere dev",
     "dev:fps": "bun run bundle:renderer && bun run --filter=photosphere dev:fps",
+    "dev:web": "concurrently --kill-others --names \"server,frontend\" \"bun run --filter=dev-server dev\" \"bun run --filter=photosphere-frontend dev\"",
     "d": "bun run dev",
     "build": "bun run bundle:renderer && bun run --filter=photosphere build",
     "bundle:main": "bun run --filter=photosphere bundle",
