@@ -11,13 +11,16 @@ export const defaultSearchFields = [ "_id", "hash", "location", "description", "
 export function valueMatches(fieldValue: any, searchTextLwr: string): boolean {
     if (Array.isArray(fieldValue)) {
         for (const elementValue of fieldValue) {
-            if (elementValue.toLowerCase().includes(searchTextLwr)) {
+            if (typeof elementValue === "string" && elementValue.toLowerCase().includes(searchTextLwr)) {
                 return true;
             }
         }
         return false;
     }
     else {
+        if (typeof fieldValue !== "string") {
+            return false;
+        }
         return fieldValue.toLowerCase().includes(searchTextLwr);
     }
 }
