@@ -8,7 +8,7 @@ const executableName = 'photosphere';
 const productName = 'Photosphere';
 
 test.describe('Smoke Tests', () => {
-  test('should navigate to About page and verify content', async () => {
+  test('should open the sidebar menu and verify content', async () => {
     // Determine the built app path based on platform
     const releaseDir = join(__dirname, '../release');
     let executablePath: string;
@@ -101,16 +101,16 @@ test.describe('Smoke Tests', () => {
     // Wait for the page to load
     await window.waitForLoadState('domcontentloaded');
 
-    // Verify "Photosphere is developed by" text is NOT yet visible
-    await expect(window.getByText('Photosphere is developed by')).not.toBeVisible();
+    // Verify the sidebar is not yet open
+    await expect(window.getByText('Open database')).not.toBeVisible();
 
-    // Find and click the About link
-    const aboutLink = window.getByRole('link', { name: /about/i });
-    await expect(aboutLink).toBeVisible();
-    await aboutLink.click();
+    // Find and click the hamburger menu button (3 bars)
+    const menuButton = window.locator('button').filter({ has: window.locator('.fa-bars') });
+    await expect(menuButton).toBeVisible();
+    await menuButton.click();
 
-    // Verify "Photosphere is developed by" text appears
-    await expect(window.getByText('Photosphere is developed by')).toBeVisible();
+    // Verify the sidebar opened and shows navigation options
+    await expect(window.getByText('Open database')).toBeVisible();
 
     // When SHOW_GUI=1, pause so you can see the app and use Playwright Inspector to step through
     if (process.env.SHOW_GUI) {
