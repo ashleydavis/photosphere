@@ -276,6 +276,7 @@ body.mobile .photo-header {
     left: 0;
     right: 0;
     bottom: 0;
+    overflow: hidden;
 }
 
 body.mobile .photo-container {
@@ -317,6 +318,44 @@ body.mobile .photo-container .full.loaded {
 
 .photo-nav {
     z-index: 2100;
+}
+
+@keyframes photo-enter-from-right {
+    from { transform: translateX(35%); opacity: 0; }
+    to   { transform: translateX(0);   opacity: 1; }
+}
+
+@keyframes photo-exit-to-left {
+    from { transform: translateX(0);    opacity: 1; }
+    to   { transform: translateX(-35%); opacity: 0; }
+}
+
+@keyframes photo-enter-from-left {
+    from { transform: translateX(-35%); opacity: 0; }
+    to   { transform: translateX(0);    opacity: 1; }
+}
+
+@keyframes photo-exit-to-right {
+    from { transform: translateX(0);   opacity: 1; }
+    to   { transform: translateX(35%); opacity: 0; }
+}
+
+.photo-enter-from-right {
+    animation: photo-enter-from-right 0.3s ease-out forwards;
+}
+
+.photo-exit-to-left {
+    animation: photo-exit-to-left 0.3s ease-out forwards;
+    pointer-events: none;
+}
+
+.photo-enter-from-left {
+    animation: photo-enter-from-left 0.3s ease-out forwards;
+}
+
+.photo-exit-to-right {
+    animation: photo-exit-to-right 0.3s ease-out forwards;
+    pointer-events: none;
 }
 
 /* Drop down */
