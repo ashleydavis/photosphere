@@ -1,5 +1,5 @@
 import Typography from '@mui/joy/Typography/Typography';
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useApp } from '../context/app-context';
 import { useAssetDatabase } from '../context/asset-database-source';
@@ -120,55 +120,6 @@ function buildNavMenu(layout: IGalleryLayout, scrollTo: (position: number) => vo
     return menu;
 }
 
-//
-// Determine the set of unique years of photos.
-//
-function determineYears(layout: IGalleryLayout): string[] {
-    const years = new Set<number>();
-    for (const row of layout.rows) {
-        for (const item of row.items) {
-
-            const fileYear = dayjs(item.fileDate).year();
-            years.add(fileYear);
-            
-            if (item.photoDate) {
-                const photoYear = dayjs(item.photoDate).year();
-                years.add(photoYear);
-            }
-
-            const uploadYear = dayjs(item.uploadDate).year();
-            years.add(uploadYear);
-        }
-    }
-
-    return Array.from(years)
-        .sort((a, b) => b - a)
-        .map(year => year.toString());
-}
-
-//
-// Determines the unique locations in the layout.
-//
-function determineLocations(layout: IGalleryLayout): string[] {
-    const locations = new Set<string>();
-    for (const row of layout.rows) {
-        for (const item of row.items) {
-            if (item.location) {
-                const parts = item.location.split(",").map(part => part.trim());
-                if (parts.length > 0) {
-                    locations.add(parts[parts.length-1]);
-
-                    if (parts.length > 1) {
-                        locations.add(parts[parts.length-2]);
-                    }
-                }
-            }
-        }
-    }
-
-    return Array.from(locations)
-        .sort();
-}
 
 //
 // Creates the full nav meu.
@@ -377,7 +328,7 @@ export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
     const { dbs, removeDatabase } = useApp();
     const theme = useTheme();
     const { databasePath, selectAndOpenDatabase } = useAssetDatabase();
-    const { search, setSortBy, isLoading } = useGallery();
+    const { search, setSortBy, isLoading, onReset, onNewItems } = useGallery();
     const { scrollTo, layout } = useGalleryLayout();
 
     const platform = usePlatform();
@@ -385,13 +336,58 @@ export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
     const [menuPath, setMenuPath] = useState<string[]>([]);
     const [breadcrumbs, setBreadCrumbs] = useState<IBreadcrumb[]>([]);
 
+    const yearsSetRef = useRef<Set<number>>(new Set<number>());
+    const locationsSetRef = useRef<Set<string>>(new Set<string>());
+    const [years, setYears] = useState<string[]>([]);
+    const [locations, setLocations] = useState<string[]>([]);
 
-    const navMenu = (layout && !isLoading) ? buildNavMenu(layout, position => {
+    useEffect(() => {
+        const subscription = onReset.subscribe(() => {
+            yearsSetRef.current = new Set<number>();
+            locationsSetRef.current = new Set<string>();
+            setYears([]);
+            setLocations([]);
+        });
+        return () => {
+            subscription.unsubscribe();
+        };
+    }, []);
+
+    useEffect(() => {
+        const subscription = onNewItems.subscribe(newItems => {
+            for (const item of newItems) {
+                yearsSetRef.current.add(dayjs(item.fileDate).year());
+                if (item.photoDate) {
+                    yearsSetRef.current.add(dayjs(item.photoDate).year());
+                }
+                yearsSetRef.current.add(dayjs(item.uploadDate).year());
+
+                if (item.location) {
+                    const parts = item.location.split(",").map(part => part.trim());
+                    if (parts.length > 0) {
+                        locationsSetRef.current.add(parts[parts.length - 1]);
+                        if (parts.length > 1) {
+                            locationsSetRef.current.add(parts[parts.length - 2]);
+                        }
+                    }
+                }
+            }
+            setYears(
+                Array.from(yearsSetRef.current)
+                    .sort((a, b) => b - a)
+                    .map(year => year.toString())
+            );
+            setLocations(Array.from(locationsSetRef.current).sort());
+        });
+        return () => {
+            subscription.unsubscribe();
+        };
+    }, []);
+
+    const navMenu = layout ? buildNavMenu(layout, position => {
         scrollTo(position);
         setSidebarOpen(false);
     }) : [];
-    const years = (layout && !isLoading) ? determineYears(layout) : [];
-    const locations = (layout && !isLoading) ? determineLocations(layout) : [];
     const fullMenu = makeFullMenu(
         navMenu, 
         years,
