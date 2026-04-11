@@ -1,10 +1,8 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import dayjs from "dayjs";
 import { AssetInfo } from "../pages/gallery/components/asset-info";
 import { useGalleryItem } from "../context/gallery-item-context";
-import { IGalleryItem } from "../lib/gallery-item";
-import { FullImage } from "./full-image";
-import { Video } from "./video";
+import { Carousel } from "./carousel";
 import { useGallery } from "../context/gallery-context";
 import { useGallerySource } from "../context/gallery-source";
 import { usePlatform } from "../context/platform-context";
@@ -14,7 +12,6 @@ import { ContentCopy, Delete, Download, Flag, Star } from "@mui/icons-material";
 import { DeleteConfirmationDialog } from "./delete-confirmation-dialog";
 import { SetPhotoDateDialog } from "./set-photo-date-dialog";
 import { SetLocationDialog } from "./set-location-dialog";
-import { FilmStrip } from "./film-strip";
 
 export interface IAssetViewProps { 
 
@@ -39,7 +36,7 @@ export interface IAssetViewProps {
 //
 export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
 
-    const { getNext, getPrev, selectedItems, addToMultipleSelection, removeFromMultipleSelection, enableSelecting, search } = useGallery();
+    const { getPrev, getNext, selectedItems, addToMultipleSelection, removeFromMultipleSelection, enableSelecting, search } = useGallery();
     const { loadAsset } = useGallerySource();
     const { downloadAsset, copyToClipboard } = usePlatform();
     const { databasePath } = useAssetDatabase();
@@ -74,72 +71,6 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
     // The text currently typed into the add-label input.
     //
     const [newLabelName, setNewLabelName] = useState<string>("");
-
-    //
-    // The photo that is sliding out during a navigation transition, or undefined when not transitioning.
-    //
-    const [outgoingAsset, setOutgoingAsset] = useState<IGalleryItem | undefined>(undefined);
-
-    //
-    // True when the active navigation direction is forward (next), false for backward (prev).
-    //
-    const [isForwardNav, setIsForwardNav] = useState<boolean>(true);
-
-    //
-    // Tracks the asset ID seen on the previous render to detect navigation.
-    //
-    const prevAssetIdRef = useRef<string | undefined>(undefined);
-
-    //
-    // Tracks the full asset seen on the previous render so it can be used as the outgoing photo.
-    //
-    const prevAssetRef = useRef<IGalleryItem | undefined>(undefined);
-
-    //
-    // Returns true if navigating from `from` to `to` is moving forward in gallery order.
-    //
-    function checkIsForward(from: IGalleryItem, to: IGalleryItem): boolean {
-        let current = from;
-        for (let i = 0; i < 5; i++) {
-            const next = getNext(current);
-            if (!next) {
-                break;
-            }
-            if (next._id === to._id) {
-                return true;
-            }
-            current = next;
-        }
-        return false;
-    }
-
-    //
-    // When the displayed asset changes, capture the outgoing photo and animation direction
-    // before the browser paints so the enter animation plays from the first visible frame.
-    //
-    useLayoutEffect(() => {
-        if (!asset) {
-            return;
-        }
-        if (asset._id === prevAssetIdRef.current) {
-            prevAssetRef.current = asset;
-            return;
-        }
-
-        const previousAsset = prevAssetRef.current;
-        prevAssetIdRef.current = asset._id;
-        prevAssetRef.current = asset;
-
-        if (!previousAsset) {
-            return;
-        }
-
-        setIsForwardNav(checkIsForward(previousAsset, asset));
-        setOutgoingAsset(previousAsset);
-
-        const timer = setTimeout(() => setOutgoingAsset(undefined), 350);
-        return () => clearTimeout(timer);
-    }, [asset]);
 
     //
     // Downloads the full-resolution asset.
@@ -198,29 +129,8 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
     return (
         <div className="photo text-xl">
             <div className="w-full h-full flex flex-col justify-center items-center">
-                <div className="photo-container flex flex-col items-center justify-center">
-                    {outgoingAsset && (
-                        <div
-                            className={isForwardNav ? "photo-exit-to-left" : "photo-exit-to-right"}
-                            style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}
-                        >
-                            {outgoingAsset.micro && (
-                                <img
-                                    src={`data:image/jpeg;base64,${outgoingAsset.micro}`}
-                                    style={{ width: "80%", height: "80%", objectFit: "contain" }}
-                                />
-                            )}
-                        </div>
-                    )}
-                    <div
-                        className={outgoingAsset ? (isForwardNav ? "photo-enter-from-right" : "photo-enter-from-left") : ""}
-                        style={{ position: "absolute", inset: 0 }}
-                    >
-                        {asset.contentType.startsWith("video/")
-                            ? <Video key={asset._id} asset={asset} />
-                            : <FullImage key={asset._id} asset={asset} />
-                        }
-                    </div>
+                <div className="photo-container">
+                    <Carousel asset={asset} />
                 </div>
 
                 <div className="photo-nav w-full h-full flex flex-row pointer-events-none">
@@ -584,7 +494,6 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                     />
             </Drawer>
 
-            <FilmStrip asset={asset} />
         </div>
     );
 }
