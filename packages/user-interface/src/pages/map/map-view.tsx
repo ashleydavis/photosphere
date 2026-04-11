@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -240,7 +240,7 @@ function MapEvents({ onBoundsChange }: IMapEventsProps) {
 // Only renders markers within the current viewport for performance.
 //
 export function MapView() {
-    const { allItems } = useGallery();
+    const { searchedItems } = useGallery();
     const { assetUrl } = useAssetDatabase();
     const navigate = useNavigate();
 
@@ -264,33 +264,21 @@ export function MapView() {
     //
     // All items with GPS coordinates.
     //
-    const geoItems = useMemo<IGalleryItem[]>(() => {
-        return allItems().filter(item => item.coordinates !== undefined);
-    }, [allItems]);
+    const geoItems = searchedItems().filter(item => item.coordinates !== undefined);
 
     //
     // Items visible within the current viewport.
     //
-    const visibleItems = useMemo<IGalleryItem[]>(() => {
-        if (!mapBounds) {
-            return [];
-        }
-
-        return geoItems.filter(item =>
-            isInBounds(item.coordinates!.lat, item.coordinates!.lng, mapBounds)
-        );
-    }, [geoItems, mapBounds]);
+    const visibleItems = mapBounds
+        ? geoItems.filter(item => isInBounds(item.coordinates!.lat, item.coordinates!.lng, mapBounds))
+        : [];
 
     //
     // Clusters computed from visible items at the current zoom level.
     //
-    const clusters = useMemo<ICluster[]>(() => {
-        if (!mapBounds) {
-            return [];
-        }
-
-        return clusterItems(visibleItems, mapBounds.zoom);
-    }, [visibleItems, mapBounds]);
+    const clusters = mapBounds
+        ? clusterItems(visibleItems, mapBounds.zoom)
+        : [];
 
     //
     // Handles clicking a single-photo marker — opens the asset view within the map page.
