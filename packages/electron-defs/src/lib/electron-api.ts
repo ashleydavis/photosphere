@@ -43,6 +43,7 @@ export interface IElectronAPI {
     onMessage: (messageType: string, callback: (data: any) => void) => void;
     removeAllListeners: (messageType: string) => void;
     openDatabase: () => Promise<void>;
+    createDatabase: () => Promise<void>;
     removeDatabase: (databasePath: string) => Promise<void>;
     notifyDatabaseOpened: (databasePath: string) => Promise<void>;
     notifyDatabaseClosed: () => Promise<void>;

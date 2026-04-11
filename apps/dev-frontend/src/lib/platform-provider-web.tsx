@@ -73,6 +73,13 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         }));
     }, [ws]);
 
+    const createDatabase = useCallback(async (): Promise<void> => {
+        // Send create-database request to server
+        ws.send(JSON.stringify({
+            type: "create-database",
+        }));
+    }, [ws]);
+
     const onDatabaseOpened = useCallback((callback: (databasePath: string) => void): (() => void) => {
         // Add callback to set
         openedCallbacksRef.current.add(callback);
@@ -160,6 +167,7 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
 
     const platformContext: IPlatformContext = {
         openDatabase,
+        createDatabase,
         onDatabaseOpened,
         onDatabaseClosed,
         notifyDatabaseOpened,

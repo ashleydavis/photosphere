@@ -122,6 +122,10 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         await electronAPI.openDatabase();
     }, [electronAPI]);
 
+    const createDatabase = useCallback(async (): Promise<void> => {
+        await electronAPI.createDatabase();
+    }, [electronAPI]);
+
     const onDatabaseOpened = useCallback((callback: (databasePath: string) => void): (() => void) => {
         // Add callback to set
         openedCallbacksRef.current.add(callback);
@@ -207,6 +211,7 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
 
     const platformContext: IPlatformContext = {
         openDatabase,
+        createDatabase,
         onDatabaseOpened,
         onDatabaseClosed,
         notifyDatabaseOpened,

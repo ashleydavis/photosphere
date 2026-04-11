@@ -20,6 +20,9 @@ const electronAPI: IElectronAPI = {
     openDatabase: (): Promise<void> => {
         return ipcRenderer.invoke('open-file');
     },
+    createDatabase: (): Promise<void> => {
+        return ipcRenderer.invoke('create-database');
+    },
     removeDatabase: (databasePath: string): Promise<void> => {
         return ipcRenderer.invoke('remove-database', databasePath);
     },

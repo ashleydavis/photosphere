@@ -7,7 +7,7 @@ import { useTheme } from '@mui/joy/styles/ThemeProvider';
 import List from '@mui/joy/List/List';
 import ListItem from '@mui/joy/ListItem/ListItem';
 import ListItemDecorator from '@mui/joy/ListItemDecorator/ListItemDecorator';
-import { Event, Flag, List as ListIcon, CalendarMonth, Category, PhotoLibrary, Folder, FolderOpen, History, Home, Info, KeyboardArrowRight, Label, Map, MoreHoriz, Navigation, People, Place, Search, Settings, Star, StarBorder, DateRange, Delete, Add } from '@mui/icons-material';
+import { Event, Flag, List as ListIcon, CalendarMonth, Category, PhotoLibrary, Folder, FolderOpen, History, Home, Info, KeyboardArrowRight, Label, Map, MoreHoriz, Navigation, People, Place, Search, Settings, Star, StarBorder, DateRange, Delete, CreateNewFolder } from '@mui/icons-material';
 import { CollapsibleSection } from './collapsible-section';
 import ListItemContent from '@mui/joy/ListItemContent/ListItemContent';
 import ListItemButton from '@mui/joy/ListItemButton/ListItemButton';
@@ -332,7 +332,7 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration }: IS
 
     const { dbs, removeDatabase } = useApp();
     const theme = useTheme();
-    const { databasePath, selectAndOpenDatabase } = useAssetDatabase();
+    const { databasePath, selectAndOpenDatabase, selectAndCreateDatabase } = useAssetDatabase();
     const { search, setSortBy, isLoading, onReset, onNewItems } = useGallery();
     const { scrollTo, layout } = useGalleryLayout();
 
@@ -445,11 +445,23 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration }: IS
                 <ListItem
                     onClick={async () => {
                         setSidebarOpen(false);
+                        await selectAndCreateDatabase();
+                    }}
+                    >
+                    <ListItemButton>
+                        <ListItemDecorator><CreateNewFolder /></ListItemDecorator>
+                        <ListItemContent>New database</ListItemContent>
+                    </ListItemButton>
+                </ListItem>
+
+                <ListItem
+                    onClick={async () => {
+                        setSidebarOpen(false);
                         await selectAndOpenDatabase();
                     }}
                     >
                     <ListItemButton>
-                        <ListItemDecorator><Add /></ListItemDecorator>
+                        <ListItemDecorator><FolderOpen /></ListItemDecorator>
                         <ListItemContent>Open database</ListItemContent>
                     </ListItemButton>
                 </ListItem>
