@@ -68,6 +68,12 @@ export interface IPlatformContext {
     openDatabase: () => Promise<void>;
 
     //
+    // Shows a directory picker, creates a new empty database there, and
+    // sends the result via the database-opened event.
+    //
+    createDatabase: () => Promise<void>;
+
+    //
     // Subscribes to database opened events.
     // Returns an unsubscribe function.
     //

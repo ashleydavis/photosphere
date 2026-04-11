@@ -57,8 +57,18 @@ export function AppContextProvider({ children }: IProps) {
         load()
             .catch(err => {
                 console.error(`Failed to load sets:`);
-                console.error(err)            
+                console.error(err)
             });
+    }, [platform]);
+
+    useEffect(() => {
+        return platform.onDatabaseOpened(() => {
+            load()
+                .catch(err => {
+                    console.error(`Failed to reload recent databases after database opened:`);
+                    console.error(err);
+                });
+        });
     }, [platform]);
 
     const value: IAppContext = {

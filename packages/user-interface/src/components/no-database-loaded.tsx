@@ -3,13 +3,14 @@ import Box from "@mui/joy/Box";
 import Typography from "@mui/joy/Typography";
 import Button from "@mui/joy/Button";
 import FolderOpenIcon from "@mui/icons-material/FolderOpen";
+import CreateNewFolderIcon from "@mui/icons-material/CreateNewFolder";
 import { useAssetDatabase } from "../context/asset-database-source";
 
 //
-// Displayed when no database is loaded, with a prompt to open one.
+// Displayed when no database is loaded, with prompts to create or open one.
 //
 export function NoDatabaseLoaded() {
-    const { selectAndOpenDatabase } = useAssetDatabase();
+    const { selectAndOpenDatabase, selectAndCreateDatabase } = useAssetDatabase();
 
     return (
         <Box
@@ -23,23 +24,40 @@ export function NoDatabaseLoaded() {
                     No database loaded
                 </Typography>
                 <Typography level="body-md" sx={{ mb: 4, maxWidth: 400, mx: 'auto' }}>
-                    Open a database to start viewing your photos and videos.
+                    Create a new database or open an existing one to start viewing your photos and videos.
                 </Typography>
-                <Button
-                    variant="soft"
-                    color="neutral"
-                    size="lg"
-                    startDecorator={<FolderOpenIcon />}
-                    onClick={async () => {
-                        await selectAndOpenDatabase();
-                    }}
-                    sx={{
-                        borderRadius: 's',
-                        px: 4,
-                    }}
-                >
-                    Open a database
-                </Button>
+                <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
+                    <Button
+                        variant="soft"
+                        color="neutral"
+                        size="lg"
+                        startDecorator={<CreateNewFolderIcon />}
+                        onClick={async () => {
+                            await selectAndCreateDatabase();
+                        }}
+                        sx={{
+                            borderRadius: 's',
+                            px: 4,
+                        }}
+                    >
+                        Create a database
+                    </Button>
+                    <Button
+                        variant="soft"
+                        color="neutral"
+                        size="lg"
+                        startDecorator={<FolderOpenIcon />}
+                        onClick={async () => {
+                            await selectAndOpenDatabase();
+                        }}
+                        sx={{
+                            borderRadius: 's',
+                            px: 4,
+                        }}
+                    >
+                        Open a database
+                    </Button>
+                </Box>
             </Box>
         </Box>
     );

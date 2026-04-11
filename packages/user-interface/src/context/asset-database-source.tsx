@@ -42,6 +42,11 @@ export interface IAssetDatabase extends IGallerySource {
     selectAndOpenDatabase(): Promise<void>;
 
     //
+    // Shows a directory picker, creates a new database there, and loads it.
+    //
+    selectAndCreateDatabase(): Promise<void>;
+
+    //
     // Opens a database by path directly (without showing file dialog).
     //
     openDatabase(dbPath: string): Promise<void>;
@@ -315,6 +320,15 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
         // Call platform.openDatabase which will trigger the platform to show the dialog
         // and send a 'database-opened' event when a file is selected
         await platform.openDatabase();
+
+        // The database-opened event will be handled by the useEffect listener
+    }
+
+    //
+    // Shows a directory picker, creates a new database there, and loads it.
+    //
+    async function selectAndCreateDatabase(): Promise<void> {
+        await platform.createDatabase();
 
         // The database-opened event will be handled by the useEffect listener
     }
@@ -664,6 +678,7 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
         closeDatabase,
         moveToDatabase,
         selectAndOpenDatabase,
+        selectAndCreateDatabase,
         openDatabase,
     };
     

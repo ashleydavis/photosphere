@@ -9,6 +9,8 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import { loadDesktopConfig, saveDesktopConfig, addRecentDatabase, removeRecentDatabase, updateLastFolder, clearLastDatabase } from "node-utils";
 import * as path from "path";
+import { createDatabase, createMediaFileDatabase } from "api";
+import { createStorage } from "storage";
 
 const execAsync = promisify(exec);
 
@@ -224,6 +226,10 @@ wss.on("connection", (ws: WebSocket) => {
                 // Handle database opening request
                 await handleOpenDatabase(ws);
             }
+            else if (messageData.type === "create-database") {
+                // Handle database creation request
+                await handleCreateDatabase(ws);
+            }
             else if (messageData.type === "remove-database") {
                 // Handle database removal request
                 await handleRemoveDatabase(ws, messageData.databasePath);
@@ -302,6 +308,43 @@ async function handleOpenDatabase(ws: WebSocket): Promise<void> {
         ws.send(JSON.stringify({
             type: "error",
             message: error instanceof Error ? error.message : "Unknown error opening database",
+        }));
+    }
+}
+
+//
+// Handles database creation request from client.
+// Shows a directory picker, initializes a new database there, and sends database-opened.
+//
+async function handleCreateDatabase(ws: WebSocket): Promise<void> {
+    try {
+        const config = await loadDesktopConfig();
+        const databasePath = await showDirectoryDialog(config.lastFolder);
+
+        if (databasePath) {
+            const { storage, rawStorage } = createStorage(databasePath, undefined, undefined);
+            const database = createMediaFileDatabase(storage, uuidGenerator, timestampProvider);
+            await createDatabase(storage, rawStorage, uuidGenerator, database.metadataCollection);
+
+            await addRecentDatabase(databasePath);
+            const folderPath = path.dirname(databasePath);
+            await updateLastFolder(folderPath);
+
+            ws.send(JSON.stringify({
+                type: "database-opened",
+                databasePath: databasePath,
+            }));
+        }
+    }
+    catch (error: any) {
+        if (error.code === 1 || error.userCancelled) {
+            console.log("User cancelled database creation");
+            return;
+        }
+        console.error("Error creating database:", error);
+        ws.send(JSON.stringify({
+            type: "error",
+            message: error instanceof Error ? error.message : "Unknown error creating database",
         }));
     }
 }

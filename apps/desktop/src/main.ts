@@ -224,6 +224,7 @@ ipcMain.on('cancel-tasks', (_event, source: string) => {
 // If the handler throws or returns a rejected promise, Electron serializes the error and sends it to the renderer.
 // The renderer can catch it when calling ipcRenderer.invoke().
 ipcMain.handle('open-file', logExceptions(openDatabase, 'Error opening database'));
+ipcMain.handle('create-database', logExceptions(createNewDatabase, 'Error creating database'));
 
 // IPC handler for removing a database from recent list
 ipcMain.handle('remove-database', logExceptions(async (event, databasePath: string) => {
@@ -678,11 +679,10 @@ async function initRestApi(): Promise<void> {
 }
 
 //
-// Opens a file dialog for the user to select a database directory, then notifies the frontend.
-// The REST API can handle multiple databases dynamically via the db query parameter.
+// Shows a directory picker dialog, focusing the main window first if available.
+// Returns the selected path, or undefined if the user cancelled.
 //
-async function openDatabase(): Promise<void> {
-    // Ensure main window is focused before showing modal dialog
+async function showDirectoryPicker(title: string, extraProperties: Electron.OpenDialogOptions['properties'] = []): Promise<string | undefined> {
     if (mainWindow) {
         if (mainWindow.isMinimized()) {
             mainWindow.restore();
@@ -690,38 +690,80 @@ async function openDatabase(): Promise<void> {
         mainWindow.focus();
     }
 
-    // Load config to get last folder
     const config = await loadDesktopConfig();
-
-    // Show file dialog to select database (modal when mainWindow is provided)
+    const options: Electron.OpenDialogOptions = {
+        properties: ['openDirectory', ...extraProperties],
+        title,
+        defaultPath: config.lastFolder,
+    };
     const result = mainWindow
-        ? await dialog.showOpenDialog(mainWindow, {
-            properties: ['openDirectory'],
-            title: 'Open Database',
-            defaultPath: config.lastFolder,
-        })
-        : await dialog.showOpenDialog({
-            properties: ['openDirectory'],
-            title: 'Open Database',
-            defaultPath: config.lastFolder,
-        });
+        ? await dialog.showOpenDialog(mainWindow, options)
+        : await dialog.showOpenDialog(options);
 
     if (result.canceled || result.filePaths.length === 0) {
+        return undefined;
+    }
+
+    return result.filePaths[0];
+}
+
+//
+// Opens a file dialog for the user to select a database directory, then notifies the frontend.
+// The REST API can handle multiple databases dynamically via the db query parameter.
+//
+async function openDatabase(): Promise<void> {
+    const databasePath = await showDirectoryPicker('Open Database');
+    if (!databasePath) {
         return;
     }
 
-    const databasePath = result.filePaths[0];
-
-    // Save to recent databases and update last folder
     await addRecentDatabase(databasePath);
-    const folderPath = dirname(databasePath);
-    await updateLastFolder(folderPath);
+    await updateLastFolder(dirname(databasePath));
 
     // Notify frontend to load the database
     // The REST API doesn't need to be restarted since it handles multiple databases dynamically
     if (mainWindow) {
         mainWindow.webContents.send('database-opened', databasePath);
         // Menu will be updated when frontend calls notifyDatabaseOpened()
+    }
+}
+
+//
+// Creates a new database by showing a directory picker, dispatching initialization
+// to the task worker, then notifying the frontend to open the result.
+//
+async function createNewDatabase(): Promise<void> {
+    const databasePath = await showDirectoryPicker('Create Database', ['createDirectory']);
+    if (!databasePath) {
+        return;
+    }
+
+    if (!taskQueue) {
+        throw new Error('Task queue not initialized');
+    }
+
+    await new Promise<void>((resolve, reject) => {
+        const taskId = randomUUID();
+        const unsubscribe = taskQueue!.onTaskComplete((task, result) => {
+            if (task.id !== taskId) {
+                return;
+            }
+            unsubscribe();
+            if (result.status === 'succeeded') {
+                resolve();
+            }
+            else {
+                reject(new Error(result.errorMessage || 'Failed to create database'));
+            }
+        });
+        taskQueue!.addTask('create-database', { databasePath }, databasePath, taskId);
+    });
+
+    await addRecentDatabase(databasePath);
+    await updateLastFolder(dirname(databasePath));
+
+    if (mainWindow) {
+        mainWindow.webContents.send('database-opened', databasePath);
     }
 }
 
@@ -771,6 +813,11 @@ async function createMenu(): Promise<void> {
 
     // File Menu
     const fileSubmenu: Electron.MenuItemConstructorOptions[] = [
+        {
+            label: 'New Database...',
+            accelerator: 'CmdOrCtrl+N',
+            click: logExceptions(createNewDatabase, 'Error creating database from menu'),
+        },
         {
             label: 'Open Database...',
             accelerator: 'CmdOrCtrl+O',
