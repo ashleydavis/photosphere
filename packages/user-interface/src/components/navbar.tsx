@@ -155,16 +155,6 @@ export function Navbar({
                         </div>
                     </NavLink>
 
-                    <NavLink
-                        className="mr-1 sm:mr-3"
-                        to="/about"
-                    >
-                        <div className="flex flex-row items-center">
-                            <i className="w-5 text-center fa-solid fa-circle-info"></i>
-                            <div className="hidden sm:block ml-2">About</div>
-                        </div>
-                    </NavLink>                        
-
                     <div className="ml-auto"></div>
 
                     {(isLoading)
