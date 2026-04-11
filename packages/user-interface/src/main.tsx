@@ -15,6 +15,7 @@ import { Navbar } from "./components/navbar";
 import { Fps } from "./components/fps";
 import { AboutPage } from "./pages/about";
 import { MapPage } from "./pages/map/map-page";
+import { ConfigurationPage } from "./pages/configuration";
 import { ToastContextProvider, useToast } from "./context/toast-context";
 import { ToastContainer } from "./components/toast-container";
 
@@ -175,6 +176,11 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
                         <Route
                             path="/about"
                             element={<AboutPage />}
+                            />
+
+                        <Route
+                            path="/configuration"
+                            element={<ConfigurationPage />}
                             />
 
                         <Route

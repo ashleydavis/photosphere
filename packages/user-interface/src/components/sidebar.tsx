@@ -7,7 +7,7 @@ import { useTheme } from '@mui/joy/styles/ThemeProvider';
 import List from '@mui/joy/List/List';
 import ListItem from '@mui/joy/ListItem/ListItem';
 import ListItemDecorator from '@mui/joy/ListItemDecorator/ListItemDecorator';
-import { Event, Flag, List as ListIcon, CalendarMonth, Category, PhotoLibrary, Folder, FolderOpen, History, Home, Info, KeyboardArrowRight, Label, Map, MoreHoriz, Navigation, People, Place, Search, Star, StarBorder, VerticalAlignBottom, VerticalAlignTop, DateRange, Delete, Add } from '@mui/icons-material';
+import { Event, Flag, List as ListIcon, CalendarMonth, Category, PhotoLibrary, Folder, FolderOpen, History, Home, Info, KeyboardArrowRight, Label, Map, MoreHoriz, Navigation, People, Place, Search, Settings, Star, StarBorder, DateRange, Delete, Add } from '@mui/icons-material';
 import { CollapsibleSection } from './collapsible-section';
 import ListItemContent from '@mui/joy/ListItemContent/ListItemContent';
 import ListItemButton from '@mui/joy/ListItemButton/ListItemButton';
@@ -19,14 +19,8 @@ import { useGalleryLayout } from '../context/gallery-layout-context';
 import { IGalleryLayout } from '../lib/create-layout';
 import { useGallery } from '../context/gallery-context';
 import { useSearch } from '../context/search-context';
-import { useConfig } from '../context/config-context';
-import Slider from '@mui/joy/Slider/Slider';
-import Stack from '@mui/joy/Stack/Stack';
 import dayjs from 'dayjs';
 import { usePlatform } from '../context/platform-context';
-import { useColorScheme } from '@mui/joy/styles/CssVarsProvider';
-import ToggleButtonGroup from '@mui/joy/ToggleButtonGroup/ToggleButtonGroup';
-import Button from '@mui/joy/Button/Button';
 
 export interface ISidebarProps {
     //
@@ -379,16 +373,14 @@ function makeFullMenu(navMenu: IMenuItem[], years: string[], locations: string[]
 export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
     const { setOpenSearch, recentSearches, removeRecentSearch, savedSearches, saveSearch, unsaveSearch } = useSearch();
     const { openDatabase } = useAssetDatabase();
-    const config = useConfig();
 
     const { dbs, removeDatabase } = useApp();
     const theme = useTheme();
     const { databasePath, selectAndOpenDatabase } = useAssetDatabase();
     const { search, setSortBy, isLoading } = useGallery();
-    const { scrollTo, layout, targetRowHeight, setTargetRowHeight } = useGalleryLayout();
+    const { scrollTo, layout } = useGalleryLayout();
 
     const platform = usePlatform();
-    const { mode, setMode } = useColorScheme();
 
     const [menuPath, setMenuPath] = useState<string[]>([]);
     const [breadcrumbs, setBreadCrumbs] = useState<IBreadcrumb[]>([]);
@@ -507,6 +499,18 @@ export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
                         <ListItemButton>
                             <ListItemDecorator><Info /></ListItemDecorator>
                             <ListItemContent>About</ListItemContent>
+                        </ListItemButton>
+                    </ListItem>
+                </NavLink>
+
+                <NavLink
+                    to="/configuration"
+                    onClick={() => setSidebarOpen(false)}
+                    >
+                    <ListItem>
+                        <ListItemButton>
+                            <ListItemDecorator><Settings /></ListItemDecorator>
+                            <ListItemContent>Configuration</ListItemContent>
                         </ListItemButton>
                     </ListItem>
                 </NavLink>
@@ -763,44 +767,6 @@ export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
                             );
                         })}
                     </List>
-                </>
-            </CollapsibleSection>
-
-            <Divider />
-            <CollapsibleSection configKey="sidebar-collapsed-configuration" label="Configuration">
-                <>
-                    <Stack
-                        sx={{ mt: 2, mr: 2 }}
-                        >
-                        <Typography level="body-xs">Theme</Typography>
-                        <ToggleButtonGroup
-                            value={mode}
-                            onChange={async (_event, value) => {
-                                if (value) {
-                                    const newTheme = value as 'light' | 'dark' | 'system';
-                                    setMode(newTheme);
-                                    await config.set("theme", newTheme);
-                                }
-                            }}
-                            sx={{ mt: 1 }}
-                            >
-                            <Button value="light">Light</Button>
-                            <Button value="dark">Dark</Button>
-                            <Button value="system">System</Button>
-                        </ToggleButtonGroup>
-                    </Stack>
-
-                    <Stack
-                        sx={{ mt: 2, mr: 2 }}
-                        >
-                        <Typography level="body-xs">Photo size</Typography>
-                        <Slider
-                            min={50}
-                            max={500}
-                            value={targetRowHeight}
-                            onChange={(e, value) => setTargetRowHeight(value as number)}
-                            />
-                    </Stack>
                 </>
             </CollapsibleSection>
 
