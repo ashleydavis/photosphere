@@ -13,6 +13,7 @@ import { ContentCopy, Delete, Download, Flag, Star } from "@mui/icons-material";
 import { DeleteConfirmationDialog } from "./delete-confirmation-dialog";
 import { SetPhotoDateDialog } from "./set-photo-date-dialog";
 import { SetLocationDialog } from "./set-location-dialog";
+import { FilmStrip } from "./film-strip";
 
 export interface IAssetViewProps { 
 
@@ -503,6 +504,8 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                     }}
                     />
             </Drawer>
+
+            <FilmStrip asset={asset} />
         </div>
     );
 }
