@@ -488,6 +488,18 @@ export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
                 </NavLink>
 
                 <NavLink
+                    to="/map"
+                    onClick={() => setSidebarOpen(false)}
+                    >
+                    <ListItem>
+                        <ListItemButton>
+                            <ListItemDecorator><Map /></ListItemDecorator>
+                            <ListItemContent>Map</ListItemContent>
+                        </ListItemButton>
+                    </ListItem>
+                </NavLink>
+
+                <NavLink
                     to="/about"
                     onClick={() => setSidebarOpen(false)}
                     >
