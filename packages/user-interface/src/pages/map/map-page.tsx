@@ -5,11 +5,8 @@ import { useGallery } from "../../context/gallery-context";
 import { GalleryItemContextProvider } from "../../context/gallery-item-context";
 import { AssetView } from "../../components/asset-view";
 import { MapView } from "./map-view";
-import Box from "@mui/joy/Box";
-import Typography from "@mui/joy/Typography";
-import Button from "@mui/joy/Button";
+import { NoDatabaseLoaded } from "../../components/no-database-loaded";
 import Drawer from "@mui/joy/Drawer/Drawer";
-import FolderOpenIcon from "@mui/icons-material/FolderOpen";
 
 export interface IMapPageProps {
 }
@@ -18,7 +15,7 @@ export interface IMapPageProps {
 // The map page of the Photosphere app, showing photos with GPS coordinates on a map.
 //
 export function MapPage({}: IMapPageProps) {
-    const { databasePath, selectAndOpenDatabase } = useAssetDatabase();
+    const { databasePath } = useAssetDatabase();
     const { selectedItemId, setSelectedItemId, getPrev, getNext, getItemById } = useGallery();
     const { assetId } = useParams();
     const navigate = useNavigate();
@@ -48,36 +45,7 @@ export function MapPage({}: IMapPageProps) {
     return (
         <div className="w-full h-full overflow-hidden relative">
             {!databasePath && (
-                <Box
-                    className="flex items-center justify-center"
-                    sx={{
-                        height: "calc(100vh - 60px)",
-                    }}
-                >
-                    <Box sx={{ textAlign: 'center' }}>
-                        <Typography level="h4" sx={{ mb: 2 }}>
-                            No database loaded
-                        </Typography>
-                        <Typography level="body-md" sx={{ mb: 4, maxWidth: 400, mx: 'auto' }}>
-                            Open a database to start viewing your photos on the map.
-                        </Typography>
-                        <Button
-                            variant="soft"
-                            color="neutral"
-                            size="lg"
-                            startDecorator={<FolderOpenIcon />}
-                            onClick={async () => {
-                                await selectAndOpenDatabase();
-                            }}
-                            sx={{
-                                borderRadius: 's',
-                                px: 4,
-                            }}
-                        >
-                            Open a database
-                        </Button>
-                    </Box>
-                </Box>
+                <NoDatabaseLoaded />
             )}
 
             {databasePath && (
