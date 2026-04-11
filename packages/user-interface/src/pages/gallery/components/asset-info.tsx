@@ -6,6 +6,7 @@ import { Textarea, IconButton, Button, Chip, Typography, Sheet, Input } from "@m
 import { Flag, FlagOutlined, Star, StarBorder } from "@mui/icons-material";
 import { useGallery } from "../../../context/gallery-context";
 import { SetPhotoDateDialog } from "../../../components/set-photo-date-dialog";
+import { SetLocationDialog } from "../../../components/set-location-dialog";
 
 export interface IAssetInfoProps { 
 
@@ -42,6 +43,11 @@ export function AssetInfo({ onClose, onDeleted, onLabelSearch }: IAssetInfoProps
     // Controls visibility of the set date dialog.
     //
     const [editingDate, setEditingDate] = React.useState(false);
+
+    //
+    // Controls visibility of the set location dialog.
+    //
+    const [editingLocation, setEditingLocation] = React.useState(false);
 
     //
     // Controls visibility of the inline add-label input.
@@ -321,18 +327,44 @@ export function AssetInfo({ onClose, onDeleted, onLabelSearch }: IAssetInfoProps
                             }}
                             />
 
-                        {asset.location
-                            && <div className="text-base flex flex-row mt-4 pt-2">
-                                <div className="w-6 mt-2 flex flex-col items-center">
-                                    <i className="text-2xl fa-regular fa-map" />
-                                </div>
-                                <div className="flex flex-col ml-3">
-                                    <Typography level="body-md">
-                                        {asset.location}
-                                    </Typography>
-                                </div>
+                        <div className="text-base flex flex-row mt-4 pt-2">
+                            <div className="w-6 mt-2 flex flex-col items-center">
+                                <i className="text-2xl fa-regular fa-map" />
                             </div>
-                        }
+                            <div className="flex flex-col ml-3 flex-grow">
+                                <Typography level="body-md">
+                                    {asset.location ?? "No location"}
+                                </Typography>
+                                {asset.coordinates && (
+                                    <Typography level="body-sm">
+                                        {asset.coordinates.lat.toFixed(6)}, {asset.coordinates.lng.toFixed(6)}
+                                    </Typography>
+                                )}
+                            </div>
+                            <IconButton
+                                size="sm"
+                                variant="plain"
+                                color="neutral"
+                                title="Edit location"
+                                onClick={() => setEditingLocation(true)}
+                            >
+                                <i className="fa-solid fa-pen text-sm" />
+                            </IconButton>
+                        </div>
+
+                        <SetLocationDialog
+                            open={editingLocation}
+                            initialCoordinates={asset.coordinates}
+                            onSetLocation={async (coordinates, location) => {
+                                await updateAsset({ coordinates, location });
+                                setEditingLocation(false);
+                            }}
+                            onClearLocation={async () => {
+                                await updateAsset({ coordinates: undefined, location: undefined });
+                                setEditingLocation(false);
+                            }}
+                            onClose={() => setEditingLocation(false)}
+                        />
 
                         {/* <div className="text-base flex flex-row mt-4 pt-2">
                             <div className="w-6 mt-2 flex flex-col items-center">

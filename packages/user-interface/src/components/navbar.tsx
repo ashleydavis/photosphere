@@ -28,6 +28,7 @@ import Download from "@mui/icons-material/Download";
 import CalendarMonth from "@mui/icons-material/CalendarMonth";
 import { useGallerySource } from "../context/gallery-source";
 import { SetPhotoDateDialog } from "./set-photo-date-dialog";
+import { SetLocationDialog } from "./set-location-dialog";
 
 export interface INavbarProps {
     //
@@ -74,6 +75,11 @@ export function Navbar({
     // Set to true to open the bulk set date dialog.
     //
     const [setDateDialogOpen, setSetDateDialogOpen] = useState<boolean>(false);
+
+    //
+    // Set to true to open the bulk set location dialog.
+    //
+    const [setLocationDialogOpen, setSetLocationDialogOpen] = useState<boolean>(false);
 
     const sortedItemsCount = sortedItems().length;
     const selectedItemsCount = selectedItems.size;
@@ -240,6 +246,11 @@ export function Navbar({
                                             <CalendarMonth />
                                             Set date for {selectedItemsCount} assets
                                         </MenuItem>
+                                        <ListDivider />
+                                        <MenuItem onClick={() => setSetLocationDialogOpen(true)}>
+                                            <i className="fa-regular fa-map" style={{ width: "24px", textAlign: "center" }} />
+                                            Set location for {selectedItemsCount} assets
+                                        </MenuItem>
                                     </>
                                 }                                    
                                 {databasePath && (
@@ -346,6 +357,29 @@ export function Navbar({
                     clearMultiSelection();
                     setSetDateDialogOpen(false);
                 }}
+                />
+
+            <SetLocationDialog
+                open={setLocationDialogOpen}
+                onSetLocation={async (coordinates, location) => {
+                    const assetUpdates = Array.from(selectedItems).map(assetId => ({
+                        assetId,
+                        partialAsset: { coordinates, location },
+                    }));
+                    await updateAssets(assetUpdates);
+                    clearMultiSelection();
+                    setSetLocationDialogOpen(false);
+                }}
+                onClearLocation={async () => {
+                    const assetUpdates = Array.from(selectedItems).map(assetId => ({
+                        assetId,
+                        partialAsset: { coordinates: undefined, location: undefined },
+                    }));
+                    await updateAssets(assetUpdates);
+                    clearMultiSelection();
+                    setSetLocationDialogOpen(false);
+                }}
+                onClose={() => setSetLocationDialogOpen(false)}
                 />
 
         </div>

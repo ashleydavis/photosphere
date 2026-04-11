@@ -12,6 +12,7 @@ import { Chip, Drawer, IconButton, Input } from "@mui/joy";
 import { ContentCopy, Delete, Download, Flag, Star } from "@mui/icons-material";
 import { DeleteConfirmationDialog } from "./delete-confirmation-dialog";
 import { SetPhotoDateDialog } from "./set-photo-date-dialog";
+import { SetLocationDialog } from "./set-location-dialog";
 
 export interface IAssetViewProps { 
 
@@ -51,6 +52,11 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
     // Set to true to open the set date dialog.
     //
     const [editingDate, setEditingDate] = useState<boolean>(false);
+
+    //
+    // Set to true to open the set location dialog.
+    //
+    const [editingLocation, setEditingLocation] = useState<boolean>(false);
 
     //
     // Set to true to show the delete confirmation dialog.
@@ -328,6 +334,20 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                 }}
                 />
 
+            <SetLocationDialog
+                open={editingLocation}
+                initialCoordinates={asset.coordinates}
+                onSetLocation={async (coordinates, location) => {
+                    await updateAsset({ coordinates, location });
+                    setEditingLocation(false);
+                }}
+                onClearLocation={async () => {
+                    await updateAsset({ coordinates: undefined, location: undefined });
+                    setEditingLocation(false);
+                }}
+                onClose={() => setEditingLocation(false)}
+                />
+
             <div
                 className="pointer-events-auto"
                 style={{
@@ -366,11 +386,41 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                     style={{
                         display: "flex",
                         flexDirection: "row",
+                        alignItems: "center",
+                        gap: "6px",
+                    }}
+                    >
+                    <span style={{ fontSize: "0.85rem", opacity: 0.85 }}>
+                        {asset.location
+                            ? asset.location
+                            : asset.coordinates
+                                ? `${asset.coordinates.lat.toFixed(4)}, ${asset.coordinates.lng.toFixed(4)}`
+                                : "No location"
+                        }
+                    </span>
+                    <IconButton
+                        size="sm"
+                        variant="outlined"
+                        color="neutral"
+                        title="Edit location"
+                        onClick={() => setEditingLocation(true)}
+                        >
+                        <i className="fa-solid fa-pen text-xs" />
+                    </IconButton>
+                </div>
+
+                <div
+                    style={{
+                        display: "flex",
+                        flexDirection: "row",
                         flexWrap: "wrap",
                         alignItems: "center",
                         gap: "4px",
                     }}
                     >
+                {customLabels.length === 0 && !addingLabel && (
+                    <span style={{ fontSize: "0.85rem", opacity: 0.85 }}>No labels</span>
+                )}
                 {customLabels.map(label => (
                     <Chip
                         key={label}
