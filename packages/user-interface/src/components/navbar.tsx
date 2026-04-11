@@ -26,6 +26,7 @@ import { usePlatform } from "../context/platform-context";
 import type { IDownloadAssetItem } from "../context/platform-context";
 import Download from "@mui/icons-material/Download";
 import CalendarMonth from "@mui/icons-material/CalendarMonth";
+import Settings from "@mui/icons-material/Settings";
 import { useGallerySource } from "../context/gallery-source";
 import { SetPhotoDateDialog } from "./set-photo-date-dialog";
 import { SetLocationDialog } from "./set-location-dialog";
@@ -35,7 +36,16 @@ export interface INavbarProps {
     // Set to true to open the sidebar.
     //
     sidebarOpen: boolean;
+
+    //
+    // Sets the sidebar open or closed.
+    //
     setSidebarOpen: (open: boolean) => void;
+
+    //
+    // Opens the configuration dialog.
+    //
+    onOpenConfiguration: () => void;
 }
 
 //
@@ -44,6 +54,7 @@ export interface INavbarProps {
 export function Navbar({
     sidebarOpen,
     setSidebarOpen,
+    onOpenConfiguration,
 }: INavbarProps) {
     const theme = useTheme();
     const { openSearch, setOpenSearch, searchInput, onCommitSearch, onCloseSearch, savedSearches, saveSearch, unsaveSearch } = useSearch();
@@ -200,73 +211,74 @@ export function Navbar({
                         </div>
                     )}
 
-                    {databasePath && (
-                        <Dropdown>
-                            <MenuButton
-                                sx={{
-                                    mr: 1,
-                                }}                            
-                                slots={{ root: IconButton }}
-                                slotProps={{ root: { variant: 'soft', color: 'neutral' } }}
-                            >
-                                <MoreVert />
-                            </MenuButton>
-                            <Menu placement="bottom-end">
-                                {selectedItemsCount > 0
-                                    && <>
-                                        <ListSubheader>MOVE TO</ListSubheader>
-                                        {dbs.map(dbPath => {
-                                            if (dbPath === databasePath) {
-                                                return null; // Don't show the current database.
-                                            }
-                                            return (
-                                                <MenuItem 
-                                                    key={dbPath}
-                                                    onClick={() => moveSelectedToDatabase(dbPath)}
-                                                >
-                                                    {dbPath}                                        
-                                                </MenuItem>
-                                            );
-                                        })}
-                                        <ListDivider />
-                                        <MenuItem
-                                            color="danger"
-                                            onClick={() => setDeleteConfirmationOpen(true)}
-                                        >
-                                            <Delete />
-                                            Delete {selectedItemsCount} assets
-                                        </MenuItem>
-                                        <ListDivider />
-                                        <MenuItem onClick={onDownloadSelected}>
-                                            <Download />
-                                            Download {selectedItemsCount} assets
-                                        </MenuItem>
-                                        <ListDivider />
-                                        <MenuItem onClick={() => setSetDateDialogOpen(true)}>
-                                            <CalendarMonth />
-                                            Set date for {selectedItemsCount} assets
-                                        </MenuItem>
-                                        <ListDivider />
-                                        <MenuItem onClick={() => setSetLocationDialogOpen(true)}>
-                                            <i className="fa-regular fa-map" style={{ width: "24px", textAlign: "center" }} />
-                                            Set location for {selectedItemsCount} assets
-                                        </MenuItem>
-                                    </>
-                                }                                    
-                                {databasePath && (
-                                    <>
-                                        {selectedItemsCount > 0 && <ListDivider />}
-                                        <MenuItem
-                                            onClick={onCloseDatabase}
-                                        >
-                                            <ExitToApp />
-                                            Close database
-                                        </MenuItem>
-                                    </>
-                                )}
-                            </Menu>
-                        </Dropdown>
-                    )}
+                    <Dropdown>
+                        <MenuButton
+                            sx={{
+                                mr: 1,
+                            }}
+                            slots={{ root: IconButton }}
+                            slotProps={{ root: { variant: 'soft', color: 'neutral' } }}
+                        >
+                            <MoreVert />
+                        </MenuButton>
+                        <Menu placement="bottom-end">
+                            {databasePath && selectedItemsCount > 0
+                                && <>
+                                    <ListSubheader>MOVE TO</ListSubheader>
+                                    {dbs.map(dbPath => {
+                                        if (dbPath === databasePath) {
+                                            return null; // Don't show the current database.
+                                        }
+                                        return (
+                                            <MenuItem
+                                                key={dbPath}
+                                                onClick={() => moveSelectedToDatabase(dbPath)}
+                                            >
+                                                {dbPath}
+                                            </MenuItem>
+                                        );
+                                    })}
+                                    <ListDivider />
+                                    <MenuItem
+                                        color="danger"
+                                        onClick={() => setDeleteConfirmationOpen(true)}
+                                    >
+                                        <Delete />
+                                        Delete {selectedItemsCount} assets
+                                    </MenuItem>
+                                    <ListDivider />
+                                    <MenuItem onClick={onDownloadSelected}>
+                                        <Download />
+                                        Download {selectedItemsCount} assets
+                                    </MenuItem>
+                                    <ListDivider />
+                                    <MenuItem onClick={() => setSetDateDialogOpen(true)}>
+                                        <CalendarMonth />
+                                        Set date for {selectedItemsCount} assets
+                                    </MenuItem>
+                                    <ListDivider />
+                                    <MenuItem onClick={() => setSetLocationDialogOpen(true)}>
+                                        <i className="fa-regular fa-map" style={{ width: "24px", textAlign: "center" }} />
+                                        Set location for {selectedItemsCount} assets
+                                    </MenuItem>
+                                </>
+                            }
+                            {databasePath && (
+                                <>
+                                    {selectedItemsCount > 0 && <ListDivider />}
+                                    <MenuItem onClick={onCloseDatabase}>
+                                        <ExitToApp />
+                                        Close database
+                                    </MenuItem>
+                                </>
+                            )}
+                            {databasePath && <ListDivider />}
+                            <MenuItem onClick={onOpenConfiguration}>
+                                <Settings />
+                                Configuration
+                            </MenuItem>
+                        </Menu>
+                    </Dropdown>
                 </div>
 
                 {openSearch

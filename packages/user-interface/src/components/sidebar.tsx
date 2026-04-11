@@ -32,6 +32,11 @@ export interface ISidebarProps {
     // Sets the sidebar open or close.
     //
     setSidebarOpen: (open: boolean) => void;
+
+    //
+    // Opens the configuration dialog.
+    //
+    onOpenConfiguration: () => void;
 }
 
 //
@@ -321,7 +326,7 @@ function makeFullMenu(navMenu: IMenuItem[], years: string[], locations: string[]
 //
 // Renders the sidebar for the app.
 //
-export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
+export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration }: ISidebarProps) {
     const { setOpenSearch, recentSearches, removeRecentSearch, savedSearches, saveSearch, unsaveSearch } = useSearch();
     const { openDatabase } = useAssetDatabase();
 
@@ -495,18 +500,6 @@ export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
                         <ListItemButton>
                             <ListItemDecorator><Info /></ListItemDecorator>
                             <ListItemContent>About</ListItemContent>
-                        </ListItemButton>
-                    </ListItem>
-                </NavLink>
-
-                <NavLink
-                    to="/configuration"
-                    onClick={() => setSidebarOpen(false)}
-                    >
-                    <ListItem>
-                        <ListItemButton>
-                            <ListItemDecorator><Settings /></ListItemDecorator>
-                            <ListItemContent>Configuration</ListItemContent>
                         </ListItemButton>
                     </ListItem>
                 </NavLink>
@@ -766,6 +759,21 @@ export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
                 </>
             </CollapsibleSection>
 
+            <div className="flex-grow" />
+            <Divider />
+            <List>
+                <ListItem
+                    onClick={() => {
+                        setSidebarOpen(false);
+                        onOpenConfiguration();
+                    }}
+                    >
+                    <ListItemButton>
+                        <ListItemDecorator><Settings /></ListItemDecorator>
+                        <ListItemContent>Configuration</ListItemContent>
+                    </ListItemButton>
+                </ListItem>
+            </List>
       </div>
     );
 

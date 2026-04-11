@@ -15,7 +15,7 @@ import { Navbar } from "./components/navbar";
 import { Fps } from "./components/fps";
 import { AboutPage } from "./pages/about";
 import { MapPage } from "./pages/map/map-page";
-import { ConfigurationPage } from "./pages/configuration";
+import { ConfigurationDialog } from "./components/configuration-dialog";
 import { ToastContextProvider, useToast } from "./context/toast-context";
 import { ToastContainer } from "./components/toast-container";
 
@@ -45,6 +45,11 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
     // Set to true to open the sidebar.
     //
     const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
+
+    //
+    // Set to true to open the configuration dialog.
+    //
+    const [configurationOpen, setConfigurationOpen] = useState<boolean>(false);
 
     const { openSearch } = useSearch();
 
@@ -137,6 +142,7 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
             <Navbar
                 sidebarOpen={sidebarOpen}
                 setSidebarOpen={setSidebarOpen}
+                onOpenConfiguration={() => setConfigurationOpen(true)}
             />
 
             <Drawer 
@@ -146,7 +152,8 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
                 <Sidebar
                     sidebarOpen={sidebarOpen}
                     setSidebarOpen={setSidebarOpen}
-                    />               
+                    onOpenConfiguration={() => setConfigurationOpen(true)}
+                    />
             </Drawer>
 
             <div
@@ -179,11 +186,6 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
                             />
 
                         <Route
-                            path="/configuration"
-                            element={<ConfigurationPage />}
-                            />
-
-                        <Route
                             path="/"
                             element={
                                 <Navigate
@@ -197,6 +199,11 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
                 </div>
             </div>
 
+
+            <ConfigurationDialog
+                open={configurationOpen}
+                onClose={() => setConfigurationOpen(false)}
+                />
 
             {isWorking
                 && <FullscreenSpinner />
