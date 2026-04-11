@@ -69,18 +69,6 @@ i {
     color: #777777;
 }
 
-/* Menu */
-
-#navbar a {
-    padding: 0.25rem;
-    padding-left: 0.5rem;
-    padding-right: 0.5rem;
-    border-bottom: 2px solid transparent;
-}
-
-.active {
-    border-bottom: 2px solid #B1B1B1;
-}
 
 /* Nav bar */
 

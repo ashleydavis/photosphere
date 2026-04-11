@@ -472,36 +472,42 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration }: IS
                     to="/gallery"
                     onClick={() => setSidebarOpen(false)}
                     >
-                    <ListItem>
-                        <ListItemButton>
-                            <ListItemDecorator><PhotoLibrary /></ListItemDecorator>
-                            <ListItemContent>Gallery</ListItemContent>
-                        </ListItemButton>
-                    </ListItem>
+                    {({ isActive }) => (
+                        <ListItem className={isActive ? "" : "opacity-40"}>
+                            <ListItemButton>
+                                <ListItemDecorator><PhotoLibrary /></ListItemDecorator>
+                                <ListItemContent>Gallery</ListItemContent>
+                            </ListItemButton>
+                        </ListItem>
+                    )}
                 </NavLink>
 
                 <NavLink
                     to="/map"
                     onClick={() => setSidebarOpen(false)}
                     >
-                    <ListItem>
-                        <ListItemButton>
-                            <ListItemDecorator><Map /></ListItemDecorator>
-                            <ListItemContent>Map</ListItemContent>
-                        </ListItemButton>
-                    </ListItem>
+                    {({ isActive }) => (
+                        <ListItem className={isActive ? "" : "opacity-40"}>
+                            <ListItemButton>
+                                <ListItemDecorator><Map /></ListItemDecorator>
+                                <ListItemContent>Map</ListItemContent>
+                            </ListItemButton>
+                        </ListItem>
+                    )}
                 </NavLink>
 
                 <NavLink
                     to="/about"
                     onClick={() => setSidebarOpen(false)}
                     >
-                    <ListItem>
-                        <ListItemButton>
-                            <ListItemDecorator><Info /></ListItemDecorator>
-                            <ListItemContent>About</ListItemContent>
-                        </ListItemButton>
-                    </ListItem>
+                    {({ isActive }) => (
+                        <ListItem className={isActive ? "" : "opacity-40"}>
+                            <ListItemButton>
+                                <ListItemDecorator><Info /></ListItemDecorator>
+                                <ListItemContent>About</ListItemContent>
+                            </ListItemButton>
+                        </ListItem>
+                    )}
                 </NavLink>
             </List>
 

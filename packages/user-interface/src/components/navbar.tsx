@@ -153,7 +153,7 @@ export function Navbar({
                     </button>
 
                     <NavLink
-                        className="mr-1 sm:mr-3"
+                        className={({ isActive }) => "mr-1 sm:mr-3" + (isActive ? "" : " opacity-40")}
                         to="/gallery"
                     >
                         <div className="flex flex-row items-center">
@@ -163,7 +163,7 @@ export function Navbar({
                     </NavLink>
 
                     <NavLink
-                        className="mr-1 sm:mr-3"
+                        className={({ isActive }) => "mr-1 sm:mr-3" + (isActive ? "" : " opacity-40")}
                         to="/map"
                     >
                         <div className="flex flex-row items-center">
