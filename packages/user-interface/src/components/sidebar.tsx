@@ -793,7 +793,7 @@ export function Sidebar({ sidebarOpen, setSidebarOpen }: ISidebarProps) {
                     <Stack
                         sx={{ mt: 2, mr: 2 }}
                         >
-                        <Typography level="body-xs">Row Height</Typography>
+                        <Typography level="body-xs">Photo size</Typography>
                         <Slider
                             min={50}
                             max={500}
