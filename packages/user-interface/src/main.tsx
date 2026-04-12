@@ -106,10 +106,10 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
     }, [platform, setMode]);
 
     //
-    // Listen for open-configuration events from the main process (e.g. menu item).
+    // Listen for open-configuration menu action from the main process.
     //
     useEffect(() => {
-        const unsubscribe = platform.onOpenConfiguration(() => {
+        const unsubscribe = platform.onMenuAction('open-configuration', () => {
             setConfigurationOpen(true);
         });
 
