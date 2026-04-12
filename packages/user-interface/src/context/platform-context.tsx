@@ -199,11 +199,17 @@ export interface IPlatformContext {
     openFolder: (folderPath: string) => Promise<void>;
 
     //
-    // Opens a folder picker and imports selected directories into the current database.
-    // Returns session info so the caller can track progress and cancel, or undefined if
-    // the user cancelled the folder picker. Desktop (Electron) only; returns undefined on web.
+    // Imports assets from the given paths (files or directories), or shows a folder picker when paths is omitted.
+    // Returns session info so the caller can track progress and cancel, or undefined if no database is open
+    // or the user cancelled the picker. Desktop (Electron) only; returns undefined on web.
     //
-    importAssets: () => Promise<IImportSession | undefined>;
+    importAssets: (paths?: string[]) => Promise<IImportSession | undefined>;
+
+    //
+    // Returns the absolute file system path for a File object from a drag-and-drop event.
+    // On Electron 30+ this must go through webUtils; on web it is not supported and returns undefined.
+    //
+    getPathForFile: (file: File) => string | undefined;
 
     //
     // Checks whether ImageMagick and FFmpeg are available on PATH.

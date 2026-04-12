@@ -170,7 +170,12 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         return () => {};
     }, []);
 
-    const importAssets = useCallback(async (): Promise<IImportSession | undefined> => {
+    const importAssets = useCallback(async (_paths?: string[]): Promise<IImportSession | undefined> => {
+        // Not supported on web platform.
+        return undefined;
+    }, []);
+
+    const getPathForFile = useCallback((_file: File): string | undefined => {
         // Not supported on web platform.
         return undefined;
     }, []);
@@ -218,6 +223,7 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         openFolder,
         onMenuAction,
         importAssets,
+        getPathForFile,
         checkTools,
         onTaskMessage,
         onTaskComplete,

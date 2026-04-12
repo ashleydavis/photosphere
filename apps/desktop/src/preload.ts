@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type { IElectronAPI, IImportSession, IRendererLogMessage, ISaveAssetItem, IToolsStatus } from 'electron-defs';
 
 // Expose generic task queue API
@@ -56,11 +56,14 @@ const electronAPI: IElectronAPI = {
     openPath: (path: string): Promise<void> => {
         return ipcRenderer.invoke('open-path', path);
     },
-    importAssets: (): Promise<IImportSession | undefined> => {
-        return ipcRenderer.invoke('import-assets');
+    importAssets: (paths?: string[]): Promise<IImportSession | undefined> => {
+        return ipcRenderer.invoke('import-assets', paths);
     },
     checkTools: (): Promise<IToolsStatus> => {
         return ipcRenderer.invoke('check-tools');
+    },
+    getPathForFile: (file: File): string => {
+        return webUtils.getPathForFile(file);
     },
 };
 

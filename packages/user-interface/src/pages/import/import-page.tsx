@@ -180,6 +180,9 @@ export function ImportPage() {
     const [toolsStatus, setToolsStatus] = useState<IToolsStatus | null>(null);
     const [isCheckingTools, setIsCheckingTools] = useState<boolean>(false);
 
+    // True while files are being dragged over the drop zone.
+    const [isDragOver, setIsDragOver] = useState<boolean>(false);
+
     // Ref for the scrollable list container so we can auto-scroll to bottom.
     const listRef = useRef<HTMLDivElement>(null);
 
@@ -217,6 +220,42 @@ export function ImportPage() {
     //
     async function handleStartImport() {
         await startImport();
+    }
+
+    //
+    // Allows the drag event to proceed so the drop target activates.
+    //
+    function handleDragOver(event: React.DragEvent<HTMLDivElement>) {
+        event.preventDefault();
+        setIsDragOver(true);
+    }
+
+    //
+    // Clears the drag-over highlight when the cursor leaves the drop zone.
+    //
+    function handleDragLeave(event: React.DragEvent<HTMLDivElement>) {
+        event.preventDefault();
+        setIsDragOver(false);
+    }
+
+    //
+    // Extracts file system paths from the dropped items and starts an import.
+    //
+    async function handleDrop(event: React.DragEvent<HTMLDivElement>) {
+        event.preventDefault();
+        setIsDragOver(false);
+
+        const droppedPaths: string[] = [];
+        for (const file of Array.from(event.dataTransfer.files)) {
+            const filePath = platform.getPathForFile(file);
+            if (filePath) {
+                droppedPaths.push(filePath);
+            }
+        }
+
+        if (droppedPaths.length > 0) {
+            await startImport(droppedPaths);
+        }
     }
 
     if (!databasePath) {
@@ -269,7 +308,19 @@ export function ImportPage() {
 
                 {/* Idle state */}
                 {status === 'idle' && (
-                    <Box className="flex flex-col items-center justify-center flex-grow">
+                    <Box
+                        className="flex flex-col items-center justify-center flex-grow"
+                        onDragOver={toolsStatus?.allAvailable ? handleDragOver : undefined}
+                        onDragLeave={toolsStatus?.allAvailable ? handleDragLeave : undefined}
+                        onDrop={toolsStatus?.allAvailable ? handleDrop : undefined}
+                        sx={{
+                            border: isDragOver ? "2px dashed" : "2px dashed transparent",
+                            borderColor: isDragOver ? "primary.outlinedBorder" : "transparent",
+                            borderRadius: "md",
+                            transition: "border-color 0.15s",
+                            bgcolor: isDragOver ? "primary.softBg" : undefined,
+                        }}
+                    >
                         {isCheckingTools && (
                             <CircularProgress size="md" />
                         )}
@@ -283,7 +334,7 @@ export function ImportPage() {
                                 <FileUpload sx={{ fontSize: 64, color: "text.secondary", mb: 2 }} />
                                 <Typography level="h4" sx={{ mb: 1 }}>Import photos</Typography>
                                 <Typography level="body-md" sx={{ mb: 4, color: "text.secondary" }}>
-                                    No import in progress.
+                                    Drop files or folders here, or click the button below.
                                 </Typography>
                                 <Button
                                     variant="soft"
