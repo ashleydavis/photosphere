@@ -15,6 +15,11 @@ export interface ICollapsibleSectionProps {
     label: string;
 
     //
+    // Optional style applied to the header row.
+    //
+    style?: React.CSSProperties;
+
+    //
     // The content to show when the section is expanded.
     //
     children: ReactNode | ReactNode[];
@@ -24,7 +29,7 @@ export interface ICollapsibleSectionProps {
 // A sidebar section with a clickable header that collapses/expands its content.
 // Collapsed state is persisted to config under the given key.
 //
-export function CollapsibleSection({ configKey, label, children }: ICollapsibleSectionProps) {
+export function CollapsibleSection({ configKey, label, style, children }: ICollapsibleSectionProps) {
     const config = useConfig();
 
     //
@@ -56,6 +61,7 @@ export function CollapsibleSection({ configKey, label, children }: ICollapsibleS
         <>
             <div
                 className="flex flex-row items-center mt-4 cursor-pointer"
+                style={style}
                 onClick={toggle}
                 >
                 <Typography
