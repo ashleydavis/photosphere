@@ -47,7 +47,7 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration }
 
     return (
         <div
-            className="flex flex-col h-full"
+            className="flex flex-col h-screen"
             style={{
                 paddingLeft: "15px",
                 color: theme.palette.text.primary,
@@ -66,90 +66,92 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration }
                 </button>
             </div>
 
-            <List>
-                <ListItem
-                    onClick={async () => {
-                        setSidebarOpen(false);
-                        await selectAndCreateDatabase();
-                    }}
-                    >
-                    <ListItemButton>
-                        <ListItemDecorator><CreateNewFolder /></ListItemDecorator>
-                        <ListItemContent>New database</ListItemContent>
-                    </ListItemButton>
-                </ListItem>
+            <div className="flex flex-col">
+                <List>
+                    <ListItem
+                        onClick={async () => {
+                            setSidebarOpen(false);
+                            await selectAndCreateDatabase();
+                        }}
+                        >
+                        <ListItemButton>
+                            <ListItemDecorator><CreateNewFolder /></ListItemDecorator>
+                            <ListItemContent>New database</ListItemContent>
+                        </ListItemButton>
+                    </ListItem>
 
-                <ListItem
-                    onClick={async () => {
-                        setSidebarOpen(false);
-                        await selectAndOpenDatabase();
-                    }}
-                    >
-                    <ListItemButton>
-                        <ListItemDecorator><FolderOpen /></ListItemDecorator>
-                        <ListItemContent>Open database</ListItemContent>
-                    </ListItemButton>
-                </ListItem>
+                    <ListItem
+                        onClick={async () => {
+                            setSidebarOpen(false);
+                            await selectAndOpenDatabase();
+                        }}
+                        >
+                        <ListItemButton>
+                            <ListItemDecorator><FolderOpen /></ListItemDecorator>
+                            <ListItemContent>Open database</ListItemContent>
+                        </ListItemButton>
+                    </ListItem>
 
-                <ListItem
-                    onClick={() => {
-                        setSidebarOpen(false);
-                        setTimeout(() => { // Delay the opening of the search input allows it auto focus.
-                            setOpenSearch(true);
-                        }, 10);
-                    }}
-                    >
-                    <ListItemButton>
-                        <ListItemDecorator><Search /></ListItemDecorator>
-                        <ListItemContent>Search</ListItemContent>
-                    </ListItemButton>
-                </ListItem>
+                    <ListItem
+                        onClick={() => {
+                            setSidebarOpen(false);
+                            setTimeout(() => { // Delay the opening of the search input allows it auto focus.
+                                setOpenSearch(true);
+                            }, 10);
+                        }}
+                        >
+                        <ListItemButton>
+                            <ListItemDecorator><Search /></ListItemDecorator>
+                            <ListItemContent>Search</ListItemContent>
+                        </ListItemButton>
+                    </ListItem>
 
-                <NavLink
-                    to="/gallery"
-                    onClick={() => setSidebarOpen(false)}
-                    >
-                    {({ isActive }) => (
-                        <ListItem className={isActive ? "" : "opacity-40"}>
-                            <ListItemButton>
-                                <ListItemDecorator><PhotoLibrary /></ListItemDecorator>
-                                <ListItemContent>Gallery</ListItemContent>
-                            </ListItemButton>
-                        </ListItem>
-                    )}
-                </NavLink>
+                    <NavLink
+                        to="/gallery"
+                        onClick={() => setSidebarOpen(false)}
+                        >
+                        {({ isActive }) => (
+                            <ListItem className={isActive ? "" : "opacity-40"}>
+                                <ListItemButton>
+                                    <ListItemDecorator><PhotoLibrary /></ListItemDecorator>
+                                    <ListItemContent>Gallery</ListItemContent>
+                                </ListItemButton>
+                            </ListItem>
+                        )}
+                    </NavLink>
 
-                <NavLink
-                    to="/map"
-                    onClick={() => setSidebarOpen(false)}
-                    >
-                    {({ isActive }) => (
-                        <ListItem className={isActive ? "" : "opacity-40"}>
-                            <ListItemButton>
-                                <ListItemDecorator><Map /></ListItemDecorator>
-                                <ListItemContent>Map</ListItemContent>
-                            </ListItemButton>
-                        </ListItem>
-                    )}
-                </NavLink>
+                    <NavLink
+                        to="/map"
+                        onClick={() => setSidebarOpen(false)}
+                        >
+                        {({ isActive }) => (
+                            <ListItem className={isActive ? "" : "opacity-40"}>
+                                <ListItemButton>
+                                    <ListItemDecorator><Map /></ListItemDecorator>
+                                    <ListItemContent>Map</ListItemContent>
+                                </ListItemButton>
+                            </ListItem>
+                        )}
+                    </NavLink>
 
-                <NavLink
-                    to="/about"
-                    onClick={() => setSidebarOpen(false)}
-                    >
-                    {({ isActive }) => (
-                        <ListItem className={isActive ? "" : "opacity-40"}>
-                            <ListItemButton>
-                                <ListItemDecorator><Info /></ListItemDecorator>
-                                <ListItemContent>About</ListItemContent>
-                            </ListItemButton>
-                        </ListItem>
-                    )}
-                </NavLink>
-            </List>
+                    <NavLink
+                        to="/about"
+                        onClick={() => setSidebarOpen(false)}
+                        >
+                        {({ isActive }) => (
+                            <ListItem className={isActive ? "" : "opacity-40"}>
+                                <ListItemButton>
+                                    <ListItemDecorator><Info /></ListItemDecorator>
+                                    <ListItemContent>About</ListItemContent>
+                                </ListItemButton>
+                            </ListItem>
+                        )}
+                    </NavLink>
+                </List>
+            </div>
 
             {savedSearches.length > 0 &&
-                <>
+                <div className="flex flex-col">
                     <Divider />
                     <CollapsibleSection configKey="sidebar-collapsed-savedSearches" label="Saved Searches">
                         <List>
@@ -184,67 +186,72 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration }
                             ))}
                         </List>
                     </CollapsibleSection>
-                </>
+                </div>
             }
 
-            <Divider />
-            <CollapsibleSection configKey="sidebar-collapsed-databases" label="Databases">
-                <List>
-                    {dbs.map(dbPath => {
-                        return (
-                            <ListItem
-                                key={dbPath}
-                                endAction={
-                                    <IconButton
-                                        size="sm"
-                                        variant="plain"
-                                        color="neutral"
-                                        onClick={async (e) => {
-                                            e.stopPropagation();
-                                            await removeDatabase(dbPath);
+            <div className="flex flex-col">
+                <Divider />
+                <CollapsibleSection configKey="sidebar-collapsed-databases" label="Databases">
+                    <List>
+                        {dbs.map(dbPath => {
+                            return (
+                                <ListItem
+                                    key={dbPath}
+                                    endAction={
+                                        <IconButton
+                                            size="sm"
+                                            variant="plain"
+                                            color="neutral"
+                                            onClick={async (e) => {
+                                                e.stopPropagation();
+                                                await removeDatabase(dbPath);
+                                            }}
+                                            sx={{ minHeight: '32px', minWidth: '32px' }}
+                                        >
+                                            <Delete fontSize="small" />
+                                        </IconButton>
+                                    }
+                                    >
+                                    <ListItemButton
+                                        onClick={async () => {
+                                            setSidebarOpen(false);
+                                            await openDatabase(dbPath);
                                         }}
-                                        sx={{ minHeight: '32px', minWidth: '32px' }}
-                                    >
-                                        <Delete fontSize="small" />
-                                    </IconButton>
-                                }
-                                >
-                                <ListItemButton
-                                    onClick={async () => {
-                                        setSidebarOpen(false);
-                                        await openDatabase(dbPath);
-                                    }}
-                                    >
-                                    <ListItemDecorator>
-                                        {dbPath === databasePath
-                                            ? <FolderOpen />
-                                            : <Folder />
-                                        }
-                                    </ListItemDecorator>
-                                    <ListItemContent title={dbPath}>{dbPath.split(/[\\/]/).filter(Boolean).pop() ?? dbPath}</ListItemContent>
-                                </ListItemButton>
-                            </ListItem>
-                        );
-                    })}
-                </List>
-            </CollapsibleSection>
+                                        >
+                                        <ListItemDecorator>
+                                            {dbPath === databasePath
+                                                ? <FolderOpen />
+                                                : <Folder />
+                                            }
+                                        </ListItemDecorator>
+                                        <ListItemContent title={dbPath}>{dbPath.split(/[\\/]/).filter(Boolean).pop() ?? dbPath}</ListItemContent>
+                                    </ListItemButton>
+                                </ListItem>
+                            );
+                        })}
+                    </List>
+                </CollapsibleSection>
+            </div>
 
             <div className="flex-grow" />
-            <Divider />
-            <List>
-                <ListItem
-                    onClick={() => {
-                        setSidebarOpen(false);
-                        onOpenConfiguration();
-                    }}
-                    >
-                    <ListItemButton>
-                        <ListItemDecorator><Settings /></ListItemDecorator>
-                        <ListItemContent>Configuration</ListItemContent>
-                    </ListItemButton>
-                </ListItem>
-            </List>
-      </div>
+
+            <div className="flex flex-col">
+                <Divider />
+                <List>
+                    <ListItem
+                        onClick={() => {
+                            setSidebarOpen(false);
+                            onOpenConfiguration();
+                        }}
+                        >
+                        <ListItemButton>
+                            <ListItemDecorator><Settings /></ListItemDecorator>
+                            <ListItemContent>Configuration</ListItemContent>
+                        </ListItemButton>
+                    </ListItem>
+                </List>
+            </div>
+        </div>
     );
 
 }

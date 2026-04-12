@@ -344,7 +344,7 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
     return (
         <>
             <div
-                className="flex flex-col h-full"
+                className="flex flex-col h-screen"
                 style={{
                     paddingLeft: "15px",
                     color: theme.palette.text.primary,
@@ -361,7 +361,7 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
                 </div>
 
                 {databasePath && selectedItemsCount > 0 &&
-                    <>
+                    <div className="flex flex-col">
                         <Divider />
                         <CollapsibleSection configKey="right-sidebar-collapsed-selection" label="Selection">
                             <List>
@@ -429,40 +429,42 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
                                 </ListItem>
                             </List>
                         </CollapsibleSection>
-                    </>
+                    </div>
                 }
 
-                <Divider />
-                <CollapsibleSection configKey="right-sidebar-collapsed-quickSearches" label="Quick Searches">
-                    <List>
-                        <ListItem
-                            onClick={() => {
-                                search(".labels=starred");
-                                setSidebarOpen(false);
-                            }}
+                <div className="flex flex-col">
+                    <Divider />
+                    <CollapsibleSection configKey="right-sidebar-collapsed-quickSearches" label="Quick Searches">
+                        <List>
+                            <ListItem
+                                onClick={() => {
+                                    search(".labels=starred");
+                                    setSidebarOpen(false);
+                                }}
                             >
-                            <ListItemButton>
-                                <ListItemDecorator><Star /></ListItemDecorator>
-                                <ListItemContent>Starred</ListItemContent>
-                            </ListItemButton>
-                        </ListItem>
+                                <ListItemButton>
+                                    <ListItemDecorator><Star /></ListItemDecorator>
+                                    <ListItemContent>Starred</ListItemContent>
+                                </ListItemButton>
+                            </ListItem>
 
-                        <ListItem
-                            onClick={() => {
-                                search(".labels=flagged");
-                                setSidebarOpen(false);
-                            }}
+                            <ListItem
+                                onClick={() => {
+                                    search(".labels=flagged");
+                                    setSidebarOpen(false);
+                                }}
                             >
-                            <ListItemButton>
-                                <ListItemDecorator><Flag /></ListItemDecorator>
-                                <ListItemContent>Flagged</ListItemContent>
-                            </ListItemButton>
-                        </ListItem>
-                    </List>
-                </CollapsibleSection>
+                                <ListItemButton>
+                                    <ListItemDecorator><Flag /></ListItemDecorator>
+                                    <ListItemContent>Flagged</ListItemContent>
+                                </ListItemButton>
+                            </ListItem>
+                        </List>
+                    </CollapsibleSection>
+                </div>
 
                 {recentSearches.length > 0 &&
-                    <>
+                    <div className="flex flex-col">
                         <Divider />
                         <CollapsibleSection configKey="right-sidebar-collapsed-recentSearches" label="Recent Searches">
                             <List>
@@ -520,94 +522,96 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
                                 ))}
                             </List>
                         </CollapsibleSection>
-                    </>
+                    </div>
                 }
 
-                <Divider />
-                <CollapsibleSection configKey="right-sidebar-collapsed-content" label="Content">
-                    <>
-                        {breadcrumbs.length > 0 &&
-                            <Breadcrumbs
-                                separator={<KeyboardArrowRight />}
+                <div className="flex flex-col">
+                    <Divider />
+                    <CollapsibleSection configKey="right-sidebar-collapsed-content" label="Content">
+                        <>
+                            {breadcrumbs.length > 0 &&
+                                <Breadcrumbs
+                                    separator={<KeyboardArrowRight />}
                                 >
-                                <Link
-                                    onClick={() => {
-                                        setMenuPath([]);
-                                        setBreadCrumbs([]);
-                                    }}
-                                    >
-                                    <Home />
-                                </Link>
-
-                                {breadcrumbs.length > 2 &&
-                                    <Typography level="body-xs">•••</Typography>
-                                }
-
-                                {breadcrumbs.length > 1 &&
                                     <Link
                                         onClick={() => {
-                                            setMenuPath(breadcrumbs[breadcrumbs.length-1].menuPath);
-                                            setBreadCrumbs(breadcrumbs.slice(0, breadcrumbs.length-1));
+                                            setMenuPath([]);
+                                            setBreadCrumbs([]);
                                         }}
-                                        >
-                                        {breadcrumbs[breadcrumbs.length-2].icon}
-                                        {breadcrumbs[breadcrumbs.length-2].text &&
-                                            <Typography>
-                                                {breadcrumbs[breadcrumbs.length-2].text}
-                                            </Typography>
-                                        }
+                                    >
+                                        <Home />
                                     </Link>
-                                }
 
-                                {breadcrumbs[breadcrumbs.length-1].icon}
+                                    {breadcrumbs.length > 2 &&
+                                        <Typography level="body-xs">•••</Typography>
+                                    }
 
-                                {breadcrumbs[breadcrumbs.length-1].text &&
-                                    <Typography>
-                                        {breadcrumbs[breadcrumbs.length-1].text}
-                                    </Typography>
-                                }
-                            </Breadcrumbs>
-                        }
-
-                        <List>
-                            {curMenu.map((menuItem, index) => {
-                                return (
-                                    <ListItem
-                                        key={`${index}-${menuItem.text}`}
-                                        onClick={() => {
-                                            if (menuItem.children && menuItem.children.length > 0) {
-                                                setBreadCrumbs([...breadcrumbs, {
-                                                    text: menuItem.text,
-                                                    menuPath,
-                                                }]);
-                                                setMenuPath([...menuPath, menuItem.text]);
-                                            }
-
-                                            if (menuItem.onClick) {
-                                                menuItem.onClick();
-                                            }
-                                        }}
+                                    {breadcrumbs.length > 1 &&
+                                        <Link
+                                            onClick={() => {
+                                                setMenuPath(breadcrumbs[breadcrumbs.length - 1].menuPath);
+                                                setBreadCrumbs(breadcrumbs.slice(0, breadcrumbs.length - 1));
+                                            }}
                                         >
-                                        <ListItemButton>
-                                            <ListItemDecorator>{menuItem.icon}</ListItemDecorator>
-                                            <ListItemContent>{menuItem.text}</ListItemContent>
-                                            {menuItem.children && menuItem.children.length > 0 &&
-                                                <KeyboardArrowRight />
+                                            {breadcrumbs[breadcrumbs.length - 2].icon}
+                                            {breadcrumbs[breadcrumbs.length - 2].text &&
+                                                <Typography>
+                                                    {breadcrumbs[breadcrumbs.length - 2].text}
+                                                </Typography>
                                             }
-                                            {menuItem.more &&
-                                                <MoreHoriz />
-                                            }
-                                        </ListItemButton>
-                                    </ListItem>
-                                );
-                            })}
-                        </List>
-                    </>
-                </CollapsibleSection>
+                                        </Link>
+                                    }
+
+                                    {breadcrumbs[breadcrumbs.length - 1].icon}
+
+                                    {breadcrumbs[breadcrumbs.length - 1].text &&
+                                        <Typography>
+                                            {breadcrumbs[breadcrumbs.length - 1].text}
+                                        </Typography>
+                                    }
+                                </Breadcrumbs>
+                            }
+
+                            <List>
+                                {curMenu.map((menuItem, index) => {
+                                    return (
+                                        <ListItem
+                                            key={`${index}-${menuItem.text}`}
+                                            onClick={() => {
+                                                if (menuItem.children && menuItem.children.length > 0) {
+                                                    setBreadCrumbs([...breadcrumbs, {
+                                                        text: menuItem.text,
+                                                        menuPath,
+                                                    }]);
+                                                    setMenuPath([...menuPath, menuItem.text]);
+                                                }
+
+                                                if (menuItem.onClick) {
+                                                    menuItem.onClick();
+                                                }
+                                            }}
+                                        >
+                                            <ListItemButton>
+                                                <ListItemDecorator>{menuItem.icon}</ListItemDecorator>
+                                                <ListItemContent>{menuItem.text}</ListItemContent>
+                                                {menuItem.children && menuItem.children.length > 0 &&
+                                                    <KeyboardArrowRight />
+                                                }
+                                                {menuItem.more &&
+                                                    <MoreHoriz />
+                                                }
+                                            </ListItemButton>
+                                        </ListItem>
+                                    );
+                                })}
+                            </List>
+                        </>
+                    </CollapsibleSection>
+                </div>
 
                 <div className="flex-grow" />
                 {databasePath &&
-                    <>
+                    <div className="flex flex-col">
                         <Divider />
                         <List>
                             <ListItem
@@ -622,7 +626,7 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
                                 </ListItemButton>
                             </ListItem>
                         </List>
-                    </>
+                    </div>
                 }
             </div>
 
