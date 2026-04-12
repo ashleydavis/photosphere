@@ -843,7 +843,7 @@ async function createMenu(): Promise<void> {
             accelerator: 'CmdOrCtrl+,',
             click: () => {
                 if (mainWindow) {
-                    mainWindow.webContents.send('open-configuration');
+                    mainWindow.webContents.send('menu-action', 'open-configuration');
                 }
             },
         }

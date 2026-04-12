@@ -21,6 +21,9 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
     // Store callbacks for theme-changed events
     const themeCallbacksRef = useRef<Set<(theme: 'light' | 'dark' | 'system') => void>>(new Set());
 
+    // Store callbacks for menu actions, keyed by action name
+    const menuActionCallbacksRef = useRef<Map<string, Set<() => void>>>(new Map());
+
     // Store callbacks for sync-started events
     const syncStartedCallbacksRef = useRef<Set<() => void>>(new Set());
 
@@ -30,9 +33,6 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
 
     // Store callbacks for show-notification events
     const showNotificationCallbacksRef = useRef<Set<(data: IShowNotificationData) => void>>(new Set());
-
-    // Store callbacks for open-configuration events
-    const openConfigurationCallbacksRef = useRef<Set<() => void>>(new Set());
 
     // Set up message listener for database-opened events
     useEffect(() => {
@@ -121,16 +121,16 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         };
     }, [electronAPI]);
 
-    // Set up message listener for open-configuration events
+    // Set up message listener for menu-action events
     useEffect(() => {
-        const handleOpenConfiguration = () => {
-            openConfigurationCallbacksRef.current.forEach(cb => cb());
+        const handleMenuAction = (action: string) => {
+            menuActionCallbacksRef.current.get(action)?.forEach(cb => cb());
         };
 
-        electronAPI.onMessage('open-configuration', handleOpenConfiguration);
+        electronAPI.onMessage('menu-action', handleMenuAction);
 
         return () => {
-            electronAPI.removeAllListeners('open-configuration');
+            electronAPI.removeAllListeners('menu-action');
         };
     }, [electronAPI]);
 
@@ -204,10 +204,13 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         };
     }, []);
 
-    const onOpenConfiguration = useCallback((callback: () => void): (() => void) => {
-        openConfigurationCallbacksRef.current.add(callback);
+    const onMenuAction = useCallback((action: string, callback: () => void): (() => void) => {
+        if (!menuActionCallbacksRef.current.has(action)) {
+            menuActionCallbacksRef.current.set(action, new Set());
+        }
+        menuActionCallbacksRef.current.get(action)!.add(callback);
         return () => {
-            openConfigurationCallbacksRef.current.delete(callback);
+            menuActionCallbacksRef.current.get(action)?.delete(callback);
         };
     }, []);
 
@@ -248,7 +251,7 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         copyToClipboard,
         onShowNotification,
         openFolder,
-        onOpenConfiguration,
+        onMenuAction,
     };
 
     const config = createConfig(

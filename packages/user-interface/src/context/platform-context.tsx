@@ -104,6 +104,12 @@ export interface IPlatformContext {
     onThemeChanged: (callback: (theme: 'light' | 'dark' | 'system') => void) => Unsubscribe;
 
     //
+    // Subscribes to a named menu action sent from the main process (excluding theme changes).
+    // Returns an unsubscribe function.
+    //
+    onMenuAction: (action: string, callback: () => void) => Unsubscribe;
+
+    //
     // Notifies the platform that the user has edited the database.
     // Used to trigger a debounced background sync.
     //
@@ -144,12 +150,6 @@ export interface IPlatformContext {
     // Returns an unsubscribe function.
     //
     onShowNotification: (callback: (data: IShowNotificationData) => void) => Unsubscribe;
-
-    //
-    // Subscribes to open-configuration events fired from the main process.
-    // Returns an unsubscribe function.
-    //
-    onOpenConfiguration: (callback: () => void) => Unsubscribe;
 
     //
     // Opens the given folder path in the system's file manager.
