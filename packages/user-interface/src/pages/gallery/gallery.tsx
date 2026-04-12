@@ -4,12 +4,13 @@ import { useParams } from "react-router-dom";
 import { useGallery } from "../../context/gallery-context";
 import { useAssetDatabase } from "../../context/asset-database-source";
 import { NoDatabaseLoaded } from "../../components/no-database-loaded";
+import { EmptyDatabase } from "../../components/empty-database";
 
 export interface IGalleryPageProps {
 }
 
 export function GalleryPage({}: IGalleryPageProps) {
-    const { selectedItemId, setSelectedItemId } = useGallery();
+    const { selectedItemId, setSelectedItemId, allItems, isLoading } = useGallery();
     const { databasePath } = useAssetDatabase();
     const { assetId } = useParams();
 
@@ -26,7 +27,11 @@ export function GalleryPage({}: IGalleryPageProps) {
                 <NoDatabaseLoaded />
             )}
 
-            {databasePath && (
+            {databasePath && !isLoading && allItems().length === 0 && (
+                <EmptyDatabase />
+            )}
+
+            {databasePath && (isLoading || allItems().length > 0) && (
                 <Gallery />
             )}
         </div>

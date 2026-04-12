@@ -217,6 +217,10 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
     const openFolder = useCallback(async (folderPath: string): Promise<void> => {
         await electronAPI.openPath(folderPath);
     }, [electronAPI]);
+
+    const importAssets = useCallback(async (): Promise<void> => {
+        await electronAPI.importAssets();
+    }, [electronAPI]);
     const downloadAsset = useCallback(async (assetId: string, assetType: string, filename: string, _contentType: string, databasePath: string): Promise<void> => {
         await electronAPI.saveAsset(assetId, assetType, filename, databasePath);
     }, [electronAPI]);
@@ -252,6 +256,7 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         onShowNotification,
         openFolder,
         onMenuAction,
+        importAssets,
     };
 
     const config = createConfig(

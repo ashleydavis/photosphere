@@ -14,6 +14,8 @@ import type { IWorkerBackendOptions } from './lib/worker-backend-electron-main';
 import type { IRestApiWorkerStopMessage, IRestApiWorkerStartMessage } from './rest-api-worker';
 import { FileLoggerElectron } from './lib/file-logger-electron';
 import type { IRendererLogMessage, ISaveAssetItem } from 'electron-defs';
+import type { IAddPathsData } from 'api';
+import type { IStorageDescriptor } from 'storage';
 
 // Main application window
 let mainWindow: BrowserWindow | null = null;
@@ -326,6 +328,9 @@ ipcMain.handle('open-path', logExceptions(async (_event, folderPath: string): Pr
     await shell.openPath(folderPath);
 }, 'Error opening path'));
 
+// IPC handler for importing assets from a user-chosen directory
+ipcMain.handle('import-assets', logExceptions(selectAndImportAssets, 'Error importing assets'));
+
 // IPC handler for renderer log messages
 ipcMain.on('renderer-log', (event, message: IRendererLogMessage) => {
     if (fileLogger) {
@@ -395,6 +400,15 @@ function initWorkers() {
             else {
                 mainWindow.webContents.send('show-notification', {
                     message: `Failed to download "${filename}": ${result.errorMessage || 'Unknown error'}`,
+                    color: 'danger',
+                    duration: 8000,
+                });
+            }
+        }
+        if (task.type === "add-paths" && mainWindow) {
+            if (result.status !== TaskStatus.Succeeded) {
+                mainWindow.webContents.send('show-notification', {
+                    message: `Import failed: ${result.errorMessage || 'Unknown error'}`,
                     color: 'danger',
                     duration: 8000,
                 });
@@ -768,6 +782,46 @@ async function createNewDatabase(): Promise<void> {
 }
 
 //
+// Shows a folder picker and queues an add-paths task to import assets from the chosen directory.
+//
+async function selectAndImportAssets(): Promise<void> {
+    if (!currentDatabasePath) {
+        return;
+    }
+
+    const selectedPath = await showDirectoryPicker('Import Assets');
+    if (!selectedPath) {
+        return;
+    }
+
+    if (!taskQueue) {
+        throw new Error('Task queue not initialized');
+    }
+
+    if (mainWindow) {
+        mainWindow.webContents.send('show-notification', {
+            message: 'Importing assets...',
+            color: 'neutral',
+            duration: 0,
+        });
+    }
+
+    const storageDescriptor: IStorageDescriptor = {
+        dbDir: currentDatabasePath,
+        encryptionKeyPaths: [],
+    };
+
+    taskQueue.addTask('add-paths', {
+        paths: [selectedPath],
+        storageDescriptor,
+        googleApiKey: undefined,
+        sessionId: randomUUID(),
+        dryRun: false,
+        s3Config: undefined,
+    } satisfies IAddPathsData, currentDatabasePath);
+}
+
+//
 // Closes the currently open database.
 //
 async function closeDatabase(): Promise<void> {
@@ -825,9 +879,15 @@ async function createMenu(): Promise<void> {
         },
     ];
 
-    // Add Close Database menu item if a database is open
+    // Add Import Assets and Close Database menu items if a database is open
     if (isDatabaseOpen) {
         fileSubmenu.push(
+            { type: 'separator' },
+            {
+                label: 'Import Assets...',
+                accelerator: 'CmdOrCtrl+I',
+                click: logExceptions(selectAndImportAssets, 'Error importing assets from menu'),
+            },
             { type: 'separator' },
             {
                 label: 'Close Database',

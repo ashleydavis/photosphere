@@ -29,7 +29,12 @@
     "bundle:main": "bun run --filter=photosphere bundle",
     "bundle:renderer": "bun run --filter=desktop-frontend bundle",
     "bundle": "bun run bundle:main && bun run bundle:renderer",
-    "test:smoke": "bun run build && bun run --filter=photosphere test:smoke"
+    "test:electron": "bun run build && bun run --filter=photosphere test:smoke",
+    "te": "bun run test:electron",
+    "test:cli": "./apps/cli/smoke-tests.sh",
+    "tc": "bun run test:cli",
+    "test:cli:encrypted": "./apps/cli/smoke-tests-encrypted.sh",
+    "tce": "bun run test:cli:encrypted"
   },
   "workspaces": [
     "apps/*",

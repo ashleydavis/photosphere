@@ -155,6 +155,12 @@ export interface IPlatformContext {
     // Opens the given folder path in the system's file manager.
     //
     openFolder: (folderPath: string) => Promise<void>;
+
+    //
+    // Opens a folder picker and imports selected directories into the current database.
+    // Desktop (Electron) only; no-op on web.
+    //
+    importAssets: () => Promise<void>;
 }
 
 const PlatformContext = createContext<IPlatformContext | undefined>(undefined);
