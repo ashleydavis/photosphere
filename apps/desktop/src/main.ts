@@ -329,8 +329,10 @@ ipcMain.handle('open-path', logExceptions(async (_event, folderPath: string): Pr
     await shell.openPath(folderPath);
 }, 'Error opening path'));
 
-// IPC handler for importing assets from a user-chosen directory
-ipcMain.handle('import-assets', logExceptions(selectAndImportAssets, 'Error importing assets'));
+// IPC handler for importing assets — opens a directory picker when paths is omitted
+ipcMain.handle('import-assets', logExceptions(async (_event, paths?: string[]) => {
+    return await selectAndImportAssets(paths);
+}, 'Error importing assets'));
 
 // IPC handler for checking whether required tools (ImageMagick, ffmpeg) are available
 ipcMain.handle('check-tools', logExceptions(async () => {
@@ -792,13 +794,12 @@ async function createNewDatabase(): Promise<void> {
 // Returns session info so the renderer can track progress and cancel, or undefined if the user
 // cancelled the folder picker.
 //
-async function selectAndImportAssets(): Promise<IImportSession | undefined> {
+//
+// Starts an import session for the given paths (files or directories).
+// Returns session info for progress tracking, or undefined if no database is open.
+//
+async function startImportWithPaths(paths: string[]): Promise<IImportSession | undefined> {
     if (!currentDatabasePath) {
-        return undefined;
-    }
-
-    const selectedPath = await showDirectoryPicker('Import Assets');
-    if (!selectedPath) {
         return undefined;
     }
 
@@ -813,7 +814,7 @@ async function selectAndImportAssets(): Promise<IImportSession | undefined> {
 
     const sessionId = randomUUID();
     const addPathsTaskId = taskQueue.addTask('add-paths', {
-        paths: [selectedPath],
+        paths,
         storageDescriptor,
         googleApiKey: undefined,
         sessionId,
@@ -822,6 +823,27 @@ async function selectAndImportAssets(): Promise<IImportSession | undefined> {
     } satisfies IAddPathsData, sessionId);
 
     return { addPathsTaskId, sessionId };
+}
+
+//
+// Imports assets from the given paths, or shows a directory picker when no paths are supplied.
+// Returns session info for progress tracking, or undefined if no database is open or the user cancelled.
+//
+async function selectAndImportAssets(paths?: string[]): Promise<IImportSession | undefined> {
+    if (!currentDatabasePath) {
+        return undefined;
+    }
+
+    if (paths && paths.length > 0) {
+        return startImportWithPaths(paths);
+    }
+
+    const selectedPath = await showDirectoryPicker('Import Assets');
+    if (!selectedPath) {
+        return undefined;
+    }
+
+    return startImportWithPaths([selectedPath]);
 }
 
 //
@@ -889,7 +911,7 @@ async function createMenu(): Promise<void> {
             {
                 label: 'Import Assets...',
                 accelerator: 'CmdOrCtrl+I',
-                click: logExceptions(selectAndImportAssets, 'Error importing assets from menu'),
+                click: logExceptions(() => selectAndImportAssets(), 'Error importing assets from menu'),
             },
             { type: 'separator' },
             {

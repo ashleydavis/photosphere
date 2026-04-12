@@ -122,15 +122,22 @@ export interface IElectronAPI {
     openPath: (path: string) => Promise<void>;
 
     //
-    // Opens a folder picker and imports selected directories into the current database.
-    // Returns session info so the renderer can track progress and cancel, or undefined
-    // if the user cancelled the folder picker.
+    // Imports the given paths (files or directories) into the current database.
+    // When paths is provided they are used directly; when omitted a folder picker dialog is shown.
+    // Returns session info so the renderer can track progress and cancel, or undefined if
+    // no database is open or the user cancelled the picker.
     //
-    importAssets: () => Promise<IImportSession | undefined>;
+    importAssets: (paths?: string[]) => Promise<IImportSession | undefined>;
 
     //
     // Checks whether ImageMagick and FFmpeg are available on PATH.
     //
     checkTools: () => Promise<IToolsStatus>;
+
+    //
+    // Returns the absolute file system path for a File object obtained from a drag-and-drop event.
+    // Required in Electron 30+ where File.path is no longer available in the renderer.
+    //
+    getPathForFile: (file: File) => string;
 }
 
