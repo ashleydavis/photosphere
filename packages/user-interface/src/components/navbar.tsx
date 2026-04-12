@@ -5,6 +5,7 @@ import IconButton from '@mui/joy/IconButton';
 import MoreVert from '@mui/icons-material/MoreVert';
 import Star from "@mui/icons-material/Star";
 import StarBorder from "@mui/icons-material/StarBorder";
+import FileUpload from "@mui/icons-material/FileUpload";
 import Input from "@mui/joy/Input/Input";
 import { useTheme } from "@mui/joy/styles/ThemeProvider";
 import classNames from "classnames";
@@ -119,6 +120,18 @@ export function Navbar({
                             <div className="hidden sm:block ml-2">Map</div>
                         </div>
                     </NavLink>
+
+                    {databasePath && (
+                        <NavLink
+                            className={({ isActive }) => "mr-1 sm:mr-3" + (isActive ? "" : " opacity-40")}
+                            to="/import"
+                        >
+                            <div className="flex flex-row items-center">
+                                <FileUpload fontSize="small" />
+                                <div className="hidden sm:block ml-2">Import</div>
+                            </div>
+                        </NavLink>
+                    )}
 
                     <div className="ml-auto"></div>
 

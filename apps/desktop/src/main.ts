@@ -13,8 +13,9 @@ import { findAvailablePort, loadDesktopConfig, saveDesktopConfig, addRecentDatab
 import type { IWorkerBackendOptions } from './lib/worker-backend-electron-main';
 import type { IRestApiWorkerStopMessage, IRestApiWorkerStartMessage } from './rest-api-worker';
 import { FileLoggerElectron } from './lib/file-logger-electron';
-import type { IRendererLogMessage, ISaveAssetItem } from 'electron-defs';
+import type { IImportSession, IRendererLogMessage, ISaveAssetItem } from 'electron-defs';
 import type { IAddPathsData } from 'api';
+import { verifyTools } from 'tools';
 import type { IStorageDescriptor } from 'storage';
 
 // Main application window
@@ -330,6 +331,11 @@ ipcMain.handle('open-path', logExceptions(async (_event, folderPath: string): Pr
 
 // IPC handler for importing assets from a user-chosen directory
 ipcMain.handle('import-assets', logExceptions(selectAndImportAssets, 'Error importing assets'));
+
+// IPC handler for checking whether required tools (ImageMagick, ffmpeg) are available
+ipcMain.handle('check-tools', logExceptions(async () => {
+    return await verifyTools();
+}, 'Error checking tools'));
 
 // IPC handler for renderer log messages
 ipcMain.on('renderer-log', (event, message: IRendererLogMessage) => {
@@ -783,27 +789,21 @@ async function createNewDatabase(): Promise<void> {
 
 //
 // Shows a folder picker and queues an add-paths task to import assets from the chosen directory.
+// Returns session info so the renderer can track progress and cancel, or undefined if the user
+// cancelled the folder picker.
 //
-async function selectAndImportAssets(): Promise<void> {
+async function selectAndImportAssets(): Promise<IImportSession | undefined> {
     if (!currentDatabasePath) {
-        return;
+        return undefined;
     }
 
     const selectedPath = await showDirectoryPicker('Import Assets');
     if (!selectedPath) {
-        return;
+        return undefined;
     }
 
     if (!taskQueue) {
         throw new Error('Task queue not initialized');
-    }
-
-    if (mainWindow) {
-        mainWindow.webContents.send('show-notification', {
-            message: 'Importing assets...',
-            color: 'neutral',
-            duration: 0,
-        });
     }
 
     const storageDescriptor: IStorageDescriptor = {
@@ -811,14 +811,17 @@ async function selectAndImportAssets(): Promise<void> {
         encryptionKeyPaths: [],
     };
 
-    taskQueue.addTask('add-paths', {
+    const sessionId = randomUUID();
+    const addPathsTaskId = taskQueue.addTask('add-paths', {
         paths: [selectedPath],
         storageDescriptor,
         googleApiKey: undefined,
-        sessionId: randomUUID(),
+        sessionId,
         dryRun: false,
         s3Config: undefined,
-    } satisfies IAddPathsData, currentDatabasePath);
+    } satisfies IAddPathsData, sessionId);
+
+    return { addPathsTaskId, sessionId };
 }
 
 //

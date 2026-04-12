@@ -181,7 +181,7 @@ describe('importFileHandler', () => {
         jest.clearAllMocks();
     });
 
-    test('sends file-already-added message when file is already in database', async () => {
+    test('sends import-skipped message when file is already in database', async () => {
         const context = makeContext();
         const data = makeHashFileData();
         const hashedFile = makeHashedFile();
@@ -197,7 +197,8 @@ describe('importFileHandler', () => {
 
         await importFileHandler(data, context);
 
-        expect(context.sendMessage).toHaveBeenCalledWith({ type: 'file-already-added' });
+        expect(context.sendMessage).toHaveBeenCalledWith({ type: 'import-pending', assetId: 'asset-1', logicalPath: '/test/photos/img.jpg' });
+        expect(context.sendMessage).toHaveBeenCalledWith({ type: 'import-skipped', assetId: 'asset-1', logicalPath: '/test/photos/img.jpg' });
         expect(mockAcquireWriteLock).not.toHaveBeenCalled();
     });
 
@@ -244,7 +245,7 @@ describe('importFileHandler', () => {
         await importFileHandler(data, context);
 
         expect(mockValidateAndHash).not.toHaveBeenCalled();
-        expect(context.sendMessage).toHaveBeenCalledWith({ type: 'asset-imported', assetId: 'asset-1' });
+        expect(context.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'import-success', assetId: 'asset-1' }));
     });
 
     test('acquires write lock and writes to database after uploads succeed', async () => {
@@ -291,13 +292,13 @@ describe('importFileHandler', () => {
         expect(mockSaveMerkleTree).toHaveBeenCalled();
         expect(mockBsonDbInstance.commit).toHaveBeenCalled();
         expect(mockReleaseWriteLock).toHaveBeenCalled();
-        expect(context.sendMessage).toHaveBeenCalledWith({
-            type: 'asset-imported',
+        expect(context.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
+            type: 'import-success',
             assetId: 'asset-1',
-        });
+        }));
     });
 
-    test('sends asset-imported message in dry-run mode without writing to database', async () => {
+    test('sends import-success message in dry-run mode without writing to database', async () => {
         const context = makeContext();
         const data = makeHashFileData({ dryRun: true });
         setupStorageMock();
@@ -322,10 +323,10 @@ describe('importFileHandler', () => {
 
         expect(mockAcquireWriteLock).toHaveBeenCalled();
         expect(mockBsonDbInstance.commit).not.toHaveBeenCalled();
-        expect(context.sendMessage).toHaveBeenCalledWith({
-            type: 'asset-imported',
+        expect(context.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
+            type: 'import-success',
             assetId: 'asset-1',
-        });
+        }));
     });
 
     test('releases write lock even when db write fails', async () => {

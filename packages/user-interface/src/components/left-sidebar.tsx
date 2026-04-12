@@ -14,7 +14,6 @@ import IconButton from '@mui/joy/IconButton/IconButton';
 import Divider from '@mui/joy/Divider/Divider';
 import { useGallery } from '../context/gallery-context';
 import { useSearch } from '../context/search-context';
-import { usePlatform } from '../context/platform-context';
 
 export interface ILeftSidebarProps {
     //
@@ -45,7 +44,6 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration }
     const theme = useTheme();
     const { databasePath, selectAndOpenDatabase, selectAndCreateDatabase } = useAssetDatabase();
     const { search } = useGallery();
-    const { importAssets } = usePlatform();
 
     return (
         <div
@@ -94,17 +92,19 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration }
                     </ListItem>
 
                     {databasePath && (
-                        <ListItem
-                            onClick={async () => {
-                                setSidebarOpen(false);
-                                await importAssets();
-                            }}
+                        <NavLink
+                            to="/import"
+                            onClick={() => setSidebarOpen(false)}
                             >
-                            <ListItemButton>
-                                <ListItemDecorator><FileUpload /></ListItemDecorator>
-                                <ListItemContent>Import photos</ListItemContent>
-                            </ListItemButton>
-                        </ListItem>
+                            {({ isActive }) => (
+                                <ListItem className={isActive ? "" : "opacity-40"}>
+                                    <ListItemButton>
+                                        <ListItemDecorator><FileUpload /></ListItemDecorator>
+                                        <ListItemContent>Import</ListItemContent>
+                                    </ListItemButton>
+                                </ListItem>
+                            )}
+                        </NavLink>
                     )}
 
                     <ListItem

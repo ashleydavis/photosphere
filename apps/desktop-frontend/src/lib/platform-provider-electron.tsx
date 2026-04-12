@@ -1,5 +1,5 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
-import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext, type IDownloadAssetItem, type IShowNotificationData, convertToPng } from "user-interface";
+import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext, type IImportSession, type IToolsStatus, type IDownloadAssetItem, type IShowNotificationData, convertToPng } from "user-interface";
 import type { IElectronAPI, ISaveAssetItem } from "electron-defs";
 
 export interface IPlatformProviderElectronProps {
@@ -33,6 +33,12 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
 
     // Store callbacks for show-notification events
     const showNotificationCallbacksRef = useRef<Set<(data: IShowNotificationData) => void>>(new Set());
+
+    // Store callbacks for task-message events
+    const taskMessageCallbacksRef = useRef<Set<(taskId: string, message: Record<string, unknown>) => void>>(new Set());
+
+    // Store callbacks for task-completed events
+    const taskCompleteCallbacksRef = useRef<Set<(taskId: string, result: Record<string, unknown>) => void>>(new Set());
 
     // Set up message listener for database-opened events
     useEffect(() => {
@@ -134,6 +140,36 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         };
     }, [electronAPI]);
 
+    // Set up message listener for task-message events (import progress)
+    useEffect(() => {
+        const handleTaskMessage = (data: { taskId: string; message: Record<string, unknown> }) => {
+            taskMessageCallbacksRef.current.forEach(cb => cb(data.taskId, data.message));
+        };
+
+        electronAPI.onMessage('task-message', handleTaskMessage);
+
+        return () => {
+            // Note: removeAllListeners is intentionally not called here because
+            // WorkerBackendElectronRenderer also registers a listener for 'task-message'
+            // and removing all listeners would break it.
+        };
+    }, [electronAPI]);
+
+    // Set up message listener for task-completed events (import completion)
+    useEffect(() => {
+        const handleTaskCompleted = (data: { taskId: string; result: Record<string, unknown> }) => {
+            taskCompleteCallbacksRef.current.forEach(cb => cb(data.taskId, data.result));
+        };
+
+        electronAPI.onMessage('task-completed', handleTaskCompleted);
+
+        return () => {
+            // Note: removeAllListeners is intentionally not called here because
+            // WorkerBackendElectronRenderer also registers a listener for 'task-completed'
+            // and removing all listeners would break it.
+        };
+    }, [electronAPI]);
+
     const openDatabase = useCallback(async (): Promise<void> => {
         await electronAPI.openDatabase();
     }, [electronAPI]);
@@ -218,8 +254,30 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         await electronAPI.openPath(folderPath);
     }, [electronAPI]);
 
-    const importAssets = useCallback(async (): Promise<void> => {
-        await electronAPI.importAssets();
+    const importAssets = useCallback(async (): Promise<IImportSession | undefined> => {
+        return await electronAPI.importAssets();
+    }, [electronAPI]);
+
+    const checkTools = useCallback(async (): Promise<IToolsStatus> => {
+        return await electronAPI.checkTools();
+    }, [electronAPI]);
+
+    const onTaskMessage = useCallback((handler: (taskId: string, message: Record<string, unknown>) => void): (() => void) => {
+        taskMessageCallbacksRef.current.add(handler);
+        return () => {
+            taskMessageCallbacksRef.current.delete(handler);
+        };
+    }, []);
+
+    const onTaskComplete = useCallback((handler: (taskId: string, result: Record<string, unknown>) => void): (() => void) => {
+        taskCompleteCallbacksRef.current.add(handler);
+        return () => {
+            taskCompleteCallbacksRef.current.delete(handler);
+        };
+    }, []);
+
+    const cancelTasks = useCallback(async (sessionId: string): Promise<void> => {
+        electronAPI.cancelTasks(sessionId);
     }, [electronAPI]);
     const downloadAsset = useCallback(async (assetId: string, assetType: string, filename: string, _contentType: string, databasePath: string): Promise<void> => {
         await electronAPI.saveAsset(assetId, assetType, filename, databasePath);
@@ -257,6 +315,10 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         openFolder,
         onMenuAction,
         importAssets,
+        checkTools,
+        onTaskMessage,
+        onTaskComplete,
+        cancelTasks,
     };
 
     const config = createConfig(
