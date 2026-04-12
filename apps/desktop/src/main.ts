@@ -836,6 +836,19 @@ async function createMenu(): Promise<void> {
         );
     }
 
+    fileSubmenu.push(
+        { type: 'separator' },
+        {
+            label: 'Configuration...',
+            accelerator: 'CmdOrCtrl+,',
+            click: () => {
+                if (mainWindow) {
+                    mainWindow.webContents.send('open-configuration');
+                }
+            },
+        }
+    );
+
     // Add Exit/Quit to File menu on Windows/Linux
     if (!isMac) {
         fileSubmenu.push(

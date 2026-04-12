@@ -146,6 +146,12 @@ export interface IPlatformContext {
     onShowNotification: (callback: (data: IShowNotificationData) => void) => Unsubscribe;
 
     //
+    // Subscribes to open-configuration events fired from the main process.
+    // Returns an unsubscribe function.
+    //
+    onOpenConfiguration: (callback: () => void) => Unsubscribe;
+
+    //
     // Opens the given folder path in the system's file manager.
     //
     openFolder: (folderPath: string) => Promise<void>;

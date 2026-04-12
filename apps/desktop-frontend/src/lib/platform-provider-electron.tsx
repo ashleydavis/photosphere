@@ -31,6 +31,9 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
     // Store callbacks for show-notification events
     const showNotificationCallbacksRef = useRef<Set<(data: IShowNotificationData) => void>>(new Set());
 
+    // Store callbacks for open-configuration events
+    const openConfigurationCallbacksRef = useRef<Set<() => void>>(new Set());
+
     // Set up message listener for database-opened events
     useEffect(() => {
         const handleDatabaseOpened = (databasePath: string) => {
@@ -118,6 +121,19 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         };
     }, [electronAPI]);
 
+    // Set up message listener for open-configuration events
+    useEffect(() => {
+        const handleOpenConfiguration = () => {
+            openConfigurationCallbacksRef.current.forEach(cb => cb());
+        };
+
+        electronAPI.onMessage('open-configuration', handleOpenConfiguration);
+
+        return () => {
+            electronAPI.removeAllListeners('open-configuration');
+        };
+    }, [electronAPI]);
+
     const openDatabase = useCallback(async (): Promise<void> => {
         await electronAPI.openDatabase();
     }, [electronAPI]);
@@ -188,6 +204,13 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         };
     }, []);
 
+    const onOpenConfiguration = useCallback((callback: () => void): (() => void) => {
+        openConfigurationCallbacksRef.current.add(callback);
+        return () => {
+            openConfigurationCallbacksRef.current.delete(callback);
+        };
+    }, []);
+
     const openFolder = useCallback(async (folderPath: string): Promise<void> => {
         await electronAPI.openPath(folderPath);
     }, [electronAPI]);
@@ -225,6 +248,7 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         copyToClipboard,
         onShowNotification,
         openFolder,
+        onOpenConfiguration,
     };
 
     const config = createConfig(

@@ -165,6 +165,11 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         // Not applicable on web platform.
     }, []);
 
+    const onOpenConfiguration = useCallback((_callback: () => void): (() => void) => {
+        // No-op for web platform.
+        return () => {};
+    }, []);
+
     const platformContext: IPlatformContext = {
         openDatabase,
         createDatabase,
@@ -181,6 +186,7 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         copyToClipboard,
         onShowNotification,
         openFolder,
+        onOpenConfiguration,
     };
 
     //
