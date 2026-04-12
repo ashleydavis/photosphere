@@ -106,6 +106,17 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
     }, [platform, setMode]);
 
     //
+    // Listen for open-configuration events from the main process (e.g. menu item).
+    //
+    useEffect(() => {
+        const unsubscribe = platform.onOpenConfiguration(() => {
+            setConfigurationOpen(true);
+        });
+
+        return unsubscribe;
+    }, [platform]);
+
+    //
     // Adds mobile or desktop class to body based on isMobile prop.
     //
     useEffect(() => {
