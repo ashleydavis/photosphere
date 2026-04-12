@@ -6,7 +6,7 @@ import { useTheme } from '@mui/joy/styles/ThemeProvider';
 import List from '@mui/joy/List/List';
 import ListItem from '@mui/joy/ListItem/ListItem';
 import ListItemDecorator from '@mui/joy/ListItemDecorator/ListItemDecorator';
-import { PhotoLibrary, Folder, FolderOpen, Info, Map, Search, Settings, Star, StarBorder, Delete, CreateNewFolder } from '@mui/icons-material';
+import { PhotoLibrary, Folder, FolderOpen, Info, Map, Search, Settings, Star, StarBorder, Delete, CreateNewFolder, FileUpload } from '@mui/icons-material';
 import { CollapsibleSection } from './collapsible-section';
 import ListItemContent from '@mui/joy/ListItemContent/ListItemContent';
 import ListItemButton from '@mui/joy/ListItemButton/ListItemButton';
@@ -14,6 +14,7 @@ import IconButton from '@mui/joy/IconButton/IconButton';
 import Divider from '@mui/joy/Divider/Divider';
 import { useGallery } from '../context/gallery-context';
 import { useSearch } from '../context/search-context';
+import { usePlatform } from '../context/platform-context';
 
 export interface ILeftSidebarProps {
     //
@@ -44,6 +45,7 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration }
     const theme = useTheme();
     const { databasePath, selectAndOpenDatabase, selectAndCreateDatabase } = useAssetDatabase();
     const { search } = useGallery();
+    const { importAssets } = usePlatform();
 
     return (
         <div
@@ -90,6 +92,20 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration }
                             <ListItemContent>Open database</ListItemContent>
                         </ListItemButton>
                     </ListItem>
+
+                    {databasePath && (
+                        <ListItem
+                            onClick={async () => {
+                                setSidebarOpen(false);
+                                await importAssets();
+                            }}
+                            >
+                            <ListItemButton>
+                                <ListItemDecorator><FileUpload /></ListItemDecorator>
+                                <ListItemContent>Import photos</ListItemContent>
+                            </ListItemButton>
+                        </ListItem>
+                    )}
 
                     <ListItem
                         onClick={() => {

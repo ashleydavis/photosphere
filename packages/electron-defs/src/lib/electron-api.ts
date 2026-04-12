@@ -78,5 +78,10 @@ export interface IElectronAPI {
     // Opens the given path in the system's file manager.
     //
     openPath: (path: string) => Promise<void>;
+
+    //
+    // Opens a folder picker and imports selected directories into the current database.
+    //
+    importAssets: () => Promise<void>;
 }
 

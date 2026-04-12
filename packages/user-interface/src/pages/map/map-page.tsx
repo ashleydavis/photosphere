@@ -6,6 +6,7 @@ import { GalleryItemContextProvider } from "../../context/gallery-item-context";
 import { AssetView } from "../../components/asset-view";
 import { MapView } from "./map-view";
 import { NoDatabaseLoaded } from "../../components/no-database-loaded";
+import { EmptyDatabase } from "../../components/empty-database";
 import Drawer from "@mui/joy/Drawer/Drawer";
 
 export interface IMapPageProps {
@@ -16,7 +17,7 @@ export interface IMapPageProps {
 //
 export function MapPage({}: IMapPageProps) {
     const { databasePath } = useAssetDatabase();
-    const { selectedItemId, setSelectedItemId, getPrev, getNext, getItemById } = useGallery();
+    const { selectedItemId, setSelectedItemId, getPrev, getNext, getItemById, allItems, isLoading } = useGallery();
     const { assetId } = useParams();
     const navigate = useNavigate();
 
@@ -48,7 +49,11 @@ export function MapPage({}: IMapPageProps) {
                 <NoDatabaseLoaded />
             )}
 
-            {databasePath && (
+            {databasePath && !isLoading && allItems().length === 0 && (
+                <EmptyDatabase />
+            )}
+
+            {databasePath && (isLoading || allItems().length > 0) && (
                 <MapView />
             )}
 

@@ -115,10 +115,28 @@ bun run test:watch
 **Run smoke tests for the Electron app**
 
 ```bash
-bun run test:smoke
+bun run test:electron
+# or
+bun run te
 ```
 
 This will build the Electron app and run Playwright smoke tests.
+
+**Run CLI smoke tests**
+
+```bash
+bun run test:cli
+# or
+bun run tc
+```
+
+**Run encrypted CLI smoke tests**
+
+```bash
+bun run test:cli:encrypted
+# or
+bun run tce
+```
 
 **Run tests using the shell script**
 

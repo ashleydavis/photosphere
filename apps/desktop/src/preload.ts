@@ -56,6 +56,9 @@ const electronAPI: IElectronAPI = {
     openPath: (path: string): Promise<void> => {
         return ipcRenderer.invoke('open-path', path);
     },
+    importAssets: (): Promise<void> => {
+        return ipcRenderer.invoke('import-assets');
+    },
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);

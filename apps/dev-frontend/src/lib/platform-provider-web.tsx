@@ -170,6 +170,10 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         return () => {};
     }, []);
 
+    const importAssets = useCallback(async (): Promise<void> => {
+        // Not supported on web platform.
+    }, []);
+
     const platformContext: IPlatformContext = {
         openDatabase,
         createDatabase,
@@ -187,6 +191,7 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         onShowNotification,
         openFolder,
         onMenuAction,
+        importAssets,
     };
 
     //
