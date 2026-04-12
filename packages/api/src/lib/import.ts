@@ -3,7 +3,7 @@ import { IAddSummary } from "./media-file-database";
 import { TaskStatus } from "task-queue";
 import type { ITaskQueueProvider } from "task-queue";
 import { IStorageDescriptor, IS3Credentials } from "storage";
-import { IAddPathsData } from "./add-paths.worker";
+import { IImportAssetsData } from "./import-assets.worker";
 
 //
 // Summary callback invoked after each task message so the caller can update progress display.
@@ -60,14 +60,14 @@ export async function addPaths(
         }
     });
 
-    queue.addTask("add-paths", {
+    queue.addTask("import-assets", {
         paths,
         storageDescriptor,
         googleApiKey,
         sessionId,
         dryRun,
         s3Config,
-    } satisfies IAddPathsData, storageDescriptor.dbDir);
+    } satisfies IImportAssetsData, storageDescriptor.dbDir);
 
     await queue.awaitAllTasks();
 

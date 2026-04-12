@@ -5,13 +5,13 @@ import { IStorageDescriptor, IS3Credentials } from "storage";
 import type { ITaskContext } from "task-queue";
 import { swallowError } from "utils";
 import { scanPaths } from "./file-scanner";
-import { IHashFileData } from "./import.worker";
+import { IUploadAssetData } from "./upload-asset.worker";
 
 //
 // Payload for the add-paths task. Contains the paths to scan plus the configuration
 // needed by downstream import-file tasks.
 //
-export interface IAddPathsData {
+export interface IImportAssetsData {
     // Filesystem paths (files or directories) to import.
     paths: string[];
 
@@ -35,7 +35,7 @@ export interface IAddPathsData {
 // Handler for the add-paths task. Scans filesystem paths for media files and queues
 // an import-file task for each file found. Returns void; downstream tasks run independently.
 //
-export async function addPathsHandler(data: IAddPathsData, context: ITaskContext): Promise<void> {
+export async function importAssetsHandler(data: IImportAssetsData, context: ITaskContext): Promise<void> {
     const { paths, storageDescriptor, googleApiKey, sessionId, dryRun, s3Config } = data;
     const { uuidGenerator } = context;
     const hashCacheDir = path.join(os.tmpdir(), "photosphere");
@@ -55,7 +55,7 @@ export async function addPathsHandler(data: IAddPathsData, context: ITaskContext
                     return;
                 }
 
-                context.queueTask("import-file", {
+                context.queueTask("upload-asset", {
                     filePath: result.filePath,
                     fileStat: result.fileStat,
                     contentType: result.contentType,
@@ -68,7 +68,7 @@ export async function addPathsHandler(data: IAddPathsData, context: ITaskContext
                     sessionId,
                     dryRun,
                     assetId: uuidGenerator.generate(),
-                } satisfies IHashFileData, data.sessionId);
+                } satisfies IUploadAssetData, data.sessionId);
             },
             (currentlyScanning, state) => {
                 const newIgnored = state.numFilesIgnored - prevIgnoredCount;

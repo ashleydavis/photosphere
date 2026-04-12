@@ -1,5 +1,5 @@
-import { addPathsHandler } from '../../lib/add-paths.worker';
-import type { IAddPathsData } from '../../lib/add-paths.worker';
+import { importAssetsHandler } from '../../lib/import-assets.worker';
+import type { IImportAssetsData } from '../../lib/import-assets.worker';
 import type { ITaskContext } from 'task-queue';
 import type { IStorageDescriptor } from 'storage';
 
@@ -32,9 +32,9 @@ function makeContext(overrides: Partial<ITaskContext> = {}): ITaskContext {
 }
 
 //
-// Builds a minimal IAddPathsData for testing.
+// Builds a minimal IImportAssetsData for testing.
 //
-function makeData(overrides: Partial<IAddPathsData> = {}): IAddPathsData {
+function makeData(overrides: Partial<IImportAssetsData> = {}): IImportAssetsData {
     const storageDescriptor: IStorageDescriptor = {
         dbDir: '/test/db',
         encryptionKeyPaths: [],
@@ -50,7 +50,7 @@ function makeData(overrides: Partial<IAddPathsData> = {}): IAddPathsData {
     };
 }
 
-describe('addPathsHandler', () => {
+describe('importAssetsHandler', () => {
     beforeEach(() => {
         jest.clearAllMocks();
     });
@@ -76,11 +76,11 @@ describe('addPathsHandler', () => {
             });
         });
 
-        await addPathsHandler(data, context);
+        await importAssetsHandler(data, context);
 
         expect(context.queueTask).toHaveBeenCalledTimes(2);
         expect(context.queueTask).toHaveBeenCalledWith(
-            'import-file',
+            'upload-asset',
             expect.objectContaining({
                 filePath: '/test/photos/img1.jpg',
                 contentType: 'image/jpeg',
@@ -91,7 +91,7 @@ describe('addPathsHandler', () => {
             'session-1'
         );
         expect(context.queueTask).toHaveBeenCalledWith(
-            'import-file',
+            'upload-asset',
             expect.objectContaining({
                 filePath: '/test/photos/img2.jpg',
             }),
@@ -107,7 +107,7 @@ describe('addPathsHandler', () => {
             progressCallback!('/test/photos', { currentlyScanning: '/test/photos', numFilesIgnored: 0, numFilesFailed: 0, tempDir: '' });
         });
 
-        await addPathsHandler(data, context);
+        await importAssetsHandler(data, context);
 
         expect(context.sendMessage).toHaveBeenCalledWith({
             type: 'scan-progress',
@@ -124,7 +124,7 @@ describe('addPathsHandler', () => {
             progressCallback!(undefined, { currentlyScanning: undefined, numFilesIgnored: 2, numFilesFailed: 0, tempDir: '' });
         });
 
-        await addPathsHandler(data, context);
+        await importAssetsHandler(data, context);
 
         const ignoredMessages = (context.sendMessage as jest.Mock).mock.calls.filter(
             (call) => call[0].type === 'file-ignored'
@@ -148,7 +148,7 @@ describe('addPathsHandler', () => {
             });
         });
 
-        await addPathsHandler(data, context);
+        await importAssetsHandler(data, context);
 
         expect(context.queueTask).not.toHaveBeenCalled();
     });
