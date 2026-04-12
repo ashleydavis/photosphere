@@ -346,11 +346,10 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
             <div
                 className="flex flex-col h-screen"
                 style={{
-                    paddingLeft: "15px",
                     color: theme.palette.text.primary,
                 }}
                 >
-                <div className="flex flex-row items-center mt-4">
+                <div className="flex flex-row items-center mt-4" style={{ paddingLeft: "15px" }}>
                     <button
                         className="ml-3 text-xl"
                         onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -363,7 +362,7 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
                 {databasePath && selectedItemsCount > 0 &&
                     <div className="flex flex-col">
                         <Divider />
-                        <CollapsibleSection configKey="right-sidebar-collapsed-selection" label="Selection">
+                        <CollapsibleSection configKey="right-sidebar-collapsed-selection" label="Selection" style={{ paddingLeft: "15px" }}>
                             <List>
                                 {dbs.map(dbPath => {
                                     if (dbPath === databasePath) {
@@ -434,7 +433,7 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
 
                 <div className="flex flex-col">
                     <Divider />
-                    <CollapsibleSection configKey="right-sidebar-collapsed-quickSearches" label="Quick Searches">
+                    <CollapsibleSection configKey="right-sidebar-collapsed-quickSearches" label="Quick Searches" style={{ paddingLeft: "15px" }}>
                         <List>
                             <ListItem
                                 onClick={() => {
@@ -466,7 +465,7 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
                 {recentSearches.length > 0 &&
                     <div className="flex flex-col">
                         <Divider />
-                        <CollapsibleSection configKey="right-sidebar-collapsed-recentSearches" label="Recent Searches">
+                        <CollapsibleSection configKey="right-sidebar-collapsed-recentSearches" label="Recent Searches" style={{ paddingLeft: "15px" }}>
                             <List>
                                 {recentSearches.map(recentSearch => (
                                     <ListItem
@@ -527,7 +526,7 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
 
                 <div className="flex flex-col">
                     <Divider />
-                    <CollapsibleSection configKey="right-sidebar-collapsed-content" label="Content">
+                    <CollapsibleSection configKey="right-sidebar-collapsed-content" label="Content" style={{ paddingLeft: "15px" }}>
                         <>
                             {breadcrumbs.length > 0 &&
                                 <Breadcrumbs
@@ -613,7 +612,7 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
                 {databasePath &&
                     <div className="flex flex-col">
                         <Divider />
-                        <List>
+                        <List sx={{ pl: "15px" }}>
                             <ListItem
                                 onClick={async () => {
                                     setSidebarOpen(false);

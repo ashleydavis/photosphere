@@ -49,11 +49,10 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration }
         <div
             className="flex flex-col h-screen"
             style={{
-                paddingLeft: "15px",
                 color: theme.palette.text.primary,
             }}
             >
-            <div className="flex flex-row items-center mt-4">
+            <div className="flex flex-row items-center mt-4" style={{ paddingLeft: "15px" }}>
                 <h1 className="text-xl">
                     Photosphere
                 </h1>
@@ -66,7 +65,7 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration }
                 </button>
             </div>
 
-            <div className="flex flex-col">
+            <div className="flex flex-col" style={{ paddingLeft: "15px" }}>
                 <List>
                     <ListItem
                         onClick={async () => {
@@ -153,7 +152,7 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration }
             {savedSearches.length > 0 &&
                 <div className="flex flex-col">
                     <Divider />
-                    <CollapsibleSection configKey="sidebar-collapsed-savedSearches" label="Saved Searches">
+                    <CollapsibleSection configKey="sidebar-collapsed-savedSearches" label="Saved Searches" style={{ paddingLeft: "15px" }}>
                         <List>
                             {savedSearches.map(savedSearch => (
                                 <ListItem
@@ -191,7 +190,7 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration }
 
             <div className="flex flex-col">
                 <Divider />
-                <CollapsibleSection configKey="sidebar-collapsed-databases" label="Databases">
+                <CollapsibleSection configKey="sidebar-collapsed-databases" label="Databases" style={{ paddingLeft: "15px" }}>
                     <List>
                         {dbs.map(dbPath => {
                             return (
@@ -237,7 +236,7 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration }
 
             <div className="flex flex-col">
                 <Divider />
-                <List>
+                <List sx={{ pl: "15px" }}>
                     <ListItem
                         onClick={() => {
                             setSidebarOpen(false);
