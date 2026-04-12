@@ -10,7 +10,8 @@ import { FullscreenSpinner } from "./components/full-screen-spinnner";
 import { CssVarsProvider, useColorScheme } from "@mui/joy/styles/CssVarsProvider";
 import { useTheme } from "@mui/joy/styles/ThemeProvider";
 import Drawer from "@mui/joy/Drawer/Drawer";
-import { Sidebar } from "./components/sidebar";
+import { LeftSidebar } from "./components/left-sidebar";
+import { RightSidebar } from "./components/right-sidebar";
 import { Navbar } from "./components/navbar";
 import { Fps } from "./components/fps";
 import { AboutPage } from "./pages/about";
@@ -42,9 +43,14 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
     } = useAssetDatabase();
 
     //
-    // Set to true to open the sidebar.
+    // Set to true to open the left sidebar.
     //
     const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
+
+    //
+    // Set to true to open the right sidebar.
+    //
+    const [rightSidebarOpen, setRightSidebarOpen] = useState<boolean>(false);
 
     //
     // Set to true to open the configuration dialog.
@@ -142,17 +148,29 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
             <Navbar
                 sidebarOpen={sidebarOpen}
                 setSidebarOpen={setSidebarOpen}
+                setRightSidebarOpen={setRightSidebarOpen}
                 onOpenConfiguration={() => setConfigurationOpen(true)}
             />
 
-            <Drawer 
-                open={sidebarOpen} 
+            <Drawer
+                open={sidebarOpen}
                 onClose={() => setSidebarOpen(false)}
                 >
-                <Sidebar
+                <LeftSidebar
                     sidebarOpen={sidebarOpen}
                     setSidebarOpen={setSidebarOpen}
                     onOpenConfiguration={() => setConfigurationOpen(true)}
+                    />
+            </Drawer>
+
+            <Drawer
+                anchor="right"
+                open={rightSidebarOpen}
+                onClose={() => setRightSidebarOpen(false)}
+                >
+                <RightSidebar
+                    sidebarOpen={rightSidebarOpen}
+                    setSidebarOpen={setRightSidebarOpen}
                     />
             </Drawer>
 

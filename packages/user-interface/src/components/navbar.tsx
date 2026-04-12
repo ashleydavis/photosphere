@@ -1,16 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { Spinner } from "./spinner";
-import Dropdown from '@mui/joy/Dropdown';
-import MenuButton from '@mui/joy/MenuButton';
 import IconButton from '@mui/joy/IconButton';
 import MoreVert from '@mui/icons-material/MoreVert';
-import MenuItem from '@mui/joy/MenuItem';
-import Menu from '@mui/joy/Menu';
-import ListDivider from '@mui/joy/ListDivider';
-import ListSubheader from "@mui/joy/ListSubheader";
-import Delete from "@mui/icons-material/Delete";
-import ExitToApp from "@mui/icons-material/ExitToApp";
 import Star from "@mui/icons-material/Star";
 import StarBorder from "@mui/icons-material/StarBorder";
 import Input from "@mui/joy/Input/Input";
@@ -20,16 +12,6 @@ import { useSearch } from "../context/search-context";
 import { useDebounce } from "../lib/use-debounce";
 import { useGallery } from "../context/gallery-context";
 import { useAssetDatabase } from "../context/asset-database-source";
-import { useApp } from "../context/app-context";
-import { useDeleteConfirmation } from "../context/delete-confirmation-context";
-import { usePlatform } from "../context/platform-context";
-import type { IDownloadAssetItem } from "../context/platform-context";
-import Download from "@mui/icons-material/Download";
-import CalendarMonth from "@mui/icons-material/CalendarMonth";
-import Settings from "@mui/icons-material/Settings";
-import { useGallerySource } from "../context/gallery-source";
-import { SetPhotoDateDialog } from "./set-photo-date-dialog";
-import { SetLocationDialog } from "./set-location-dialog";
 
 export interface INavbarProps {
     //
@@ -46,6 +28,11 @@ export interface INavbarProps {
     // Opens the configuration dialog.
     //
     onOpenConfiguration: () => void;
+
+    //
+    // Opens the right sidebar.
+    //
+    setRightSidebarOpen: (open: boolean) => void;
 }
 
 //
@@ -54,6 +41,7 @@ export interface INavbarProps {
 export function Navbar({
     sidebarOpen,
     setSidebarOpen,
+    setRightSidebarOpen,
     onOpenConfiguration,
 }: INavbarProps) {
     const theme = useTheme();
@@ -75,51 +63,11 @@ export function Navbar({
     useEffect(() => {
         setLocalInput(searchInput);
     }, [searchInput]);
-    const { sortedItems, selectedItems, clearMultiSelection, moveSelectedToDatabase, getItemById } = useGallery();
-    const { isLoading, isSyncing, databasePath, closeDatabase } = useAssetDatabase();
-    const { dbs } = useApp();
-    const { setDeleteConfirmationOpen } = useDeleteConfirmation();
-    const { downloadAssets } = usePlatform();
-    const { updateAssets } = useGallerySource();
-
-    //
-    // Set to true to open the bulk set date dialog.
-    //
-    const [setDateDialogOpen, setSetDateDialogOpen] = useState<boolean>(false);
-
-    //
-    // Set to true to open the bulk set location dialog.
-    //
-    const [setLocationDialogOpen, setSetLocationDialogOpen] = useState<boolean>(false);
+    const { sortedItems, selectedItems, clearMultiSelection } = useGallery();
+    const { isLoading, isSyncing, databasePath } = useAssetDatabase();
 
     const sortedItemsCount = sortedItems().length;
     const selectedItemsCount = selectedItems.size;
-
-    //
-    // Downloads all selected assets.
-    //
-    async function onDownloadSelected(): Promise<void> {
-        const assets: IDownloadAssetItem[] = [];
-        for (const assetId of selectedItems) {
-            const item = getItemById(assetId);
-            if (!item) {
-                continue;
-            }
-            assets.push({ assetId, assetType: "asset", filename: item.origFileName || assetId, contentType: item.contentType });
-        }
-        await downloadAssets(assets, databasePath!);
-    }
-
-    //
-    // Copies all selected assets (display version) to the clipboard.
-    //
-    //
-    // Closes the current database.
-    //
-    async function onCloseDatabase() {
-        clearMultiSelection();
-        await closeDatabase();
-    }
 
     return (
         <div 
@@ -211,74 +159,14 @@ export function Navbar({
                         </div>
                     )}
 
-                    <Dropdown>
-                        <MenuButton
-                            sx={{
-                                mr: 1,
-                            }}
-                            slots={{ root: IconButton }}
-                            slotProps={{ root: { variant: 'soft', color: 'neutral' } }}
-                        >
-                            <MoreVert />
-                        </MenuButton>
-                        <Menu placement="bottom-end">
-                            {databasePath && selectedItemsCount > 0
-                                && <>
-                                    <ListSubheader>MOVE TO</ListSubheader>
-                                    {dbs.map(dbPath => {
-                                        if (dbPath === databasePath) {
-                                            return null; // Don't show the current database.
-                                        }
-                                        return (
-                                            <MenuItem
-                                                key={dbPath}
-                                                onClick={() => moveSelectedToDatabase(dbPath)}
-                                            >
-                                                {dbPath}
-                                            </MenuItem>
-                                        );
-                                    })}
-                                    <ListDivider />
-                                    <MenuItem
-                                        color="danger"
-                                        onClick={() => setDeleteConfirmationOpen(true)}
-                                    >
-                                        <Delete />
-                                        Delete {selectedItemsCount} assets
-                                    </MenuItem>
-                                    <ListDivider />
-                                    <MenuItem onClick={onDownloadSelected}>
-                                        <Download />
-                                        Download {selectedItemsCount} assets
-                                    </MenuItem>
-                                    <ListDivider />
-                                    <MenuItem onClick={() => setSetDateDialogOpen(true)}>
-                                        <CalendarMonth />
-                                        Set date for {selectedItemsCount} assets
-                                    </MenuItem>
-                                    <ListDivider />
-                                    <MenuItem onClick={() => setSetLocationDialogOpen(true)}>
-                                        <i className="fa-regular fa-map" style={{ width: "24px", textAlign: "center" }} />
-                                        Set location for {selectedItemsCount} assets
-                                    </MenuItem>
-                                </>
-                            }
-                            {databasePath && (
-                                <>
-                                    {selectedItemsCount > 0 && <ListDivider />}
-                                    <MenuItem onClick={onCloseDatabase}>
-                                        <ExitToApp />
-                                        Close database
-                                    </MenuItem>
-                                </>
-                            )}
-                            {databasePath && <ListDivider />}
-                            <MenuItem onClick={onOpenConfiguration}>
-                                <Settings />
-                                Configuration
-                            </MenuItem>
-                        </Menu>
-                    </Dropdown>
+                    <IconButton
+                        sx={{ mr: 1 }}
+                        variant="soft"
+                        color="neutral"
+                        onClick={() => setRightSidebarOpen(true)}
+                    >
+                        <MoreVert />
+                    </IconButton>
                 </div>
 
                 {openSearch
@@ -356,43 +244,6 @@ export function Navbar({
                     </div>
                 }                    
             </div>
-
-            <SetPhotoDateDialog
-                open={setDateDialogOpen}
-                onClose={() => setSetDateDialogOpen(false)}
-                onSetDate={async (date) => {
-                    const assetUpdates = Array.from(selectedItems).map(assetId => ({
-                        assetId,
-                        partialAsset: { photoDate: date },
-                    }));
-                    await updateAssets(assetUpdates);
-                    clearMultiSelection();
-                    setSetDateDialogOpen(false);
-                }}
-                />
-
-            <SetLocationDialog
-                open={setLocationDialogOpen}
-                onSetLocation={async (coordinates, location) => {
-                    const assetUpdates = Array.from(selectedItems).map(assetId => ({
-                        assetId,
-                        partialAsset: { coordinates, location },
-                    }));
-                    await updateAssets(assetUpdates);
-                    clearMultiSelection();
-                    setSetLocationDialogOpen(false);
-                }}
-                onClearLocation={async () => {
-                    const assetUpdates = Array.from(selectedItems).map(assetId => ({
-                        assetId,
-                        partialAsset: { coordinates: undefined, location: undefined },
-                    }));
-                    await updateAssets(assetUpdates);
-                    clearMultiSelection();
-                    setSetLocationDialogOpen(false);
-                }}
-                onClose={() => setSetLocationDialogOpen(false)}
-                />
 
         </div>
     );
