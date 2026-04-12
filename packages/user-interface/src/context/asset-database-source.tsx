@@ -632,6 +632,27 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
     }, [databasePath]);
 
     //
+    // Subscribe to import-success task messages and add newly imported assets to the gallery
+    // immediately, so the user sees them without needing to reload.
+    //
+    useEffect(() => {
+        const unsubscribeImportSuccess = platform.onTaskMessage((_taskId, message) => {
+            if (message.type !== 'import-success') {
+                return;
+            }
+
+            const asset = message.asset as IAsset | undefined;
+            if (!asset) {
+                return;
+            }
+
+            _onNewItems([asset]);
+        });
+
+        return () => { unsubscribeImportSuccess(); };
+    }, [platform]);
+
+    //
     // Load assets when database path changes.
     //
     useEffect(() => {
