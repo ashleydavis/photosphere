@@ -38,7 +38,7 @@ export interface ISaveAssetItem {
 //
 export interface IImportSession {
     // Task ID of the add-paths task, for correlating task-completed events.
-    addPathsTaskId: string;
+    importAssetsTaskId: string;
 
     // Source tag for all tasks in this import; pass to cancelTasks() to cancel.
     sessionId: string;

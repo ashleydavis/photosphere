@@ -170,7 +170,7 @@ export function ImportContextProvider({ children }: IImportContextProviderProps)
                 return;
             }
 
-            if (sessionRef.current && taskId === sessionRef.current.addPathsTaskId) {
+            if (sessionRef.current && taskId === sessionRef.current.importAssetsTaskId) {
                 addPathsDoneRef.current = true;
 
                 // Use the functional updater to access the latest items for the completion check.

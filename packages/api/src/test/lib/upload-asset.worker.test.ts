@@ -1,6 +1,6 @@
 import type { ITaskContext } from 'task-queue';
 import type { IStorageDescriptor } from 'storage';
-import type { IHashFileData } from '../../lib/import.worker';
+import type { IUploadAssetData } from '../../lib/upload-asset.worker';
 
 // ── module mocks ────────────────────────────────────────────────────────────
 
@@ -70,7 +70,7 @@ jest.mock('utils', () => ({
 
 // ── imports after mocks ─────────────────────────────────────────────────────
 
-import { importFileHandler } from '../../lib/import.worker';
+import { uploadAssetHandler } from '../../lib/upload-asset.worker';
 import { validateAndHash, getHashFromCache } from '../../lib/hash';
 import { createStorage, loadEncryptionKeys } from 'storage';
 import { createMediaFileDatabase } from '../../lib/media-file-database';
@@ -116,9 +116,9 @@ function makeStorageDescriptor(): IStorageDescriptor {
 }
 
 //
-// Builds a minimal IHashFileData for testing.
+// Builds a minimal IUploadAssetData for testing.
 //
-function makeHashFileData(overrides: Partial<IHashFileData> = {}): IHashFileData {
+function makeHashFileData(overrides: Partial<IUploadAssetData> = {}): IUploadAssetData {
     return {
         filePath: '/test/photos/img.jpg',
         fileStat: { length: 1000, lastModified: new Date('2024-01-01') },
@@ -174,9 +174,9 @@ function setupStorageMock() {
     return { mockStorage, mockRawStorage };
 }
 
-// ── importFileHandler tests ──────────────────────────────────────────────────
+// ── uploadAssetHandler tests ──────────────────────────────────────────────────
 
-describe('importFileHandler', () => {
+describe('uploadAssetHandler', () => {
     beforeEach(() => {
         jest.clearAllMocks();
     });
@@ -195,7 +195,7 @@ describe('importFileHandler', () => {
             metadataCollection: mockMetadataCollection as any,
         } as any);
 
-        await importFileHandler(data, context);
+        await uploadAssetHandler(data, context);
 
         expect(context.sendMessage).toHaveBeenCalledWith({ type: 'import-pending', assetId: 'asset-1', logicalPath: '/test/photos/img.jpg' });
         expect(context.sendMessage).toHaveBeenCalledWith({ type: 'import-skipped', assetId: 'asset-1', logicalPath: '/test/photos/img.jpg' });
@@ -206,7 +206,7 @@ describe('importFileHandler', () => {
         const context = makeContext({ isCancelled: jest.fn().mockReturnValue(true) });
         const data = makeHashFileData();
 
-        await importFileHandler(data, context);
+        await uploadAssetHandler(data, context);
 
         expect(mockValidateAndHash).not.toHaveBeenCalled();
         expect(mockAcquireWriteLock).not.toHaveBeenCalled();
@@ -242,7 +242,7 @@ describe('importFileHandler', () => {
         const { computeAssetHash } = require('../../lib/hash');
         computeAssetHash.mockResolvedValue({ hash: Buffer.from('aabbcc', 'hex'), length: 1000, lastModified: new Date() });
 
-        await importFileHandler(data, context);
+        await uploadAssetHandler(data, context);
 
         expect(mockValidateAndHash).not.toHaveBeenCalled();
         expect(context.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'import-success', assetId: 'asset-1' }));
@@ -285,7 +285,7 @@ describe('importFileHandler', () => {
         const { computeAssetHash } = require('../../lib/hash');
         computeAssetHash.mockResolvedValue(mockComputeHash);
 
-        await importFileHandler(data, context);
+        await uploadAssetHandler(data, context);
 
         expect(mockAcquireWriteLock).toHaveBeenCalledWith(expect.anything(), 'session-1', 3);
         expect(mockLoadMerkleTree).toHaveBeenCalled();
@@ -319,7 +319,7 @@ describe('importFileHandler', () => {
         };
         MockBsonDatabase.mockImplementation(() => mockBsonDbInstance as any);
 
-        await importFileHandler(data, context);
+        await uploadAssetHandler(data, context);
 
         expect(mockAcquireWriteLock).toHaveBeenCalled();
         expect(mockBsonDbInstance.commit).not.toHaveBeenCalled();
@@ -355,7 +355,7 @@ describe('importFileHandler', () => {
         };
         MockBsonDatabase.mockImplementation(() => mockBsonDbInstance as any);
 
-        await expect(importFileHandler(data, context)).rejects.toThrow('Disk full');
+        await expect(uploadAssetHandler(data, context)).rejects.toThrow('Disk full');
 
         expect(mockReleaseWriteLock).toHaveBeenCalled();
     });

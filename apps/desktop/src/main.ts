@@ -14,7 +14,7 @@ import type { IWorkerBackendOptions } from './lib/worker-backend-electron-main';
 import type { IRestApiWorkerStopMessage, IRestApiWorkerStartMessage } from './rest-api-worker';
 import { FileLoggerElectron } from './lib/file-logger-electron';
 import type { IImportSession, IRendererLogMessage, ISaveAssetItem } from 'electron-defs';
-import type { IAddPathsData } from 'api';
+import type { IImportAssetsData } from 'api';
 import { verifyTools } from 'tools';
 import type { IStorageDescriptor } from 'storage';
 
@@ -413,7 +413,7 @@ function initWorkers() {
                 });
             }
         }
-        if (task.type === "add-paths" && mainWindow) {
+        if (task.type === "import-assets" && mainWindow) {
             if (result.status !== TaskStatus.Succeeded) {
                 mainWindow.webContents.send('show-notification', {
                     message: `Import failed: ${result.errorMessage || 'Unknown error'}`,
@@ -813,16 +813,16 @@ async function startImportWithPaths(paths: string[]): Promise<IImportSession | u
     };
 
     const sessionId = randomUUID();
-    const addPathsTaskId = taskQueue.addTask('add-paths', {
+    const importAssetsTaskId = taskQueue.addTask('add-paths', {
         paths,
         storageDescriptor,
         googleApiKey: undefined,
         sessionId,
         dryRun: false,
         s3Config: undefined,
-    } satisfies IAddPathsData, sessionId);
+    } satisfies IImportAssetsData, sessionId);
 
-    return { addPathsTaskId, sessionId };
+    return { importAssetsTaskId, sessionId };
 }
 
 //

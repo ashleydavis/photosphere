@@ -2,13 +2,13 @@ import { registerHandler } from "task-queue";
 import { verifyFileHandler } from "./verify.worker";
 import { checkFileHandler } from "./check.worker";
 import { loadAssetsHandler } from "./load-assets.worker";
-import { importFileHandler } from "./import.worker";
+import { uploadAssetHandler } from "./upload-asset.worker";
 import { prefetchDatabaseHandler } from "./prefetch-database.worker";
 import { syncDatabaseHandler } from "./sync-database.worker";
 import { saveAssetHandler } from "./save-asset.worker";
 import { saveAssetsBatchHandler } from "./save-assets-batch.worker";
 import { createDatabaseHandler } from "./create-database.worker";
-import { addPathsHandler } from "./add-paths.worker";
+import { importAssetsHandler } from "./import-assets.worker";
 
 //
 // Register all task handlers
@@ -19,10 +19,10 @@ export function initTaskHandlers(): void {
     registerHandler("check-file", checkFileHandler);
     registerHandler("load-assets", loadAssetsHandler);
     registerHandler("prefetch-database", prefetchDatabaseHandler);
-    registerHandler("import-file", importFileHandler);
+    registerHandler("upload-asset", uploadAssetHandler);
     registerHandler("sync-database", syncDatabaseHandler);
     registerHandler("save-asset", saveAssetHandler);
     registerHandler("save-assets-batch", saveAssetsBatchHandler);
     registerHandler("create-database", createDatabaseHandler);
-    registerHandler("add-paths", addPathsHandler);
+    registerHandler("import-assets", importAssetsHandler);
 }

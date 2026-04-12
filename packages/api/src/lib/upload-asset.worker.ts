@@ -30,7 +30,7 @@ import { updateDatabaseConfig } from "./database-config";
 // Payload for the hash-file task. Contains everything needed to hash the file, check for
 // duplicates, and — if the file is new — queue an import-file task with the full context.
 //
-export interface IHashFileData {
+export interface IUploadAssetData {
     // Actual path to the file (e.g. temp file when importing from zip).
     filePath: string;
 
@@ -72,7 +72,7 @@ export interface IHashFileData {
 // Handler for importing a single file. Hashes the file, checks for duplicates, then performs
 // uploads and writes the asset record and merkle tree directly to the database under the write lock.
 //
-export async function importFileHandler(data: IHashFileData, context: ITaskContext): Promise<void> {
+export async function uploadAssetHandler(data: IUploadAssetData, context: ITaskContext): Promise<void> {
     if (context.isCancelled()) {
         return;
     }
