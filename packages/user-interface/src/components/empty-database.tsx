@@ -1,15 +1,15 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import Box from "@mui/joy/Box";
 import Typography from "@mui/joy/Typography";
 import Button from "@mui/joy/Button";
 import FileUploadIcon from "@mui/icons-material/FileUpload";
-import { usePlatform } from "../context/platform-context";
 
 //
 // Displayed when a database is open but contains no assets, with a prompt to import photos.
 //
 export function EmptyDatabase() {
-    const { importAssets } = usePlatform();
+    const navigate = useNavigate();
 
     return (
         <Box
@@ -30,9 +30,7 @@ export function EmptyDatabase() {
                     color="neutral"
                     size="lg"
                     startDecorator={<FileUploadIcon />}
-                    onClick={async () => {
-                        await importAssets();
-                    }}
+                    onClick={() => navigate('/import')}
                     sx={{
                         borderRadius: "s",
                         px: 4,

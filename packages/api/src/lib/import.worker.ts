@@ -77,6 +77,8 @@ export async function importFileHandler(data: IHashFileData, context: ITaskConte
         return;
     }
 
+    context.sendMessage({ type: "import-pending", assetId: data.assetId, logicalPath: data.logicalPath });
+
     const { filePath, fileStat, contentType, storageDescriptor, hashCacheDir, s3Config, googleApiKey, dryRun, sessionId } = data;
     const { uuidGenerator, timestampProvider } = context;
 
@@ -106,7 +108,7 @@ export async function importFileHandler(data: IHashFileData, context: ITaskConte
     const localHashStr = hashedFile.hash.toString("hex");
     const existingRecordsEarlyCheck = await metadataCollection.sortIndex("hash", "asc").findByValue(localHashStr);
     if (existingRecordsEarlyCheck.length > 0) {
-        context.sendMessage({ type: "file-already-added" });
+        context.sendMessage({ type: "import-skipped", assetId: data.assetId, logicalPath: data.logicalPath });
         return;
     }
 
@@ -140,6 +142,7 @@ export async function importFileHandler(data: IHashFileData, context: ITaskConte
         }
 
         try {
+            let wasSkippedConcurrently = false;
             let hashedAsset: IHashedData;
 
             // Upload files (no database writes here - that's done in main thread)
@@ -288,6 +291,8 @@ export async function importFileHandler(data: IHashFileData, context: ITaskConte
                     const existingRecords = await metadataCollection.sortIndex("hash", "asc").findByValue(expectedHashBuffer.toString("hex"));
                     if (existingRecords.length > 0) {
                         log.verbose(`File "${data.logicalPath}" (${assetId}) already inserted by a concurrent import, skipping.`);
+                        wasSkippedConcurrently = true;
+                        context.sendMessage({ type: "import-skipped", assetId: data.assetId, logicalPath: data.logicalPath });
                     }
                     else {
                         let merkleTree = await retry(() => loadMerkleTree(storage));
@@ -340,14 +345,17 @@ export async function importFileHandler(data: IHashFileData, context: ITaskConte
                 await releaseWriteLock(rawStorage);
             }
 
-            log.verbose(dryRun
-                ? `[DRY RUN] Would add file "${data.logicalPath}" to the database with ID "${assetId}" with id ${assetId}.`
-                : `Added file "${data.logicalPath}" to the database with ID "${assetId}" with id ${assetId}.`);
+            if (!wasSkippedConcurrently) {
+                log.verbose(dryRun
+                    ? `[DRY RUN] Would add file "${data.logicalPath}" to the database with ID "${assetId}" with id ${assetId}.`
+                    : `Added file "${data.logicalPath}" to the database with ID "${assetId}" with id ${assetId}.`);
 
-            context.sendMessage({ type: "asset-imported", assetId: data.assetId });
+                context.sendMessage({ type: "import-success", assetId: data.assetId, logicalPath: data.logicalPath, micro });
+            }
         }
         catch (err: any) {
             log.exception(`Error importing file ${filePath} (${assetId})`, err);
+            context.sendMessage({ type: "import-failed", assetId: data.assetId, logicalPath: data.logicalPath });
 
             // Clean up uploaded files on error, then let exception propagate to task queue
             await retry(() => storage.deleteFile(assetPath));

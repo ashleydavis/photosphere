@@ -34,6 +34,48 @@ export interface ISaveAssetItem {
 }
 
 //
+// Identifies an import session so the renderer can track progress and cancel it.
+//
+export interface IImportSession {
+    // Task ID of the add-paths task, for correlating task-completed events.
+    addPathsTaskId: string;
+
+    // Source tag for all tasks in this import; pass to cancelTasks() to cancel.
+    sessionId: string;
+}
+
+//
+// Status of a single required external tool (ImageMagick, ffmpeg, ffprobe).
+//
+export interface IToolStatus {
+    // Whether the tool is available on PATH.
+    available: boolean;
+
+    // Version string returned by the tool, if available.
+    version?: string;
+}
+
+//
+// Aggregated availability of all tools required for importing photos and videos.
+//
+export interface IToolsStatus {
+    // Status of the ImageMagick `magick` command.
+    magick: IToolStatus;
+
+    // Status of the `ffprobe` command.
+    ffprobe: IToolStatus;
+
+    // Status of the `ffmpeg` command.
+    ffmpeg: IToolStatus;
+
+    // True when all three tools are available.
+    allAvailable: boolean;
+
+    // Names of any missing tools (e.g. ['ImageMagick', 'ffmpeg']).
+    missingTools: string[];
+}
+
+//
 // Type definition for Electron API exposed via preload script
 // Shared between desktop main process and desktop frontend
 //
@@ -81,7 +123,14 @@ export interface IElectronAPI {
 
     //
     // Opens a folder picker and imports selected directories into the current database.
+    // Returns session info so the renderer can track progress and cancel, or undefined
+    // if the user cancelled the folder picker.
     //
-    importAssets: () => Promise<void>;
+    importAssets: () => Promise<IImportSession | undefined>;
+
+    //
+    // Checks whether ImageMagick and FFmpeg are available on PATH.
+    //
+    checkTools: () => Promise<IToolsStatus>;
 }
 

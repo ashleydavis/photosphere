@@ -57,6 +57,48 @@ export interface IDownloadAssetItem {
 }
 
 //
+// Identifies an import session so the renderer can track progress and cancel it.
+//
+export interface IImportSession {
+    // Task ID of the add-paths task, for correlating task-completed events.
+    addPathsTaskId: string;
+
+    // Source tag for all tasks in this import; pass to cancelTasks() to cancel.
+    sessionId: string;
+}
+
+//
+// Status of a single required external tool (ImageMagick, ffmpeg, ffprobe).
+//
+export interface IToolStatus {
+    // Whether the tool is available on PATH.
+    available: boolean;
+
+    // Version string returned by the tool, if available.
+    version?: string;
+}
+
+//
+// Aggregated availability of all tools required for importing photos and videos.
+//
+export interface IToolsStatus {
+    // Status of the ImageMagick `magick` command.
+    magick: IToolStatus;
+
+    // Status of the `ffprobe` command.
+    ffprobe: IToolStatus;
+
+    // Status of the `ffmpeg` command.
+    ffmpeg: IToolStatus;
+
+    // True when all three tools are available.
+    allAvailable: boolean;
+
+    // Names of any missing tools (e.g. ['ImageMagick', 'ffmpeg']).
+    missingTools: string[];
+}
+
+//
 // Platform-specific operations interface.
 // Implemented by Electron for desktop and Capacitor for mobile.
 //
@@ -158,9 +200,34 @@ export interface IPlatformContext {
 
     //
     // Opens a folder picker and imports selected directories into the current database.
-    // Desktop (Electron) only; no-op on web.
+    // Returns session info so the caller can track progress and cancel, or undefined if
+    // the user cancelled the folder picker. Desktop (Electron) only; returns undefined on web.
     //
-    importAssets: () => Promise<void>;
+    importAssets: () => Promise<IImportSession | undefined>;
+
+    //
+    // Checks whether ImageMagick and FFmpeg are available on PATH.
+    // On web (no-op platform), returns allAvailable: true.
+    //
+    checkTools: () => Promise<IToolsStatus>;
+
+    //
+    // Subscribes to task messages (worker progress events).
+    // Returns an unsubscribe function. On web, the handler is never called.
+    //
+    onTaskMessage: (handler: (taskId: string, message: Record<string, unknown>) => void) => Unsubscribe;
+
+    //
+    // Subscribes to task completion events.
+    // Returns an unsubscribe function. On web, the handler is never called.
+    //
+    onTaskComplete: (handler: (taskId: string, result: Record<string, unknown>) => void) => Unsubscribe;
+
+    //
+    // Cancels all tasks associated with the given session ID.
+    // On web, does nothing.
+    //
+    cancelTasks: (sessionId: string) => Promise<void>;
 }
 
 const PlatformContext = createContext<IPlatformContext | undefined>(undefined);

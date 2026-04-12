@@ -68,7 +68,7 @@ export async function addPathsHandler(data: IAddPathsData, context: ITaskContext
                     sessionId,
                     dryRun,
                     assetId: uuidGenerator.generate(),
-                } satisfies IHashFileData, storageDescriptor.dbDir);
+                } satisfies IHashFileData, data.sessionId);
             },
             (currentlyScanning, state) => {
                 const newIgnored = state.numFilesIgnored - prevIgnoredCount;

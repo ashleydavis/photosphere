@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useState } from "react";
-import { Route, Routes, Navigate } from "react-router-dom";
+import { Route, Routes, Navigate, useNavigate } from "react-router-dom";
 import { GalleryPage } from "./pages/gallery/gallery";
 import classNames from "classnames";
 import { usePlatform } from "./context/platform-context";
@@ -19,6 +19,8 @@ import { MapPage } from "./pages/map/map-page";
 import { ConfigurationDialog } from "./components/configuration-dialog";
 import { ToastContextProvider, useToast } from "./context/toast-context";
 import { ToastContainer } from "./components/toast-container";
+import { useImport } from "./context/import-context";
+import { ImportPage } from "./pages/import/import-page";
 
 export interface IMainProps {
     //
@@ -75,6 +77,27 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
     }, []); // Only run once on mount - don't reset when mode changes
 
     const { addToast } = useToast();
+    const navigate = useNavigate();
+    const { status: importStatus, importItems } = useImport();
+
+    //
+    // Show a completion toast when an import finishes, with a "View Import" action button.
+    //
+    useEffect(() => {
+        if (importStatus === 'completed') {
+            const successCount = importItems.filter(item => item.status === 'success').length;
+            addToast({
+                message: `Import complete: ${successCount} asset${successCount !== 1 ? 's' : ''} added`,
+                color: 'success',
+                duration: 0,
+                action: {
+                    label: 'View Import',
+                    onClick: () => navigate('/import'),
+                },
+            });
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [importStatus]);
 
     //
     // Subscribe to show-notification events from the main process and display toasts.
@@ -212,6 +235,11 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
                         <Route
                             path="/about"
                             element={<AboutPage />}
+                            />
+
+                        <Route
+                            path="/import"
+                            element={<ImportPage />}
                             />
 
                         <Route

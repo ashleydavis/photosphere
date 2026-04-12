@@ -88,14 +88,14 @@ describe('addPathsHandler', () => {
                 sessionId: 'session-1',
                 dryRun: false,
             }),
-            '/test/db'
+            'session-1'
         );
         expect(context.queueTask).toHaveBeenCalledWith(
             'import-file',
             expect.objectContaining({
                 filePath: '/test/photos/img2.jpg',
             }),
-            '/test/db'
+            'session-1'
         );
     });
 

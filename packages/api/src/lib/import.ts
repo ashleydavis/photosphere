@@ -38,11 +38,11 @@ export async function addPaths(
     };
 
     queue.onAnyTaskMessage((data) => {
-        if (data.message.type === "asset-imported") {
+        if (data.message.type === "import-success") {
             summary.filesAdded++;
             summary.filesProcessed++;
         }
-        else if (data.message.type === "file-already-added") {
+        else if (data.message.type === "import-skipped") {
             summary.filesAlreadyAdded++;
             summary.filesProcessed++;
         }

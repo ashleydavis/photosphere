@@ -1,5 +1,5 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
-import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext, type IDownloadAssetItem, type IShowNotificationData, convertToPng } from "user-interface";
+import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext, type IImportSession, type IToolsStatus, type IDownloadAssetItem, type IShowNotificationData, convertToPng } from "user-interface";
 
 const restApiUrl = "http://localhost:3001";
 
@@ -170,8 +170,34 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         return () => {};
     }, []);
 
-    const importAssets = useCallback(async (): Promise<void> => {
+    const importAssets = useCallback(async (): Promise<IImportSession | undefined> => {
         // Not supported on web platform.
+        return undefined;
+    }, []);
+
+    const checkTools = useCallback(async (): Promise<IToolsStatus> => {
+        // All tools assumed available on web platform.
+        return {
+            magick: { available: true },
+            ffprobe: { available: true },
+            ffmpeg: { available: true },
+            allAvailable: true,
+            missingTools: [],
+        };
+    }, []);
+
+    const onTaskMessage = useCallback((_handler: (taskId: string, message: Record<string, unknown>) => void): (() => void) => {
+        // No-op on web platform; no task workers.
+        return () => {};
+    }, []);
+
+    const onTaskComplete = useCallback((_handler: (taskId: string, result: Record<string, unknown>) => void): (() => void) => {
+        // No-op on web platform; no task workers.
+        return () => {};
+    }, []);
+
+    const cancelTasks = useCallback(async (_sessionId: string): Promise<void> => {
+        // No-op on web platform; no tasks to cancel.
     }, []);
 
     const platformContext: IPlatformContext = {
@@ -192,6 +218,10 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         openFolder,
         onMenuAction,
         importAssets,
+        checkTools,
+        onTaskMessage,
+        onTaskComplete,
+        cancelTasks,
     };
 
     //
