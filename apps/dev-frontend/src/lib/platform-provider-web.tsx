@@ -191,6 +191,11 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         };
     }, []);
 
+    const checkDatabaseExists = useCallback(async (_databasePath: string): Promise<boolean> => {
+        // Always returns true on web platform; file system is not accessible.
+        return true;
+    }, []);
+
     const onTaskMessage = useCallback((_handler: (taskId: string, message: Record<string, unknown>) => void): (() => void) => {
         // No-op on web platform; no task workers.
         return () => {};
@@ -225,6 +230,7 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         importAssets,
         getPathForFile,
         checkTools,
+        checkDatabaseExists,
         onTaskMessage,
         onTaskComplete,
         cancelTasks,

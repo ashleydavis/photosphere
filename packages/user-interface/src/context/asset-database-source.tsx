@@ -11,6 +11,7 @@ import axios from "axios";
 import { TaskStatus, TaskQueue, getQueueBackend } from "task-queue";
 import type { IQueueBackend } from "task-queue";
 import { usePlatform } from "./platform-context";
+import { useToast } from "./toast-context";
 
 //
 // Adds "asset database" specific functionality to the gallery source.
@@ -70,6 +71,7 @@ export interface IAssetDatabaseProviderProps {
 
 export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IAssetDatabaseProviderProps) {
     const platform = usePlatform();
+    const { addToast } = useToast();
 
     //
     // Set to true while loading assets.
@@ -340,16 +342,24 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
 
     //
     // Opens a database by path directly (without showing file dialog).
+    // Checks accessibility first; if not found, notifies the user and returns without
+    // changing state so the previously open database stays loaded.
     //
     async function openDatabase(dbPath: string): Promise<void> {
+        const exists = await platform.checkDatabaseExists(dbPath);
+        if (!exists) {
+            addToast({
+                message: `Database not found: ${dbPath}`,
+                color: 'warning',
+            });
+            return;
+        }
+
         if (databasePath) {
             await closeDatabase();
         }
 
-        // Directly set the database path to trigger loading
         setDatabasePath(dbPath);
-
-        // Notify platform that database was opened (adds to recent databases and updates menu)
         await platform.notifyDatabaseOpened(dbPath);
     }
     

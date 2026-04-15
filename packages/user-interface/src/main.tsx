@@ -17,7 +17,7 @@ import { Fps } from "./components/fps";
 import { AboutPage } from "./pages/about";
 import { MapPage } from "./pages/map/map-page";
 import { ConfigurationDialog } from "./components/configuration-dialog";
-import { ToastContextProvider, useToast } from "./context/toast-context";
+import { useToast } from "./context/toast-context";
 import { ToastContainer } from "./components/toast-container";
 import { useImport } from "./context/import-context";
 import { ImportPage } from "./pages/import/import-page";
@@ -279,9 +279,7 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
 export function Main({ isMobile, initialTheme }: IMainProps) {
     return (
         <CssVarsProvider defaultMode={initialTheme}>
-            <ToastContextProvider>
-                <__Main isMobile={isMobile} initialTheme={initialTheme} />
-            </ToastContextProvider>
+            <__Main isMobile={isMobile} initialTheme={initialTheme} />
         </CssVarsProvider>
     );
 }

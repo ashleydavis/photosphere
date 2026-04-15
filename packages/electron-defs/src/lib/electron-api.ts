@@ -135,6 +135,11 @@ export interface IElectronAPI {
     checkTools: () => Promise<IToolsStatus>;
 
     //
+    // Checks whether a database directory exists at the given path.
+    //
+    checkDatabaseExists: (databasePath: string) => Promise<boolean>;
+
+    //
     // Returns the absolute file system path for a File object obtained from a drag-and-drop event.
     // Required in Electron 30+ where File.path is no longer available in the renderer.
     //

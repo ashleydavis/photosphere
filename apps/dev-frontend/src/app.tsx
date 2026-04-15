@@ -7,7 +7,8 @@ import {
     GalleryLayoutContextProvider,
     SearchContextProvider,
     DeleteConfirmationContextProvider,
-    ImportContextProvider
+    ImportContextProvider,
+    ToastContextProvider,
 } from "user-interface";
 import { useWebSocket } from "./lib/use-web-socket";
 import { WebSocketQueueBackend } from "./lib/websocket-queue-backend";
@@ -38,19 +39,21 @@ export function App() {
         >
             <PlatformProviderWeb ws={ws}>
                 <ImportContextProvider>
-                <AppContextProvider>
-                        <AssetDatabaseProvider queueBackend={queueBackend} restApiUrl="http://localhost:3001">
-                            <GalleryContextProvider>
-                                <DeleteConfirmationContextProvider>
-                                    <SearchContextProvider>
-                                        <GalleryLayoutContextProvider>
-                                            <Main isMobile={false} initialTheme={initialTheme} />
-                                        </GalleryLayoutContextProvider>
-                                    </SearchContextProvider>
-                                </DeleteConfirmationContextProvider>
-                            </GalleryContextProvider>
-                        </AssetDatabaseProvider>
-                </AppContextProvider>
+                    <AppContextProvider>
+                        <ToastContextProvider>
+                            <AssetDatabaseProvider queueBackend={queueBackend} restApiUrl="http://localhost:3001">
+                                <GalleryContextProvider>
+                                    <DeleteConfirmationContextProvider>
+                                        <SearchContextProvider>
+                                            <GalleryLayoutContextProvider>
+                                                <Main isMobile={false} initialTheme={initialTheme} />
+                                            </GalleryLayoutContextProvider>
+                                        </SearchContextProvider>
+                                    </DeleteConfirmationContextProvider>
+                                </GalleryContextProvider>
+                            </AssetDatabaseProvider>
+                        </ToastContextProvider>
+                    </AppContextProvider>
                 </ImportContextProvider>
             </PlatformProviderWeb>
         </HashRouter>

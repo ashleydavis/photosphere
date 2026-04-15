@@ -218,6 +218,12 @@ export interface IPlatformContext {
     checkTools: () => Promise<IToolsStatus>;
 
     //
+    // Checks whether a database directory exists at the given path.
+    // On web, always returns true.
+    //
+    checkDatabaseExists: (databasePath: string) => Promise<boolean>;
+
+    //
     // Subscribes to task messages (worker progress events).
     // Returns an unsubscribe function. On web, the handler is never called.
     //
