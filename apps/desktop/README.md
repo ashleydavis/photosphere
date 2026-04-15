@@ -12,7 +12,7 @@ desktop/
 │   ├── worker.ts                            # Worker process
 │   ├── rest-api-worker.ts                   # REST API worker process
 │   └── lib/
-│       ├── worker-backend-electron-main.ts   # Electron main process worker backend
+│       ├── worker-pool-electron-main.ts   # Electron main process worker pool
 │       └── worker-init.ts                   # Worker initialization utilities
 ├── bundle/                                  # Bundled output
 │   ├── main.js

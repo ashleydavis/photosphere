@@ -2,9 +2,8 @@ import { log, retry, tryOrLog, retryOrLog, swallowError, IUuidGenerator } from "
 import { HashCache } from "./hash-cache";
 import { scanPaths } from "./file-scanner";
 import { IAddSummary } from "./media-file-database";
-import { TaskStatus } from "task-queue";
+import { TaskStatus, TaskQueue } from "task-queue";
 import { ICheckFileData, ICheckFileResult } from "./check.worker";
-import type { ITaskQueueProvider } from "task-queue";
 import { IStorageDescriptor, IS3Credentials } from "storage";
 import * as os from "os";
 import * as path from "path";
@@ -21,7 +20,6 @@ export async function checkPaths(
     storageDescriptor: IStorageDescriptor,
     paths: string[],
     progressCallback: CheckPathsProgressCallback | undefined,
-    taskQueueProvider: ITaskQueueProvider,
     s3Config: IS3Credentials | undefined,
     uuidGenerator: IUuidGenerator,
     sessionTempDir: string
@@ -40,25 +38,24 @@ export async function checkPaths(
         totalSize: 0,
         averageSize: 0,
     };
-    const queue = taskQueueProvider.get();
+    const queue = new TaskQueue(uuidGenerator, storageDescriptor.dbDir);
     let filesAddedToCache = 0;
 
     try {
         //
         // Registers a callback to integrate results as tasks complete.
         //
-        queue.onTaskComplete<ICheckFileData, ICheckFileResult>(async (task, result) => {
+        queue.onTaskComplete<ICheckFileData, ICheckFileResult>(async (result) => {
             if (result.status === TaskStatus.Succeeded) {
 
                 summary.filesProcessed++;
 
                 const checkResult = result.outputs!;
-                const taskData = task.data;
-                
+
                 // Add hash to cache if computation was successful and hash wasn't already in cache
                 if (checkResult.hashedFile) {
                     if (!checkResult.hashFromCache) {
-                        localHashCache.addHash(taskData.filePath, {
+                        localHashCache.addHash(result.inputs.filePath, {
                             hash: Buffer.from(checkResult.hashedFile.hash, "hex"),
                             lastModified: new Date(checkResult.hashedFile.lastModified),
                             length: checkResult.hashedFile.length,
@@ -76,22 +73,22 @@ export async function checkPaths(
                     // Use database lookup result from worker
                     // Use logicalPath for display (always set)
                     if (checkResult.matchingRecordsCount > 0) {
-                        log.verbose(`File "${taskData.logicalPath}" with hash "${checkResult.hashedFile.hash}", matches ${checkResult.matchingRecordsCount} existing records.`);
+                        log.verbose(`File "${result.inputs.logicalPath}" with hash "${checkResult.hashedFile.hash}", matches ${checkResult.matchingRecordsCount} existing records.`);
                         summary.filesAlreadyAdded++;
-                    } 
-                    else {
-                        log.verbose(`File "${taskData.logicalPath}" has not been added to the media file database.`);
-                        summary.filesAdded++;
-                        summary.totalSize += taskData.fileStat.length;
                     }
-                } 
+                    else {
+                        log.verbose(`File "${result.inputs.logicalPath}" has not been added to the media file database.`);
+                        summary.filesAdded++;
+                        summary.totalSize += result.inputs.fileStat.length;
+                    }
+                }
                 else {
-                    log.error(`Failed to get hash for file ${taskData.logicalPath}`);
+                    log.error(`Failed to get hash for file ${result.inputs.logicalPath}`);
                     summary.filesFailed++;
                 }                
             } 
             else if (result.status === TaskStatus.Failed) {
-                const taskData = task.data as ICheckFileData;
+                const taskData = result.inputs;
                 const logicalPath = taskData.logicalPath || "unknown";
                 if (result.error) {
                     log.exception(`Failed to check file "${logicalPath}": ${result.errorMessage}`, result.error);
@@ -118,7 +115,7 @@ export async function checkPaths(
                 hashCacheDir,
                 s3Config,
                 logicalPath: result.logicalPath, // Use logicalPath for display to user
-            } as ICheckFileData, storageDescriptor.dbDir);
+            } as ICheckFileData);
         }, (currentlyScanning, state) => {
             summary.filesIgnored = state.numFilesIgnored;
             if (progressCallback) {

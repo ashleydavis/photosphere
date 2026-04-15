@@ -1,5 +1,6 @@
 //
-// Import worker handler - handles file import tasks
+// Upload-asset worker handler - uploads a single asset's files to storage and
+// returns all data needed by the orchestrator to write the asset to the database.
 //
 
 import * as fs from "fs/promises";
@@ -9,26 +10,19 @@ import os from "os";
 import path from "path";
 import { createStorage, loadEncryptionKeys, IStorageDescriptor, IS3Credentials } from "storage";
 import type { ITaskContext } from "task-queue";
-import { validateAndHash, getHashFromCache, computeAssetHash } from "./hash";
-import { HashCache } from "./hash-cache";
+import { computeAssetHash } from "./hash";
 import { IFileStat } from "./file-scanner";
-import { createMediaFileDatabase, extractDominantColorFromThumbnail } from "./media-file-database";
+import { IAssetDetails, extractDominantColorFromThumbnail } from "./media-file-database";
 import { getVideoDetails } from "./video";
 import { getImageDetails } from "./image";
-import { IAssetDetails } from "./media-file-database";
 import { ILocation, log, retry, reverseGeocode, swallowError } from "utils";
 import { LARGE_FILE_TIMEOUT } from "./constants";
 import dayjs from "dayjs";
 import { IAsset } from "defs";
-import { IHashedData, addItem } from "merkle-tree";
-import { BsonDatabase } from "bdb";
-import { acquireWriteLock, releaseWriteLock } from "./write-lock";
-import { loadMerkleTree, saveMerkleTree } from "./tree";
-import { updateDatabaseConfig } from "./database-config";
+import { IHashedData } from "merkle-tree";
 
 //
-// Payload for the hash-file task. Contains everything needed to hash the file, check for
-// duplicates, and — if the file is new — queue an import-file task with the full context.
+// Payload for the upload-asset task.
 //
 export interface IUploadAssetData {
     // Actual path to the file (e.g. temp file when importing from zip).
@@ -43,16 +37,13 @@ export interface IUploadAssetData {
     // Identifies the target database and encryption keys.
     storageDescriptor: IStorageDescriptor;
 
-    // Directory for the hash cache (read-only in the worker).
-    hashCacheDir: string;
-
     // S3 credentials when the database is hosted in cloud storage (optional).
     s3Config?: IS3Credentials;
 
     // Path used in UI (e.g. path inside a zip).
     logicalPath: string;
 
-    // ID to use for this asset if it is imported.
+    // ID to use for this asset.
     assetId: string;
 
     // Labels to attach to the asset (e.g. folder hierarchy).
@@ -61,64 +52,100 @@ export interface IUploadAssetData {
     // Google Maps API key for reverse geocoding (optional).
     googleApiKey?: string;
 
-    // Unique identifier for the session, used to acquire the write lock.
+    // Unique identifier for the session.
     sessionId: string;
 
     // When true, files are scanned and hashed but not written to the database.
     dryRun?: boolean;
+
+    // Pre-computed SHA-256 hash of the file content, supplied by the orchestrator.
+    expectedHash: Uint8Array;
 }
 
 //
-// Handler for importing a single file. Hashes the file, checks for duplicates, then performs
-// uploads and writes the asset record and merkle tree directly to the database under the write lock.
+// All data the orchestrator needs to write a single asset to the database.
 //
-export async function uploadAssetHandler(data: IUploadAssetData, context: ITaskContext): Promise<void> {
+export interface IAssetDatabaseData {
+    // ID used for asset/thumb/display storage paths.
+    assetId: string;
+
+    // Storage path of the original asset file.
+    assetPath: string;
+
+    // Hex-encoded SHA-256 hash of the uploaded asset.
+    assetHash: string;
+
+    // Byte length of the uploaded asset.
+    assetLength: number;
+
+    // Last-modified date of the uploaded asset.
+    assetLastModified: Date;
+
+    // Storage path of the thumbnail (optional).
+    thumbPath?: string;
+
+    // Hex-encoded SHA-256 hash of the thumbnail (optional).
+    thumbHash?: string;
+
+    // Byte length of the thumbnail (optional).
+    thumbLength?: number;
+
+    // Last-modified date of the thumbnail (optional).
+    thumbLastModified?: Date;
+
+    // Storage path of the display version (optional).
+    displayPath?: string;
+
+    // Hex-encoded SHA-256 hash of the display version (optional).
+    displayHash?: string;
+
+    // Byte length of the display version (optional).
+    displayLength?: number;
+
+    // Last-modified date of the display version (optional).
+    displayLastModified?: Date;
+
+    // Full metadata record ready for metadataCollection.insertOne().
+    assetRecord: IAsset;
+}
+
+//
+// Result returned by the upload-asset task.
+//
+export interface IUploadAssetResult {
+    // All data needed by the orchestrator to write this asset to the database.
+    assetData: IAssetDatabaseData;
+
+    // Total byte size of all uploaded files (asset + thumb + display).
+    totalSize: number;
+}
+
+//
+// Handler for uploading a single asset. Extracts metadata, uploads files to storage,
+// and returns all data needed by the orchestrator for the database write.
+// Does NOT write to the database or acquire the write lock.
+//
+export async function uploadAssetHandler(data: IUploadAssetData, context: ITaskContext): Promise<IUploadAssetResult | undefined> {
     if (context.isCancelled()) {
         return;
     }
 
     context.sendMessage({ type: "import-pending", assetId: data.assetId, logicalPath: data.logicalPath });
 
-    const { filePath, fileStat, contentType, storageDescriptor, hashCacheDir, s3Config, googleApiKey, dryRun, sessionId } = data;
+    const { filePath, fileStat, contentType, storageDescriptor, s3Config, googleApiKey, dryRun } = data;
     const { uuidGenerator, timestampProvider } = context;
 
     const assetId = data.assetId;
     log.verbose(`Importing file ${data.logicalPath} to asset database with asset id ${assetId}`);
 
-    // Load hash cache (read-only)
-    const localHashCache = new HashCache(hashCacheDir, true);
-    await localHashCache.load();
+    const expectedHashBuffer = Buffer.from(data.expectedHash);
 
-    // Check cache first
-    let hashedFile = await getHashFromCache(filePath, fileStat, localHashCache);
-
-    if (!hashedFile) {
-        // Not in cache - compute hash
-        hashedFile = await validateAndHash(filePath, fileStat, contentType, data.logicalPath);
-        if (!hashedFile) {
-            throw new Error(`Failed to validate and hash file ${data.logicalPath} (${assetId})`);
-        }
-    }
-
-    // Check if file is already in database before doing any work
     const { options: storageOptions } = await loadEncryptionKeys(storageDescriptor.encryptionKeyPaths, false);
-    const { storage, rawStorage } = createStorage(storageDescriptor.dbDir, s3Config, storageOptions);
-    const database = createMediaFileDatabase(storage, uuidGenerator, timestampProvider);
-    const metadataCollection = database.metadataCollection;
-    const localHashStr = hashedFile.hash.toString("hex");
-    const existingRecordsEarlyCheck = await metadataCollection.sortIndex("hash", "asc").findByValue(localHashStr);
-    if (existingRecordsEarlyCheck.length > 0) {
-        context.sendMessage({ type: "import-skipped", assetId: data.assetId, logicalPath: data.logicalPath });
-        return;
-    }
+    const { storage } = createStorage(storageDescriptor.dbDir, s3Config, storageOptions);
 
-    const expectedHashBuffer = Buffer.from(hashedFile.hash);
-
-    // Extract metadata/details and import (storage already created above)
     const assetTempDir = path.join(os.tmpdir(), `photosphere`, `assets`, uuidGenerator.generate());
     await ensureDir(assetTempDir);
-    
-    // Use logicalPath for display (always set)
+
     const fileDisplayPath = data.logicalPath;
     
     try {
@@ -133,7 +160,7 @@ export async function uploadAssetHandler(data: IUploadAssetData, context: ITaskC
             assetDetails = await getImageDetails(filePath, assetTempDir, contentType, uuidGenerator, data.logicalPath);
         }
 
-        const assetPath = `asset/${assetId}`; //todo: this relies on the wrapper!
+        const assetPath = `asset/${assetId}`;
         const thumbPath = `thumb/${assetId}`;
         const displayPath = `display/${assetId}`;
 
@@ -142,7 +169,6 @@ export async function uploadAssetHandler(data: IUploadAssetData, context: ITaskC
         }
 
         try {
-            let wasSkippedConcurrently = false;
             let hashedAsset: IHashedData;
 
             // Upload files (no database writes here - that's done in main thread)
@@ -169,6 +195,10 @@ export async function uploadAssetHandler(data: IUploadAssetData, context: ITaskC
                 }
             }
 
+            if (context.isCancelled()) {
+                return;
+            }
+
             let thumbHash: Buffer | undefined = undefined;
             let thumbLength: number | undefined = undefined;
             let thumbLastModified: Date | undefined = undefined;
@@ -192,6 +222,10 @@ export async function uploadAssetHandler(data: IUploadAssetData, context: ITaskC
                     thumbLength = hashedThumb.length;
                     thumbLastModified = hashedThumb.lastModified;
                 }
+            }
+
+            if (context.isCancelled()) {
+                return;
             }
 
             let displayHash: Buffer | undefined = undefined;
@@ -225,6 +259,10 @@ export async function uploadAssetHandler(data: IUploadAssetData, context: ITaskC
                 properties.metadata = assetDetails.metadata;
             }
 
+            if (context.isCancelled()) {
+                return;
+            }
+
             let coordinates: ILocation | undefined = undefined;
             let location: string | undefined = undefined;
             if (assetDetails?.coordinates) {
@@ -247,6 +285,10 @@ export async function uploadAssetHandler(data: IUploadAssetData, context: ITaskC
                     .split("/")
                     .filter(label => label)
             );
+
+            if (context.isCancelled()) {
+                return;
+            }
 
             const description = "";
             const micro = assetDetails?.microPath
@@ -278,80 +320,32 @@ export async function uploadAssetHandler(data: IUploadAssetData, context: ITaskC
                 color: color || [0, 0, 0],
             };
 
-            // Write asset record and merkle tree directly to the database under the write lock.
-            await acquireWriteLock(rawStorage, sessionId, 3);
+            const totalSize = hashedAsset.length
+                + (thumbLength ?? 0)
+                + (displayLength ?? 0);
 
-            try {
-                if (!dryRun) {
-                    // Check for duplicates before touching the merkle tree: another worker may have
-                    // imported the same content concurrently (e.g. two files with identical bytes
-                    // in the same scan). Re-check under the write lock before doing any work.
-                    const bsonDatabase = new BsonDatabase(storage, ".db/bson", uuidGenerator, timestampProvider);
-                    const metadataCollection = bsonDatabase.collection<IAsset>("metadata");
-                    const existingRecords = await metadataCollection.sortIndex("hash", "asc").findByValue(expectedHashBuffer.toString("hex"));
-                    if (existingRecords.length > 0) {
-                        log.verbose(`File "${data.logicalPath}" (${assetId}) already inserted by a concurrent import, skipping.`);
-                        wasSkippedConcurrently = true;
-                        context.sendMessage({ type: "import-skipped", assetId: data.assetId, logicalPath: data.logicalPath });
-                    }
-                    else {
-                        let merkleTree = await retry(() => loadMerkleTree(storage));
-                        if (!merkleTree) {
-                            throw new Error(`Failed to load merkle tree`);
-                        }
+            const assetData: IAssetDatabaseData = {
+                assetId,
+                assetPath,
+                assetHash: hashedAsset.hash.toString("hex"),
+                assetLength: hashedAsset.length,
+                assetLastModified: hashedAsset.lastModified,
+                thumbPath: assetDetails?.thumbnailPath ? thumbPath : undefined,
+                thumbHash: thumbHash?.toString("hex"),
+                thumbLength,
+                thumbLastModified,
+                displayPath: assetDetails?.displayPath ? displayPath : undefined,
+                displayHash: displayHash?.toString("hex"),
+                displayLength,
+                displayLastModified,
+                assetRecord,
+            };
 
-                        // Add asset file to merkle tree
-                        merkleTree = addItem(merkleTree, {
-                            name: assetPath,
-                            hash: Buffer.from(hashedAsset.hash.toString("hex"), "hex"),
-                            length: hashedAsset.length,
-                            lastModified: hashedAsset.lastModified,
-                        });
+            log.verbose(dryRun
+                ? `[DRY RUN] Would add file "${data.logicalPath}" to the database with ID "${assetId}".`
+                : `Uploaded file "${data.logicalPath}" with ID "${assetId}".`);
 
-                        // Add thumbnail to merkle tree if present
-                        if (assetDetails?.thumbnailPath && thumbHash) {
-                            merkleTree = addItem(merkleTree, {
-                                name: thumbPath,
-                                hash: Buffer.from(thumbHash.toString("hex"), "hex"),
-                                length: thumbLength!,
-                                lastModified: thumbLastModified!,
-                            });
-                        }
-
-                        // Add display file to merkle tree if present
-                        if (assetDetails?.displayPath && displayHash) {
-                            merkleTree = addItem(merkleTree, {
-                                name: displayPath,
-                                hash: Buffer.from(displayHash.toString("hex"), "hex"),
-                                length: displayLength!,
-                                lastModified: displayLastModified!,
-                            });
-                        }
-
-                        // Update filesImported counter in merkle tree metadata
-                        if (!merkleTree.databaseMetadata) {
-                            merkleTree.databaseMetadata = { filesImported: 0 };
-                        }
-                        merkleTree.databaseMetadata.filesImported = (merkleTree.databaseMetadata.filesImported ?? 0) + 1;
-
-                        await metadataCollection.insertOne(assetRecord);
-                        await retry(() => saveMerkleTree(merkleTree, storage));
-                        await bsonDatabase.commit();
-                        await updateDatabaseConfig(rawStorage, { lastModifiedAt: new Date().toISOString() });
-                    }
-                }
-            }
-            finally {
-                await releaseWriteLock(rawStorage);
-            }
-
-            if (!wasSkippedConcurrently) {
-                log.verbose(dryRun
-                    ? `[DRY RUN] Would add file "${data.logicalPath}" to the database with ID "${assetId}" with id ${assetId}.`
-                    : `Added file "${data.logicalPath}" to the database with ID "${assetId}" with id ${assetId}.`);
-
-                context.sendMessage({ type: "import-success", assetId: data.assetId, logicalPath: data.logicalPath, micro });
-            }
+            return { assetData, totalSize };
         }
         catch (err: any) {
             log.exception(`Error importing file ${filePath} (${assetId})`, err);

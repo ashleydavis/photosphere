@@ -107,7 +107,7 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
             syncCompletedCallbacksRef.current.forEach(cb => cb());
         };
 
-        electronAPI.onMessage('sync-completed', handleSyncCompleted); //todo: it might be better just to have one event that all these separate events are chanelled through.
+        electronAPI.onMessage('sync-completed', handleSyncCompleted);
 
         return () => {
             electronAPI.removeAllListeners('sync-completed');
@@ -150,7 +150,7 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
 
         return () => {
             // Note: removeAllListeners is intentionally not called here because
-            // WorkerBackendElectronRenderer also registers a listener for 'task-message'
+            // WorkerPoolElectronRenderer also registers a listener for 'task-message'
             // and removing all listeners would break it.
         };
     }, [electronAPI]);
@@ -165,7 +165,7 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
 
         return () => {
             // Note: removeAllListeners is intentionally not called here because
-            // WorkerBackendElectronRenderer also registers a listener for 'task-completed'
+            // WorkerPoolElectronRenderer also registers a listener for 'task-completed'
             // and removing all listeners would break it.
         };
     }, [electronAPI]);

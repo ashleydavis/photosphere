@@ -1,26 +1,32 @@
 //
-// Mock worker backend for testing TaskQueue
-// Executes tasks synchronously/inline for fast, predictable tests
+// Mock queue backend for testing TaskQueue.
+// Executes tasks inline (in-process) for fast, predictable tests.
 //
 
-import type { ITask, ITaskResult, IWorkerBackend, WorkerTaskCompletionCallback, TaskMessageCallback } from "../src/lib/worker-backend";
-import { TaskStatus } from "../src/lib/worker-backend";
+import type { ITaskResult, WorkerTaskCompletionCallback, TaskMessageCallback, IMessageCallbackEntry, UnsubscribeFn } from "../src/lib/types";
+import type { IQueueBackend } from "../src/lib/queue-backend";
+import { TaskStatus } from "../src/lib/types";
 import type { ITaskContext } from "../src/lib/types";
 import { executeTaskHandler } from "../src/lib/worker";
 import { TestUuidGenerator, TestTimestampProvider } from "node-utils";
 
-export class MockWorkerBackend implements IWorkerBackend {
+//
+// Mock implementation of IQueueBackend that executes tasks inline.
+// Supports concurrency limits for testing parallel-execution scenarios.
+//
+export class MockWorkerPool implements IQueueBackend {
     private completionCallbacks: WorkerTaskCompletionCallback[] = [];
-    private messageCallbacks: Array<{ messageType: string; callback: TaskMessageCallback }> = [];
+    private messageCallbacks: IMessageCallbackEntry[] = [];
     private anyMessageCallbacks: TaskMessageCallback[] = [];
-    private workerAvailableCallbacks: (() => void)[] = [];
-    private queueTaskCallbacks: Array<(type: string, data: any, source: string) => void> = [];
-    private activeTasks: Map<string, ITask<any>> = new Map();
+    private taskAddedCallbacks: Map<string, ((taskId: string) => void)[]> = new Map();
+    private tasksCancelledCallbacks: Map<string, (() => void)[]> = new Map();
+    private activeTaskCount: number = 0;
+    private pendingTasks: { id: string; type: string; data: any; source: string }[] = [];
     private maxConcurrent: number;
     private cancelledSources: Set<string> = new Set();
-    private baseContext: Omit<ITaskContext, "sendMessage" | "queueTask" | "isCancelled">;
+    private baseContext: Omit<ITaskContext, "sendMessage" | "isCancelled" | "taskId">;
 
-    constructor(maxConcurrent: number = 2, baseContext?: Partial<Omit<ITaskContext, "sendMessage" | "queueTask" | "isCancelled">>) {
+    constructor(maxConcurrent: number = 2, baseContext?: Partial<Omit<ITaskContext, "sendMessage" | "isCancelled" | "taskId">>) {
         this.maxConcurrent = maxConcurrent;
         this.baseContext = {
             uuidGenerator: baseContext?.uuidGenerator || new TestUuidGenerator(),
@@ -29,82 +35,89 @@ export class MockWorkerBackend implements IWorkerBackend {
         };
     }
 
-    dispatchTask(task: ITask<any>): boolean {
-        if (this.activeTasks.size >= this.maxConcurrent) {
-            return false;
+    addTask(type: string, data: any, source: string, taskId?: string): string {
+        const id = taskId ?? `${type}-${Date.now()}-${Math.random()}`;
+        const cbs = this.taskAddedCallbacks.get(source);
+        if (cbs) {
+            for (const cb of cbs) {
+                cb(id);
+            }
         }
-
-        this.activeTasks.set(task.id, task);
-        
-        // Execute task asynchronously
-        this.executeTask(task).catch((error) => {
-            console.error(`Error executing task ${task.id}:`, error);
-        });
-
-        return true;
+        this.pendingTasks.push({ id, type, data, source });
+        this.tryDispatch();
+        return id;
     }
 
-    private async executeTask(task: ITask<any>): Promise<void> {
+    private tryDispatch(): void {
+        while (this.activeTaskCount < this.maxConcurrent && this.pendingTasks.length > 0) {
+            const task = this.pendingTasks.shift()!;
+            this.activeTaskCount++;
+            this.executeTask(task).catch((error) => {
+                console.error(`Error executing task ${task.id}:`, error);
+            });
+        }
+    }
+
+    private async executeTask(task: { id: string; type: string; data: any; source: string }): Promise<void> {
         try {
-            // Create a task-specific sendMessage function
             const taskSpecificSendMessage = (message: any): void => {
                 this.notifyMessageCallbacks(task.id, message);
             };
 
-            // Create task context
             const taskContext: ITaskContext = {
                 ...this.baseContext,
                 sendMessage: taskSpecificSendMessage,
-                queueTask: (type: string, data: any, source: string): void => {
-                    for (const callback of this.queueTaskCallbacks) {
-                        callback(type, data, source);
-                    }
-                },
                 isCancelled: (): boolean => this.cancelledSources.has(task.source),
+                taskId: task.id,
             };
 
             const outputs = await executeTaskHandler(task.type, task.data, taskContext);
 
-            // Task completed successfully
             const result: ITaskResult = {
                 taskId: task.id,
+                type: task.type,
+                inputs: task.data,
                 status: TaskStatus.Succeeded,
                 outputs,
             };
 
-            this.activeTasks.delete(task.id);
+            this.activeTaskCount--;
             await this.notifyCompletionCallbacks(result);
-            this.notifyWorkerAvailable();
+            this.tryDispatch();
         }
         catch (error: any) {
-            // Task failed
             const err = error instanceof Error ? error : new Error(String(error));
             const result: ITaskResult = {
                 taskId: task.id,
+                type: task.type,
+                inputs: task.data,
                 status: TaskStatus.Failed,
                 error: err,
                 errorMessage: err.message || "Unknown error",
             };
 
-            this.activeTasks.delete(task.id);
+            this.activeTaskCount--;
             await this.notifyCompletionCallbacks(result);
-            this.notifyWorkerAvailable();
+            this.tryDispatch();
         }
     }
 
-    onWorkerAvailable(callback: () => void): () => void {
-        this.workerAvailableCallbacks.push(callback);
-        // Immediately notify that a worker is available
-        callback();
+    onTaskAdded(source: string, callback: (taskId: string) => void): UnsubscribeFn {
+        const existing = this.taskAddedCallbacks.get(source) ?? [];
+        existing.push(callback);
+        this.taskAddedCallbacks.set(source, existing);
         return () => {
-            const index = this.workerAvailableCallbacks.indexOf(callback);
-            if (index !== -1) {
-                this.workerAvailableCallbacks.splice(index, 1);
+            const callbacks = this.taskAddedCallbacks.get(source);
+            if (callbacks) {
+                const index = callbacks.indexOf(callback);
+                if (index !== -1) {
+                    callbacks.splice(index, 1);
+                }
             }
         };
     }
 
-    onTaskComplete(callback: WorkerTaskCompletionCallback): () => void {
+    onTaskComplete(callback: WorkerTaskCompletionCallback): UnsubscribeFn {
         this.completionCallbacks.push(callback);
         return () => {
             const index = this.completionCallbacks.indexOf(callback);
@@ -114,7 +127,7 @@ export class MockWorkerBackend implements IWorkerBackend {
         };
     }
 
-    onTaskMessage(messageType: string, callback: TaskMessageCallback): () => void {
+    onTaskMessage(messageType: string, callback: TaskMessageCallback): UnsubscribeFn {
         const entry = { messageType, callback };
         this.messageCallbacks.push(entry);
         return () => {
@@ -125,7 +138,7 @@ export class MockWorkerBackend implements IWorkerBackend {
         };
     }
 
-    onAnyTaskMessage(callback: TaskMessageCallback): () => void {
+    onAnyTaskMessage(callback: TaskMessageCallback): UnsubscribeFn {
         this.anyMessageCallbacks.push(callback);
         return () => {
             const index = this.anyMessageCallbacks.indexOf(callback);
@@ -135,30 +148,39 @@ export class MockWorkerBackend implements IWorkerBackend {
         };
     }
 
-    onQueueTask(callback: (type: string, data: any, source: string) => void): () => void {
-        this.queueTaskCallbacks.push(callback);
+    cancelTasks(source: string): void {
+        this.cancelledSources.add(source);
+        this.pendingTasks = this.pendingTasks.filter(task => task.source !== source);
+        const callbacks = this.tasksCancelledCallbacks.get(source);
+        if (callbacks) {
+            for (const cb of callbacks) {
+                cb();
+            }
+        }
+    }
+
+    onTasksCancelled(source: string, callback: () => void): UnsubscribeFn {
+        const existing = this.tasksCancelledCallbacks.get(source) ?? [];
+        existing.push(callback);
+        this.tasksCancelledCallbacks.set(source, existing);
         return () => {
-            const index = this.queueTaskCallbacks.indexOf(callback);
-            if (index !== -1) {
-                this.queueTaskCallbacks.splice(index, 1);
+            const cbs = this.tasksCancelledCallbacks.get(source);
+            if (cbs) {
+                const idx = cbs.indexOf(callback);
+                if (idx !== -1) {
+                    cbs.splice(idx, 1);
+                }
             }
         };
     }
 
-    cancelTasks(source: string): void {
-        this.cancelledSources.add(source);
-    }
-
-    isIdle(): boolean {
-        return this.activeTasks.size === 0;
-    }
-
     shutdown(): void {
-        this.activeTasks.clear();
+        this.pendingTasks = [];
         this.completionCallbacks = [];
         this.messageCallbacks = [];
         this.anyMessageCallbacks = [];
-        this.workerAvailableCallbacks = [];
+        this.taskAddedCallbacks.clear();
+        this.tasksCancelledCallbacks.clear();
     }
 
     private async notifyCompletionCallbacks(result: ITaskResult): Promise<void> {
@@ -175,7 +197,6 @@ export class MockWorkerBackend implements IWorkerBackend {
     private notifyMessageCallbacks(taskId: string, message: any): void {
         const messageType = message && typeof message === "object" && "type" in message ? message.type : undefined;
 
-        // Notify callbacks registered for specific message types
         for (const { messageType: filterType, callback } of this.messageCallbacks) {
             if (messageType !== filterType) {
                 continue;
@@ -189,7 +210,6 @@ export class MockWorkerBackend implements IWorkerBackend {
             }
         }
 
-        // Notify callbacks registered for any message type
         for (const callback of this.anyMessageCallbacks) {
             try {
                 callback({ taskId, message });
@@ -199,11 +219,4 @@ export class MockWorkerBackend implements IWorkerBackend {
             }
         }
     }
-
-    private notifyWorkerAvailable(): void {
-        for (const callback of this.workerAvailableCallbacks) {
-            callback();
-        }
-    }
 }
-

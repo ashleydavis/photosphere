@@ -1,8 +1,9 @@
-import type { ITask, ITaskResult, IWorkerBackend, WorkerTaskCompletionCallback, TaskMessageCallback } from "task-queue";
+import type { ITask, ITaskResult, WorkerTaskCompletionCallback, TaskMessageCallback, IMessageCallbackEntry, IQueueBackend, UnsubscribeFn } from "task-queue";
 import { TaskStatus } from "task-queue";
 import { executeTaskHandler } from "task-queue";
 import type { ITaskContext } from "task-queue";
 import type { IUuidGenerator, ITimestampProvider } from "utils";
+import { randomUUID } from "node:crypto";
 import { initTaskHandlers } from "api";
 
 interface IBaseTaskContext {
@@ -24,25 +25,32 @@ interface IRunningTask {
 }
 
 //
-// Inline worker backend that executes tasks directly without workers
+// Inline worker pool that executes tasks directly without workers
 // Supports up to maxConcurrent tasks running at once
 //
-export class WorkerBackendInline implements IWorkerBackend {
+export class WorkerPoolInline implements IQueueBackend {
     private completionCallbacks: WorkerTaskCompletionCallback[] = [];
-    private messageCallbacks: Array<{ messageType: string; callback: TaskMessageCallback }> = [];
+    private messageCallbacks: IMessageCallbackEntry[] = [];
     private anyMessageCallbacks: TaskMessageCallback[] = [];
-    private workerAvailableCallbacks: (() => void)[] = [];
-    private queueTaskCallbacks: Array<(type: string, data: any, source: string) => void> = [];
     private maxConcurrent: number;
-    private baseContext: IBaseTaskContext;
+    private baseContext: IBaseTaskContext; //fio:
 
     // Tracks currently running tasks by ID so cancelTasks can mark them cancelled by source.
     private runningTasks: Map<string, IRunningTask> = new Map();
 
-    // Initializes the inline worker backend with max concurrent tasks and working directory
+    // Tasks waiting to be executed when a slot opens up.
+    private pendingTasks: ITask<any>[] = [];
+
+    // Callbacks registered per source via onTaskAdded.
+    private taskAddedCallbacks: Map<string, ((taskId: string) => void)[]> = new Map();
+
+    // Callbacks registered per source via onTasksCancelled.
+    private tasksCancelledCallbacks: Map<string, (() => void)[]> = new Map();
+
+    // Initializes the inline worker pool with max concurrent tasks and working directory
     constructor(maxConcurrent: number, uuidGenerator: IUuidGenerator, timestampProvider: ITimestampProvider, workerOptions: { verbose: boolean; sessionId: string }) {
         this.maxConcurrent = maxConcurrent;
-        
+
         // Initialize task handlers
         initTaskHandlers();
         
@@ -57,25 +65,64 @@ export class WorkerBackendInline implements IWorkerBackend {
     }
 
     //
-    // Gets a summary of the worker pool.
+    // Adds a task to the queue. Executes immediately if a slot is available, otherwise queues it.
     //
-    getStatus() {
-        return {
-            peakWorkers: this.maxConcurrent
+    addTask(type: string, data: any, source: string, taskId?: string): string {
+        const id = taskId ?? randomUUID();
+        const task: ITask<any> = {
+            id,
+            type,
+            status: TaskStatus.Pending,
+            data,
+            source,
+            createdAt: new Date(),
+        };
+        this.pendingTasks.push(task);
+
+        const callbacks = this.taskAddedCallbacks.get(source);
+        if (callbacks) {
+            for (const cb of callbacks) {
+                cb(id);
+            }
+        }
+
+        this.tryDispatchPending();
+        return id;
+    }
+
+    //
+    // Registers a callback that fires when a task with the given source is added.
+    //
+    onTaskAdded(source: string, callback: (taskId: string) => void): UnsubscribeFn {
+        const existing = this.taskAddedCallbacks.get(source);
+        if (existing) {
+            existing.push(callback);
+        }
+        else {
+            this.taskAddedCallbacks.set(source, [callback]);
+        }
+        return () => {
+            const cbs = this.taskAddedCallbacks.get(source);
+            if (cbs) {
+                const idx = cbs.indexOf(callback);
+                if (idx !== -1) {
+                    cbs.splice(idx, 1);
+                }
+            }
         };
     }
 
     //
-    // Registers a callback that will be called when a worker becomes available.
+    // Dispatches pending tasks up to the concurrency limit.
     //
-    onWorkerAvailable(callback: () => void): () => void {
-        this.workerAvailableCallbacks.push(callback);
-        return () => {
-            const index = this.workerAvailableCallbacks.indexOf(callback);
-            if (index !== -1) {
-                this.workerAvailableCallbacks.splice(index, 1);
-            }
-        };
+    private tryDispatchPending(): void {
+        while (this.pendingTasks.length > 0 && this.runningTasks.size < this.maxConcurrent) {
+            const task = this.pendingTasks.shift()!;
+            this.runningTasks.set(task.id, { id: task.id, source: task.source, cancelled: false });
+            this.executeTask(task).catch((error) => {
+                console.error(`Error executing task ${task.id}:`, error);
+            });
+        }
     }
 
     //
@@ -118,37 +165,6 @@ export class WorkerBackendInline implements IWorkerBackend {
                 this.anyMessageCallbacks.splice(index, 1);
             }
         };
-    }
-
-    //
-    // Registers a callback that will be called when a task requests another task to be queued.
-    //
-    onQueueTask(callback: (type: string, data: any, source: string) => void): () => void {
-        this.queueTaskCallbacks.push(callback);
-        return () => {
-            const index = this.queueTaskCallbacks.indexOf(callback);
-            if (index !== -1) {
-                this.queueTaskCallbacks.splice(index, 1);
-            }
-        };
-    }
-
-    //
-    // Notifies callback of worker availability.
-    //
-    private notifyWorkerAvailable(): void {
-        for (const callback of this.workerAvailableCallbacks) {
-            callback();
-        }
-    }
-
-    //
-    // Notifies all registered queue-task callbacks.
-    //
-    private notifyQueueTaskCallbacks(type: string, data: any, source: string): void {
-        for (const callback of this.queueTaskCallbacks) {
-            callback(type, data, source);
-        }
     }
 
     //
@@ -205,22 +221,6 @@ export class WorkerBackendInline implements IWorkerBackend {
     // Dispatches as many tasks a possible to workers.
     // Returns true if the task was dispatched, false if no worker was available.
     //
-    dispatchTask(task: ITask<any>): boolean {
-        if (this.runningTasks.size >= this.maxConcurrent) {
-            // The maximum number of concurrent tasks is reached, so we don't process any more tasks yet.
-            return false;
-        }
-
-        this.runningTasks.set(task.id, { id: task.id, source: task.source, cancelled: false });
-
-        // Execute task inline
-        this.executeTask(task).catch((error) => {
-            console.error(`Error executing task ${task.id}:`, error);
-        });
-
-        return true;
-    }
-
     //
     // Executes a task inline and handles completion or failure
     //
@@ -234,65 +234,83 @@ export class WorkerBackendInline implements IWorkerBackend {
                 });
             };
 
-            // Create a task-specific context with the task-specific sendMessage and queueTask
             const taskContextWithSendMessage: ITaskContext = {
                 ...this.baseContext,
                 sendMessage: taskSpecificSendMessage,
-                queueTask: (type: string, data: any, source: string): void => {
-                    this.notifyQueueTaskCallbacks(type, data, source);
-                },
                 isCancelled: (): boolean => this.runningTasks.get(task.id)?.cancelled ?? false,
+                taskId: task.id,
             };
 
             const outputs = await executeTaskHandler(task.type, task.data, taskContextWithSendMessage);
 
-            // Task completed successfully
             const result: ITaskResult = {
                 status: TaskStatus.Succeeded,
                 outputs,
                 taskId: task.id,
+                type: task.type,
+                inputs: task.data,
             };
 
             this.runningTasks.delete(task.id);
             await this.notifyCompletionCallbacks(result);
-            this.notifyWorkerAvailable();
+            this.tryDispatchPending();
         }
         catch (error: any) {
-            // Task failed
             const err = error instanceof Error ? error : new Error(String(error));
             const result: ITaskResult = {
                 status: TaskStatus.Failed,
                 error: err,
                 errorMessage: err.message || "Unknown error",
                 taskId: task.id,
+                type: task.type,
+                inputs: task.data,
             };
 
             this.runningTasks.delete(task.id);
             await this.notifyCompletionCallbacks(result);
-            this.notifyWorkerAvailable();
+            this.tryDispatchPending();
         }
     }
 
     //
-    // Checks if all workers are idle.
-    //
-    isIdle(): boolean {
-        return this.runningTasks.size === 0;
-    }
-
-    //
-    // Signals running tasks with the given source to cancel.
+    // Signals running tasks with the given source to cancel, drops pending tasks, and fires cancellation callbacks.
     //
     cancelTasks(source: string): void {
+        this.pendingTasks = this.pendingTasks.filter(task => task.source !== source);
         for (const runningTask of this.runningTasks.values()) {
             if (runningTask.source === source) {
                 runningTask.cancelled = true;
             }
         }
+
+        const callbacks = this.tasksCancelledCallbacks.get(source);
+        if (callbacks) {
+            for (const cb of callbacks) {
+                cb();
+            }
+        }
     }
 
     //
-    // Shuts down the worker backend (no-op for inline execution)
+    // Registers a callback that fires when cancelTasks is called for the given source.
+    //
+    onTasksCancelled(source: string, callback: () => void): UnsubscribeFn {
+        const existing = this.tasksCancelledCallbacks.get(source) ?? [];
+        existing.push(callback);
+        this.tasksCancelledCallbacks.set(source, existing);
+        return () => {
+            const cbs = this.tasksCancelledCallbacks.get(source);
+            if (cbs) {
+                const idx = cbs.indexOf(callback);
+                if (idx !== -1) {
+                    cbs.splice(idx, 1);
+                }
+            }
+        };
+    }
+
+    //
+    // Shuts down the worker pool (no-op for inline execution)
     //
     shutdown(): void {
         // Nothing to shut down for inline execution

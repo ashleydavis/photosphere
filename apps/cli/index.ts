@@ -37,7 +37,6 @@ import pc from "picocolors";
 import { exit } from 'node-utils';
 import { log, FatalError } from 'utils';
 import { version } from 'config';
-import { startDebugServer } from 'debug-server';
 
 async function main() {
 
@@ -538,21 +537,6 @@ Resources:
         .addHelpText('after', getCommandExamplesHelp('decrypt'))
         .action(initContext(decryptCommand));
 
-    // Start debug server if --debug flag is set (before parsing so it's available during command execution)
-    if (process.argv.includes('--debug')) {
-        try {
-            const { url } = await startDebugServer({
-                initialData: {},
-                openBrowser: true
-            });
-            console.log(pc.green(`Debug REST API server started on ${url}`));
-            console.log(pc.cyan("Press Ctrl+C in this terminal to stop the server."));
-        }
-        catch (error: any) {
-            console.error(pc.red(`Failed to start debug server: ${error.message}`));
-        }
-    }
-
     // Parse the command line arguments
     try {
         await program.parseAsync(process.argv);
@@ -607,3 +591,20 @@ main()
         handleError(error, undefined);
         return exit(1);
     });
+
+//
+// Handle uncaught exceptions in the CLI process
+//
+process.on('uncaughtException', (error) => {
+    handleError(error, 'uncaught exception');
+    process.exit(1);
+});
+
+//
+// Handle unhandled promise rejections in the CLI process
+//
+process.on('unhandledRejection', (reason) => {
+    const error = reason instanceof Error ? reason : new Error(String(reason));
+    handleError(error, 'unhandled rejection');
+    process.exit(1);
+});

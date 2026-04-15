@@ -51,7 +51,6 @@ To move assets from Google Photos:
     - packages/
         - api - Core API for database operations
         - bdb - BSON database implementation
-        - debug-server - Debug server utilities
         - defs - Type definitions
         - electron-defs - Electron-specific type definitions
         - merkle-tree - Merkle tree data structure

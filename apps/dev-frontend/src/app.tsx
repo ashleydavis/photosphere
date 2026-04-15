@@ -10,9 +10,10 @@ import {
     ImportContextProvider
 } from "user-interface";
 import { useWebSocket } from "./lib/use-web-socket";
-import { TaskQueueProviderWebSocket } from "./lib/task-queue-provider-websocket";
+import { WebSocketQueueBackend } from "./lib/websocket-queue-backend";
+import { setQueueBackend } from "task-queue";
 import { PlatformProviderWeb } from "./lib/platform-provider-web";
-import { RandomUuidGenerator, TimestampProvider } from "utils";
+
 
 export function App() {
     const ws = useWebSocket();    
@@ -25,9 +26,8 @@ export function App() {
     const urlParams = new URLSearchParams(window.location.search);
     const initialTheme = (urlParams.get('theme') as 'light' | 'dark' | 'system') || 'system';
     
-    const uuidGenerator = new RandomUuidGenerator();
-    const timestampProvider = new TimestampProvider();
-    const taskQueueProvider = new TaskQueueProviderWebSocket(ws, uuidGenerator, timestampProvider);
+    const queueBackend = new WebSocketQueueBackend(ws);
+    setQueueBackend(queueBackend);
 
     return (
         <HashRouter
@@ -39,7 +39,7 @@ export function App() {
             <PlatformProviderWeb ws={ws}>
                 <ImportContextProvider>
                 <AppContextProvider>
-                        <AssetDatabaseProvider taskQueueProvider={taskQueueProvider} restApiUrl="http://localhost:3001">
+                        <AssetDatabaseProvider queueBackend={queueBackend} restApiUrl="http://localhost:3001">
                             <GalleryContextProvider>
                                 <DeleteConfirmationContextProvider>
                                     <SearchContextProvider>

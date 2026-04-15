@@ -5,11 +5,11 @@ import { IAsset, IDatabaseOp } from "defs";
 import { RandomUuidGenerator } from "utils";
 import { IObservable, Observable } from "../lib/subscription";
 import { loadAssets as loadAssetsApi } from "api/src/lib/load-assets";
-import type { IAssetPageMessage, ILoadAssetsData, ILoadAssetsResult } from "api/src/lib/load-assets.types";
+import type { ILoadAssetsData, ILoadAssetsResult } from "api/src/lib/load-assets.types";
 import type { ISyncBatchMessage } from "api/src/lib/sync-database.types";
 import axios from "axios";
-import { TaskStatus } from "task-queue";
-import type { ITaskQueueProvider } from "task-queue";
+import { TaskStatus, TaskQueue, getQueueBackend } from "task-queue";
+import type { IQueueBackend } from "task-queue";
 import { usePlatform } from "./platform-context";
 
 //
@@ -64,11 +64,11 @@ export interface IAssetDatabase extends IGallerySource {
 
 export interface IAssetDatabaseProviderProps {
     children: ReactNode | ReactNode[];
-    taskQueueProvider: ITaskQueueProvider;
+    queueBackend: IQueueBackend;
     restApiUrl: string;
 }
 
-export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl }: IAssetDatabaseProviderProps) {
+export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IAssetDatabaseProviderProps) {
     const platform = usePlatform();
 
     //
@@ -90,6 +90,11 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
     // Unsubscribe function for the current load's task queue callbacks.
     //
     const unsubscribeCurrentLoad = useRef<(() => void) | undefined>(undefined);
+
+    //
+    // The TaskQueue instance for the current in-progress load, used to cancel it.
+    //
+    const currentLoadQueue = useRef<TaskQueue | undefined>(undefined);
 
     //
     // Set to true while working on something.
@@ -452,8 +457,11 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
     //
     // Cancels an in-progress database load and cleans up its subscriptions.
     //
-    function cancelDatabaseLoad(dbPath: string): void {
-        taskQueueProvider.get().cancelTasks(dbPath);
+    function cancelDatabaseLoad(_dbPath: string): void {
+        if (currentLoadQueue.current) {
+            currentLoadQueue.current.shutdown();
+            currentLoadQueue.current = undefined;
+        }
         if (unsubscribeCurrentLoad.current) {
             unsubscribeCurrentLoad.current();
             unsubscribeCurrentLoad.current = undefined;
@@ -497,14 +505,15 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
         //
         onReset.current.invoke();
 
-        const queue = taskQueueProvider.get();
+        const queue = new TaskQueue(new RandomUuidGenerator(), dbPath);
+        currentLoadQueue.current = queue;
 
         // Store the database path at the time the load started
         const currentDatabasePath = dbPath;
 
         // Set up listener for task completion before queuing the task
-        const unsubscribeComplete = queue.onTaskComplete<ILoadAssetsData, ILoadAssetsResult>((task, result) => {
-            if (task.type === "load-assets") {
+        const unsubscribeComplete = queue.onTaskComplete<ILoadAssetsData, ILoadAssetsResult>((result) => {
+            if (result.type === "load-assets") {
                 if (result.status === TaskStatus.Succeeded) {
                     console.log(`Load assets task completed: ${result.outputs?.totalAssets} assets loaded`);
                 }
@@ -512,7 +521,7 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
                     console.error("Load assets task failed:", result.errorMessage);
                 }
 
-                if (task.data.databasePath === currentDatabasePath) {
+                if (result.inputs?.databasePath === currentDatabasePath) {
                     loadingDatabasePath.current = undefined;
                     setIsLoading(false);
 
@@ -533,7 +542,7 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
         });
 
         // Receive asset pages.
-        const unsubscribeMessage = queue.onTaskMessage<IAssetPageMessage>("asset-page", data => {
+        const unsubscribeMessage = queue.onTaskMessage("asset-page", data => {
             // Discard messages that belong to a different (now-closed) database.
             if (data.message.databasePath !== currentDatabasePath) {
                 return;
@@ -602,8 +611,7 @@ export function AssetDatabaseProvider({ children, taskQueueProvider, restApiUrl 
     // Subscribe to incremental sync-batch task messages and apply changes live to the gallery.
     //
     useEffect(() => {
-        const queue = taskQueueProvider.get();
-        const unsubscribeSyncBatch = queue.onTaskMessage<ISyncBatchMessage>("sync-batch", (data) => {
+        const unsubscribeSyncBatch = queueBackend.onTaskMessage("sync-batch", (data) => {
             const batch = data.message as ISyncBatchMessage;
             if (batch.databasePath !== databasePath) {
                 return;

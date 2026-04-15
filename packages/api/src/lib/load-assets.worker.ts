@@ -3,6 +3,7 @@
 //
 
 import type { ITaskContext } from "task-queue";
+import { TaskQueue } from "task-queue";
 import { createLazyDatabaseStorage, createMediaFileDatabase, isDatabasePartial } from "./media-file-database";
 import { createStorage } from "storage";
 import type { ILoadAssetsData, ILoadAssetsResult } from "./load-assets.types";
@@ -88,9 +89,10 @@ export async function loadAssetsHandler(
         nextPageId = result.nextPageId;
     }
     
-    // Queue thumb prefetch only for partial databases.
     if (isPartial) {
-        context.queueTask("prefetch-database", { databasePath: data.databasePath }, data.databasePath);
+        // Queue thumb prefetch only for partial databases.
+        const queue = new TaskQueue(context.uuidGenerator, data.databasePath);
+        queue.addTask("prefetch-database", { databasePath: data.databasePath });
     }
 
     return {

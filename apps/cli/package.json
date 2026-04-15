@@ -55,7 +55,6 @@
     "wrap-ansi": "^9.0.0",
     "bdb": "workspace:*",
     "defs": "workspace:*",
-    "task-queue": "workspace:*",
-    "debug-server": "workspace:*"
+    "task-queue": "workspace:*"
   }
 }

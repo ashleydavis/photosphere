@@ -53,7 +53,7 @@ export async function verifyCommand(context: ICommandContext, options: IVerifyCo
     //
     writeProgress('Verifying assets...');
     
-    const result = await verify(storageDescriptor, assetStorage, context.taskQueueProvider, metadataCollection, {
+    const result = await verify(storageDescriptor, assetStorage, context.uuidGenerator, metadataCollection, {
         full: options.full,
         pathFilter: options.path,
         s3Config

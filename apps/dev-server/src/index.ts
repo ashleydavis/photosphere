@@ -1,6 +1,6 @@
 import { RandomUuidGenerator, TimestampProvider, log } from "utils";
-import { TaskStatus, type ITaskQueue } from "task-queue";
-import { TaskQueueProviderInline } from "./lib/task-queue-provider-inline";
+import { TaskStatus, setQueueBackend } from "task-queue";
+import { WorkerPoolInline } from "./lib/worker-pool-inline";
 import express from "express";
 import { createServer } from "http";
 import { WebSocketServer, type WebSocket } from "ws";
@@ -19,7 +19,8 @@ const PORT = 3001;
 const uuidGenerator = new RandomUuidGenerator();
 const timestampProvider = new TimestampProvider();
 const sessionId = uuidGenerator.generate();
-const taskQueueProvider = new TaskQueueProviderInline(uuidGenerator, timestampProvider, sessionId);
+const workerPool = new WorkerPoolInline(10, uuidGenerator, timestampProvider, { verbose: true, sessionId });
+setQueueBackend(workerPool);
 
 
 // Create Express app for HTTP routes
@@ -75,11 +76,6 @@ interface IConnectionSyncState {
     // True while a sync task is queued or running; prevents concurrent syncs.
     //
     isSyncRunning: boolean;
-
-    //
-    // The task queue for this connection.
-    //
-    queue: ITaskQueue;
 }
 
 //
@@ -91,7 +87,7 @@ function enqueueSyncTask(state: IConnectionSyncState): void {
     }
     state.isSyncRunning = true;
     log.info(`Queuing sync task for ${state.currentDatabasePath}`);
-    state.queue.addTask("sync-database", { databasePath: state.currentDatabasePath }, state.currentDatabasePath);
+    workerPool.addTask("sync-database", { databasePath: state.currentDatabasePath }, state.currentDatabasePath);
 }
 
 //
@@ -107,7 +103,7 @@ function syncStopped(state: IConnectionSyncState): void {
 //
 function resetSyncState(state: IConnectionSyncState): void {
     if (state.currentDatabasePath) {
-        state.queue.cancelTasks(state.currentDatabasePath);
+        workerPool.cancelTasks(state.currentDatabasePath);
     }
     syncStopped(state);
     if (state.syncDebounceTimer !== null) {
@@ -157,36 +153,24 @@ function stopPeriodicSync(state: IConnectionSyncState): void {
 wss.on("connection", (ws: WebSocket) => {
     console.log("WebSocket connection opened");
 
-    const queue = taskQueueProvider.get();
-
     // Per-connection sync state — automatically cleaned up when the client disconnects.
     const syncState: IConnectionSyncState = {
         currentDatabasePath: null,
         syncDebounceTimer: null,
         syncPeriodicTimer: null,
         isSyncRunning: false,
-        queue,
     };
 
     startPeriodicSync(syncState);
 
     // Set up task completion handler to send results back to this client
-    const unsubscribeTaskComplete = queue.onTaskComplete(async (task, result) => {
+    const unsubscribeTaskComplete = workerPool.onTaskComplete(async (result) => {
         ws.send(JSON.stringify({
             type: "task-completed",
             taskId: result.taskId,
-            task: {
-                id: task.id,
-                type: task.type,
-                status: task.status,
-                data: task.data,
-                createdAt: task.createdAt.toISOString(),
-                startedAt: task.startedAt?.toISOString(),
-                completedAt: task.completedAt?.toISOString(),
-            },
             result: result,
         }));
-        if (task.type === "sync-database") {
+        if (result.type === "sync-database") {
             syncStopped(syncState);
             if (result.status !== TaskStatus.Succeeded) {
                 ws.send(JSON.stringify({ type: "sync-completed" }));
@@ -195,7 +179,7 @@ wss.on("connection", (ws: WebSocket) => {
     });
 
     // Set up task message handler to send messages back to this client
-    const unsubscribeTaskMessage = queue.onAnyTaskMessage(data => {
+    const unsubscribeTaskMessage = workerPool.onAnyTaskMessage(data => {
         ws.send(JSON.stringify({
             type: "task-message",
             ...data,
@@ -216,11 +200,11 @@ wss.on("connection", (ws: WebSocket) => {
 
             if (messageData.type === "add-task") {
                 // Queue the task using the client-provided task ID and source
-                const taskId = queue.addTask(messageData.taskType, messageData.data, messageData.source, messageData.taskId);
+                const taskId = workerPool.addTask(messageData.taskType, messageData.data, messageData.source, messageData.taskId);
                 console.log(`Queued task ${taskId} of type ${messageData.taskType}`);
             }
             else if (messageData.type === "cancel-tasks") {
-                queue.cancelTasks(messageData.source);
+                workerPool.cancelTasks(messageData.source);
             }
             else if (messageData.type === "open-database") {
                 // Handle database opening request
