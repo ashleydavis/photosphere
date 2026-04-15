@@ -45,7 +45,7 @@ const sessionId = workerOptions.sessionId || uuidGenerator.generate();
 //
 // Worker-side queue backend — receives child task completions forwarded from the main thread.
 //
-const workerBackend = new WorkerQueueBackend((message) => self.postMessage(message));
+const workerBackend = new WorkerQueueBackend((message) => self.postMessage(message), uuidGenerator);
 setQueueBackend(workerBackend);
 
 //

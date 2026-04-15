@@ -1,14 +1,17 @@
 import { WorkerQueueBackend } from "../src/lib/worker-queue-backend";
 import { TaskStatus } from "../src/lib/types";
 import type { ITaskResult } from "../src/lib/types";
+import type { IUuidGenerator } from "utils";
 
 describe("WorkerQueueBackend", () => {
     let postMessage: jest.Mock;
+    let uuidGenerator: IUuidGenerator;
     let backend: WorkerQueueBackend;
 
     beforeEach(() => {
         postMessage = jest.fn();
-        backend = new WorkerQueueBackend(postMessage);
+        uuidGenerator = { generate: () => "test-uuid" };
+        backend = new WorkerQueueBackend(postMessage, uuidGenerator);
     });
 
     test("addTask calls postMessage with { type, taskId, taskType, data, source }", () => {
