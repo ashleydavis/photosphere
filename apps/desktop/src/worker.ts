@@ -45,12 +45,6 @@ if (!parentPort) {
 }
 
 //
-// Worker-side queue backend — receives child task completions forwarded from the main process.
-//
-const workerBackend = new WorkerQueueBackend((message) => parentPort.postMessage(message));
-setQueueBackend(workerBackend);
-
-//
 // Execute a task handler in the worker
 //
 async function executeTask(message: IWorkerMessage, taskContext: ITaskContext): Promise<void> {
@@ -100,6 +94,12 @@ setLog(createWorkerLog(workerOptions.verbose, workerOptions.tools));
 const uuidGenerator = process.env.NODE_ENV === "testing" ? new TestUuidGenerator() : new RandomUuidGenerator();
 const timestampProvider = process.env.NODE_ENV === "testing" ? new TestTimestampProvider() : new TimestampProvider();
 const sessionId = workerOptions.sessionId;
+
+//
+// Worker-side queue backend — receives child task completions forwarded from the main process.
+//
+const workerBackend = new WorkerQueueBackend((message) => parentPort.postMessage(message), uuidGenerator);
+setQueueBackend(workerBackend);
 
 //
 // The currently executing task context, null when idle.

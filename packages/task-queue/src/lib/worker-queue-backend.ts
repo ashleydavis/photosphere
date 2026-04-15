@@ -4,7 +4,7 @@
 // fires completion callbacks when "task-completed" messages are forwarded back by the main process.
 //
 
-import { randomUUID } from "node:crypto";
+import type { IUuidGenerator } from "utils";
 import type { IQueueBackend } from "./queue-backend";
 import type { ITaskResult, WorkerTaskCompletionCallback, TaskMessageCallback, UnsubscribeFn, IMessageCallbackEntry } from "./types";
 
@@ -19,6 +19,11 @@ export class WorkerQueueBackend implements IQueueBackend {
     // Function used to send messages to the main process or thread.
     //
     private postMessage: (message: any) => void;
+
+    //
+    // UUID generator for creating unique task IDs.
+    //
+    private uuidGenerator: IUuidGenerator;
 
     //
     // Callbacks invoked when any child task completes.
@@ -45,15 +50,16 @@ export class WorkerQueueBackend implements IQueueBackend {
     //
     private tasksCancelledCallbacks: Map<string, (() => void)[]> = new Map();
 
-    constructor(postMessage: (message: any) => void) {
+    constructor(postMessage: (message: any) => void, uuidGenerator: IUuidGenerator) {
         this.postMessage = postMessage;
+        this.uuidGenerator = uuidGenerator;
     }
 
     //
     // Sends a "queue-task" message to the main process and fires onTaskAdded callbacks.
     //
     addTask(type: string, data: any, source: string, taskId?: string): string {
-        const id = taskId ?? randomUUID();
+        const id = taskId ?? this.uuidGenerator.generate();
         this.postMessage({ type: "queue-task", taskId: id, taskType: type, data, source });
         const callbacks = this.taskAddedCallbacks.get(source);
         if (callbacks) {
