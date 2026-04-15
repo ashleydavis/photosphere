@@ -10,7 +10,7 @@ dev-server/
 │   ├── index.ts                              # Server entry point
 │   └── lib/
 │       ├── task-queue-provider-inline.ts     # Inline task queue provider
-│       └── worker-backend-inline.ts          # Inline worker backend
+│       └── worker-pool-inline.ts          # Inline worker pool
 ├── package.json
 └── tsconfig.json
 ```

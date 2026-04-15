@@ -1,47 +1,68 @@
 import { log } from "utils";
-import { ITask, ITaskResult, IWorkerBackend, WorkerTaskCompletionCallback, TaskMessageCallback, TaskStatus } from "task-queue";
-import type { IWorkerOptions } from "./worker-init";
+import { ITask, ITaskResult, WorkerTaskCompletionCallback, TaskMessageCallback, TaskStatus, IMessageCallbackEntry, IQueueBackend, UnsubscribeFn } from "task-queue";
+import { randomUUID } from "node:crypto";
+import { initTaskHandlers } from "api";
 
 //
-// Worker info interface for debugging and monitoring (Bun-specific)
+// Options passed to workers for context initialization
 //
-export interface IWorkerInfo {
+export interface IWorkerOptions {
+    // Unique numeric identifier assigned to this worker.
     workerId: number;
-    isReady: boolean;
-    isIdle: boolean;
-    currentTaskId: string | null;
-    currentTaskType: string | null;
-    currentTaskRunningTimeMs: number | null;
-    tasksProcessed: number;
-}
 
-//
-// Callback for worker state changes (Bun-specific)
-//
-export type WorkerStateChangeCallback = (workers: IWorkerInfo[]) => void;
+    // Whether verbose logging is enabled.
+    verbose?: boolean;
+
+    // Whether tool output logging is enabled.
+    tools?: boolean;
+
+    // Session identifier forwarded to task handlers.
+    sessionId?: string;
+}
 
 //
 // Worker state interface
 //
 interface IWorkerState {
+    // The underlying Bun Worker thread.
     worker: Worker;
+
+    // Unique numeric identifier assigned to this worker for logging and options.
     workerId: number;
-    isReady: boolean; // Worker has sent "ready" message and can process tasks
-    isIdle: boolean; // Worker is ready and not currently processing a task
+
+    // Worker has sent "ready" message and can process tasks.
+    isReady: boolean;
+
+    // Worker is ready and not currently processing a task.
+    isIdle: boolean;
+
+    // ID of the task currently being processed, or null if idle.
     currentTaskId: string | null;
+
+    // Type of the task currently being processed, or null if idle.
     currentTaskType: string | null;
+
+    // Elapsed milliseconds for the current task, updated on status polls, or null if idle.
     currentTaskRunningTimeMs: number | null;
-    tasksProcessed: number; // Number of tasks this worker has completed (successful or failed)
+
+    // Number of tasks this worker has completed (successful or failed).
+    tasksProcessed: number;
+
+    // Timestamp (Date.now()) when the current task started, or null if idle.
     taskStartTime: number | null;
 }
-
 
 //
 // Options passed to workers for context initialization (does not include workerId, which is assigned per worker)
 //
-export interface IWorkerBackendOptions {
+export interface IWorkerPoolOptions {
+    // Enable verbose logging in worker threads.
     verbose?: boolean;
+
+    // Enable tool support in worker threads.
     tools?: boolean;
+
+    // Session identifier forwarded to workers for context initialization.
     sessionId?: string;
 }
 
@@ -49,14 +70,19 @@ export interface IWorkerBackendOptions {
 // Worker message interface for communication between main thread and workers
 //
 export interface IWorkerMessage {
+    // Discriminant for the message union; always "execute".
     type: "execute";
+
+    // Unique identifier for the task being dispatched.
     taskId: string;
+
+    // Handler name that the worker uses to look up the task implementation.
     taskType: string;
+
+    // Input payload for the task handler.
     data: any;
 
-    //
     // Source tag of the task, used to match cancellation signals.
-    //
     source: string;
 }
 
@@ -64,7 +90,10 @@ export interface IWorkerMessage {
 // Message sent from main thread to worker to cancel tasks with a given source.
 //
 export interface IWorkerCancelTasksMessage {
+    // Discriminant for the message union; always "cancel-tasks".
     type: "cancel-tasks";
+
+    // Source tag identifying which group of tasks should be cancelled.
     source: string;
 }
 
@@ -72,18 +101,29 @@ export interface IWorkerCancelTasksMessage {
 // Worker response message types
 //
 export interface IWorkerReadyMessage {
+    // Discriminant for the message union; always "worker-ready".
     type: "worker-ready";
 }
 
 export interface IWorkerTaskCompletedMessage {
+    // Discriminant for the message union; always "task-completed".
     type: "task-completed";
+
+    // ID of the task that finished.
     taskId: string;
+
+    // Outcome of the task, including status, error, and output data.
     result: ITaskResult;
 }
 
 export interface IWorkerTaskMessage {
+    // Discriminant for the message union; always "task-message".
     type: "task-message";
+
+    // ID of the task that sent the message.
     taskId: string;
+
+    // Arbitrary payload emitted by the task handler mid-execution.
     message: any;
 }
 
@@ -91,35 +131,79 @@ export interface IWorkerTaskMessage {
 // Message sent from worker to main thread to request queuing a new task.
 //
 export interface IWorkerQueueTaskMessage {
+    //
+    // The type of the message.
+    //
     type: "queue-task";
+
+    //
+    // Pre-assigned task ID from the worker-side TaskQueue, so the main thread uses the same ID.
+    // This enables the main thread to forward task-completed back to the correct worker by origin.
+    //
+    taskId: string;
+
+    //
+    // Specifies the handler to use when running the task.
+    //
     taskType: string;
+
+    //
+    // Input data for the task.
+    //
     data: any;
 
     //
     // Source tag to associate the new task with a logical group (e.g. database path).
     //
     source: string;
+
 }
 
+//
+// Union of all message types that a worker thread can send to the main thread.
+//
 type IWorkerResponseMessage = IWorkerReadyMessage | IWorkerTaskCompletedMessage | IWorkerTaskMessage | IWorkerQueueTaskMessage;
 
 //
 // Manages workers on Bun.
 //
-export class WorkerBackendBun implements IWorkerBackend {
+export class WorkerPoolBun implements IQueueBackend {
 
+    // All currently allocated worker threads.
     private workers: IWorkerState[] = [];
+
+    // Maximum number of worker threads allowed.
     private maxWorkers: number;
-    private peakWorkers: number = 0;
-    private workerOptions: IWorkerBackendOptions;
-    private workerStateChangeCallback: WorkerStateChangeCallback | null = null;
+
+    // Options forwarded to each worker thread for logging and session initialization.
+    private workerOptions: IWorkerPoolOptions;
+
+    // Milliseconds before a running task is considered timed out.
     private taskTimeout: number;
+
+    // Active timeout handles keyed by task ID, cleared when the task completes.
     private taskTimeouts: Map<string, NodeJS.Timeout> = new Map();
-    private workerAvailableCallbacks: (() => void)[] = [];
+
+    // Callbacks notified when any task completes (success or failure).
     private completionCallbacks: WorkerTaskCompletionCallback[] = [];
-    private messageCallbacks: Array<{ messageType: string; callback: TaskMessageCallback }> = []; //todo: anon type?
+
+    // Callbacks notified for task messages of a specific type.
+    private messageCallbacks: IMessageCallbackEntry[] = [];
+
+    // Callbacks notified for every task message regardless of type.
     private anyMessageCallbacks: TaskMessageCallback[] = [];
-    private queueTaskCallbacks: Array<(type: string, data: any, source: string) => void> = [];
+
+    // Tasks waiting to be dispatched to a worker.
+    private pendingTasks: ITask<any>[] = [];
+
+    // Maps task ID to task for result construction.
+    private taskMap: Map<string, ITask<any>> = new Map();
+
+    // Callbacks registered per source via onTaskAdded.
+    private taskAddedCallbacks: Map<string, ((taskId: string) => void)[]> = new Map();
+
+    // Callbacks registered per source via onTasksCancelled.
+    private tasksCancelledCallbacks: Map<string, (() => void)[]> = new Map();
 
     //
     // Creates a new task queue with the specified number of workers.
@@ -127,32 +211,74 @@ export class WorkerBackendBun implements IWorkerBackend {
     // taskTimeout: Timeout in milliseconds for tasks (default: 10 minutes = 600000ms).
     // workerOptions: Options to pass to workers for logging and context initialization.
     //
-    constructor(maxWorkers: number, taskTimeout: number, workerOptions: IWorkerBackendOptions) {
+    constructor(maxWorkers: number, taskTimeout: number, workerOptions: IWorkerPoolOptions) {
         this.maxWorkers = maxWorkers;
         this.taskTimeout = taskTimeout;
         this.workerOptions = workerOptions;
+        initTaskHandlers();
     }
 
     //
-    // Gets a summary of the worker pool.
     //
-    getStatus() {
-        return {
-            peakWorkers: this.peakWorkers
+    // Adds a task to the pending queue and attempts to dispatch it immediately.
+    //
+    addTask(type: string, data: any, source: string, taskId?: string): string {
+        const id = taskId ?? randomUUID();
+        const task: ITask<any> = {
+            id,
+            type,
+            status: TaskStatus.Pending,
+            data,
+            source,
+            createdAt: new Date(),
         };
-    } 
+        this.pendingTasks.push(task);
+        this.taskMap.set(id, task);
+
+        const callbacks = this.taskAddedCallbacks.get(source);
+        if (callbacks) {
+            for (const cb of callbacks) {
+                cb(id);
+            }
+        }
+
+        this.tryDispatchPending();
+        return id;
+    }
 
     //
-    // Registers a callback that will be called when a worker becomes available.
+    // Registers a callback that fires when a task with the given source is added.
     //
-    onWorkerAvailable(callback: () => void): () => void {
-        this.workerAvailableCallbacks.push(callback);
+    onTaskAdded(source: string, callback: (taskId: string) => void): UnsubscribeFn {
+        const existing = this.taskAddedCallbacks.get(source);
+        if (existing) {
+            existing.push(callback);
+        }
+        else {
+            this.taskAddedCallbacks.set(source, [callback]);
+        }
         return () => {
-            const index = this.workerAvailableCallbacks.indexOf(callback);
-            if (index !== -1) {
-                this.workerAvailableCallbacks.splice(index, 1);
+            const cbs = this.taskAddedCallbacks.get(source);
+            if (cbs) {
+                const idx = cbs.indexOf(callback);
+                if (idx !== -1) {
+                    cbs.splice(idx, 1);
+                }
             }
         };
+    }
+
+    //
+    // Tries to dispatch all pending tasks to available workers.
+    //
+    private tryDispatchPending(): void {
+        while (this.pendingTasks.length > 0) {
+            const task = this.pendingTasks[0];
+            if (!this.dispatchTask(task)) {
+                break;
+            }
+            this.pendingTasks.shift();
+        }
     }
 
     //
@@ -184,6 +310,9 @@ export class WorkerBackendBun implements IWorkerBackend {
         };
     }
 
+    //
+    // Registers a callback that will be called for any task message, regardless of type.
+    //
     onAnyTaskMessage(callback: TaskMessageCallback): () => void {
         this.anyMessageCallbacks.push(callback);
         return () => {
@@ -192,65 +321,6 @@ export class WorkerBackendBun implements IWorkerBackend {
                 this.anyMessageCallbacks.splice(index, 1);
             }
         };
-    }
-
-    //
-    // Registers a callback that will be called when a task requests another task to be queued.
-    //
-    onQueueTask(callback: (type: string, data: any, source: string) => void): () => void {
-        this.queueTaskCallbacks.push(callback);
-        return () => {
-            const index = this.queueTaskCallbacks.indexOf(callback);
-            if (index !== -1) {
-                this.queueTaskCallbacks.splice(index, 1);
-            }
-        };
-    }
-
-    //
-    // Gets current state of all workers for debugging.
-    //
-    getWorkerState(): IWorkerInfo[] {
-        return this.workers.map(worker => {
-            const runningTime = worker.taskStartTime //todo: If the UI could do this calculation wouldn't have to do this map here.
-                ? Date.now() - worker.taskStartTime
-                : null;
-
-            return {
-                workerId: worker.workerId,
-                isReady: worker.isReady,
-                isIdle: worker.isIdle,
-                currentTaskId: worker.currentTaskId,
-                currentTaskType: worker.currentTaskType,
-                currentTaskRunningTimeMs: runningTime,
-                tasksProcessed: worker.tasksProcessed,
-            };
-        });
-    }
-
-    //
-    // Sets a callback to be notified when worker state changes.
-    //
-    onWorkerStateChange(callback: WorkerStateChangeCallback): void {
-        this.workerStateChangeCallback = callback;
-    }
-
-    //
-    // Notifies callback of worker availability.
-    //
-    private notifyWorkerAvailable(): void {
-        for (const callback of this.workerAvailableCallbacks) {
-            callback();
-        }
-    }
-
-    //
-    // Notifies all registered queue-task callbacks.
-    //
-    private notifyQueueTaskCallbacks(type: string, data: any, source: string): void {
-        for (const callback of this.queueTaskCallbacks) {
-            callback(type, data, source);
-        }
     }
 
     //
@@ -305,15 +375,6 @@ export class WorkerBackendBun implements IWorkerBackend {
             }
         }
     }
-   
-    //
-    // Notifies callback of worker state changes.
-    //
-    private notifyWorkerStateChange(): void {
-        if (this.workerStateChangeCallback) {
-            this.workerStateChangeCallback(this.getWorkerState());
-        }
-    }
 
     //
     // Creates a single worker and adds it to the pool.
@@ -359,12 +420,6 @@ export class WorkerBackendBun implements IWorkerBackend {
         });
 
         this.workers.push(workerState);
-
-        if (this.workers.length > this.peakWorkers) {
-            this.peakWorkers = this.workers.length;
-        }
-        
-        this.notifyWorkerStateChange();
         return workerState;
     }
 
@@ -377,7 +432,6 @@ export class WorkerBackendBun implements IWorkerBackend {
         const index = this.workers.indexOf(oldWorkerState);
         if (index > -1) {
             this.workers.splice(index, 1);
-            this.notifyWorkerStateChange();
         }
 
         const env: any = process.env;
@@ -419,7 +473,6 @@ export class WorkerBackendBun implements IWorkerBackend {
         });
 
         this.workers.push(newWorkerState);
-        this.notifyWorkerStateChange();
     }
 
     //
@@ -431,8 +484,7 @@ export class WorkerBackendBun implements IWorkerBackend {
         if (data.type === "worker-ready") {
             workerState.isReady = true;
             workerState.isIdle = true;
-            this.notifyWorkerStateChange();
-            this.notifyWorkerAvailable(); // Try to process pending tasks now that worker is ready
+            this.tryDispatchPending();
             return;
         }
 
@@ -446,7 +498,10 @@ export class WorkerBackendBun implements IWorkerBackend {
                 clearTimeout(timeout);
                 this.taskTimeouts.delete(taskId);
             }
-            
+
+            const task = this.taskMap.get(taskId);
+            this.taskMap.delete(taskId);
+
             // Build result object
             const fullResult: ITaskResult = {
                 taskId: taskId,
@@ -454,6 +509,8 @@ export class WorkerBackendBun implements IWorkerBackend {
                 error: result.error,
                 errorMessage: result.error?.message || "Unknown error",
                 outputs: result.outputs,
+                type: task?.type ?? "",
+                inputs: task?.data,
             };
 
             // Update worker state
@@ -464,8 +521,15 @@ export class WorkerBackendBun implements IWorkerBackend {
             workerState.taskStartTime = null;
             workerState.tasksProcessed++;
 
-            this.notifyWorkerStateChange();
             await this.notifyCompletionCallbacks(fullResult);
+
+            // Broadcast completion to all workers so worker-side TaskQueue instances
+            // (e.g. in orchestrator tasks) can react to child task completions.
+            for (const worker of this.workers) {
+                worker.worker.postMessage({ type: "task-completed", taskId, result: fullResult });
+            }
+
+            this.tryDispatchPending();
             return;
         }
 
@@ -479,7 +543,7 @@ export class WorkerBackendBun implements IWorkerBackend {
         // Handle queue-task request from worker
         if (data.type === "queue-task") {
             const msg = data as IWorkerQueueTaskMessage;
-            this.notifyQueueTaskCallbacks(msg.taskType, msg.data, msg.source);
+            this.addTask(msg.taskType, msg.data, msg.source, msg.taskId);
             return;
         }
     }
@@ -506,11 +570,15 @@ export class WorkerBackendBun implements IWorkerBackend {
         }
 
         const error = new Error("Task timeout");
+        const task = this.taskMap.get(taskId);
+        this.taskMap.delete(taskId);
         const result: ITaskResult = {
             taskId: taskId,
             status: TaskStatus.Failed,
             error: error,
             errorMessage: error.message,
+            type: task?.type ?? "",
+            inputs: task?.data,
         };
 
         workerState.isIdle = true;
@@ -548,11 +616,15 @@ export class WorkerBackendBun implements IWorkerBackend {
             }
 
             const error = new Error("Worker crashed");
+            const task = this.taskMap.get(crashedTaskId);
+            this.taskMap.delete(crashedTaskId);
             const result: ITaskResult = {
                 taskId: crashedTaskId,
                 status: TaskStatus.Failed,
                 error: error,
                 errorMessage: error.message,
+                type: task?.type ?? "",
+                inputs: task?.data,
             };
 
             workerState.currentTaskId = null;
@@ -567,10 +639,11 @@ export class WorkerBackendBun implements IWorkerBackend {
     }
 
     //
-    // Dispatches as many tasks a possible to workers.
+    // Dispatches a single task to an available worker.
     // Returns true if the task was dispatched, false if no worker was available.
     //
-    dispatchTask(task: ITask<any>): boolean {
+    private dispatchTask(task: ITask<any>): boolean {
+
         //
         // Find an available idle worker that has processed the least tasks
         //
@@ -612,7 +685,6 @@ export class WorkerBackendBun implements IWorkerBackend {
         availableWorker.currentTaskId = task.id;
         availableWorker.currentTaskType = task.type;
         availableWorker.taskStartTime = Date.now();
-        this.notifyWorkerStateChange();
 
         // Set up timeout for this task
         const timeoutId = setTimeout(() => {
@@ -649,10 +721,17 @@ export class WorkerBackendBun implements IWorkerBackend {
     }
 
     //
-    // Broadcasts a cancel-tasks message to all workers.
-    // Each worker cancels its running task if its source matches.
+    // Drops pending tasks with the given source and signals running tasks to cancel.
     //
     cancelTasks(source: string): void {
+        this.pendingTasks = this.pendingTasks.filter(task => {
+            if (task.source === source) {
+                this.taskMap.delete(task.id);
+                return false;
+            }
+            return true;
+        });
+
         const cancelMsg: IWorkerCancelTasksMessage = {
             type: "cancel-tasks",
             source,
@@ -660,15 +739,31 @@ export class WorkerBackendBun implements IWorkerBackend {
         for (const workerState of this.workers) {
             workerState.worker.postMessage(cancelMsg);
         }
+
+        const callbacks = this.tasksCancelledCallbacks.get(source);
+        if (callbacks) {
+            for (const cb of callbacks) {
+                cb();
+            }
+        }
     }
 
     //
-    // Checks if all workers are idle.
-    // Only ready workers are considered; workers that have not yet sent worker-ready
-    // do not block (they are not running a task).
+    // Registers a callback that fires when cancelTasks is called for the given source.
     //
-    isIdle(): boolean {
-        return this.workers.filter(w => w.isReady).every(w => w.isIdle);
+    onTasksCancelled(source: string, callback: () => void): UnsubscribeFn {
+        const existing = this.tasksCancelledCallbacks.get(source) ?? [];
+        existing.push(callback);
+        this.tasksCancelledCallbacks.set(source, existing);
+        return () => {
+            const cbs = this.tasksCancelledCallbacks.get(source);
+            if (cbs) {
+                const idx = cbs.indexOf(callback);
+                if (idx !== -1) {
+                    cbs.splice(idx, 1);
+                }
+            }
+        };
     }
 
     //

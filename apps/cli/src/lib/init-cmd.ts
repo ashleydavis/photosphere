@@ -3,8 +3,9 @@ import { createStorage, loadEncryptionKeys, pathJoin, IStorage } from "storage";
 import type { BsonDatabase, IBsonCollection } from "bdb";
 import type { IUuidGenerator, ITimestampProvider } from "utils";
 import type { IAsset } from "defs";
-import type { ITaskQueueProvider } from "task-queue";
-import { TaskQueueProviderBun } from "./task-queue-provider-bun";
+import type { IQueueBackend } from "task-queue";
+import { setQueueBackend } from "task-queue";
+import { WorkerPoolBun } from "./worker-pool-bun";
 import { configureLog } from "./log";
 import { exit, TestUuidGenerator, TestTimestampProvider, registerTerminationCallback } from "node-utils";
 import { log, RandomUuidGenerator, TimestampProvider } from "utils";
@@ -315,7 +316,7 @@ export interface ICommandContext {
     timestampProvider: ITimestampProvider;
     sessionId: string;
     sessionTempDir: string;
-    taskQueueProvider: ITaskQueueProvider;
+    workerPool: IQueueBackend;
 }
 
 //
@@ -349,27 +350,27 @@ export function initContext<TArgs extends any[], TReturn>(
         await fs.mkdir(sessionTempDir, { recursive: true });
         log.verbose(`Created temporary directory for command session: "${sessionTempDir}"`);
         
-        // TaskQueueProvider defaults to number of CPUs if not specified
-        // Check if command supports --workers and --timeout options and use them if provided
+        // Worker pool defaults to number of CPUs if not specified
         const workers = options.workers ?? os.cpus().length;
         const timeout = options.timeout ?? 2400000;
-        const debug = process.argv.includes('--debug');
-        const taskQueueProvider = new TaskQueueProviderBun(workers, timeout, {
+        const workerPool = new WorkerPoolBun(workers, timeout, {
             verbose: options.verbose,
             tools: options.tools,
             sessionId,
-        }, debug, uuidGenerator, timestampProvider);
-        
+        });
+        setQueueBackend(workerPool);
+
         const context: ICommandContext = {
             uuidGenerator,
             timestampProvider,
             sessionId,
             sessionTempDir,
-            taskQueueProvider,
+            workerPool,
         };
         
         // Register cleanup handler for termination
         registerTerminationCallback(async (exitCode: number) => {
+            workerPool.shutdown();
             if (exitCode === 0) {
                 // Successful exit - clean up temp directory
                 try {

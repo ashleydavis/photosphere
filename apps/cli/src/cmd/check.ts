@@ -48,7 +48,6 @@ export async function checkCommand(context: ICommandContext, paths: string[], op
             progressMessage += " | Abort with Ctrl-C";
             writeProgress(progressMessage);
         },
-        context.taskQueueProvider,
         s3Config,
         uuidGenerator,
         sessionTempDir

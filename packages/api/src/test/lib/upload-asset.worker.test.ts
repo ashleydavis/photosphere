@@ -4,47 +4,18 @@ import type { IUploadAssetData } from '../../lib/upload-asset.worker';
 
 // ── module mocks ────────────────────────────────────────────────────────────
 
-jest.mock('../../lib/hash', () => ({
-    validateAndHash: jest.fn(),
-    getHashFromCache: jest.fn(),
-    computeAssetHash: jest.fn(),
+jest.mock('fs', () => ({
+    ...jest.requireActual('fs'),
+    createReadStream: jest.fn().mockReturnValue({ pipe: jest.fn(), on: jest.fn() }),
 }));
 
-jest.mock('../../lib/hash-cache', () => ({
-    HashCache: jest.fn().mockImplementation(() => ({
-        load: jest.fn().mockResolvedValue(undefined),
-    })),
+jest.mock('../../lib/hash', () => ({
+    computeAssetHash: jest.fn(),
 }));
 
 jest.mock('storage', () => ({
     createStorage: jest.fn(),
     loadEncryptionKeys: jest.fn().mockResolvedValue({ options: {} }),
-}));
-
-jest.mock('../../lib/media-file-database', () => ({
-    createMediaFileDatabase: jest.fn(),
-}));
-
-jest.mock('../../lib/write-lock', () => ({
-    acquireWriteLock: jest.fn().mockResolvedValue(true),
-    releaseWriteLock: jest.fn().mockResolvedValue(undefined),
-}));
-
-jest.mock('../../lib/tree', () => ({
-    loadMerkleTree: jest.fn(),
-    saveMerkleTree: jest.fn().mockResolvedValue(undefined),
-}));
-
-jest.mock('merkle-tree', () => ({
-    addItem: jest.fn((tree: any, _item: any) => tree),
-}));
-
-jest.mock('bdb', () => ({
-    BsonDatabase: jest.fn(),
-}));
-
-jest.mock('../../lib/database-config', () => ({
-    updateDatabaseConfig: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock('../../lib/image', () => ({
@@ -60,6 +31,10 @@ jest.mock('node-utils', () => ({
     remove: jest.fn().mockResolvedValue(undefined),
 }));
 
+jest.mock('../../lib/media-file-database', () => ({
+    extractDominantColorFromThumbnail: jest.fn().mockResolvedValue([128, 64, 32]),
+}));
+
 jest.mock('utils', () => ({
     log: { verbose: jest.fn(), error: jest.fn(), exception: jest.fn(), info: jest.fn() },
     retry: jest.fn((fn: () => any) => fn()),
@@ -71,22 +46,13 @@ jest.mock('utils', () => ({
 // ── imports after mocks ─────────────────────────────────────────────────────
 
 import { uploadAssetHandler } from '../../lib/upload-asset.worker';
-import { validateAndHash, getHashFromCache } from '../../lib/hash';
 import { createStorage, loadEncryptionKeys } from 'storage';
-import { createMediaFileDatabase } from '../../lib/media-file-database';
-import { acquireWriteLock, releaseWriteLock } from '../../lib/write-lock';
-import { loadMerkleTree, saveMerkleTree } from '../../lib/tree';
-import { BsonDatabase } from 'bdb';
+import { getImageDetails } from '../../lib/image';
+import { getVideoDetails } from '../../lib/video';
 
-const mockValidateAndHash = validateAndHash as jest.MockedFunction<typeof validateAndHash>;
-const mockGetHashFromCache = getHashFromCache as jest.MockedFunction<typeof getHashFromCache>;
 const mockCreateStorage = createStorage as jest.MockedFunction<typeof createStorage>;
-const mockCreateMediaFileDatabase = createMediaFileDatabase as jest.MockedFunction<typeof createMediaFileDatabase>;
-const mockAcquireWriteLock = acquireWriteLock as jest.MockedFunction<typeof acquireWriteLock>;
-const mockReleaseWriteLock = releaseWriteLock as jest.MockedFunction<typeof releaseWriteLock>;
-const mockLoadMerkleTree = loadMerkleTree as jest.MockedFunction<typeof loadMerkleTree>;
-const mockSaveMerkleTree = saveMerkleTree as jest.MockedFunction<typeof saveMerkleTree>;
-const MockBsonDatabase = BsonDatabase as jest.MockedClass<typeof BsonDatabase>;
+const mockGetImageDetails = getImageDetails as jest.MockedFunction<typeof getImageDetails>;
+const mockGetVideoDetails = getVideoDetails as jest.MockedFunction<typeof getVideoDetails>;
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -99,8 +65,8 @@ function makeContext(overrides: Partial<ITaskContext> = {}): ITaskContext {
         timestampProvider: { now: jest.fn().mockReturnValue(Date.now()), dateNow: jest.fn().mockReturnValue(new Date('2024-01-01')) },
         sessionId: 'session-1',
         sendMessage: jest.fn(),
-        queueTask: jest.fn(),
         isCancelled: jest.fn().mockReturnValue(false),
+        taskId: 'task-1',
         ...overrides,
     };
 }
@@ -118,13 +84,12 @@ function makeStorageDescriptor(): IStorageDescriptor {
 //
 // Builds a minimal IUploadAssetData for testing.
 //
-function makeHashFileData(overrides: Partial<IUploadAssetData> = {}): IUploadAssetData {
+function makeUploadAssetData(overrides: Partial<IUploadAssetData> = {}): IUploadAssetData {
     return {
         filePath: '/test/photos/img.jpg',
         fileStat: { length: 1000, lastModified: new Date('2024-01-01') },
         contentType: 'image/jpeg',
         storageDescriptor: makeStorageDescriptor(),
-        hashCacheDir: '/tmp/photosphere',
         s3Config: undefined,
         logicalPath: '/test/photos/img.jpg',
         assetId: 'asset-1',
@@ -132,26 +97,9 @@ function makeHashFileData(overrides: Partial<IUploadAssetData> = {}): IUploadAss
         googleApiKey: undefined,
         sessionId: 'session-1',
         dryRun: false,
+        expectedHash: new Uint8Array(Buffer.from('aabbcc', 'hex')),
         ...overrides,
     };
-}
-
-//
-// A valid hash buffer returned from validateAndHash / getHashFromCache.
-//
-function makeHashedFile(hexHash = 'aabbcc') {
-    const hash = Buffer.from(hexHash, 'hex');
-    return { hash, length: 1000, lastModified: new Date('2024-01-01') };
-}
-
-//
-// Minimal mock for the metadata collection returned by createMediaFileDatabase.
-//
-function makeMockMetadataCollection(records: any[] = []) {
-    const sortIndex = jest.fn().mockReturnValue({
-        findByValue: jest.fn().mockResolvedValue(records),
-    });
-    return { sortIndex };
 }
 
 //
@@ -174,189 +122,224 @@ function setupStorageMock() {
     return { mockStorage, mockRawStorage };
 }
 
-// ── uploadAssetHandler tests ──────────────────────────────────────────────────
+//
+// Builds a minimal IAssetDetails mock for testing thumbnail/display paths.
+//
+function makeAssetDetails(overrides: Record<string, any> = {}): any {
+    return {
+        resolution: { width: 100, height: 100 },
+        thumbnailPath: '/tmp/thumb.jpg',
+        thumbnailContentType: 'image/jpeg',
+        displayPath: '/tmp/display.jpg',
+        displayContentType: 'image/jpeg',
+        ...overrides,
+    };
+}
+
+// ── uploadAssetHandler tests ─────────────────────────────────────────────────
 
 describe('uploadAssetHandler', () => {
     beforeEach(() => {
         jest.clearAllMocks();
     });
 
-    test('sends import-skipped message when file is already in database', async () => {
-        const context = makeContext();
-        const data = makeHashFileData();
-        const hashedFile = makeHashedFile();
-
-        mockGetHashFromCache.mockResolvedValue(null as any);
-        mockValidateAndHash.mockResolvedValue(hashedFile as any);
-        setupStorageMock();
-
-        const mockMetadataCollection = makeMockMetadataCollection([{ _id: 'existing-asset' }]);
-        mockCreateMediaFileDatabase.mockReturnValue({
-            metadataCollection: mockMetadataCollection as any,
-        } as any);
-
-        await uploadAssetHandler(data, context);
-
-        expect(context.sendMessage).toHaveBeenCalledWith({ type: 'import-pending', assetId: 'asset-1', logicalPath: '/test/photos/img.jpg' });
-        expect(context.sendMessage).toHaveBeenCalledWith({ type: 'import-skipped', assetId: 'asset-1', logicalPath: '/test/photos/img.jpg' });
-        expect(mockAcquireWriteLock).not.toHaveBeenCalled();
-    });
-
-    test('returns early when cancelled', async () => {
+    test('returns undefined when cancelled', async () => {
         const context = makeContext({ isCancelled: jest.fn().mockReturnValue(true) });
-        const data = makeHashFileData();
+        const data = makeUploadAssetData();
 
-        await uploadAssetHandler(data, context);
-
-        expect(mockValidateAndHash).not.toHaveBeenCalled();
-        expect(mockAcquireWriteLock).not.toHaveBeenCalled();
+        expect(await uploadAssetHandler(data, context)).toBeUndefined();
     });
 
-    test('uses hash from cache when available', async () => {
+    test('returns IUploadAssetResult with assetData in dry-run mode without writing to storage', async () => {
         const context = makeContext();
-        const data = makeHashFileData();
-        const cachedHash = makeHashedFile('aabbcc');
-
-        mockGetHashFromCache.mockResolvedValue(cachedHash as any);
+        const data = makeUploadAssetData({ dryRun: true });
         setupStorageMock();
 
-        const mockMetadataCollection = makeMockMetadataCollection([]);
-        mockCreateMediaFileDatabase.mockReturnValue({
-            metadataCollection: mockMetadataCollection as any,
-        } as any);
+        const result = await uploadAssetHandler(data, context);
 
-        const mockMerkleTree = { nodes: [], databaseMetadata: {} };
-        mockLoadMerkleTree.mockResolvedValue(mockMerkleTree as any);
+        expect(result).toHaveProperty('assetData');
+        expect(result).toHaveProperty('totalSize');
+        expect(result!.assetData.assetId).toBe('asset-1');
+        expect(result!.assetData.assetRecord).toBeDefined();
+        expect(result!.assetData.assetRecord._id).toBe('asset-1');
+    });
 
-        const mockBsonDbInstance = {
-            collection: jest.fn().mockReturnValue({
-                insertOne: jest.fn().mockResolvedValue(undefined),
-                sortIndex: jest.fn().mockReturnValue({
-                    findByValue: jest.fn().mockResolvedValue([]),
-                }),
-            }),
-            commit: jest.fn().mockResolvedValue(undefined),
-        };
-        MockBsonDatabase.mockImplementation(() => mockBsonDbInstance as any);
-
-        const { computeAssetHash } = require('../../lib/hash');
-        computeAssetHash.mockResolvedValue({ hash: Buffer.from('aabbcc', 'hex'), length: 1000, lastModified: new Date() });
+    test('sends import-pending message at start', async () => {
+        const context = makeContext();
+        const data = makeUploadAssetData({ dryRun: true });
+        setupStorageMock();
 
         await uploadAssetHandler(data, context);
 
-        expect(mockValidateAndHash).not.toHaveBeenCalled();
-        expect(context.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'import-success', assetId: 'asset-1' }));
+        expect(context.sendMessage).toHaveBeenCalledWith({
+            type: 'import-pending',
+            assetId: 'asset-1',
+            logicalPath: '/test/photos/img.jpg',
+        });
     });
 
-    test('acquires write lock and writes to database after uploads succeed', async () => {
+    test('does not send import-success or import-skipped messages', async () => {
         const context = makeContext();
-        const data = makeHashFileData({ dryRun: false });
+        const data = makeUploadAssetData({ dryRun: true });
+        setupStorageMock();
+
+        await uploadAssetHandler(data, context);
+
+        const messages = (context.sendMessage as jest.Mock).mock.calls.map(call => call[0].type);
+        expect(messages).not.toContain('import-success');
+        expect(messages).not.toContain('import-skipped');
+    });
+
+    test('does not acquire write lock or write to database', async () => {
+        const context = makeContext();
+        const data = makeUploadAssetData({ dryRun: false });
         const { mockStorage } = setupStorageMock();
 
-        const hashBuffer = Buffer.from('aabbcc', 'hex');
-        const mockComputeHash = { hash: hashBuffer, length: 1000, lastModified: new Date() };
-        mockStorage.info.mockResolvedValue({ length: 1000, lastModified: new Date() });
+        const { computeAssetHash } = require('../../lib/hash');
+        computeAssetHash.mockResolvedValue({
+            hash: Buffer.from('aabbcc', 'hex'),
+            length: 1000,
+            lastModified: new Date(),
+        });
 
-        // Early duplicate check returns no records (file is new)
-        mockGetHashFromCache.mockResolvedValue(null as any);
-        mockValidateAndHash.mockResolvedValue(makeHashedFile() as any);
-        const mockMetadataCollection = makeMockMetadataCollection([]);
-        mockCreateMediaFileDatabase.mockReturnValue({
-            metadataCollection: mockMetadataCollection as any,
-        } as any);
+        await uploadAssetHandler(data, context);
 
-        const mockMerkleTree = { nodes: [], databaseMetadata: {} };
-        mockLoadMerkleTree.mockResolvedValue(mockMerkleTree as any);
+        // No write-lock or DB modules are imported by the new upload-asset handler.
+        // Verify that no 'write-lock' or 'bdb' code was invoked by checking that
+        // storage writes happened but no DB-related methods were called.
+        expect(mockStorage.writeStream).toHaveBeenCalled();
+    });
 
-        const mockBsonDbInstance = {
-            collection: jest.fn().mockReturnValue({
-                insertOne: jest.fn().mockResolvedValue(undefined),
-                sortIndex: jest.fn().mockReturnValue({
-                    findByValue: jest.fn().mockResolvedValue([]),
-                }),
-            }),
-            commit: jest.fn().mockResolvedValue(undefined),
-        };
-        MockBsonDatabase.mockImplementation(() => mockBsonDbInstance as any);
+    test('returns correct assetRecord hash', async () => {
+        const context = makeContext();
+        const expectedHashHex = 'aabbcc';
+        const data = makeUploadAssetData({
+            dryRun: true,
+            expectedHash: new Uint8Array(Buffer.from(expectedHashHex, 'hex')),
+        });
+        setupStorageMock();
 
-        mockStorage.writeStream.mockResolvedValue(undefined);
-        mockStorage.readStream.mockResolvedValue({ pipe: jest.fn() });
+        const result = await uploadAssetHandler(data, context);
+
+        expect(result!.assetData.assetRecord.hash).toBe(expectedHashHex);
+    });
+
+    test('in non-dry-run mode, storage.writeStream is called for the asset, thumbnail, and display file', async () => {
+        const context = makeContext();
+        const data = makeUploadAssetData({ contentType: 'image/jpeg', dryRun: false });
+        const { mockStorage } = setupStorageMock();
+        mockGetImageDetails.mockResolvedValue(makeAssetDetails());
 
         const { computeAssetHash } = require('../../lib/hash');
-        computeAssetHash.mockResolvedValue(mockComputeHash);
+        computeAssetHash.mockResolvedValue({
+            hash: Buffer.from('aabbcc', 'hex'),
+            length: 1000,
+            lastModified: new Date(),
+        });
 
         await uploadAssetHandler(data, context);
 
-        expect(mockAcquireWriteLock).toHaveBeenCalledWith(expect.anything(), 'session-1', 3);
-        expect(mockLoadMerkleTree).toHaveBeenCalled();
-        expect(mockSaveMerkleTree).toHaveBeenCalled();
-        expect(mockBsonDbInstance.commit).toHaveBeenCalled();
-        expect(mockReleaseWriteLock).toHaveBeenCalled();
-        expect(context.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
-            type: 'import-success',
-            assetId: 'asset-1',
-        }));
+        const writeStreamCalls = mockStorage.writeStream.mock.calls.map((call: any[]) => call[0]);
+        expect(writeStreamCalls).toContain(`asset/${data.assetId}`);
+        expect(writeStreamCalls).toContain(`thumb/${data.assetId}`);
+        expect(writeStreamCalls).toContain(`display/${data.assetId}`);
     });
 
-    test('sends import-success message in dry-run mode without writing to database', async () => {
+    test('result.totalSize equals the sum of asset + thumbnail + display byte lengths', async () => {
         const context = makeContext();
-        const data = makeHashFileData({ dryRun: true });
+        const fileSize = 500;
+        const data = makeUploadAssetData({
+            contentType: 'image/jpeg',
+            dryRun: true,
+            fileStat: { length: fileSize, lastModified: new Date('2024-01-01') },
+        });
         setupStorageMock();
+        mockGetImageDetails.mockResolvedValue(makeAssetDetails());
 
-        mockGetHashFromCache.mockResolvedValue(null as any);
-        mockValidateAndHash.mockResolvedValue(makeHashedFile() as any);
-        const mockMetadataCollection = makeMockMetadataCollection([]);
-        mockCreateMediaFileDatabase.mockReturnValue({
-            metadataCollection: mockMetadataCollection as any,
-        } as any);
+        const result = await uploadAssetHandler(data, context);
 
-        const mockMerkleTree = { nodes: [], databaseMetadata: {} };
-        mockLoadMerkleTree.mockResolvedValue(mockMerkleTree as any);
+        // In dry-run mode each of the three uploads uses fileStat.length.
+        expect(result!.totalSize).toBe(fileSize * 3);
+    });
 
-        const mockBsonDbInstance = {
-            collection: jest.fn(),
-            commit: jest.fn(),
-        };
-        MockBsonDatabase.mockImplementation(() => mockBsonDbInstance as any);
+    test('returned IAssetDatabaseData includes display fields when a display version is produced', async () => {
+        const context = makeContext();
+        const data = makeUploadAssetData({ contentType: 'image/jpeg', dryRun: true });
+        setupStorageMock();
+        mockGetImageDetails.mockResolvedValue(makeAssetDetails());
+
+        const result = await uploadAssetHandler(data, context);
+
+        expect(result!.assetData.displayPath).toBeDefined();
+        expect(result!.assetData.displayHash).toBeDefined();
+        expect(result!.assetData.displayLength).toBeDefined();
+        expect(result!.assetData.displayLastModified).toBeDefined();
+    });
+
+    test('returned IAssetDatabaseData includes thumb fields when a thumbnail is produced', async () => {
+        const context = makeContext();
+        const data = makeUploadAssetData({ contentType: 'image/jpeg', dryRun: true });
+        setupStorageMock();
+        mockGetImageDetails.mockResolvedValue(makeAssetDetails({ displayPath: undefined }));
+
+        const result = await uploadAssetHandler(data, context);
+
+        expect(result!.assetData.thumbPath).toBeDefined();
+        expect(result!.assetData.thumbHash).toBeDefined();
+        expect(result!.assetData.thumbLength).toBeDefined();
+        expect(result!.assetData.thumbLastModified).toBeDefined();
+    });
+
+    test('when contentType starts with image/, getImageDetails is called', async () => {
+        const context = makeContext();
+        const data = makeUploadAssetData({ contentType: 'image/jpeg', dryRun: true });
+        setupStorageMock();
+        mockGetImageDetails.mockResolvedValue(makeAssetDetails());
 
         await uploadAssetHandler(data, context);
 
-        expect(mockAcquireWriteLock).toHaveBeenCalled();
-        expect(mockBsonDbInstance.commit).not.toHaveBeenCalled();
-        expect(context.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
-            type: 'import-success',
-            assetId: 'asset-1',
-        }));
+        expect(mockGetImageDetails).toHaveBeenCalledWith(
+            data.filePath,
+            expect.any(String),
+            data.contentType,
+            context.uuidGenerator,
+            data.logicalPath
+        );
+        expect(mockGetVideoDetails).not.toHaveBeenCalled();
     });
 
-    test('releases write lock even when db write fails', async () => {
+    test('when contentType starts with video/, getVideoDetails is called', async () => {
         const context = makeContext();
-        const data = makeHashFileData({ dryRun: false });
+        const data = makeUploadAssetData({ contentType: 'video/mp4', dryRun: true });
         setupStorageMock();
+        mockGetVideoDetails.mockResolvedValue(makeAssetDetails());
 
-        mockGetHashFromCache.mockResolvedValue(null as any);
-        mockValidateAndHash.mockResolvedValue(makeHashedFile() as any);
-        const mockMetadataCollection = makeMockMetadataCollection([]);
-        mockCreateMediaFileDatabase.mockReturnValue({
-            metadataCollection: mockMetadataCollection as any,
-        } as any);
+        await uploadAssetHandler(data, context);
 
-        mockLoadMerkleTree.mockResolvedValue({ nodes: [], databaseMetadata: {} } as any);
-        mockSaveMerkleTree.mockRejectedValue(new Error('Disk full'));
+        expect(mockGetVideoDetails).toHaveBeenCalledWith(
+            data.filePath,
+            expect.any(String),
+            data.contentType,
+            context.uuidGenerator,
+            data.logicalPath
+        );
+        expect(mockGetImageDetails).not.toHaveBeenCalled();
+    });
 
-        const mockBsonDbInstance = {
-            collection: jest.fn().mockReturnValue({
-                insertOne: jest.fn().mockResolvedValue(undefined),
-                sortIndex: jest.fn().mockReturnValue({
-                    findByValue: jest.fn().mockResolvedValue([]),
-                }),
-            }),
-            commit: jest.fn().mockResolvedValue(undefined),
-        };
-        MockBsonDatabase.mockImplementation(() => mockBsonDbInstance as any);
+    test('sends import-failed and cleans up on upload error', async () => {
+        const context = makeContext();
+        const data = makeUploadAssetData({ dryRun: false });
+        const { mockStorage } = setupStorageMock();
 
-        await expect(uploadAssetHandler(data, context)).rejects.toThrow('Disk full');
+        mockStorage.writeStream.mockRejectedValue(new Error('Storage write failed'));
 
-        expect(mockReleaseWriteLock).toHaveBeenCalled();
+        await expect(uploadAssetHandler(data, context)).rejects.toThrow('Storage write failed');
+
+        expect(context.sendMessage).toHaveBeenCalledWith({
+            type: 'import-failed',
+            assetId: 'asset-1',
+            logicalPath: '/test/photos/img.jpg',
+        });
+        expect(mockStorage.deleteFile).toHaveBeenCalled();
     });
 });

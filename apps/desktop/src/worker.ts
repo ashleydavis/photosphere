@@ -1,13 +1,13 @@
 //
-// Electron utility process entry point
-// Routes messages to the appropriate handler from shared packages
+// Electron utility process for executing background tasks.
 //
+
 import { serializeError } from "serialize-error";
-import { executeTaskHandler } from "task-queue";
+import { executeTaskHandler, TaskStatus, setQueueBackend, WorkerQueueBackend } from "task-queue";
 import type { ITaskContext } from "task-queue";
-import { type IWorkerOptions } from "./lib/worker-backend-electron-main";
+import { TaskContext } from "task-queue";
+import { type IWorkerOptions, type IWorkerMessage, type IWorkerTaskCompletedMessage, type IWorkerReadyMessage, type IWorkerTaskMessage } from "./lib/worker-pool-electron-main";
 import { initTaskHandlers } from "api";
-import type { IWorkerMessage, IWorkerTaskCompletedMessage, IWorkerTaskMessage, IWorkerReadyMessage, IWorkerQueueTaskMessage, IWorkerShowNotificationMessage } from "./lib/worker-backend-electron-main";
 import { RandomUuidGenerator, TimestampProvider, setLog, log } from "utils";
 import { TestUuidGenerator, TestTimestampProvider } from "node-utils";
 import { createWorkerLog } from "./lib/worker-log-electron";
@@ -45,17 +45,10 @@ if (!parentPort) {
 }
 
 //
-// Sends a show-notification message to the main process, which relays it to the renderer as a toast.
+// Worker-side queue backend — receives child task completions forwarded from the main process.
 //
-function sendNotification(message: string, color: IWorkerShowNotificationMessage['color'], duration?: number): void {
-    const notificationMessage: IWorkerShowNotificationMessage = {
-        type: "show-notification",
-        message,
-        color,
-        duration,
-    };
-    parentPort.postMessage(notificationMessage);
-}
+const workerBackend = new WorkerQueueBackend((message) => parentPort.postMessage(message));
+setQueueBackend(workerBackend);
 
 //
 // Execute a task handler in the worker
@@ -72,7 +65,10 @@ async function executeTask(message: IWorkerMessage, taskContext: ITaskContext): 
             type: "task-completed",
             taskId,
             result: {
-                status: "succeeded",
+                taskId,
+                type: taskType,
+                inputs: data,
+                status: TaskStatus.Succeeded,
                 outputs: outputs
             }
         };
@@ -84,8 +80,12 @@ async function executeTask(message: IWorkerMessage, taskContext: ITaskContext): 
             type: "task-completed",
             taskId,
             result: {
-                status: "failed",
-                error: serializeError(error)
+                taskId,
+                type: taskType,
+                inputs: data,
+                status: TaskStatus.Failed,
+                error: serializeError(error),
+                errorMessage: error instanceof Error ? error.message : String(error)
             }
         };
         parentPort.postMessage(errorMessage);
@@ -102,58 +102,52 @@ const timestampProvider = process.env.NODE_ENV === "testing" ? new TestTimestamp
 const sessionId = workerOptions.sessionId;
 
 //
+// The currently executing task context, null when idle.
+//
+let currentTaskSource: string | null = null;
+
+//
+// The source tag of the currently executing task, null when idle.
+//
+let currentTaskContext: TaskContext | null = null;
+
+//
+// Sends a message from the current task back to the caller via the main process.
+//
+function sendMessageFn(msg: any): void {
+    const taskMessage: IWorkerTaskMessage = {
+        type: "task-message",
+        taskId: currentTaskContext!.taskId,
+        message: msg
+    };
+    parentPort.postMessage(taskMessage);
+}
+
+//
 // Initialize the worker message listener
 //
 function initWorker(): void {
-    let currentTaskSource: string | null = null;
-    let cancelled = false;
-
     parentPort.on('message', async (event: any) => {
         const message = event.data;
 
         if (message.type === 'execute') {
             const { taskId, source } = message;
             currentTaskSource = source;
-            cancelled = false;
+            currentTaskContext = new TaskContext(uuidGenerator, timestampProvider, sessionId, taskId, sendMessageFn);
 
-            // Create a task-specific sendMessage function that captures the task ID in a closure
-            // This ensures messages are correctly associated with the current task
-            const taskSpecificSendMessage = (msg: any): void => {
-                const taskMessage: IWorkerTaskMessage = {
-                    type: "task-message",
-                    taskId,
-                    message: msg
-                };
-                parentPort.postMessage(taskMessage);
-            };
-
-            // Create a task-specific queueTask function that sends a queue-task message to the main thread
-            const taskSpecificQueueTask = (type: string, data: any, taskSource: string): void => {
-                const queueTaskMsg: IWorkerQueueTaskMessage = {
-                    type: "queue-task",
-                    taskType: type,
-                    data,
-                    source: taskSource,
-                };
-                parentPort.postMessage(queueTaskMsg);
-            };
-
-            const taskContext: ITaskContext = {
-                uuidGenerator,
-                timestampProvider,
-                sessionId,
-                sendMessage: taskSpecificSendMessage,
-                queueTask: taskSpecificQueueTask,
-                isCancelled: () => cancelled,
-            };
-
-            await executeTask(message, taskContext);
+            await executeTask(message, currentTaskContext);
+            currentTaskContext = null;
             currentTaskSource = null;
         }
         else if (message.type === 'cancel-tasks') {
             if (currentTaskSource === message.source) {
-                cancelled = true;
+                currentTaskContext?.cancel();
             }
+            workerBackend.cancelTasks(message.source);
+        }
+        else if (message.type === "task-completed") {
+            const taskCompletedMessage = message as IWorkerTaskCompletedMessage;
+            await workerBackend.notifyTaskCompleted(taskCompletedMessage.result);
         }
         else {
             throw new Error(`Unknown message type: ${message.type}`);

@@ -13,7 +13,7 @@ dev-frontend/
 │   ├── lib/
 │   │   ├── platform-provider-web.tsx          # Web platform provider
 │   │   ├── task-queue-provider-websocket.ts   # WebSocket task queue provider
-│   │   ├── worker-backend-websocket.ts        # WebSocket worker backend
+│   │   ├── worker-pool-websocket.ts        # WebSocket worker pool
 │   │   └── use-web-socket.ts                  # WebSocket hook
 │   └── test/
 │       └── e2e/

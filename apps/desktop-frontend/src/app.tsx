@@ -9,10 +9,11 @@ import {
     DeleteConfirmationContextProvider,
     ImportContextProvider
 } from "user-interface";
-import { TaskQueueProviderElectron } from "./lib/task-queue-provider-electron";
+import { ElectronRendererQueueBackend } from "./lib/electron-renderer-queue-backend";
+import { setQueueBackend } from "task-queue";
 import { PlatformProviderElectron } from "./lib/platform-provider-electron";
 import type { IElectronAPI } from "electron-defs";
-import { RandomUuidGenerator, TimestampProvider, setLog } from "utils";
+import { setLog } from "utils";
 import { createRendererLog } from "./lib/renderer-log";
 
 export function App() {
@@ -33,9 +34,8 @@ export function App() {
     }
     const initialTheme = (urlParams.get('theme') as 'light' | 'dark' | 'system') || 'system';
 
-    const uuidGenerator = new RandomUuidGenerator();
-    const timestampProvider = new TimestampProvider();
-    const taskQueueProvider = new TaskQueueProviderElectron(electronAPI, uuidGenerator, timestampProvider);
+    const queueBackend = new ElectronRendererQueueBackend(electronAPI);
+    setQueueBackend(queueBackend);
 
     return (
         <HashRouter
@@ -47,7 +47,7 @@ export function App() {
             <PlatformProviderElectron electronAPI={electronAPI}>
                 <ImportContextProvider>
                 <AppContextProvider>
-                    <AssetDatabaseProvider taskQueueProvider={taskQueueProvider} restApiUrl={restApiUrl}>
+                    <AssetDatabaseProvider queueBackend={queueBackend} restApiUrl={restApiUrl}>
                         <GalleryContextProvider>
                             <DeleteConfirmationContextProvider>
                                 <SearchContextProvider>

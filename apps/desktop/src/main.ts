@@ -5,27 +5,23 @@ import { randomUUID } from 'crypto';
 import { cpus, platform, arch, release } from 'os';
 import { version } from 'config';
 import { existsSync, readdirSync, statSync, readFileSync } from 'fs';
-import type { ITask, ITaskQueue, IWorkerBackend } from 'task-queue';
-import { TaskQueue, TaskStatus } from 'task-queue';
-import { WorkerBackendElectronMain } from './lib/worker-backend-electron-main';
+import type { IQueueBackend, ITaskMessageData } from 'task-queue';
+import { TaskQueue, TaskStatus, setQueueBackend } from 'task-queue';
+import { WorkerPoolElectronMain } from './lib/worker-pool-electron-main';
 import { RandomUuidGenerator, TimestampProvider, logExceptions, log } from 'utils';
 import { findAvailablePort, loadDesktopConfig, saveDesktopConfig, addRecentDatabase, removeRecentDatabase, updateLastFolder, clearLastDatabase, getTheme, setTheme, updateLastDownloadFolder } from 'node-utils';
-import type { IWorkerBackendOptions } from './lib/worker-backend-electron-main';
+import type { IWorkerPoolOptions } from './lib/worker-pool-electron-main';
 import type { IRestApiWorkerStopMessage, IRestApiWorkerStartMessage } from './rest-api-worker';
 import { FileLoggerElectron } from './lib/file-logger-electron';
 import type { IImportSession, IRendererLogMessage, ISaveAssetItem } from 'electron-defs';
-import type { IImportAssetsData } from 'api';
 import { verifyTools } from 'tools';
 import type { IStorageDescriptor } from 'storage';
 
 // Main application window
 let mainWindow: BrowserWindow | null = null;
 
-// Task queue for background task processing
-let taskQueue: ITaskQueue | null = null;
-
-// Worker backend for executing tasks
-let workerBackend: IWorkerBackend | null = null;
+// Worker pool for background task processing
+let workerPool: IQueueBackend | null = null;
 
 // REST API utility process
 let restApiWorker: UtilityProcess | null = null;
@@ -165,16 +161,10 @@ app.on('before-quit', async () => {
         fileLogger.info('Photosphere Desktop shutting down...', 'Main');
     }
     
-    // Cleanup task queue
-    if (taskQueue) {
-        taskQueue.shutdown();
-        taskQueue = null;
-    }
-    
-    // Cleanup worker backend
-    if (workerBackend) {
-        workerBackend.shutdown();
-        workerBackend = null;
+    // Cleanup worker pool
+    if (workerPool) {
+        workerPool.shutdown();
+        workerPool = null;
     }
 
     // Cleanup REST API utility process
@@ -204,22 +194,22 @@ if (process.env.FPS_LOGGING === '1') {
 }
 
 // IPC handler for adding tasks
-ipcMain.on('add-task', (event, taskType: string, data: any, source: string, taskId?: string) => {
-    if (!taskQueue) {
-        console.error('Task queue not initialized');
+ipcMain.on('add-task', (_event, taskType: string, data: any, source: string, taskId?: string) => {
+    if (!workerPool) {
+        console.error('Worker pool not initialized');
         return;
     }
 
-    taskQueue.addTask(taskType, data, source, taskId);
+    workerPool.addTask(taskType, data, source, taskId);
 });
 
 // IPC handler for cancelling tasks
 ipcMain.on('cancel-tasks', (_event, source: string) => {
-    if (!taskQueue) {
+    if (!workerPool) {
         return;
     }
 
-    taskQueue.cancelTasks(source);
+    workerPool.cancelTasks(source);
 });
 
 // IPC handler for opening file dialog
@@ -292,13 +282,13 @@ ipcMain.handle('save-asset', logExceptions(async (_event, assetId: string, asset
         return;
     }
 
-    if (!taskQueue) {
-        throw new Error('Task queue not initialized');
+    if (!workerPool) {
+        throw new Error('Worker pool not initialized');
     }
 
     const destPath = result.filePath;
     await updateLastDownloadFolder(dirname(destPath));
-    taskQueue.addTask("save-asset", { assetId, assetType, destPath, databasePath }, databasePath);
+    workerPool.addTask("save-asset", { assetId, assetType, destPath, databasePath }, databasePath);
 }, 'Error saving asset'));
 
 // IPC handler for showing a folder picker and enqueuing background tasks to save multiple assets.
@@ -315,13 +305,13 @@ ipcMain.handle('save-assets', logExceptions(async (_event, assets: ISaveAssetIte
         return;
     }
 
-    if (!taskQueue) {
-        throw new Error('Task queue not initialized');
+    if (!workerPool) {
+        throw new Error('Worker pool not initialized');
     }
 
     const folderPath = result.filePaths[0];
     await updateLastDownloadFolder(folderPath);
-    taskQueue.addTask("save-assets-batch", { assets, folderPath, databasePath }, databasePath);
+    workerPool.addTask("save-assets-batch", { assets, folderPath, databasePath }, databasePath);
 }, 'Error saving assets'));
 
 // IPC handler for opening a folder in the system's file manager
@@ -361,13 +351,13 @@ function initWorkers() {
     const uuidGenerator = new RandomUuidGenerator();
     const timestampProvider = new TimestampProvider();
     const taskTimeout = 600000; // 10 minutes
-    const workerOptions: IWorkerBackendOptions = {
+    const workerOptions: IWorkerPoolOptions = {
         verbose: false,
         tools: false,
         sessionId: uuidGenerator.generate(),
     };
-    const electronWorkerBackend = new WorkerBackendElectronMain(workerPath, maxWorkers, taskTimeout, workerOptions, (message: any) => handleWorkerLogMessage(message, 'Worker'));
-    electronWorkerBackend.onShowNotification((data) => {
+    const electronWorkerPool = new WorkerPoolElectronMain(workerPath, maxWorkers, taskTimeout, workerOptions, (message: any) => handleWorkerLogMessage(message, 'Worker'));
+    electronWorkerPool.onShowNotification((data) => {
         if (mainWindow) {
             mainWindow.webContents.send('show-notification', {
                 message: data.message,
@@ -376,26 +366,26 @@ function initWorkers() {
             });
         }
     });
-    workerBackend = electronWorkerBackend;
-    taskQueue = new TaskQueue(uuidGenerator, timestampProvider, taskTimeout, workerBackend);
-    console.log('Task queue initialized');
+    workerPool = electronWorkerPool;
+    setQueueBackend(workerPool);
+    console.log('Worker pool initialized');
 
     // Forward task completion events to renderer
-    taskQueue.onTaskComplete<ITask<any>, any>((task, result) => {
+    workerPool.onTaskComplete((result) => {
         if (mainWindow) {
             mainWindow.webContents.send('task-completed', {
                 taskId: result.taskId,
                 result
             });
         }
-        if (task.type === "sync-database") {
+        if (result.type === "sync-database") {
             syncStopped();
             if (result.status !== TaskStatus.Succeeded && mainWindow) {
                 mainWindow.webContents.send('sync-completed');
             }
         }
-        if (task.type === "save-asset" && mainWindow) {
-            const { destPath } = task.data as unknown as { destPath: string };
+        if (result.type === "save-asset" && mainWindow) {
+            const { destPath } = result.inputs as { destPath: string };
             const filename = basename(destPath);
             const folderPath = dirname(destPath);
             if (result.status === TaskStatus.Succeeded) {
@@ -413,7 +403,7 @@ function initWorkers() {
                 });
             }
         }
-        if (task.type === "import-assets" && mainWindow) {
+        if (result.type === "import-assets" && mainWindow) {
             if (result.status !== TaskStatus.Succeeded) {
                 mainWindow.webContents.send('show-notification', {
                     message: `Import failed: ${result.errorMessage || 'Unknown error'}`,
@@ -422,7 +412,7 @@ function initWorkers() {
                 });
             }
         }
-        if (task.type === "save-assets-batch" && mainWindow) {
+        if (result.type === "save-assets-batch" && mainWindow) {
             const { succeededFiles, failedFiles, folderPath } = result.outputs as { succeededFiles: string[]; failedFiles: Array<{ filename: string; error: string }>; folderPath: string };
             const total = succeededFiles.length + failedFiles.length;
             if (failedFiles.length === 0) {
@@ -451,7 +441,7 @@ function initWorkers() {
     });
 
     // Forward task messages to renderer
-    taskQueue.onAnyTaskMessage((data) => {
+    workerPool.onAnyTaskMessage((data) => {
         if (mainWindow) {
             mainWindow.webContents.send('task-message', {
                 taskId: data.taskId,
@@ -474,12 +464,12 @@ function initWorkers() {
 // Connectivity checking and sync-started/sync-completed messages are the worker's responsibility.
 //
 function enqueueSyncTask(): void {
-    if (!currentDatabasePath || !taskQueue || isSyncRunning) {
+    if (!currentDatabasePath || !workerPool || isSyncRunning) {
         return;
     }
     isSyncRunning = true;
     log.info(`Queuing sync task for ${currentDatabasePath}`);
-    taskQueue.addTask("sync-database", { databasePath: currentDatabasePath }, currentDatabasePath);
+    workerPool.addTask("sync-database", { databasePath: currentDatabasePath }, currentDatabasePath);
 }
 
 //
@@ -495,8 +485,8 @@ function syncStopped(): void {
 // and clears the debounce timer. Call this whenever the active database changes.
 //
 function resetSyncState(): void {
-    if (currentDatabasePath && taskQueue) {
-        taskQueue.cancelTasks(currentDatabasePath);
+    if (currentDatabasePath && workerPool) {
+        workerPool.cancelTasks(currentDatabasePath);
     }
     syncStopped();
     if (syncDebounceTimer !== null) {
@@ -760,26 +750,16 @@ async function createNewDatabase(): Promise<void> {
         return;
     }
 
-    if (!taskQueue) {
-        throw new Error('Task queue not initialized');
+    if (!workerPool) {
+        throw new Error('Worker pool not initialized');
     }
 
-    await new Promise<void>((resolve, reject) => {
-        const taskId = randomUUID();
-        const unsubscribe = taskQueue!.onTaskComplete((task, result) => {
-            if (task.id !== taskId) {
-                return;
-            }
-            unsubscribe();
-            if (result.status === 'succeeded') {
-                resolve();
-            }
-            else {
-                reject(new Error(result.errorMessage || 'Failed to create database'));
-            }
-        });
-        taskQueue!.addTask('create-database', { databasePath }, databasePath, taskId);
-    });
+    const uuidGenerator = new RandomUuidGenerator();
+    const createQueue = new TaskQueue(uuidGenerator, databasePath);
+    const taskId = randomUUID();
+    createQueue.addTask('create-database', { databasePath }, taskId);
+    await createQueue.awaitTask(taskId);
+    createQueue.shutdown();
 
     await addRecentDatabase(databasePath);
     await updateLastFolder(dirname(databasePath));
@@ -803,8 +783,8 @@ async function startImportWithPaths(paths: string[]): Promise<IImportSession | u
         return undefined;
     }
 
-    if (!taskQueue) {
-        throw new Error('Task queue not initialized');
+    if (!workerPool) {
+        throw new Error('Worker pool not initialized');
     }
 
     const storageDescriptor: IStorageDescriptor = {
@@ -813,14 +793,14 @@ async function startImportWithPaths(paths: string[]): Promise<IImportSession | u
     };
 
     const sessionId = randomUUID();
-    const importAssetsTaskId = taskQueue.addTask('add-paths', {
+    const importAssetsTaskId = workerPool.addTask('add-paths', {
         paths,
         storageDescriptor,
         googleApiKey: undefined,
         sessionId,
         dryRun: false,
         s3Config: undefined,
-    } satisfies IImportAssetsData, sessionId);
+    }, sessionId);
 
     return { importAssetsTaskId, sessionId };
 }

@@ -1,31 +1,30 @@
-import { log } from "utils";
 import { IAddSummary } from "./media-file-database";
-import { TaskStatus } from "task-queue";
-import type { ITaskQueueProvider } from "task-queue";
+import { TaskQueue } from "task-queue";
+import type { ITaskMessageData } from "task-queue";
 import { IStorageDescriptor, IS3Credentials } from "storage";
-import { IImportAssetsData } from "./import-assets.worker";
+import type { IUuidGenerator } from "utils";
 
 //
-// Summary callback invoked after each task message so the caller can update progress display.
+// Progress callback invoked after each file event during import, receiving the running summary.
 //
-export type AddPathsMessageCallback = (message: any) => void;
+export type AddPathsProgressCallback = (currentlyScanning: string | undefined, summary: IAddSummary) => void;
 
 //
 // Adds a list of files or directories to the media file database.
 // Dispatches a single add-paths task and waits for all downstream tasks to complete.
-// Progress is reported via the optional onMessage callback.
+// Progress is reported via the optional onProgress callback.
 //
 export async function addPaths(
-    taskQueueProvider: ITaskQueueProvider,
+    uuidGenerator: IUuidGenerator,
     storageDescriptor: IStorageDescriptor,
     paths: string[],
     googleApiKey: string | undefined,
     sessionId: string,
     s3Config: IS3Credentials | undefined,
     dryRun: boolean,
-    onMessage?: AddPathsMessageCallback
+    onProgress?: AddPathsProgressCallback
 ): Promise<IAddSummary> {
-    const queue = taskQueueProvider.get();
+    const queue = new TaskQueue(uuidGenerator, storageDescriptor.dbDir);
 
     const summary: IAddSummary = {
         filesAdded: 0,
@@ -37,7 +36,9 @@ export async function addPaths(
         averageSize: 0,
     };
 
-    queue.onAnyTaskMessage((data) => {
+    let currentlyScanning: string | undefined = undefined;
+
+    queue.onAnyTaskMessage((data: ITaskMessageData) => {
         if (data.message.type === "import-success") {
             summary.filesAdded++;
             summary.filesProcessed++;
@@ -47,29 +48,35 @@ export async function addPaths(
             summary.filesProcessed++;
         }
         else if (data.message.type === "file-ignored") {
-            summary.filesIgnored++;
+            summary.filesIgnored += data.message.count;
         }
-
-        onMessage?.(data.message);
-    });
-
-    queue.onTaskComplete((_task, result) => {
-        if (result.status === TaskStatus.Failed) {
+        else if (data.message.type === "import-failed") {
             summary.filesFailed++;
-            log.error(`Task failed: ${result.errorMessage}`);
+            summary.filesProcessed++;
         }
+        else if (data.message.type === "scan-progress") {
+            currentlyScanning = data.message.currentPath;
+        }
+        else if (data.message.type === "import-pending") {
+            // no-op: pending messages are informational only
+            return;
+        }
+
+        onProgress?.(currentlyScanning, summary);
     });
 
-    queue.addTask("import-assets", {
+    const taskId = queue.addTask("import-assets", {
         paths,
         storageDescriptor,
         googleApiKey,
         sessionId,
         dryRun,
         s3Config,
-    } satisfies IImportAssetsData, storageDescriptor.dbDir);
+    });
 
-    await queue.awaitAllTasks();
+    await queue.awaitTask(taskId);
+
+    queue.shutdown();
 
     summary.averageSize = summary.filesAdded > 0
         ? Math.floor(summary.totalSize / summary.filesAdded)

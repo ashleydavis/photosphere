@@ -13,7 +13,7 @@ desktop-frontend/
 │   ├── tailwind.css                           # Tailwind CSS
 │   └── lib/
 │       ├── task-queue-provider-electron.ts    # Electron task queue provider
-│       └── worker-backend-electron-renderer.ts # Electron renderer worker backend
+│       └── worker-pool-electron-renderer.ts # Electron renderer worker pool
 ├── index.html                                  # HTML template
 ├── package.json
 ├── tsconfig.json

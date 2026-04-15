@@ -18,7 +18,7 @@ export interface IAddCommandOptions extends IBaseCommandOptions {
 // Command that adds files and directories to the Photosphere media file database.
 //
 export async function addCommand(context: ICommandContext, paths: string[], options: IAddCommandOptions): Promise<void> {
-    const { sessionId, taskQueueProvider, uuidGenerator, timestampProvider } = context;
+    const { sessionId, uuidGenerator, timestampProvider } = context;
 
     const nonInteractive = options.yes || false;
     
@@ -52,21 +52,36 @@ export async function addCommand(context: ICommandContext, paths: string[], opti
     writeProgress(`Searching for files...`);
 
     const addSummary = await addPaths(
-        taskQueueProvider,
+        uuidGenerator,
         storageDescriptor,
         paths,
         googleApiKey,
         sessionId,
         s3Config,
         options.dryRun || false,
-        (message) => {
-            if (message.type === "scan-progress") {
-                writeProgress(`Scanning ${pc.cyan(message.currentPath)} | Abort with Ctrl-C.`);
+        (currentlyScanning, summary) => {
+            let progressMessage = options.dryRun
+                ? `Would add: ${pc.green(summary.filesAdded.toString().padStart(4))}`
+                : `Added: ${pc.green(summary.filesAdded.toString().padStart(4))}`;
+            if (summary.filesAlreadyAdded > 0) {
+                progressMessage += ` | Existing: ${pc.blue(summary.filesAlreadyAdded.toString().padStart(4))}`;
             }
-            else if (message.type === "asset-imported") {
-                writeProgress(`Importing... | Abort with Ctrl-C.`);
+            if (summary.filesIgnored > 0) {
+                progressMessage += ` | Ignored: ${pc.yellow(summary.filesIgnored.toString().padStart(4))}`;
             }
-        }
+            if (summary.filesFailed > 0) {
+                progressMessage += ` | Failed: ${pc.red(summary.filesFailed.toString().padStart(4))}`;
+            }
+            if (currentlyScanning) {
+                progressMessage += ` | Scanning ${pc.cyan(currentlyScanning)}`;
+            }
+            if (options.dryRun) {
+                progressMessage += ` | ${pc.yellow("DRY RUN")}`;
+            }
+
+            progressMessage += ` | Abort with Ctrl-C. It is safe to abort and resume later.`;
+            writeProgress(progressMessage);
+        },
     );
 
     clearProgressMessage(); // Flush the progress message.

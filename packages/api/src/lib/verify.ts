@@ -1,11 +1,11 @@
 import { log, retry } from "utils";
+import type { IUuidGenerator } from "utils";
 import { ProgressCallback } from "./media-file-database";
 import { SortNode, traverseTreeAsync } from "merkle-tree";
 import { loadMerkleTree } from "./tree";
 import { IStorage, IStorageDescriptor, IS3Credentials } from "storage";
-import { TaskStatus } from "task-queue";
+import { TaskStatus, TaskQueue } from "task-queue";
 import { IVerifyFileData } from "./verify.worker";
-import type { ITaskQueueProvider } from "task-queue";
 import { verify as verifySerializedFile } from "serialization";
 import type { IBsonCollection } from "bdb";
 import type { IAsset } from "defs";
@@ -96,7 +96,7 @@ export interface IVerifyResult {
 // If any files are corrupted, this will pick them up as modified.
 // Also checks each asset in the merkle tree has a database record with the correct id and hash.
 //
-export async function verify(storageDescriptor: IStorageDescriptor, databaseStorage: IStorage, taskQueueProvider: ITaskQueueProvider, metadataCollection: IBsonCollection<IAsset>, options?: IVerifyOptions, progressCallback?: ProgressCallback) : Promise<IVerifyResult> {
+export async function verify(storageDescriptor: IStorageDescriptor, databaseStorage: IStorage, uuidGenerator: IUuidGenerator, metadataCollection: IBsonCollection<IAsset>, options?: IVerifyOptions, progressCallback?: ProgressCallback) : Promise<IVerifyResult> {
 
     let pathFilter = options?.pathFilter 
         ? options.pathFilter.replace(/\\/g, '/') // Normalize path separators
@@ -148,7 +148,7 @@ export async function verify(storageDescriptor: IStorageDescriptor, databaseStor
     // Handlers are registered in the worker file (apps/cli/src/lib/worker.ts).
     // maxWorkers is set in the provider constructor (defaults to number of CPUs).
     //
-    const queue = taskQueueProvider.get();
+    const queue = new TaskQueue(uuidGenerator, storageDescriptor.dbDir);
 
     try {
         //
@@ -170,7 +170,7 @@ export async function verify(storageDescriptor: IStorageDescriptor, databaseStor
         //
         // Registers a callback to integrate results as tasks complete.
         //
-        queue.onTaskComplete<IVerifyFileData, IVerifyFileResult>((task, taskResult) => {
+        queue.onTaskComplete<IVerifyFileData, IVerifyFileResult>((taskResult) => {
 
             result.filesProcessed++;
             
@@ -178,8 +178,7 @@ export async function verify(storageDescriptor: IStorageDescriptor, databaseStor
                 const fileResult = taskResult.outputs!;
 
                 if (progressCallback) {
-                    const status = queue.getStatus();
-                    progressCallback(`Verified file ${result.filesProcessed} of ${totalFiles} (${status.running} tasks running in parallel)`);
+                    progressCallback(`Verified file ${result.filesProcessed} of ${totalFiles}`);
                 }
 
                 if (fileResult.status === "removed") {
@@ -211,7 +210,7 @@ export async function verify(storageDescriptor: IStorageDescriptor, databaseStor
                 }
             } 
             else if (taskResult.status === TaskStatus.Failed) {
-                const fileName = task.data.node.name ?? "unknown";
+                const fileName = taskResult.inputs.node.name ?? "unknown";
                 if (taskResult.error) {
                     log.exception(`Failed to verify file "${fileName}": ${taskResult.errorMessage}`, taskResult.error);
                 } 
@@ -248,7 +247,7 @@ export async function verify(storageDescriptor: IStorageDescriptor, databaseStor
                     options: {
                         full: options?.full,
                     },
-                }, storageDescriptor.dbDir);
+                });
 
                 // Check asset nodes have a database record with the correct id and hash.
                 if (node.name.startsWith("asset/") && node.contentHash) {
