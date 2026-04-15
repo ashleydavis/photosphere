@@ -16,6 +16,7 @@ import { FileLoggerElectron } from './lib/file-logger-electron';
 import type { IImportSession, IRendererLogMessage, ISaveAssetItem } from 'electron-defs';
 import { verifyTools } from 'tools';
 import type { IStorageDescriptor } from 'storage';
+import { checkConnectivity } from 'api';
 
 // Main application window
 let mainWindow: BrowserWindow | null = null;
@@ -223,6 +224,11 @@ ipcMain.handle('create-database', logExceptions(createNewDatabase, 'Error creati
 ipcMain.handle('remove-database', logExceptions(async (event, databasePath: string) => {
     await removeRecentDatabase(databasePath);
 }, 'Error removing database'));
+
+// IPC handler for checking whether a database is accessible (works for local FS, S3, etc.)
+ipcMain.handle('check-database-exists', logExceptions(async (_event, databasePath: string) => {
+    return checkConnectivity(databasePath);
+}, 'Error checking database exists'));
 
 // IPC handler for getting recent databases list
 

@@ -62,6 +62,9 @@ const electronAPI: IElectronAPI = {
     checkTools: (): Promise<IToolsStatus> => {
         return ipcRenderer.invoke('check-tools');
     },
+    checkDatabaseExists: (databasePath: string): Promise<boolean> => {
+        return ipcRenderer.invoke('check-database-exists', databasePath);
+    },
     getPathForFile: (file: File): string => {
         return webUtils.getPathForFile(file);
     },

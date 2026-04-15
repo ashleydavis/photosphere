@@ -7,7 +7,8 @@ import {
     GalleryLayoutContextProvider,
     SearchContextProvider,
     DeleteConfirmationContextProvider,
-    ImportContextProvider
+    ImportContextProvider,
+    ToastContextProvider,
 } from "user-interface";
 import { ElectronRendererQueueBackend } from "./lib/electron-renderer-queue-backend";
 import { setQueueBackend } from "task-queue";
@@ -46,19 +47,21 @@ export function App() {
         >
             <PlatformProviderElectron electronAPI={electronAPI}>
                 <ImportContextProvider>
-                <AppContextProvider>
-                    <AssetDatabaseProvider queueBackend={queueBackend} restApiUrl={restApiUrl}>
-                        <GalleryContextProvider>
-                            <DeleteConfirmationContextProvider>
-                                <SearchContextProvider>
-                                    <GalleryLayoutContextProvider>
-                                        <Main isMobile={false} initialTheme={initialTheme} />
-                                    </GalleryLayoutContextProvider>
-                                </SearchContextProvider>
-                            </DeleteConfirmationContextProvider>
-                        </GalleryContextProvider>
-                    </AssetDatabaseProvider>
-                </AppContextProvider>
+                    <AppContextProvider>
+                        <ToastContextProvider>
+                            <AssetDatabaseProvider queueBackend={queueBackend} restApiUrl={restApiUrl}>
+                                <GalleryContextProvider>
+                                    <DeleteConfirmationContextProvider>
+                                        <SearchContextProvider>
+                                            <GalleryLayoutContextProvider>
+                                                <Main isMobile={false} initialTheme={initialTheme} />
+                                            </GalleryLayoutContextProvider>
+                                        </SearchContextProvider>
+                                    </DeleteConfirmationContextProvider>
+                                </GalleryContextProvider>
+                            </AssetDatabaseProvider>
+                        </ToastContextProvider>
+                    </AppContextProvider>
                 </ImportContextProvider>
             </PlatformProviderElectron>
         </HashRouter>
