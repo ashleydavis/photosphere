@@ -17,6 +17,8 @@ import { Fps } from "./components/fps";
 import { AboutPage } from "./pages/about";
 import { MapPage } from "./pages/map/map-page";
 import { ConfigurationDialog } from "./components/configuration-dialog";
+import { QrDisplayDialog } from "./components/qr-display-dialog";
+import { QrScannerDialog } from "./components/qr-scanner-dialog";
 import { useToast } from "./context/toast-context";
 import { ToastContainer } from "./components/toast-container";
 import { useImport } from "./context/import-context";
@@ -58,6 +60,16 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
     // Set to true to open the configuration dialog.
     //
     const [configurationOpen, setConfigurationOpen] = useState<boolean>(false);
+
+    //
+    // Set to true to open the QR code display dialog.
+    //
+    const [qrDisplayOpen, setQrDisplayOpen] = useState<boolean>(false);
+
+    //
+    // Set to true to open the QR code scanner dialog.
+    //
+    const [qrScannerOpen, setQrScannerOpen] = useState<boolean>(true);
 
     const { openSearch } = useSearch();
 
@@ -134,6 +146,28 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
     useEffect(() => {
         const unsubscribe = platform.onMenuAction('open-configuration', () => {
             setConfigurationOpen(true);
+        });
+
+        return unsubscribe;
+    }, [platform]);
+
+    //
+    // Listen for show-qr-display menu action from the main process.
+    //
+    useEffect(() => {
+        const unsubscribe = platform.onMenuAction('show-qr-display', () => {
+            setQrDisplayOpen(true);
+        });
+
+        return unsubscribe;
+    }, [platform]);
+
+    //
+    // Listen for open-qr-scanner menu action from the main process.
+    //
+    useEffect(() => {
+        const unsubscribe = platform.onMenuAction('open-qr-scanner', () => {
+            setQrScannerOpen(true);
         });
 
         return unsubscribe;
@@ -260,6 +294,16 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
             <ConfigurationDialog
                 open={configurationOpen}
                 onClose={() => setConfigurationOpen(false)}
+                />
+
+            <QrDisplayDialog
+                open={qrDisplayOpen}
+                onClose={() => setQrDisplayOpen(false)}
+                />
+
+            <QrScannerDialog
+                open={qrScannerOpen}
+                onClose={() => setQrScannerOpen(false)}
                 />
 
             {isWorking

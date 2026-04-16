@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, utilityProcess, type UtilityProcess, dialog, Menu, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, utilityProcess, type UtilityProcess, dialog, Menu, shell, session } from 'electron';
 import { appendFileSync } from 'fs';
 import { join, dirname, basename } from 'path';
 import { randomUUID } from 'crypto';
@@ -70,7 +70,9 @@ async function createMainWindow() {
         },
     });
 
-    // mainWindow.webContents.openDevTools();
+    
+    mainWindow.webContents.openDevTools();
+    mainWindow.maximize();
 
 
     // Load theme preference to pass to frontend
@@ -118,6 +120,17 @@ else {
 }
 
 app.whenReady().then(async () => {
+    // Allow camera access for the QR scanner window.
+    session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+        if (permission === 'media') {
+            callback(true);
+        }
+        else {
+            callback(false);
+        }
+    });
+
+
     // Initialize file logger first so we can log everything
     fileLogger = await FileLoggerElectron.create(app.getPath('userData'));
     fileLogger.info('Photosphere Desktop starting...', 'Main');
@@ -843,6 +856,7 @@ async function closeDatabase(): Promise<void> {
     }
 }
 
+
 //
 // Creates the application menu bar with standard menu items for macOS, Windows, and Linux.
 //
@@ -887,6 +901,23 @@ async function createMenu(): Promise<void> {
             label: 'Open Database...',
             accelerator: 'CmdOrCtrl+O',
             click: logExceptions(openDatabase, 'Error opening database from menu'),
+        },
+        { type: 'separator' },
+        {
+            label: 'Show QR Code for Database Access',
+            click: () => {
+                if (mainWindow) {
+                    mainWindow.webContents.send('menu-action', 'show-qr-display');
+                }
+            },
+        },
+        {
+            label: 'Open Database from QR Code',
+            click: () => {
+                if (mainWindow) {
+                    mainWindow.webContents.send('menu-action', 'open-qr-scanner');
+                }
+            },
         },
     ];
 
