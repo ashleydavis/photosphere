@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { BrowserQRCodeReader, IScannerControls } from "@zxing/browser";
 import { NotFoundException, ChecksumException, FormatException } from "@zxing/library";
 import { log } from "utils";
+import { IDatabaseQrConfig, deserializeDatabaseQrConfig } from "../lib/qr-code-format";
 import Modal from "@mui/joy/Modal";
 import ModalClose from "@mui/joy/ModalClose";
 import ModalDialog from "@mui/joy/ModalDialog";
@@ -30,7 +31,7 @@ export interface IQrScannerDialogProps {
 export function QrScannerDialog({ open, onClose }: IQrScannerDialogProps) {
     const controlsRef = useRef<IScannerControls | null>(null);
     const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
-    const [scannedData, setScannedData] = useState<string | null>(null);
+    const [scannedData, setScannedData] = useState<IDatabaseQrConfig | null>(null);
     const [scanError, setScanError] = useState<string | null>(null);
     const [wrongCode, setWrongCode] = useState<boolean>(false);
 
@@ -73,7 +74,7 @@ export function QrScannerDialog({ open, onClose }: IQrScannerDialogProps) {
                     }
                     setWrongCode(false);
                     controls.stop();
-                    setScannedData(text.slice(4));
+                    setScannedData(deserializeDatabaseQrConfig(text.slice(4)));
                 }
                 if (err && !(err instanceof NotFoundException) && !(err instanceof ChecksumException) && !(err instanceof FormatException)) {
                     log.error(`[QR] Scan error: ${err}`);
@@ -111,7 +112,7 @@ export function QrScannerDialog({ open, onClose }: IQrScannerDialogProps) {
                                     level="body-xs"
                                     sx={{ fontFamily: "monospace", whiteSpace: "pre-wrap", wordBreak: "break-all", background: "var(--joy-palette-background-level1)", p: 1, borderRadius: "sm" }}
                                     >
-                                    {scannedData}
+                                    {JSON.stringify(scannedData, null, 2)}
                                 </Typography>
                             </>
                             : <>
