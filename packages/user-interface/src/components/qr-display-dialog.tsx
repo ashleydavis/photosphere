@@ -45,10 +45,10 @@ export function QrDisplayDialog({ open, onClose }: IQrDisplayDialogProps) {
                 <DialogTitle>Database Access QR Code</DialogTitle>
                 <DialogContent>
                     <QRCodeSVG
-                        value="PSIEHello World"
+                        value={"PSIE" + JSON.stringify(DATABASE_QR_CONFIG)}
                         size={600}
                         level="L"
-                        marginSize={4}
+                        marginSize={8}
                         bgColor="#ffffff"
                         fgColor="#000000"
                         style={{ maxWidth: "100%", height: "auto" }}
