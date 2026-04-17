@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { BrowserQRCodeReader, IScannerControls } from "@zxing/browser";
 import { NotFoundException, ChecksumException, FormatException } from "@zxing/library";
 import { log } from "utils";
-import { IDatabaseQrConfig, deserializeDatabaseQrConfig } from "../lib/qr-code-format";
+import { IDatabaseQrConfig } from "../lib/qr-code-format";
 import Box from "@mui/joy/Box";
 import Modal from "@mui/joy/Modal";
 import ModalClose from "@mui/joy/ModalClose";
@@ -130,7 +130,7 @@ export function QrScannerDialog({ open, onClose }: IQrScannerDialogProps) {
                     //
                     let config;
                     try {
-                        config = deserializeDatabaseQrConfig(text.slice(4));
+                        config = JSON.parse(text.slice(4)) as IDatabaseQrConfig;
                     }
                     catch (parseErr) {
                         log.warn(`[QR] Failed to parse Photosphere QR payload: ${parseErr}`);

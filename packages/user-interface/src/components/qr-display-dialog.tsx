@@ -6,7 +6,7 @@ import ModalDialog from "@mui/joy/ModalDialog";
 import DialogTitle from "@mui/joy/DialogTitle";
 import DialogContent from "@mui/joy/DialogContent";
 import Typography from "@mui/joy/Typography";
-import { IDatabaseQrConfig, serializeDatabaseQrConfig } from "../lib/qr-code-format";
+import { IDatabaseQrConfig } from "../lib/qr-code-format";
 
 //
 // Database connection configuration to encode in the QR code.
@@ -24,10 +24,7 @@ const DATABASE_QR_CONFIG: IDatabaseQrConfig = {
     passPhrase: "maple drift anchor tunnel velvet gross frog orbit plank siren amber cloud",
 };
 
-const jsonPayload = "PSIE" + JSON.stringify(DATABASE_QR_CONFIG);
-const delimitedPayload = "PSIE" + serializeDatabaseQrConfig(DATABASE_QR_CONFIG);
-console.log(`[QR] JSON payload size:      ${jsonPayload.length} chars`);
-console.log(`[QR] Delimited payload size: ${delimitedPayload.length} chars`);
+const payload = "PSIE" + JSON.stringify(DATABASE_QR_CONFIG);
 
 export interface IQrDisplayDialogProps {
     //
@@ -52,7 +49,7 @@ export function QrDisplayDialog({ open, onClose }: IQrDisplayDialogProps) {
                 <DialogTitle>Database Access QR Code</DialogTitle>
                 <DialogContent>
                     <QRCodeSVG
-                        value={delimitedPayload}
+                        value={payload}
                         size={1500}
                         level="L"
                         marginSize={8}
