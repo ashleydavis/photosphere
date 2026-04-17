@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import Modal from "@mui/joy/Modal";
 import ModalClose from "@mui/joy/ModalClose";
 import ModalDialog from "@mui/joy/ModalDialog";
@@ -43,8 +43,14 @@ export interface IShareDatabaseDialogProps {
 export function ShareDatabaseDialog({ open, onClose }: IShareDatabaseDialogProps) {
     const platform = usePlatform();
 
+    //
+    // Set to true once a receiver has successfully fetched the config.
+    //
+    const [delivered, setDelivered] = useState<boolean>(false);
+
     useEffect(() => {
         if (open) {
+            setDelivered(false);
             platform.startDatabaseShare(DATABASE_SHARE_CONFIG);
         }
         return () => {
@@ -53,6 +59,13 @@ export function ShareDatabaseDialog({ open, onClose }: IShareDatabaseDialogProps
             }
         };
     }, [open, platform]);
+
+    useEffect(() => {
+        const unsubscribe = platform.onMenuAction('database-share-delivered', () => {
+            setDelivered(true);
+        });
+        return unsubscribe;
+    }, [platform]);
 
     function handleClose() {
         platform.stopDatabaseShare();
@@ -65,15 +78,28 @@ export function ShareDatabaseDialog({ open, onClose }: IShareDatabaseDialogProps
                 <ModalClose />
                 <DialogTitle>Share Database via Network</DialogTitle>
                 <DialogContent>
-                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, py: 2 }}>
-                        <CircularProgress />
-                        <Typography level="body-md">
-                            Sharing <strong>{DATABASE_SHARE_CONFIG.name}</strong>
-                        </Typography>
-                        <Typography level="body-sm" sx={{ color: 'text.tertiary' }}>
-                            Waiting for another device on the same network to connect...
-                        </Typography>
-                    </Box>
+                    {!delivered
+                        && (
+                            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, py: 2 }}>
+                                <CircularProgress />
+                                <Typography level="body-md">
+                                    Sharing <strong>{DATABASE_SHARE_CONFIG.name}</strong>
+                                </Typography>
+                                <Typography level="body-sm" sx={{ color: 'text.tertiary' }}>
+                                    Waiting for another device on the same network to connect...
+                                </Typography>
+                            </Box>
+                        )
+                    }
+                    {delivered
+                        && (
+                            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, py: 2 }}>
+                                <Typography level="body-md" color="success">
+                                    Database config delivered to <strong>{DATABASE_SHARE_CONFIG.name}</strong> successfully.
+                                </Typography>
+                            </Box>
+                        )
+                    }
                 </DialogContent>
             </ModalDialog>
         </Modal>

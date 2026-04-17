@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import Modal from "@mui/joy/Modal";
 import ModalClose from "@mui/joy/ModalClose";
 import ModalDialog from "@mui/joy/ModalDialog";
@@ -7,6 +7,7 @@ import DialogContent from "@mui/joy/DialogContent";
 import Typography from "@mui/joy/Typography";
 import CircularProgress from "@mui/joy/CircularProgress";
 import Box from "@mui/joy/Box";
+import Button from "@mui/joy/Button";
 import { type IDatabaseShareConfig } from "../context/platform-context";
 
 //
@@ -47,14 +48,12 @@ export function ReceiveDatabaseBluetoothDialog({ open, onClose }: IReceiveDataba
     //
     const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        if (open) {
-            setReceivedConfig(null);
-            setError(null);
-            setIsSearching(true);
-            receiveConfig();
-        }
-    }, [open]);
+    function handleScan() {
+        setReceivedConfig(null);
+        setError(null);
+        setIsSearching(true);
+        receiveConfig();
+    }
 
     //
     // Scans for the PhotoSphere BLE peripheral and reads the database config.
@@ -100,6 +99,22 @@ export function ReceiveDatabaseBluetoothDialog({ open, onClose }: IReceiveDataba
                 <ModalClose />
                 <DialogTitle>Receive Database via Bluetooth</DialogTitle>
                 <DialogContent>
+                    {!isSearching && receivedConfig === null
+                        && (
+                            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, py: 2 }}>
+                                {error !== null
+                                    && (
+                                        <Typography level="body-md" color="danger">
+                                            {error}
+                                        </Typography>
+                                    )
+                                }
+                                <Button onClick={handleScan}>
+                                    Scan for nearby device
+                                </Button>
+                            </Box>
+                        )
+                    }
                     {isSearching
                         && (
                             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, py: 2 }}>
@@ -122,15 +137,6 @@ export function ReceiveDatabaseBluetoothDialog({ open, onClose }: IReceiveDataba
                                 >
                                     {JSON.stringify(receivedConfig, null, 2)}
                                 </Box>
-                            </Box>
-                        )
-                    }
-                    {!isSearching && error !== null
-                        && (
-                            <Box sx={{ py: 2 }}>
-                                <Typography level="body-md" color="danger">
-                                    {error}
-                                </Typography>
                             </Box>
                         )
                     }

@@ -124,26 +124,29 @@ async function createMainWindow() {
     });
 }
 
+// Enable Web Bluetooth API in the renderer process.
+app.commandLine.appendSwitch('enable-experimental-web-platform-features');
+
 // Enforce single instance: if another instance is already running, focus its window and quit.
-const gotSingleInstanceLock = app.requestSingleInstanceLock();
-if (!gotSingleInstanceLock) {
-    app.quit();
-}
-else {
-    app.on('second-instance', () => {
-        if (mainWindow) {
-            if (mainWindow.isMinimized()) {
-                mainWindow.restore();
-            }
-            mainWindow.focus();
-        }
-    });
-}
+// const gotSingleInstanceLock = app.requestSingleInstanceLock();
+// if (!gotSingleInstanceLock) {
+//     app.quit();
+// }
+// else {
+//     app.on('second-instance', () => {
+//         if (mainWindow) {
+//             if (mainWindow.isMinimized()) {
+//                 mainWindow.restore();
+//             }
+//             mainWindow.focus();
+//         }
+//     });
+// }
 
 app.whenReady().then(async () => {
     // Allow camera access for the QR scanner window.
     session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
-        if (permission === 'media') {
+        if (permission === 'media' || (permission as string) === 'bluetooth') {
             callback(true);
         }
         else {
@@ -424,6 +427,9 @@ ipcMain.handle('start-database-share', logExceptions(async (_event, config: unkn
         if (parsedUrl.pathname === '/db-config' && parsedUrl.searchParams.get('token') === token) {
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify(config));
+            if (mainWindow) {
+                mainWindow.webContents.send('menu-action', 'database-share-delivered');
+            }
         }
         else {
             res.writeHead(403);
