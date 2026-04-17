@@ -1,4 +1,5 @@
-import { createHash, generateKeyPairSync, createPrivateKey, createPublicKey, KeyObject } from 'node:crypto';
+import { createHash, generateKeyPairSync, createPrivateKey, createPublicKey, KeyObject, pbkdf2Sync } from 'node:crypto';
+import forge from 'node-forge';
 import * as fs from 'fs/promises';
 import { pathExists } from 'node-utils';
 import { IStorageOptions } from './storage-factory';
@@ -213,5 +214,50 @@ export async function loadEncryptionKeys(
             encryptionPublicKey
         },
         isEncrypted: true
+    };
+}
+
+//
+// PBKDF2 salt used when deriving an RSA key pair from a passphrase.
+// Fixed so that the same passphrase always produces the same key pair.
+//
+const PASSPHRASE_KEY_DERIVATION_SALT = 'photosphere-key-v1';
+
+//
+// Number of PBKDF2 iterations used when deriving the seed for key generation.
+//
+const PASSPHRASE_KEY_DERIVATION_ITERATIONS = 600000;
+
+//
+// Derives a deterministic RSA-4096 key pair from a passphrase.
+// The same passphrase always produces the same key pair.
+// Uses PBKDF2 to derive a seed, then uses that seed to drive node-forge's
+// PRNG so that RSA prime generation is fully deterministic.
+//
+// Note: RSA-4096 generation is computationally expensive and may take
+// 30–90 seconds. Cache the result to disk (via saveKeyPair) to avoid
+// repeating this work.
+//
+export function deriveKeyPairFromPassPhrase(passPhrase: string): IKeyPair {
+    const seed = pbkdf2Sync(
+        passPhrase,
+        PASSPHRASE_KEY_DERIVATION_SALT,
+        PASSPHRASE_KEY_DERIVATION_ITERATIONS,
+        64,
+        'sha512'
+    );
+
+    const seedBinary = seed.toString('binary');
+    const prng = forge.random.createInstance();
+    prng.seedFileSync = (_needed: number) => seedBinary;
+
+    const forgeKeyPair = forge.pki.rsa.generateKeyPair({ bits: 4096, prng });
+
+    const privateKeyPem = forge.pki.privateKeyToPem(forgeKeyPair.privateKey);
+    const publicKeyPem = forge.pki.publicKeyToPem(forgeKeyPair.publicKey);
+
+    return {
+        privateKey: createPrivateKey(privateKeyPem),
+        publicKey: createPublicKey(publicKeyPem),
     };
 }

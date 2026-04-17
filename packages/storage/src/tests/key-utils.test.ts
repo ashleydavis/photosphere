@@ -1,4 +1,4 @@
-import { generateKeyPair, hashPublicKey, loadEncryptionKeys } from '../lib/key-utils';
+import { generateKeyPair, hashPublicKey, loadEncryptionKeys, deriveKeyPairFromPassPhrase } from '../lib/key-utils';
 import type { IStorageOptions } from '../lib/storage-factory';
 import { createCipheriv, randomBytes } from 'node:crypto';
 import * as fs from 'fs/promises';
@@ -132,4 +132,33 @@ describe('loadEncryptionKeys', () => {
             // Best-effort cleanup; ignore errors.
         }
     });
+});
+
+describe('deriveKeyPairFromPassPhrase', () => {
+    // RSA-4096 generation via node-forge is slow; allow up to 3 minutes.
+    const SLOW_TIMEOUT = 180000;
+
+    test('returns a key pair with privateKey and publicKey', () => {
+        const keyPair = deriveKeyPairFromPassPhrase('test-passphrase');
+        expect(keyPair.privateKey).toBeDefined();
+        expect(keyPair.publicKey).toBeDefined();
+    }, SLOW_TIMEOUT);
+
+    test('same passphrase produces the same key pair', () => {
+        const keyPair1 = deriveKeyPairFromPassPhrase('deterministic-passphrase');
+        const keyPair2 = deriveKeyPairFromPassPhrase('deterministic-passphrase');
+
+        const pub1 = keyPair1.publicKey.export({ type: 'spki', format: 'der' }) as Buffer;
+        const pub2 = keyPair2.publicKey.export({ type: 'spki', format: 'der' }) as Buffer;
+        expect(pub1.equals(pub2)).toBe(true);
+    }, SLOW_TIMEOUT);
+
+    test('different passphrases produce different key pairs', () => {
+        const keyPair1 = deriveKeyPairFromPassPhrase('passphrase-alpha');
+        const keyPair2 = deriveKeyPairFromPassPhrase('passphrase-beta');
+
+        const pub1 = keyPair1.publicKey.export({ type: 'spki', format: 'der' }) as Buffer;
+        const pub2 = keyPair2.publicKey.export({ type: 'spki', format: 'der' }) as Buffer;
+        expect(pub1.equals(pub2)).toBe(false);
+    }, SLOW_TIMEOUT);
 });

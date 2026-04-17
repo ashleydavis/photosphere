@@ -39,9 +39,9 @@ export interface IDatabaseQrConfig {
     };
 
     //
-    // PEM-encoded private key used to encrypt the database.
+    // Passphrase used to deterministically derive the private key that encrypts the database.
     //
-    encryptionKey: string;
+    passPhrase: string;
 }
 
 //
@@ -58,7 +58,7 @@ const UNIT_SEPARATOR = "\x1F";
 //
 // Serializes a database config to a compact QR code payload.
 // Format: <code><field\x1F...>
-// Fields in order: name, path, endpoint, region, accessKeyId, secretAccessKey, encryptionKey.
+// Fields in order: name, path, endpoint, region, accessKeyId, secretAccessKey, passPhrase.
 //
 export function serializeDatabaseQrConfig(config: IDatabaseQrConfig): string {
     return FORMAT_CODE + [
@@ -68,7 +68,7 @@ export function serializeDatabaseQrConfig(config: IDatabaseQrConfig): string {
         config.storage.region,
         config.storage.accessKeyId,
         config.storage.secretAccessKey,
-        config.encryptionKey,
+        config.passPhrase,
     ].join(UNIT_SEPARATOR);
 }
 
@@ -91,6 +91,6 @@ export function deserializeDatabaseQrConfig(data: string): IDatabaseQrConfig {
             accessKeyId: values[4],
             secretAccessKey: values[5],
         },
-        encryptionKey: values[6],
+        passPhrase: values[6],
     };
 }
