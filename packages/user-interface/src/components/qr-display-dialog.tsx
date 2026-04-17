@@ -21,7 +21,7 @@ const DATABASE_QR_CONFIG: IDatabaseQrConfig = {
         accessKeyId: "AKIAIOSFODNN7EXAMPLE",
         secretAccessKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
     },
-    passPhrase: "maple drift anchor tunnel velvet gross frog orbit plank siren amber cloud rivet hinge blunt spark flint cedar prism anvil chalk ember gloom ivory latch",
+    passPhrase: "maple drift anchor tunnel velvet gross frog orbit plank siren amber cloud",
 };
 
 const jsonPayload = "PSIE" + JSON.stringify(DATABASE_QR_CONFIG);
@@ -47,13 +47,13 @@ export interface IQrDisplayDialogProps {
 export function QrDisplayDialog({ open, onClose }: IQrDisplayDialogProps) {
     return (
         <Modal open={open} onClose={onClose}>
-            <ModalDialog sx={{ width: "95vw", maxWidth: 1400 }}>
+            <ModalDialog sx={{ width: "95vw", maxWidth: 1600 }}>
                 <ModalClose />
                 <DialogTitle>Database Access QR Code</DialogTitle>
                 <DialogContent>
                     <QRCodeSVG
                         value={delimitedPayload}
-                        size={1200}
+                        size={1500}
                         level="L"
                         marginSize={8}
                         bgColor="#ffffff"
