@@ -144,5 +144,26 @@ export interface IElectronAPI {
     // Required in Electron 30+ where File.path is no longer available in the renderer.
     //
     getPathForFile: (file: File) => string;
+
+    //
+    // Starts broadcasting an opaque config object over the local network via UDP + HTTP.
+    //
+    startDatabaseShare: (config: unknown) => Promise<void>;
+
+    //
+    // Stops the active local network database share.
+    //
+    stopDatabaseShare: () => Promise<void>;
+
+    //
+    // Listens for a local network database share broadcast and returns the received config,
+    // or null on timeout or cancellation.
+    //
+    startDatabaseReceive: () => Promise<unknown>;
+
+    //
+    // Cancels an in-progress database receive operation.
+    //
+    cancelDatabaseReceive: () => Promise<void>;
 }
 

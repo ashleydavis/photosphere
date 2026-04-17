@@ -99,6 +99,51 @@ export interface IToolsStatus {
 }
 
 //
+// Database connection configuration shared via local network.
+//
+export interface IDatabaseShareConfig {
+    //
+    // Display name for the database.
+    //
+    name: string;
+
+    //
+    // Storage path for the database, e.g. "s3:bucket/path".
+    //
+    path: string;
+
+    //
+    // Storage connection details.
+    //
+    storage: {
+        //
+        // S3-compatible endpoint URL.
+        //
+        endpoint: string;
+
+        //
+        // Storage region.
+        //
+        region: string;
+
+        //
+        // Access key ID for storage authentication.
+        //
+        accessKeyId: string;
+
+        //
+        // Secret access key for storage authentication.
+        //
+        secretAccessKey: string;
+    };
+
+    //
+    // Passphrase used to deterministically derive the private key that encrypts the database.
+    //
+    passPhrase: string;
+}
+
+//
 // Platform-specific operations interface.
 // Implemented by Electron for desktop and Capacitor for mobile.
 //
@@ -240,6 +285,31 @@ export interface IPlatformContext {
     // On web, does nothing.
     //
     cancelTasks: (sessionId: string) => Promise<void>;
+
+    //
+    // Starts broadcasting the given database config over the local network via UDP + HTTP.
+    // On web, does nothing.
+    //
+    startDatabaseShare: (config: IDatabaseShareConfig) => Promise<void>;
+
+    //
+    // Stops the active local network database share.
+    // On web, does nothing.
+    //
+    stopDatabaseShare: () => Promise<void>;
+
+    //
+    // Listens for a local network database share and returns the received config,
+    // or null on timeout or cancellation.
+    // On web, always returns null.
+    //
+    startDatabaseReceive: () => Promise<IDatabaseShareConfig | null>;
+
+    //
+    // Cancels an in-progress database receive operation.
+    // On web, does nothing.
+    //
+    cancelDatabaseReceive: () => Promise<void>;
 }
 
 const PlatformContext = createContext<IPlatformContext | undefined>(undefined);

@@ -1,5 +1,5 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
-import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext, type IImportSession, type IToolsStatus, type IDownloadAssetItem, type IShowNotificationData, convertToPng } from "user-interface";
+import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext, type IImportSession, type IToolsStatus, type IDownloadAssetItem, type IShowNotificationData, type IDatabaseShareConfig, convertToPng } from "user-interface";
 
 const restApiUrl = "http://localhost:3001";
 
@@ -210,6 +210,23 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         // No-op on web platform; no tasks to cancel.
     }, []);
 
+    const startDatabaseShare = useCallback(async (_config: IDatabaseShareConfig): Promise<void> => {
+        // Not supported on web platform.
+    }, []);
+
+    const stopDatabaseShare = useCallback(async (): Promise<void> => {
+        // Not supported on web platform.
+    }, []);
+
+    const startDatabaseReceive = useCallback(async (): Promise<IDatabaseShareConfig | null> => {
+        // Not supported on web platform.
+        return null;
+    }, []);
+
+    const cancelDatabaseReceive = useCallback(async (): Promise<void> => {
+        // Not supported on web platform.
+    }, []);
+
     const platformContext: IPlatformContext = {
         openDatabase,
         createDatabase,
@@ -234,6 +251,10 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         onTaskMessage,
         onTaskComplete,
         cancelTasks,
+        startDatabaseShare,
+        stopDatabaseShare,
+        startDatabaseReceive,
+        cancelDatabaseReceive,
     };
 
     //

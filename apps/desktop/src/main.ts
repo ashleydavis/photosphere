@@ -2,6 +2,8 @@ import { app, BrowserWindow, ipcMain, utilityProcess, type UtilityProcess, dialo
 import { appendFileSync } from 'fs';
 import { join, dirname, basename } from 'path';
 import { randomUUID } from 'crypto';
+import http from 'http';
+import dgram from 'dgram';
 import { cpus, platform, arch, release } from 'os';
 import { version } from 'config';
 import { existsSync, readdirSync, statSync, readFileSync } from 'fs';
@@ -50,6 +52,24 @@ let isSyncRunning: boolean = false;
 
 // File logger for writing logs to files
 let fileLogger: FileLoggerElectron | null = null;
+
+// HTTP server used to serve database config during a share operation.
+let shareHttpServer: http.Server | null = null;
+
+// UDP socket used to broadcast share announcements.
+let shareUdpSocket: dgram.Socket | null = null;
+
+// Timer for periodic UDP broadcast messages.
+let shareIntervalId: NodeJS.Timeout | null = null;
+
+// UDP socket used to listen for incoming share announcements.
+let receiveUdpSocket: dgram.Socket | null = null;
+
+// Resolve callback for the pending startDatabaseReceive IPC call.
+let receiveResolveCallback: ((config: unknown) => void) | null = null;
+
+// Timeout handle for the database receive operation (60 seconds).
+let receiveTimeoutId: NodeJS.Timeout | null = null;
 
 //
 // Creates and configures the main browser window for the Electron app.
@@ -347,6 +367,132 @@ ipcMain.handle('import-assets', logExceptions(async (_event, paths?: string[]) =
 ipcMain.handle('check-tools', logExceptions(async () => {
     return await verifyTools();
 }, 'Error checking tools'));
+
+//
+// Stops any active database share (HTTP server + UDP broadcast).
+//
+async function stopDatabaseShareInternal(): Promise<void> {
+    if (shareIntervalId !== null) {
+        clearInterval(shareIntervalId);
+        shareIntervalId = null;
+    }
+    if (shareUdpSocket !== null) {
+        const socket = shareUdpSocket;
+        shareUdpSocket = null;
+        await new Promise<void>((resolve) => socket.close(resolve));
+    }
+    if (shareHttpServer !== null) {
+        const server = shareHttpServer;
+        shareHttpServer = null;
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+}
+
+//
+// Stops any active database receive operation.
+//
+function stopDatabaseReceiveInternal(): void {
+    if (receiveTimeoutId !== null) {
+        clearTimeout(receiveTimeoutId);
+        receiveTimeoutId = null;
+    }
+    if (receiveUdpSocket !== null) {
+        const socket = receiveUdpSocket;
+        receiveUdpSocket = null;
+        socket.close();
+    }
+}
+
+// Starts broadcasting the database config over the local network via UDP + HTTP.
+ipcMain.handle('start-database-share', logExceptions(async (_event, config: unknown) => {
+    await stopDatabaseShareInternal();
+    const token = randomUUID();
+    const port = await findAvailablePort();
+    shareHttpServer = http.createServer((req, res) => {
+        const parsedUrl = new URL(req.url!, `http://localhost`);
+        if (parsedUrl.pathname === '/db-config' && parsedUrl.searchParams.get('token') === token) {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(config));
+        }
+        else {
+            res.writeHead(403);
+            res.end();
+        }
+    });
+    await new Promise<void>((resolve) => {
+        shareHttpServer!.listen(port, resolve);
+    });
+    shareUdpSocket = dgram.createSocket('udp4');
+    await new Promise<void>((resolve) => {
+        shareUdpSocket!.bind(0, () => {
+            shareUdpSocket!.setBroadcast(true);
+            resolve();
+        });
+    });
+    const broadcastMessage = Buffer.from(`PSIE_SHARE:${port}:${token}`);
+    shareIntervalId = setInterval(() => {
+        shareUdpSocket?.send(broadcastMessage, 0, broadcastMessage.length, 54321, '255.255.255.255');
+    }, 1000);
+}, 'Error starting database share'));
+
+// Stops the active local network database share.
+ipcMain.handle('stop-database-share', logExceptions(async () => {
+    await stopDatabaseShareInternal();
+}, 'Error stopping database share'));
+
+// Listens for a local network database share broadcast and returns the received config.
+ipcMain.handle('start-database-receive', logExceptions(async () => {
+    stopDatabaseReceiveInternal();
+    return new Promise<unknown>((resolve) => {
+        receiveResolveCallback = resolve;
+        receiveUdpSocket = dgram.createSocket('udp4');
+        receiveUdpSocket.on('message', async (msg, rinfo) => {
+            if (receiveResolveCallback === null) {
+                return;
+            }
+            const msgStr = msg.toString();
+            if (!msgStr.startsWith('PSIE_SHARE:')) {
+                return;
+            }
+            const firstColon = msgStr.indexOf(':');
+            const secondColon = msgStr.indexOf(':', firstColon + 1);
+            const port = parseInt(msgStr.substring(firstColon + 1, secondColon));
+            const token = msgStr.substring(secondColon + 1);
+            try {
+                const response = await fetch(`http://${rinfo.address}:${port}/db-config?token=${token}`);
+                if (response.ok) {
+                    const config = await response.json();
+                    const resolveCallback = receiveResolveCallback;
+                    receiveResolveCallback = null;
+                    stopDatabaseReceiveInternal();
+                    resolveCallback(config);
+                }
+            }
+            catch {
+                // Continue listening on fetch failure.
+            }
+        });
+        receiveUdpSocket.bind(54321);
+        receiveTimeoutId = setTimeout(() => {
+            const resolveCallback = receiveResolveCallback;
+            receiveResolveCallback = null;
+            stopDatabaseReceiveInternal();
+            if (resolveCallback !== null) {
+                resolveCallback(null);
+            }
+        }, 60000);
+    });
+}, 'Error starting database receive'));
+
+// Cancels an in-progress database receive operation.
+ipcMain.handle('cancel-database-receive', logExceptions(async () => {
+    if (receiveResolveCallback !== null) {
+        const resolveCallback = receiveResolveCallback;
+        receiveResolveCallback = null;
+        stopDatabaseReceiveInternal();
+        resolveCallback(null);
+    }
+}, 'Error cancelling database receive'));
 
 // IPC handler for renderer log messages
 ipcMain.on('renderer-log', (event, message: IRendererLogMessage) => {
@@ -916,6 +1062,23 @@ async function createMenu(): Promise<void> {
             click: () => {
                 if (mainWindow) {
                     mainWindow.webContents.send('menu-action', 'open-qr-scanner');
+                }
+            },
+        },
+        { type: 'separator' },
+        {
+            label: 'Share Database via Network',
+            click: () => {
+                if (mainWindow) {
+                    mainWindow.webContents.send('menu-action', 'share-database');
+                }
+            },
+        },
+        {
+            label: 'Receive Database via Network',
+            click: () => {
+                if (mainWindow) {
+                    mainWindow.webContents.send('menu-action', 'receive-database');
                 }
             },
         },

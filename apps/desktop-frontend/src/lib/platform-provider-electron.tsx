@@ -1,5 +1,5 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
-import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext, type IImportSession, type IToolsStatus, type IDownloadAssetItem, type IShowNotificationData, convertToPng } from "user-interface";
+import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext, type IImportSession, type IToolsStatus, type IDownloadAssetItem, type IShowNotificationData, type IDatabaseShareConfig, convertToPng } from "user-interface";
 import type { IElectronAPI, ISaveAssetItem } from "electron-defs";
 
 export interface IPlatformProviderElectronProps {
@@ -287,6 +287,22 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
     const cancelTasks = useCallback(async (sessionId: string): Promise<void> => {
         electronAPI.cancelTasks(sessionId);
     }, [electronAPI]);
+
+    const startDatabaseShare = useCallback(async (config: IDatabaseShareConfig): Promise<void> => {
+        await electronAPI.startDatabaseShare(config);
+    }, [electronAPI]);
+
+    const stopDatabaseShare = useCallback(async (): Promise<void> => {
+        await electronAPI.stopDatabaseShare();
+    }, [electronAPI]);
+
+    const startDatabaseReceive = useCallback(async (): Promise<IDatabaseShareConfig | null> => {
+        return await electronAPI.startDatabaseReceive() as IDatabaseShareConfig | null;
+    }, [electronAPI]);
+
+    const cancelDatabaseReceive = useCallback(async (): Promise<void> => {
+        await electronAPI.cancelDatabaseReceive();
+    }, [electronAPI]);
     const downloadAsset = useCallback(async (assetId: string, assetType: string, filename: string, _contentType: string, databasePath: string): Promise<void> => {
         await electronAPI.saveAsset(assetId, assetType, filename, databasePath);
     }, [electronAPI]);
@@ -329,6 +345,10 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         onTaskMessage,
         onTaskComplete,
         cancelTasks,
+        startDatabaseShare,
+        stopDatabaseShare,
+        startDatabaseReceive,
+        cancelDatabaseReceive,
     };
 
     const config = createConfig(

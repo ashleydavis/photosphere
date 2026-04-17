@@ -19,6 +19,8 @@ import { MapPage } from "./pages/map/map-page";
 import { ConfigurationDialog } from "./components/configuration-dialog";
 import { QrDisplayDialog } from "./components/qr-display-dialog";
 import { QrScannerDialog } from "./components/qr-scanner-dialog";
+import { ShareDatabaseDialog } from "./components/share-database-dialog";
+import { ReceiveDatabaseDialog } from "./components/receive-database-dialog";
 import { useToast } from "./context/toast-context";
 import { ToastContainer } from "./components/toast-container";
 import { useImport } from "./context/import-context";
@@ -70,6 +72,16 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
     // Set to true to open the QR code scanner dialog.
     //
     const [qrScannerOpen, setQrScannerOpen] = useState<boolean>(true);
+
+    //
+    // Set to true to open the share database dialog.
+    //
+    const [shareDatabaseOpen, setShareDatabaseOpen] = useState<boolean>(false);
+
+    //
+    // Set to true to open the receive database dialog.
+    //
+    const [receiveDatabaseOpen, setReceiveDatabaseOpen] = useState<boolean>(false);
 
     const { openSearch } = useSearch();
 
@@ -168,6 +180,28 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
     useEffect(() => {
         const unsubscribe = platform.onMenuAction('open-qr-scanner', () => {
             setQrScannerOpen(true);
+        });
+
+        return unsubscribe;
+    }, [platform]);
+
+    //
+    // Listen for share-database menu action from the main process.
+    //
+    useEffect(() => {
+        const unsubscribe = platform.onMenuAction('share-database', () => {
+            setShareDatabaseOpen(true);
+        });
+
+        return unsubscribe;
+    }, [platform]);
+
+    //
+    // Listen for receive-database menu action from the main process.
+    //
+    useEffect(() => {
+        const unsubscribe = platform.onMenuAction('receive-database', () => {
+            setReceiveDatabaseOpen(true);
         });
 
         return unsubscribe;
@@ -304,6 +338,16 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
             <QrScannerDialog
                 open={qrScannerOpen}
                 onClose={() => setQrScannerOpen(false)}
+                />
+
+            <ShareDatabaseDialog
+                open={shareDatabaseOpen}
+                onClose={() => setShareDatabaseOpen(false)}
+                />
+
+            <ReceiveDatabaseDialog
+                open={receiveDatabaseOpen}
+                onClose={() => setReceiveDatabaseOpen(false)}
                 />
 
             {isWorking

@@ -68,6 +68,18 @@ const electronAPI: IElectronAPI = {
     getPathForFile: (file: File): string => {
         return webUtils.getPathForFile(file);
     },
+    startDatabaseShare: (config: unknown): Promise<void> => {
+        return ipcRenderer.invoke('start-database-share', config);
+    },
+    stopDatabaseShare: (): Promise<void> => {
+        return ipcRenderer.invoke('stop-database-share');
+    },
+    startDatabaseReceive: (): Promise<unknown> => {
+        return ipcRenderer.invoke('start-database-receive');
+    },
+    cancelDatabaseReceive: (): Promise<void> => {
+        return ipcRenderer.invoke('cancel-database-receive');
+    },
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);
