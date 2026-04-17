@@ -140,7 +140,12 @@ export interface IDatabaseShareConfig {
     //
     // Passphrase used to deterministically derive the private key that encrypts the database.
     //
-    passPhrase: string;
+    passPhrase?: string;
+
+    //
+    // PEM-encoded private key used to encrypt the database.
+    //
+    encryptionKey?: string;
 }
 
 //
