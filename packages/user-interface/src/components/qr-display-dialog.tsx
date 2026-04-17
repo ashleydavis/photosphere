@@ -47,13 +47,13 @@ export interface IQrDisplayDialogProps {
 export function QrDisplayDialog({ open, onClose }: IQrDisplayDialogProps) {
     return (
         <Modal open={open} onClose={onClose}>
-            <ModalDialog sx={{ width: "90vw", maxWidth: 1000 }}>
+            <ModalDialog sx={{ width: "95vw", maxWidth: 1400 }}>
                 <ModalClose />
                 <DialogTitle>Database Access QR Code</DialogTitle>
                 <DialogContent>
                     <QRCodeSVG
                         value={delimitedPayload}
-                        size={900}
+                        size={1200}
                         level="L"
                         marginSize={8}
                         bgColor="#ffffff"
