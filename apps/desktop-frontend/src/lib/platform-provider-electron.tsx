@@ -288,6 +288,14 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         electronAPI.cancelTasks(sessionId);
     }, [electronAPI]);
 
+    const startBluetoothShare = useCallback(async (config: IDatabaseShareConfig): Promise<void> => {
+        await electronAPI.startBluetoothShare(config);
+    }, [electronAPI]);
+
+    const stopBluetoothShare = useCallback(async (): Promise<void> => {
+        await electronAPI.stopBluetoothShare();
+    }, [electronAPI]);
+
     const startDatabaseShare = useCallback(async (config: IDatabaseShareConfig): Promise<void> => {
         await electronAPI.startDatabaseShare(config);
     }, [electronAPI]);
@@ -345,6 +353,8 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         onTaskMessage,
         onTaskComplete,
         cancelTasks,
+        startBluetoothShare,
+        stopBluetoothShare,
         startDatabaseShare,
         stopDatabaseShare,
         startDatabaseReceive,

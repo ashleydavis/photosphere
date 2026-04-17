@@ -19,6 +19,7 @@ import type { IImportSession, IRendererLogMessage, ISaveAssetItem } from 'electr
 import { verifyTools } from 'tools';
 import type { IStorageDescriptor } from 'storage';
 import { checkConnectivity } from 'api';
+import { startBluetoothShare, stopBluetoothShare } from './bluetooth-share';
 
 // Main application window
 let mainWindow: BrowserWindow | null = null;
@@ -147,6 +148,16 @@ app.whenReady().then(async () => {
         }
         else {
             callback(false);
+        }
+    });
+
+    // Auto-select the PhotoSphere device when the receiver scans via Web Bluetooth.
+    // Cast to any because Electron's type definitions don't include this event.
+    (session.defaultSession as any).on('select-bluetooth-device', (event: any, deviceList: any[], callback: (id: string) => void) => {
+        event.preventDefault();
+        const device = deviceList.find(d => d.deviceName === 'PhotoSphere');
+        if (device) {
+            callback(device.deviceId);
         }
     });
 
@@ -493,6 +504,16 @@ ipcMain.handle('cancel-database-receive', logExceptions(async () => {
         resolveCallback(null);
     }
 }, 'Error cancelling database receive'));
+
+// Starts advertising the database config as a BLE peripheral.
+ipcMain.handle('start-bluetooth-share', logExceptions(async (_event, config: unknown) => {
+    await startBluetoothShare(config);
+}, 'Error starting Bluetooth share'));
+
+// Stops the active BLE peripheral.
+ipcMain.handle('stop-bluetooth-share', logExceptions(async () => {
+    await stopBluetoothShare();
+}, 'Error stopping Bluetooth share'));
 
 // IPC handler for renderer log messages
 ipcMain.on('renderer-log', (event, message: IRendererLogMessage) => {
@@ -1062,6 +1083,23 @@ async function createMenu(): Promise<void> {
             click: () => {
                 if (mainWindow) {
                     mainWindow.webContents.send('menu-action', 'open-qr-scanner');
+                }
+            },
+        },
+        { type: 'separator' },
+        {
+            label: 'Share Database via Bluetooth',
+            click: () => {
+                if (mainWindow) {
+                    mainWindow.webContents.send('menu-action', 'share-database-bluetooth');
+                }
+            },
+        },
+        {
+            label: 'Receive Database via Bluetooth',
+            click: () => {
+                if (mainWindow) {
+                    mainWindow.webContents.send('menu-action', 'receive-database-bluetooth');
                 }
             },
         },

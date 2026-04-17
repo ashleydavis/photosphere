@@ -287,6 +287,18 @@ export interface IPlatformContext {
     cancelTasks: (sessionId: string) => Promise<void>;
 
     //
+    // Starts advertising the database config as a BLE GATT peripheral.
+    // On web, does nothing.
+    //
+    startBluetoothShare: (config: IDatabaseShareConfig) => Promise<void>;
+
+    //
+    // Stops the active BLE GATT peripheral.
+    // On web, does nothing.
+    //
+    stopBluetoothShare: () => Promise<void>;
+
+    //
     // Starts broadcasting the given database config over the local network via UDP + HTTP.
     // On web, does nothing.
     //

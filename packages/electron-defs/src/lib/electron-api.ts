@@ -146,6 +146,16 @@ export interface IElectronAPI {
     getPathForFile: (file: File) => string;
 
     //
+    // Starts advertising the database config as a BLE GATT peripheral via BlueZ.
+    //
+    startBluetoothShare: (config: unknown) => Promise<void>;
+
+    //
+    // Stops the active BLE GATT peripheral.
+    //
+    stopBluetoothShare: () => Promise<void>;
+
+    //
     // Starts broadcasting an opaque config object over the local network via UDP + HTTP.
     //
     startDatabaseShare: (config: unknown) => Promise<void>;

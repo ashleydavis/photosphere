@@ -210,6 +210,14 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         // No-op on web platform; no tasks to cancel.
     }, []);
 
+    const startBluetoothShare = useCallback(async (_config: IDatabaseShareConfig): Promise<void> => {
+        // Not supported on web platform.
+    }, []);
+
+    const stopBluetoothShare = useCallback(async (): Promise<void> => {
+        // Not supported on web platform.
+    }, []);
+
     const startDatabaseShare = useCallback(async (_config: IDatabaseShareConfig): Promise<void> => {
         // Not supported on web platform.
     }, []);
@@ -251,6 +259,8 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         onTaskMessage,
         onTaskComplete,
         cancelTasks,
+        startBluetoothShare,
+        stopBluetoothShare,
         startDatabaseShare,
         stopDatabaseShare,
         startDatabaseReceive,

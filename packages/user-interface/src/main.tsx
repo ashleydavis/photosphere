@@ -21,6 +21,8 @@ import { QrDisplayDialog } from "./components/qr-display-dialog";
 import { QrScannerDialog } from "./components/qr-scanner-dialog";
 import { ShareDatabaseDialog } from "./components/share-database-dialog";
 import { ReceiveDatabaseDialog } from "./components/receive-database-dialog";
+import { ShareDatabaseBluetoothDialog } from "./components/share-database-bluetooth-dialog";
+import { ReceiveDatabaseBluetoothDialog } from "./components/receive-database-bluetooth-dialog";
 import { useToast } from "./context/toast-context";
 import { ToastContainer } from "./components/toast-container";
 import { useImport } from "./context/import-context";
@@ -82,6 +84,16 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
     // Set to true to open the receive database dialog.
     //
     const [receiveDatabaseOpen, setReceiveDatabaseOpen] = useState<boolean>(false);
+
+    //
+    // Set to true to open the Bluetooth share dialog.
+    //
+    const [shareBluetoothOpen, setShareBluetoothOpen] = useState<boolean>(false);
+
+    //
+    // Set to true to open the Bluetooth receive dialog.
+    //
+    const [receiveBluetoothOpen, setReceiveBluetoothOpen] = useState<boolean>(false);
 
     const { openSearch } = useSearch();
 
@@ -202,6 +214,28 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
     useEffect(() => {
         const unsubscribe = platform.onMenuAction('receive-database', () => {
             setReceiveDatabaseOpen(true);
+        });
+
+        return unsubscribe;
+    }, [platform]);
+
+    //
+    // Listen for share-database-bluetooth menu action from the main process.
+    //
+    useEffect(() => {
+        const unsubscribe = platform.onMenuAction('share-database-bluetooth', () => {
+            setShareBluetoothOpen(true);
+        });
+
+        return unsubscribe;
+    }, [platform]);
+
+    //
+    // Listen for receive-database-bluetooth menu action from the main process.
+    //
+    useEffect(() => {
+        const unsubscribe = platform.onMenuAction('receive-database-bluetooth', () => {
+            setReceiveBluetoothOpen(true);
         });
 
         return unsubscribe;
@@ -348,6 +382,16 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
             <ReceiveDatabaseDialog
                 open={receiveDatabaseOpen}
                 onClose={() => setReceiveDatabaseOpen(false)}
+                />
+
+            <ShareDatabaseBluetoothDialog
+                open={shareBluetoothOpen}
+                onClose={() => setShareBluetoothOpen(false)}
+                />
+
+            <ReceiveDatabaseBluetoothDialog
+                open={receiveBluetoothOpen}
+                onClose={() => setReceiveBluetoothOpen(false)}
                 />
 
             {isWorking

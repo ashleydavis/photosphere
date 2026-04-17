@@ -15,7 +15,7 @@
     "dev:fps": "bun run bundle && FPS_LOGGING=1 electron . --no-sandbox",
     "compile": "tsc --noEmit",
     "c": "bun run compile",
-    "bundle:main": "bun build ./src/main.ts --outdir ./bundle --target node --format cjs --external electron",
+    "bundle:main": "bun build ./src/main.ts --outdir ./bundle --target node --format cjs --external electron --external dbus-next",
     "bundle:preload": "bun build ./src/preload.ts --outdir ./bundle --target node --format cjs --external electron",
     "bundle:worker": "bun build ./src/worker.ts --outdir ./bundle --target node --format cjs",
     "bundle:rest-api-worker": "bun build ./src/rest-api-worker.ts --outdir ./bundle --target node --format cjs",
@@ -29,6 +29,7 @@
   "dependencies": {
     "api": "workspace:*",
     "config": "workspace:*",
+    "dbus-next": "^0.10.2",
     "electron-defs": "workspace:*",
     "jsqr": "^1.4.0",
     "node-utils": "workspace:*",

@@ -68,6 +68,12 @@ const electronAPI: IElectronAPI = {
     getPathForFile: (file: File): string => {
         return webUtils.getPathForFile(file);
     },
+    startBluetoothShare: (config: unknown): Promise<void> => {
+        return ipcRenderer.invoke('start-bluetooth-share', config);
+    },
+    stopBluetoothShare: (): Promise<void> => {
+        return ipcRenderer.invoke('stop-bluetooth-share');
+    },
     startDatabaseShare: (config: unknown): Promise<void> => {
         return ipcRenderer.invoke('start-database-share', config);
     },
