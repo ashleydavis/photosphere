@@ -1,5 +1,5 @@
 import { createMediaFileDatabase, createDatabase as createMediaDatabase, loadSortIndexes } from "api";
-import { createStorage, loadEncryptionKeys, pathJoin, IStorage } from "storage";
+import { createStorage, loadEncryptionKeysFromPem, generateKeyPair, exportPublicKeyToPem, pathJoin, IStorage, IEncryptionKeyPem } from "storage";
 import type { BsonDatabase, IBsonCollection } from "bdb";
 import type { IUuidGenerator, ITimestampProvider } from "utils";
 import type { IAsset } from "defs";
@@ -13,48 +13,42 @@ import { configureIfNeeded, getS3Config } from './config';
 import { getDirectoryForCommand } from './directory-picker';
 import { ensureMediaProcessingTools } from './ensure-tools';
 import * as fs from 'fs/promises';
-import { existsSync } from 'fs';
-import { pathExists, ensureDir } from 'node-utils';
+import { pathExists } from 'node-utils';
 import * as os from 'os';
 import pc from "picocolors";
 import { confirm, text, isCancel, outro, select } from './clack/prompts';
-import { join } from "path";
 import * as path from "path";
 import { CURRENT_DATABASE_VERSION, loadTreeVersion } from "merkle-tree";
+import { getVault } from 'vault';
 
 //
-// Helper function to get available encryption keys from the keys directory
+// Lists vault key names for all encryption keys stored under cli:encryption:*.
 //
 export async function getAvailableKeys(): Promise<string[]> {
-    const keysDir = join(os.homedir(), '.config', 'photosphere', 'keys');
-    
-    if (!await pathExists(keysDir)) {
-        return [];
-    }
-    
-    const allFiles = await fs.readdir(keysDir);
-    // Filter for .key files (private keys are all we need)
-    return allFiles
-        .filter(file => file.endsWith('.key'));
+    const vault = getVault("plaintext");
+    const secrets = await vault.list();
+    return secrets
+        .filter(secret => secret.name.startsWith('cli:encryption:'))
+        .map(secret => secret.name.slice('cli:encryption:'.length));
 }
 
 //
-// Helper function to show key selection menu
+// Prompts the user to pick an encryption key from those stored in the vault.
+// Returns the vault key name (the part after "cli:encryption:").
 //
 export async function selectEncryptionKey(message: string): Promise<string> {
-    const keyFiles = await getAvailableKeys();
-    
-    if (keyFiles.length === 0) {
-        outro(pc.red('✗ No encryption keys found in ~/.config/photosphere/keys/\n  Please provide the private key using the --key option or place your key files in the keys directory.'));
+    const keyNames = await getAvailableKeys();
+
+    if (keyNames.length === 0) {
+        outro(pc.red('✗ No encryption keys found in the vault.\n  Use "psi vault add" to add a key or "psi vault import" to import an existing key file.'));
         await exit(1);
     }
 
-    // Show menu of available keys
     const selectedKey = await select({
         message,
-        options: keyFiles.map(file => ({
-            value: file,
-            label: file
+        options: keyNames.map(name => ({
+            value: name,
+            label: name
         })),
     });
 
@@ -66,16 +60,20 @@ export async function selectEncryptionKey(message: string): Promise<string> {
 }
 
 //
-// Result of encryption prompting
+// Result of encryption prompting.
+// keyName is the vault key name (e.g. "my-photos"); generateKey indicates a new key should be created.
 //
 export interface IEncryptionPromptResult {
-    keyPath?: string;
+    // Vault key name (the part after "cli:encryption:").
+    keyName?: string;
+
+    // True when a new key pair should be generated and stored in the vault.
     generateKey?: boolean;
 }
 
 //
-// Shared function to prompt for encryption settings
-// Returns the key path and whether to generate a new key
+// Prompts for encryption settings. Either selects an existing vault key or
+// generates a new RSA-4096 key pair and stores it in the vault.
 //
 export async function promptForEncryption(message: string = 'Would you like to encrypt your database?'): Promise<IEncryptionPromptResult> {
     const wantEncryption = await confirm({
@@ -97,8 +95,8 @@ export async function promptForEncryption(message: string = 'Would you like to e
     const keyChoice = await select({
         message: 'How would you like to handle the encryption key?',
         options: [
-            { value: 'existing', label: 'Use an existing private key' },
-            { value: 'generate', label: 'Generate a new key and save it to a file' },
+            { value: 'existing', label: 'Use an existing key from the vault' },
+            { value: 'generate', label: 'Generate a new key and store it in the vault' },
         ],
     });
 
@@ -107,140 +105,79 @@ export async function promptForEncryption(message: string = 'Would you like to e
     }
 
     if (keyChoice === 'existing') {
-        // Show menu of available keys
         const selectedKey = await selectEncryptionKey('Select an encryption key:');
-        
-        return {
-            keyPath: selectedKey,
-            generateKey: false
-        };
-    } else if (keyChoice === 'generate') {
-        // Generate new key - save in ~/.config/photosphere/keys directory
-        const keysDir = join(os.homedir(), '.config', 'photosphere', 'keys');
-        
-        // Ensure the ~/.config/photosphere/keys directory exists
-        await ensureDir(keysDir);
-
-        // Ask for filename
-        const keyFilename = await text({
-            message: 'Enter filename for encryption key:',
-            placeholder: 'my-photos.key',
-            initialValue: 'my-photos.key',
+        return { keyName: selectedKey, generateKey: false };
+    }
+    else if (keyChoice === 'generate') {
+        const keyNameInput = await text({
+            message: 'Enter a name for the new encryption key:',
+            placeholder: 'my-photos',
+            initialValue: 'my-photos',
             validate: (value) => {
                 if (!value || value.trim().length === 0) {
-                    return 'Filename is required';
+                    return 'Key name is required';
                 }
-                // Check for invalid characters
                 if (!/^[a-zA-Z0-9._-]+$/.test(value)) {
-                    return 'Filename can only contain letters, numbers, dots, hyphens, and underscores';
-                }
-                // Check if file already exists
-                const keyPath = join(keysDir, value);
-                if (existsSync(keyPath)) {
-                    return 'File already exists';
+                    return 'Key name can only contain letters, numbers, dots, hyphens, and underscores';
                 }
                 return undefined;
             },
         });
 
-        if (isCancel(keyFilename)) {
+        if (isCancel(keyNameInput)) {
             await exit(1);
         }
 
-        return {
-            keyPath: join(keysDir, keyFilename as string),
-            generateKey: true
-        };
+        const keyName = (keyNameInput as string).trim();
+        const keyPair = generateKeyPair();
+        const privateKeyPem = keyPair.privateKey.export({ type: 'pkcs8', format: 'pem' }) as string;
+        const publicKeyPem = exportPublicKeyToPem(keyPair.publicKey);
+
+        const vault = getVault("plaintext");
+        await vault.set({
+            name: `cli:encryption:${keyName}`,
+            type: 'encryption-key',
+            value: JSON.stringify({ privateKeyPem, publicKeyPem }),
+        });
+
+        log.info(pc.green(`✓ Encryption key "${keyName}" stored in vault.`));
+
+        return { keyName, generateKey: true };
     }
 
     return {};
 }
 
 //
-// When the user has requested key generation (e.g., via --generate-key) but has not
-// provided a key path, this helper interactively prompts for a destination path.
-// It mirrors the "generate" branch of promptForEncryption so that non-interactive
-// callers can still delegate to a shared flow when they only know "generate: true".
+// Resolves a comma-separated list of vault key names to PEM key pairs for use in storage descriptors.
+// Returns an empty array if no key names are provided.
 //
-export async function promptForKeyGenerationPath(): Promise<IEncryptionPromptResult> {
-    const keysDir = join(os.homedir(), '.config', 'photosphere', 'keys');
-
-    await ensureDir(keysDir);
-
-    const keyFilename = await text({
-        message: 'Enter filename for encryption key:',
-        placeholder: 'my-photos.key',
-        initialValue: 'my-photos.key',
-        validate: (value) => {
-            if (!value || value.trim().length === 0) {
-                return 'Filename is required';
-            }
-
-            if (!/^[a-zA-Z0-9._-]+$/.test(value)) {
-                return 'Filename can only contain letters, numbers, dots, hyphens, and underscores';
-            }
-
-            const keyPath = join(keysDir, value);
-            if (existsSync(keyPath)) {
-                return 'File already exists';
-            }
-
-            return undefined;
-        },
-    });
-
-    if (isCancel(keyFilename)) {
-        await exit(1);
-    }
-
-    return {
-        keyPath: join(keysDir, keyFilename as string),
-        generateKey: true,
-    };
-}
-
-export async function resolveKeyPath(keyPath: string | undefined): Promise<string | undefined> {
-    if (!keyPath) {
-        return undefined;
-    }
-    
-    // If the path contains separators, use it as-is (absolute or relative path)
-    if (keyPath.includes('/') || keyPath.includes('\\')) {
-        return keyPath;
-    }
-    
-    // For filenames only, check ~/.config/photosphere/keys/ first
-    const keysDir = join(os.homedir(), '.config', 'photosphere', 'keys');
-    const keysPath = join(keysDir, keyPath);
-    
-    if (await pathExists(keysPath)) {
-        return keysPath;
-    }
-    
-    // If not found in keys directory, use current directory
-    return keyPath;
-}
-
-//
-// Resolves a comma-separated list of key paths into absolute/expanded paths.
-// Returns an array of resolved paths; empty array means "no keys provided".
-//
-export async function resolveKeyPaths(raw: string | undefined): Promise<string[]> {
-    if (!raw) {
+export async function resolveKeyPems(keyNames?: string): Promise<IEncryptionKeyPem[]> {
+    if (!keyNames) {
         return [];
     }
-
-    const parts = raw.split(',').map(part => part.trim()).filter(part => part.length > 0);
-    const resolved: string[] = [];
-
-    for (const part of parts) {
-        const resolvedPath = await resolveKeyPath(part);
-        if (resolvedPath) {
-            resolved.push(resolvedPath);
+    const names = keyNames.split(',').map(name => name.trim()).filter(name => name.length > 0);
+    const pairs: IEncryptionKeyPem[] = [];
+    for (const name of names) {
+        const pair = await loadKeyPairFromVault(name);
+        if (pair) {
+            pairs.push(pair);
         }
     }
+    return pairs;
+}
 
-    return resolved;
+//
+// Loads a PEM key pair from the vault for the given key name.
+// Returns the pair or undefined if not found.
+//
+async function loadKeyPairFromVault(keyName: string): Promise<IEncryptionKeyPem | undefined> {
+    const vault = getVault("plaintext");
+    const secret = await vault.get(`cli:encryption:${keyName}`);
+    if (!secret) {
+        return undefined;
+    }
+    return JSON.parse(secret.value) as IEncryptionKeyPem;
 }
 
 //
@@ -253,7 +190,7 @@ export interface IBaseCommandOptions {
     db?: string;
 
     //
-    // Sets the path to private key file for encryption.
+    // Name of the encryption key stored in the vault (e.g. "my-photos").
     //
     key?: string;
 
@@ -452,8 +389,18 @@ export async function loadDatabase(
         await configureIfNeeded(['s3'], nonInteractive);
     }
 
-    const resolvedKeyPaths = await resolveKeyPaths(options.key);
-    let { options: storageOptions } = await loadEncryptionKeys(resolvedKeyPaths, false);
+    let keyName = options.key;
+    let keyPems: IEncryptionKeyPem[] = [];
+
+    if (keyName) {
+        keyPems = await resolveKeyPems(keyName);
+        if (keyPems.length === 0) {
+            outro(pc.red(`✗ Encryption key "${keyName}" not found in vault.\n  Use "psi vault list" to see available keys.`));
+            await exit(1);
+        }
+    }
+
+    let { options: storageOptions } = await loadEncryptionKeysFromPem(keyPems);
 
     const s3Config = await getS3Config();
     let { storage: assetStorage, rawStorage: rawAssetStorage } = createStorage(dbDir, s3Config, storageOptions);
@@ -474,37 +421,39 @@ export async function loadDatabase(
         // quickly load the version from the database and reject if the database is old.
         //
         const treePath = hasFilesDat ? ".db/files.dat" : ".db/tree.dat";
-        let databaseVersion = await loadTreeVersion(treePath, assetStorage);
+        const databaseVersion = await loadTreeVersion(treePath, assetStorage);
         if (databaseVersion && databaseVersion < CURRENT_DATABASE_VERSION) {
             outro(pc.red(`✗ Database version ${databaseVersion} is outdated. Current version is ${CURRENT_DATABASE_VERSION}. Please run 'psi upgrade' to upgrade your database.`));
             await exit(1);
         }
-    }    
+    }
 
     //
     // See if the database is encrypted and requires a key.
     //
     if (await assetStorage.fileExists('.db/encryption.pub')) {
-        if (resolvedKeyPaths.length === 0) {
+        if (keyPems.length === 0) {
             if (nonInteractive) {
-                outro(pc.red(`✗ This database is encrypted and requires a private key to access.\n  Please provide the private key using the --key option.\n\nExample:\n    ${pc.cyan(`psi <command> --key my-photos.key`)}\n    ${pc.cyan(`psi <command> --key <full or relative path to key>`)}`));
+                outro(pc.red(`✗ This database is encrypted and requires a private key to access.\n  Please provide the key name using the --key option.\n\nExample:\n    ${pc.cyan(`psi <command> --key my-photos`)}`));
                 await exit(1);
-            } else {
-                // Interactive mode - show key selection menu
+            }
+            else {
                 log.info(pc.yellow('This database is encrypted and requires a private key to access.'));
-                
-                // Show menu of available keys
-                const selectedKey = await selectEncryptionKey('Select the encryption key for this database:');
-                
-                // Resolve the selected key path and reload encryption keys
-                options.key = selectedKey;
-                const selectedKeyPaths = await resolveKeyPaths(options.key);
-                const { options: newStorageOptions } = await loadEncryptionKeys(selectedKeyPaths, false);
+
+                const selectedKeyName = await selectEncryptionKey('Select the encryption key for this database:');
+                keyName = selectedKeyName;
+                options.key = keyName;
+
+                keyPems = await resolveKeyPems(keyName);
+                if (keyPems.length === 0) {
+                    outro(pc.red(`✗ Encryption key "${keyName}" not found in vault.`));
+                    await exit(1);
+                }
+
+                const { options: newStorageOptions } = await loadEncryptionKeysFromPem(keyPems);
                 storageOptions = newStorageOptions;
-                
-                // Recreate storage with the new encryption options
+
                 const { storage: newAssetStorage } = createStorage(dbDir, s3Config, storageOptions);
-                assetStorage = newAssetStorage;
                 assetStorage = newAssetStorage;
             }
         }
@@ -556,23 +505,18 @@ export async function createDatabase(
     // Ask about encryption if not already specified
     if (!options.key && !nonInteractive) {
         if (options.generateKey) {
-            //
-            // User has already requested key generation via --generate-key but did not
-            // provide a key path. Mirror the "generate" branch of the interactive
-            // prompt so that CLI flags behave consistently with the wizard.
-            //
-            const encryptionResult = await promptForKeyGenerationPath();
-
-            if (encryptionResult.keyPath) {
-                options.key = encryptionResult.keyPath;
+            // User requested key generation via --generate-key without a key name.
+            // Run the generate branch of the interactive prompt.
+            const encryptionResult = await promptForEncryption('Would you like to encrypt your database? (You can say no now and create an encrypted copy later using the replicate command)');
+            if (encryptionResult.keyName) {
+                options.key = encryptionResult.keyName;
                 options.generateKey = encryptionResult.generateKey || false;
             }
         }
         else {
             const encryptionResult = await promptForEncryption('Would you like to encrypt your database? (You can say no now and create an encrypted copy later using the replicate command)');
-            
-            if (encryptionResult.keyPath) {
-                options.key = encryptionResult.keyPath;
+            if (encryptionResult.keyName) {
+                options.key = encryptionResult.keyName;
                 options.generateKey = encryptionResult.generateKey || false;
             }
         }
@@ -589,14 +533,42 @@ export async function createDatabase(
         await configureIfNeeded(['s3'], nonInteractive);
     }
 
-    // Load encryption keys (with generateKey support for init)
-    const resolvedKeyPaths = await resolveKeyPaths(options.key);
-    const { options: storageOptions, isEncrypted } = await loadEncryptionKeys(resolvedKeyPaths, options.generateKey || false);
+    // Load encryption key pair from vault
+    let keyPems: IEncryptionKeyPem[] = [];
+    let publicKeyPemForMarker: string | undefined = undefined;
+
+    if (options.key) {
+        let pair = await loadKeyPairFromVault(options.key);
+        if (!pair) {
+            if (options.generateKey) {
+                const keyPair = generateKeyPair();
+                const privateKeyPem = keyPair.privateKey.export({ type: 'pkcs8', format: 'pem' }) as string;
+                const publicKeyPem = exportPublicKeyToPem(keyPair.publicKey);
+                const vault = getVault("plaintext");
+                await vault.set({
+                    name: `cli:encryption:${options.key}`,
+                    type: 'encryption-key',
+                    value: JSON.stringify({ privateKeyPem, publicKeyPem }),
+                });
+                pair = { privateKeyPem, publicKeyPem };
+            }
+            else {
+                outro(pc.red(`✗ Encryption key "${options.key}" not found in vault.`));
+                await exit(1);
+            }
+        }
+        if (pair) {
+            keyPems = [pair];
+            publicKeyPemForMarker = pair.publicKeyPem;
+        }
+    }
+
+    const { options: storageOptions, isEncrypted } = await loadEncryptionKeysFromPem(keyPems);
 
     const s3Config = await getS3Config();
     const { storage: assetStorage, rawStorage: rawAssetStorage } = createStorage(dbDir, s3Config, storageOptions);
 
-    // Check the requested directory is empty or non-existent using the storage interface. 
+    // Check the requested directory is empty or non-existent using the storage interface.
     if (!await assetStorage.isEmpty("/")) {
         outro(pc.red(`✗ The directory ${pc.cyan(dbDir)} is not empty or already contains a database.\n  Please choose an empty directory or a non-existent one.`));
         await exit(1);
@@ -613,18 +585,9 @@ export async function createDatabase(
     // Create the database (instead of loading)
     await createMediaDatabase(assetStorage, rawAssetStorage, uuidGenerator, database.metadataCollection);
 
-    // If database is encrypted, copy the public key to the .db directory as a marker
-    if (isEncrypted && resolvedKeyPaths.length > 0) {
-        const publicKeySource = `${resolvedKeyPaths[0]}.pub`;
-
-        try {
-            if (await pathExists(publicKeySource)) {
-                const publicKeyData = await fs.readFile(publicKeySource);
-                await rawAssetStorage.write('.db/encryption.pub', undefined, publicKeyData);
-            }
-        } catch (error) {
-            console.warn(`Warning: Could not copy public key to database directory: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        }
+    // If database is encrypted, write the public key PEM to .db/encryption.pub as a marker
+    if (isEncrypted && publicKeyPemForMarker) {
+        await rawAssetStorage.write('.db/encryption.pub', undefined, Buffer.from(publicKeyPemForMarker, 'utf-8'));
     }
 
     return {

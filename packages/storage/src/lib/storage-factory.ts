@@ -5,6 +5,7 @@ import { CloudStorage, IS3Credentials } from './cloud-storage';
 import { EncryptedStorage } from './encrypted-storage';
 import { StoragePrefixWrapper } from './storage-prefix-wrapper';
 import type { IPrivateKeyMap } from './encryption-types';
+import { IEncryptionKeyPem } from './key-utils';
 import path from 'node:path';
 
 //
@@ -47,10 +48,9 @@ export interface IStorageDescriptor {
     dbDir: string;
 
     //
-    // Paths to encryption key files (if storage is encrypted).
-    // Empty array means no encryption keys (plain storage).
+    // PEM key pairs for encryption (empty array means no encryption).
     //
-    encryptionKeyPaths: string[];
+    encryptionKeyPems?: IEncryptionKeyPem[];
 }
 
 //

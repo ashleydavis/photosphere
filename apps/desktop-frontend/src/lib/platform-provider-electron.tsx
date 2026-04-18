@@ -1,6 +1,7 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
-import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext, type IImportSession, type IToolsStatus, type IDownloadAssetItem, type IShowNotificationData, convertToPng } from "user-interface";
+import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext, type IImportSession, type IToolsStatus, type IDownloadAssetItem, type IShowNotificationData, convertToPng, type IDatabaseEntry, type IDatabaseSecrets } from "user-interface";
 import type { IElectronAPI, ISaveAssetItem } from "electron-defs";
+import { ProxyVault } from "./proxy-vault";
 
 export interface IPlatformProviderElectronProps {
     children: ReactNode | ReactNode[];
@@ -287,6 +288,38 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
     const cancelTasks = useCallback(async (sessionId: string): Promise<void> => {
         electronAPI.cancelTasks(sessionId);
     }, [electronAPI]);
+
+    const getDatabases = useCallback(async (): Promise<IDatabaseEntry[]> => {
+        return await electronAPI.getDatabases();
+    }, [electronAPI]);
+
+    const addDatabase = useCallback(async (entry: Omit<IDatabaseEntry, 'id'>): Promise<IDatabaseEntry> => {
+        return await electronAPI.addDatabase(entry);
+    }, [electronAPI]);
+
+    const updateDatabase = useCallback(async (entry: IDatabaseEntry): Promise<void> => {
+        await electronAPI.updateDatabase(entry);
+    }, [electronAPI]);
+
+    const removeDatabaseEntry = useCallback(async (id: string): Promise<void> => {
+        const vault = new ProxyVault(electronAPI);
+        await vault.delete(`db:${id}:s3`);
+        await vault.delete(`db:${id}:geocoding`);
+        await vault.delete(`db:${id}:encryption`);
+        await electronAPI.removeDatabaseEntry(id);
+    }, [electronAPI]);
+
+    const getDatabaseSecrets = useCallback(async (id: string): Promise<IDatabaseSecrets> => {
+        return await electronAPI.getDatabaseSecrets(id);
+    }, [electronAPI]);
+
+    const setDatabaseSecrets = useCallback(async (id: string, secrets: IDatabaseSecrets): Promise<void> => {
+        await electronAPI.setDatabaseSecrets(id, secrets);
+    }, [electronAPI]);
+
+    const pickFolder = useCallback(async (): Promise<string | undefined> => {
+        return await electronAPI.pickFolder();
+    }, [electronAPI]);
     const downloadAsset = useCallback(async (assetId: string, assetType: string, filename: string, _contentType: string, databasePath: string): Promise<void> => {
         await electronAPI.saveAsset(assetId, assetType, filename, databasePath);
     }, [electronAPI]);
@@ -329,6 +362,13 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         onTaskMessage,
         onTaskComplete,
         cancelTasks,
+        getDatabases,
+        addDatabase,
+        updateDatabase,
+        removeDatabaseEntry,
+        getDatabaseSecrets,
+        setDatabaseSecrets,
+        pickFolder,
     };
 
     const config = createConfig(

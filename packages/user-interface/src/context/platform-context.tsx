@@ -5,6 +5,69 @@ import React, { ReactNode, createContext, useContext } from "react";
 //
 export type Unsubscribe = () => void;
 
+//
+// S3 credentials for accessing an S3-compatible object store.
+//
+export interface IS3Credentials {
+    // AWS region (e.g. "us-east-1").
+    region: string;
+
+    // Access key ID for authentication.
+    accessKeyId: string;
+
+    // Secret access key for authentication.
+    secretAccessKey: string;
+
+    // Optional custom endpoint URL (for non-AWS S3-compatible services).
+    endpoint?: string;
+}
+
+//
+// An RSA key pair stored as PEM strings.
+//
+export interface IEncryptionKeyPair {
+    // PEM-encoded PKCS#8 private key.
+    privateKeyPem: string;
+
+    // PEM-encoded SPKI public key.
+    publicKeyPem: string;
+}
+
+//
+// All secrets associated with a database entry (all fields optional).
+//
+export interface IDatabaseSecrets {
+    // S3 credentials for this database.
+    s3Credentials?: IS3Credentials;
+
+    // RSA key pair used to encrypt/decrypt assets.
+    encryptionKeyPair?: IEncryptionKeyPair;
+
+    // Google geocoding API key.
+    geocodingApiKey?: string;
+}
+
+//
+// A database entry stored in desktop.json.
+// id is an 8-character random alphanumeric string (e.g. "a3k9mz7x").
+//
+export interface IDatabaseEntry {
+    // Unique identifier for this database entry.
+    id: string;
+
+    // Human-readable display name.
+    name: string;
+
+    // Optional description of this database.
+    description: string;
+
+    // Absolute filesystem path (or S3 path) to the database directory.
+    path: string;
+
+    // Optional origin string read from .db/config.json; refreshed each time the database is opened.
+    origin?: string;
+}
+
 
 //
 // Payload for the show-notification IPC event sent from the main process.
@@ -240,6 +303,41 @@ export interface IPlatformContext {
     // On web, does nothing.
     //
     cancelTasks: (sessionId: string) => Promise<void>;
+
+    //
+    // Returns all configured database entries.
+    //
+    getDatabases: () => Promise<IDatabaseEntry[]>;
+
+    //
+    // Adds a new database entry and returns the created entry (with generated id).
+    //
+    addDatabase: (entry: Omit<IDatabaseEntry, 'id'>) => Promise<IDatabaseEntry>;
+
+    //
+    // Updates an existing database entry matched by id.
+    //
+    updateDatabase: (entry: IDatabaseEntry) => Promise<void>;
+
+    //
+    // Removes a database entry by id and deletes its vault secrets.
+    //
+    removeDatabaseEntry: (id: string) => Promise<void>;
+
+    //
+    // Reads vault secrets for the given database id.
+    //
+    getDatabaseSecrets: (id: string) => Promise<IDatabaseSecrets>;
+
+    //
+    // Writes vault secrets for the given database id.
+    //
+    setDatabaseSecrets: (id: string, secrets: IDatabaseSecrets) => Promise<void>;
+
+    //
+    // Opens a directory picker and returns the chosen path, or undefined if cancelled.
+    //
+    pickFolder: () => Promise<string | undefined>;
 }
 
 const PlatformContext = createContext<IPlatformContext | undefined>(undefined);

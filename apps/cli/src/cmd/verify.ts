@@ -2,7 +2,7 @@ import { log } from "utils";
 import pc from "picocolors";
 import { exit } from "node-utils";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
-import { loadDatabase, IBaseCommandOptions, ICommandContext, resolveKeyPaths } from "../lib/init-cmd";
+import { loadDatabase, IBaseCommandOptions, ICommandContext, resolveKeyPems } from "../lib/init-cmd";
 import { formatBytes } from "../lib/format";
 import { verify, verifyDatabaseFiles, IDatabaseFileVerifyResult } from "api";
 import { IStorageDescriptor } from "storage";
@@ -28,10 +28,10 @@ export async function verifyCommand(context: ICommandContext, options: IVerifyCo
     const { assetStorage, databaseDir, metadataCollection } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
 
     // Create storage descriptor for passing to workers
-    const resolvedKeyPaths = await resolveKeyPaths(options.key);
+    const keyPems = await resolveKeyPems(options.key);
     const storageDescriptor: IStorageDescriptor = {
         dbDir: databaseDir,
-        encryptionKeyPaths: resolvedKeyPaths
+        encryptionKeyPems: keyPems
     };
     
     // Get S3 config to pass to workers (needed for S3-hosted storage)

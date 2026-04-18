@@ -1,17 +1,16 @@
 import React, { ReactNode, createContext, useContext, useEffect, useState } from "react";
-import { usePlatform } from "./platform-context";
-import { useConfig } from "./config-context";
+import { usePlatform, type IDatabaseEntry } from "./platform-context";
 
 export interface IAppContext {
     //
-    // Available media file databases (list of database paths).
+    // Configured database entries.
     //
-    dbs: string[];
+    dbs: IDatabaseEntry[];
 
     //
-    // Removes a database from the recent databases list.
+    // Removes a database entry by id.
     //
-    removeDatabase: (databasePath: string) => Promise<void>;
+    removeDatabase: (id: string) => Promise<void>;
 }
 
 const AppContext = createContext<IAppContext | undefined>(undefined);
@@ -22,34 +21,32 @@ export interface IProps {
 
 export function AppContextProvider({ children }: IProps) {
     const platform = usePlatform();
-    const config = useConfig();
 
     //
-    // Available media file databases (list of database paths).
+    // Configured database entries.
     //
-    const [ dbs, setDbs ] = useState<string[]>([]);
+    const [ dbs, setDbs ] = useState<IDatabaseEntry[]>([]);
 
     //
-    // Loads data from the backend.
+    // Loads database entries from the platform.
     //
     async function load(): Promise<void> {
         try {
-            const databases = await config.get<string[]>('recentDatabases') || [];
+            const databases = await platform.getDatabases();
             setDbs(databases);
         }
         catch (err) {
-            console.error(`Failed to load recent databases:`);
+            console.error(`Failed to load databases:`);
             console.error(err);
             setDbs([]);
         }
     }
 
     //
-    // Removes a database from the recent databases list.
+    // Removes a database entry by id.
     //
-    async function removeDatabase(databasePath: string): Promise<void> {
-        await config.remove<string>('recentDatabases', databasePath);
-        // Reload the list
+    async function removeDatabase(id: string): Promise<void> {
+        await platform.removeDatabaseEntry(id);
         await load();
     }
 

@@ -7,7 +7,7 @@ import { WebSocketServer, type WebSocket } from "ws";
 import { createAssetServer } from "rest-api";
 import { exec } from "child_process";
 import { promisify } from "util";
-import { loadDesktopConfig, saveDesktopConfig, addRecentDatabase, removeRecentDatabase, updateLastFolder, clearLastDatabase } from "node-utils";
+import { loadDesktopConfig, saveDesktopConfig, getDatabases, addDatabaseEntry, removeDatabaseEntry, updateLastFolder } from "node-utils";
 import * as path from "path";
 import { createDatabase, createMediaFileDatabase } from "api";
 import { createStorage } from "storage";
@@ -269,8 +269,11 @@ async function handleOpenDatabase(ws: WebSocket): Promise<void> {
         const databasePath = await showDirectoryDialog(config.lastFolder);
 
         if (databasePath) {
-            // Save to recent databases and update last folder
-            await addRecentDatabase(databasePath);
+            // Save to databases list and update last folder
+            const existingDbs = await getDatabases();
+            if (!existingDbs.some(entry => entry.path === databasePath)) {
+                await addDatabaseEntry({ id: Math.random().toString(36).slice(2, 10), name: path.basename(databasePath), description: "", path: databasePath });
+            }
             const folderPath = path.dirname(databasePath);
             await updateLastFolder(folderPath);
 
@@ -310,7 +313,10 @@ async function handleCreateDatabase(ws: WebSocket): Promise<void> {
             const database = createMediaFileDatabase(storage, uuidGenerator, timestampProvider);
             await createDatabase(storage, rawStorage, uuidGenerator, database.metadataCollection);
 
-            await addRecentDatabase(databasePath);
+            const existingDbs2 = await getDatabases();
+            if (!existingDbs2.some(entry => entry.path === databasePath)) {
+                await addDatabaseEntry({ id: Math.random().toString(36).slice(2, 10), name: path.basename(databasePath), description: "", path: databasePath });
+            }
             const folderPath = path.dirname(databasePath);
             await updateLastFolder(folderPath);
 
@@ -338,7 +344,11 @@ async function handleCreateDatabase(ws: WebSocket): Promise<void> {
 //
 async function handleRemoveDatabase(ws: WebSocket, databasePath: string): Promise<void> {
     try {
-        await removeRecentDatabase(databasePath);
+        const existingDbs = await getDatabases();
+        const entry = existingDbs.find(dbEntry => dbEntry.path === databasePath);
+        if (entry) {
+            await removeDatabaseEntry(entry.id);
+        }
         ws.send(JSON.stringify({
             type: "database-removed",
             databasePath: databasePath,
@@ -358,10 +368,10 @@ async function handleRemoveDatabase(ws: WebSocket, databasePath: string): Promis
 //
 async function handleGetRecentDatabases(ws: WebSocket): Promise<void> {
     try {
-        const config = await loadDesktopConfig();
+        const databases = await getDatabases();
         ws.send(JSON.stringify({
             type: "recent-databases",
-            databases: config.recentDatabases || [],
+            databases: databases.map(entry => entry.path),
         }));
     }
     catch (error: any) {
@@ -378,7 +388,10 @@ async function handleGetRecentDatabases(ws: WebSocket): Promise<void> {
 //
 async function handleNotifyDatabaseOpened(ws: WebSocket, databasePath: string, requestId: unknown): Promise<void> {
     try {
-        await addRecentDatabase(databasePath);
+        const existingDbs = await getDatabases();
+        if (!existingDbs.some(entry => entry.path === databasePath)) {
+            await addDatabaseEntry({ id: Math.random().toString(36).slice(2, 10), name: path.basename(databasePath), description: "", path: databasePath });
+        }
         ws.send(JSON.stringify({ type: "notify-database-opened-ack", requestId }));
     }
     catch (error: any) {
@@ -395,7 +408,6 @@ async function handleNotifyDatabaseOpened(ws: WebSocket, databasePath: string, r
 //
 async function handleNotifyDatabaseClosed(ws: WebSocket, requestId: unknown): Promise<void> {
     try {
-        await clearLastDatabase();
         ws.send(JSON.stringify({ type: "notify-database-closed-ack", requestId }));
     }
     catch (error: any) {

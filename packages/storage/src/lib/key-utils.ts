@@ -14,6 +14,17 @@ export interface IKeyPair {
     privateKey: KeyObject;
 }
 
+//
+// An RSA key pair stored as PEM strings.
+//
+export interface IEncryptionKeyPem {
+    // PEM-encoded PKCS#8 private key.
+    privateKeyPem: string;
+
+    // PEM-encoded SPKI public key.
+    publicKeyPem: string;
+}
+
 /**
  * Generate a new RSA key pair
  * 
@@ -144,6 +155,51 @@ export function exportPublicKeyToPem(publicKey: KeyObject): string {
 export function hashPublicKey(publicKey: KeyObject): Buffer {
     const spki = publicKey.export({ type: 'spki', format: 'der' }) as Buffer;
     return createHash('sha256').update(spki).digest();
+}
+
+/**
+ * Load encryption keys from PEM strings without touching the filesystem.
+ * Accepts an array of { privateKeyPem, publicKeyPem } objects.
+ * The first entry becomes the default encryption (write) key.
+ *
+ * @param keyPems Array of PEM key pair objects
+ * @returns Storage options with encryption keys, or empty object if array is empty
+ */
+export async function loadEncryptionKeysFromPem(
+    keyPems: IEncryptionKeyPem[]
+): Promise<{ options: IStorageOptions, isEncrypted: boolean }> {
+    if (!keyPems || keyPems.length === 0) {
+        return { options: {}, isEncrypted: false };
+    }
+
+    const decryptionKeyMap: IPrivateKeyMap = {};
+    let encryptionPublicKey: KeyObject | undefined = undefined;
+
+    for (let index = 0; index < keyPems.length; index++) {
+        const { privateKeyPem, publicKeyPem } = keyPems[index];
+        const privateKey = createPrivateKey(privateKeyPem);
+        const publicKey = createPublicKey(publicKeyPem);
+
+        const keyHashHex = hashPublicKey(publicKey).toString('hex');
+        decryptionKeyMap[keyHashHex] = privateKey;
+
+        if (index === 0) {
+            decryptionKeyMap.default = privateKey;
+            encryptionPublicKey = publicKey;
+        }
+    }
+
+    if (!encryptionPublicKey || !decryptionKeyMap.default) {
+        return { options: {}, isEncrypted: false };
+    }
+
+    return {
+        options: {
+            decryptionKeyMap,
+            encryptionPublicKey,
+        },
+        isEncrypted: true,
+    };
 }
 
 /**

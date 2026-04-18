@@ -1,7 +1,7 @@
 import * as os from "os";
 import * as path from "path";
 import { ensureDir, remove } from "node-utils";
-import { createStorage, IStorageDescriptor, IS3Credentials, loadEncryptionKeys } from "storage";
+import { createStorage, IStorageDescriptor, IS3Credentials, loadEncryptionKeysFromPem } from "storage";
 import type { ITaskContext } from "task-queue";
 import { TaskStatus, TaskQueue } from "task-queue";
 import { IAsset } from "defs";
@@ -69,7 +69,7 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
     const { uuidGenerator, timestampProvider } = context;
     const hashCacheDir = path.join(os.tmpdir(), "photosphere");
 
-    const { options: storageOptions } = await loadEncryptionKeys(storageDescriptor.encryptionKeyPaths, false);
+    const { options: storageOptions } = await loadEncryptionKeysFromPem(storageDescriptor.encryptionKeyPems ?? []);
     const { storage, rawStorage } = createStorage(storageDescriptor.dbDir, s3Config, storageOptions);
     const bsonDatabase = new BsonDatabase(storage, ".db/bson", uuidGenerator, timestampProvider);
     const metadataCollection = bsonDatabase.collection<IAsset>("metadata");

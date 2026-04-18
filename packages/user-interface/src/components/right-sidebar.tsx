@@ -364,20 +364,20 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
                         <Divider />
                         <CollapsibleSection configKey="right-sidebar-collapsed-selection" label="Selection" style={{ paddingLeft: "15px" }}>
                             <List>
-                                {dbs.map(dbPath => {
-                                    if (dbPath === databasePath) {
+                                {dbs.map(dbEntry => {
+                                    if (dbEntry.path === databasePath) {
                                         return null;
                                     }
                                     return (
                                         <ListItem
-                                            key={dbPath}
+                                            key={dbEntry.id}
                                             onClick={() => {
-                                                moveSelectedToDatabase(dbPath);
+                                                moveSelectedToDatabase(dbEntry.path);
                                                 setSidebarOpen(false);
                                             }}
                                             >
                                             <ListItemButton>
-                                                <ListItemContent>Move to {dbPath.split(/[\\/]/).filter(Boolean).pop() ?? dbPath}</ListItemContent>
+                                                <ListItemContent>Move to {dbEntry.name}</ListItemContent>
                                             </ListItemButton>
                                         </ListItem>
                                     );

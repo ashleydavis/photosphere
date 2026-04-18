@@ -3,13 +3,14 @@
 // (plain → encrypted, re-encrypt with new key, or old-format → new format).
 //
 
-import { createStorage, exportPublicKeyToPem, loadEncryptionKeys } from "storage";
+import { createStorage, exportPublicKeyToPem, loadEncryptionKeysFromPem, generateKeyPair } from "storage";
 import pc from "picocolors";
 import { log } from "utils";
 import { exit } from "node-utils";
 import { configureIfNeeded, getS3Config } from "../lib/config";
 import { getDirectoryForCommand } from "../lib/directory-picker";
-import { resolveKeyPaths, IBaseCommandOptions, ICommandContext, promptForKeyGenerationPath } from "../lib/init-cmd";
+import { resolveKeyPems, IBaseCommandOptions, ICommandContext, promptForEncryption, selectEncryptionKey } from "../lib/init-cmd";
+import { getVault } from "vault";
 import { writeProgress, clearProgressMessage } from "../lib/terminal-utils";
 import { confirm, isCancel } from "../lib/clack/prompts";
 import { merkleTreeExists, encrypt as apiEncrypt } from "api";
@@ -58,26 +59,43 @@ export async function encryptCommand(context: ICommandContext, options: IEncrypt
     // - In interactive mode, if --generate-key is set but no --key was provided,
     //   prompt the user for a key path (mirroring init behavior).
     //
-    if (!nonInteractive && options.generateKey && !options.key) {
-        const result = await promptForKeyGenerationPath();
-        if (result.keyPath) {
-            options.key = result.keyPath;
-            options.generateKey = result.generateKey;
+    if (!nonInteractive && !options.key) {
+        const result = await promptForEncryption('Select the encryption key to use:');
+        if (result.keyName) {
+            options.key = result.keyName;
+        }
+        else {
+            const selectedKey = await selectEncryptionKey('Select an encryption key:');
+            options.key = selectedKey;
         }
     }
 
-    const resolvedKeyPaths = await resolveKeyPaths(options.key);
-    if (resolvedKeyPaths.length === 0) {
-        log.error(pc.red(`✗ Encryption requires --key (comma-separated list supported).`));
+    // If --generate-key is set, generate the first key in the list if it doesn't exist in the vault.
+    if (options.generateKey && options.key) {
+        const firstKeyName = options.key.split(',')[0].trim();
+        const vault = getVault("plaintext");
+        const existing = await vault.get(`cli:encryption:${firstKeyName}`);
+        if (!existing) {
+            const keyPair = generateKeyPair();
+            const privateKeyPem = keyPair.privateKey.export({ type: 'pkcs8', format: 'pem' }) as string;
+            const publicKeyPem = exportPublicKeyToPem(keyPair.publicKey);
+            await vault.set({
+                name: `cli:encryption:${firstKeyName}`,
+                type: 'encryption-key',
+                value: JSON.stringify({ privateKeyPem, publicKeyPem }),
+            });
+        }
+    }
+
+    const keyPems = await resolveKeyPems(options.key);
+    if (keyPems.length === 0) {
+        log.error(pc.red(`✗ Encryption requires --key.`));
         await exit(1);
     }
 
-    const { options: writeStorageOptions, isEncrypted: writeIsEncrypted } = await loadEncryptionKeys(
-        resolvedKeyPaths,
-        options.generateKey ?? false
-    );
+    const { options: writeStorageOptions, isEncrypted: writeIsEncrypted } = await loadEncryptionKeysFromPem(keyPems);
     if (!writeIsEncrypted) {
-        log.error(pc.red(`✗ Failed to load or generate encryption key(s).`));
+        log.error(pc.red(`✗ Failed to load encryption key.`));
         await exit(1);
     }
 
@@ -98,7 +116,7 @@ export async function encryptCommand(context: ICommandContext, options: IEncrypt
         }
     }
     else {
-        log.warn(pc.yellow(`⚠️  This will encrypt the database in place at ${pc.cyan(dbDir)} using key(s): ${pc.cyan(resolvedKeyPaths.join(", "))}.`));
+        log.warn(pc.yellow(`⚠️  This will encrypt the database in place at ${pc.cyan(dbDir)} using key: ${pc.cyan(options.key ?? "")}.`));
         log.warn(pc.yellow(`   All files will be rewritten in encrypted form. This cannot be undone without the key.`));
         const confirmed = await confirm({ message: "Proceed with encryption?", initialValue: false });
         if (isCancel(confirmed) || !confirmed) {

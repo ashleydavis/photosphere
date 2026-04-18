@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
-import type { IElectronAPI, IImportSession, IRendererLogMessage, ISaveAssetItem, IToolsStatus } from 'electron-defs';
+import type { IElectronAPI, IImportSession, IRendererLogMessage, ISaveAssetItem, IToolsStatus, IDatabaseEntry, IDatabaseSecrets, IVaultSecret } from 'electron-defs';
 
 // Expose generic task queue API
 const electronAPI: IElectronAPI = {
@@ -67,6 +67,36 @@ const electronAPI: IElectronAPI = {
     },
     getPathForFile: (file: File): string => {
         return webUtils.getPathForFile(file);
+    },
+    getDatabases: (): Promise<IDatabaseEntry[]> => {
+        return ipcRenderer.invoke('get-databases');
+    },
+    addDatabase: (entry: Omit<IDatabaseEntry, 'id'>): Promise<IDatabaseEntry> => {
+        return ipcRenderer.invoke('add-database', entry);
+    },
+    updateDatabase: (entry: IDatabaseEntry): Promise<void> => {
+        return ipcRenderer.invoke('update-database', entry);
+    },
+    removeDatabaseEntry: (id: string): Promise<void> => {
+        return ipcRenderer.invoke('remove-database-entry', id);
+    },
+    getDatabaseSecrets: (id: string): Promise<IDatabaseSecrets> => {
+        return ipcRenderer.invoke('get-database-secrets', id);
+    },
+    setDatabaseSecrets: (id: string, secrets: IDatabaseSecrets): Promise<void> => {
+        return ipcRenderer.invoke('set-database-secrets', id, secrets);
+    },
+    pickFolder: (): Promise<string | undefined> => {
+        return ipcRenderer.invoke('pick-folder');
+    },
+    vaultGet: (name: string): Promise<IVaultSecret | undefined> => {
+        return ipcRenderer.invoke('vault-get', name);
+    },
+    vaultSet: (secret: IVaultSecret): Promise<void> => {
+        return ipcRenderer.invoke('vault-set', secret);
+    },
+    vaultDelete: (name: string): Promise<void> => {
+        return ipcRenderer.invoke('vault-delete', name);
     },
 };
 

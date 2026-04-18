@@ -25,6 +25,9 @@ NC='\033[0m'
 TEST_TMP_DIR="${TEST_TMP_DIR:-./test/tmp-encrypted}"
 TEST_FILES_DIR="../../test"
 
+# Isolate the vault so tests don't pollute the user's real vault.
+export PHOTOSPHERE_VAULT_DIR="${TEST_TMP_DIR}/vault"
+
 # Use built binary instead of bun run start (set by --binary)
 USE_BINARY=false
 
@@ -394,11 +397,11 @@ test_init_encrypted() {
 
     local test_dir="$TEST_TMP_DIR/$name"
     local db_dir="$test_dir/db"
-    local key_path="$test_dir/key1.key"
+    local key_name="init-enc-key"
 
     prepare_test_dir "$test_dir"
 
-    invoke_command "Init encrypted database" "$cli init --db \"$db_dir\" --key \"$key_path\" --generate-key --yes" || {
+    invoke_command "Init encrypted database" "$cli init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
@@ -421,23 +424,20 @@ test_init_generate_key_file() {
 
     local test_dir="$TEST_TMP_DIR/$name"
     local db_dir="$test_dir/db"
-    local key_path="$test_dir/key-generate.key"
+    local key_name="init-gen-key"
 
     prepare_test_dir "$test_dir"
 
-    invoke_command "Init encrypted database with generated key file" "$cli init --db \"$db_dir\" --key \"$key_path\" --generate-key --yes" || {
+    invoke_command "Init encrypted database with generated vault key" "$cli init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
 
-    if [ ! -f "$key_path" ]; then
-        log_error "Expected generated key file not found: $key_path"
+    if [ ! -f "$db_dir/.db/encryption.pub" ]; then
+        log_error "Expected encryption.pub not found after init with generated key"
         test_failed "$name"
         return
     fi
-
-    # Clean up key file after verification
-    rm -f "$key_path" "$key_path.pub"
 
     test_passed "$name"
 }
@@ -452,7 +452,7 @@ test_replicate_to_encrypted() {
     local test_dir="$TEST_TMP_DIR/$name"
     local src_dir="$test_dir/plain-db"
     local dest_dir="$test_dir/encrypted-db"
-    local dest_key="$test_dir/dest.key"
+    local dest_key_name="rep-to-enc-dest"
 
     prepare_test_dir "$test_dir"
 
@@ -466,7 +466,7 @@ test_replicate_to_encrypted() {
         return
     }
 
-    invoke_command "Replicate to encrypted destination" "$cli replicate --db \"$src_dir\" --dest \"$dest_dir\" --dest-key \"$dest_key\" --generate-key --yes" || {
+    invoke_command "Replicate to encrypted destination" "$cli replicate --db \"$src_dir\" --dest \"$dest_dir\" --dest-key \"$dest_key_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
@@ -482,7 +482,7 @@ test_replicate_to_encrypted() {
         return
     }
 
-    invoke_command "Verify encrypted destination database" "$cli verify --db \"$dest_dir\" --key \"$dest_key\" --yes" || {
+    invoke_command "Verify encrypted destination database" "$cli verify --db \"$dest_dir\" --key \"$dest_key_name\" --yes" || {
         test_failed "$name"
         return
     }
@@ -500,16 +500,16 @@ test_replicate_from_encrypted() {
     local test_dir="$TEST_TMP_DIR/$name"
     local enc_dir="$test_dir/encrypted-db"
     local plain_dir="$test_dir/plain-db"
-    local key_path="$test_dir/key1.key"
+    local key_name="rep-from-enc-key"
 
     prepare_test_dir "$test_dir"
 
-    invoke_command "Init encrypted source database" "$cli init --db \"$enc_dir\" --key \"$key_path\" --generate-key --yes" || {
+    invoke_command "Init encrypted source database" "$cli init --db \"$enc_dir\" --key \"$key_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Add PNG file to encrypted database" "$cli add --db \"$enc_dir\" --key \"$key_path\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    invoke_command "Add PNG file to encrypted database" "$cli add --db \"$enc_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
         test_failed "$name"
         return
     }
@@ -519,7 +519,7 @@ test_replicate_from_encrypted() {
         return
     }
 
-    invoke_command "Replicate from encrypted to plain destination" "$cli replicate --db \"$enc_dir\" --dest \"$plain_dir\" --key \"$key_path\" --yes" || {
+    invoke_command "Replicate from encrypted to plain destination" "$cli replicate --db \"$enc_dir\" --dest \"$plain_dir\" --key \"$key_name\" --yes" || {
         test_failed "$name"
         return
     }
@@ -552,7 +552,7 @@ test_encrypt_plain() {
 
     local test_dir="$TEST_TMP_DIR/$name"
     local plain_dir="$test_dir/plain-db"
-    local key_path="$test_dir/key1.key"
+    local key_name="enc-plain-key"
 
     prepare_test_dir "$test_dir"
 
@@ -566,7 +566,7 @@ test_encrypt_plain() {
         return
     }
 
-    invoke_command "Encrypt plain database in place using psi encrypt" "$cli encrypt --db \"$plain_dir\" --key \"$key_path\" --generate-key --yes" || {
+    invoke_command "Encrypt plain database in place using psi encrypt" "$cli encrypt --db \"$plain_dir\" --key \"$key_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
@@ -582,7 +582,7 @@ test_encrypt_plain() {
         return
     }
 
-    invoke_command "Verify encrypted database" "$cli verify --db \"$plain_dir\" --key \"$key_path\" --yes" || {
+    invoke_command "Verify encrypted database" "$cli verify --db \"$plain_dir\" --key \"$key_name\" --yes" || {
         test_failed "$name"
         return
     }
@@ -599,7 +599,7 @@ test_encrypt_generate_key_file() {
 
     local test_dir="$TEST_TMP_DIR/$name"
     local plain_dir="$test_dir/plain-db"
-    local key_path="$test_dir/encrypt-generate.key"
+    local key_name="enc-gen-key"
 
     prepare_test_dir "$test_dir"
 
@@ -613,19 +613,16 @@ test_encrypt_generate_key_file() {
         return
     }
 
-    invoke_command "Encrypt plain database with generated key file" "$cli encrypt --db \"$plain_dir\" --key \"$key_path\" --generate-key --yes" || {
+    invoke_command "Encrypt plain database with generated vault key" "$cli encrypt --db \"$plain_dir\" --key \"$key_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
 
-    if [ ! -f "$key_path" ]; then
-        log_error "Expected generated key file not found after encrypt: $key_path"
+    if [ ! -f "$plain_dir/.db/encryption.pub" ]; then
+        log_error "Expected encryption.pub not found after encrypt with generated key"
         test_failed "$name"
         return
     fi
-
-    # Clean up key file after verification
-    rm -f "$key_path" "$key_path.pub"
 
     test_passed "$name"
 }
@@ -639,27 +636,17 @@ test_encrypt_reencrypt() {
 
     local test_dir="$TEST_TMP_DIR/$name"
     local enc1_dir="$test_dir/encrypted-db-1"
-    local key1="$test_dir/key1.key"
-    local key2="$test_dir/key2.key"
+    local key1_name="reenc-key1"
+    local key2_name="reenc-key2"
 
     prepare_test_dir "$test_dir"
 
-    invoke_command "Init encrypted database with key1" "$cli init --db \"$enc1_dir\" --key \"$key1\" --generate-key --yes" || {
+    invoke_command "Init encrypted database with key1" "$cli init --db \"$enc1_dir\" --key \"$key1_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Add PNG file with key1" "$cli add --db \"$enc1_dir\" --key \"$key1\" \"$TEST_FILES_DIR/test.png\" --yes" || {
-        test_failed "$name"
-        return
-    }
-
-    assert_database_assets_encrypted "$enc1_dir" || {
-        test_failed "$name"
-        return
-    }
-
-    invoke_command "Re-encrypt database in place with key2" "$cli encrypt --db \"$enc1_dir\" --key \"$key2,$key1\" --generate-key --yes" || {
+    invoke_command "Add PNG file with key1" "$cli add --db \"$enc1_dir\" --key \"$key1_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
         test_failed "$name"
         return
     }
@@ -669,14 +656,24 @@ test_encrypt_reencrypt() {
         return
     }
 
-    invoke_command "Verify re-encrypted database with key2" "$cli verify --db \"$enc1_dir\" --key \"$key2\" --yes" || {
+    invoke_command "Re-encrypt database in place with key2" "$cli encrypt --db \"$enc1_dir\" --key \"$key2_name,$key1_name\" --generate-key --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    assert_database_assets_encrypted "$enc1_dir" || {
+        test_failed "$name"
+        return
+    }
+
+    invoke_command "Verify re-encrypted database with key2" "$cli verify --db \"$enc1_dir\" --key \"$key2_name\" --yes" || {
         test_failed "$name"
         return
     }
 
     # Sanity check: trying to verify with key1 should fail.
     local output
-    output=$(eval "$cli verify --db \"$enc1_dir\" --key \"$key1\" --yes" 2>&1)
+    output=$(eval "$cli verify --db \"$enc1_dir\" --key \"$key1_name\" --yes" 2>&1)
     if [ $? -eq 0 ]; then
         log_error "Verification of re-encrypted database unexpectedly succeeded with old key"
         echo "$output"
@@ -696,24 +693,24 @@ test_encrypt_old_to_new_format() {
 
     local test_dir="$TEST_TMP_DIR/$name"
     local old_dir="$test_dir/old-encrypted-db"
-    local key="$test_dir/key1.key"
+    local key_name="enc-fmt-key"
 
     prepare_test_dir "$test_dir"
 
     # Encrypt with same key as source: CLI exits early (no rewrite). Database
     # remains encrypted and verifies with that key.
 
-    invoke_command "Init encrypted database (simulated old-format source)" "$cli init --db \"$old_dir\" --key \"$key\" --generate-key --yes" || {
+    invoke_command "Init encrypted database (simulated old-format source)" "$cli init --db \"$old_dir\" --key \"$key_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Add PNG file to simulated old-format database" "$cli add --db \"$old_dir\" --key \"$key\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    invoke_command "Add PNG file to simulated old-format database" "$cli add --db \"$old_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Run psi encrypt in place to convert to new format" "$cli encrypt --db \"$old_dir\" --key \"$key\" --yes" || {
+    invoke_command "Run psi encrypt in place to convert to new format" "$cli encrypt --db \"$old_dir\" --key \"$key_name\" --yes" || {
         test_failed "$name"
         return
     }
@@ -723,7 +720,7 @@ test_encrypt_old_to_new_format() {
         return
     }
 
-    invoke_command "Verify converted encrypted database" "$cli verify --db \"$old_dir\" --key \"$key\" --yes" || {
+    invoke_command "Verify converted encrypted database" "$cli verify --db \"$old_dir\" --key \"$key_name\" --yes" || {
         test_failed "$name"
         return
     }
@@ -740,16 +737,16 @@ test_decrypt_encrypted() {
 
     local test_dir="$TEST_TMP_DIR/$name"
     local enc_dir="$test_dir/encrypted-db"
-    local key="$test_dir/key1.key"
+    local key_name="decrypt-key"
 
     prepare_test_dir "$test_dir"
 
-    invoke_command "Init encrypted database" "$cli init --db \"$enc_dir\" --key \"$key\" --generate-key --yes" || {
+    invoke_command "Init encrypted database" "$cli init --db \"$enc_dir\" --key \"$key_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Add PNG file to encrypted database" "$cli add --db \"$enc_dir\" --key \"$key\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    invoke_command "Add PNG file to encrypted database" "$cli add --db \"$enc_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
         test_failed "$name"
         return
     }
@@ -759,7 +756,7 @@ test_decrypt_encrypted() {
         return
     }
 
-    invoke_command "Decrypt encrypted database in place" "$cli decrypt --db \"$enc_dir\" --key \"$key\" --yes" || {
+    invoke_command "Decrypt encrypted database in place" "$cli decrypt --db \"$enc_dir\" --key \"$key_name\" --yes" || {
         test_failed "$name"
         return
     }
@@ -792,16 +789,16 @@ test_add_encrypted_file() {
 
     local test_dir="$TEST_TMP_DIR/$name"
     local db_dir="$test_dir/encrypted-db"
-    local key="$test_dir/key1.key"
+    local key_name="add-enc-key"
 
     prepare_test_dir "$test_dir"
 
-    invoke_command "Init encrypted database" "$cli init --db \"$db_dir\" --key \"$key\" --generate-key --yes" || {
+    invoke_command "Init encrypted database" "$cli init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Add PNG file to encrypted database" "$cli add --db \"$db_dir\" --key \"$key\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    invoke_command "Add PNG file to encrypted database" "$cli add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
         test_failed "$name"
         return
     }
@@ -824,29 +821,29 @@ test_export_encrypted_file() {
     local test_dir="$TEST_TMP_DIR/$name"
     local db_dir="$test_dir/encrypted-db"
     local export_dir="$test_dir/export"
-    local key="$test_dir/key1.key"
+    local key_name="export-enc-key"
 
     prepare_test_dir "$test_dir"
     mkdir -p "$export_dir"
 
-    invoke_command "Init encrypted database" "$cli init --db \"$db_dir\" --key \"$key\" --generate-key --yes" || {
+    invoke_command "Init encrypted database" "$cli init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Add PNG file to encrypted database" "$cli add --db \"$db_dir\" --key \"$key\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    invoke_command "Add PNG file to encrypted database" "$cli add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
         test_failed "$name"
         return
     }
 
     local asset_id
-    asset_id=$(get_asset_id_for_filename "$db_dir" "$key" "test.png") || {
+    asset_id=$(get_asset_id_for_filename "$db_dir" "$key_name" "test.png") || {
         test_failed "$name"
         return
     }
 
     local export_path="$export_dir/exported.png"
-    invoke_command "Export encrypted asset" "$cli export --db \"$db_dir\" --key \"$key\" \"$asset_id\" \"$export_path\" --yes" || {
+    invoke_command "Export encrypted asset" "$cli export --db \"$db_dir\" --key \"$key_name\" \"$asset_id\" \"$export_path\" --yes" || {
         test_failed "$name"
         return
     }
@@ -878,16 +875,16 @@ test_verify_encrypted_db() {
 
     local test_dir="$TEST_TMP_DIR/$name"
     local db_dir="$test_dir/encrypted-db"
-    local key="$test_dir/key1.key"
+    local key_name="verify-enc-key"
 
     prepare_test_dir "$test_dir"
 
-    invoke_command "Init encrypted database" "$cli init --db \"$db_dir\" --key \"$key\" --generate-key --yes" || {
+    invoke_command "Init encrypted database" "$cli init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Add PNG file to encrypted database" "$cli add --db \"$db_dir\" --key \"$key\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    invoke_command "Add PNG file to encrypted database" "$cli add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
         test_failed "$name"
         return
     }
@@ -897,7 +894,7 @@ test_verify_encrypted_db() {
         return
     }
 
-    invoke_command "Verify encrypted database" "$cli verify --db \"$db_dir\" --key \"$key\" --yes" || {
+    invoke_command "Verify encrypted database" "$cli verify --db \"$db_dir\" --key \"$key_name\" --yes" || {
         test_failed "$name"
         return
     }
@@ -914,32 +911,32 @@ test_delete_encrypted_file() {
 
     local test_dir="$TEST_TMP_DIR/$name"
     local db_dir="$test_dir/encrypted-db"
-    local key="$test_dir/key1.key"
+    local key_name="delete-enc-key"
 
     prepare_test_dir "$test_dir"
 
-    invoke_command "Init encrypted database" "$cli init --db \"$db_dir\" --key \"$key\" --generate-key --yes" || {
+    invoke_command "Init encrypted database" "$cli init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Add PNG file to encrypted database" "$cli add --db \"$db_dir\" --key \"$key\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    invoke_command "Add PNG file to encrypted database" "$cli add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
         test_failed "$name"
         return
     }
 
     local asset_id
-    asset_id=$(get_asset_id_for_filename "$db_dir" "$key" "test.png") || {
+    asset_id=$(get_asset_id_for_filename "$db_dir" "$key_name" "test.png") || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Remove asset from encrypted database" "$cli remove --db \"$db_dir\" --key \"$key\" \"$asset_id\" --yes" || {
+    invoke_command "Remove asset from encrypted database" "$cli remove --db \"$db_dir\" --key \"$key_name\" \"$asset_id\" --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Verify encrypted database after delete" "$cli verify --db \"$db_dir\" --key \"$key\" --yes" || {
+    invoke_command "Verify encrypted database after delete" "$cli verify --db \"$db_dir\" --key \"$key_name\" --yes" || {
         test_failed "$name"
         return
     }
@@ -956,16 +953,16 @@ test_list_encrypted_files() {
 
     local test_dir="$TEST_TMP_DIR/$name"
     local db_dir="$test_dir/encrypted-db"
-    local key="$test_dir/key1.key"
+    local key_name="list-enc-key"
 
     prepare_test_dir "$test_dir"
 
-    invoke_command "Init encrypted database" "$cli init --db \"$db_dir\" --key \"$key\" --generate-key --yes" || {
+    invoke_command "Init encrypted database" "$cli init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Add PNG file to encrypted database" "$cli add --db \"$db_dir\" --key \"$key\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    invoke_command "Add PNG file to encrypted database" "$cli add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
         test_failed "$name"
         return
     }
@@ -976,7 +973,7 @@ test_list_encrypted_files() {
     }
 
     local list_output
-    list_output=$(invoke_command "List files in encrypted database" "$cli list --db \"$db_dir\" --key \"$key\" --yes") || {
+    list_output=$(invoke_command "List files in encrypted database" "$cli list --db \"$db_dir\" --key \"$key_name\" --yes") || {
         test_failed "$name"
         return
     }
@@ -1015,16 +1012,16 @@ test_replicate_decrypted_from_encrypted() {
     local test_dir="$TEST_TMP_DIR/$name"
     local enc_dir="$test_dir/encrypted-db"
     local plain_dir="$test_dir/plain-db"
-    local key="$test_dir/key1.key"
+    local key_name="rep-dec-key"
 
     prepare_test_dir "$test_dir"
 
-    invoke_command "Init encrypted database" "$cli init --db \"$enc_dir\" --key \"$key\" --generate-key --yes" || {
+    invoke_command "Init encrypted database" "$cli init --db \"$enc_dir\" --key \"$key_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Add PNG file to encrypted database" "$cli add --db \"$enc_dir\" --key \"$key\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    invoke_command "Add PNG file to encrypted database" "$cli add --db \"$enc_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
         test_failed "$name"
         return
     }
@@ -1034,7 +1031,7 @@ test_replicate_decrypted_from_encrypted() {
         return
     }
 
-    invoke_command "Replicate from encrypted to plain destination" "$cli replicate --db \"$enc_dir\" --dest \"$plain_dir\" --key \"$key\" --yes" || {
+    invoke_command "Replicate from encrypted to plain destination" "$cli replicate --db \"$enc_dir\" --dest \"$plain_dir\" --key \"$key_name\" --yes" || {
         test_failed "$name"
         return
     }
@@ -1068,39 +1065,39 @@ test_export_with_multiple_keys() {
     local test_dir="$TEST_TMP_DIR/$name"
     local db_dir="$test_dir/encrypted-db"
     local export_dir="$test_dir/export"
-    local key1="$test_dir/key1.key"
-    local key2="$test_dir/key2.key"
+    local key1_name="multi-exp-key1"
+    local key2_name="multi-exp-key2"
 
     prepare_test_dir "$test_dir"
     mkdir -p "$export_dir"
 
     # Create encrypted database with key1 (official key).
-    invoke_command "Init encrypted database with key1" "$cli init --db \"$db_dir\" --key \"$key1\" --generate-key --yes" || {
+    invoke_command "Init encrypted database with key1" "$cli init --db \"$db_dir\" --key \"$key1_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
 
     # Ensure key2 exists (generate via throwaway database).
-    invoke_command "Generate key2" "$cli init --db \"$test_dir/tmp-key2-db\" --key \"$key2\" --generate-key --yes" || {
+    invoke_command "Generate key2" "$cli init --db \"$test_dir/tmp-key2-db\" --key \"$key2_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
 
     # Add first file with key1 (encrypted with key1).
-    invoke_command "Add first PNG with key1" "$cli add --db \"$db_dir\" --key \"$key1\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    invoke_command "Add first PNG with key1" "$cli add --db \"$db_dir\" --key \"$key1_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
         test_failed "$name"
         return
     }
 
     # Add second file with key2,key1 so key2 is write key (encrypted with key2).
-    invoke_command "Add second JPG with key2" "$cli add --db \"$db_dir\" --key \"$key2,$key1\" \"$TEST_FILES_DIR/test.jpg\" --yes" || {
+    invoke_command "Add second JPG with key2" "$cli add --db \"$db_dir\" --key \"$key2_name,$key1_name\" \"$TEST_FILES_DIR/test.jpg\" --yes" || {
         test_failed "$name"
         return
     }
 
     # Look up asset IDs via list.
     local asset_id1
-    local multi_keys="$key1,$key2"
+    local multi_keys="$key1_name,$key2_name"
     asset_id1=$(get_asset_id_for_filename "$db_dir" "$multi_keys" "test.png") || {
         test_failed "$name"
         return
@@ -1157,37 +1154,37 @@ test_multi_key_encrypt() {
     local db1_dir="$test_dir/encrypted-db1"
     local db2_dir="$test_dir/encrypted-db2"
     local export_dir="$test_dir/export"
-    local key1="$test_dir/key1.key"
-    local key2="$test_dir/key2.key"
+    local key1_name="multi-enc-key1"
+    local key2_name="multi-enc-key2"
 
     prepare_test_dir "$test_dir"
     mkdir -p "$export_dir"
 
     # Create two encrypted DBs with different keys, add two assets to each.
-    invoke_command "Init encrypted database 1 with key1" "$cli init --db \"$db1_dir\" --key \"$key1\" --generate-key --yes" || {
+    invoke_command "Init encrypted database 1 with key1" "$cli init --db \"$db1_dir\" --key \"$key1_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Init encrypted database 2 with key2" "$cli init --db \"$db2_dir\" --key \"$key2\" --generate-key --yes" || {
+    invoke_command "Init encrypted database 2 with key2" "$cli init --db \"$db2_dir\" --key \"$key2_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Add PNG and JPG to DB1 (key1)" "$cli add --db \"$db1_dir\" --key \"$key1\" \"$TEST_FILES_DIR/test.png\" \"$TEST_FILES_DIR/test.jpg\" --yes" || {
+    invoke_command "Add PNG and JPG to DB1 (key1)" "$cli add --db \"$db1_dir\" --key \"$key1_name\" \"$TEST_FILES_DIR/test.png\" \"$TEST_FILES_DIR/test.jpg\" --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Add PNG and JPG to DB2 (key2)" "$cli add --db \"$db2_dir\" --key \"$key2\" \"$TEST_FILES_DIR/test.png\" \"$TEST_FILES_DIR/test.jpg\" --yes" || {
+    invoke_command "Add PNG and JPG to DB2 (key2)" "$cli add --db \"$db2_dir\" --key \"$key2_name\" \"$TEST_FILES_DIR/test.png\" \"$TEST_FILES_DIR/test.jpg\" --yes" || {
         test_failed "$name"
         return
     }
 
     # Simulate failed re-encrypt: take one asset from DB2 (key2) and overwrite same slot in DB1. Now DB1 has one asset with key1, one with key2.
     local asset_id_jpg_db1 asset_id_jpg_db2
-    asset_id_jpg_db1=$(get_asset_id_for_filename "$db1_dir" "$key1" "test.jpg") || { test_failed "$name"; return; }
-    asset_id_jpg_db2=$(get_asset_id_for_filename "$db2_dir" "$key2" "test.jpg") || { test_failed "$name"; return; }
+    asset_id_jpg_db1=$(get_asset_id_for_filename "$db1_dir" "$key1_name" "test.jpg") || { test_failed "$name"; return; }
+    asset_id_jpg_db2=$(get_asset_id_for_filename "$db2_dir" "$key2_name" "test.jpg") || { test_failed "$name"; return; }
 
     log_info "Overwriting DB1 asset $asset_id_jpg_db1 with DB2 file (key2) to simulate partial re-encrypt"
     cp "$db2_dir/asset/$asset_id_jpg_db2" "$db1_dir/asset/$asset_id_jpg_db1" || {
@@ -1200,10 +1197,10 @@ test_multi_key_encrypt() {
 
     # Export from DB1 with both keys; PNG is key1, JPG is key2.
     local asset_id_png
-    asset_id_png=$(get_asset_id_for_filename "$db1_dir" "$key1,$key2" "test.png") || { test_failed "$name"; return; }
-    asset_id_jpg_db1=$(get_asset_id_for_filename "$db1_dir" "$key1,$key2" "test.jpg") || { test_failed "$name"; return; }
+    asset_id_png=$(get_asset_id_for_filename "$db1_dir" "$key1_name,$key2_name" "test.png") || { test_failed "$name"; return; }
+    asset_id_jpg_db1=$(get_asset_id_for_filename "$db1_dir" "$key1_name,$key2_name" "test.jpg") || { test_failed "$name"; return; }
 
-    local multi_keys="$key1,$key2"
+    local multi_keys="$key1_name,$key2_name"
     local export1="$export_dir/out1.png"
     local export2="$export_dir/out2.jpg"
     invoke_command "Export PNG (key1)" "$cli export --db \"$db1_dir\" --key \"$multi_keys\" \"$asset_id_png\" \"$export1\" --yes" || { test_failed "$name"; return; }
@@ -1233,30 +1230,30 @@ test_partial_encrypt() {
     local test_dir="$TEST_TMP_DIR/$name"
     local db_dir="$test_dir/encrypted-db"
     local export_dir="$test_dir/export"
-    local key="$test_dir/key1.key"
+    local key_name="partial-enc-key"
 
     prepare_test_dir "$test_dir"
     mkdir -p "$export_dir"
 
     # Create encrypted DB and add two assets (both encrypted).
-    invoke_command "Init encrypted database" "$cli init --db \"$db_dir\" --key \"$key\" --generate-key --yes" || {
+    invoke_command "Init encrypted database" "$cli init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Add PNG (encrypted)" "$cli add --db \"$db_dir\" --key \"$key\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    invoke_command "Add PNG (encrypted)" "$cli add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Add JPG (encrypted)" "$cli add --db \"$db_dir\" --key \"$key\" \"$TEST_FILES_DIR/test.jpg\" --yes" || {
+    invoke_command "Add JPG (encrypted)" "$cli add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.jpg\" --yes" || {
         test_failed "$name"
         return
     }
 
     # Simulate failed encrypt: replace second asset file with plain content (one encrypted, one plain).
     local asset_id2
-    asset_id2=$(get_asset_id_for_filename "$db_dir" "$key" "test.jpg") || { test_failed "$name"; return; }
+    asset_id2=$(get_asset_id_for_filename "$db_dir" "$key_name" "test.jpg") || { test_failed "$name"; return; }
     if [ ! -d "$db_dir/asset" ]; then
         log_error "Expected asset directory $db_dir/asset"
         test_failed "$name"
@@ -1270,12 +1267,12 @@ test_partial_encrypt() {
     }
 
     local asset_id1
-    asset_id1=$(get_asset_id_for_filename "$db_dir" "$key" "test.png") || { test_failed "$name"; return; }
+    asset_id1=$(get_asset_id_for_filename "$db_dir" "$key_name" "test.png") || { test_failed "$name"; return; }
 
     local export1="$export_dir/out.png"
     local export2="$export_dir/out.jpg"
-    invoke_command "Export PNG (encrypted)" "$cli export --db \"$db_dir\" --key \"$key\" \"$asset_id1\" \"$export1\" --yes" || { test_failed "$name"; return; }
-    invoke_command "Export JPG (plain)" "$cli export --db \"$db_dir\" --key \"$key\" \"$asset_id2\" \"$export2\" --yes" || { test_failed "$name"; return; }
+    invoke_command "Export PNG (encrypted)" "$cli export --db \"$db_dir\" --key \"$key_name\" \"$asset_id1\" \"$export1\" --yes" || { test_failed "$name"; return; }
+    invoke_command "Export JPG (plain)" "$cli export --db \"$db_dir\" --key \"$key_name\" \"$asset_id2\" \"$export2\" --yes" || { test_failed "$name"; return; }
 
     if ! cmp -s "$TEST_FILES_DIR/test.png" "$export1"; then
         log_error "Exported PNG does not match original"

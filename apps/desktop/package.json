@@ -35,7 +35,9 @@
     "electron-defs": "workspace:*",
     "serialize-error": "^11.0.0",
     "rest-api": "workspace:*",
-    "tools": "workspace:*"
+    "tools": "workspace:*",
+    "vault": "workspace:*",
+    "storage": "workspace:*"
   },
   "devDependencies": {
     "cross-env": "^7.0.3",

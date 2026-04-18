@@ -32,7 +32,8 @@ export function getVault(type: string): IVault {
 //
 function instantiateVault(type: string): IVault {
     if (type === "plaintext") {
-        return new PlaintextVault();
+        const vaultDir = process.env.PHOTOSPHERE_VAULT_DIR;
+        return vaultDir ? new PlaintextVault(vaultDir) : new PlaintextVault();
     }
     throw new Error(`Unknown vault type: "${type}". Supported types: "plaintext".`);
 }

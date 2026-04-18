@@ -1,10 +1,9 @@
-import { createStorage } from "storage";
+import { createStorage, loadEncryptionKeysFromPem } from "storage";
 import { computeHash } from "api";
 import { exit } from "node-utils";
 import pc from "picocolors";
 import { getS3Config } from '../lib/config';
-import { loadEncryptionKeys } from "storage";
-import { resolveKeyPaths } from "../lib/init-cmd";
+import { resolveKeyPems } from "../lib/init-cmd";
 import path from 'node:path';
 
 export interface IHashCommandOptions {
@@ -27,8 +26,8 @@ export async function hashCommand(filePath: string, options: IHashCommandOptions
     // Load S3 configuration if needed
     const s3Config = await getS3Config();
 
-    const resolvedKeyPaths = await resolveKeyPaths(options.key);
-    let { options: storageOptions } = await loadEncryptionKeys(resolvedKeyPaths, false);
+    const keyPems = await resolveKeyPems(options.key);
+    let { options: storageOptions } = await loadEncryptionKeysFromPem(keyPems);
 
     const dirPath = path.dirname(filePath);  
     const fileName = path.basename(filePath);          
