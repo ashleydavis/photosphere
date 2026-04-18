@@ -9,14 +9,16 @@ import type { IQueueBackend, ITaskMessageData } from 'task-queue';
 import { TaskQueue, TaskStatus, setQueueBackend } from 'task-queue';
 import { WorkerPoolElectronMain } from './lib/worker-pool-electron-main';
 import { RandomUuidGenerator, TimestampProvider, logExceptions, log } from 'utils';
-import { findAvailablePort, loadDesktopConfig, saveDesktopConfig, addRecentDatabase, removeRecentDatabase, updateLastFolder, clearLastDatabase, getTheme, setTheme, updateLastDownloadFolder } from 'node-utils';
+import { findAvailablePort, loadDesktopConfig, saveDesktopConfig, updateLastFolder, getTheme, setTheme, updateLastDownloadFolder, getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry } from 'node-utils';
 import type { IWorkerPoolOptions } from './lib/worker-pool-electron-main';
 import type { IRestApiWorkerStopMessage, IRestApiWorkerStartMessage } from './rest-api-worker';
 import { FileLoggerElectron } from './lib/file-logger-electron';
-import type { IImportSession, IRendererLogMessage, ISaveAssetItem } from 'electron-defs';
+import type { IImportSession, IRendererLogMessage, ISaveAssetItem, IDatabaseEntry, IDatabaseSecrets } from 'electron-defs';
 import { verifyTools } from 'tools';
-import type { IStorageDescriptor } from 'storage';
-import { checkConnectivity } from 'api';
+import type { IStorageDescriptor, IEncryptionKeyPem } from 'storage';
+import { createStorage } from 'storage';
+import { checkConnectivity, loadDatabaseConfig } from 'api';
+import { getVault } from 'vault';
 
 // Main application window
 let mainWindow: BrowserWindow | null = null;
@@ -50,6 +52,18 @@ let isSyncRunning: boolean = false;
 
 // File logger for writing logs to files
 let fileLogger: FileLoggerElectron | null = null;
+
+//
+// Generates an 8-character random alphanumeric id for a database entry.
+//
+function generateDatabaseId(): string {
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+    for (let index = 0; index < 8; index++) {
+        result += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return result;
+}
 
 //
 // Creates and configures the main browser window for the Electron app.
@@ -220,21 +234,123 @@ ipcMain.on('cancel-tasks', (_event, source: string) => {
 ipcMain.handle('open-file', logExceptions(openDatabase, 'Error opening database'));
 ipcMain.handle('create-database', logExceptions(createNewDatabase, 'Error creating database'));
 
-// IPC handler for removing a database from recent list
-ipcMain.handle('remove-database', logExceptions(async (event, databasePath: string) => {
-    await removeRecentDatabase(databasePath);
-}, 'Error removing database'));
+// IPC handler for removing a database entry by id
+ipcMain.handle('remove-database-entry', logExceptions(async (_event, id: string) => {
+    await removeDatabaseEntry(id);
+}, 'Error removing database entry'));
+
+// IPC handler for retrieving a vault secret by name
+ipcMain.handle('vault-get', logExceptions(async (_event, name: string) => {
+    const vault = getVault("plaintext");
+    return await vault.get(name);
+}, 'Error getting vault secret'));
+
+// IPC handler for creating or overwriting a vault secret
+ipcMain.handle('vault-set', logExceptions(async (_event, secret: { name: string; type: string; value: string }) => {
+    const vault = getVault("plaintext");
+    await vault.set(secret);
+}, 'Error setting vault secret'));
+
+// IPC handler for deleting a vault secret by name
+ipcMain.handle('vault-delete', logExceptions(async (_event, name: string) => {
+    const vault = getVault("plaintext");
+    await vault.delete(name);
+}, 'Error deleting vault secret'));
 
 // IPC handler for checking whether a database is accessible (works for local FS, S3, etc.)
 ipcMain.handle('check-database-exists', logExceptions(async (_event, databasePath: string) => {
     return checkConnectivity(databasePath);
 }, 'Error checking database exists'));
 
-// IPC handler for getting recent databases list
+// IPC handler for returning all configured database entries
+ipcMain.handle('get-databases', logExceptions(async () => {
+    return await getDatabases();
+}, 'Error getting databases'));
+
+// IPC handler for adding a new database entry
+ipcMain.handle('add-database', logExceptions(async (_event, entry: Omit<IDatabaseEntry, 'id'>) => {
+    const newEntry: IDatabaseEntry = {
+        id: generateDatabaseId(),
+        name: entry.name,
+        description: entry.description,
+        path: entry.path,
+    };
+    await addDatabaseEntry(newEntry);
+    return newEntry;
+}, 'Error adding database'));
+
+// IPC handler for updating an existing database entry
+ipcMain.handle('update-database', logExceptions(async (_event, entry: IDatabaseEntry) => {
+    await updateDatabaseEntry(entry);
+}, 'Error updating database'));
+
+// IPC handler for reading vault secrets for a database
+ipcMain.handle('get-database-secrets', logExceptions(async (_event, id: string) => {
+    const vault = getVault("plaintext");
+    const secrets: IDatabaseSecrets = {};
+    const s3Secret = await vault.get(`db:${id}:s3`);
+    if (s3Secret) {
+        secrets.s3Credentials = JSON.parse(s3Secret.value);
+    }
+    const geocodingSecret = await vault.get(`db:${id}:geocoding`);
+    if (geocodingSecret) {
+        secrets.geocodingApiKey = geocodingSecret.value;
+    }
+    const encryptionSecret = await vault.get(`db:${id}:encryption`);
+    if (encryptionSecret) {
+        secrets.encryptionKeyPair = JSON.parse(encryptionSecret.value);
+    }
+    return secrets;
+}, 'Error getting database secrets'));
+
+// IPC handler for writing vault secrets for a database
+ipcMain.handle('set-database-secrets', logExceptions(async (_event, id: string, secrets: IDatabaseSecrets) => {
+    const vault = getVault("plaintext");
+    if (secrets.s3Credentials) {
+        await vault.set({ name: `db:${id}:s3`, type: 's3-credentials', value: JSON.stringify(secrets.s3Credentials) });
+    }
+    else {
+        await vault.delete(`db:${id}:s3`);
+    }
+    if (secrets.geocodingApiKey) {
+        await vault.set({ name: `db:${id}:geocoding`, type: 'api-key', value: secrets.geocodingApiKey });
+    }
+    else {
+        await vault.delete(`db:${id}:geocoding`);
+    }
+    if (secrets.encryptionKeyPair) {
+        await vault.set({ name: `db:${id}:encryption`, type: 'encryption-key', value: JSON.stringify(secrets.encryptionKeyPair) });
+    }
+    else {
+        await vault.delete(`db:${id}:encryption`);
+    }
+}, 'Error setting database secrets'));
+
+// IPC handler for opening a directory picker and returning the chosen path
+ipcMain.handle('pick-folder', logExceptions(async () => {
+    return await showDirectoryPicker('Select Folder');
+}, 'Error picking folder'));
 
 // IPC handler for notifying that database was opened from frontend
-ipcMain.handle('notify-database-opened', logExceptions(async (event, databasePath: string) => {
-    await addRecentDatabase(databasePath);
+ipcMain.handle('notify-database-opened', logExceptions(async (_event, databasePath: string) => {
+    const { rawStorage } = createStorage(databasePath);
+    const dbConfig = await loadDatabaseConfig(rawStorage);
+    const origin = dbConfig?.origin;
+    const databases = await getDatabases();
+    const existing = databases.find(dbEntry => dbEntry.path === databasePath);
+    if (!existing) {
+        const newEntry: IDatabaseEntry = {
+            id: generateDatabaseId(),
+            name: basename(databasePath),
+            description: '',
+            path: databasePath,
+            origin,
+        };
+        await addDatabaseEntry(newEntry);
+    }
+    else if (existing.origin !== origin) {
+        await updateDatabaseEntry({ ...existing, origin });
+    }
     isDatabaseOpen = true;
     await updateMenu();
     resetSyncState();
@@ -243,7 +359,6 @@ ipcMain.handle('notify-database-opened', logExceptions(async (event, databasePat
 
 // IPC handler for notifying that database was closed from frontend
 ipcMain.handle('notify-database-closed', logExceptions(async () => {
-    await clearLastDatabase();
     isDatabaseOpen = false;
     await updateMenu();
     resetSyncState();
@@ -735,7 +850,6 @@ async function openDatabase(): Promise<void> {
         return;
     }
 
-    await addRecentDatabase(databasePath);
     await updateLastFolder(dirname(databasePath));
 
     // Notify frontend to load the database
@@ -767,7 +881,6 @@ async function createNewDatabase(): Promise<void> {
     await createQueue.awaitTask(taskId);
     createQueue.shutdown();
 
-    await addRecentDatabase(databasePath);
     await updateLastFolder(dirname(databasePath));
 
     if (mainWindow) {
@@ -793,19 +906,41 @@ async function startImportWithPaths(paths: string[]): Promise<IImportSession | u
         throw new Error('Worker pool not initialized');
     }
 
+    const databases = await getDatabases();
+    const dbEntry = databases.find(entry => entry.path === currentDatabasePath);
+    let s3Config = undefined;
+    let googleApiKey = undefined;
+    let encryptionKeyPems: IEncryptionKeyPem[] | undefined = undefined;
+
+    if (dbEntry) {
+        const vault = getVault("plaintext");
+        const s3Secret = await vault.get(`db:${dbEntry.id}:s3`);
+        if (s3Secret) {
+            s3Config = JSON.parse(s3Secret.value);
+        }
+        const geocodingSecret = await vault.get(`db:${dbEntry.id}:geocoding`);
+        if (geocodingSecret) {
+            googleApiKey = geocodingSecret.value;
+        }
+        const encryptionSecret = await vault.get(`db:${dbEntry.id}:encryption`);
+        if (encryptionSecret) {
+            encryptionKeyPems = [JSON.parse(encryptionSecret.value)];
+        }
+    }
+
     const storageDescriptor: IStorageDescriptor = {
         dbDir: currentDatabasePath,
-        encryptionKeyPaths: [],
+        encryptionKeyPems,
     };
 
     const sessionId = randomUUID();
     const importAssetsTaskId = workerPool.addTask('add-paths', {
         paths,
         storageDescriptor,
-        googleApiKey: undefined,
+        googleApiKey,
         sessionId,
         dryRun: false,
-        s3Config: undefined,
+        s3Config,
     }, sessionId);
 
     return { importAssetsTaskId, sessionId };

@@ -27,8 +27,8 @@ export async function initCommand(context: ICommandContext, options: IInitComman
     
     if (options.generateKey && options.key) {
         log.info('');
-        log.info(pc.green(`✓  Encryption key saved to: ${options.key}, public key: ${options.key}.pub`));
-        log.info(pc.yellow(`⚠️ Keep this key file safe! You will need it to access your encrypted database.`));
+        log.info(pc.green(`✓  Encryption key "${options.key}" stored in vault.`));
+        log.info(pc.yellow(`⚠️ Keep this key safe! You will need it to access your encrypted database.`));
     }
 
     log.info('');
@@ -47,17 +47,16 @@ export async function initCommand(context: ICommandContext, options: IInitComman
     }
 
     if (options.key) {
-        const keyFilename = basename(options.key);
         log.info('');
-        log.info('When using your encrypted database, specify the key file:');
-        log.info(`    ` + pc.cyan(`psi add --key ${keyFilename} <file or directory>`));
+        log.info('When using your encrypted database, specify the key name:');
+        log.info(`    ` + pc.cyan(`psi add --key ${options.key} <file or directory>`));
     }
 
     // Show follow-up commands
     log.info('');
     log.info(pc.bold('Examples:'));
     const dbFlag = isCurrentDir ? '' : ` --db ${databaseDir}`;
-    const keyFlag = options.key ? ` --key ${basename(options.key)}` : '';
+    const keyFlag = options.key ? ` --key ${options.key}` : '';
     const flags = `${dbFlag}${keyFlag}`;
     log.info(`    ${pc.cyan(`psi add${flags} photo.jpg`)}   - Adds a single photo to the database`);
     log.info(`    ${pc.cyan(`psi add${flags} video.mp4`)}   - Adds a single video to the database`);

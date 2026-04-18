@@ -1,4 +1,81 @@
 //
+// A secret stored in the vault, passed over IPC between renderer and main process.
+//
+export interface IVaultSecret {
+    // Unique name that identifies the secret within the vault.
+    name: string;
+
+    // Caller-defined category string for the secret (e.g. "api-key", "s3-credentials").
+    type: string;
+
+    // The secret value as a plain string; callers serialise structured values as JSON.
+    value: string;
+}
+
+//
+// S3 credentials for accessing an S3-compatible object store.
+//
+export interface IS3Credentials {
+    // AWS region (e.g. "us-east-1").
+    region: string;
+
+    // Access key ID for authentication.
+    accessKeyId: string;
+
+    // Secret access key for authentication.
+    secretAccessKey: string;
+
+    // Optional custom endpoint URL (for non-AWS S3-compatible services).
+    endpoint?: string;
+}
+
+//
+// An RSA key pair stored as PEM strings.
+//
+export interface IEncryptionKeyPair {
+    // PEM-encoded PKCS#8 private key.
+    privateKeyPem: string;
+
+    // PEM-encoded SPKI public key.
+    publicKeyPem: string;
+}
+
+//
+// All secrets associated with a database entry (all fields optional — absent means not configured).
+//
+export interface IDatabaseSecrets {
+    // S3 credentials for this database.
+    s3Credentials?: IS3Credentials;
+
+    // RSA key pair used to encrypt/decrypt assets.
+    encryptionKeyPair?: IEncryptionKeyPair;
+
+    // Google geocoding API key.
+    geocodingApiKey?: string;
+}
+
+//
+// A database entry stored in desktop.json.
+// id is an 8-character random alphanumeric string (e.g. "a3k9mz7x").
+//
+export interface IDatabaseEntry {
+    // Unique identifier for this database entry.
+    id: string;
+
+    // Human-readable display name.
+    name: string;
+
+    // Optional description of this database.
+    description: string;
+
+    // Absolute filesystem path (or S3 path) to the database directory.
+    path: string;
+
+    // Optional origin string read from .db/config.json; refreshed each time the database is opened.
+    origin?: string;
+}
+
+//
 // Log levels supported by the logging system
 //
 export type LogLevel = 'info' | 'verbose' | 'error' | 'exception' | 'warn' | 'debug' | 'tool';
@@ -144,5 +221,55 @@ export interface IElectronAPI {
     // Required in Electron 30+ where File.path is no longer available in the renderer.
     //
     getPathForFile: (file: File) => string;
+
+    //
+    // Returns all configured database entries from desktop.json.
+    //
+    getDatabases: () => Promise<IDatabaseEntry[]>;
+
+    //
+    // Adds a new database entry (generates an id automatically) and returns the created entry.
+    //
+    addDatabase: (entry: Omit<IDatabaseEntry, 'id'>) => Promise<IDatabaseEntry>;
+
+    //
+    // Updates an existing database entry (matched by id).
+    //
+    updateDatabase: (entry: IDatabaseEntry) => Promise<void>;
+
+    //
+    // Removes a database entry by id and deletes its associated vault secrets.
+    //
+    removeDatabaseEntry: (id: string) => Promise<void>;
+
+    //
+    // Reads vault secrets for the given database id.
+    //
+    getDatabaseSecrets: (id: string) => Promise<IDatabaseSecrets>;
+
+    //
+    // Writes vault secrets for the given database id.
+    //
+    setDatabaseSecrets: (id: string, secrets: IDatabaseSecrets) => Promise<void>;
+
+    //
+    // Opens a directory picker dialog and returns the chosen path, or undefined if cancelled.
+    //
+    pickFolder: () => Promise<string | undefined>;
+
+    //
+    // Retrieves a vault secret by name; returns undefined if not found.
+    //
+    vaultGet: (name: string) => Promise<IVaultSecret | undefined>;
+
+    //
+    // Creates or overwrites a vault secret.
+    //
+    vaultSet: (secret: IVaultSecret) => Promise<void>;
+
+    //
+    // Deletes a vault secret by name; does nothing if it does not exist.
+    //
+    vaultDelete: (name: string) => Promise<void>;
 }
 

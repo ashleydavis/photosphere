@@ -1,10 +1,10 @@
-import { loadDatabase, IBaseCommandOptions, ICommandContext, selectEncryptionKey, resolveKeyPaths } from "../lib/init-cmd";
+import { loadDatabase, IBaseCommandOptions, ICommandContext, selectEncryptionKey, resolveKeyPems } from "../lib/init-cmd";
 import { getDirectoryForCommand } from "../lib/directory-picker";
 import { log } from "utils";
 import pc from "picocolors";
 import { exit } from "node-utils";
 import { syncDatabases, merkleTreeExists, isDatabaseEncrypted, loadDatabaseConfig, updateDatabaseConfig } from "api";
-import { createStorage, loadEncryptionKeys } from "storage";
+import { createStorage, loadEncryptionKeysFromPem } from "storage";
 import { configureIfNeeded, getS3Config } from '../lib/config';
 
 //
@@ -87,12 +87,12 @@ export async function syncCommand(context: ICommandContext, options: ISyncComman
             }
             
             // Verify the key works by trying to load encryption keys
-            const resolvedDestKeyPaths = await resolveKeyPaths(options.destKey);
+            const destKeyPems = await resolveKeyPems(options.destKey);
             try {
-                await loadEncryptionKeys(resolvedDestKeyPaths, false);
+                await loadEncryptionKeysFromPem(destKeyPems);
             } catch (error) {
                 log.error(pc.red(`✗ Failed to load encryption key: ${error instanceof Error ? error.message : String(error)}`));
-                log.error(pc.red(`  Please check that the key file exists and is valid.`));
+                log.error(pc.red(`  Please check that the key exists in the vault.`));
                 await exit(1);
             }
         } else {

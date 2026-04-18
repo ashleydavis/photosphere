@@ -1,12 +1,11 @@
 import { log } from "utils";
-import { createStorage, loadEncryptionKeys, pathJoin } from "storage";
+import { createStorage, loadEncryptionKeysFromPem, pathJoin, generateKeyPair, exportPublicKeyToPem } from "storage";
 import pc from "picocolors";
 import { exit } from "node-utils";
 import { configureIfNeeded, getS3Config } from '../lib/config';
-import { loadDatabase, IBaseCommandOptions, resolveKeyPaths, promptForEncryption, selectEncryptionKey, ICommandContext } from "../lib/init-cmd";
+import { loadDatabase, IBaseCommandOptions, resolveKeyPems, promptForEncryption, selectEncryptionKey, ICommandContext } from "../lib/init-cmd";
+import { getVault } from "vault";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
-import { pathExists } from 'node-utils';
-import { readFile } from 'fs/promises';
 import { getDirectoryForCommand } from "../lib/directory-picker";
 import { replicate, merkleTreeExists, loadDatabaseConfig, updateDatabaseConfig } from "api";
 import { confirm, select, isCancel } from '../lib/clack/prompts';
@@ -155,12 +154,12 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
             }
             
             // Verify the key works by trying to load encryption keys
-            const resolvedDestKeyPaths = await resolveKeyPaths(options.destKey);
+            const verifyKeyPems = await resolveKeyPems(options.destKey);
             try {
-                await loadEncryptionKeys(resolvedDestKeyPaths, false);
+                await loadEncryptionKeysFromPem(verifyKeyPems);
             } catch (error) {
                 log.error(pc.red(`✗ Failed to load encryption key: ${error instanceof Error ? error.message : String(error)}`));
-                log.error(pc.red(`  Please check that the key file exists and is valid.`));
+                log.error(pc.red(`  Please check that the key exists in the vault.`));
                 await exit(1);
             }
             
@@ -177,16 +176,32 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
         // Database doesn't exist - ask about encryption if not already specified
         if (!options.destKey && !options.generateKey && !nonInteractive) {
             const encryptionResult = await promptForEncryption('Would you like to encrypt the destination database?');
-            
-            if (encryptionResult.keyPath) {
-                options.destKey = encryptionResult.keyPath;
+
+            if (encryptionResult.keyName) {
+                options.destKey = encryptionResult.keyName;
                 options.generateKey = encryptionResult.generateKey || false;
             }
         }
     }
 
-    const resolvedDestKeyPaths = await resolveKeyPaths(options.destKey);
-    const { options: destStorageOptions, isEncrypted: destIsEncrypted } = await loadEncryptionKeys(resolvedDestKeyPaths, options.generateKey || false);
+    // If --generate-key is set, generate the dest key in the vault if it doesn't exist yet.
+    if (options.generateKey && options.destKey) {
+        const vault = getVault("plaintext");
+        const existing = await vault.get(`cli:encryption:${options.destKey}`);
+        if (!existing) {
+            const keyPair = generateKeyPair();
+            const privateKeyPem = keyPair.privateKey.export({ type: 'pkcs8', format: 'pem' }) as string;
+            const publicKeyPem = exportPublicKeyToPem(keyPair.publicKey);
+            await vault.set({
+                name: `cli:encryption:${options.destKey}`,
+                type: 'encryption-key',
+                value: JSON.stringify({ privateKeyPem, publicKeyPem }),
+            });
+        }
+    }
+
+    const destKeyPems = await resolveKeyPems(options.destKey);
+    const { options: destStorageOptions, isEncrypted: destIsEncrypted } = await loadEncryptionKeysFromPem(destKeyPems);
     const { storage: destAssetStorage, rawStorage: destRawStorage } = createStorage(destDir, s3Config, destStorageOptions);
 
     // If destination database exists, warn user and ask for confirmation (unless --ues is used)
@@ -259,18 +274,13 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
         }
     }
     
-    // If destination is encrypted, copy the public key to the destination .db directory
-    if (destIsEncrypted && resolvedDestKeyPaths.length > 0) {
-        const publicKeySource = `${resolvedDestKeyPaths[0]}.pub`;
-
+    // If destination is encrypted, write the public key PEM to the destination .db directory
+    if (destIsEncrypted && destKeyPems.length > 0) {
         try {
-            if (await pathExists(publicKeySource)) {
-                const publicKeyData = await readFile(publicKeySource);
-                await destRawStorage.write('.db/encryption.pub', undefined, publicKeyData);
-                log.info(pc.green(`✓ Copied public key to destination database directory`));
-            }
+            await destRawStorage.write('.db/encryption.pub', undefined, Buffer.from(destKeyPems[0].publicKeyPem, 'utf-8'));
+            log.info(pc.green(`✓ Wrote public key to destination database directory`));
         } catch (error) {
-            console.warn(pc.yellow(`⚠️ Warning: Could not copy public key to destination database directory: ${error instanceof Error ? error.message : 'Unknown error'}`));
+            console.warn(pc.yellow(`⚠️ Warning: Could not write public key to destination database directory: ${error instanceof Error ? error.message : 'Unknown error'}`));
         }
     }
 

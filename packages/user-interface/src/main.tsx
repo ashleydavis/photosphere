@@ -21,6 +21,7 @@ import { useToast } from "./context/toast-context";
 import { ToastContainer } from "./components/toast-container";
 import { useImport } from "./context/import-context";
 import { ImportPage } from "./pages/import/import-page";
+import { DatabasesPage } from "./pages/databases/databases-page";
 
 export interface IMainProps {
     //
@@ -240,6 +241,11 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
                         <Route
                             path="/import"
                             element={<ImportPage />}
+                            />
+
+                        <Route
+                            path="/databases"
+                            element={<DatabasesPage />}
                             />
 
                         <Route

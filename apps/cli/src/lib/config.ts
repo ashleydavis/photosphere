@@ -5,147 +5,51 @@ import os from 'os';
 import pc from 'picocolors';
 import { IS3Credentials } from 'storage';
 import { exit } from 'node-utils';
+import { getVault } from 'vault';
 
-export interface IConfig {
-    s3?: IS3Credentials;
-    googleApiKey?: string;
+//
+// Non-secret CLI preferences stored in ~/.config/photosphere/cli.json.
+//
+interface ICliConfig {
+    // Whether the user previously declined to configure a Google API key.
     googleApiKeyDeclined?: boolean;
 }
 
 //
-// Gets the path to the Photosphere configuration directory
+// Returns the path to the non-secret CLI preferences file.
 //
-function getConfigDir(): string {
-    const homeDir = os.homedir();
-    return path.join(homeDir, '.config', 'photosphere');
+function getCliConfigPath(): string {
+    return path.join(os.homedir(), '.config', 'photosphere', 'cli.json');
 }
 
 //
-// Gets the path to the config file
+// Loads non-secret CLI preferences from disk.
+// Returns an empty object if the file does not exist.
 //
-function getConfigPath(): string {
-    return path.join(getConfigDir(), 'photosphere.conf');
-}
-
-//
-// Loads configuration from file
-//
-export async function loadConfig(): Promise<IConfig | null> {
+async function loadCliConfig(): Promise<ICliConfig> {
     try {
-        const configPath = getConfigPath();
-        const data = await fs.readFile(configPath, 'utf-8');
-        return parseIniConfig(data);
-    } catch {
-        return null;
+        const raw = await fs.readFile(getCliConfigPath(), 'utf-8');
+        return JSON.parse(raw) as ICliConfig;
+    }
+    catch {
+        return {};
     }
 }
 
 //
-// Parses INI format configuration
+// Saves non-secret CLI preferences to disk.
 //
-function parseIniConfig(content: string): IConfig {
-    const config: IConfig = {};
-    const lines = content.split('\n');
-    let currentSection = '';
-    
-    for (const line of lines) {
-        const trimmedLine = line.trim();
-        
-        // Skip empty lines and comments
-        if (!trimmedLine || trimmedLine.startsWith('#')) {
-            continue;
-        }
-        
-        // Section headers
-        if (trimmedLine.startsWith('[') && trimmedLine.endsWith(']')) {
-            currentSection = trimmedLine.slice(1, -1);
-            continue;
-        }
-        
-        // Key-value pairs
-        const equalIndex = trimmedLine.indexOf('=');
-        if (equalIndex === -1) continue;
-        
-        const key = trimmedLine.slice(0, equalIndex).trim();
-        const value = trimmedLine.slice(equalIndex + 1).trim();
-        
-        if (currentSection === 's3') {
-            if (!config.s3) config.s3 = {} as IS3Credentials;
-            (config.s3 as any)[key] = value;
-        } else if (currentSection === 'google') {
-            if (key === 'apiKey') {
-                config.googleApiKey = value;
-            } else if (key === 'declined') {
-                config.googleApiKeyDeclined = value.toLowerCase() === 'true';
-            }
-        }
-    }
-    
-    return config;
-}
-
-//
-// Saves configuration to file
-//
-async function saveConfig(config: IConfig): Promise<void> {
-    const configPath = getConfigPath();
-    const dir = path.dirname(configPath);
-    
-    // Ensure directory exists
-    await fs.mkdir(dir, { recursive: true });
-    
-    // Convert to INI format
-    const iniContent = formatIniConfig(config);
-    
-    // Write config file
-    await fs.writeFile(configPath, iniContent, 'utf-8');
-    
-    // Set restrictive permissions on non-Windows systems
+async function saveCliConfig(config: ICliConfig): Promise<void> {
+    const configPath = getCliConfigPath();
+    await fs.mkdir(path.dirname(configPath), { recursive: true });
+    await fs.writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8');
     if (process.platform !== 'win32') {
         await fs.chmod(configPath, 0o600);
     }
 }
 
 //
-// Formats configuration as INI content
-//
-function formatIniConfig(config: IConfig): string {
-    const lines: string[] = [];
-    
-    // Add header comment
-    lines.push('# Photosphere Configuration File');
-    lines.push('# This file contains credentials and settings for Photosphere');
-    lines.push('');
-    
-    // S3 configuration section
-    if (config.s3) {
-        lines.push('[s3]');
-        lines.push(`region=${config.s3.region}`);
-        lines.push(`accessKeyId=${config.s3.accessKeyId}`);
-        lines.push(`secretAccessKey=${config.s3.secretAccessKey}`);
-        if (config.s3.endpoint) {
-            lines.push(`endpoint=${config.s3.endpoint}`);
-        }
-        lines.push('');
-    }
-    
-    // Google API configuration section
-    if (config.googleApiKey || config.googleApiKeyDeclined) {
-        lines.push('[google]');
-        if (config.googleApiKey) {
-            lines.push(`apiKey=${config.googleApiKey}`);
-        }
-        if (config.googleApiKeyDeclined) {
-            lines.push(`declined=true`);
-        }
-        lines.push('');
-    }
-    
-    return lines.join('\n');
-}
-
-//
-// Prompts the user to configure S3.
+// Prompts the user to configure S3 credentials and stores them in the vault.
 //
 export async function configureS3(): Promise<IS3Credentials | undefined> {
     note('Configure credentials to access your S3-hosted media file database.');
@@ -219,42 +123,41 @@ export async function configureS3(): Promise<IS3Credentials | undefined> {
     if (endpoint && typeof endpoint === 'string' && endpoint.trim() !== '') {
         s3Config.endpoint = endpoint.trim();
     }
-    
-    // Load existing config or create new one
-    const existingConfig = await loadConfig() || {};
-    existingConfig.s3 = s3Config;
-    
-    // Save config
-    await saveConfig(existingConfig);
-    
-    outro(pc.green(`Credentials saved to ${getConfigPath()}`));
-    
+
+    const vault = getVault("plaintext");
+    await vault.set({ name: 'cli:s3', type: 's3-credentials', value: JSON.stringify(s3Config) });
+
+    outro(pc.green('S3 credentials saved to vault.'));
+
     return s3Config;
 }
 
 //
-// Gets S3 configuration, prompting if necessary
+// Reads S3 credentials from the vault.
 //
 export async function getS3Config(): Promise<IS3Credentials | undefined> {
-    const config = await loadConfig();
-    return config?.s3;   
+    const vault = getVault("plaintext");
+    const secret = await vault.get('cli:s3');
+    if (!secret) {
+        return undefined;
+    }
+    return JSON.parse(secret.value) as IS3Credentials;
 }
 
 //
-// Gets the current Google API key from configuration
+// Reads the Google geocoding API key from env or vault.
 //
 export async function getGoogleApiKey(): Promise<string | undefined> {
     if (process.env.GOOGLE_API_KEY) {
-        // If the environment variable is set, use it directly.
         return process.env.GOOGLE_API_KEY.trim();
     }
-
-    const config = await loadConfig();
-    return config?.googleApiKey;
+    const vault = getVault("plaintext");
+    const secret = await vault.get('cli:geocoding');
+    return secret?.value;
 }
 
 //
-// Configures Google API key for reverse geocoding.
+// Prompts the user to enter a Google API key and stores it in the vault.
 //
 export async function configureGoogleApiKey(): Promise<void> {
     note(
@@ -282,57 +185,46 @@ export async function configureGoogleApiKey(): Promise<void> {
         outro(pc.red('Setup cancelled'));
         return;
     }
-    
-    // Load existing config or create new one
-    const existingConfig = await loadConfig() || {};
-    existingConfig.googleApiKey = typeof apiKey === 'string' ? apiKey.trim() : '';
-    
-    // Save to global config (Google API key is typically global, not project-specific)
-    await saveConfig(existingConfig);
-    
+
+    const vault = getVault("plaintext");
+    await vault.set({ name: 'cli:geocoding', type: 'api-key', value: typeof apiKey === 'string' ? apiKey.trim() : '' });
+
     outro(pc.green('✓ Google API key configured successfully!'));
     note(pc.dim('Your photos and videos will now be reverse geocoded to determine location names.'));
 }
 
 //
-// Sets the Google API key in configuration
+// Sets the Google API key directly in the vault.
 //
 export async function setGoogleApiKey(apiKey: string): Promise<void> {
-    const existingConfig = await loadConfig() || {};
-    existingConfig.googleApiKey = apiKey;
-    await saveConfig(existingConfig);
+    const vault = getVault("plaintext");
+    await vault.set({ name: 'cli:geocoding', type: 'api-key', value: apiKey });
 }
 
 //
-// Removes the Google API key from configuration
+// Removes the Google API key from the vault.
 //
 export async function removeGoogleApiKey(): Promise<void> {
-    const existingConfig = await loadConfig();
-    if (existingConfig) {
-        delete existingConfig.googleApiKey;
-        await saveConfig(existingConfig);
-    }
+    const vault = getVault("plaintext");
+    await vault.delete('cli:geocoding');
 }
 
 //
-// Resets the Google API key declined state, allowing prompts to appear again
+// Resets the googleApiKeyDeclined flag in the CLI preferences file.
 //
 export async function resetGoogleApiKeyDeclined(): Promise<void> {
-    const existingConfig = await loadConfig();
-    if (existingConfig) {
-        delete existingConfig.googleApiKeyDeclined;
-        await saveConfig(existingConfig);
-    }
+    const cliConfig = await loadCliConfig();
+    delete cliConfig.googleApiKeyDeclined;
+    await saveCliConfig(cliConfig);
 }
 
 //
-// Configures required services based on tags and context
+// Configures required services based on tags and context.
 //
 export async function configureIfNeeded(tags: string[], nonInteractive: boolean): Promise<void> {
     for (const tag of tags) {
         switch (tag) {
-            case 's3':
-                // Configure connection to S3 cloud storage.
+            case 's3': {
                 const s3Config = await getS3Config();
                 if (!s3Config) {
                     if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
@@ -364,13 +256,13 @@ export async function configureIfNeeded(tags: string[], nonInteractive: boolean)
                     await configureS3();
                 }
                 break;
-                
-            case 'google':
-                // Check if Google API key is configured, prompt if not (unless --yes is specified or user previously declined)
+            }
+
+            case 'google': {
                 const apiKey = await getGoogleApiKey();
-                const config = await loadConfig();
-                const hasDeclined = config?.googleApiKeyDeclined;
-                
+                const cliConfig = await loadCliConfig();
+                const hasDeclined = cliConfig.googleApiKeyDeclined;
+
                 if (!apiKey && !nonInteractive && !hasDeclined) {
                     const setupNow = await confirm({
                         message: 'Would you like to configure reverse geocoding? (This converts GPS coordinates to location names) (You can say no now and configure it later with "psi config")',
@@ -378,20 +270,17 @@ export async function configureIfNeeded(tags: string[], nonInteractive: boolean)
                     });
                     
                     if (isCancel(setupNow) || !setupNow) {
-                        // User declined to set up Google API key, remember this choice
-                        const existingConfig = await loadConfig() || {};
-                        existingConfig.googleApiKeyDeclined = true;
-                        await saveConfig(existingConfig);
-                        
+                        cliConfig.googleApiKeyDeclined = true;
+                        await saveCliConfig(cliConfig);
                         outro(pc.yellow('Skipping Google API Key setup'));
-
                         return;
                     }
 
                     await configureGoogleApiKey();
                 }
                 break;
-                
+            }
+
             default:
                 console.warn(pc.yellow(`Unknown configuration tag: ${tag}`));
                 break;
@@ -400,24 +289,11 @@ export async function configureIfNeeded(tags: string[], nonInteractive: boolean)
 }
 
 //
-// Clears all configuration files
+// Clears vault secrets and CLI preferences.
 //
 export async function clearConfig(): Promise<boolean> {
     intro(pc.cyan('Clear Configuration'));
-    
-    // Check if config file exists
-    const configPath = getConfigPath();
-    
-    try {
-        await fs.access(configPath);
-    } catch {
-        outro(pc.yellow('No configuration file found.'));
-        return true;
-    }
-    
-    console.log(pc.yellow(`\nThe following configuration file will be deleted:`));
-    console.log(pc.dim(`  - ${configPath}`));
-    
+
     console.log(pc.red('\n⚠️ Warning: This action cannot be undone!'));
     console.log(pc.red('All your configuration (S3 credentials, Google API key, etc.) will be permanently deleted.'));
     
@@ -434,16 +310,19 @@ export async function clearConfig(): Promise<boolean> {
         outro(pc.yellow('Configuration deletion cancelled.'));
         return false;
     }
-    
-    // Delete the configuration file
+
+    const vault = getVault("plaintext");
+    await vault.delete('cli:s3');
+    await vault.delete('cli:geocoding');
+
+    const cliConfigPath = getCliConfigPath();
     try {
-        await fs.unlink(configPath);
-        console.log(pc.green(`✓ Deleted ${configPath}`));
-    } catch (err) {
-        console.error(pc.red(`✗ Failed to delete ${configPath}: ${err}`));
-        return false;
+        await fs.unlink(cliConfigPath);
     }
-    
-    outro(pc.green('Configuration file deleted successfully.'));
+    catch {
+        // File may not exist; ignore.
+    }
+
+    outro(pc.green('Configuration cleared successfully.'));
     return true;
 }

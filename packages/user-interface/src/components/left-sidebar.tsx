@@ -6,7 +6,7 @@ import { useTheme } from '@mui/joy/styles/ThemeProvider';
 import List from '@mui/joy/List/List';
 import ListItem from '@mui/joy/ListItem/ListItem';
 import ListItemDecorator from '@mui/joy/ListItemDecorator/ListItemDecorator';
-import { PhotoLibrary, Folder, FolderOpen, Info, Map, Search, Settings, Star, StarBorder, Delete, CreateNewFolder, FileUpload } from '@mui/icons-material';
+import { PhotoLibrary, Folder, FolderOpen, Info, Map, Search, Settings, Star, StarBorder, Delete, CreateNewFolder, FileUpload, ManageSearch } from '@mui/icons-material';
 import { CollapsibleSection } from './collapsible-section';
 import ListItemContent from '@mui/joy/ListItemContent/ListItemContent';
 import ListItemButton from '@mui/joy/ListItemButton/ListItemButton';
@@ -208,42 +208,56 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration }
                 <Divider />
                 <CollapsibleSection configKey="sidebar-collapsed-databases" label="Databases" style={{ paddingLeft: "15px" }}>
                     <List>
-                        {dbs.map(dbPath => {
-                            return (
-                                <ListItem
-                                    key={dbPath}
-                                    endAction={
-                                        <IconButton
-                                            size="sm"
-                                            variant="plain"
-                                            color="neutral"
-                                            onClick={async (e) => {
-                                                e.stopPropagation();
-                                                await removeDatabase(dbPath);
-                                            }}
-                                            sx={{ minHeight: '32px', minWidth: '32px' }}
-                                        >
-                                            <Delete fontSize="small" />
-                                        </IconButton>
-                                    }
-                                    >
-                                    <ListItemButton
-                                        onClick={async () => {
-                                            setSidebarOpen(false);
-                                            await openDatabase(dbPath);
-                                        }}
-                                        >
-                                        <ListItemDecorator>
-                                            {dbPath === databasePath
-                                                ? <FolderOpen />
-                                                : <Folder />
-                                            }
-                                        </ListItemDecorator>
-                                        <ListItemContent title={dbPath}>{dbPath.split(/[\\/]/).filter(Boolean).pop() ?? dbPath}</ListItemContent>
+                        <NavLink
+                            to="/databases"
+                            onClick={() => setSidebarOpen(false)}
+                            >
+                            {({ isActive }) => (
+                                <ListItem className={isActive ? "" : "opacity-40"}>
+                                    <ListItemButton>
+                                        <ListItemDecorator><ManageSearch /></ListItemDecorator>
+                                        <ListItemContent>Manage Databases</ListItemContent>
                                     </ListItemButton>
                                 </ListItem>
-                            );
-                        })}
+                            )}
+                        </NavLink>
+
+                        {dbs.map(dbEntry => (
+                            <ListItem
+                                key={dbEntry.id}
+                                endAction={
+                                    <IconButton
+                                        size="sm"
+                                        variant="plain"
+                                        color="neutral"
+                                        onClick={async (e) => {
+                                            e.stopPropagation();
+                                            await removeDatabase(dbEntry.id);
+                                        }}
+                                        sx={{ minHeight: '32px', minWidth: '32px' }}
+                                    >
+                                        <Delete fontSize="small" />
+                                    </IconButton>
+                                }
+                                >
+                                <ListItemButton
+                                    onClick={async () => {
+                                        setSidebarOpen(false);
+                                        await openDatabase(dbEntry.path);
+                                    }}
+                                    >
+                                    <ListItemDecorator>
+                                        {dbEntry.path === databasePath
+                                            ? <FolderOpen />
+                                            : <Folder />
+                                        }
+                                    </ListItemDecorator>
+                                    <ListItemContent title={dbEntry.path}>
+                                        {dbEntry.name || dbEntry.path.split(/[\\/]/).filter(Boolean).pop() || dbEntry.path}
+                                    </ListItemContent>
+                                </ListItemButton>
+                            </ListItem>
+                        ))}
                     </List>
                 </CollapsibleSection>
             </div>

@@ -6,7 +6,7 @@ import * as fs from "fs/promises";
 import { ensureDir } from "node-utils";
 import os from "os";
 import path from "path";
-import { FileStorage, createStorage, loadEncryptionKeys, IStorageDescriptor, IS3Credentials } from "storage";
+import { FileStorage, createStorage, loadEncryptionKeysFromPem, IStorageDescriptor, IS3Credentials } from "storage";
 import type { ITaskContext } from "task-queue";
 import { validateAndHash, getHashFromCache } from "./hash";
 import { HashCache } from "./hash-cache";
@@ -59,7 +59,7 @@ export async function checkFileHandler(data: ICheckFileData, context: ITaskConte
     }
     
     // Recreate storage and metadata collection in the worker
-    const { options: storageOptions } = await loadEncryptionKeys(storageDescriptor.encryptionKeyPaths, false);
+    const { options: storageOptions } = await loadEncryptionKeysFromPem(storageDescriptor.encryptionKeyPems ?? []);
     const { storage } = createStorage(storageDescriptor.dbDir, s3Config, storageOptions);
     const database = createMediaFileDatabase(storage, uuidGenerator, timestampProvider);
     const metadataCollection = database.metadataCollection;

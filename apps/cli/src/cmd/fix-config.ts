@@ -2,12 +2,12 @@
 // Decrypts .db/config.json in place if it was accidentally encrypted.
 //
 
-import { createStorage, loadEncryptionKeys } from "storage";
+import { createStorage, loadEncryptionKeysFromPem } from "storage";
 import pc from "picocolors";
 import { log } from "utils";
 import { exit } from "node-utils";
 import { configureIfNeeded, getS3Config } from "../lib/config";
-import { resolveKeyPaths, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
+import { resolveKeyPems, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
 
 export interface IFixConfigCommandOptions extends IBaseCommandOptions {
     //
@@ -38,14 +38,14 @@ export async function fixConfigCommand(context: ICommandContext, options: IFixCo
 
     const s3Config = await getS3Config();
 
-    const keyPaths = await resolveKeyPaths(options.key);
-    if (keyPaths.length === 0) {
+    const keyPems = await resolveKeyPems(options.key);
+    if (keyPems.length === 0) {
         log.error(pc.red("✗ Decryption requires --key."));
         await exit(1);
         return;
     }
 
-    const { options: readStorageOptions } = await loadEncryptionKeys(keyPaths, false);
+    const { options: readStorageOptions } = await loadEncryptionKeysFromPem(keyPems);
 
     const { storage: rawStorage } = createStorage(dbDir, s3Config, undefined);
     const { storage: readStorage } = createStorage(dbDir, s3Config, readStorageOptions);

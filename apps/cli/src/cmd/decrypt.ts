@@ -3,13 +3,13 @@
 // (encrypted → plain). Removes .db/encryption.pub at the end.
 //
 
-import { createStorage, loadEncryptionKeys } from "storage";
+import { createStorage, loadEncryptionKeysFromPem } from "storage";
 import pc from "picocolors";
 import { log } from "utils";
 import { exit } from "node-utils";
 import { configureIfNeeded, getS3Config } from "../lib/config";
 import { getDirectoryForCommand } from "../lib/directory-picker";
-import { resolveKeyPaths, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
+import { resolveKeyPems, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
 import { writeProgress, clearProgressMessage } from "../lib/terminal-utils";
 import { confirm, isCancel } from "../lib/clack/prompts";
 import { decrypt as apiDecrypt } from "api";
@@ -46,13 +46,13 @@ export async function decryptCommand(context: ICommandContext, options: IDecrypt
 
     const s3Config = await getS3Config();
 
-    const keyPaths = await resolveKeyPaths(options.key);
-    if (keyPaths.length === 0) {
-        log.error(pc.red(`✗ Decryption requires --key (comma-separated list supported).`));
+    const keyPems = await resolveKeyPems(options.key);
+    if (keyPems.length === 0) {
+        log.error(pc.red(`✗ Decryption requires --key.`));
         await exit(1);
     }
 
-    const { options: readStorageOptions } = await loadEncryptionKeys(keyPaths, false);
+    const { options: readStorageOptions } = await loadEncryptionKeysFromPem(keyPems);
 
     const { storage: rawStorage } = createStorage(dbDir, s3Config, undefined);
     const hasEncryptionPub = await rawStorage.fileExists(".db/encryption.pub");
@@ -70,7 +70,7 @@ export async function decryptCommand(context: ICommandContext, options: IDecrypt
         }
     }
     else {
-        log.warn(pc.yellow(`⚠️  This will decrypt the database in place at ${pc.cyan(dbDir)} using key(s): ${pc.cyan(keyPaths.join(", "))}.`));
+        log.warn(pc.yellow(`⚠️  This will decrypt the database in place at ${pc.cyan(dbDir)} using key: ${pc.cyan(options.key ?? "")}.`));
         log.warn(pc.yellow(`   All files will be rewritten in plain form. The database will no longer be encrypted.`));
         const confirmed = await confirm({ message: "Proceed with decryption?", initialValue: false });
         if (isCancel(confirmed) || !confirmed) {

@@ -31,6 +31,7 @@ import { setOriginCommand, ISetOriginCommandOptions } from './src/cmd/set-origin
 import { encryptCommand } from './src/cmd/encrypt';
 import { decryptCommand } from './src/cmd/decrypt';
 import { fixConfigCommand } from './src/cmd/fix-config';
+import { vaultCommand } from './src/cmd/vault';
 import { initContext } from './src/lib/init-cmd';
 import { MAIN_EXAMPLES, getCommandExamplesHelp } from './src/examples';
 import pc from "picocolors";
@@ -536,6 +537,8 @@ Resources:
         .option(...verboseOption)
         .addHelpText('after', getCommandExamplesHelp('decrypt'))
         .action(initContext(decryptCommand));
+
+    program.addCommand(vaultCommand());
 
     // Parse the command line arguments
     try {

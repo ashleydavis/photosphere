@@ -17,7 +17,7 @@ jest.mock('../../lib/hash-cache', () => ({
 
 jest.mock('storage', () => ({
     createStorage: jest.fn(),
-    loadEncryptionKeys: jest.fn().mockResolvedValue({ options: {} }),
+    loadEncryptionKeysFromPem: jest.fn().mockResolvedValue({ options: {} }),
 }));
 
 jest.mock('../../lib/media-file-database', () => ({
@@ -28,7 +28,7 @@ jest.mock('../../lib/media-file-database', () => ({
 
 import { hashFileHandler } from '../../lib/hash-file.worker';
 import { validateAndHash, getHashFromCache } from '../../lib/hash';
-import { createStorage, loadEncryptionKeys } from 'storage';
+import { createStorage, loadEncryptionKeysFromPem } from 'storage';
 import { createMediaFileDatabase } from '../../lib/media-file-database';
 
 const mockValidateAndHash = validateAndHash as jest.MockedFunction<typeof validateAndHash>;
@@ -59,7 +59,6 @@ function makeContext(overrides: Partial<ITaskContext> = {}): ITaskContext {
 function makeData(overrides: Partial<IHashFileData> = {}): IHashFileData {
     const storageDescriptor: IStorageDescriptor = {
         dbDir: '/test/db',
-        encryptionKeyPaths: [],
     };
     return {
         filePath: '/test/photos/img.jpg',

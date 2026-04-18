@@ -1,5 +1,5 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
-import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext, type IImportSession, type IToolsStatus, type IDownloadAssetItem, type IShowNotificationData, convertToPng } from "user-interface";
+import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext, type IImportSession, type IToolsStatus, type IDownloadAssetItem, type IShowNotificationData, type IDatabaseEntry, type IDatabaseSecrets, convertToPng } from "user-interface";
 
 const restApiUrl = "http://localhost:3001";
 
@@ -210,6 +210,31 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         // No-op on web platform; no tasks to cancel.
     }, []);
 
+    const getDatabases = useCallback(async () => {
+        return [];
+    }, []);
+
+    const addDatabase = useCallback(async (entry: Omit<IDatabaseEntry, "id">): Promise<IDatabaseEntry> => {
+        return { ...entry, id: Math.random().toString(36).slice(2, 10) };
+    }, []);
+
+    const updateDatabase = useCallback(async (_entry: IDatabaseEntry): Promise<void> => {
+    }, []);
+
+    const removeDatabaseEntry = useCallback(async (_id: string): Promise<void> => {
+    }, []);
+
+    const getDatabaseSecrets = useCallback(async (_id: string): Promise<IDatabaseSecrets> => {
+        return {};
+    }, []);
+
+    const setDatabaseSecrets = useCallback(async (_id: string, _secrets: IDatabaseSecrets): Promise<void> => {
+    }, []);
+
+    const pickFolder = useCallback(async () => {
+        return undefined;
+    }, []);
+
     const platformContext: IPlatformContext = {
         openDatabase,
         createDatabase,
@@ -234,6 +259,13 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         onTaskMessage,
         onTaskComplete,
         cancelTasks,
+        getDatabases,
+        addDatabase,
+        updateDatabase,
+        removeDatabaseEntry,
+        getDatabaseSecrets,
+        setDatabaseSecrets,
+        pickFolder,
     };
 
     //

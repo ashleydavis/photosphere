@@ -3,7 +3,7 @@
 //
 
 import { SortNode } from "merkle-tree";
-import { createStorage, loadEncryptionKeys, IStorageDescriptor, IS3Credentials } from "storage";
+import { createStorage, loadEncryptionKeysFromPem, IStorageDescriptor, IS3Credentials } from "storage";
 import type { ITaskContext } from "task-queue";
 import { computeAssetHash } from "./hash";
 import { formatFileSize, log, retry } from "utils";
@@ -32,8 +32,7 @@ export async function verifyFileHandler(data: IVerifyFileData, context: ITaskCon
     const fileName = node.name!;
 
     // Recreate the storage in the worker (storage objects can't be passed through worker messages)
-    // S3 config is passed in the data, and encryption key paths come from the storage descriptor
-    const { options: storageOptions } = await loadEncryptionKeys(storageDescriptor.encryptionKeyPaths, false);
+    const { options: storageOptions } = await loadEncryptionKeysFromPem(storageDescriptor.encryptionKeyPems ?? []);
     const { storage } = createStorage(storageDescriptor.dbDir, s3Config, storageOptions);
 
     const fileInfo = await retry(() => storage.info(fileName));

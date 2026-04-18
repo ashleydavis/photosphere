@@ -1,5 +1,5 @@
 import { exit } from 'node-utils';
-import { configureS3, clearConfig, getGoogleApiKey, loadConfig, configureGoogleApiKey } from '../lib/config';
+import { configureS3, clearConfig, getGoogleApiKey, getS3Config, configureGoogleApiKey } from '../lib/config';
 import pc from 'picocolors';
 import { intro, outro, select, isCancel, note, confirm } from '../lib/clack/prompts';
 import { log } from "utils";
@@ -26,8 +26,7 @@ export async function configureCommand(options: IConfigureCommandOptions): Promi
     // Configuration loop
     while (true) {
         // Check current configuration status
-        const existingConfig = await loadConfig();
-        const hasS3Config = existingConfig?.s3;
+        const hasS3Config = !!(await getS3Config());
         const hasGoogleApiKey = !!(await getGoogleApiKey());
         
         note(

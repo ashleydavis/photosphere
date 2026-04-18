@@ -7,7 +7,7 @@ import { ISecret, IVault } from "./vault";
 //
 // Default directory under which the plain-text vault stores its files.
 //
-const DEFAULT_VAULT_DIR = path.join(os.homedir(), ".config", "vault");
+const DEFAULT_VAULT_DIR = path.join(os.homedir(), ".config", "photosphere", "vault");
 
 //
 // The file extension used for each secret file.

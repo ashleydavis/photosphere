@@ -1,4 +1,4 @@
-import { createStorage, IStorageDescriptor, IS3Credentials, loadEncryptionKeys } from "storage";
+import { createStorage, IStorageDescriptor, IS3Credentials, loadEncryptionKeysFromPem } from "storage";
 import type { ITaskContext } from "task-queue";
 import { createMediaFileDatabase } from "./media-file-database";
 import { HashCache } from "./hash-cache";
@@ -93,7 +93,7 @@ export async function hashFileHandler(data: IHashFileData, context: ITaskContext
     }
 
     // Check whether this hash is already present in the database.
-    const { options: storageOptions } = await loadEncryptionKeys(storageDescriptor.encryptionKeyPaths, false);
+    const { options: storageOptions } = await loadEncryptionKeysFromPem(storageDescriptor.encryptionKeyPems ?? []);
     const { storage } = createStorage(storageDescriptor.dbDir, s3Config, storageOptions);
     const database = createMediaFileDatabase(storage, uuidGenerator, timestampProvider);
     const hashHex = hashBuffer.toString("hex");

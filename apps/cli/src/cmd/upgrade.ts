@@ -1,12 +1,12 @@
 import { log, retry } from "utils";
 import pc from "picocolors";
 import { exit } from "node-utils";
-import { IBaseCommandOptions, ICommandContext, resolveKeyPaths, selectEncryptionKey } from "../lib/init-cmd";
+import { IBaseCommandOptions, ICommandContext, resolveKeyPems, selectEncryptionKey } from "../lib/init-cmd";
 import { getDirectoryForCommand } from "../lib/directory-picker";
 import { ensureMediaProcessingTools } from "../lib/ensure-tools";
 import { configureIfNeeded, getS3Config } from "../lib/config";
 import { intro, confirm, outro } from "../lib/clack/prompts";
-import { createStorage, loadEncryptionKeys } from "storage";
+import { createStorage, loadEncryptionKeysFromPem } from "storage";
 import { addItem, CURRENT_DATABASE_VERSION, loadTree, rebuildTree, saveTree, SortNode, traverseTreeAsync } from "merkle-tree";
 import { IDatabaseMetadata, acquireWriteLock, releaseWriteLock, createReadme, ensureSortIndex, loadDatabaseConfig, saveDatabaseConfig } from "api";
 import { BsonDatabase, buildDatabaseMerkleTree, deleteDatabaseMerkleTree, saveDatabaseMerkleTree } from "bdb";
@@ -14,10 +14,6 @@ import type { IAsset } from "defs";
 import type { IStorage } from "storage";
 import { pathJoin, walkDirectory } from "storage";
 import { computeHash } from "api";
-import { loadPrivateKey, loadPublicKey } from "storage";
-import { createPublicKey } from "node:crypto";
-import * as fs from "fs/promises";
-import { pathExists } from "node-utils";
 
 export interface IUpgradeCommandOptions extends IBaseCommandOptions {
     yes?: boolean;
@@ -56,8 +52,8 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
         await configureIfNeeded(["s3"], nonInteractive);
     }
 
-    let resolvedKeyPaths = await resolveKeyPaths(options.key);
-    let { options: storageOptions } = await loadEncryptionKeys(resolvedKeyPaths, false);
+    let keyPems = await resolveKeyPems(options.key);
+    let { options: storageOptions } = await loadEncryptionKeysFromPem(keyPems);
     const s3Config = await getS3Config();
     let { storage: assetStorage, rawStorage } = createStorage(databaseDir, s3Config, storageOptions);
 
@@ -69,7 +65,7 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
     }
 
     if (await assetStorage.fileExists(".db/encryption.pub")) {
-        if (resolvedKeyPaths.length === 0) {
+        if (keyPems.length === 0) {
             if (nonInteractive) {
                 outro(pc.red(`✗ This database is encrypted and requires a private key to access.\n  Please provide the private key using the --key option.`));
                 await exit(1);
@@ -77,8 +73,8 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
             log.info(pc.yellow("This database is encrypted and requires a private key to access."));
             const selectedKey = await selectEncryptionKey("Select the encryption key for this database:");
             options.key = selectedKey;
-            resolvedKeyPaths = await resolveKeyPaths(options.key);
-            const { options: newStorageOptions } = await loadEncryptionKeys(resolvedKeyPaths, false);
+            keyPems = await resolveKeyPems(options.key);
+            const { options: newStorageOptions } = await loadEncryptionKeysFromPem(keyPems);
             storageOptions = newStorageOptions;
             const { storage: newAssetStorage } = createStorage(databaseDir, s3Config, storageOptions);
             assetStorage = newAssetStorage;
@@ -226,33 +222,16 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
         }
 
         // Check if database is encrypted and ensure public key is in .db directory
-        if (resolvedKeyPaths.length > 0) {
+        if (keyPems.length > 0) {
             // Database is encrypted - check if public key marker exists in .db directory
             if (!await assetStorage.fileExists('.db/encryption.pub')) {
-                // Generate public key from private key and save it
+                // Write public key PEM from vault key pair
                 try {
-                    let publicKeyPem: string | undefined;
-                    const publicKeyPath = `${resolvedKeyPaths[0]}.pub`;
-                    if (await pathExists(publicKeyPath)) {
-                        publicKeyPem = await fs.readFile(publicKeyPath, 'utf8');
-                    } else {
-                        // Extract public key from private key
-                        const privateKey = await loadPrivateKey(resolvedKeyPaths[0]);
-                        if (privateKey) {
-                            const publicKey = createPublicKey(privateKey);
-                            publicKeyPem = publicKey.export({
-                                type: 'spki',
-                                format: 'pem'
-                            }) as string;
-                        }
-                    }
-                    
-                    if (publicKeyPem) {
-                        await rawStorage.write('.db/encryption.pub', 'text/plain', Buffer.from(publicKeyPem, 'utf8'));
-                        log.info(pc.green(`✓ Copied public key to database directory`));
-                    }
+                    const publicKeyPem = keyPems[0].publicKeyPem;
+                    await rawStorage.write('.db/encryption.pub', 'text/plain', Buffer.from(publicKeyPem, 'utf8'));
+                    log.info(pc.green(`✓ Wrote public key to database directory`));
                 } catch (error) {
-                    log.error(pc.red(`Warning: Could not copy public key to database directory: ${error instanceof Error ? error.message : 'Unknown error'}`));
+                    log.error(pc.red(`Warning: Could not write public key to database directory: ${error instanceof Error ? error.message : 'Unknown error'}`));
                 }
             }
 

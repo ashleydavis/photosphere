@@ -15,7 +15,7 @@ jest.mock('../../lib/hash', () => ({
 
 jest.mock('storage', () => ({
     createStorage: jest.fn(),
-    loadEncryptionKeys: jest.fn().mockResolvedValue({ options: {} }),
+    loadEncryptionKeysFromPem: jest.fn().mockResolvedValue({ options: {} }),
 }));
 
 jest.mock('../../lib/image', () => ({
@@ -77,7 +77,6 @@ function makeContext(overrides: Partial<ITaskContext> = {}): ITaskContext {
 function makeStorageDescriptor(): IStorageDescriptor {
     return {
         dbDir: '/test/db',
-        encryptionKeyPaths: [],
     };
 }
 
