@@ -72,6 +72,10 @@ let receiveResolveCallback: ((config: unknown) => void) | null = null;
 // Timeout handle for the database receive operation (60 seconds).
 let receiveTimeoutId: NodeJS.Timeout | null = null;
 
+// Pending Bluetooth device selection callback — stored so it can be invoked
+// when the target device appears in a later select-bluetooth-device event.
+let bluetoothSelectCallback: ((deviceId: string) => void) | null = null;
+
 //
 // Creates and configures the main browser window for the Electron app.
 //
@@ -155,11 +159,15 @@ app.whenReady().then(async () => {
     });
 
     // Auto-select the PhotoSphere device when the receiver scans via Web Bluetooth.
+    // The event may fire multiple times as devices are discovered, so the callback
+    // is stored and invoked as soon as PhotoSphere appears in the list.
     // Cast to any because Electron's type definitions don't include this event.
     (session.defaultSession as any).on('select-bluetooth-device', (event: any, deviceList: any[], callback: (id: string) => void) => {
         event.preventDefault();
-        const device = deviceList.find(d => d.deviceName === 'PhotoSphere');
+        bluetoothSelectCallback = callback;
+        const device = deviceList.find((d: any) => d.deviceName === 'PhotoSphere');
         if (device) {
+            bluetoothSelectCallback = null;
             callback(device.deviceId);
         }
     });
