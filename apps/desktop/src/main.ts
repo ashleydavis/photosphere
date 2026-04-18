@@ -164,9 +164,11 @@ app.whenReady().then(async () => {
     // Cast to any because Electron's type definitions don't include this event.
     (session.defaultSession as any).on('select-bluetooth-device', (event: any, deviceList: any[], callback: (id: string) => void) => {
         event.preventDefault();
+        console.log('[BT] select-bluetooth-device fired, devices:', JSON.stringify(deviceList));
         bluetoothSelectCallback = callback;
         const device = deviceList.find((d: any) => d.deviceName === 'PhotoSphere');
         if (device) {
+            console.log('[BT] Found PhotoSphere, selecting:', device.deviceId);
             bluetoothSelectCallback = null;
             callback(device.deviceId);
         }

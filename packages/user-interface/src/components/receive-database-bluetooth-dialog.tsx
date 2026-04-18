@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Modal from "@mui/joy/Modal";
 import ModalClose from "@mui/joy/ModalClose";
 import ModalDialog from "@mui/joy/ModalDialog";
@@ -7,7 +7,6 @@ import DialogContent from "@mui/joy/DialogContent";
 import Typography from "@mui/joy/Typography";
 import CircularProgress from "@mui/joy/CircularProgress";
 import Box from "@mui/joy/Box";
-import Button from "@mui/joy/Button";
 import { type IDatabaseShareConfig } from "../context/platform-context";
 
 //
@@ -44,51 +43,78 @@ export function ReceiveDatabaseBluetoothDialog({ open, onClose }: IReceiveDataba
     const [isSearching, setIsSearching] = useState<boolean>(false);
 
     //
-    // Error message if the Bluetooth operation fails.
+    // Number of scan attempts made so far.
     //
-    const [error, setError] = useState<string | null>(null);
+    const [attempts, setAttempts] = useState<number>(0);
 
-    function handleScan() {
-        setReceivedConfig(null);
-        setError(null);
-        setIsSearching(true);
-        receiveConfig();
-    }
+    //
+    // Ref that stays true while the dialog is open, used to stop the scan loop on close.
+    //
+    const scanningRef = useRef<boolean>(false);
+
+    useEffect(() => {
+        if (open) {
+            setReceivedConfig(null);
+            setAttempts(0);
+            setIsSearching(true);
+            scanningRef.current = true;
+            receiveConfig();
+        }
+        else {
+            scanningRef.current = false;
+        }
+    }, [open]);
 
     //
     // Scans for the PhotoSphere BLE peripheral and reads the database config.
+    // Retries automatically until the device is found or the dialog is closed.
     //
     async function receiveConfig() {
-        try {
-            const nav = navigator as any;
-            const device = await nav.bluetooth.requestDevice({
-                filters: [{ services: [SERVICE_UUID] }],
-            });
+        while (scanningRef.current) {
+            try {
+                const nav = navigator as any;
+                const device = await nav.bluetooth.requestDevice({
+                    filters: [{ services: [SERVICE_UUID] }],
+                });
 
-            if (!device.gatt) {
-                throw new Error('GATT not available on this device');
+                if (!device.gatt) {
+                    throw new Error('GATT not available on this device');
+                }
+
+                const server = await device.gatt.connect();
+                const service = await server.getPrimaryService(SERVICE_UUID);
+                const characteristic = await service.getCharacteristic(CHAR_UUID);
+                const value = await characteristic.readValue();
+
+                const config = JSON.parse(new TextDecoder().decode(value)) as IDatabaseShareConfig;
+                setReceivedConfig(config);
+                await device.gatt.disconnect();
+                scanningRef.current = false;
+                setIsSearching(false);
+                return;
             }
-
-            const server = await device.gatt.connect();
-            const service = await server.getPrimaryService(SERVICE_UUID);
-            const characteristic = await service.getCharacteristic(CHAR_UUID);
-            const value = await characteristic.readValue();
-
-            const config = JSON.parse(new TextDecoder().decode(value)) as IDatabaseShareConfig;
-            setReceivedConfig(config);
-            await device.gatt.disconnect();
+            catch (err) {
+                const message = err instanceof Error ? err.message : String(err);
+                if (!message.includes('User cancelled') && !message.includes('chooser')) {
+                    setIsSearching(false);
+                    scanningRef.current = false;
+                    // Unexpected error — stop and show it.
+                    setReceivedConfig(null);
+                    (err as any).__displayed = true;
+                    console.error('[BT] Receive error:', message);
+                    return;
+                }
+                // No device found yet — wait briefly and try again.
+                setAttempts(prev => prev + 1);
+                await new Promise<void>(resolve => setTimeout(resolve, 2000));
+            }
         }
-        catch (err) {
-            setError(err instanceof Error ? err.message : String(err));
-        }
-        finally {
-            setIsSearching(false);
-        }
+        setIsSearching(false);
     }
 
     function handleClose() {
+        scanningRef.current = false;
         setReceivedConfig(null);
-        setError(null);
         setIsSearching(false);
         onClose();
     }
@@ -99,22 +125,6 @@ export function ReceiveDatabaseBluetoothDialog({ open, onClose }: IReceiveDataba
                 <ModalClose />
                 <DialogTitle>Receive Database via Bluetooth</DialogTitle>
                 <DialogContent>
-                    {!isSearching && receivedConfig === null
-                        && (
-                            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, py: 2 }}>
-                                {error !== null
-                                    && (
-                                        <Typography level="body-md" color="danger">
-                                            {error}
-                                        </Typography>
-                                    )
-                                }
-                                <Button onClick={handleScan}>
-                                    Scan for nearby device
-                                </Button>
-                            </Box>
-                        )
-                    }
                     {isSearching
                         && (
                             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, py: 2 }}>
@@ -122,6 +132,13 @@ export function ReceiveDatabaseBluetoothDialog({ open, onClose }: IReceiveDataba
                                 <Typography level="body-md">
                                     Scanning for nearby PhotoSphere device...
                                 </Typography>
+                                {attempts > 0
+                                    && (
+                                        <Typography level="body-sm" sx={{ color: 'text.tertiary' }}>
+                                            {attempts} scan{attempts !== 1 ? 's' : ''} — make sure the sender is running.
+                                        </Typography>
+                                    )
+                                }
                             </Box>
                         )
                     }
