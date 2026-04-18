@@ -38,14 +38,19 @@ export function ReceiveDatabaseBluetoothDialog({ open, onClose }: IReceiveDataba
     const [receivedConfig, setReceivedConfig] = useState<IDatabaseShareConfig | null>(null);
 
     //
-    // True while scanning and reading from the peripheral.
+    // True while the scan loop is running.
     //
-    const [isSearching, setIsSearching] = useState<boolean>(false);
+    const [isScanning, setIsScanning] = useState<boolean>(false);
 
     //
     // Number of scan attempts made so far.
     //
     const [attempts, setAttempts] = useState<number>(0);
+
+    //
+    // Fatal error that stops scanning.
+    //
+    const [fatalError, setFatalError] = useState<string | null>(null);
 
     //
     // Ref that stays true while the dialog is open, used to stop the scan loop on close.
@@ -55,10 +60,11 @@ export function ReceiveDatabaseBluetoothDialog({ open, onClose }: IReceiveDataba
     useEffect(() => {
         if (open) {
             setReceivedConfig(null);
+            setFatalError(null);
             setAttempts(0);
-            setIsSearching(true);
+            setIsScanning(true);
             scanningRef.current = true;
-            receiveConfig();
+            scanLoop();
         }
         else {
             scanningRef.current = false;
@@ -66,10 +72,9 @@ export function ReceiveDatabaseBluetoothDialog({ open, onClose }: IReceiveDataba
     }, [open]);
 
     //
-    // Scans for the PhotoSphere BLE peripheral and reads the database config.
-    // Retries automatically until the device is found or the dialog is closed.
+    // Continuously scans for the PhotoSphere BLE peripheral until found or the dialog is closed.
     //
-    async function receiveConfig() {
+    async function scanLoop() {
         while (scanningRef.current) {
             try {
                 const nav = navigator as any;
@@ -77,45 +82,40 @@ export function ReceiveDatabaseBluetoothDialog({ open, onClose }: IReceiveDataba
                     filters: [{ services: [SERVICE_UUID] }],
                 });
 
-                if (!device.gatt) {
-                    throw new Error('GATT not available on this device');
-                }
-
                 const server = await device.gatt.connect();
                 const service = await server.getPrimaryService(SERVICE_UUID);
                 const characteristic = await service.getCharacteristic(CHAR_UUID);
                 const value = await characteristic.readValue();
 
                 const config = JSON.parse(new TextDecoder().decode(value)) as IDatabaseShareConfig;
-                setReceivedConfig(config);
-                await device.gatt.disconnect();
                 scanningRef.current = false;
-                setIsSearching(false);
+                setIsScanning(false);
+                setReceivedConfig(config);
                 return;
             }
             catch (err) {
                 const message = err instanceof Error ? err.message : String(err);
-                if (!message.includes('User cancelled') && !message.includes('chooser')) {
-                    setIsSearching(false);
+                const isNoDeviceFound = message.includes('User cancelled') || message.includes('chooser');
+                if (isNoDeviceFound) {
+                    setAttempts(prev => prev + 1);
+                    await new Promise<void>(resolve => setTimeout(resolve, 2000));
+                }
+                else {
                     scanningRef.current = false;
-                    // Unexpected error — stop and show it.
-                    setReceivedConfig(null);
-                    (err as any).__displayed = true;
-                    console.error('[BT] Receive error:', message);
+                    setIsScanning(false);
+                    setFatalError(message);
                     return;
                 }
-                // No device found yet — wait briefly and try again.
-                setAttempts(prev => prev + 1);
-                await new Promise<void>(resolve => setTimeout(resolve, 2000));
             }
         }
-        setIsSearching(false);
+        setIsScanning(false);
     }
 
     function handleClose() {
         scanningRef.current = false;
         setReceivedConfig(null);
-        setIsSearching(false);
+        setIsScanning(false);
+        setFatalError(null);
         onClose();
     }
 
@@ -125,7 +125,7 @@ export function ReceiveDatabaseBluetoothDialog({ open, onClose }: IReceiveDataba
                 <ModalClose />
                 <DialogTitle>Receive Database via Bluetooth</DialogTitle>
                 <DialogContent>
-                    {isSearching
+                    {isScanning
                         && (
                             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, py: 2 }}>
                                 <CircularProgress />
@@ -135,18 +135,27 @@ export function ReceiveDatabaseBluetoothDialog({ open, onClose }: IReceiveDataba
                                 {attempts > 0
                                     && (
                                         <Typography level="body-sm" sx={{ color: 'text.tertiary' }}>
-                                            {attempts} scan{attempts !== 1 ? 's' : ''} — make sure the sender is running.
+                                            {attempts} attempt{attempts !== 1 ? 's' : ''} — make sure the sender is running on the other device.
                                         </Typography>
                                     )
                                 }
                             </Box>
                         )
                     }
-                    {!isSearching && receivedConfig !== null
+                    {!isScanning && fatalError !== null
+                        && (
+                            <Box sx={{ py: 2 }}>
+                                <Typography level="body-md" color="danger">
+                                    {fatalError}
+                                </Typography>
+                            </Box>
+                        )
+                    }
+                    {!isScanning && receivedConfig !== null
                         && (
                             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, py: 1 }}>
-                                <Typography level="body-md">
-                                    Received database: <strong>{receivedConfig.name}</strong>
+                                <Typography level="body-md" color="success">
+                                    Database received successfully.
                                 </Typography>
                                 <Box
                                     component="pre"

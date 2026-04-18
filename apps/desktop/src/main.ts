@@ -148,14 +148,13 @@ app.commandLine.appendSwitch('enable-experimental-web-platform-features');
 // }
 
 app.whenReady().then(async () => {
-    // Allow camera access for the QR scanner window.
+    // Allow camera and bluetooth access without requiring a user gesture.
+    session.defaultSession.setPermissionCheckHandler((_webContents, permission) => {
+        return permission === 'media' || (permission as string) === 'bluetooth';
+    });
+
     session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
-        if (permission === 'media' || (permission as string) === 'bluetooth') {
-            callback(true);
-        }
-        else {
-            callback(false);
-        }
+        callback(permission === 'media' || (permission as string) === 'bluetooth');
     });
 
     // Auto-select the PhotoSphere device when the receiver scans via Web Bluetooth.
