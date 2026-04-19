@@ -1,5 +1,5 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
-import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext, type IImportSession, type IToolsStatus, type IDownloadAssetItem, type IShowNotificationData, type IDatabaseEntry, type IDatabaseSecrets, convertToPng } from "user-interface";
+import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext, type IImportSession, type IToolsStatus, type IDownloadAssetItem, type IShowNotificationData, type IDatabaseEntry, type ISharedSecretEntry, convertToPng } from "user-interface";
 
 const restApiUrl = "http://localhost:3001";
 
@@ -170,6 +170,11 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         return () => {};
     }, []);
 
+    const onNavigate = useCallback((_callback: (page: string) => void): (() => void) => {
+        // No-op for web platform.
+        return () => {};
+    }, []);
+
     const importAssets = useCallback(async (_paths?: string[]): Promise<IImportSession | undefined> => {
         // Not supported on web platform.
         return undefined;
@@ -224,15 +229,37 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
     const removeDatabaseEntry = useCallback(async (_id: string): Promise<void> => {
     }, []);
 
-    const getDatabaseSecrets = useCallback(async (_id: string): Promise<IDatabaseSecrets> => {
-        return {};
-    }, []);
-
-    const setDatabaseSecrets = useCallback(async (_id: string, _secrets: IDatabaseSecrets): Promise<void> => {
-    }, []);
-
     const pickFolder = useCallback(async () => {
         return undefined;
+    }, []);
+
+    const createDatabaseAtPath = useCallback(async (_path: string): Promise<void> => {
+    }, []);
+
+    const listSecrets = useCallback(async (): Promise<ISharedSecretEntry[]> => {
+        return [];
+    }, []);
+
+    const addSecret = useCallback(async (entry: Omit<ISharedSecretEntry, 'id'>, _value: string): Promise<ISharedSecretEntry> => {
+        return { ...entry, id: Math.random().toString(36).slice(2, 10) };
+    }, []);
+
+    const updateSecret = useCallback(async (_entry: ISharedSecretEntry, _value?: string): Promise<void> => {
+    }, []);
+
+    const deleteSecret = useCallback(async (_id: string): Promise<void> => {
+    }, []);
+
+    const getSecretValue = useCallback(async (_id: string): Promise<string | undefined> => {
+        return undefined;
+    }, []);
+
+    const getRecentDatabases = useCallback(async (): Promise<IDatabaseEntry[]> => {
+        return [];
+    }, []);
+
+    const listS3Dirs = useCallback(async (_credentialId: string, _bucket: string, _prefix: string): Promise<string[]> => {
+        return [];
     }, []);
 
     const platformContext: IPlatformContext = {
@@ -252,6 +279,7 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         onShowNotification,
         openFolder,
         onMenuAction,
+        onNavigate,
         importAssets,
         getPathForFile,
         checkTools,
@@ -263,9 +291,15 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         addDatabase,
         updateDatabase,
         removeDatabaseEntry,
-        getDatabaseSecrets,
-        setDatabaseSecrets,
         pickFolder,
+        createDatabaseAtPath,
+        listSecrets,
+        addSecret,
+        updateSecret,
+        deleteSecret,
+        getSecretValue,
+        getRecentDatabases,
+        listS3Dirs,
     };
 
     //

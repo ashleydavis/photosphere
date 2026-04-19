@@ -55,7 +55,21 @@ export interface IDatabaseSecrets {
 }
 
 //
-// A database entry stored in desktop.json.
+// A shared secret entry, derived from a vault entry with key "shared:{id}".
+//
+export interface ISharedSecretEntry {
+    // 8-char random alphanumeric ID, extracted from the vault key "shared:{id}".
+    id: string;
+
+    // Human-readable display name chosen by the user (the "label" field in the vault value JSON).
+    name: string;
+
+    // The category of secret stored (e.g. 's3-credentials', 'encryption-key', 'api-key').
+    type: string;
+}
+
+//
+// A database entry stored in databases.json.
 // id is an 8-character random alphanumeric string (e.g. "a3k9mz7x").
 //
 export interface IDatabaseEntry {
@@ -73,6 +87,15 @@ export interface IDatabaseEntry {
 
     // Optional origin string read from .db/config.json; refreshed each time the database is opened.
     origin?: string;
+
+    // References an ISharedSecretEntry.id for S3 credentials.
+    s3CredentialId?: string;
+
+    // References an ISharedSecretEntry.id for the encryption key pair.
+    encryptionKeyId?: string;
+
+    // References an ISharedSecretEntry.id for the geocoding API key.
+    geocodingKeyId?: string;
 }
 
 //
@@ -243,16 +266,6 @@ export interface IElectronAPI {
     removeDatabaseEntry: (id: string) => Promise<void>;
 
     //
-    // Reads vault secrets for the given database id.
-    //
-    getDatabaseSecrets: (id: string) => Promise<IDatabaseSecrets>;
-
-    //
-    // Writes vault secrets for the given database id.
-    //
-    setDatabaseSecrets: (id: string, secrets: IDatabaseSecrets) => Promise<void>;
-
-    //
     // Opens a directory picker dialog and returns the chosen path, or undefined if cancelled.
     //
     pickFolder: () => Promise<string | undefined>;
@@ -271,5 +284,26 @@ export interface IElectronAPI {
     // Deletes a vault secret by name; does nothing if it does not exist.
     //
     vaultDelete: (name: string) => Promise<void>;
+
+    //
+    // Returns all secrets stored in the vault.
+    //
+    vaultList: () => Promise<IVaultSecret[]>;
+
+    //
+    // Creates a database at the given path (no file picker) and sends database-opened to renderer.
+    //
+    createDatabaseAtPath: (path: string) => Promise<void>;
+
+    //
+    // Lists directory names under the given S3 bucket and prefix using the credentials
+    // identified by credentialId (a shared secret id).
+    //
+    listS3Dirs: (credentialId: string, bucket: string, prefix: string) => Promise<string[]>;
+
+    //
+    // Returns the top-5 most recently opened database entries, most recent first.
+    //
+    getRecentDatabases: () => Promise<IDatabaseEntry[]>;
 }
 

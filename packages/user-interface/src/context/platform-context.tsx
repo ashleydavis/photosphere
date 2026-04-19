@@ -48,7 +48,21 @@ export interface IDatabaseSecrets {
 }
 
 //
-// A database entry stored in desktop.json.
+// A shared secret entry, derived from a vault entry with key "shared:{id}".
+//
+export interface ISharedSecretEntry {
+    // 8-char random alphanumeric ID, extracted from the vault key "shared:{id}".
+    id: string;
+
+    // Human-readable display name chosen by the user (the "label" field in the vault value JSON).
+    name: string;
+
+    // The category of secret stored (e.g. 's3-credentials', 'encryption-key', 'api-key').
+    type: string;
+}
+
+//
+// A database entry stored in databases.json.
 // id is an 8-character random alphanumeric string (e.g. "a3k9mz7x").
 //
 export interface IDatabaseEntry {
@@ -66,6 +80,15 @@ export interface IDatabaseEntry {
 
     // Optional origin string read from .db/config.json; refreshed each time the database is opened.
     origin?: string;
+
+    // References an ISharedSecretEntry.id for S3 credentials.
+    s3CredentialId?: string;
+
+    // References an ISharedSecretEntry.id for the encryption key pair.
+    encryptionKeyId?: string;
+
+    // References an ISharedSecretEntry.id for the geocoding API key.
+    geocodingKeyId?: string;
 }
 
 
@@ -215,6 +238,13 @@ export interface IPlatformContext {
     onMenuAction: (action: string, callback: () => void) => Unsubscribe;
 
     //
+    // Subscribes to navigate events sent from the main process.
+    // The page argument is the route to navigate to (e.g. '/gallery', '/databases').
+    // Returns an unsubscribe function.
+    //
+    onNavigate: (callback: (page: string) => void) => Unsubscribe;
+
+    //
     // Notifies the platform that the user has edited the database.
     // Used to trigger a debounced background sync.
     //
@@ -320,24 +350,55 @@ export interface IPlatformContext {
     updateDatabase: (entry: IDatabaseEntry) => Promise<void>;
 
     //
-    // Removes a database entry by id and deletes its vault secrets.
+    // Removes a database entry by id.
     //
     removeDatabaseEntry: (id: string) => Promise<void>;
-
-    //
-    // Reads vault secrets for the given database id.
-    //
-    getDatabaseSecrets: (id: string) => Promise<IDatabaseSecrets>;
-
-    //
-    // Writes vault secrets for the given database id.
-    //
-    setDatabaseSecrets: (id: string, secrets: IDatabaseSecrets) => Promise<void>;
 
     //
     // Opens a directory picker and returns the chosen path, or undefined if cancelled.
     //
     pickFolder: () => Promise<string | undefined>;
+
+    //
+    // Creates a database at the given path (no file picker) and sends database-opened to renderer.
+    //
+    createDatabaseAtPath: (path: string) => Promise<void>;
+
+    //
+    // Returns all shared secrets (vault entries with name starting with "shared:").
+    //
+    listSecrets: () => Promise<ISharedSecretEntry[]>;
+
+    //
+    // Adds a new shared secret to the vault. Generates an id client-side.
+    //
+    addSecret: (entry: Omit<ISharedSecretEntry, 'id'>, value: string) => Promise<ISharedSecretEntry>;
+
+    //
+    // Updates an existing shared secret in the vault.
+    //
+    updateSecret: (entry: ISharedSecretEntry, value?: string) => Promise<void>;
+
+    //
+    // Deletes a shared secret by id.
+    //
+    deleteSecret: (id: string) => Promise<void>;
+
+    //
+    // Retrieves the raw value string for a shared secret by id.
+    //
+    getSecretValue: (id: string) => Promise<string | undefined>;
+
+    //
+    // Returns the top-5 most recently opened database entries, most recent first.
+    //
+    getRecentDatabases: () => Promise<IDatabaseEntry[]>;
+
+    //
+    // Lists directory names under the given S3 bucket and prefix using the credentials
+    // identified by credentialId (a shared secret id).
+    //
+    listS3Dirs: (credentialId: string, bucket: string, prefix: string) => Promise<string[]>;
 }
 
 const PlatformContext = createContext<IPlatformContext | undefined>(undefined);

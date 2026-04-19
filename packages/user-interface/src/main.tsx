@@ -22,6 +22,9 @@ import { ToastContainer } from "./components/toast-container";
 import { useImport } from "./context/import-context";
 import { ImportPage } from "./pages/import/import-page";
 import { DatabasesPage } from "./pages/databases/databases-page";
+import { SecretsPage } from "./pages/secrets/secrets-page";
+import { OpenDatabaseModal } from "./components/open-database-modal";
+import { CreateDatabaseModal } from "./components/create-database-modal";
 
 export interface IMainProps {
     //
@@ -59,6 +62,16 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
     // Set to true to open the configuration dialog.
     //
     const [configurationOpen, setConfigurationOpen] = useState<boolean>(false);
+
+    //
+    // Set to true to open the "open database" modal.
+    //
+    const [openDatabaseModalOpen, setOpenDatabaseModalOpen] = useState<boolean>(false);
+
+    //
+    // Set to true to open the "create database" modal.
+    //
+    const [createDatabaseModalOpen, setCreateDatabaseModalOpen] = useState<boolean>(false);
 
     const { openSearch } = useSearch();
 
@@ -141,6 +154,37 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
     }, [platform]);
 
     //
+    // Listen for new-database menu action from the main process.
+    //
+    useEffect(() => {
+        const unsubscribe = platform.onMenuAction('new-database', () => {
+            setCreateDatabaseModalOpen(true);
+        });
+
+        return unsubscribe;
+    }, [platform]);
+
+    //
+    // Listen for open-database menu action from the main process.
+    //
+    useEffect(() => {
+        const unsubscribe = platform.onMenuAction('open-database', () => {
+            setOpenDatabaseModalOpen(true);
+        });
+
+        return unsubscribe;
+    }, [platform]);
+
+    //
+    // Listen for navigate events from the main process.
+    //
+    useEffect(() => {
+        return platform.onNavigate((page) => {
+            navigate(page);
+        });
+    }, [platform, navigate]);
+
+    //
     // Adds mobile or desktop class to body based on isMobile prop.
     //
     useEffect(() => {
@@ -195,6 +239,8 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
                     sidebarOpen={sidebarOpen}
                     setSidebarOpen={setSidebarOpen}
                     onOpenConfiguration={() => setConfigurationOpen(true)}
+                    onNewDatabase={() => setCreateDatabaseModalOpen(true)}
+                    onOpenDatabase={() => setOpenDatabaseModalOpen(true)}
                     />
             </Drawer>
 
@@ -249,6 +295,11 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
                             />
 
                         <Route
+                            path="/secrets"
+                            element={<SecretsPage />}
+                            />
+
+                        <Route
                             path="/"
                             element={
                                 <Navigate
@@ -266,6 +317,16 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
             <ConfigurationDialog
                 open={configurationOpen}
                 onClose={() => setConfigurationOpen(false)}
+                />
+
+            <OpenDatabaseModal
+                open={openDatabaseModalOpen}
+                onClose={() => setOpenDatabaseModalOpen(false)}
+                />
+
+            <CreateDatabaseModal
+                open={createDatabaseModalOpen}
+                onClose={() => setCreateDatabaseModalOpen(false)}
                 />
 
             {isWorking
