@@ -141,6 +141,15 @@ export const COMMAND_EXAMPLES: ICommandExamples = {
         { command: "psi sync --db . --dest s3:bucket/photos", description: "Synchronizes local database with an S3 replica." },
     ],
 
+    secrets: [
+        { command: "psi secrets list", description: "List all secrets (values are masked)." },
+        { command: "psi secrets add", description: "Interactively add a new secret." },
+        { command: "psi secrets view my-key", description: "View the full value of a secret." },
+        { command: "psi secrets edit my-key", description: "Edit an existing secret." },
+        { command: "psi secrets delete my-key", description: "Delete a secret." },
+        { command: "psi secrets import", description: "Import a .key / .key.pub PEM key pair file." },
+    ],
+
     dbs: [
         { command: "psi dbs list", description: "List all configured databases." },
         { command: "psi dbs add", description: "Add a new database to the list." },

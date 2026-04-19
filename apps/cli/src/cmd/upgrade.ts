@@ -225,7 +225,7 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
         if (keyPems.length > 0) {
             // Database is encrypted - check if public key marker exists in .db directory
             if (!await assetStorage.fileExists('.db/encryption.pub')) {
-                // Write public key PEM from vault key pair
+                // Write public key PEM from key pair
                 try {
                     const publicKeyPem = keyPems[0].publicKeyPem;
                     await rawStorage.write('.db/encryption.pub', 'text/plain', Buffer.from(publicKeyPem, 'utf8'));

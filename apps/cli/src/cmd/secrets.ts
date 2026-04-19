@@ -8,55 +8,55 @@ import { existsSync } from 'fs';
 import { generateKeyPair, exportPublicKeyToPem } from 'storage';
 
 //
-// Secret types supported by the vault CLI.
+// Secret types supported by the secrets CLI.
 //
 const SECRET_TYPES = ['api-key', 's3-credentials', 'encryption-key', 'plain'];
 
 //
-// Returns the Commander sub-command group for `psi vault`.
+// Returns the Commander sub-command group for `psi secrets`.
 //
-export function vaultCommand(): Command {
-    const cmd = new Command('vault')
-        .description('Manage secrets stored in the Photosphere vault.');
+export function secretsCommand(): Command {
+    const cmd = new Command('secrets')
+        .description('Manage secrets stored in the Photosphere secrets store.');
 
-    // psi vault add
+    // psi secrets add
     cmd.command('add')
-        .description('Interactively add a new secret to the vault.')
-        .action(vaultAdd);
+        .description('Interactively add a new secret.')
+        .action(secretsAdd);
 
-    // psi vault list
+    // psi secrets list
     cmd.command('list')
-        .description('List all secrets in the vault (values are masked).')
-        .action(vaultList);
+        .description('List all secrets (values are masked).')
+        .action(secretsList);
 
-    // psi vault view <name>
+    // psi secrets view <name>
     cmd.command('view <name>')
         .description('Show the full value of a named secret.')
-        .action(vaultView);
+        .action(secretsView);
 
-    // psi vault edit <name>
+    // psi secrets edit <name>
     cmd.command('edit <name>')
         .description('Edit an existing secret, field by field.')
-        .action(vaultEdit);
+        .action(secretsEdit);
 
-    // psi vault delete <name>
+    // psi secrets delete <name>
     cmd.command('delete <name>')
-        .description('Delete a named secret from the vault.')
-        .action(vaultDelete);
+        .description('Delete a named secret.')
+        .action(secretsDelete);
 
-    // psi vault import
+    // psi secrets import
     cmd.command('import')
-        .description('Import a .key / .key.pub PEM key pair file into the vault.')
-        .action(vaultImport);
+        .description('Import a .key / .key.pub PEM key pair file.')
+        .action(secretsImport);
 
     return cmd;
 }
 
 //
-// psi vault add — prompt for name, type, value, then store.
+// psi secrets add — prompt for name, type, value, then store.
 //
-async function vaultAdd(): Promise<void> {
-    intro(pc.cyan('Add Vault Secret'));
+async function secretsAdd(): Promise<void> {
+    intro(pc.cyan('Add Secret'));
 
     const vault = getVault("plaintext");
 
@@ -102,18 +102,18 @@ async function vaultAdd(): Promise<void> {
 
     await vault.set({ name: (name as string).trim(), type: type as string, value: value as string });
 
-    outro(pc.green(`✓ Secret "${name}" added to vault.`));
+    outro(pc.green(`✓ Secret "${name}" added.`));
 }
 
 //
-// psi vault list — print all secrets with masked values.
+// psi secrets list — print all secrets with masked values.
 //
-async function vaultList(): Promise<void> {
+async function secretsList(): Promise<void> {
     const vault = getVault("plaintext");
     const secrets = await vault.list();
 
     if (secrets.length === 0) {
-        console.log(pc.yellow('No secrets found in vault.'));
+        console.log(pc.yellow('No secrets found.'));
         return;
     }
 
@@ -129,14 +129,14 @@ async function vaultList(): Promise<void> {
 }
 
 //
-// psi vault view <name> — show the full value after confirmation.
+// psi secrets view <name> — show the full value after confirmation.
 //
-async function vaultView(name: string): Promise<void> {
+async function secretsView(name: string): Promise<void> {
     const vault = getVault("plaintext");
     const secret = await vault.get(name);
 
     if (!secret) {
-        console.error(pc.red(`✗ No secret named "${name}" found in vault.`));
+        console.error(pc.red(`✗ No secret named "${name}" found.`));
         await exit(1);
         return;
     }
@@ -174,16 +174,16 @@ async function vaultView(name: string): Promise<void> {
 }
 
 //
-// psi vault edit <name> — reload existing fields and re-prompt with current values pre-populated.
+// psi secrets edit <name> — reload existing fields and re-prompt with current values pre-populated.
 //
-async function vaultEdit(name: string): Promise<void> {
-    intro(pc.cyan(`Edit Vault Secret: ${name}`));
+async function secretsEdit(name: string): Promise<void> {
+    intro(pc.cyan(`Edit Secret: ${name}`));
 
     const vault = getVault("plaintext");
     const secret = await vault.get(name);
 
     if (!secret) {
-        outro(pc.red(`✗ No secret named "${name}" found in vault.`));
+        outro(pc.red(`✗ No secret named "${name}" found.`));
         await exit(1);
         return;
     }
@@ -208,14 +208,14 @@ async function vaultEdit(name: string): Promise<void> {
 }
 
 //
-// psi vault delete <name> — delete a secret after confirmation.
+// psi secrets delete <name> — delete a secret after confirmation.
 //
-async function vaultDelete(name: string): Promise<void> {
+async function secretsDelete(name: string): Promise<void> {
     const vault = getVault("plaintext");
     const secret = await vault.get(name);
 
     if (!secret) {
-        console.error(pc.red(`✗ No secret named "${name}" found in vault.`));
+        console.error(pc.red(`✗ No secret named "${name}" found.`));
         await exit(1);
         return;
     }
@@ -235,10 +235,10 @@ async function vaultDelete(name: string): Promise<void> {
 }
 
 //
-// psi vault import — import a .key / .key.pub PEM file pair into the vault.
+// psi secrets import — import a .key / .key.pub PEM file pair into the secrets store.
 //
-async function vaultImport(): Promise<void> {
-    intro(pc.cyan('Import Encryption Key into Vault'));
+async function secretsImport(): Promise<void> {
+    intro(pc.cyan('Import Encryption Key'));
 
     const privateKeyPath = await text({
         message: 'Path to the private key file (.key):',
@@ -290,7 +290,7 @@ async function vaultImport(): Promise<void> {
     const defaultKeyName = privatePath.split('/').pop()?.replace(/\.key$/, '') ?? 'imported-key';
 
     const keyNameInput = await text({
-        message: 'Vault key name:',
+        message: 'Key name:',
         initialValue: defaultKeyName,
         validate: (value) => {
             if (!value || value.trim().length === 0) {

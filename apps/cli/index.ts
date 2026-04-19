@@ -31,7 +31,7 @@ import { setOriginCommand, ISetOriginCommandOptions } from './src/cmd/set-origin
 import { encryptCommand } from './src/cmd/encrypt';
 import { decryptCommand } from './src/cmd/decrypt';
 import { fixConfigCommand } from './src/cmd/fix-config';
-import { vaultCommand } from './src/cmd/vault';
+import { secretsCommand } from './src/cmd/secrets';
 import { dbsCommand } from './src/cmd/dbs';
 import { initContext } from './src/lib/init-cmd';
 import { MAIN_EXAMPLES, getCommandExamplesHelp } from './src/examples';
@@ -539,7 +539,7 @@ Resources:
         .addHelpText('after', getCommandExamplesHelp('decrypt'))
         .action(initContext(decryptCommand));
 
-    program.addCommand(vaultCommand());
+    program.addCommand(secretsCommand());
     program.addCommand(dbsCommand());
 
     // Parse the command line arguments
