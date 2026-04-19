@@ -9,14 +9,14 @@ import type { IQueueBackend, ITaskMessageData } from 'task-queue';
 import { TaskQueue, TaskStatus, setQueueBackend } from 'task-queue';
 import { WorkerPoolElectronMain } from './lib/worker-pool-electron-main';
 import { RandomUuidGenerator, TimestampProvider, logExceptions, log } from 'utils';
-import { findAvailablePort, loadDesktopConfig, saveDesktopConfig, updateLastFolder, getTheme, setTheme, updateLastDownloadFolder, getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry } from 'node-utils';
+import { findAvailablePort, loadDesktopConfig, saveDesktopConfig, updateLastFolder, getTheme, setTheme, updateLastDownloadFolder, getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry, getRecentDatabases, markDatabaseOpenedByPath } from 'node-utils';
 import type { IWorkerPoolOptions } from './lib/worker-pool-electron-main';
 import type { IRestApiWorkerStopMessage, IRestApiWorkerStartMessage } from './rest-api-worker';
 import { FileLoggerElectron } from './lib/file-logger-electron';
 import type { IImportSession, IRendererLogMessage, ISaveAssetItem, IDatabaseEntry, IDatabaseSecrets } from 'electron-defs';
 import { verifyTools } from 'tools';
 import type { IStorageDescriptor, IEncryptionKeyPem } from 'storage';
-import { createStorage } from 'storage';
+import { createStorage, CloudStorage } from 'storage';
 import { checkConnectivity, loadDatabaseConfig } from 'api';
 import { getVault } from 'vault';
 
@@ -234,7 +234,7 @@ ipcMain.on('cancel-tasks', (_event, source: string) => {
 ipcMain.handle('open-file', logExceptions(openDatabase, 'Error opening database'));
 ipcMain.handle('create-database', logExceptions(createNewDatabase, 'Error creating database'));
 
-// IPC handler for removing a database entry by id
+// IPC handler for removing a database entry by id (secrets are independent and managed via the secrets page)
 ipcMain.handle('remove-database-entry', logExceptions(async (_event, id: string) => {
     await removeDatabaseEntry(id);
 }, 'Error removing database entry'));
@@ -257,6 +257,30 @@ ipcMain.handle('vault-delete', logExceptions(async (_event, name: string) => {
     await vault.delete(name);
 }, 'Error deleting vault secret'));
 
+// IPC handler for listing all vault secrets
+ipcMain.handle('vault-list', logExceptions(async () => {
+    const vault = getVault("plaintext");
+    return await vault.list();
+}, 'Error listing vault secrets'));
+
+// IPC handler for creating a database at a known path (no file picker)
+ipcMain.handle('create-database-at-path', logExceptions(async (_event, databasePath: string) => {
+    if (!workerPool) {
+        throw new Error('Worker pool not initialized');
+    }
+
+    const uuidGenerator = new RandomUuidGenerator();
+    const createQueue = new TaskQueue(uuidGenerator, databasePath);
+    const taskId = randomUUID();
+    createQueue.addTask('create-database', { databasePath }, taskId);
+    await createQueue.awaitTask(taskId);
+    createQueue.shutdown();
+
+    if (mainWindow) {
+        mainWindow.webContents.send('database-opened', databasePath);
+    }
+}, 'Error creating database at path'));
+
 // IPC handler for checking whether a database is accessible (works for local FS, S3, etc.)
 ipcMain.handle('check-database-exists', logExceptions(async (_event, databasePath: string) => {
     return checkConnectivity(databasePath);
@@ -274,6 +298,9 @@ ipcMain.handle('add-database', logExceptions(async (_event, entry: Omit<IDatabas
         name: entry.name,
         description: entry.description,
         path: entry.path,
+        s3CredentialId: entry.s3CredentialId,
+        encryptionKeyId: entry.encryptionKeyId,
+        geocodingKeyId: entry.geocodingKeyId,
     };
     await addDatabaseEntry(newEntry);
     return newEntry;
@@ -284,47 +311,47 @@ ipcMain.handle('update-database', logExceptions(async (_event, entry: IDatabaseE
     await updateDatabaseEntry(entry);
 }, 'Error updating database'));
 
-// IPC handler for reading vault secrets for a database
+// IPC handler for reading vault secrets for a database (resolved via shared secret reference IDs)
 ipcMain.handle('get-database-secrets', logExceptions(async (_event, id: string) => {
     const vault = getVault("plaintext");
+    const databases = await getDatabases();
+    const dbEntry = databases.find(entry => entry.id === id);
     const secrets: IDatabaseSecrets = {};
-    const s3Secret = await vault.get(`db:${id}:s3`);
-    if (s3Secret) {
-        secrets.s3Credentials = JSON.parse(s3Secret.value);
+
+    if (dbEntry) {
+        if (dbEntry.s3CredentialId) {
+            const s3Secret = await vault.get(`shared:${dbEntry.s3CredentialId}`);
+            if (s3Secret) {
+                const parsed = JSON.parse(s3Secret.value);
+                secrets.s3Credentials = {
+                    region: parsed.region,
+                    accessKeyId: parsed.accessKeyId,
+                    secretAccessKey: parsed.secretAccessKey,
+                    endpoint: parsed.endpoint,
+                };
+            }
+        }
+        if (dbEntry.encryptionKeyId) {
+            const encryptionSecret = await vault.get(`shared:${dbEntry.encryptionKeyId}`);
+            if (encryptionSecret) {
+                const parsed = JSON.parse(encryptionSecret.value);
+                secrets.encryptionKeyPair = {
+                    privateKeyPem: parsed.privateKeyPem,
+                    publicKeyPem: parsed.publicKeyPem,
+                };
+            }
+        }
+        if (dbEntry.geocodingKeyId) {
+            const geocodingSecret = await vault.get(`shared:${dbEntry.geocodingKeyId}`);
+            if (geocodingSecret) {
+                const parsed = JSON.parse(geocodingSecret.value);
+                secrets.geocodingApiKey = parsed.apiKey;
+            }
+        }
     }
-    const geocodingSecret = await vault.get(`db:${id}:geocoding`);
-    if (geocodingSecret) {
-        secrets.geocodingApiKey = geocodingSecret.value;
-    }
-    const encryptionSecret = await vault.get(`db:${id}:encryption`);
-    if (encryptionSecret) {
-        secrets.encryptionKeyPair = JSON.parse(encryptionSecret.value);
-    }
+
     return secrets;
 }, 'Error getting database secrets'));
-
-// IPC handler for writing vault secrets for a database
-ipcMain.handle('set-database-secrets', logExceptions(async (_event, id: string, secrets: IDatabaseSecrets) => {
-    const vault = getVault("plaintext");
-    if (secrets.s3Credentials) {
-        await vault.set({ name: `db:${id}:s3`, type: 's3-credentials', value: JSON.stringify(secrets.s3Credentials) });
-    }
-    else {
-        await vault.delete(`db:${id}:s3`);
-    }
-    if (secrets.geocodingApiKey) {
-        await vault.set({ name: `db:${id}:geocoding`, type: 'api-key', value: secrets.geocodingApiKey });
-    }
-    else {
-        await vault.delete(`db:${id}:geocoding`);
-    }
-    if (secrets.encryptionKeyPair) {
-        await vault.set({ name: `db:${id}:encryption`, type: 'encryption-key', value: JSON.stringify(secrets.encryptionKeyPair) });
-    }
-    else {
-        await vault.delete(`db:${id}:encryption`);
-    }
-}, 'Error setting database secrets'));
 
 // IPC handler for opening a directory picker and returning the chosen path
 ipcMain.handle('pick-folder', logExceptions(async () => {
@@ -351,14 +378,44 @@ ipcMain.handle('notify-database-opened', logExceptions(async (_event, databasePa
     else if (existing.origin !== origin) {
         await updateDatabaseEntry({ ...existing, origin });
     }
+    await markDatabaseOpenedByPath(databasePath);
+    const desktopConfig = await loadDesktopConfig();
+    (desktopConfig as Record<string, unknown>).lastDatabase = databasePath;
+    await saveDesktopConfig(desktopConfig);
     isDatabaseOpen = true;
     await updateMenu();
     resetSyncState();
     currentDatabasePath = databasePath;
 }, 'Error notifying database opened'));
 
+// IPC handler for returning the top-5 most recently opened database entries
+ipcMain.handle('get-recent-databases', logExceptions(async () => {
+    return await getRecentDatabases();
+}, 'Error getting recent databases'));
+
+// IPC handler for listing directory names under an S3 bucket and prefix
+ipcMain.handle('list-s3-dirs', logExceptions(async (_event, credentialId: string, bucket: string, prefix: string) => {
+    const vault = getVault("plaintext");
+    const secret = await vault.get(`shared:${credentialId}`);
+    if (!secret) {
+        return [];
+    }
+    const parsed = JSON.parse(secret.value);
+    const storage = new CloudStorage(bucket, {
+        accessKeyId: parsed.accessKeyId,
+        secretAccessKey: parsed.secretAccessKey,
+        region: parsed.region,
+        endpoint: parsed.endpoint,
+    });
+    const result = await storage.listDirs(`${bucket}/${prefix}`, 100);
+    return result.names;
+}, 'Error listing S3 directories'));
+
 // IPC handler for notifying that database was closed from frontend
 ipcMain.handle('notify-database-closed', logExceptions(async () => {
+    const desktopConfig = await loadDesktopConfig();
+    delete (desktopConfig as Record<string, unknown>).lastDatabase;
+    await saveDesktopConfig(desktopConfig);
     isDatabaseOpen = false;
     await updateMenu();
     resetSyncState();
@@ -914,17 +971,31 @@ async function startImportWithPaths(paths: string[]): Promise<IImportSession | u
 
     if (dbEntry) {
         const vault = getVault("plaintext");
-        const s3Secret = await vault.get(`db:${dbEntry.id}:s3`);
-        if (s3Secret) {
-            s3Config = JSON.parse(s3Secret.value);
+        if (dbEntry.s3CredentialId) {
+            const s3Secret = await vault.get(`shared:${dbEntry.s3CredentialId}`);
+            if (s3Secret) {
+                const parsed = JSON.parse(s3Secret.value);
+                s3Config = {
+                    region: parsed.region,
+                    accessKeyId: parsed.accessKeyId,
+                    secretAccessKey: parsed.secretAccessKey,
+                    endpoint: parsed.endpoint,
+                };
+            }
         }
-        const geocodingSecret = await vault.get(`db:${dbEntry.id}:geocoding`);
-        if (geocodingSecret) {
-            googleApiKey = geocodingSecret.value;
+        if (dbEntry.geocodingKeyId) {
+            const geocodingSecret = await vault.get(`shared:${dbEntry.geocodingKeyId}`);
+            if (geocodingSecret) {
+                const parsed = JSON.parse(geocodingSecret.value);
+                googleApiKey = parsed.apiKey;
+            }
         }
-        const encryptionSecret = await vault.get(`db:${dbEntry.id}:encryption`);
-        if (encryptionSecret) {
-            encryptionKeyPems = [JSON.parse(encryptionSecret.value)];
+        if (dbEntry.encryptionKeyId) {
+            const encryptionSecret = await vault.get(`shared:${dbEntry.encryptionKeyId}`);
+            if (encryptionSecret) {
+                const parsed = JSON.parse(encryptionSecret.value);
+                encryptionKeyPems = [{ privateKeyPem: parsed.privateKeyPem, publicKeyPem: parsed.publicKeyPem }];
+            }
         }
     }
 
@@ -1016,12 +1087,20 @@ async function createMenu(): Promise<void> {
         {
             label: 'New Database...',
             accelerator: 'CmdOrCtrl+N',
-            click: logExceptions(createNewDatabase, 'Error creating database from menu'),
+            click: () => {
+                if (mainWindow) {
+                    mainWindow.webContents.send('menu-action', 'new-database');
+                }
+            },
         },
         {
             label: 'Open Database...',
             accelerator: 'CmdOrCtrl+O',
-            click: logExceptions(openDatabase, 'Error opening database from menu'),
+            click: () => {
+                if (mainWindow) {
+                    mainWindow.webContents.send('menu-action', 'open-database');
+                }
+            },
         },
     ];
 
@@ -1042,18 +1121,6 @@ async function createMenu(): Promise<void> {
         );
     }
 
-    fileSubmenu.push(
-        { type: 'separator' },
-        {
-            label: 'Configuration...',
-            accelerator: 'CmdOrCtrl+,',
-            click: () => {
-                if (mainWindow) {
-                    mainWindow.webContents.send('menu-action', 'open-configuration');
-                }
-            },
-        }
-    );
 
     // Add Exit/Quit to File menu on Windows/Linux
     if (!isMac) {
@@ -1071,45 +1138,36 @@ async function createMenu(): Promise<void> {
     // View Menu
     const viewSubmenu: Electron.MenuItemConstructorOptions[] = [
         {
-            label: 'Theme',
-            submenu: [
-                {
-                    label: 'Light',
-                    type: 'radio',
-                    checked: currentTheme === 'light',
-                    click: async () => {
-                        await setTheme('light');
-                        if (mainWindow) {
-                            mainWindow.webContents.send('theme-changed', 'light');
-                        }
-                        await updateMenu();
-                    },
-                },
-                {
-                    label: 'Dark',
-                    type: 'radio',
-                    checked: currentTheme === 'dark',
-                    click: async () => {
-                        await setTheme('dark');
-                        if (mainWindow) {
-                            mainWindow.webContents.send('theme-changed', 'dark');
-                        }
-                        await updateMenu();
-                    },
-                },
-                {
-                    label: 'System',
-                    type: 'radio',
-                    checked: currentTheme === 'system',
-                    click: async () => {
-                        await setTheme('system');
-                        if (mainWindow) {
-                            mainWindow.webContents.send('theme-changed', 'system');
-                        }
-                        await updateMenu();
-                    },
-                },
-            ],
+            label: 'Gallery',
+            click: () => {
+                if (mainWindow) {
+                    mainWindow.webContents.send('navigate', '/gallery');
+                }
+            },
+        },
+        {
+            label: 'Map',
+            click: () => {
+                if (mainWindow) {
+                    mainWindow.webContents.send('navigate', '/map');
+                }
+            },
+        },
+        {
+            label: 'Import',
+            click: () => {
+                if (mainWindow) {
+                    mainWindow.webContents.send('navigate', '/import');
+                }
+            },
+        },
+        {
+            label: 'About',
+            click: () => {
+                if (mainWindow) {
+                    mainWindow.webContents.send('navigate', '/about');
+                }
+            },
         },
         { type: 'separator' },
         { role: 'resetZoom', label: 'Actual Size' },
@@ -1122,6 +1180,80 @@ async function createMenu(): Promise<void> {
     template.push({
         label: 'View',
         submenu: viewSubmenu,
+    });
+
+    // Preferences Menu
+    template.push({
+        label: 'Preferences',
+        submenu: [
+            {
+                label: 'Theme',
+                submenu: [
+                    {
+                        label: 'Light',
+                        type: 'radio',
+                        checked: currentTheme === 'light',
+                        click: async () => {
+                            await setTheme('light');
+                            if (mainWindow) {
+                                mainWindow.webContents.send('theme-changed', 'light');
+                            }
+                            await updateMenu();
+                        },
+                    },
+                    {
+                        label: 'Dark',
+                        type: 'radio',
+                        checked: currentTheme === 'dark',
+                        click: async () => {
+                            await setTheme('dark');
+                            if (mainWindow) {
+                                mainWindow.webContents.send('theme-changed', 'dark');
+                            }
+                            await updateMenu();
+                        },
+                    },
+                    {
+                        label: 'System',
+                        type: 'radio',
+                        checked: currentTheme === 'system',
+                        click: async () => {
+                            await setTheme('system');
+                            if (mainWindow) {
+                                mainWindow.webContents.send('theme-changed', 'system');
+                            }
+                            await updateMenu();
+                        },
+                    },
+                ],
+            },
+            { type: 'separator' },
+            {
+                label: 'Manage Databases',
+                click: () => {
+                    if (mainWindow) {
+                        mainWindow.webContents.send('navigate', '/databases');
+                    }
+                },
+            },
+            {
+                label: 'Manage Secrets',
+                click: () => {
+                    if (mainWindow) {
+                        mainWindow.webContents.send('navigate', '/secrets');
+                    }
+                },
+            },
+            { type: 'separator' },
+            {
+                label: 'Configuration...',
+                click: () => {
+                    if (mainWindow) {
+                        mainWindow.webContents.send('menu-action', 'open-configuration');
+                    }
+                },
+            },
+        ],
     });
 
     // Window Menu

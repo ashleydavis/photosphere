@@ -28,4 +28,11 @@ export class ProxyVault {
     async delete(name: string): Promise<void> {
         await this.electronAPI.vaultDelete(name);
     }
+
+    //
+    // Returns all secrets stored in the vault.
+    //
+    async list(): Promise<IVaultSecret[]> {
+        return await this.electronAPI.vaultList();
+    }
 }

@@ -1,17 +1,11 @@
 import * as os from "os";
 import * as path from "path";
 import { readJson, writeJson, pathExists } from "./fs";
-import type { IDatabaseEntry } from "electron-defs";
 
 //
 // Configuration for the desktop app stored in ~/.config/photosphere/desktop.json
 //
 export interface IDesktopConfig {
-    //
-    // Structured list of configured databases.
-    //
-    databases?: IDatabaseEntry[];
-
     //
     // The last folder that was opened in the file dialog.
     //
@@ -50,69 +44,18 @@ export function getConfigPath(): string {
 //
 export async function loadDesktopConfig(): Promise<IDesktopConfig> {
     if (!await pathExists(CONFIG_FILE)) {
-        return {
-            databases: [],
-        };
+        return {};
     }
 
-    try {
-        const config = await readJson<IDesktopConfig>(CONFIG_FILE);
-        if (!Array.isArray(config.databases)) {
-            config.databases = [];
-        }
-        return config;
-    }
-    catch (error: any) {
-        console.error("Failed to load desktop config:", error);
-        return {
-            databases: [],
-        };
-    }
+    const config = await readJson<IDesktopConfig>(CONFIG_FILE);
+    return config;
 }
 
 //
 // Saves the desktop configuration to disk.
 //
 export async function saveDesktopConfig(config: IDesktopConfig): Promise<void> {
-    if (!Array.isArray(config.databases)) {
-        config.databases = [];
-    }
     await writeJson(CONFIG_FILE, config, { spaces: 2 });
-}
-
-//
-// Returns all configured database entries.
-//
-export async function getDatabases(): Promise<IDatabaseEntry[]> {
-    const config = await loadDesktopConfig();
-    return config.databases || [];
-}
-
-//
-// Adds a new database entry to the list.
-//
-export async function addDatabaseEntry(entry: IDatabaseEntry): Promise<void> {
-    const config = await loadDesktopConfig();
-    config.databases = [...(config.databases || []), entry];
-    await saveDesktopConfig(config);
-}
-
-//
-// Updates an existing database entry matched by id.
-//
-export async function updateDatabaseEntry(entry: IDatabaseEntry): Promise<void> {
-    const config = await loadDesktopConfig();
-    config.databases = (config.databases || []).map(existing => existing.id === entry.id ? entry : existing);
-    await saveDesktopConfig(config);
-}
-
-//
-// Removes a database entry by id.
-//
-export async function removeDatabaseEntry(id: string): Promise<void> {
-    const config = await loadDesktopConfig();
-    config.databases = (config.databases || []).filter(existing => existing.id !== id);
-    await saveDesktopConfig(config);
 }
 
 //
@@ -176,4 +119,3 @@ export async function removeRecentSearch(searchText: string): Promise<void> {
     config.recentSearches = (config.recentSearches || []).filter(item => item !== searchText);
     await saveDesktopConfig(config);
 }
-

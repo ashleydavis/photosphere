@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
-import type { IElectronAPI, IImportSession, IRendererLogMessage, ISaveAssetItem, IToolsStatus, IDatabaseEntry, IDatabaseSecrets, IVaultSecret } from 'electron-defs';
+import type { IElectronAPI, IImportSession, IRendererLogMessage, ISaveAssetItem, IToolsStatus, IDatabaseEntry, IVaultSecret } from 'electron-defs';
 
 // Expose generic task queue API
 const electronAPI: IElectronAPI = {
@@ -80,12 +80,6 @@ const electronAPI: IElectronAPI = {
     removeDatabaseEntry: (id: string): Promise<void> => {
         return ipcRenderer.invoke('remove-database-entry', id);
     },
-    getDatabaseSecrets: (id: string): Promise<IDatabaseSecrets> => {
-        return ipcRenderer.invoke('get-database-secrets', id);
-    },
-    setDatabaseSecrets: (id: string, secrets: IDatabaseSecrets): Promise<void> => {
-        return ipcRenderer.invoke('set-database-secrets', id, secrets);
-    },
     pickFolder: (): Promise<string | undefined> => {
         return ipcRenderer.invoke('pick-folder');
     },
@@ -97,6 +91,18 @@ const electronAPI: IElectronAPI = {
     },
     vaultDelete: (name: string): Promise<void> => {
         return ipcRenderer.invoke('vault-delete', name);
+    },
+    vaultList: (): Promise<IVaultSecret[]> => {
+        return ipcRenderer.invoke('vault-list');
+    },
+    createDatabaseAtPath: (path: string): Promise<void> => {
+        return ipcRenderer.invoke('create-database-at-path', path);
+    },
+    listS3Dirs: (credentialId: string, bucket: string, prefix: string): Promise<string[]> => {
+        return ipcRenderer.invoke('list-s3-dirs', credentialId, bucket, prefix);
+    },
+    getRecentDatabases: (): Promise<IDatabaseEntry[]> => {
+        return ipcRenderer.invoke('get-recent-databases');
     },
 };
 

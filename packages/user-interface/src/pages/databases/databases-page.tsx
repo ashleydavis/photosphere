@@ -10,37 +10,29 @@ import DialogTitle from '@mui/joy/DialogTitle';
 import DialogContent from '@mui/joy/DialogContent';
 import DialogActions from '@mui/joy/DialogActions';
 import Input from '@mui/joy/Input';
-import Textarea from '@mui/joy/Textarea';
 import FormControl from '@mui/joy/FormControl';
 import FormLabel from '@mui/joy/FormLabel';
-import AccordionGroup from '@mui/joy/AccordionGroup';
-import Accordion from '@mui/joy/Accordion';
-import AccordionSummary from '@mui/joy/AccordionSummary';
-import AccordionDetails from '@mui/joy/AccordionDetails';
-import { Edit, Delete, Add } from '@mui/icons-material';
-import { usePlatform, type IDatabaseEntry, type IDatabaseSecrets, type IS3Credentials, type IEncryptionKeyPair } from '../../context/platform-context';
+import Select from '@mui/joy/Select';
+import Option from '@mui/joy/Option';
+import { Edit, Delete } from '@mui/icons-material';
+import { usePlatform, type IDatabaseEntry, type ISharedSecretEntry } from '../../context/platform-context';
+import { CreateSecretDialog } from '../../components/create-secret-dialog';
+import { CreateDatabaseModal } from '../../components/create-database-modal';
+import { AddDatabaseModal } from '../../components/add-database-modal';
 
 //
 // Form state for the add/edit dialog.
 //
 interface IDatabaseFormState {
-    // Non-secret fields
+    // Non-secret fields.
     name: string;
     description: string;
     path: string;
 
-    // S3 credentials
-    s3Endpoint: string;
-    s3Region: string;
-    s3AccessKeyId: string;
-    s3SecretAccessKey: string;
-
-    // Encryption key pair
-    privateKeyPem: string;
-    publicKeyPem: string;
-
-    // Geocoding API key
-    geocodingApiKey: string;
+    // References to shared secrets by id.
+    s3CredentialId: string | undefined;
+    encryptionKeyId: string | undefined;
+    geocodingKeyId: string | undefined;
 }
 
 //
@@ -51,13 +43,9 @@ function emptyFormState(): IDatabaseFormState {
         name: '',
         description: '',
         path: '',
-        s3Endpoint: '',
-        s3Region: '',
-        s3AccessKeyId: '',
-        s3SecretAccessKey: '',
-        privateKeyPem: '',
-        publicKeyPem: '',
-        geocodingApiKey: '',
+        s3CredentialId: undefined,
+        encryptionKeyId: undefined,
+        geocodingKeyId: undefined,
     };
 }
 
@@ -67,34 +55,54 @@ function emptyFormState(): IDatabaseFormState {
 export function DatabasesPage() {
     const platform = usePlatform();
 
-    // All known database entries
+    // All known database entries.
     const [databases, setDatabases] = useState<IDatabaseEntry[]>([]);
 
-    // Whether the add/edit dialog is open
+    // Shared secrets grouped by type.
+    const [s3Secrets, setS3Secrets] = useState<ISharedSecretEntry[]>([]);
+    const [encryptionSecrets, setEncryptionSecrets] = useState<ISharedSecretEntry[]>([]);
+    const [geocodingSecrets, setGeocodingSecrets] = useState<ISharedSecretEntry[]>([]);
+
+    // Whether the create-database modal is open.
+    const [createModalOpen, setCreateModalOpen] = useState(false);
+
+    // Whether the add-database modal is open.
+    const [addModalOpen, setAddModalOpen] = useState(false);
+
+    // Whether the add/edit dialog is open.
     const [dialogOpen, setDialogOpen] = useState(false);
 
-    // Entry being edited (undefined when adding new)
+    // Entry being edited (undefined when adding new).
     const [editingEntry, setEditingEntry] = useState<IDatabaseEntry | undefined>(undefined);
 
-    // Current form values
+    // Current form values.
     const [form, setForm] = useState<IDatabaseFormState>(emptyFormState());
 
-    // Whether the remove confirmation dialog is open
+    // Whether the remove confirmation dialog is open.
     const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false);
 
-    // Entry pending removal
+    // Entry pending removal.
     const [removingEntry, setRemovingEntry] = useState<IDatabaseEntry | undefined>(undefined);
 
+    // Whether a quick-create secret dialog is open and which type it is for.
+    const [quickCreateType, setQuickCreateType] = useState<string | undefined>(undefined);
+
     //
-    // Loads database entries from the platform.
+    // Loads database entries and secrets from the platform.
     //
-    async function loadDatabases(): Promise<void> {
-        const entries = await platform.getDatabases();
+    async function loadData(): Promise<void> {
+        const [entries, allSecrets] = await Promise.all([
+            platform.getDatabases(),
+            platform.listSecrets(),
+        ]);
         setDatabases(entries);
+        setS3Secrets(allSecrets.filter(secret => secret.type === 's3-credentials'));
+        setEncryptionSecrets(allSecrets.filter(secret => secret.type === 'encryption-key'));
+        setGeocodingSecrets(allSecrets.filter(secret => secret.type === 'api-key'));
     }
 
     useEffect(() => {
-        loadDatabases().catch(err => console.error('Failed to load databases:', err));
+        loadData().catch(err => console.error('Failed to load data:', err));
     }, []);
 
     //
@@ -107,75 +115,43 @@ export function DatabasesPage() {
     }
 
     //
-    // Opens the edit dialog pre-populated with the entry's values and secrets.
+    // Opens the edit dialog pre-populated with the entry's values.
     //
-    async function openEditDialog(entry: IDatabaseEntry): Promise<void> {
+    function openEditDialog(entry: IDatabaseEntry): void {
         setEditingEntry(entry);
-        const secrets = await platform.getDatabaseSecrets(entry.id);
         setForm({
             name: entry.name,
             description: entry.description,
             path: entry.path,
-            s3Endpoint: secrets.s3Credentials?.endpoint ?? '',
-            s3Region: secrets.s3Credentials?.region ?? '',
-            s3AccessKeyId: secrets.s3Credentials?.accessKeyId ?? '',
-            s3SecretAccessKey: secrets.s3Credentials?.secretAccessKey ?? '',
-            privateKeyPem: secrets.encryptionKeyPair?.privateKeyPem ?? '',
-            publicKeyPem: secrets.encryptionKeyPair?.publicKeyPem ?? '',
-            geocodingApiKey: secrets.geocodingApiKey ?? '',
+            s3CredentialId: entry.s3CredentialId,
+            encryptionKeyId: entry.encryptionKeyId,
+            geocodingKeyId: entry.geocodingKeyId,
         });
         setDialogOpen(true);
     }
 
     //
-    // Saves the form (add or update entry plus secrets).
+    // Saves the form (add or update entry).
     //
     async function handleSave(): Promise<void> {
         const entryData: Omit<IDatabaseEntry, 'id'> = {
             name: form.name,
             description: form.description,
             path: form.path,
+            s3CredentialId: form.s3CredentialId,
+            encryptionKeyId: form.encryptionKeyId,
+            geocodingKeyId: form.geocodingKeyId,
         };
 
-        let savedEntry: IDatabaseEntry;
         if (editingEntry) {
-            savedEntry = { ...editingEntry, ...entryData };
-            await platform.updateDatabase(savedEntry);
+            await platform.updateDatabase({ ...editingEntry, ...entryData });
         }
         else {
-            savedEntry = await platform.addDatabase(entryData);
+            await platform.addDatabase(entryData);
         }
-
-        const secrets: IDatabaseSecrets = {};
-
-        if (form.s3Region || form.s3AccessKeyId || form.s3SecretAccessKey) {
-            const s3Creds: IS3Credentials = {
-                region: form.s3Region,
-                accessKeyId: form.s3AccessKeyId,
-                secretAccessKey: form.s3SecretAccessKey,
-            };
-            if (form.s3Endpoint) {
-                s3Creds.endpoint = form.s3Endpoint;
-            }
-            secrets.s3Credentials = s3Creds;
-        }
-
-        if (form.privateKeyPem && form.publicKeyPem) {
-            const keyPair: IEncryptionKeyPair = {
-                privateKeyPem: form.privateKeyPem,
-                publicKeyPem: form.publicKeyPem,
-            };
-            secrets.encryptionKeyPair = keyPair;
-        }
-
-        if (form.geocodingApiKey) {
-            secrets.geocodingApiKey = form.geocodingApiKey;
-        }
-
-        await platform.setDatabaseSecrets(savedEntry.id, secrets);
 
         setDialogOpen(false);
-        await loadDatabases();
+        await loadData();
     }
 
     //
@@ -195,7 +171,7 @@ export function DatabasesPage() {
             setRemovingEntry(undefined);
         }
         setConfirmRemoveOpen(false);
-        await loadDatabases();
+        await loadData();
     }
 
     //
@@ -208,16 +184,77 @@ export function DatabasesPage() {
         }
     }
 
+    //
+    // Handles a newly created secret from the quick-create dialog and auto-selects it.
+    //
+    async function handleQuickCreateSave(newSecret: ISharedSecretEntry): Promise<void> {
+        setQuickCreateType(undefined);
+        await loadData();
+        if (newSecret.type === 's3-credentials') {
+            setForm(prev => ({ ...prev, s3CredentialId: newSecret.id }));
+        }
+        else if (newSecret.type === 'encryption-key') {
+            setForm(prev => ({ ...prev, encryptionKeyId: newSecret.id }));
+        }
+        else {
+            setForm(prev => ({ ...prev, geocodingKeyId: newSecret.id }));
+        }
+    }
+
+    //
+    // Renders a secret selector row with a dropdown and a "+ New" button.
+    //
+    function renderSecretSelector(
+        label: string,
+        options: ISharedSecretEntry[],
+        selectedId: string | undefined,
+        onChange: (id: string | undefined) => void,
+        secretType: string
+    ): React.ReactNode {
+        return (
+            <FormControl sx={{ mb: 1 }}>
+                <FormLabel>{label}</FormLabel>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Select
+                        sx={{ flexGrow: 1 }}
+                        value={selectedId ?? ''}
+                        onChange={(_event, value) => onChange(value as string || undefined)}
+                        placeholder="None"
+                    >
+                        <Option value="">None</Option>
+                        {options.map(secret => (
+                            <Option key={secret.id} value={secret.id}>{secret.name}</Option>
+                        ))}
+                    </Select>
+                    <Button
+                        variant="outlined"
+                        size="sm"
+                        onClick={() => setQuickCreateType(secretType)}
+                    >
+                        + New
+                    </Button>
+                </Box>
+            </FormControl>
+        );
+    }
+
     return (
         <Box sx={{ p: 3 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                <Typography level="h3">Databases</Typography>
+                <Typography level="h3">Manage Databases</Typography>
                 <Box sx={{ flexGrow: 1 }} />
                 <Button
-                    startDecorator={<Add />}
-                    onClick={openAddDialog}
+                    variant="outlined"
+                    sx={{ mr: 1 }}
+                    onClick={() => setCreateModalOpen(true)}
                 >
-                    Add Database
+                    New database
+                </Button>
+                <Button
+                    variant="outlined"
+                    onClick={() => setAddModalOpen(true)}
+                >
+                    Add database
                 </Button>
             </Box>
 
@@ -242,7 +279,7 @@ export function DatabasesPage() {
                                 <IconButton
                                     size="sm"
                                     variant="plain"
-                                    onClick={() => openEditDialog(entry).catch(err => console.error('Failed to open edit dialog:', err))}
+                                    onClick={() => openEditDialog(entry)}
                                 >
                                     <Edit fontSize="small" />
                                 </IconButton>
@@ -295,77 +332,29 @@ export function DatabasesPage() {
                             </Box>
                         </FormControl>
 
-                        <AccordionGroup>
-                            <Accordion>
-                                <AccordionSummary>S3 Credentials</AccordionSummary>
-                                <AccordionDetails>
-                                    <FormControl sx={{ mb: 1 }}>
-                                        <FormLabel>Endpoint (optional)</FormLabel>
-                                        <Input
-                                            value={form.s3Endpoint}
-                                            onChange={event => setForm(prev => ({ ...prev, s3Endpoint: event.target.value }))}
-                                        />
-                                    </FormControl>
-                                    <FormControl sx={{ mb: 1 }}>
-                                        <FormLabel>Region</FormLabel>
-                                        <Input
-                                            value={form.s3Region}
-                                            onChange={event => setForm(prev => ({ ...prev, s3Region: event.target.value }))}
-                                        />
-                                    </FormControl>
-                                    <FormControl sx={{ mb: 1 }}>
-                                        <FormLabel>Access Key ID</FormLabel>
-                                        <Input
-                                            value={form.s3AccessKeyId}
-                                            onChange={event => setForm(prev => ({ ...prev, s3AccessKeyId: event.target.value }))}
-                                        />
-                                    </FormControl>
-                                    <FormControl sx={{ mb: 1 }}>
-                                        <FormLabel>Secret Access Key</FormLabel>
-                                        <Input
-                                            type="password"
-                                            value={form.s3SecretAccessKey}
-                                            onChange={event => setForm(prev => ({ ...prev, s3SecretAccessKey: event.target.value }))}
-                                        />
-                                    </FormControl>
-                                </AccordionDetails>
-                            </Accordion>
+                        {renderSecretSelector(
+                            'S3 Credentials',
+                            s3Secrets,
+                            form.s3CredentialId,
+                            id => setForm(prev => ({ ...prev, s3CredentialId: id })),
+                            's3-credentials'
+                        )}
 
-                            <Accordion>
-                                <AccordionSummary>Encryption Key</AccordionSummary>
-                                <AccordionDetails>
-                                    <FormControl sx={{ mb: 1 }}>
-                                        <FormLabel>Private Key PEM</FormLabel>
-                                        <Textarea
-                                            minRows={4}
-                                            value={form.privateKeyPem}
-                                            onChange={event => setForm(prev => ({ ...prev, privateKeyPem: event.target.value }))}
-                                        />
-                                    </FormControl>
-                                    <FormControl sx={{ mb: 1 }}>
-                                        <FormLabel>Public Key PEM</FormLabel>
-                                        <Textarea
-                                            minRows={4}
-                                            value={form.publicKeyPem}
-                                            onChange={event => setForm(prev => ({ ...prev, publicKeyPem: event.target.value }))}
-                                        />
-                                    </FormControl>
-                                </AccordionDetails>
-                            </Accordion>
+                        {renderSecretSelector(
+                            'Encryption Key',
+                            encryptionSecrets,
+                            form.encryptionKeyId,
+                            id => setForm(prev => ({ ...prev, encryptionKeyId: id })),
+                            'encryption-key'
+                        )}
 
-                            <Accordion>
-                                <AccordionSummary>Geocoding</AccordionSummary>
-                                <AccordionDetails>
-                                    <FormControl sx={{ mb: 1 }}>
-                                        <FormLabel>API Key</FormLabel>
-                                        <Input
-                                            value={form.geocodingApiKey}
-                                            onChange={event => setForm(prev => ({ ...prev, geocodingApiKey: event.target.value }))}
-                                        />
-                                    </FormControl>
-                                </AccordionDetails>
-                            </Accordion>
-                        </AccordionGroup>
+                        {renderSecretSelector(
+                            'Geocoding API Key',
+                            geocodingSecrets,
+                            form.geocodingKeyId,
+                            id => setForm(prev => ({ ...prev, geocodingKeyId: id })),
+                            'api-key'
+                        )}
                     </DialogContent>
                     <DialogActions>
                         <Button variant="plain" onClick={() => setDialogOpen(false)}>Cancel</Button>
@@ -383,8 +372,8 @@ export function DatabasesPage() {
                             Remove <strong>{removingEntry?.name || removingEntry?.path}</strong> from the list?
                         </Typography>
                         <Typography level="body-sm" sx={{ mt: 1 }}>
-                            This only removes the entry from Photosphere's database list and deletes its stored secrets.
-                            No files on disk will be deleted.
+                            This only removes the entry from Photosphere's database list.
+                            No files on disk will be deleted. Shared secrets are not affected.
                         </Typography>
                     </DialogContent>
                     <DialogActions>
@@ -398,6 +387,33 @@ export function DatabasesPage() {
                     </DialogActions>
                 </ModalDialog>
             </Modal>
+
+            {/* Quick-create secret dialog */}
+            {quickCreateType !== undefined && (
+                <CreateSecretDialog
+                    open={true}
+                    secretType={quickCreateType}
+                    defaultName={form.name || form.path}
+                    onClose={() => setQuickCreateType(undefined)}
+                    onSave={newSecret => handleQuickCreateSave(newSecret).catch(err => console.error('Quick-create error:', err))}
+                />
+            )}
+
+            <CreateDatabaseModal
+                open={createModalOpen}
+                onClose={() => {
+                    setCreateModalOpen(false);
+                    loadData().catch(err => console.error('Failed to reload data:', err));
+                }}
+            />
+
+            <AddDatabaseModal
+                open={addModalOpen}
+                onClose={() => {
+                    setAddModalOpen(false);
+                    loadData().catch(err => console.error('Failed to reload data:', err));
+                }}
+            />
         </Box>
     );
 }

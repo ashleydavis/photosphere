@@ -1,12 +1,12 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { useApp } from '../context/app-context';
 import { useAssetDatabase } from '../context/asset-database-source';
+import { usePlatform, type IDatabaseEntry } from '../context/platform-context';
 import { useTheme } from '@mui/joy/styles/ThemeProvider';
 import List from '@mui/joy/List/List';
 import ListItem from '@mui/joy/ListItem/ListItem';
 import ListItemDecorator from '@mui/joy/ListItemDecorator/ListItemDecorator';
-import { PhotoLibrary, Folder, FolderOpen, Info, Map, Search, Settings, Star, StarBorder, Delete, CreateNewFolder, FileUpload, ManageSearch } from '@mui/icons-material';
+import { PhotoLibrary, Folder, FolderOpen, Info, Map, Search, Settings, Star, StarBorder, CreateNewFolder, FileUpload, ManageSearch, Key } from '@mui/icons-material';
 import { CollapsibleSection } from './collapsible-section';
 import ListItemContent from '@mui/joy/ListItemContent/ListItemContent';
 import ListItemButton from '@mui/joy/ListItemButton/ListItemButton';
@@ -30,20 +30,42 @@ export interface ILeftSidebarProps {
     // Opens the configuration dialog.
     //
     onOpenConfiguration: () => void;
+
+    //
+    // Opens the new database modal.
+    //
+    onNewDatabase: () => void;
+
+    //
+    // Opens the open database modal.
+    //
+    onOpenDatabase: () => void;
 }
 
 
 //
 // Renders the left sidebar for the app.
 //
-export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration }: ILeftSidebarProps) {
+export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, onNewDatabase, onOpenDatabase }: ILeftSidebarProps) {
     const { setOpenSearch, savedSearches, saveSearch, unsaveSearch } = useSearch();
-    const { openDatabase } = useAssetDatabase();
-
-    const { dbs, removeDatabase } = useApp();
+    const { openDatabase, databasePath } = useAssetDatabase();
+    const platform = usePlatform();
     const theme = useTheme();
-    const { databasePath, selectAndOpenDatabase, selectAndCreateDatabase } = useAssetDatabase();
     const { search } = useGallery();
+
+    // Recently opened databases (top 5).
+    const [recentDatabases, setRecentDatabases] = useState<IDatabaseEntry[]>([]);
+
+    function loadRecentDatabases(): void {
+        platform.getRecentDatabases()
+            .then(recent => setRecentDatabases(recent))
+            .catch(err => console.error('Failed to load recent databases:', err));
+    }
+
+    useEffect(() => {
+        loadRecentDatabases();
+        return platform.onDatabaseOpened(() => loadRecentDatabases());
+    }, [platform]);
 
     return (
         <div
@@ -68,9 +90,9 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration }
             <div className="flex flex-col" style={{ paddingLeft: "15px" }}>
                 <List>
                     <ListItem
-                        onClick={async () => {
+                        onClick={() => {
                             setSidebarOpen(false);
-                            await selectAndCreateDatabase();
+                            onNewDatabase();
                         }}
                         >
                         <ListItemButton>
@@ -80,9 +102,9 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration }
                     </ListItem>
 
                     <ListItem
-                        onClick={async () => {
+                        onClick={() => {
                             setSidebarOpen(false);
-                            await selectAndOpenDatabase();
+                            onOpenDatabase();
                         }}
                         >
                         <ListItemButton>
@@ -204,69 +226,69 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration }
                 </div>
             }
 
-            <div className="flex flex-col">
-                <Divider />
-                <CollapsibleSection configKey="sidebar-collapsed-databases" label="Databases" style={{ paddingLeft: "15px" }}>
-                    <List>
-                        <NavLink
-                            to="/databases"
-                            onClick={() => setSidebarOpen(false)}
-                            >
-                            {({ isActive }) => (
-                                <ListItem className={isActive ? "" : "opacity-40"}>
-                                    <ListItemButton>
-                                        <ListItemDecorator><ManageSearch /></ListItemDecorator>
-                                        <ListItemContent>Manage Databases</ListItemContent>
+            {recentDatabases.length > 0 && (
+                <div className="flex flex-col">
+                    <Divider />
+                    <CollapsibleSection configKey="sidebar-collapsed-databases" label="Databases" style={{ paddingLeft: "15px" }}>
+                        <List>
+                            {recentDatabases.map(dbEntry => (
+                                <ListItem key={dbEntry.id}>
+                                    <ListItemButton
+                                        onClick={async () => {
+                                            setSidebarOpen(false);
+                                            await openDatabase(dbEntry.path);
+                                        }}
+                                        >
+                                        <ListItemDecorator>
+                                            {dbEntry.path === databasePath
+                                                ? <FolderOpen />
+                                                : <Folder />
+                                            }
+                                        </ListItemDecorator>
+                                        <ListItemContent title={dbEntry.path}>
+                                            {dbEntry.name || dbEntry.path.split(/[\\/]/).filter(Boolean).pop() || dbEntry.path}
+                                        </ListItemContent>
                                     </ListItemButton>
                                 </ListItem>
-                            )}
-                        </NavLink>
-
-                        {dbs.map(dbEntry => (
-                            <ListItem
-                                key={dbEntry.id}
-                                endAction={
-                                    <IconButton
-                                        size="sm"
-                                        variant="plain"
-                                        color="neutral"
-                                        onClick={async (e) => {
-                                            e.stopPropagation();
-                                            await removeDatabase(dbEntry.id);
-                                        }}
-                                        sx={{ minHeight: '32px', minWidth: '32px' }}
-                                    >
-                                        <Delete fontSize="small" />
-                                    </IconButton>
-                                }
-                                >
-                                <ListItemButton
-                                    onClick={async () => {
-                                        setSidebarOpen(false);
-                                        await openDatabase(dbEntry.path);
-                                    }}
-                                    >
-                                    <ListItemDecorator>
-                                        {dbEntry.path === databasePath
-                                            ? <FolderOpen />
-                                            : <Folder />
-                                        }
-                                    </ListItemDecorator>
-                                    <ListItemContent title={dbEntry.path}>
-                                        {dbEntry.name || dbEntry.path.split(/[\\/]/).filter(Boolean).pop() || dbEntry.path}
-                                    </ListItemContent>
-                                </ListItemButton>
-                            </ListItem>
-                        ))}
-                    </List>
-                </CollapsibleSection>
-            </div>
+                            ))}
+                        </List>
+                    </CollapsibleSection>
+                </div>
+            )}
 
             <div className="flex-grow" />
 
             <div className="flex flex-col">
                 <Divider />
                 <List sx={{ pl: "15px" }}>
+                    <NavLink
+                        to="/databases"
+                        onClick={() => setSidebarOpen(false)}
+                        >
+                        {({ isActive }) => (
+                            <ListItem className={isActive ? "" : "opacity-40"}>
+                                <ListItemButton>
+                                    <ListItemDecorator><ManageSearch /></ListItemDecorator>
+                                    <ListItemContent>Manage Databases</ListItemContent>
+                                </ListItemButton>
+                            </ListItem>
+                        )}
+                    </NavLink>
+
+                    <NavLink
+                        to="/secrets"
+                        onClick={() => setSidebarOpen(false)}
+                        >
+                        {({ isActive }) => (
+                            <ListItem className={isActive ? "" : "opacity-40"}>
+                                <ListItemButton>
+                                    <ListItemDecorator><Key /></ListItemDecorator>
+                                    <ListItemContent>Manage Secrets</ListItemContent>
+                                </ListItemButton>
+                            </ListItem>
+                        )}
+                    </NavLink>
+
                     <ListItem
                         onClick={() => {
                             setSidebarOpen(false);
@@ -280,6 +302,7 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration }
                     </ListItem>
                 </List>
             </div>
+
         </div>
     );
 
