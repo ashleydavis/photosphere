@@ -139,6 +139,9 @@ export function SecretsPage() {
     // Database entries that reference the secret pending deletion.
     const [referencingDatabases, setReferencingDatabases] = useState<IDatabaseEntry[]>([]);
 
+    // Whether a refresh is in progress (drives the spin animation).
+    const [refreshing, setRefreshing] = useState(false);
+
     //
     // Loads all shared secrets from the platform.
     //
@@ -150,6 +153,18 @@ export function SecretsPage() {
     useEffect(() => {
         loadSecrets().catch(err => console.error('Failed to load secrets:', err));
     }, []);
+
+    //
+    // Reloads secrets with a minimum delay so the spin animation is visible.
+    //
+    async function handleRefresh(): Promise<void> {
+        setRefreshing(true);
+        await Promise.all([
+            loadSecrets(),
+            new Promise(resolve => setTimeout(resolve, 500)),
+        ]);
+        setRefreshing(false);
+    }
 
     //
     // Opens the add dialog with a blank form.
@@ -316,9 +331,18 @@ export function SecretsPage() {
                 <IconButton
                     variant="outlined"
                     sx={{ mr: 1 }}
-                    onClick={() => loadSecrets().catch(err => console.error('Failed to refresh secrets:', err))}
+                    disabled={refreshing}
+                    onClick={() => handleRefresh().catch(err => console.error('Failed to refresh secrets:', err))}
                 >
-                    <Refresh />
+                    <Refresh
+                        sx={refreshing ? {
+                            animation: 'spin 0.8s linear infinite',
+                            '@keyframes spin': {
+                                from: { transform: 'rotate(0deg)' },
+                                to: { transform: 'rotate(360deg)' },
+                            },
+                        } : undefined}
+                    />
                 </IconButton>
                 <Button
                     startDecorator={<Add />}
