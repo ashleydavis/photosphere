@@ -9,6 +9,8 @@ import Box from '@mui/joy/Box';
 import Typography from '@mui/joy/Typography';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import FolderIcon from '@mui/icons-material/Folder';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import IconButton from '@mui/joy/IconButton';
 import { useNavigate } from 'react-router-dom';
 import { usePlatform, type IDatabaseEntry } from '../context/platform-context';
 import { useAssetDatabase } from '../context/asset-database-source';
@@ -36,11 +38,18 @@ export function OpenDatabaseModal({ open, onClose }: IOpenDatabaseModalProps) {
     // Whether the AddDatabaseModal is open.
     const [addModalOpen, setAddModalOpen] = useState(false);
 
+    //
+    // Loads the list of configured databases from the platform.
+    //
+    function loadDatabases(): void {
+        platform.getDatabases()
+            .then(entries => setDatabases(entries))
+            .catch(err => console.error('Failed to load databases:', err));
+    }
+
     useEffect(() => {
         if (open) {
-            platform.getDatabases()
-                .then(entries => setDatabases(entries))
-                .catch(err => console.error('Failed to load databases:', err));
+            loadDatabases();
         }
     }, [open, platform]);
 
@@ -87,6 +96,12 @@ export function OpenDatabaseModal({ open, onClose }: IOpenDatabaseModalProps) {
                     </DialogContent>
                     <DialogActions>
                         <Button variant="plain" onClick={onClose}>Cancel</Button>
+                        <IconButton
+                            variant="outlined"
+                            onClick={loadDatabases}
+                        >
+                            <RefreshIcon />
+                        </IconButton>
                         <Button
                             variant="outlined"
                             onClick={() => setAddModalOpen(true)}

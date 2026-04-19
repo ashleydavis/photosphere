@@ -14,7 +14,7 @@ import FormControl from '@mui/joy/FormControl';
 import FormLabel from '@mui/joy/FormLabel';
 import Select from '@mui/joy/Select';
 import Option from '@mui/joy/Option';
-import { Edit, Delete } from '@mui/icons-material';
+import { Edit, Delete, Refresh } from '@mui/icons-material';
 import { usePlatform, type IDatabaseEntry, type ISharedSecretEntry } from '../../context/platform-context';
 import { CreateSecretDialog } from '../../components/create-secret-dialog';
 import { CreateDatabaseModal } from '../../components/create-database-modal';
@@ -243,6 +243,13 @@ export function DatabasesPage() {
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                 <Typography level="h3">Manage Databases</Typography>
                 <Box sx={{ flexGrow: 1 }} />
+                <IconButton
+                    variant="outlined"
+                    sx={{ mr: 1 }}
+                    onClick={() => loadData().catch(err => console.error('Failed to refresh data:', err))}
+                >
+                    <Refresh />
+                </IconButton>
                 <Button
                     variant="outlined"
                     sx={{ mr: 1 }}
