@@ -43,6 +43,7 @@
         "task-queue": "workspace:*",
         "tools": "workspace:*",
         "utils": "workspace:*",
+        "vault": "workspace:*",
         "wrap-ansi": "^9.0.0",
       },
       "devDependencies": {
@@ -67,9 +68,11 @@
         "node-utils": "workspace:*",
         "rest-api": "workspace:*",
         "serialize-error": "^11.0.0",
+        "storage": "workspace:*",
         "task-queue": "workspace:*",
         "tools": "workspace:*",
         "utils": "workspace:*",
+        "vault": "workspace:*",
       },
       "devDependencies": {
         "@playwright/test": "^1.57.0",
@@ -280,6 +283,7 @@
         "axios": "^0.27.2",
         "dayjs": "^1.11.7",
         "defs": "workspace:*",
+        "electron-defs": "workspace:*",
         "jszip": "^3.10.1",
         "lodash": "^4.17.21",
         "mime-types": "^2.1.35",
