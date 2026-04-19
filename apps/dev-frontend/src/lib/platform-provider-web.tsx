@@ -102,6 +102,11 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
 
     const notifyDatabaseOpened = useCallback(async (databasePath: string): Promise<void> => {
         await sendAndWait<void>({ type: "notify-database-opened", databasePath }, "notify-database-opened-ack");
+
+        // Fire opened callbacks so UI components (e.g. recent databases list) refresh.
+        openedCallbacksRef.current.forEach(callback => {
+            callback(databasePath);
+        });
     }, [ws]);
 
     const notifyDatabaseClosed = useCallback(async (): Promise<void> => {
