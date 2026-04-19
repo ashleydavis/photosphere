@@ -32,6 +32,7 @@ import { encryptCommand } from './src/cmd/encrypt';
 import { decryptCommand } from './src/cmd/decrypt';
 import { fixConfigCommand } from './src/cmd/fix-config';
 import { vaultCommand } from './src/cmd/vault';
+import { dbsCommand } from './src/cmd/dbs';
 import { initContext } from './src/lib/init-cmd';
 import { MAIN_EXAMPLES, getCommandExamplesHelp } from './src/examples';
 import pc from "picocolors";
@@ -539,6 +540,7 @@ Resources:
         .action(initContext(decryptCommand));
 
     program.addCommand(vaultCommand());
+    program.addCommand(dbsCommand());
 
     // Parse the command line arguments
     try {

@@ -25,8 +25,9 @@ NC='\033[0m'
 TEST_TMP_DIR="${TEST_TMP_DIR:-./test/tmp-encrypted}"
 TEST_FILES_DIR="../../test"
 
-# Isolate the vault so tests don't pollute the user's real vault.
+# Isolate the vault and config so tests don't pollute the user's real data.
 export PHOTOSPHERE_VAULT_DIR="${TEST_TMP_DIR}/vault"
+export PHOTOSPHERE_CONFIG_DIR="${TEST_TMP_DIR}/config"
 
 # Use built binary instead of bun run start (set by --binary)
 USE_BINARY=false

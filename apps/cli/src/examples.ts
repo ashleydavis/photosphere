@@ -139,6 +139,14 @@ export const COMMAND_EXAMPLES: ICommandExamples = {
     sync: [
         { command: "psi sync --db ./photos --dest ./backup", description: "Synchronizes changes between two databases." },
         { command: "psi sync --db . --dest s3:bucket/photos", description: "Synchronizes local database with an S3 replica." },
+    ],
+
+    dbs: [
+        { command: "psi dbs list", description: "List all configured databases." },
+        { command: "psi dbs add", description: "Add a new database to the list." },
+        { command: "psi dbs view my-photos", description: "View details of a database entry." },
+        { command: "psi dbs edit my-photos", description: "Edit a database entry." },
+        { command: "psi dbs remove my-photos", description: "Remove a database entry." },
     ]
 };
 

@@ -7,13 +7,14 @@ import type { IQueueBackend } from "task-queue";
 import { setQueueBackend } from "task-queue";
 import { WorkerPoolBun } from "./worker-pool-bun";
 import { configureLog } from "./log";
-import { exit, TestUuidGenerator, TestTimestampProvider, registerTerminationCallback } from "node-utils";
+import { exit, TestUuidGenerator, TestTimestampProvider, registerTerminationCallback, getDatabases, pathExists } from "node-utils";
 import { log, RandomUuidGenerator, TimestampProvider } from "utils";
+import type { IDatabaseEntry } from 'electron-defs';
+import type { IS3Credentials } from 'storage';
 import { configureIfNeeded, getS3Config } from './config';
 import { getDirectoryForCommand } from './directory-picker';
 import { ensureMediaProcessingTools } from './ensure-tools';
 import * as fs from 'fs/promises';
-import { pathExists } from 'node-utils';
 import * as os from 'os';
 import pc from "picocolors";
 import { confirm, text, isCancel, outro, select } from './clack/prompts';
@@ -178,6 +179,100 @@ async function loadKeyPairFromVault(keyName: string): Promise<IEncryptionKeyPem 
         return undefined;
     }
     return JSON.parse(secret.value) as IEncryptionKeyPem;
+}
+
+//
+// Secrets resolved from a database entry in databases.json.
+//
+export interface IResolvedDatabaseSecrets {
+    // S3 credentials resolved from the linked shared secret.
+    s3Config?: IS3Credentials;
+
+    // Encryption key PEM pairs resolved from the linked shared secret.
+    keyPems: IEncryptionKeyPem[];
+
+    // Google geocoding API key resolved from the linked shared secret.
+    googleApiKey?: string;
+}
+
+//
+// Resolves a --db value to a database entry from databases.json.
+// Tries exact path match first, then case-insensitive name match.
+// Returns undefined if no match is found (not an error — the value is treated as a raw path).
+// Errors if multiple entries match by name (ambiguous).
+//
+export async function resolveDatabaseEntry(dbValue: string): Promise<IDatabaseEntry | undefined> {
+    const databases = await getDatabases();
+
+    // Try exact path match first.
+    const pathMatch = databases.find(dbEntry => dbEntry.path === dbValue);
+    if (pathMatch) {
+        return pathMatch;
+    }
+
+    // Try case-insensitive name match.
+    const nameMatches = databases.filter(
+        dbEntry => dbEntry.name.toLowerCase() === dbValue.toLowerCase()
+    );
+
+    if (nameMatches.length === 0) {
+        return undefined;
+    }
+
+    if (nameMatches.length > 1) {
+        console.error(pc.red(`✗ Ambiguous database name "${dbValue}" — matches ${nameMatches.length} entries:`));
+        for (const match of nameMatches) {
+            console.error(`  • ${match.name} → ${match.path}`);
+        }
+        await exit(1);
+    }
+
+    return nameMatches[0];
+}
+
+//
+// Resolves vault secrets linked to a database entry.
+// Follows the same pattern as the desktop main.ts secret resolution.
+//
+export async function resolveSecretsFromEntry(entry: IDatabaseEntry): Promise<IResolvedDatabaseSecrets> {
+    const vault = getVault("plaintext");
+    const result: IResolvedDatabaseSecrets = {
+        keyPems: [],
+    };
+
+    if (entry.s3CredentialId) {
+        const s3Secret = await vault.get(`shared:${entry.s3CredentialId}`);
+        if (s3Secret) {
+            const parsed = JSON.parse(s3Secret.value);
+            result.s3Config = {
+                region: parsed.region,
+                accessKeyId: parsed.accessKeyId,
+                secretAccessKey: parsed.secretAccessKey,
+                endpoint: parsed.endpoint,
+            };
+        }
+    }
+
+    if (entry.encryptionKeyId) {
+        const encryptionSecret = await vault.get(`shared:${entry.encryptionKeyId}`);
+        if (encryptionSecret) {
+            const parsed = JSON.parse(encryptionSecret.value);
+            result.keyPems.push({
+                privateKeyPem: parsed.privateKeyPem,
+                publicKeyPem: parsed.publicKeyPem,
+            });
+        }
+    }
+
+    if (entry.geocodingKeyId) {
+        const geocodingSecret = await vault.get(`shared:${entry.geocodingKeyId}`);
+        if (geocodingSecret) {
+            const parsed = JSON.parse(geocodingSecret.value);
+            result.googleApiKey = parsed.apiKey;
+        }
+    }
+
+    return result;
 }
 
 //
@@ -356,6 +451,11 @@ export interface IInitResult {
     // The resolved metadata path
     //
     metaPath: string;
+
+    //
+    // Google geocoding API key resolved from the database entry's linked shared secret.
+    //
+    googleApiKey?: string;
 }
 
 //
@@ -378,21 +478,38 @@ export async function loadDatabase(
     if (dbDir === undefined) {
         dbDir = await getDirectoryForCommand("existing", nonInteractive, options.cwd || process.cwd());
     }
-    
+
+    // Try to resolve the --db value to a database entry in databases.json.
+    // This allows --db to accept a database name in addition to a path.
+    let resolvedSecrets: IResolvedDatabaseSecrets | undefined;
+    const matchedEntry = await resolveDatabaseEntry(dbDir);
+    if (matchedEntry) {
+        // If matched by name (dbDir doesn't equal the entry's path), use the entry's path.
+        if (matchedEntry.path !== dbDir) {
+            dbDir = matchedEntry.path;
+        }
+        resolvedSecrets = await resolveSecretsFromEntry(matchedEntry);
+    }
+
     const metaPath = pathJoin(dbDir, '.db');
 
     if (dbDir.startsWith("s3:")) {
-        await configureIfNeeded(['s3'], nonInteractive);
+        if (!resolvedSecrets?.s3Config) {
+            await configureIfNeeded(['s3'], nonInteractive);
+        }
     }
     
     if (metaPath.startsWith("s3:")) {
-        await configureIfNeeded(['s3'], nonInteractive);
+        if (!resolvedSecrets?.s3Config) {
+            await configureIfNeeded(['s3'], nonInteractive);
+        }
     }
 
     let keyName = options.key;
-    let keyPems: IEncryptionKeyPem[] = [];
+    let keyPems: IEncryptionKeyPem[] = resolvedSecrets?.keyPems ?? [];
 
     if (keyName) {
+        // Explicit --key overrides any resolved keys.
         keyPems = await resolveKeyPems(keyName);
         if (keyPems.length === 0) {
             outro(pc.red(`✗ Encryption key "${keyName}" not found in vault.\n  Use "psi vault list" to see available keys.`));
@@ -402,7 +519,7 @@ export async function loadDatabase(
 
     let { options: storageOptions } = await loadEncryptionKeysFromPem(keyPems);
 
-    const s3Config = await getS3Config();
+    const s3Config = resolvedSecrets?.s3Config ?? await getS3Config();
     let { storage: assetStorage, rawStorage: rawAssetStorage } = createStorage(dbDir, s3Config, storageOptions);
 
     //
@@ -472,6 +589,7 @@ export async function loadDatabase(
         bsonDatabase: database.bsonDatabase,
         sessionId,
         metadataCollection: database.metadataCollection,
+        googleApiKey: resolvedSecrets?.googleApiKey,
     };
 }
 

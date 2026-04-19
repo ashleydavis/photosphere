@@ -25,6 +25,10 @@ TEST_FILES_DIR="../../test"
 MULTIPLE_IMAGES_DIR="../../test/multiple-images"
 DUPLICATE_IMAGES_DIR="../../test/duplicate-images"
 
+# Isolate the vault and config so tests don't pollute the user's real data.
+export PHOTOSPHERE_VAULT_DIR="${TEST_TMP_DIR}/vault"
+export PHOTOSPHERE_CONFIG_DIR="${TEST_TMP_DIR}/config"
+
 # Use built binary instead of bun run start (set by --binary)
 USE_BINARY=false
 
@@ -79,6 +83,14 @@ declare -a TEST_TABLE=(
     "replicate-deleted-asset:test_replicate_with_deleted_asset:Test replicate database with deleted asset"
     "replicate-unrelated-fail:test_replicate_unrelated_databases_fail:Test replicate fails between unrelated databases"
     "replicate-partial:test_replicate_partial:Test partial replication (README and .db files only, no media)"
+    "vault-list-shared:test_vault_list_shared:Seed shared secrets in vault and verify vault list"
+    "dbs-list-empty:test_dbs_list_empty:psi dbs list with no databases shows empty message"
+    "dbs-add-and-list:test_dbs_add_and_list:Seed database entry and verify psi dbs list"
+    "dbs-view:test_dbs_view:psi dbs view shows name path and secret IDs"
+    "dbs-remove:test_dbs_remove:psi dbs remove --yes removes entry from list"
+    "dbs-resolve-by-name:test_dbs_resolve_by_name:Resolve database by name with auto-resolved encryption key"
+    "dbs-resolve-by-path:test_dbs_resolve_by_path:Resolve database by path with auto-resolved encryption key"
+    "dbs-no-match-fallback:test_dbs_no_match_fallback:No databases.json match falls back to existing flow"
 )
 
 # Test table helper functions
@@ -3615,6 +3627,228 @@ test_replicate_partial() {
     local compare_output
     invoke_command "Compare source and partial replica" "$(get_cli_command) compare --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "compare_output"
     expect_output_string "$compare_output" "No differences detected" "Source and partial replica have no merkle tree differences"
+
+    test_passed
+}
+
+# -----------------------------------------------------------------------------
+# Helpers for vault/dbs smoke tests
+# -----------------------------------------------------------------------------
+
+# Write a vault secret file directly (bypassing the interactive CLI).
+# Usage: seed_vault_secret "shared:abc123" "s3-credentials" '{"label":"My S3",...}'
+seed_vault_secret() {
+    local secret_name="$1"
+    local secret_type="$2"
+    local secret_value="$3"
+
+    mkdir -p "$PHOTOSPHERE_VAULT_DIR"
+    local encoded_name
+    encoded_name=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$secret_name', safe=''))")
+    local file_path="${PHOTOSPHERE_VAULT_DIR}/${encoded_name}.json"
+
+    cat > "$file_path" <<VAULT_EOF
+{
+  "name": "$secret_name",
+  "type": "$secret_type",
+  "value": $(echo "$secret_value" | python3 -c "import sys,json; print(json.dumps(sys.stdin.read().strip()))")
+}
+VAULT_EOF
+    chmod 600 "$file_path"
+}
+
+# Write a databases.json config file directly.
+# Usage: seed_databases_config '[{"name":"my-photos","description":"","path":"/tmp/db"}]'
+seed_databases_config() {
+    local databases_json="$1"
+
+    mkdir -p "$PHOTOSPHERE_CONFIG_DIR"
+    cat > "${PHOTOSPHERE_CONFIG_DIR}/databases.json" <<CONFIG_EOF
+{
+  "databases": $databases_json,
+  "recentDatabasePaths": []
+}
+CONFIG_EOF
+}
+
+# -----------------------------------------------------------------------------
+# Vault & dbs smoke tests
+# -----------------------------------------------------------------------------
+
+test_vault_list_shared() {
+    local test_number="$1"
+    print_test_header "$test_number" "VAULT LIST SHARED SECRETS"
+
+    # Seed shared secrets directly in the vault.
+    seed_vault_secret "shared:s3test01" "s3-credentials" \
+        '{"label":"Test S3","region":"us-east-1","accessKeyId":"AKIATEST","secretAccessKey":"secret123","endpoint":"http://localhost:9000"}'
+
+    seed_vault_secret "shared:api00001" "api-key" \
+        '{"label":"Test Geocoding","apiKey":"AIzaFakeKey123"}'
+
+    local vault_output
+    invoke_command "List vault secrets" "$(get_cli_command) vault list" 0 "vault_output"
+
+    expect_output_string "$vault_output" "shared:s3test01" "S3 credential appears in vault list"
+    expect_output_string "$vault_output" "shared:api00001" "API key appears in vault list"
+
+    test_passed
+}
+
+test_dbs_list_empty() {
+    local test_number="$1"
+    print_test_header "$test_number" "DBS LIST EMPTY"
+
+    # Ensure no databases.json exists.
+    rm -f "${PHOTOSPHERE_CONFIG_DIR}/databases.json"
+
+    local dbs_output
+    invoke_command "List databases (empty)" "$(get_cli_command) dbs list" 0 "dbs_output"
+
+    expect_output_string "$dbs_output" "No databases" "Empty list shows 'No databases' message"
+
+    test_passed
+}
+
+test_dbs_add_and_list() {
+    local test_number="$1"
+    print_test_header "$test_number" "DBS ADD AND LIST"
+
+    # Seed a database entry directly.
+    seed_databases_config '[{"name":"smoke-db","description":"Smoke test database","path":"/tmp/smoke-db"}]'
+
+    local dbs_output
+    invoke_command "List databases" "$(get_cli_command) dbs list" 0 "dbs_output"
+
+    expect_output_string "$dbs_output" "smoke-db" "Database entry appears in dbs list"
+    expect_output_string "$dbs_output" "/tmp/smoke-db" "Database path appears in dbs list"
+
+    test_passed
+}
+
+test_dbs_view() {
+    local test_number="$1"
+    print_test_header "$test_number" "DBS VIEW"
+
+    seed_databases_config '[{"name":"view-db","description":"A test database","path":"/tmp/view-db","encryptionKeyId":"enc00001","s3CredentialId":"s3test01"}]'
+
+    local dbs_output
+    invoke_command "View database entry" "$(get_cli_command) dbs view view-db" 0 "dbs_output"
+
+    expect_output_string "$dbs_output" "view-db" "Name appears in view output"
+    expect_output_string "$dbs_output" "/tmp/view-db" "Path appears in view output"
+    expect_output_string "$dbs_output" "enc00001" "Encryption key ID appears in view output"
+    expect_output_string "$dbs_output" "s3test01" "S3 credential ID appears in view output"
+
+    test_passed
+}
+
+test_dbs_remove() {
+    local test_number="$1"
+    print_test_header "$test_number" "DBS REMOVE"
+
+    seed_databases_config '[{"name":"keep-db","description":"","path":"/tmp/keep-db"},{"name":"remove-db","description":"","path":"/tmp/remove-db"}]'
+
+    invoke_command "Remove database entry" "$(get_cli_command) dbs remove remove-db --yes" 0
+
+    local dbs_output
+    invoke_command "List databases after remove" "$(get_cli_command) dbs list" 0 "dbs_output"
+
+    expect_output_string "$dbs_output" "remove-db" "remove-db is absent after removal" false
+    expect_output_string "$dbs_output" "keep-db" "keep-db still present after removal"
+
+    test_passed
+}
+
+test_dbs_resolve_by_name() {
+    local test_number="$1"
+    print_test_header "$test_number" "DBS RESOLVE BY NAME"
+
+    local test_dir="$TEST_TMP_DIR/dbs-resolve-name"
+    local db_dir="$test_dir/db"
+    local key_name="dbs-enc-key"
+
+    rm -rf "$test_dir"
+    mkdir -p "$test_dir"
+
+    # Init an encrypted database with a generated key.
+    invoke_command "Init encrypted database" "$(get_cli_command) init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" 0
+
+    # Add a test file.
+    invoke_command "Add PNG to database" "$(get_cli_command) add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" 0
+
+    # Extract the key pair from the CLI vault key and store it as a shared secret.
+    local cli_key_file="${PHOTOSPHERE_VAULT_DIR}/cli%3Aencryption%3A${key_name}.json"
+    local key_value
+    key_value=$(python3 -c "
+import json
+with open('$cli_key_file') as f:
+    data = json.load(f)
+inner = json.loads(data['value'])
+inner['label'] = 'Resolve Test Key'
+print(json.dumps(inner))
+")
+    seed_vault_secret "shared:enc00001" "encryption-key" "$key_value"
+
+    # Register the database with the shared encryption key.
+    seed_databases_config "[{\"name\":\"resolve-name-db\",\"description\":\"\",\"path\":\"$db_dir\",\"encryptionKeyId\":\"enc00001\"}]"
+
+    # Summary using database name — secrets should auto-resolve.
+    local summary_output
+    invoke_command "Summary by name" "$(get_cli_command) summary --db resolve-name-db --yes" 0 "summary_output"
+
+    expect_output_string "$summary_output" "1" "Summary shows at least 1 asset"
+
+    test_passed
+}
+
+test_dbs_resolve_by_path() {
+    local test_number="$1"
+    print_test_header "$test_number" "DBS RESOLVE BY PATH"
+
+    # Reuse the database created in resolve-by-name test.
+    local db_dir="$TEST_TMP_DIR/dbs-resolve-name/db"
+
+    if [ ! -d "$db_dir/.db" ]; then
+        log_error "Expected database from resolve-by-name test at $db_dir"
+        exit 1
+    fi
+
+    # Re-seed databases.json with path match.
+    seed_databases_config "[{\"name\":\"resolve-path-db\",\"description\":\"\",\"path\":\"$db_dir\",\"encryptionKeyId\":\"enc00001\"}]"
+
+    # Summary using the path — should auto-resolve linked encryption key.
+    local summary_output
+    invoke_command "Summary by path (auto-resolve)" "$(get_cli_command) summary --db \"$db_dir\" --yes" 0 "summary_output"
+
+    expect_output_string "$summary_output" "1" "Summary shows at least 1 asset"
+
+    test_passed
+}
+
+test_dbs_no_match_fallback() {
+    local test_number="$1"
+    print_test_header "$test_number" "DBS NO MATCH FALLBACK"
+
+    local test_dir="$TEST_TMP_DIR/dbs-no-match"
+    local db_dir="$test_dir/db"
+
+    rm -rf "$test_dir"
+    mkdir -p "$test_dir"
+
+    # Create a plain (unencrypted) database.
+    invoke_command "Init plain database" "$(get_cli_command) init --db \"$db_dir\" --yes" 0
+
+    invoke_command "Add PNG to plain database" "$(get_cli_command) add --db \"$db_dir\" \"$TEST_FILES_DIR/test.png\" --yes" 0
+
+    # Clear databases.json so there's no match.
+    seed_databases_config '[]'
+
+    # Summary should still work using existing manual config flows.
+    local summary_output
+    invoke_command "Summary with no databases.json match" "$(get_cli_command) summary --db \"$db_dir\" --yes" 0 "summary_output"
+
+    expect_output_string "$summary_output" "1" "Summary shows at least 1 asset"
 
     test_passed
 }
