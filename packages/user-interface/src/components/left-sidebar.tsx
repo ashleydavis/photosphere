@@ -6,13 +6,11 @@ import { useTheme } from '@mui/joy/styles/ThemeProvider';
 import List from '@mui/joy/List/List';
 import ListItem from '@mui/joy/ListItem/ListItem';
 import ListItemDecorator from '@mui/joy/ListItemDecorator/ListItemDecorator';
-import { PhotoLibrary, Folder, FolderOpen, Info, Map, Search, Settings, Star, StarBorder, CreateNewFolder, FileUpload, ManageSearch, Key } from '@mui/icons-material';
+import { PhotoLibrary, Folder, FolderOpen, Info, Map, Search, Settings, CreateNewFolder, FileUpload, ManageSearch, Key } from '@mui/icons-material';
 import { CollapsibleSection } from './collapsible-section';
 import ListItemContent from '@mui/joy/ListItemContent/ListItemContent';
 import ListItemButton from '@mui/joy/ListItemButton/ListItemButton';
-import IconButton from '@mui/joy/IconButton/IconButton';
 import Divider from '@mui/joy/Divider/Divider';
-import { useGallery } from '../context/gallery-context';
 import { useSearch } from '../context/search-context';
 
 export interface ILeftSidebarProps {
@@ -47,12 +45,10 @@ export interface ILeftSidebarProps {
 // Renders the left sidebar for the app.
 //
 export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, onNewDatabase, onOpenDatabase }: ILeftSidebarProps) {
-    const { setOpenSearch, savedSearches, saveSearch, unsaveSearch } = useSearch();
+    const { setOpenSearch } = useSearch();
     const { openDatabase, databasePath } = useAssetDatabase();
     const platform = usePlatform();
     const theme = useTheme();
-    const { search } = useGallery();
-
     // Recently opened databases (top 5).
     const [recentDatabases, setRecentDatabases] = useState<IDatabaseEntry[]>([]);
 
@@ -186,45 +182,6 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                     </NavLink>
                 </List>
             </div>
-
-            {savedSearches.length > 0 &&
-                <div className="flex flex-col">
-                    <Divider />
-                    <CollapsibleSection configKey="sidebar-collapsed-savedSearches" label="Saved Searches" style={{ paddingLeft: "15px" }}>
-                        <List>
-                            {savedSearches.map(savedSearch => (
-                                <ListItem
-                                    key={savedSearch}
-                                    endAction={
-                                        <IconButton
-                                            size="sm"
-                                            variant="plain"
-                                            color="neutral"
-                                            onClick={async (e) => {
-                                                e.stopPropagation();
-                                                await unsaveSearch(savedSearch);
-                                            }}
-                                            sx={{ minHeight: '32px', minWidth: '32px' }}
-                                        >
-                                            <Star fontSize="small" sx={{ color: "gold" }} />
-                                        </IconButton>
-                                    }
-                                    >
-                                    <ListItemButton
-                                        onClick={() => {
-                                            search(savedSearch);
-                                            setSidebarOpen(false);
-                                        }}
-                                        >
-                                        <ListItemDecorator><StarBorder /></ListItemDecorator>
-                                        <ListItemContent>{savedSearch}</ListItemContent>
-                                    </ListItemButton>
-                                </ListItem>
-                            ))}
-                        </List>
-                    </CollapsibleSection>
-                </div>
-            }
 
             {recentDatabases.length > 0 && (
                 <div className="flex flex-col">
