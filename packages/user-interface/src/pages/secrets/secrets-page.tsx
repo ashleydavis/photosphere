@@ -15,7 +15,7 @@ import FormControl from '@mui/joy/FormControl';
 import FormLabel from '@mui/joy/FormLabel';
 import Select from '@mui/joy/Select';
 import Option from '@mui/joy/Option';
-import { Edit, Delete, Add } from '@mui/icons-material';
+import { Edit, Delete, Add, Refresh } from '@mui/icons-material';
 import { usePlatform, type ISharedSecretEntry, type IDatabaseEntry } from '../../context/platform-context';
 
 //
@@ -313,6 +313,13 @@ export function SecretsPage() {
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                 <Typography level="h3">Manage Secrets</Typography>
                 <Box sx={{ flexGrow: 1 }} />
+                <IconButton
+                    variant="outlined"
+                    sx={{ mr: 1 }}
+                    onClick={() => loadSecrets().catch(err => console.error('Failed to refresh secrets:', err))}
+                >
+                    <Refresh />
+                </IconButton>
                 <Button
                     startDecorator={<Add />}
                     onClick={openAddDialog}
