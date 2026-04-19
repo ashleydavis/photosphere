@@ -18,7 +18,7 @@ interface IDatabasesConfig {
     recentDatabasePaths: string[];
 }
 
-const CONFIG_DIR = path.join(os.homedir(), ".config", "photosphere");
+const CONFIG_DIR = process.env.PHOTOSPHERE_CONFIG_DIR || path.join(os.homedir(), ".config", "photosphere");
 const DATABASES_FILE = path.join(CONFIG_DIR, "databases.json");
 
 //
