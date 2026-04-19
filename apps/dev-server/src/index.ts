@@ -272,7 +272,7 @@ async function handleOpenDatabase(ws: WebSocket): Promise<void> {
             // Save to databases list and update last folder
             const existingDbs = await getDatabases();
             if (!existingDbs.some(entry => entry.path === databasePath)) {
-                await addDatabaseEntry({ id: Math.random().toString(36).slice(2, 10), name: path.basename(databasePath), description: "", path: databasePath });
+                await addDatabaseEntry({ name: path.basename(databasePath), description: "", path: databasePath });
             }
             const folderPath = path.dirname(databasePath);
             await updateLastFolder(folderPath);
@@ -315,7 +315,7 @@ async function handleCreateDatabase(ws: WebSocket): Promise<void> {
 
             const existingDbs2 = await getDatabases();
             if (!existingDbs2.some(entry => entry.path === databasePath)) {
-                await addDatabaseEntry({ id: Math.random().toString(36).slice(2, 10), name: path.basename(databasePath), description: "", path: databasePath });
+                await addDatabaseEntry({ name: path.basename(databasePath), description: "", path: databasePath });
             }
             const folderPath = path.dirname(databasePath);
             await updateLastFolder(folderPath);
@@ -347,7 +347,7 @@ async function handleRemoveDatabase(ws: WebSocket, databasePath: string): Promis
         const existingDbs = await getDatabases();
         const entry = existingDbs.find(dbEntry => dbEntry.path === databasePath);
         if (entry) {
-            await removeDatabaseEntry(entry.id);
+            await removeDatabaseEntry(entry.path);
         }
         ws.send(JSON.stringify({
             type: "database-removed",
@@ -390,7 +390,7 @@ async function handleNotifyDatabaseOpened(ws: WebSocket, databasePath: string, r
     try {
         const existingDbs = await getDatabases();
         if (!existingDbs.some(entry => entry.path === databasePath)) {
-            await addDatabaseEntry({ id: Math.random().toString(36).slice(2, 10), name: path.basename(databasePath), description: "", path: databasePath });
+            await addDatabaseEntry({ name: path.basename(databasePath), description: "", path: databasePath });
         }
         ws.send(JSON.stringify({ type: "notify-database-opened-ack", requestId }));
     }

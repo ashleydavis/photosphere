@@ -13,9 +13,9 @@ interface IDatabasesConfig {
     databases: IDatabaseEntry[];
 
     //
-    // Ordered list of recently opened database IDs (most recent first, max 5).
+    // Ordered list of recently opened database paths (most recent first, max 5).
     //
-    recentDatabaseIds: string[];
+    recentDatabasePaths: string[];
 }
 
 const CONFIG_DIR = path.join(os.homedir(), ".config", "photosphere");
@@ -27,15 +27,15 @@ const DATABASES_FILE = path.join(CONFIG_DIR, "databases.json");
 //
 export async function loadDatabasesConfig(): Promise<IDatabasesConfig> {
     if (!await pathExists(DATABASES_FILE)) {
-        return { databases: [], recentDatabaseIds: [] };
+        return { databases: [], recentDatabasePaths: [] };
     }
 
     const config = await readJson<IDatabasesConfig>(DATABASES_FILE);
     if (!Array.isArray(config.databases)) {
         config.databases = [];
     }
-    if (!Array.isArray(config.recentDatabaseIds)) {
-        config.recentDatabaseIds = [];
+    if (!Array.isArray(config.recentDatabasePaths)) {
+        config.recentDatabasePaths = [];
     }
     return config;
 }
@@ -47,8 +47,8 @@ export async function saveDatabasesConfig(config: IDatabasesConfig): Promise<voi
     if (!Array.isArray(config.databases)) {
         config.databases = [];
     }
-    if (!Array.isArray(config.recentDatabaseIds)) {
-        config.recentDatabaseIds = [];
+    if (!Array.isArray(config.recentDatabasePaths)) {
+        config.recentDatabasePaths = [];
     }
     await writeJson(DATABASES_FILE, config, { spaces: 2 });
 }
@@ -71,20 +71,20 @@ export async function addDatabaseEntry(entry: IDatabaseEntry): Promise<void> {
 }
 
 //
-// Updates an existing database entry matched by id.
+// Updates an existing database entry matched by path.
 //
 export async function updateDatabaseEntry(entry: IDatabaseEntry): Promise<void> {
     const config = await loadDatabasesConfig();
-    config.databases = config.databases.map(existing => existing.id === entry.id ? entry : existing);
+    config.databases = config.databases.map(existing => existing.path === entry.path ? entry : existing);
     await saveDatabasesConfig(config);
 }
 
 //
-// Removes a database entry by id.
+// Removes a database entry by path.
 //
-export async function removeDatabaseEntry(id: string): Promise<void> {
+export async function removeDatabaseEntry(databasePath: string): Promise<void> {
     const config = await loadDatabasesConfig();
-    config.databases = config.databases.filter(existing => existing.id !== id);
+    config.databases = config.databases.filter(existing => existing.path !== databasePath);
     await saveDatabasesConfig(config);
 }
 
@@ -95,8 +95,8 @@ export async function removeDatabaseEntry(id: string): Promise<void> {
 export async function getRecentDatabases(): Promise<IDatabaseEntry[]> {
     const config = await loadDatabasesConfig();
     const result: IDatabaseEntry[] = [];
-    for (const recentId of config.recentDatabaseIds) {
-        const found = config.databases.find(dbEntry => dbEntry.id === recentId);
+    for (const recentPath of config.recentDatabasePaths) {
+        const found = config.databases.find(dbEntry => dbEntry.path === recentPath);
         if (found) {
             result.push(found);
         }
@@ -105,7 +105,7 @@ export async function getRecentDatabases(): Promise<IDatabaseEntry[]> {
 }
 
 //
-// Moves the database entry matching the given path to the front of recentDatabaseIds,
+// Moves the database entry matching the given path to the front of recentDatabasePaths,
 // trimming the list to a maximum of 5 entries, then saves.
 //
 export async function markDatabaseOpenedByPath(databasePath: string): Promise<void> {
@@ -114,9 +114,9 @@ export async function markDatabaseOpenedByPath(databasePath: string): Promise<vo
     if (!found) {
         return;
     }
-    config.recentDatabaseIds = [
-        found.id,
-        ...config.recentDatabaseIds.filter(recentId => recentId !== found.id),
+    config.recentDatabasePaths = [
+        found.path,
+        ...config.recentDatabasePaths.filter(recentPath => recentPath !== found.path),
     ].slice(0, 5);
     await saveDatabasesConfig(config);
 }

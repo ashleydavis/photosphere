@@ -182,7 +182,7 @@ export function DatabasesPage() {
     //
     async function handleConfirmRemove(): Promise<void> {
         if (removingEntry) {
-            await platform.removeDatabaseEntry(removingEntry.id);
+            await platform.removeDatabaseEntry(removingEntry.path);
             setRemovingEntry(undefined);
         }
         setConfirmRemoveOpen(false);
@@ -301,7 +301,7 @@ export function DatabasesPage() {
                 </thead>
                 <tbody>
                     {databases.map(entry => (
-                        <tr key={entry.id}>
+                        <tr key={entry.path}>
                             <td>{entry.name}</td>
                             <td>{entry.description}</td>
                             <td>{entry.path}</td>

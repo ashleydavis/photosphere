@@ -370,7 +370,7 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
                                     }
                                     return (
                                         <ListItem
-                                            key={dbEntry.id}
+                                            key={dbEntry.path}
                                             onClick={() => {
                                                 moveSelectedToDatabase(dbEntry.path);
                                                 setSidebarOpen(false);

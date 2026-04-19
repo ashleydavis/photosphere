@@ -316,7 +316,7 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         return await electronAPI.getDatabases();
     }, [electronAPI]);
 
-    const addDatabase = useCallback(async (entry: Omit<IDatabaseEntry, 'id'>): Promise<IDatabaseEntry> => {
+    const addDatabase = useCallback(async (entry: IDatabaseEntry): Promise<IDatabaseEntry> => {
         return await electronAPI.addDatabase(entry);
     }, [electronAPI]);
 
@@ -324,8 +324,8 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         await electronAPI.updateDatabase(entry);
     }, [electronAPI]);
 
-    const removeDatabaseEntry = useCallback(async (id: string): Promise<void> => {
-        await electronAPI.removeDatabaseEntry(id);
+    const removeDatabaseEntry = useCallback(async (databasePath: string): Promise<void> => {
+        await electronAPI.removeDatabaseEntry(databasePath);
     }, [electronAPI]);
 
     const pickFolder = useCallback(async (): Promise<string | undefined> => {

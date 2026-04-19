@@ -70,12 +70,9 @@ export interface ISharedSecretEntry {
 
 //
 // A database entry stored in databases.json.
-// id is an 8-character random alphanumeric string (e.g. "a3k9mz7x").
+// The path field is the unique identifier for each entry.
 //
 export interface IDatabaseEntry {
-    // Unique identifier for this database entry.
-    id: string;
-
     // Human-readable display name.
     name: string;
 
@@ -251,19 +248,19 @@ export interface IElectronAPI {
     getDatabases: () => Promise<IDatabaseEntry[]>;
 
     //
-    // Adds a new database entry (generates an id automatically) and returns the created entry.
+    // Adds a new database entry and returns the created entry.
     //
-    addDatabase: (entry: Omit<IDatabaseEntry, 'id'>) => Promise<IDatabaseEntry>;
+    addDatabase: (entry: IDatabaseEntry) => Promise<IDatabaseEntry>;
 
     //
-    // Updates an existing database entry (matched by id).
+    // Updates an existing database entry (matched by path).
     //
     updateDatabase: (entry: IDatabaseEntry) => Promise<void>;
 
     //
-    // Removes a database entry by id and deletes its associated vault secrets.
+    // Removes a database entry by path.
     //
-    removeDatabaseEntry: (id: string) => Promise<void>;
+    removeDatabaseEntry: (path: string) => Promise<void>;
 
     //
     // Opens a directory picker dialog and returns the chosen path, or undefined if cancelled.

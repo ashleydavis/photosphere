@@ -453,7 +453,7 @@ export function SecretsPage() {
                         </Typography>
                         <Box component="ul" sx={{ mt: 1, pl: 2 }}>
                             {referencingDatabases.map(dbEntry => (
-                                <li key={dbEntry.id}>{dbEntry.name || dbEntry.path}</li>
+                                <li key={dbEntry.path}>{dbEntry.name || dbEntry.path}</li>
                             ))}
                         </Box>
                         <Typography sx={{ mt: 1 }}>
