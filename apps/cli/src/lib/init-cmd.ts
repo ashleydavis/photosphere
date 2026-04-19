@@ -41,7 +41,7 @@ export async function selectEncryptionKey(message: string): Promise<string> {
     const keyNames = await getAvailableKeys();
 
     if (keyNames.length === 0) {
-        outro(pc.red('✗ No encryption keys found in the vault.\n  Use "psi vault add" to add a key or "psi vault import" to import an existing key file.'));
+        outro(pc.red('✗ No encryption keys found.\n  Use "psi secrets add" to add a key or "psi secrets import" to import an existing key file.'));
         await exit(1);
     }
 
@@ -96,8 +96,8 @@ export async function promptForEncryption(message: string = 'Would you like to e
     const keyChoice = await select({
         message: 'How would you like to handle the encryption key?',
         options: [
-            { value: 'existing', label: 'Use an existing key from the vault' },
-            { value: 'generate', label: 'Generate a new key and store it in the vault' },
+            { value: 'existing', label: 'Use an existing key' },
+            { value: 'generate', label: 'Generate a new key' },
         ],
     });
 
@@ -141,7 +141,7 @@ export async function promptForEncryption(message: string = 'Would you like to e
             value: JSON.stringify({ privateKeyPem, publicKeyPem }),
         });
 
-        log.info(pc.green(`✓ Encryption key "${keyName}" stored in vault.`));
+        log.info(pc.green(`✓ Encryption key "${keyName}" stored.`));
 
         return { keyName, generateKey: true };
     }
@@ -512,7 +512,7 @@ export async function loadDatabase(
         // Explicit --key overrides any resolved keys.
         keyPems = await resolveKeyPems(keyName);
         if (keyPems.length === 0) {
-            outro(pc.red(`✗ Encryption key "${keyName}" not found in vault.\n  Use "psi vault list" to see available keys.`));
+            outro(pc.red(`✗ Encryption key "${keyName}" not found.\n  Use "psi secrets list" to see available keys.`));
             await exit(1);
         }
     }
@@ -563,7 +563,7 @@ export async function loadDatabase(
 
                 keyPems = await resolveKeyPems(keyName);
                 if (keyPems.length === 0) {
-                    outro(pc.red(`✗ Encryption key "${keyName}" not found in vault.`));
+                    outro(pc.red(`✗ Encryption key "${keyName}" not found.`));
                     await exit(1);
                 }
 

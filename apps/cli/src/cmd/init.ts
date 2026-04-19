@@ -27,7 +27,7 @@ export async function initCommand(context: ICommandContext, options: IInitComman
     
     if (options.generateKey && options.key) {
         log.info('');
-        log.info(pc.green(`✓  Encryption key "${options.key}" stored in vault.`));
+        log.info(pc.green(`✓  Encryption key "${options.key}" stored.`));
         log.info(pc.yellow(`⚠️ Keep this key safe! You will need it to access your encrypted database.`));
     }
 

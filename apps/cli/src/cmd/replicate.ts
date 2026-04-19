@@ -159,7 +159,7 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
                 await loadEncryptionKeysFromPem(verifyKeyPems);
             } catch (error) {
                 log.error(pc.red(`✗ Failed to load encryption key: ${error instanceof Error ? error.message : String(error)}`));
-                log.error(pc.red(`  Please check that the key exists in the vault.`));
+                log.error(pc.red(`  Please check that the key exists. Use "psi secrets list" to see available keys.`));
                 await exit(1);
             }
             

@@ -127,7 +127,7 @@ export async function configureS3(): Promise<IS3Credentials | undefined> {
     const vault = getVault("plaintext");
     await vault.set({ name: 'cli:s3', type: 's3-credentials', value: JSON.stringify(s3Config) });
 
-    outro(pc.green('S3 credentials saved to vault.'));
+    outro(pc.green('S3 credentials saved.'));
 
     return s3Config;
 }
