@@ -462,6 +462,45 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
                     </CollapsibleSection>
                 </div>
 
+                {savedSearches.length > 0 &&
+                    <div className="flex flex-col">
+                        <Divider />
+                        <CollapsibleSection configKey="sidebar-collapsed-savedSearches" label="Saved Searches" style={{ paddingLeft: "15px" }}>
+                            <List>
+                                {savedSearches.map(savedSearch => (
+                                    <ListItem
+                                        key={savedSearch}
+                                        endAction={
+                                            <IconButton
+                                                size="sm"
+                                                variant="plain"
+                                                color="neutral"
+                                                onClick={async (e) => {
+                                                    e.stopPropagation();
+                                                    await unsaveSearch(savedSearch);
+                                                }}
+                                                sx={{ minHeight: '32px', minWidth: '32px' }}
+                                            >
+                                                <Star fontSize="small" sx={{ color: "gold" }} />
+                                            </IconButton>
+                                        }
+                                        >
+                                        <ListItemButton
+                                            onClick={() => {
+                                                search(savedSearch);
+                                                setSidebarOpen(false);
+                                            }}
+                                            >
+                                            <ListItemDecorator><StarBorder /></ListItemDecorator>
+                                            <ListItemContent>{savedSearch}</ListItemContent>
+                                        </ListItemButton>
+                                    </ListItem>
+                                ))}
+                            </List>
+                        </CollapsibleSection>
+                    </div>
+                }
+
                 {recentSearches.length > 0 &&
                     <div className="flex flex-col">
                         <Divider />
