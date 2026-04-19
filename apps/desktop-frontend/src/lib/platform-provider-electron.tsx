@@ -218,6 +218,11 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
     const notifyDatabaseOpened = useCallback(async (databasePath: string): Promise<void> => {
         // Notify main process to add to recent databases and update menu
         await electronAPI.notifyDatabaseOpened(databasePath);
+
+        // Fire opened callbacks so UI components (e.g. recent databases list) refresh.
+        openedCallbacksRef.current.forEach(callback => {
+            callback(databasePath);
+        });
     }, [electronAPI]);
 
     const notifyDatabaseClosed = useCallback(async (): Promise<void> => {
