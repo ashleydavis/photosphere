@@ -43,10 +43,10 @@ export function AppContextProvider({ children }: IProps) {
     }
 
     //
-    // Removes a database entry by id.
+    // Removes a database entry by path.
     //
-    async function removeDatabase(id: string): Promise<void> {
-        await platform.removeDatabaseEntry(id);
+    async function removeDatabase(databasePath: string): Promise<void> {
+        await platform.removeDatabaseEntry(databasePath);
         await load();
     }
 

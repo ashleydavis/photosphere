@@ -189,7 +189,7 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                     <CollapsibleSection configKey="sidebar-collapsed-databases" label="Databases" style={{ paddingLeft: "15px" }}>
                         <List>
                             {recentDatabases.map(dbEntry => (
-                                <ListItem key={dbEntry.id}>
+                                <ListItem key={dbEntry.path}>
                                     <ListItemButton
                                         onClick={async () => {
                                             setSidebarOpen(false);

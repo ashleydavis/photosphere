@@ -219,14 +219,14 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         return [];
     }, []);
 
-    const addDatabase = useCallback(async (entry: Omit<IDatabaseEntry, "id">): Promise<IDatabaseEntry> => {
-        return { ...entry, id: Math.random().toString(36).slice(2, 10) };
+    const addDatabase = useCallback(async (entry: IDatabaseEntry): Promise<IDatabaseEntry> => {
+        return entry;
     }, []);
 
     const updateDatabase = useCallback(async (_entry: IDatabaseEntry): Promise<void> => {
     }, []);
 
-    const removeDatabaseEntry = useCallback(async (_id: string): Promise<void> => {
+    const removeDatabaseEntry = useCallback(async (_path: string): Promise<void> => {
     }, []);
 
     const pickFolder = useCallback(async () => {

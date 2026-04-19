@@ -92,7 +92,7 @@ export function OpenDatabaseModal({ open, onClose }: IOpenDatabaseModalProps) {
                                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                                     {databases.map(dbEntry => (
                                         <Button
-                                            key={dbEntry.id}
+                                            key={dbEntry.path}
                                             variant={dbEntry.path === databasePath ? 'soft' : 'outlined'}
                                             color="neutral"
                                             startDecorator={dbEntry.path === databasePath ? <FolderOpenIcon /> : <FolderIcon />}

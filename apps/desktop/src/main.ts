@@ -53,17 +53,6 @@ let isSyncRunning: boolean = false;
 // File logger for writing logs to files
 let fileLogger: FileLoggerElectron | null = null;
 
-//
-// Generates an 8-character random alphanumeric id for a database entry.
-//
-function generateDatabaseId(): string {
-    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-    let result = '';
-    for (let index = 0; index < 8; index++) {
-        result += chars[Math.floor(Math.random() * chars.length)];
-    }
-    return result;
-}
 
 //
 // Creates and configures the main browser window for the Electron app.
@@ -234,9 +223,9 @@ ipcMain.on('cancel-tasks', (_event, source: string) => {
 ipcMain.handle('open-file', logExceptions(openDatabase, 'Error opening database'));
 ipcMain.handle('create-database', logExceptions(createNewDatabase, 'Error creating database'));
 
-// IPC handler for removing a database entry by id (secrets are independent and managed via the secrets page)
-ipcMain.handle('remove-database-entry', logExceptions(async (_event, id: string) => {
-    await removeDatabaseEntry(id);
+// IPC handler for removing a database entry by path (secrets are independent and managed via the secrets page)
+ipcMain.handle('remove-database-entry', logExceptions(async (_event, databasePath: string) => {
+    await removeDatabaseEntry(databasePath);
 }, 'Error removing database entry'));
 
 // IPC handler for retrieving a vault secret by name
@@ -292,18 +281,9 @@ ipcMain.handle('get-databases', logExceptions(async () => {
 }, 'Error getting databases'));
 
 // IPC handler for adding a new database entry
-ipcMain.handle('add-database', logExceptions(async (_event, entry: Omit<IDatabaseEntry, 'id'>) => {
-    const newEntry: IDatabaseEntry = {
-        id: generateDatabaseId(),
-        name: entry.name,
-        description: entry.description,
-        path: entry.path,
-        s3CredentialId: entry.s3CredentialId,
-        encryptionKeyId: entry.encryptionKeyId,
-        geocodingKeyId: entry.geocodingKeyId,
-    };
-    await addDatabaseEntry(newEntry);
-    return newEntry;
+ipcMain.handle('add-database', logExceptions(async (_event, entry: IDatabaseEntry) => {
+    await addDatabaseEntry(entry);
+    return entry;
 }, 'Error adding database'));
 
 // IPC handler for updating an existing database entry
@@ -312,10 +292,10 @@ ipcMain.handle('update-database', logExceptions(async (_event, entry: IDatabaseE
 }, 'Error updating database'));
 
 // IPC handler for reading vault secrets for a database (resolved via shared secret reference IDs)
-ipcMain.handle('get-database-secrets', logExceptions(async (_event, id: string) => {
+ipcMain.handle('get-database-secrets', logExceptions(async (_event, databasePath: string) => {
     const vault = getVault("plaintext");
     const databases = await getDatabases();
-    const dbEntry = databases.find(entry => entry.id === id);
+    const dbEntry = databases.find(entry => entry.path === databasePath);
     const secrets: IDatabaseSecrets = {};
 
     if (dbEntry) {
@@ -367,7 +347,6 @@ ipcMain.handle('notify-database-opened', logExceptions(async (_event, databasePa
     const existing = databases.find(dbEntry => dbEntry.path === databasePath);
     if (!existing) {
         const newEntry: IDatabaseEntry = {
-            id: generateDatabaseId(),
             name: basename(databasePath),
             description: '',
             path: databasePath,

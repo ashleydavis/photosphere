@@ -71,14 +71,14 @@ const electronAPI: IElectronAPI = {
     getDatabases: (): Promise<IDatabaseEntry[]> => {
         return ipcRenderer.invoke('get-databases');
     },
-    addDatabase: (entry: Omit<IDatabaseEntry, 'id'>): Promise<IDatabaseEntry> => {
+    addDatabase: (entry: IDatabaseEntry): Promise<IDatabaseEntry> => {
         return ipcRenderer.invoke('add-database', entry);
     },
     updateDatabase: (entry: IDatabaseEntry): Promise<void> => {
         return ipcRenderer.invoke('update-database', entry);
     },
-    removeDatabaseEntry: (id: string): Promise<void> => {
-        return ipcRenderer.invoke('remove-database-entry', id);
+    removeDatabaseEntry: (databasePath: string): Promise<void> => {
+        return ipcRenderer.invoke('remove-database-entry', databasePath);
     },
     pickFolder: (): Promise<string | undefined> => {
         return ipcRenderer.invoke('pick-folder');
