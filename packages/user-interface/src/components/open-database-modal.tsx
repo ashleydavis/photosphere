@@ -38,6 +38,9 @@ export function OpenDatabaseModal({ open, onClose }: IOpenDatabaseModalProps) {
     // Whether the AddDatabaseModal is open.
     const [addModalOpen, setAddModalOpen] = useState(false);
 
+    // Whether a refresh is in progress (drives the spin animation).
+    const [refreshing, setRefreshing] = useState(false);
+
     //
     // Loads the list of configured databases from the platform.
     //
@@ -45,6 +48,18 @@ export function OpenDatabaseModal({ open, onClose }: IOpenDatabaseModalProps) {
         platform.getDatabases()
             .then(entries => setDatabases(entries))
             .catch(err => console.error('Failed to load databases:', err));
+    }
+
+    //
+    // Reloads databases with a minimum delay so the spin animation is visible.
+    //
+    async function handleRefresh(): Promise<void> {
+        setRefreshing(true);
+        await Promise.all([
+            platform.getDatabases().then(entries => setDatabases(entries)),
+            new Promise(resolve => setTimeout(resolve, 500)),
+        ]);
+        setRefreshing(false);
     }
 
     useEffect(() => {
@@ -98,9 +113,18 @@ export function OpenDatabaseModal({ open, onClose }: IOpenDatabaseModalProps) {
                         <Button variant="plain" onClick={onClose}>Cancel</Button>
                         <IconButton
                             variant="outlined"
-                            onClick={loadDatabases}
+                            disabled={refreshing}
+                            onClick={() => handleRefresh().catch(err => console.error('Failed to refresh databases:', err))}
                         >
-                            <RefreshIcon />
+                            <RefreshIcon
+                                sx={refreshing ? {
+                                    animation: 'spin 0.8s linear infinite',
+                                    '@keyframes spin': {
+                                        from: { transform: 'rotate(0deg)' },
+                                        to: { transform: 'rotate(360deg)' },
+                                    },
+                                } : undefined}
+                            />
                         </IconButton>
                         <Button
                             variant="outlined"

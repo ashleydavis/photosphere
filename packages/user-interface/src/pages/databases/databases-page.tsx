@@ -87,6 +87,9 @@ export function DatabasesPage() {
     // Whether a quick-create secret dialog is open and which type it is for.
     const [quickCreateType, setQuickCreateType] = useState<string | undefined>(undefined);
 
+    // Whether a refresh is in progress (drives the spin animation).
+    const [refreshing, setRefreshing] = useState(false);
+
     //
     // Loads database entries and secrets from the platform.
     //
@@ -104,6 +107,18 @@ export function DatabasesPage() {
     useEffect(() => {
         loadData().catch(err => console.error('Failed to load data:', err));
     }, []);
+
+    //
+    // Reloads data with a minimum delay so the spin animation is visible.
+    //
+    async function handleRefresh(): Promise<void> {
+        setRefreshing(true);
+        await Promise.all([
+            loadData(),
+            new Promise(resolve => setTimeout(resolve, 500)),
+        ]);
+        setRefreshing(false);
+    }
 
     //
     // Opens the add dialog with a blank form.
@@ -246,9 +261,18 @@ export function DatabasesPage() {
                 <IconButton
                     variant="outlined"
                     sx={{ mr: 1 }}
-                    onClick={() => loadData().catch(err => console.error('Failed to refresh data:', err))}
+                    disabled={refreshing}
+                    onClick={() => handleRefresh().catch(err => console.error('Failed to refresh data:', err))}
                 >
-                    <Refresh />
+                    <Refresh
+                        sx={refreshing ? {
+                            animation: 'spin 0.8s linear infinite',
+                            '@keyframes spin': {
+                                from: { transform: 'rotate(0deg)' },
+                                to: { transform: 'rotate(360deg)' },
+                            },
+                        } : undefined}
+                    />
                 </IconButton>
                 <Button
                     variant="outlined"
