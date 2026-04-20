@@ -10,6 +10,46 @@ import { LanShareSender, LanShareReceiver, resolveDatabaseSharePayload, importDa
 import type { IDatabaseSharePayload } from 'lan-share';
 
 //
+// Options for the `dbs add` command.
+//
+interface IDbsAddOptions {
+    // Skip interactive prompts.
+    yes?: boolean;
+    // Database name.
+    name?: string;
+    // Database description.
+    description?: string;
+    // Database path.
+    path?: string;
+    // S3 credential secret ID.
+    s3CredId?: string;
+    // Encryption key secret ID.
+    encryptionKeyId?: string;
+    // Geocoding API key secret ID.
+    geocodingKeyId?: string;
+}
+
+//
+// Options for the `dbs edit` command.
+//
+interface IDbsEditOptions {
+    // Skip interactive prompts.
+    yes?: boolean;
+    // New database name.
+    newName?: string;
+    // New description.
+    description?: string;
+    // New database path.
+    path?: string;
+    // S3 credential secret ID.
+    s3CredId?: string;
+    // Encryption key secret ID.
+    encryptionKeyId?: string;
+    // Geocoding API key secret ID.
+    geocodingKeyId?: string;
+}
+
+//
 // Generates an 8-character random alphanumeric ID for shared vault secrets.
 //
 function generateSharedSecretId(): string {
@@ -250,6 +290,13 @@ export function dbsCommand(): Command {
     // psi dbs add
     cmd.command('add')
         .description('Interactively add a new database to the list.')
+        .option('--yes', 'Skip prompts')
+        .option('--name <name>', 'Database name')
+        .option('--description <desc>', 'Database description')
+        .option('--path <path>', 'Database path')
+        .option('--s3-cred-id <id>', 'S3 credential secret ID')
+        .option('--encryption-key-id <id>', 'Encryption key secret ID')
+        .option('--geocoding-key-id <id>', 'Geocoding API key secret ID')
         .action(dbsAdd);
 
     // psi dbs view <name>
@@ -260,6 +307,13 @@ export function dbsCommand(): Command {
     // psi dbs edit <name>
     cmd.command('edit <name>')
         .description('Edit fields of a database entry.')
+        .option('--yes', 'Skip prompts')
+        .option('--new-name <name>', 'New database name')
+        .option('--description <desc>', 'New description')
+        .option('--path <path>', 'New database path')
+        .option('--s3-cred-id <id>', 'S3 credential secret ID')
+        .option('--encryption-key-id <id>', 'Encryption key secret ID')
+        .option('--geocoding-key-id <id>', 'Geocoding API key secret ID')
         .action(dbsEdit);
 
     // psi dbs remove <name>
@@ -309,7 +363,28 @@ async function dbsList(): Promise<void> {
 //
 // psi dbs add — interactively add a new database entry.
 //
-async function dbsAdd(): Promise<void> {
+async function dbsAdd(cmdOptions: IDbsAddOptions): Promise<void> {
+    if (cmdOptions.yes) {
+        if (!cmdOptions.name || !cmdOptions.path) {
+            console.error(pc.red('✗ --name and --path are required with --yes'));
+            await exit(1);
+            return;
+        }
+
+        const entry: IDatabaseEntry = {
+            name: cmdOptions.name.trim(),
+            description: cmdOptions.description?.trim() || '',
+            path: cmdOptions.path.trim(),
+            s3CredentialId: cmdOptions.s3CredId,
+            encryptionKeyId: cmdOptions.encryptionKeyId,
+            geocodingKeyId: cmdOptions.geocodingKeyId,
+        };
+
+        await addDatabaseEntry(entry);
+        console.log(pc.green(`✓ Database "${entry.name}" added.`));
+        return;
+    }
+
     intro(pc.cyan('Add Database'));
 
     const name = await promptRequired('Database name:');
@@ -384,12 +459,34 @@ async function dbsView(name: string): Promise<void> {
 //
 // psi dbs edit <name> — edit fields with current values pre-populated.
 //
-async function dbsEdit(name: string): Promise<void> {
+async function dbsEdit(name: string, cmdOptions: IDbsEditOptions): Promise<void> {
     const entry = await findDatabaseByName(name);
 
     if (!entry) {
         console.error(pc.red(`✗ No database named "${name}" found.`));
         await exit(1);
+        return;
+    }
+
+    if (cmdOptions.yes) {
+        const updated: IDatabaseEntry = {
+            name: cmdOptions.newName?.trim() || entry.name,
+            description: cmdOptions.description?.trim() ?? entry.description ?? '',
+            path: cmdOptions.path?.trim() || entry.path,
+            origin: entry.origin,
+            s3CredentialId: cmdOptions.s3CredId ?? entry.s3CredentialId,
+            encryptionKeyId: cmdOptions.encryptionKeyId ?? entry.encryptionKeyId,
+            geocodingKeyId: cmdOptions.geocodingKeyId ?? entry.geocodingKeyId,
+        };
+
+        await updateDatabaseEntry({ ...updated, path: entry.path });
+
+        if (updated.path !== entry.path) {
+            await removeDatabaseEntry(entry.path);
+            await addDatabaseEntry(updated);
+        }
+
+        console.log(pc.green(`✓ Database "${updated.name}" updated.`));
         return;
     }
 
