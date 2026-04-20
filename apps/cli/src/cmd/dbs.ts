@@ -2,10 +2,12 @@ import { Command } from 'commander';
 import pc from 'picocolors';
 import { getVault } from 'vault';
 import { getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry } from 'node-utils';
-import { confirm, intro, outro, text, select, isCancel } from '../lib/clack/prompts';
+import { confirm, intro, outro, text, select, isCancel, spinner, note } from '../lib/clack/prompts';
 import { exit } from 'node-utils';
 import { generateKeyPair, exportPublicKeyToPem } from 'storage';
 import type { IDatabaseEntry } from 'electron-defs';
+import { LanShareSender, LanShareReceiver, resolveDatabaseSharePayload, importDatabasePayload } from 'lan-share';
+import type { IDatabaseSharePayload } from 'lan-share';
 
 //
 // Generates an 8-character random alphanumeric ID for shared vault secrets.
@@ -266,6 +268,19 @@ export function dbsCommand(): Command {
         .option('--yes', 'Skip confirmation prompt')
         .action(dbsRemove);
 
+    // psi dbs send [name]
+    cmd.command('send [name]')
+        .description('Send a database config (with secrets) to another device over the LAN.')
+        .option('--yes', 'Skip confirmation prompts and field editing')
+        .option('--code <code>', 'Pairing code (required with --yes)')
+        .action(dbsSend);
+
+    // psi dbs receive
+    cmd.command('receive')
+        .description('Receive a database config (with secrets) from another device over the LAN.')
+        .option('--yes', 'Skip confirmation prompts and field editing')
+        .action(dbsReceive);
+
     return cmd;
 }
 
@@ -475,4 +490,388 @@ async function dbsRemove(name: string, cmdOptions: { yes?: boolean }): Promise<v
 
     await removeDatabaseEntry(entry.path);
     outro(pc.green(`✓ Database "${entry.name}" removed from list.`));
+}
+
+//
+// psi dbs send [name] — share a database config with secrets over the LAN.
+//
+async function dbsSend(name: string | undefined, cmdOptions: { yes?: boolean; code?: string }): Promise<void> {
+    intro(pc.cyan('Send Database'));
+
+    const skipPrompts = !!cmdOptions.yes;
+
+    let entry: IDatabaseEntry | undefined;
+
+    if (name) {
+        entry = await findDatabaseByName(name);
+        if (!entry) {
+            console.error(pc.red(`✗ No database named "${name}" found.`));
+            await exit(1);
+            return;
+        }
+    }
+    else {
+        // Pick from configured databases
+        const databases = await getDatabases();
+        if (databases.length === 0) {
+            console.log(pc.yellow('No databases configured.'));
+            console.log(pc.dim('Use "psi dbs add" to add a database first.'));
+            return;
+        }
+
+        const selected = await select({
+            message: 'Select a database to send:',
+            options: databases.map(dbEntry => ({
+                value: dbEntry.path,
+                label: dbEntry.name,
+            })),
+        });
+
+        if (isCancel(selected)) {
+            outro(pc.yellow('Cancelled.'));
+            return;
+        }
+
+        entry = databases.find(dbEntry => dbEntry.path === selected as string);
+        if (!entry) {
+            console.error(pc.red('✗ Database not found.'));
+            await exit(1);
+            return;
+        }
+    }
+
+    console.log(pc.dim('Hint: Run `psi dbs receive` on another device to receive this database.'));
+
+    // Security warning
+    note(
+        'This will share sensitive credentials over your local network.\nOnly use this on a trusted network.',
+        pc.yellow('⚠ Security Warning')
+    );
+
+    if (!skipPrompts) {
+        const confirmed = await confirm({
+            message: 'Continue with sending?',
+            initialValue: true,
+        });
+
+        if (isCancel(confirmed) || !confirmed) {
+            outro(pc.yellow('Cancelled.'));
+            return;
+        }
+    }
+
+    // Resolve the database payload with secrets
+    const payload = await resolveDatabaseSharePayload(entry);
+
+    // Display resolved fields
+    console.log(pc.cyan('\nDatabase to send:'));
+    console.log(pc.cyan('  Name:        ') + payload.name);
+    console.log(pc.cyan('  Description: ') + (payload.description || pc.dim('(none)')));
+    console.log(pc.cyan('  Path:        ') + payload.path);
+    if (payload.s3Credentials) {
+        console.log(pc.cyan('  S3 Creds:    ') + payload.s3Credentials.label);
+    }
+    if (payload.encryptionKey) {
+        console.log(pc.cyan('  Encryption:  ') + payload.encryptionKey.label);
+    }
+    if (payload.geocodingKey) {
+        console.log(pc.cyan('  Geocoding:   ') + payload.geocodingKey.label);
+    }
+    console.log('');
+
+    if (!skipPrompts) {
+        // Allow editing fields
+        const editedName = await text({
+            message: 'Database name:',
+            initialValue: payload.name,
+            validate: (val) => {
+                if (!val || val.trim().length === 0) {
+                    return 'Name is required';
+                }
+                return undefined;
+            },
+        });
+        if (isCancel(editedName)) {
+            outro(pc.yellow('Cancelled.'));
+            return;
+        }
+        payload.name = (editedName as string).trim();
+
+        const editedDescription = await text({
+            message: 'Description:',
+            initialValue: payload.description || '',
+        });
+        if (isCancel(editedDescription)) {
+            outro(pc.yellow('Cancelled.'));
+            return;
+        }
+        payload.description = (editedDescription as string).trim();
+
+        const editedPath = await text({
+            message: 'Database path:',
+            initialValue: payload.path,
+            validate: (val) => {
+                if (!val || val.trim().length === 0) {
+                    return 'Path is required';
+                }
+                return undefined;
+            },
+        });
+        if (isCancel(editedPath)) {
+            outro(pc.yellow('Cancelled.'));
+            return;
+        }
+        payload.path = (editedPath as string).trim();
+
+        // Confirm which secrets to include
+        if (payload.s3Credentials) {
+            const includeS3 = await confirm({
+                message: `Include S3 credentials (${payload.s3Credentials.label})?`,
+                initialValue: true,
+            });
+            if (isCancel(includeS3)) {
+                outro(pc.yellow('Cancelled.'));
+                return;
+            }
+            if (!includeS3) {
+                payload.s3Credentials = undefined;
+            }
+        }
+
+        if (payload.encryptionKey) {
+            const includeEnc = await confirm({
+                message: `Include encryption key (${payload.encryptionKey.label})?`,
+                initialValue: true,
+            });
+            if (isCancel(includeEnc)) {
+                outro(pc.yellow('Cancelled.'));
+                return;
+            }
+            if (!includeEnc) {
+                payload.encryptionKey = undefined;
+            }
+        }
+
+        if (payload.geocodingKey) {
+            const includeGeo = await confirm({
+                message: `Include geocoding key (${payload.geocodingKey.label})?`,
+                initialValue: true,
+            });
+            if (isCancel(includeGeo)) {
+                outro(pc.yellow('Cancelled.'));
+                return;
+            }
+            if (!includeGeo) {
+                payload.geocodingKey = undefined;
+            }
+        }
+    }
+
+    // Search for receiver
+    const sender = new LanShareSender(payload);
+    const spin = spinner();
+    spin.start('Searching for receiver on the LAN... (Ctrl+C to cancel)');
+
+    const sigintHandler = () => {
+        sender.cancel();
+    };
+    process.on('SIGINT', sigintHandler);
+
+    const endpoint = await sender.waitForReceiver(60000);
+    process.removeListener('SIGINT', sigintHandler);
+
+    if (!endpoint) {
+        spin.stop(pc.yellow('No receiver found within 60 seconds.'));
+        return;
+    }
+
+    spin.stop(pc.green('Receiver found!'));
+
+    let code: string;
+
+    if (skipPrompts) {
+        if (!cmdOptions.code) {
+            console.error(pc.red('✗ --code is required when using --yes'));
+            await exit(1);
+            return;
+        }
+        code = cmdOptions.code;
+    }
+    else {
+        // Prompt for pairing code
+        const codeInput = await text({
+            message: 'Enter the 4-digit pairing code shown on the receiver:',
+            validate: (val) => {
+                if (!val || !/^\d{4}$/.test(val.trim())) {
+                    return 'Please enter a 4-digit code';
+                }
+                return undefined;
+            },
+        });
+
+        if (isCancel(codeInput)) {
+            outro(pc.yellow('Cancelled.'));
+            return;
+        }
+
+        code = (codeInput as string).trim();
+    }
+
+    const success = await sender.send(endpoint, code);
+
+    if (success) {
+        outro(pc.green('✓ Database sent successfully!'));
+    }
+    else {
+        console.error(pc.red('✗ Pairing code rejected by receiver.'));
+        await exit(1);
+    }
+}
+
+//
+// psi dbs receive — receive a database config with secrets from another device.
+//
+async function dbsReceive(cmdOptions: { yes?: boolean }): Promise<void> {
+    intro(pc.cyan('Receive Database'));
+
+    const skipPrompts = !!cmdOptions.yes;
+
+    console.log(pc.dim('Hint: Run `psi dbs send` on another device to send a database.'));
+
+    const receiver = new LanShareReceiver(60000);
+    const receiverInfo = await receiver.start();
+
+    console.log('');
+    console.log(pc.cyan(`  Pairing code: ${pc.bold(receiverInfo.code)}`));
+    console.log('');
+
+    const spin = spinner();
+    spin.start(`Waiting for sender... Code: ${receiverInfo.code} (Ctrl+C to cancel)`);
+
+    const sigintHandler = () => {
+        receiver.cancel();
+    };
+    process.on('SIGINT', sigintHandler);
+
+    const rawPayload = await receiver.receive();
+    process.removeListener('SIGINT', sigintHandler);
+
+    if (!rawPayload) {
+        spin.stop(pc.yellow('No sender connected within 60 seconds.'));
+        return;
+    }
+
+    spin.stop(pc.green('Payload received!'));
+
+    const payload = rawPayload as IDatabaseSharePayload;
+
+    // Display received fields
+    console.log(pc.cyan('\nReceived database:'));
+    console.log(pc.cyan('  Name:        ') + payload.name);
+    console.log(pc.cyan('  Description: ') + (payload.description || pc.dim('(none)')));
+    console.log(pc.cyan('  Path:        ') + payload.path);
+    if (payload.s3Credentials) {
+        console.log(pc.cyan('  S3 Creds:    ') + payload.s3Credentials.label);
+    }
+    if (payload.encryptionKey) {
+        console.log(pc.cyan('  Encryption:  ') + payload.encryptionKey.label);
+    }
+    if (payload.geocodingKey) {
+        console.log(pc.cyan('  Geocoding:   ') + payload.geocodingKey.label);
+    }
+    console.log('');
+
+    if (!skipPrompts) {
+        // Allow editing fields before saving
+        const editedName = await text({
+            message: 'Database name:',
+            initialValue: payload.name,
+            validate: (val) => {
+                if (!val || val.trim().length === 0) {
+                    return 'Name is required';
+                }
+                return undefined;
+            },
+        });
+        if (isCancel(editedName)) {
+            outro(pc.yellow('Cancelled.'));
+            return;
+        }
+        payload.name = (editedName as string).trim();
+
+        const editedDescription = await text({
+            message: 'Description:',
+            initialValue: payload.description || '',
+        });
+        if (isCancel(editedDescription)) {
+            outro(pc.yellow('Cancelled.'));
+            return;
+        }
+        payload.description = (editedDescription as string).trim();
+
+        const editedPath = await text({
+            message: 'Database path:',
+            initialValue: payload.path,
+            validate: (val) => {
+                if (!val || val.trim().length === 0) {
+                    return 'Path is required';
+                }
+                return undefined;
+            },
+        });
+        if (isCancel(editedPath)) {
+            outro(pc.yellow('Cancelled.'));
+            return;
+        }
+        payload.path = (editedPath as string).trim();
+
+        // Confirm which secrets to import
+        if (payload.s3Credentials) {
+            const importS3 = await confirm({
+                message: `Import S3 credentials (${payload.s3Credentials.label})?`,
+                initialValue: true,
+            });
+            if (isCancel(importS3)) {
+                outro(pc.yellow('Cancelled.'));
+                return;
+            }
+            if (!importS3) {
+                payload.s3Credentials = undefined;
+            }
+        }
+
+        if (payload.encryptionKey) {
+            const importEnc = await confirm({
+                message: `Import encryption key (${payload.encryptionKey.label})?`,
+                initialValue: true,
+            });
+            if (isCancel(importEnc)) {
+                outro(pc.yellow('Cancelled.'));
+                return;
+            }
+            if (!importEnc) {
+                payload.encryptionKey = undefined;
+            }
+        }
+
+        if (payload.geocodingKey) {
+            const importGeo = await confirm({
+                message: `Import geocoding key (${payload.geocodingKey.label})?`,
+                initialValue: true,
+            });
+            if (isCancel(importGeo)) {
+                outro(pc.yellow('Cancelled.'));
+                return;
+            }
+            if (!importGeo) {
+                payload.geocodingKey = undefined;
+            }
+        }
+    }
+
+    // Import the payload
+    const dbEntry = await importDatabasePayload(payload);
+    await addDatabaseEntry(dbEntry);
+
+    outro(pc.green(`✓ Database "${dbEntry.name}" imported successfully!`));
 }

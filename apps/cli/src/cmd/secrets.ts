@@ -1,16 +1,30 @@
 import { Command } from 'commander';
 import pc from 'picocolors';
 import { getVault } from 'vault';
-import { confirm, intro, outro, text, password, select, isCancel } from '../lib/clack/prompts';
+import { confirm, intro, outro, text, password, select, isCancel, spinner, note } from '../lib/clack/prompts';
 import { exit } from 'node-utils';
 import * as fs from 'fs/promises';
 import { existsSync } from 'fs';
 import { generateKeyPair, exportPublicKeyToPem } from 'storage';
+import { LanShareSender, LanShareReceiver, resolveSecretSharePayload, importSecretPayload } from 'lan-share';
+import type { ISecretSharePayload } from 'lan-share';
 
 //
 // Secret types supported by the secrets CLI.
 //
 const SECRET_TYPES = ['api-key', 's3-credentials', 'encryption-key', 'plain'];
+
+//
+// Generates an 8-character random alphanumeric ID for shared vault secrets.
+//
+function generateSharedSecretId(): string {
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+    for (let index = 0; index < 8; index++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+}
 
 //
 // Returns the Commander sub-command group for `psi secrets`.
@@ -48,6 +62,19 @@ export function secretsCommand(): Command {
     cmd.command('import')
         .description('Import a .key / .key.pub PEM key pair file.')
         .action(secretsImport);
+
+    // psi secrets send [name]
+    cmd.command('send [name]')
+        .description('Send a secret to another device over the LAN.')
+        .option('--yes', 'Skip confirmation prompts')
+        .option('--code <code>', 'Pairing code (required with --yes)')
+        .action(secretsSend);
+
+    // psi secrets receive
+    cmd.command('receive')
+        .description('Receive a secret from another device over the LAN.')
+        .option('--yes', 'Skip confirmation prompts and field editing')
+        .action(secretsReceive);
 
     return cmd;
 }
@@ -317,4 +344,219 @@ async function secretsImport(): Promise<void> {
     });
 
     outro(pc.green(`✓ Key imported as "cli:encryption:${keyName}".`));
+}
+
+//
+// psi secrets send [name] — share a secret with another device over the LAN.
+//
+async function secretsSend(name: string | undefined, cmdOptions: { yes?: boolean; code?: string }): Promise<void> {
+    intro(pc.cyan('Send Secret'));
+
+    const skipPrompts = !!cmdOptions.yes;
+    const vault = getVault("plaintext");
+    let secretName: string;
+
+    if (name) {
+        const secret = await vault.get(name);
+        if (!secret) {
+            console.error(pc.red(`✗ No secret named "${name}" found.`));
+            await exit(1);
+            return;
+        }
+        secretName = name;
+    }
+    else {
+        // Pick from all vault secrets
+        const secrets = await vault.list();
+        if (secrets.length === 0) {
+            console.log(pc.yellow('No secrets found.'));
+            console.log(pc.dim('Use "psi secrets add" to add a secret first.'));
+            return;
+        }
+
+        const selected = await select({
+            message: 'Select a secret to send:',
+            options: secrets.map(secret => ({
+                value: secret.name,
+                label: `${secret.name} (${secret.type})`,
+            })),
+        });
+
+        if (isCancel(selected)) {
+            outro(pc.yellow('Cancelled.'));
+            return;
+        }
+
+        secretName = selected as string;
+    }
+
+    console.log(pc.dim('Hint: Run `psi secrets receive` on another device to receive this secret.'));
+
+    // Security warning
+    note(
+        'This will share sensitive credentials over your local network.\nOnly use this on a trusted network.',
+        pc.yellow('⚠ Security Warning')
+    );
+
+    if (!skipPrompts) {
+        const confirmed = await confirm({
+            message: 'Continue with sending?',
+            initialValue: true,
+        });
+
+        if (isCancel(confirmed) || !confirmed) {
+            outro(pc.yellow('Cancelled.'));
+            return;
+        }
+    }
+
+    // Build the payload
+    const payload = await resolveSecretSharePayload(secretName);
+
+    console.log(pc.cyan('\nSecret to send:'));
+    console.log(pc.cyan('  Name: ') + secretName);
+    console.log(pc.cyan('  Type: ') + payload.secretType);
+    console.log('');
+
+    // Search for receiver
+    const sender = new LanShareSender(payload);
+    const spin = spinner();
+    spin.start('Searching for receiver on the LAN... (Ctrl+C to cancel)');
+
+    const sigintHandler = () => {
+        sender.cancel();
+    };
+    process.on('SIGINT', sigintHandler);
+
+    const endpoint = await sender.waitForReceiver(60000);
+    process.removeListener('SIGINT', sigintHandler);
+
+    if (!endpoint) {
+        spin.stop(pc.yellow('No receiver found within 60 seconds.'));
+        return;
+    }
+
+    spin.stop(pc.green('Receiver found!'));
+
+    let code: string;
+
+    if (skipPrompts) {
+        if (!cmdOptions.code) {
+            console.error(pc.red('✗ --code is required when using --yes'));
+            await exit(1);
+            return;
+        }
+        code = cmdOptions.code;
+    }
+    else {
+        // Prompt for pairing code
+        const codeInput = await text({
+            message: 'Enter the 4-digit pairing code shown on the receiver:',
+            validate: (val) => {
+                if (!val || !/^\d{4}$/.test(val.trim())) {
+                    return 'Please enter a 4-digit code';
+                }
+                return undefined;
+            },
+        });
+
+        if (isCancel(codeInput)) {
+            outro(pc.yellow('Cancelled.'));
+            return;
+        }
+
+        code = (codeInput as string).trim();
+    }
+
+    const success = await sender.send(endpoint, code);
+
+    if (success) {
+        outro(pc.green('✓ Secret sent successfully!'));
+    }
+    else {
+        console.error(pc.red('✗ Pairing code rejected by receiver.'));
+        await exit(1);
+    }
+}
+
+//
+// psi secrets receive — receive a secret from another device over the LAN.
+//
+async function secretsReceive(cmdOptions: { yes?: boolean }): Promise<void> {
+    intro(pc.cyan('Receive Secret'));
+
+    const skipPrompts = !!cmdOptions.yes;
+
+    console.log(pc.dim('Hint: Run `psi secrets send` on another device to send a secret.'));
+
+    const receiver = new LanShareReceiver(60000);
+    const receiverInfo = await receiver.start();
+
+    console.log('');
+    console.log(pc.cyan(`  Pairing code: ${pc.bold(receiverInfo.code)}`));
+    console.log('');
+
+    const spin = spinner();
+    spin.start(`Waiting for sender... Code: ${receiverInfo.code} (Ctrl+C to cancel)`);
+
+    const sigintHandler = () => {
+        receiver.cancel();
+    };
+    process.on('SIGINT', sigintHandler);
+
+    const rawPayload = await receiver.receive();
+    process.removeListener('SIGINT', sigintHandler);
+
+    if (!rawPayload) {
+        spin.stop(pc.yellow('No sender connected within 60 seconds.'));
+        return;
+    }
+
+    spin.stop(pc.green('Payload received!'));
+
+    const payload = rawPayload as ISecretSharePayload;
+
+    console.log(pc.cyan('\nReceived secret:'));
+    console.log(pc.cyan('  Type: ') + payload.secretType);
+    console.log('');
+
+    let saveName: string;
+
+    if (skipPrompts) {
+        // Auto-generate a save name from the payload label or a random ID.
+        let defaultName = "";
+        try {
+            const parsed = JSON.parse(payload.value);
+            if (parsed.label) {
+                defaultName = parsed.label;
+            }
+        }
+        catch {
+            // Ignore parse errors.
+        }
+        saveName = `shared:${defaultName || generateSharedSecretId()}`;
+    }
+    else {
+        // Ask what name to save it as
+        const nameInput = await text({
+            message: 'Save secret as (name):',
+            validate: (val) => {
+                if (!val || val.trim().length === 0) {
+                    return 'Name is required';
+                }
+                return undefined;
+            },
+        });
+
+        if (isCancel(nameInput)) {
+            outro(pc.yellow('Cancelled.'));
+            return;
+        }
+
+        saveName = (nameInput as string).trim();
+    }
+
+    await importSecretPayload(payload, saveName);
+
+    outro(pc.green(`✓ Secret "${saveName}" imported successfully!`));
 }

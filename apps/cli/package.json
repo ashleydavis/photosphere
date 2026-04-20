@@ -56,6 +56,7 @@
     "bdb": "workspace:*",
     "defs": "workspace:*",
     "task-queue": "workspace:*",
-    "vault": "workspace:*"
+    "vault": "workspace:*",
+    "lan-share": "workspace:*"
   }
 }

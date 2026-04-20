@@ -1,0 +1,286 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import Modal from '@mui/joy/Modal';
+import ModalDialog from '@mui/joy/ModalDialog';
+import DialogTitle from '@mui/joy/DialogTitle';
+import DialogContent from '@mui/joy/DialogContent';
+import DialogActions from '@mui/joy/DialogActions';
+import Button from '@mui/joy/Button';
+import Input from '@mui/joy/Input';
+import FormControl from '@mui/joy/FormControl';
+import FormLabel from '@mui/joy/FormLabel';
+import Typography from '@mui/joy/Typography';
+import Alert from '@mui/joy/Alert';
+import CircularProgress from '@mui/joy/CircularProgress';
+import Checkbox from '@mui/joy/Checkbox';
+import Box from '@mui/joy/Box';
+import { usePlatform } from '../context/platform-context';
+
+export interface IReceiveDatabaseDialogProps {
+    // Whether the dialog is visible.
+    open: boolean;
+
+    // Called when the dialog should close.
+    onClose: () => void;
+}
+
+//
+// Steps in the receive database flow.
+//
+type ReceiveStep = "waiting" | "review" | "success" | "error";
+
+//
+// Payload shape received from the sender (matches IDatabaseSharePayload).
+//
+interface IReceivedDatabasePayload {
+    // Discriminator.
+    type: "database";
+
+    // Editable database name.
+    name: string;
+
+    // Editable description.
+    description: string;
+
+    // Editable path.
+    path: string;
+
+    // Optional origin.
+    origin?: string;
+
+    // Resolved S3 credentials, if included.
+    s3Credentials?: { label: string };
+
+    // Resolved encryption key, if included.
+    encryptionKey?: { label: string };
+
+    // Resolved geocoding key, if included.
+    geocodingKey?: { label: string };
+}
+
+//
+// Dialog for receiving a database config from another device over the LAN.
+//
+export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogProps) {
+    const platform = usePlatform();
+    const [step, setStep] = useState<ReceiveStep>("waiting");
+    const [pairingCode, setPairingCode] = useState("");
+    const [payload, setPayload] = useState<IReceivedDatabasePayload | null>(null);
+    const [editedName, setEditedName] = useState("");
+    const [editedDescription, setEditedDescription] = useState("");
+    const [editedPath, setEditedPath] = useState("");
+    const [importS3, setImportS3] = useState(true);
+    const [importEncryption, setImportEncryption] = useState(true);
+    const [importGeocoding, setImportGeocoding] = useState(true);
+    const [errorMessage, setErrorMessage] = useState("");
+
+    // Start receiving when dialog opens
+    useEffect(() => {
+        if (!open) {
+            return;
+        }
+
+        setStep("waiting");
+        setPairingCode("");
+        setPayload(null);
+        setErrorMessage("");
+
+        let cancelled = false;
+
+        async function startReceiving(): Promise<void> {
+            const info = await platform.startShareReceive();
+            if (cancelled) {
+                return;
+            }
+            setPairingCode(info.code);
+
+            const received = await platform.waitShareReceive();
+            if (cancelled) {
+                return;
+            }
+
+            if (!received) {
+                setErrorMessage("No sender connected within 60 seconds.");
+                setStep("error");
+                return;
+            }
+
+            const receivedPayload = received as IReceivedDatabasePayload;
+            setPayload(receivedPayload);
+            setEditedName(receivedPayload.name);
+            setEditedDescription(receivedPayload.description || "");
+            setEditedPath(receivedPayload.path);
+            setImportS3(!!receivedPayload.s3Credentials);
+            setImportEncryption(!!receivedPayload.encryptionKey);
+            setImportGeocoding(!!receivedPayload.geocodingKey);
+            setStep("review");
+        }
+
+        startReceiving().catch(error => {
+            if (!cancelled) {
+                setErrorMessage(String(error));
+                setStep("error");
+            }
+        });
+
+        return () => {
+            cancelled = true;
+            platform.cancelShareReceive().catch(() => {});
+        };
+    }, [open, platform]);
+
+    //
+    // Saves the received database payload locally.
+    //
+    const handleSave = useCallback(async () => {
+        if (!payload) {
+            return;
+        }
+
+        // Build the import payload with edited fields
+        const importPayload = {
+            ...payload,
+            name: editedName,
+            description: editedDescription,
+            path: editedPath,
+            s3Credentials: importS3 ? payload.s3Credentials : undefined,
+            encryptionKey: importEncryption ? payload.encryptionKey : undefined,
+            geocodingKey: importGeocoding ? payload.geocodingKey : undefined,
+        };
+
+        await platform.importSharePayload(importPayload);
+        setStep("success");
+    }, [payload, editedName, editedDescription, editedPath, importS3, importEncryption, importGeocoding, platform]);
+
+    //
+    // Cancels the receiver and closes the dialog.
+    //
+    const handleCancel = useCallback(async () => {
+        if (step === "waiting") {
+            await platform.cancelShareReceive();
+        }
+        onClose();
+    }, [step, platform, onClose]);
+
+    return (
+        <Modal open={open} onClose={handleCancel}>
+            <ModalDialog sx={{ minWidth: 480, maxWidth: 600 }}>
+                <DialogTitle>Receive Database</DialogTitle>
+                <DialogContent>
+                    <Typography level="body-sm" sx={{ mb: 2 }} color="neutral">
+                        Click Share on a database on another device to send it here.
+                    </Typography>
+
+                    {step === "waiting" && (
+                        <Box sx={{ textAlign: "center", py: 3 }}>
+                            {pairingCode ? (
+                                <>
+                                    <Typography level="body-lg" sx={{ mb: 1 }}>Pairing Code</Typography>
+                                    <Typography level="h2" sx={{ fontFamily: "monospace", letterSpacing: "0.3em", mb: 2 }}>
+                                        {pairingCode}
+                                    </Typography>
+                                    <Box sx={{ display: "flex", alignItems: "center", gap: 2, justifyContent: "center" }}>
+                                        <CircularProgress size="sm" />
+                                        <Typography level="body-sm">Waiting for sender...</Typography>
+                                    </Box>
+                                </>
+                            ) : (
+                                <Box sx={{ display: "flex", alignItems: "center", gap: 2, justifyContent: "center" }}>
+                                    <CircularProgress size="sm" />
+                                    <Typography>Starting receiver...</Typography>
+                                </Box>
+                            )}
+                        </Box>
+                    )}
+
+                    {step === "review" && payload && (
+                        <>
+                            <FormControl sx={{ mb: 1 }}>
+                                <FormLabel>Name</FormLabel>
+                                <Input
+                                    value={editedName}
+                                    onChange={event => setEditedName(event.target.value)}
+                                />
+                            </FormControl>
+
+                            <FormControl sx={{ mb: 1 }}>
+                                <FormLabel>Description</FormLabel>
+                                <Input
+                                    value={editedDescription}
+                                    onChange={event => setEditedDescription(event.target.value)}
+                                />
+                            </FormControl>
+
+                            <FormControl sx={{ mb: 2 }}>
+                                <FormLabel>Path</FormLabel>
+                                <Input
+                                    value={editedPath}
+                                    onChange={event => setEditedPath(event.target.value)}
+                                />
+                            </FormControl>
+
+                            {payload.s3Credentials && (
+                                <Checkbox
+                                    label={`Import S3 credentials (${payload.s3Credentials.label})`}
+                                    checked={importS3}
+                                    onChange={event => setImportS3(event.target.checked)}
+                                    sx={{ mb: 1 }}
+                                />
+                            )}
+
+                            {payload.encryptionKey && (
+                                <Checkbox
+                                    label={`Import encryption key (${payload.encryptionKey.label})`}
+                                    checked={importEncryption}
+                                    onChange={event => setImportEncryption(event.target.checked)}
+                                    sx={{ mb: 1 }}
+                                />
+                            )}
+
+                            {payload.geocodingKey && (
+                                <Checkbox
+                                    label={`Import geocoding key (${payload.geocodingKey.label})`}
+                                    checked={importGeocoding}
+                                    onChange={event => setImportGeocoding(event.target.checked)}
+                                    sx={{ mb: 1 }}
+                                />
+                            )}
+                        </>
+                    )}
+
+                    {step === "success" && (
+                        <Alert color="success">
+                            Database imported successfully!
+                        </Alert>
+                    )}
+
+                    {step === "error" && (
+                        <Alert color="danger">
+                            {errorMessage}
+                        </Alert>
+                    )}
+                </DialogContent>
+                <DialogActions>
+                    {step === "waiting" && (
+                        <Button variant="plain" onClick={handleCancel}>Cancel</Button>
+                    )}
+
+                    {step === "review" && (
+                        <>
+                            <Button variant="plain" onClick={handleCancel}>Cancel</Button>
+                            <Button
+                                disabled={!editedName || !editedPath}
+                                onClick={() => { handleSave().catch(err => console.error("Import error:", err)); }}
+                            >
+                                Save
+                            </Button>
+                        </>
+                    )}
+
+                    {(step === "success" || step === "error") && (
+                        <Button onClick={onClose}>Close</Button>
+                    )}
+                </DialogActions>
+            </ModalDialog>
+        </Modal>
+    );
+}

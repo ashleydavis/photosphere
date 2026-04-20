@@ -399,6 +399,35 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
     const listS3Dirs = useCallback(async (credentialId: string, bucket: string, prefix: string): Promise<string[]> => {
         return await electronAPI.listS3Dirs(credentialId, bucket, prefix);
     }, [electronAPI]);
+
+    const startShareReceive = useCallback(async (): Promise<{ code: string }> => {
+        return await electronAPI.startShareReceive();
+    }, [electronAPI]);
+
+    const waitShareReceive = useCallback(async (): Promise<unknown> => {
+        return await electronAPI.waitShareReceive();
+    }, [electronAPI]);
+
+    const cancelShareReceive = useCallback(async (): Promise<void> => {
+        await electronAPI.cancelShareReceive();
+    }, [electronAPI]);
+
+    const waitForReceiver = useCallback(async (payload: unknown): Promise<unknown> => {
+        return await electronAPI.waitForReceiver(payload);
+    }, [electronAPI]);
+
+    const sendToReceiver = useCallback(async (endpoint: unknown, code: string): Promise<boolean> => {
+        return await electronAPI.sendToReceiver(endpoint, code);
+    }, [electronAPI]);
+
+    const cancelShareSend = useCallback(async (): Promise<void> => {
+        await electronAPI.cancelShareSend();
+    }, [electronAPI]);
+
+    const importSharePayload = useCallback(async (payload: unknown): Promise<void> => {
+        await electronAPI.importSharePayload(payload);
+    }, [electronAPI]);
+
     const downloadAsset = useCallback(async (assetId: string, assetType: string, filename: string, _contentType: string, databasePath: string): Promise<void> => {
         await electronAPI.saveAsset(assetId, assetType, filename, databasePath);
     }, [electronAPI]);
@@ -455,6 +484,13 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         getSecretValue,
         getRecentDatabases,
         listS3Dirs,
+        startShareReceive,
+        waitShareReceive,
+        cancelShareReceive,
+        waitForReceiver,
+        sendToReceiver,
+        cancelShareSend,
+        importSharePayload,
     };
 
     const config = createConfig(

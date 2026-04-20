@@ -37,7 +37,8 @@
     "rest-api": "workspace:*",
     "tools": "workspace:*",
     "vault": "workspace:*",
-    "storage": "workspace:*"
+    "storage": "workspace:*",
+    "lan-share": "workspace:*"
   },
   "devDependencies": {
     "cross-env": "^7.0.3",

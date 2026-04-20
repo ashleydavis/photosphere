@@ -267,6 +267,38 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         return [];
     }, []);
 
+    const startShareReceive = useCallback(async (): Promise<{ code: string }> => {
+        // Not supported on web platform.
+        return { code: "0000" };
+    }, []);
+
+    const waitShareReceive = useCallback(async (): Promise<unknown> => {
+        // Not supported on web platform.
+        return null;
+    }, []);
+
+    const cancelShareReceive = useCallback(async (): Promise<void> => {
+        // Not supported on web platform.
+    }, []);
+
+    const waitForReceiver = useCallback(async (_payload: unknown): Promise<unknown> => {
+        // Not supported on web platform.
+        return null;
+    }, []);
+
+    const sendToReceiver = useCallback(async (_endpoint: unknown, _code: string): Promise<boolean> => {
+        // Not supported on web platform.
+        return false;
+    }, []);
+
+    const cancelShareSend = useCallback(async (): Promise<void> => {
+        // Not supported on web platform.
+    }, []);
+
+    const importSharePayload = useCallback(async (_payload: unknown): Promise<void> => {
+        // Not supported on web platform.
+    }, []);
+
     const platformContext: IPlatformContext = {
         openDatabase,
         createDatabase,
@@ -305,6 +337,13 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         getSecretValue,
         getRecentDatabases,
         listS3Dirs,
+        startShareReceive,
+        waitShareReceive,
+        cancelShareReceive,
+        waitForReceiver,
+        sendToReceiver,
+        cancelShareSend,
+        importSharePayload,
     };
 
     //

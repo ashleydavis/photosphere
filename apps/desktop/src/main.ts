@@ -19,6 +19,8 @@ import type { IStorageDescriptor, IEncryptionKeyPem } from 'storage';
 import { createStorage, CloudStorage } from 'storage';
 import { checkConnectivity, loadDatabaseConfig } from 'api';
 import { getVault } from 'vault';
+import { LanShareSender, LanShareReceiver, importDatabasePayload, importSecretPayload } from 'lan-share';
+import type { IDatabaseSharePayload, ISecretSharePayload, IReceiverEndpoint } from 'lan-share';
 
 // Main application window
 let mainWindow: BrowserWindow | null = null;
@@ -52,6 +54,12 @@ let isSyncRunning: boolean = false;
 
 // File logger for writing logs to files
 let fileLogger: FileLoggerElectron | null = null;
+
+// Active LAN share sender instance, if any.
+let activeSender: LanShareSender | null = null;
+
+// Active LAN share receiver instance, if any.
+let activeReceiver: LanShareReceiver | null = null;
 
 
 //
@@ -480,6 +488,68 @@ ipcMain.handle('open-path', logExceptions(async (_event, folderPath: string): Pr
 ipcMain.handle('import-assets', logExceptions(async (_event, paths?: string[]) => {
     return await selectAndImportAssets(paths);
 }, 'Error importing assets'));
+
+// IPC handler for starting a LAN share receiver
+ipcMain.handle('start-share-receive', logExceptions(async () => {
+    activeReceiver = new LanShareReceiver(60000);
+    return await activeReceiver.start();
+}, 'Error starting share receiver'));
+
+// IPC handler for waiting for a sender payload on the active receiver
+ipcMain.handle('wait-share-receive', logExceptions(async () => {
+    if (!activeReceiver) {
+        throw new Error('No active share receiver');
+    }
+    const payload = await activeReceiver.receive();
+    activeReceiver = null;
+    return payload;
+}, 'Error waiting for share payload'));
+
+// IPC handler for cancelling the active share receiver
+ipcMain.handle('cancel-share-receive', logExceptions(async () => {
+    if (activeReceiver) {
+        activeReceiver.cancel();
+        activeReceiver = null;
+    }
+}, 'Error cancelling share receiver'));
+
+// IPC handler for creating a sender and waiting for a receiver on the LAN
+ipcMain.handle('wait-for-receiver', logExceptions(async (_event, payload: unknown) => {
+    activeSender = new LanShareSender(payload);
+    const endpoint = await activeSender.waitForReceiver(60000);
+    return endpoint;
+}, 'Error waiting for receiver'));
+
+// IPC handler for sending a payload to a discovered receiver
+ipcMain.handle('send-to-receiver', logExceptions(async (_event, endpoint: unknown, code: string) => {
+    if (!activeSender) {
+        throw new Error('No active share sender');
+    }
+    const result = await activeSender.send(endpoint as IReceiverEndpoint, code);
+    activeSender = null;
+    return result;
+}, 'Error sending to receiver'));
+
+// IPC handler for cancelling the active share sender
+ipcMain.handle('cancel-share-send', logExceptions(async () => {
+    if (activeSender) {
+        activeSender.cancel();
+        activeSender = null;
+    }
+}, 'Error cancelling share sender'));
+
+// IPC handler for importing a share payload (database or secret)
+ipcMain.handle('import-share-payload', logExceptions(async (_event, payload: unknown) => {
+    const typed = payload as { type: string };
+    if (typed.type === 'database') {
+        const dbEntry = await importDatabasePayload(payload as IDatabaseSharePayload);
+        await addDatabaseEntry(dbEntry);
+    }
+    else if (typed.type === 'secret') {
+        const secretPayload = payload as ISecretSharePayload & { saveName: string };
+        await importSecretPayload(secretPayload, secretPayload.saveName);
+    }
+}, 'Error importing share payload'));
 
 // IPC handler for checking whether required tools (ImageMagick, ffmpeg) are available
 ipcMain.handle('check-tools', logExceptions(async () => {
