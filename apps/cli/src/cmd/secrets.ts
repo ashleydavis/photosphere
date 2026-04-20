@@ -15,6 +15,60 @@ import type { ISecretSharePayload } from 'lan-share';
 const SECRET_TYPES = ['api-key', 's3-credentials', 'encryption-key', 'plain'];
 
 //
+// Options for the `secrets add` command.
+//
+interface ISecretsAddOptions {
+    // Skip interactive prompts.
+    yes?: boolean;
+    // Secret name.
+    name?: string;
+    // Secret type.
+    type?: string;
+    // Secret value.
+    value?: string;
+}
+
+//
+// Options for the `secrets view` command.
+//
+interface ISecretsViewOptions {
+    // Skip confirmation prompt.
+    yes?: boolean;
+}
+
+//
+// Options for the `secrets edit` command.
+//
+interface ISecretsEditOptions {
+    // Skip interactive prompts.
+    yes?: boolean;
+    // New secret value.
+    value?: string;
+}
+
+//
+// Options for the `secrets delete` command.
+//
+interface ISecretsDeleteOptions {
+    // Skip confirmation prompt.
+    yes?: boolean;
+}
+
+//
+// Options for the `secrets import` command.
+//
+interface ISecretsImportOptions {
+    // Skip interactive prompts.
+    yes?: boolean;
+    // Path to the private key file.
+    privateKey?: string;
+    // Path to the public key file.
+    publicKey?: string;
+    // Name for the imported key.
+    keyName?: string;
+}
+
+//
 // Generates an 8-character random alphanumeric ID for shared vault secrets.
 //
 function generateSharedSecretId(): string {
@@ -36,6 +90,10 @@ export function secretsCommand(): Command {
     // psi secrets add
     cmd.command('add')
         .description('Interactively add a new secret.')
+        .option('--yes', 'Skip prompts')
+        .option('--name <name>', 'Secret name')
+        .option('--type <type>', 'Secret type')
+        .option('--value <value>', 'Secret value')
         .action(secretsAdd);
 
     // psi secrets list
@@ -46,21 +104,29 @@ export function secretsCommand(): Command {
     // psi secrets view <name>
     cmd.command('view <name>')
         .description('Show the full value of a named secret.')
+        .option('--yes', 'Skip confirmation prompt')
         .action(secretsView);
 
     // psi secrets edit <name>
     cmd.command('edit <name>')
         .description('Edit an existing secret, field by field.')
+        .option('--yes', 'Skip prompts')
+        .option('--value <value>', 'New value')
         .action(secretsEdit);
 
     // psi secrets delete <name>
     cmd.command('delete <name>')
         .description('Delete a named secret.')
+        .option('--yes', 'Skip confirmation prompt')
         .action(secretsDelete);
 
     // psi secrets import
     cmd.command('import')
         .description('Import a .key / .key.pub PEM key pair file.')
+        .option('--yes', 'Skip prompts')
+        .option('--private-key <path>', 'Path to private key file')
+        .option('--public-key <path>', 'Path to public key file')
+        .option('--key-name <name>', 'Name for the imported key')
         .action(secretsImport);
 
     // psi secrets send [name]
@@ -82,10 +148,28 @@ export function secretsCommand(): Command {
 //
 // psi secrets add — prompt for name, type, value, then store.
 //
-async function secretsAdd(): Promise<void> {
-    intro(pc.cyan('Add Secret'));
-
+async function secretsAdd(cmdOptions: ISecretsAddOptions): Promise<void> {
     const vault = getVault("plaintext");
+
+    if (cmdOptions.yes) {
+        if (!cmdOptions.name || !cmdOptions.type || !cmdOptions.value) {
+            console.error(pc.red('✗ --name, --type, and --value are required with --yes'));
+            await exit(1);
+            return;
+        }
+
+        if (!SECRET_TYPES.includes(cmdOptions.type)) {
+            console.error(pc.red(`✗ Invalid secret type "${cmdOptions.type}". Must be one of: ${SECRET_TYPES.join(', ')}`));
+            await exit(1);
+            return;
+        }
+
+        await vault.set({ name: cmdOptions.name.trim(), type: cmdOptions.type, value: cmdOptions.value });
+        console.log(pc.green(`✓ Secret "${cmdOptions.name}" added.`));
+        return;
+    }
+
+    intro(pc.cyan('Add Secret'));
 
     const name = await text({
         message: 'Secret name (e.g. cli:geocoding or db:abc123:s3):',
@@ -158,7 +242,7 @@ async function secretsList(): Promise<void> {
 //
 // psi secrets view <name> — show the full value after confirmation.
 //
-async function secretsView(name: string): Promise<void> {
+async function secretsView(name: string, cmdOptions: ISecretsViewOptions): Promise<void> {
     const vault = getVault("plaintext");
     const secret = await vault.get(name);
 
@@ -168,14 +252,16 @@ async function secretsView(name: string): Promise<void> {
         return;
     }
 
-    const confirmed = await confirm({
-        message: `Reveal the value of "${name}"? (This will display sensitive data.)`,
-        initialValue: false,
-    });
+    if (!cmdOptions.yes) {
+        const confirmed = await confirm({
+            message: `Reveal the value of "${name}"? (This will display sensitive data.)`,
+            initialValue: false,
+        });
 
-    if (isCancel(confirmed) || !confirmed) {
-        outro(pc.yellow('Cancelled.'));
-        return;
+        if (isCancel(confirmed) || !confirmed) {
+            outro(pc.yellow('Cancelled.'));
+            return;
+        }
     }
 
     console.log(pc.cyan(`\nName: `) + secret.name);
@@ -203,17 +289,29 @@ async function secretsView(name: string): Promise<void> {
 //
 // psi secrets edit <name> — reload existing fields and re-prompt with current values pre-populated.
 //
-async function secretsEdit(name: string): Promise<void> {
-    intro(pc.cyan(`Edit Secret: ${name}`));
-
+async function secretsEdit(name: string, cmdOptions: ISecretsEditOptions): Promise<void> {
     const vault = getVault("plaintext");
     const secret = await vault.get(name);
 
     if (!secret) {
-        outro(pc.red(`✗ No secret named "${name}" found.`));
+        console.error(pc.red(`✗ No secret named "${name}" found.`));
         await exit(1);
         return;
     }
+
+    if (cmdOptions.yes) {
+        if (!cmdOptions.value) {
+            console.error(pc.red('✗ --value is required with --yes'));
+            await exit(1);
+            return;
+        }
+
+        await vault.set({ name: secret.name, type: secret.type, value: cmdOptions.value });
+        console.log(pc.green(`✓ Secret "${name}" updated.`));
+        return;
+    }
+
+    intro(pc.cyan(`Edit Secret: ${name}`));
 
     const newValue = await password({
         message: `New value (leave blank to keep current):`,
@@ -237,7 +335,7 @@ async function secretsEdit(name: string): Promise<void> {
 //
 // psi secrets delete <name> — delete a secret after confirmation.
 //
-async function secretsDelete(name: string): Promise<void> {
+async function secretsDelete(name: string, cmdOptions: ISecretsDeleteOptions): Promise<void> {
     const vault = getVault("plaintext");
     const secret = await vault.get(name);
 
@@ -247,14 +345,16 @@ async function secretsDelete(name: string): Promise<void> {
         return;
     }
 
-    const confirmed = await confirm({
-        message: `Delete secret "${name}"? This cannot be undone.`,
-        initialValue: false,
-    });
+    if (!cmdOptions.yes) {
+        const confirmed = await confirm({
+            message: `Delete secret "${name}"? This cannot be undone.`,
+            initialValue: false,
+        });
 
-    if (isCancel(confirmed) || !confirmed) {
-        outro(pc.yellow('Cancelled.'));
-        return;
+        if (isCancel(confirmed) || !confirmed) {
+            outro(pc.yellow('Cancelled.'));
+            return;
+        }
     }
 
     await vault.delete(name);
@@ -264,7 +364,43 @@ async function secretsDelete(name: string): Promise<void> {
 //
 // psi secrets import — import a .key / .key.pub PEM file pair into the secrets store.
 //
-async function secretsImport(): Promise<void> {
+async function secretsImport(cmdOptions: ISecretsImportOptions): Promise<void> {
+    if (cmdOptions.yes) {
+        if (!cmdOptions.privateKey) {
+            console.error(pc.red('✗ --private-key is required with --yes'));
+            await exit(1);
+            return;
+        }
+
+        const privatePath = cmdOptions.privateKey.trim();
+        if (!existsSync(privatePath)) {
+            console.error(pc.red(`✗ File not found: ${privatePath}`));
+            await exit(1);
+            return;
+        }
+
+        const publicPath = cmdOptions.publicKey?.trim() || `${privatePath}.pub`;
+        if (!existsSync(publicPath)) {
+            console.error(pc.red(`✗ Public key file not found: ${publicPath}`));
+            await exit(1);
+            return;
+        }
+
+        const keyName = cmdOptions.keyName?.trim() || privatePath.split('/').pop()?.replace(/\.key$/, '') || 'imported-key';
+        const privateKeyPem = await fs.readFile(privatePath, 'utf-8');
+        const publicKeyPem = await fs.readFile(publicPath, 'utf-8');
+
+        const vault = getVault("plaintext");
+        await vault.set({
+            name: `cli:encryption:${keyName}`,
+            type: 'encryption-key',
+            value: JSON.stringify({ privateKeyPem, publicKeyPem }),
+        });
+
+        console.log(pc.green(`✓ Key imported as "cli:encryption:${keyName}".`));
+        return;
+    }
+
     intro(pc.cyan('Import Encryption Key'));
 
     const privateKeyPath = await text({

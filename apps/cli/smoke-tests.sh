@@ -91,6 +91,14 @@ declare -a TEST_TABLE=(
     "dbs-resolve-by-name:test_dbs_resolve_by_name:Resolve database by name with auto-resolved encryption key"
     "dbs-resolve-by-path:test_dbs_resolve_by_path:Resolve database by path with auto-resolved encryption key"
     "dbs-no-match-fallback:test_dbs_no_match_fallback:No databases.json match falls back to existing flow"
+    "secrets-list-empty:test_secrets_list_empty:Empty vault shows No secrets message"
+    "secrets-add:test_secrets_add:Add a secret via CLI and verify with list"
+    "secrets-view:test_secrets_view:View a secret with --yes and verify output"
+    "secrets-edit:test_secrets_edit:Edit a secret with --yes and verify updated value"
+    "secrets-delete:test_secrets_delete:Delete a secret with --yes and verify removal"
+    "secrets-import:test_secrets_import:Import a PEM key pair and verify via list"
+    "dbs-edit:test_dbs_edit:Edit a database entry with --yes and verify rename"
+    "dbs-add-cli:test_dbs_add_cli:Add a database via CLI with --yes and verify"
 )
 
 # Test table helper functions
@@ -3849,6 +3857,242 @@ test_dbs_no_match_fallback() {
     invoke_command "Summary with no databases.json match" "$(get_cli_command) summary --db \"$db_dir\" --yes" 0 "summary_output"
 
     expect_output_string "$summary_output" "1" "Summary shows at least 1 asset"
+
+    test_passed
+}
+
+# -----------------------------------------------------------------------------
+# Secrets & dbs non-interactive CLI smoke tests
+# -----------------------------------------------------------------------------
+
+test_secrets_list_empty() {
+    local test_number="$1"
+    print_test_header "$test_number" "SECRETS LIST EMPTY"
+
+    # Use an isolated vault and config for this test.
+    local saved_vault="$PHOTOSPHERE_VAULT_DIR"
+    local saved_config="$PHOTOSPHERE_CONFIG_DIR"
+    local test_dir="$TEST_TMP_DIR/secrets-list-empty"
+    rm -rf "$test_dir"
+    export PHOTOSPHERE_VAULT_DIR="$test_dir/vault"
+    export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
+    mkdir -p "$PHOTOSPHERE_VAULT_DIR" "$PHOTOSPHERE_CONFIG_DIR"
+
+    local list_output
+    invoke_command "List secrets (empty)" "$(get_cli_command) secrets list" 0 "list_output"
+
+    expect_output_string "$list_output" "No secrets" "Empty vault shows 'No secrets' message"
+
+    # Restore shared vault and config.
+    export PHOTOSPHERE_VAULT_DIR="$saved_vault"
+    export PHOTOSPHERE_CONFIG_DIR="$saved_config"
+
+    test_passed
+}
+
+test_secrets_add() {
+    local test_number="$1"
+    print_test_header "$test_number" "SECRETS ADD"
+
+    # Use an isolated vault and config for this test.
+    local saved_vault="$PHOTOSPHERE_VAULT_DIR"
+    local saved_config="$PHOTOSPHERE_CONFIG_DIR"
+    local test_dir="$TEST_TMP_DIR/secrets-add"
+    rm -rf "$test_dir"
+    export PHOTOSPHERE_VAULT_DIR="$test_dir/vault"
+    export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
+    mkdir -p "$PHOTOSPHERE_VAULT_DIR" "$PHOTOSPHERE_CONFIG_DIR"
+
+    invoke_command "Add secret via CLI" "$(get_cli_command) secrets add --yes --name test-secret --type plain --value hello123" 0
+
+    local list_output
+    invoke_command "List secrets after add" "$(get_cli_command) secrets list" 0 "list_output"
+
+    expect_output_string "$list_output" "test-secret" "Added secret appears in list"
+
+    # Restore shared vault and config.
+    export PHOTOSPHERE_VAULT_DIR="$saved_vault"
+    export PHOTOSPHERE_CONFIG_DIR="$saved_config"
+
+    test_passed
+}
+
+test_secrets_view() {
+    local test_number="$1"
+    print_test_header "$test_number" "SECRETS VIEW"
+
+    # Use an isolated vault and config for this test.
+    local saved_vault="$PHOTOSPHERE_VAULT_DIR"
+    local saved_config="$PHOTOSPHERE_CONFIG_DIR"
+    local test_dir="$TEST_TMP_DIR/secrets-view"
+    rm -rf "$test_dir"
+    export PHOTOSPHERE_VAULT_DIR="$test_dir/vault"
+    export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
+    mkdir -p "$PHOTOSPHERE_VAULT_DIR" "$PHOTOSPHERE_CONFIG_DIR"
+
+    seed_vault_secret "view-secret" "plain" "my-secret-value"
+
+    local view_output
+    invoke_command "View secret" "$(get_cli_command) secrets view view-secret --yes" 0 "view_output"
+
+    expect_output_string "$view_output" "view-secret" "Secret name appears in view output"
+    expect_output_string "$view_output" "plain" "Secret type appears in view output"
+    expect_output_string "$view_output" "my-secret-value" "Secret value appears in view output"
+
+    # Restore shared vault and config.
+    export PHOTOSPHERE_VAULT_DIR="$saved_vault"
+    export PHOTOSPHERE_CONFIG_DIR="$saved_config"
+
+    test_passed
+}
+
+test_secrets_edit() {
+    local test_number="$1"
+    print_test_header "$test_number" "SECRETS EDIT"
+
+    # Use an isolated vault and config for this test.
+    local saved_vault="$PHOTOSPHERE_VAULT_DIR"
+    local saved_config="$PHOTOSPHERE_CONFIG_DIR"
+    local test_dir="$TEST_TMP_DIR/secrets-edit"
+    rm -rf "$test_dir"
+    export PHOTOSPHERE_VAULT_DIR="$test_dir/vault"
+    export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
+    mkdir -p "$PHOTOSPHERE_VAULT_DIR" "$PHOTOSPHERE_CONFIG_DIR"
+
+    seed_vault_secret "edit-secret" "plain" "original-value"
+
+    invoke_command "Edit secret via CLI" "$(get_cli_command) secrets edit edit-secret --yes --value updated-value" 0
+
+    local view_output
+    invoke_command "View secret after edit" "$(get_cli_command) secrets view edit-secret --yes" 0 "view_output"
+
+    expect_output_string "$view_output" "updated-value" "Secret value updated after edit"
+
+    # Restore shared vault and config.
+    export PHOTOSPHERE_VAULT_DIR="$saved_vault"
+    export PHOTOSPHERE_CONFIG_DIR="$saved_config"
+
+    test_passed
+}
+
+test_secrets_delete() {
+    local test_number="$1"
+    print_test_header "$test_number" "SECRETS DELETE"
+
+    # Use an isolated vault and config for this test.
+    local saved_vault="$PHOTOSPHERE_VAULT_DIR"
+    local saved_config="$PHOTOSPHERE_CONFIG_DIR"
+    local test_dir="$TEST_TMP_DIR/secrets-delete"
+    rm -rf "$test_dir"
+    export PHOTOSPHERE_VAULT_DIR="$test_dir/vault"
+    export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
+    mkdir -p "$PHOTOSPHERE_VAULT_DIR" "$PHOTOSPHERE_CONFIG_DIR"
+
+    seed_vault_secret "keep-secret" "plain" "keep-me"
+    seed_vault_secret "delete-secret" "plain" "delete-me"
+
+    invoke_command "Delete secret via CLI" "$(get_cli_command) secrets delete delete-secret --yes" 0
+
+    local list_output
+    invoke_command "List secrets after delete" "$(get_cli_command) secrets list" 0 "list_output"
+
+    expect_output_string "$list_output" "keep-secret" "Remaining secret still present"
+    expect_output_string "$list_output" "delete-secret" "Deleted secret is absent" false
+
+    # Restore shared vault and config.
+    export PHOTOSPHERE_VAULT_DIR="$saved_vault"
+    export PHOTOSPHERE_CONFIG_DIR="$saved_config"
+
+    test_passed
+}
+
+test_secrets_import() {
+    local test_number="$1"
+    print_test_header "$test_number" "SECRETS IMPORT"
+
+    # Use an isolated vault and config for this test.
+    local saved_vault="$PHOTOSPHERE_VAULT_DIR"
+    local saved_config="$PHOTOSPHERE_CONFIG_DIR"
+    local test_dir="$TEST_TMP_DIR/secrets-import"
+    rm -rf "$test_dir"
+    export PHOTOSPHERE_VAULT_DIR="$test_dir/vault"
+    export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
+    mkdir -p "$PHOTOSPHERE_VAULT_DIR" "$PHOTOSPHERE_CONFIG_DIR"
+
+    local key_dir="$test_dir/keys"
+    mkdir -p "$key_dir"
+
+    # Generate a PEM key pair using openssl.
+    openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$key_dir/test-import.key" 2>/dev/null
+    openssl rsa -in "$key_dir/test-import.key" -pubout -out "$key_dir/test-import.key.pub" 2>/dev/null
+
+    invoke_command "Import key pair" "$(get_cli_command) secrets import --yes --private-key \"$key_dir/test-import.key\" --key-name test-import" 0
+
+    local list_output
+    invoke_command "List secrets after import" "$(get_cli_command) secrets list" 0 "list_output"
+
+    expect_output_string "$list_output" "cli:encryption:test-import" "Imported key appears in secrets list"
+
+    # Restore shared vault and config.
+    export PHOTOSPHERE_VAULT_DIR="$saved_vault"
+    export PHOTOSPHERE_CONFIG_DIR="$saved_config"
+
+    test_passed
+}
+
+test_dbs_edit() {
+    local test_number="$1"
+    print_test_header "$test_number" "DBS EDIT"
+
+    # Use an isolated vault and config for this test.
+    local saved_vault="$PHOTOSPHERE_VAULT_DIR"
+    local saved_config="$PHOTOSPHERE_CONFIG_DIR"
+    local test_dir="$TEST_TMP_DIR/dbs-edit"
+    rm -rf "$test_dir"
+    export PHOTOSPHERE_VAULT_DIR="$test_dir/vault"
+    export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
+    mkdir -p "$PHOTOSPHERE_VAULT_DIR" "$PHOTOSPHERE_CONFIG_DIR"
+
+    seed_databases_config '[{"name":"edit-db","description":"","path":"/tmp/edit-db"}]'
+
+    invoke_command "Edit database entry" "$(get_cli_command) dbs edit edit-db --yes --new-name renamed-db" 0
+
+    local dbs_output
+    invoke_command "List databases after edit" "$(get_cli_command) dbs list" 0 "dbs_output"
+
+    expect_output_string "$dbs_output" "renamed-db" "Renamed database appears in list"
+
+    # Restore shared vault and config.
+    export PHOTOSPHERE_VAULT_DIR="$saved_vault"
+    export PHOTOSPHERE_CONFIG_DIR="$saved_config"
+
+    test_passed
+}
+
+test_dbs_add_cli() {
+    local test_number="$1"
+    print_test_header "$test_number" "DBS ADD CLI"
+
+    # Use an isolated vault and config for this test.
+    local saved_vault="$PHOTOSPHERE_VAULT_DIR"
+    local saved_config="$PHOTOSPHERE_CONFIG_DIR"
+    local test_dir="$TEST_TMP_DIR/dbs-add-cli"
+    rm -rf "$test_dir"
+    export PHOTOSPHERE_VAULT_DIR="$test_dir/vault"
+    export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
+    mkdir -p "$PHOTOSPHERE_VAULT_DIR" "$PHOTOSPHERE_CONFIG_DIR"
+
+    invoke_command "Add database via CLI" "$(get_cli_command) dbs add --yes --name cli-db --path /tmp/cli-db" 0
+
+    local dbs_output
+    invoke_command "List databases after add" "$(get_cli_command) dbs list" 0 "dbs_output"
+
+    expect_output_string "$dbs_output" "cli-db" "Added database appears in list"
+    expect_output_string "$dbs_output" "/tmp/cli-db" "Database path appears in list"
+
+    # Restore shared vault and config.
+    export PHOTOSPHERE_VAULT_DIR="$saved_vault"
+    export PHOTOSPHERE_CONFIG_DIR="$saved_config"
 
     test_passed
 }
