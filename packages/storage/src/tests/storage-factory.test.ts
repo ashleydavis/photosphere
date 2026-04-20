@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { pathJoin, createStorage } from '../lib/storage-factory';
 import { StoragePrefixWrapper } from '../lib/storage-prefix-wrapper';
-import { generateKeyPair, hashPublicKey } from '../lib/key-utils';
+import { generateKeyPair, hashPublicKey } from 'encryption';
 
 describe('pathJoin', () => {
     test('joins multiple segments with forward slashes', () => {

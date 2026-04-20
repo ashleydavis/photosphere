@@ -1,5 +1,5 @@
 import { generateKeyPair, hashPublicKey, loadEncryptionKeys } from '../lib/key-utils';
-import type { IStorageOptions } from '../lib/storage-factory';
+import type { IStorageOptions } from '../lib/encryption-types';
 import { createCipheriv, randomBytes } from 'node:crypto';
 import * as fs from 'fs/promises';
 import * as path from 'path';

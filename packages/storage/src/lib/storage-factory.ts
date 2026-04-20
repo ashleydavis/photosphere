@@ -1,11 +1,10 @@
-import { KeyObject } from 'node:crypto';
 import { IStorage } from './storage';
 import { FileStorage } from './file-storage';
 import { CloudStorage, IS3Credentials } from './cloud-storage';
 import { EncryptedStorage } from './encrypted-storage';
 import { StoragePrefixWrapper } from './storage-prefix-wrapper';
-import type { IPrivateKeyMap } from './encryption-types';
-import { IEncryptionKeyPem } from './key-utils';
+import type { IStorageOptions } from 'encryption';
+import { IEncryptionKeyPem } from 'encryption';
 import path from 'node:path';
 
 //
@@ -18,23 +17,6 @@ export function pathJoin(...paths: string[]): string {
     result = result.replace(/\/{2,}/g, '/');    
 
     return result;
-}
-
-//
-// Options for creating storage.
-//
-export interface IStorageOptions {
-    //
-    // Public key used when writing new encrypted data.
-    // Must correspond to the "default" private key in decryptionKeyMap.
-    //
-    encryptionPublicKey?: KeyObject;
-
-    //
-    // Map of key identifier to private key for decryption.
-    // The "default" entry is used for old-format files (no header).
-    //
-    decryptionKeyMap?: IPrivateKeyMap;
 }
 
 //
