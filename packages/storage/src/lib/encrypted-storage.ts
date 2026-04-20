@@ -1,9 +1,9 @@
 import { Readable } from "stream";
 import { IFileInfo, IListResult, IStorage, IWriteLockInfo } from "./storage";
-import { computeEncryptedLength, createDecryptionStream, createEncryptionStream } from "./encrypt-stream";
+import { computeEncryptedLength, createDecryptionStream, createEncryptionStream } from "encryption";
 import { KeyObject } from "node:crypto";
-import { decryptBuffer, encryptBuffer } from "./encrypt-buffer";
-import type { IPrivateKeyMap } from "./encryption-types";
+import { decryptBuffer, encryptBuffer } from "encryption";
+import type { IPrivateKeyMap } from "encryption";
 import { pipe } from "node-utils";
 
 //

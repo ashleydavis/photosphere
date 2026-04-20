@@ -4,7 +4,7 @@
 //
 
 import type { IStorage } from "./storage";
-import { ENCRYPTION_TAG, NEW_FORMAT_HEADER_LENGTH, PUBLIC_KEY_HASH_LENGTH } from "./encryption-constants";
+import { ENCRYPTION_TAG, NEW_FORMAT_HEADER_LENGTH, PUBLIC_KEY_HASH_LENGTH } from "encryption";
 import { retry } from "utils";
 
 //

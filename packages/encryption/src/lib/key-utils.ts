@@ -1,7 +1,7 @@
 import { createHash, generateKeyPairSync, createPrivateKey, createPublicKey, KeyObject } from 'node:crypto';
 import * as fs from 'fs/promises';
 import { pathExists } from 'node-utils';
-import { IStorageOptions } from './storage-factory';
+import { IStorageOptions } from './encryption-types';
 import { ensureParentDirectoryExists } from 'node-utils';
 import { FatalError } from 'utils';
 import type { IPrivateKeyMap } from './encryption-types';
