@@ -3687,7 +3687,7 @@ test_vault_list_shared() {
         '{"label":"Test Geocoding","apiKey":"AIzaFakeKey123"}'
 
     local vault_output
-    invoke_command "List vault secrets" "$(get_cli_command) vault list" 0 "vault_output"
+    invoke_command "List vault secrets" "$(get_cli_command) secrets list" 0 "vault_output"
 
     expect_output_string "$vault_output" "shared:s3test01" "S3 credential appears in vault list"
     expect_output_string "$vault_output" "shared:api00001" "API key appears in vault list"
