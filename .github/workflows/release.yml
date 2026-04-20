@@ -222,6 +222,39 @@ jobs:
           echo "Encrypted smoke tests exit code: $ENCRYPTED_EXIT_CODE" >> smoke-test-logs/smoke-tests-encrypted-output.log
           exit $ENCRYPTED_EXIT_CODE
 
+  lan-share-smoke-test:
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Run LAN share smoke tests
+        working-directory: ./apps/cli
+        run: |
+          mkdir -p smoke-test-logs
+          ./smoke-tests-lan-share.sh 2>&1 | tee smoke-test-logs/lan-share-tests-output.log
+          LAN_SHARE_EXIT_CODE=${PIPESTATUS[0]}
+          echo "LAN share smoke tests exit code: $LAN_SHARE_EXIT_CODE"
+          echo "LAN share smoke tests exit code: $LAN_SHARE_EXIT_CODE" >> smoke-test-logs/lan-share-tests-output.log
+          exit $LAN_SHARE_EXIT_CODE
+
   build-linux:
     timeout-minutes: 20
     runs-on: ubuntu-24.04
@@ -873,7 +906,7 @@ jobs:
 
   create-release:
     timeout-minutes: 20
-    needs: [compile, unit-tests, build-linux, build-windows, build-windows-baseline, build-macos-x64, build-macos-arm64, build-desktop, smoke-test, smoke-test-encrypted, write-lock-tests, sync-tests]
+    needs: [compile, unit-tests, build-linux, build-windows, build-windows-baseline, build-macos-x64, build-macos-arm64, build-desktop, smoke-test, smoke-test-encrypted, write-lock-tests, sync-tests, lan-share-smoke-test]
     runs-on: ubuntu-latest
     permissions:
       contents: write

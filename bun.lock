@@ -33,6 +33,7 @@
         "exif-parser": "^0.1.12",
         "is-unicode-supported": "^2.1.0",
         "js-yaml": "^4.1.0",
+        "lan-share": "workspace:*",
         "merkle-tree": "workspace:*",
         "mime": "^4.0.7",
         "node-utils": "workspace:*",
@@ -65,6 +66,7 @@
         "api": "workspace:*",
         "config": "workspace:*",
         "electron-defs": "workspace:*",
+        "lan-share": "workspace:*",
         "node-utils": "workspace:*",
         "rest-api": "workspace:*",
         "serialize-error": "^11.0.0",
@@ -256,6 +258,22 @@
       "version": "1.0.0",
       "devDependencies": {
         "@types/node": "^22.9.1",
+        "typescript": "^5.6.3",
+      },
+    },
+    "packages/lan-share": {
+      "name": "lan-share",
+      "version": "1.0.0",
+      "dependencies": {
+        "electron-defs": "workspace:*",
+        "node-utils": "workspace:*",
+        "vault": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/jest": "^29.4.0",
+        "@types/node": "^22.9.1",
+        "jest": "^29.0.1",
+        "ts-jest": "^29.0.5",
         "typescript": "^5.6.3",
       },
     },
@@ -1897,6 +1915,8 @@
     "keyv": ["keyv@4.5.4", "", { "dependencies": { "json-buffer": "3.0.1" } }, "sha512-oxVHkHR/EJf2CNXnWxRLW6mg7JyCCUcG0DtEGmL2ctUo1PNTin1PUil+r/+4r5MpVgC/fn1kjsx7mjSujKqIpw=="],
 
     "kleur": ["kleur@3.0.3", "", {}, "sha512-eTIzlVOSUR+JxdDFepEYcBMtZ9Qqdef+rnzWdRZuMbOywu5tO2w2N7rqjoANZ5k9vywhL6Br1VRjUIgTQx4E8w=="],
+
+    "lan-share": ["lan-share@workspace:packages/lan-share"],
 
     "lazy-val": ["lazy-val@1.0.5", "", {}, "sha512-0/BnGCCfyUMkBpeDgWihanIAF9JmZhHBgUhEqzvf+adhNGLoP6TaiI5oF8oyb3I45P+PcnrqihSf01M0l0G5+Q=="],
 

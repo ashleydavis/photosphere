@@ -302,5 +302,44 @@ export interface IElectronAPI {
     // Returns the top-5 most recently opened database entries, most recent first.
     //
     getRecentDatabases: () => Promise<IDatabaseEntry[]>;
+
+    //
+    // Starts a share receiver: generates a pairing code and begins listening for senders.
+    // Returns the pairing code so the UI can display it.
+    //
+    startShareReceive: () => Promise<{ code: string }>;
+
+    //
+    // Waits for a sender to deliver a payload to the active receiver.
+    // Returns the payload on success, or null on timeout.
+    //
+    waitShareReceive: () => Promise<unknown>;
+
+    //
+    // Cancels the active share receiver.
+    //
+    cancelShareReceive: () => Promise<void>;
+
+    //
+    // Creates a sender with the given payload and waits for a receiver on the LAN.
+    // Returns the discovered endpoint, or null on timeout.
+    //
+    waitForReceiver: (payload: unknown) => Promise<unknown>;
+
+    //
+    // Sends the payload to the discovered receiver using the pairing code.
+    // Returns true on success, false if the code was rejected.
+    //
+    sendToReceiver: (endpoint: unknown, code: string) => Promise<boolean>;
+
+    //
+    // Cancels the active share sender.
+    //
+    cancelShareSend: () => Promise<void>;
+
+    //
+    // Imports a share payload (database or secret) into the local vault and config.
+    //
+    importSharePayload: (payload: unknown) => Promise<void>;
 }
 

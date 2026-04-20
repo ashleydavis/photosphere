@@ -104,6 +104,27 @@ const electronAPI: IElectronAPI = {
     getRecentDatabases: (): Promise<IDatabaseEntry[]> => {
         return ipcRenderer.invoke('get-recent-databases');
     },
+    startShareReceive: (): Promise<{ code: string }> => {
+        return ipcRenderer.invoke('start-share-receive');
+    },
+    waitShareReceive: (): Promise<unknown> => {
+        return ipcRenderer.invoke('wait-share-receive');
+    },
+    cancelShareReceive: (): Promise<void> => {
+        return ipcRenderer.invoke('cancel-share-receive');
+    },
+    waitForReceiver: (payload: unknown): Promise<unknown> => {
+        return ipcRenderer.invoke('wait-for-receiver', payload);
+    },
+    sendToReceiver: (endpoint: unknown, code: string): Promise<boolean> => {
+        return ipcRenderer.invoke('send-to-receiver', endpoint, code);
+    },
+    cancelShareSend: (): Promise<void> => {
+        return ipcRenderer.invoke('cancel-share-send');
+    },
+    importSharePayload: (payload: unknown): Promise<void> => {
+        return ipcRenderer.invoke('import-share-payload', payload);
+    },
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);
