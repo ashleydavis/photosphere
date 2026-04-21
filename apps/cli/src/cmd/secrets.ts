@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import pc from 'picocolors';
-import { getVault } from 'vault';
+import { getVault, getDefaultVaultType } from 'vault';
 import { confirm, intro, outro, text, password, select, isCancel, spinner, note } from '../lib/clack/prompts';
 import { exit } from 'node-utils';
 import * as fs from 'fs/promises';
@@ -14,6 +14,19 @@ import type { ISecretSharePayload } from 'lan-share';
 // Secret types supported by the secrets CLI.
 //
 const SECRET_TYPES = ['api-key', 's3-credentials', 'encryption-key', 'plain'];
+
+//
+// Checks that the vault's required tools are present.
+// Prints an actionable error and exits with code 1 if any prerequisite is missing.
+//
+async function checkVaultPrereqs(): Promise<void> {
+    const vault = getVault(getDefaultVaultType());
+    const result = await vault.checkPrereqs();
+    if (!result.ok) {
+        console.error(pc.red(`✗ ${result.message}`));
+        await exit(1);
+    }
+}
 
 //
 // Options for the `secrets add` command.
@@ -150,7 +163,8 @@ export function secretsCommand(): Command {
 // psi secrets add — prompt for name, type, value, then store.
 //
 async function secretsAdd(cmdOptions: ISecretsAddOptions): Promise<void> {
-    const vault = getVault("plaintext");
+    await checkVaultPrereqs();
+    const vault = getVault(getDefaultVaultType());
 
     if (cmdOptions.yes) {
         if (!cmdOptions.name || !cmdOptions.type || !cmdOptions.value) {
@@ -221,7 +235,8 @@ async function secretsAdd(cmdOptions: ISecretsAddOptions): Promise<void> {
 // psi secrets list — print all secrets with masked values.
 //
 async function secretsList(): Promise<void> {
-    const vault = getVault("plaintext");
+    await checkVaultPrereqs();
+    const vault = getVault(getDefaultVaultType());
     const secrets = await vault.list();
 
     if (secrets.length === 0) {
@@ -244,7 +259,8 @@ async function secretsList(): Promise<void> {
 // psi secrets view [name] — show the full value after confirmation.
 //
 async function secretsView(name: string | undefined, cmdOptions: ISecretsViewOptions): Promise<void> {
-    const vault = getVault("plaintext");
+    await checkVaultPrereqs();
+    const vault = getVault(getDefaultVaultType());
 
     if (!name) {
         if (cmdOptions.yes) {
@@ -321,7 +337,8 @@ async function secretsView(name: string | undefined, cmdOptions: ISecretsViewOpt
 // psi secrets edit [name] — reload existing fields and re-prompt with current values pre-populated.
 //
 async function secretsEdit(name: string | undefined, cmdOptions: ISecretsEditOptions): Promise<void> {
-    const vault = getVault("plaintext");
+    await checkVaultPrereqs();
+    const vault = getVault(getDefaultVaultType());
 
     if (!name) {
         if (cmdOptions.yes) {
@@ -426,7 +443,8 @@ async function secretsEdit(name: string | undefined, cmdOptions: ISecretsEditOpt
 // psi secrets delete [name] — delete a secret after confirmation.
 //
 async function secretsDelete(name: string | undefined, cmdOptions: ISecretsDeleteOptions): Promise<void> {
-    const vault = getVault("plaintext");
+    await checkVaultPrereqs();
+    const vault = getVault(getDefaultVaultType());
 
     if (!name) {
         if (cmdOptions.yes) {
@@ -485,6 +503,7 @@ async function secretsDelete(name: string | undefined, cmdOptions: ISecretsDelet
 // psi secrets import — import a .key / .key.pub PEM file pair into the secrets store.
 //
 async function secretsImport(cmdOptions: ISecretsImportOptions): Promise<void> {
+    await checkVaultPrereqs();
     if (cmdOptions.yes) {
         if (!cmdOptions.privateKey) {
             console.error(pc.red('✗ --private-key is required with --yes'));
@@ -511,7 +530,7 @@ async function secretsImport(cmdOptions: ISecretsImportOptions): Promise<void> {
             publicKeyPem = exportPublicKeyToPem(createPublicKey(privateKeyObj));
         }
 
-        const vault = getVault("plaintext");
+        const vault = getVault(getDefaultVaultType());
         await vault.set({
             name: keyName,
             type: 'encryption-key',
@@ -555,7 +574,7 @@ async function secretsImport(cmdOptions: ISecretsImportOptions): Promise<void> {
         publicKeyPem = exportPublicKeyToPem(createPublicKey(privateKeyObj));
     }
 
-    const vault = getVault("plaintext");
+    const vault = getVault(getDefaultVaultType());
     await vault.set({
         name: keyName,
         type: 'encryption-key',
@@ -569,10 +588,11 @@ async function secretsImport(cmdOptions: ISecretsImportOptions): Promise<void> {
 // psi secrets send [name] — share a secret with another device over the LAN.
 //
 async function secretsSend(name: string | undefined, cmdOptions: { yes?: boolean; code?: string }): Promise<void> {
+    await checkVaultPrereqs();
     intro(pc.cyan('Send Secret'));
 
     const skipPrompts = !!cmdOptions.yes;
-    const vault = getVault("plaintext");
+    const vault = getVault(getDefaultVaultType());
     let secretName: string;
 
     if (name) {
@@ -702,6 +722,7 @@ async function secretsSend(name: string | undefined, cmdOptions: { yes?: boolean
 // psi secrets receive — receive a secret from another device over the LAN.
 //
 async function secretsReceive(cmdOptions: { yes?: boolean }): Promise<void> {
+    await checkVaultPrereqs();
     intro(pc.cyan('Receive Secret'));
 
     const skipPrompts = !!cmdOptions.yes;

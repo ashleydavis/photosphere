@@ -20,13 +20,13 @@ import pc from "picocolors";
 import { confirm, text, isCancel, outro, select } from './clack/prompts';
 import * as path from "path";
 import { CURRENT_DATABASE_VERSION, loadTreeVersion } from "merkle-tree";
-import { getVault } from 'vault';
+import { getVault, getDefaultVaultType } from 'vault';
 
 //
 // Lists vault key names for all encryption keys stored under cli:encryption:*.
 //
 export async function getAvailableKeys(): Promise<string[]> {
-    const vault = getVault("plaintext");
+    const vault = getVault(getDefaultVaultType());
     const secrets = await vault.list();
     return secrets
         .filter(secret => secret.name.startsWith('cli:encryption:'))
@@ -134,7 +134,7 @@ export async function promptForEncryption(message: string = 'Would you like to e
         const privateKeyPem = keyPair.privateKey.export({ type: 'pkcs8', format: 'pem' }) as string;
         const publicKeyPem = exportPublicKeyToPem(keyPair.publicKey);
 
-        const vault = getVault("plaintext");
+        const vault = getVault(getDefaultVaultType());
         await vault.set({
             name: `cli:encryption:${keyName}`,
             type: 'encryption-key',
@@ -173,7 +173,7 @@ export async function resolveKeyPems(keyNames?: string): Promise<IEncryptionKeyP
 // Returns the pair or undefined if not found.
 //
 async function loadKeyPairFromVault(keyName: string): Promise<IEncryptionKeyPem | undefined> {
-    const vault = getVault("plaintext");
+    const vault = getVault(getDefaultVaultType());
     const secret = await vault.get(`cli:encryption:${keyName}`);
     if (!secret) {
         return undefined;
@@ -235,7 +235,7 @@ export async function resolveDatabaseEntry(dbValue: string): Promise<IDatabaseEn
 // Follows the same pattern as the desktop main.ts secret resolution.
 //
 export async function resolveSecretsFromEntry(entry: IDatabaseEntry): Promise<IResolvedDatabaseSecrets> {
-    const vault = getVault("plaintext");
+    const vault = getVault(getDefaultVaultType());
     const result: IResolvedDatabaseSecrets = {
         keyPems: [],
     };
@@ -662,7 +662,7 @@ export async function createDatabase(
                 const keyPair = generateKeyPair();
                 const privateKeyPem = keyPair.privateKey.export({ type: 'pkcs8', format: 'pem' }) as string;
                 const publicKeyPem = exportPublicKeyToPem(keyPair.publicKey);
-                const vault = getVault("plaintext");
+                const vault = getVault(getDefaultVaultType());
                 await vault.set({
                     name: `cli:encryption:${options.key}`,
                     type: 'encryption-key',

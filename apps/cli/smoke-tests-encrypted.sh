@@ -28,6 +28,7 @@ TEST_FILES_DIR="../../test"
 # Isolate the vault and config so tests don't pollute the user's real data.
 export PHOTOSPHERE_VAULT_DIR="${TEST_TMP_DIR}/vault"
 export PHOTOSPHERE_CONFIG_DIR="${TEST_TMP_DIR}/config"
+export PHOTOSPHERE_VAULT_TYPE="plaintext"
 
 # Use built binary instead of bun run start (set by --binary)
 USE_BINARY=false

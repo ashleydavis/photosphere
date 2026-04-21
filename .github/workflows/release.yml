@@ -173,6 +173,16 @@ jobs:
           sudo apt update
           sudo apt install -y imagemagick ffmpeg tree
 
+      - name: Install keychain tools (Linux)
+        run: |
+          sudo apt-get install -y libsecret-tools gnome-keyring
+
+      - name: Start keyring daemon (Linux)
+        run: |
+          eval $(gnome-keyring-daemon --unlock --components=secrets <<< "ci-test-password")
+          echo "GNOME_KEYRING_CONTROL=$GNOME_KEYRING_CONTROL" >> $GITHUB_ENV
+          echo "DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS" >> $GITHUB_ENV
+
       - name: Run smoke tests
         working-directory: ./apps/cli
         run: |

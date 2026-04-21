@@ -4,7 +4,7 @@ import pc from "picocolors";
 import { exit } from "node-utils";
 import { configureIfNeeded, getS3Config } from '../lib/config';
 import { loadDatabase, IBaseCommandOptions, resolveKeyPems, promptForEncryption, selectEncryptionKey, ICommandContext } from "../lib/init-cmd";
-import { getVault } from "vault";
+import { getVault, getDefaultVaultType } from "vault";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import { getDirectoryForCommand } from "../lib/directory-picker";
 import { replicate, merkleTreeExists, loadDatabaseConfig, updateDatabaseConfig } from "api";
@@ -186,7 +186,7 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
 
     // If --generate-key is set, generate the dest key in the vault if it doesn't exist yet.
     if (options.generateKey && options.destKey) {
-        const vault = getVault("plaintext");
+        const vault = getVault(getDefaultVaultType());
         const existing = await vault.get(`cli:encryption:${options.destKey}`);
         if (!existing) {
             const keyPair = generateKeyPair();

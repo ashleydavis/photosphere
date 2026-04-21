@@ -2,7 +2,7 @@ import * as fs from "fs/promises";
 import * as fsSync from "fs";
 import * as os from "os";
 import * as path from "path";
-import { ISecret, IVault } from "./vault";
+import { ISecret, IVault, IPrereqCheckResult } from "./vault";
 
 //
 // Default directory under which the plain-text vault stores its files.
@@ -171,5 +171,12 @@ export class PlaintextVault implements IVault {
     //
     exists(): boolean {
         return fsSync.existsSync(this.vaultDir);
+    }
+
+    //
+    // The plaintext vault has no external tool dependencies.
+    //
+    async checkPrereqs(): Promise<IPrereqCheckResult> {
+        return { ok: true, message: undefined };
     }
 }

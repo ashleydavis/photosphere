@@ -23,6 +23,7 @@ SENDER_VAULT_DIR="${TEST_TMP_DIR}/sender-vault"
 SENDER_CONFIG_DIR="${TEST_TMP_DIR}/sender-config"
 RECEIVER_VAULT_DIR="${TEST_TMP_DIR}/receiver-vault"
 RECEIVER_CONFIG_DIR="${TEST_TMP_DIR}/receiver-config"
+export PHOTOSPHERE_VAULT_TYPE="plaintext"
 
 # Counters.
 TESTS_PASSED=0

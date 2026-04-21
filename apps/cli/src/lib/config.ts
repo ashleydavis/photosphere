@@ -5,7 +5,7 @@ import os from 'os';
 import pc from 'picocolors';
 import { IS3Credentials } from 'storage';
 import { exit } from 'node-utils';
-import { getVault } from 'vault';
+import { getVault, getDefaultVaultType } from 'vault';
 
 //
 // Non-secret CLI preferences stored in ~/.config/photosphere/cli.json.
@@ -124,7 +124,7 @@ export async function configureS3(): Promise<IS3Credentials | undefined> {
         s3Config.endpoint = endpoint.trim();
     }
 
-    const vault = getVault("plaintext");
+    const vault = getVault(getDefaultVaultType());
     await vault.set({ name: 'cli:s3', type: 's3-credentials', value: JSON.stringify(s3Config) });
 
     outro(pc.green('S3 credentials saved.'));
@@ -136,7 +136,7 @@ export async function configureS3(): Promise<IS3Credentials | undefined> {
 // Reads S3 credentials from the vault.
 //
 export async function getS3Config(): Promise<IS3Credentials | undefined> {
-    const vault = getVault("plaintext");
+    const vault = getVault(getDefaultVaultType());
     const secret = await vault.get('cli:s3');
     if (!secret) {
         return undefined;
@@ -151,7 +151,7 @@ export async function getGoogleApiKey(): Promise<string | undefined> {
     if (process.env.GOOGLE_API_KEY) {
         return process.env.GOOGLE_API_KEY.trim();
     }
-    const vault = getVault("plaintext");
+    const vault = getVault(getDefaultVaultType());
     const secret = await vault.get('cli:geocoding');
     return secret?.value;
 }
@@ -186,7 +186,7 @@ export async function configureGoogleApiKey(): Promise<void> {
         return;
     }
 
-    const vault = getVault("plaintext");
+    const vault = getVault(getDefaultVaultType());
     await vault.set({ name: 'cli:geocoding', type: 'api-key', value: typeof apiKey === 'string' ? apiKey.trim() : '' });
 
     outro(pc.green('✓ Google API key configured successfully!'));
@@ -197,7 +197,7 @@ export async function configureGoogleApiKey(): Promise<void> {
 // Sets the Google API key directly in the vault.
 //
 export async function setGoogleApiKey(apiKey: string): Promise<void> {
-    const vault = getVault("plaintext");
+    const vault = getVault(getDefaultVaultType());
     await vault.set({ name: 'cli:geocoding', type: 'api-key', value: apiKey });
 }
 
@@ -205,7 +205,7 @@ export async function setGoogleApiKey(apiKey: string): Promise<void> {
 // Removes the Google API key from the vault.
 //
 export async function removeGoogleApiKey(): Promise<void> {
-    const vault = getVault("plaintext");
+    const vault = getVault(getDefaultVaultType());
     await vault.delete('cli:geocoding');
 }
 
@@ -311,7 +311,7 @@ export async function clearConfig(): Promise<boolean> {
         return false;
     }
 
-    const vault = getVault("plaintext");
+    const vault = getVault(getDefaultVaultType());
     await vault.delete('cli:s3');
     await vault.delete('cli:geocoding');
 
