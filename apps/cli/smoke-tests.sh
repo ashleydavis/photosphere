@@ -105,6 +105,8 @@ declare -a TEST_TABLE=(
     "keychain-vault-delete:test_keychain_vault_delete:Add a secret to OS keychain, delete it, verify it is gone from list"
     "dbs-edit:test_dbs_edit:Edit a database entry with --yes and verify rename"
     "dbs-add-cli:test_dbs_add_cli:Add a database via CLI with --yes and verify"
+    "dbs-add-duplicate:test_dbs_add_duplicate:Adding a database with a duplicate name fails with error"
+    "secrets-add-duplicate:test_secrets_add_duplicate:Adding a secret with a duplicate name fails with error"
 )
 
 # Test table helper functions
@@ -4263,6 +4265,61 @@ test_dbs_add_cli() {
     expect_output_string "$dbs_output" "/tmp/cli-db" "Database path appears in list"
 
     # Restore shared vault and config.
+    export PHOTOSPHERE_VAULT_DIR="$saved_vault"
+    export PHOTOSPHERE_CONFIG_DIR="$saved_config"
+
+    test_passed
+}
+
+test_dbs_add_duplicate() {
+    local test_number="$1"
+    print_test_header "$test_number" "DBS ADD DUPLICATE"
+
+    local saved_vault="$PHOTOSPHERE_VAULT_DIR"
+    local saved_config="$PHOTOSPHERE_CONFIG_DIR"
+    local test_dir="$TEST_TMP_DIR/dbs-add-duplicate"
+    rm -rf "$test_dir"
+    export PHOTOSPHERE_VAULT_DIR="$test_dir/vault"
+    export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
+    mkdir -p "$PHOTOSPHERE_VAULT_DIR" "$PHOTOSPHERE_CONFIG_DIR"
+
+    invoke_command "Add database first time" "$(get_cli_command) dbs add --yes --name dup-db --path /tmp/dup-db-1" 0
+
+    local error_output
+    invoke_command "Add database with same name fails" "$(get_cli_command) dbs add --yes --name dup-db --path /tmp/dup-db-2" 1 "error_output"
+
+    expect_output_string "$error_output" "already exists" "Error message mentions already exists"
+
+    local dbs_output
+    invoke_command "List databases" "$(get_cli_command) dbs list" 0 "dbs_output"
+    expect_output_string "$dbs_output" "/tmp/dup-db-1" "Original path still present"
+    expect_output_string "$dbs_output" "/tmp/dup-db-2" "Duplicate path absent" false
+
+    export PHOTOSPHERE_VAULT_DIR="$saved_vault"
+    export PHOTOSPHERE_CONFIG_DIR="$saved_config"
+
+    test_passed
+}
+
+test_secrets_add_duplicate() {
+    local test_number="$1"
+    print_test_header "$test_number" "SECRETS ADD DUPLICATE"
+
+    local saved_vault="$PHOTOSPHERE_VAULT_DIR"
+    local saved_config="$PHOTOSPHERE_CONFIG_DIR"
+    local test_dir="$TEST_TMP_DIR/secrets-add-duplicate"
+    rm -rf "$test_dir"
+    export PHOTOSPHERE_VAULT_DIR="$test_dir/vault"
+    export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
+    mkdir -p "$PHOTOSPHERE_VAULT_DIR" "$PHOTOSPHERE_CONFIG_DIR"
+
+    invoke_command "Add secret first time" "$(get_cli_command) secrets add --yes --name dup-secret --type generic --value first" 0
+
+    local error_output
+    invoke_command "Add secret with same name fails" "$(get_cli_command) secrets add --yes --name dup-secret --type generic --value second" 1 "error_output"
+
+    expect_output_string "$error_output" "already exists" "Error message mentions already exists"
+
     export PHOTOSPHERE_VAULT_DIR="$saved_vault"
     export PHOTOSPHERE_CONFIG_DIR="$saved_config"
 

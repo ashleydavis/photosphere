@@ -374,13 +374,20 @@ async function dbsAdd(cmdOptions: IDbsAddOptions): Promise<void> {
         }
 
         const entry: IDatabaseEntry = {
-            name: cmdOptions.name.trim(),
-            description: cmdOptions.description?.trim() || '',
-            path: cmdOptions.path.trim(),
+            name: cmdOptions.name,
+            description: cmdOptions.description || '',
+            path: cmdOptions.path,
             s3CredentialId: cmdOptions.s3CredId,
             encryptionKeyId: cmdOptions.encryptionKeyId,
             geocodingKeyId: cmdOptions.geocodingKeyId,
         };
+
+        const existing = await findDatabaseByName(entry.name);
+        if (existing) {
+            console.error(pc.red(`✗ A database named "${entry.name}" already exists (${existing.path}). Use a different name or remove the existing entry first.`));
+            await exit(1);
+            return;
+        }
 
         await addDatabaseEntry(entry);
         console.log(pc.green(`✓ Database "${entry.name}" added.`));
@@ -392,6 +399,13 @@ async function dbsAdd(cmdOptions: IDbsAddOptions): Promise<void> {
     const name = await promptRequired('Database name:');
     const description = await promptOptional('Description (optional):') || '';
     const dbPath = await promptRequired('Database path (filesystem or S3):');
+
+    const existing = await findDatabaseByName(name);
+    if (existing) {
+        outro(pc.red(`✗ A database named "${name}" already exists (${existing.path}). Use a different name or remove the existing entry first.`));
+        await exit(1);
+        return;
+    }
 
     // Secret linking
     const s3CredentialId = await pickOrCreateSecret('s3-credentials', 'S3 credentials:');
@@ -416,6 +430,8 @@ async function dbsAdd(cmdOptions: IDbsAddOptions): Promise<void> {
 // psi dbs view [name] — show all fields of a database entry.
 //
 async function dbsView(name: string | undefined, cmdOptions: { yes?: boolean }): Promise<void> {
+    let entry: IDatabaseEntry | undefined;
+
     if (!name) {
         if (cmdOptions.yes) {
             console.error(pc.red('✗ <name> is required with --yes'));
@@ -432,7 +448,7 @@ async function dbsView(name: string | undefined, cmdOptions: { yes?: boolean }):
         const selected = await select({
             message: 'Select a database to view:',
             options: databases.map(database => ({
-                value: database.name,
+                value: database.path,
                 label: `${database.name} (${database.path})`,
             })),
         });
@@ -442,10 +458,11 @@ async function dbsView(name: string | undefined, cmdOptions: { yes?: boolean }):
             return;
         }
 
-        name = selected as string;
+        entry = databases.find(database => database.path === selected as string);
     }
-
-    const entry = await findDatabaseByName(name);
+    else {
+        entry = await findDatabaseByName(name);
+    }
 
     if (!entry) {
         console.error(pc.red(`✗ No database named "${name}" found.`));
@@ -491,6 +508,8 @@ async function dbsView(name: string | undefined, cmdOptions: { yes?: boolean }):
 // psi dbs edit [name] — edit fields with current values pre-populated.
 //
 async function dbsEdit(name: string | undefined, cmdOptions: IDbsEditOptions): Promise<void> {
+    let entry: IDatabaseEntry | undefined;
+
     if (!name) {
         if (cmdOptions.yes) {
             console.error(pc.red('✗ <name> is required with --yes'));
@@ -507,7 +526,7 @@ async function dbsEdit(name: string | undefined, cmdOptions: IDbsEditOptions): P
         const selected = await select({
             message: 'Select a database to edit:',
             options: databases.map(database => ({
-                value: database.name,
+                value: database.path,
                 label: `${database.name} (${database.path})`,
             })),
         });
@@ -517,10 +536,11 @@ async function dbsEdit(name: string | undefined, cmdOptions: IDbsEditOptions): P
             return;
         }
 
-        name = selected as string;
+        entry = databases.find(database => database.path === selected as string);
     }
-
-    const entry = await findDatabaseByName(name);
+    else {
+        entry = await findDatabaseByName(name);
+    }
 
     if (!entry) {
         console.error(pc.red(`✗ No database named "${name}" found.`));
@@ -530,9 +550,9 @@ async function dbsEdit(name: string | undefined, cmdOptions: IDbsEditOptions): P
 
     if (cmdOptions.yes) {
         const updated: IDatabaseEntry = {
-            name: cmdOptions.name?.trim() || entry.name,
-            description: cmdOptions.description?.trim() ?? entry.description ?? '',
-            path: cmdOptions.path?.trim() || entry.path,
+            name: cmdOptions.name || entry.name,
+            description: cmdOptions.description ?? entry.description ?? '',
+            path: cmdOptions.path || entry.path,
             origin: entry.origin,
             s3CredentialId: cmdOptions.s3CredId ?? entry.s3CredentialId,
             encryptionKeyId: cmdOptions.encryptionKeyId ?? entry.encryptionKeyId,
@@ -625,6 +645,8 @@ async function dbsEdit(name: string | undefined, cmdOptions: IDbsEditOptions): P
 // psi dbs remove [name] — remove a database entry after confirmation.
 //
 async function dbsRemove(name: string | undefined, cmdOptions: { yes?: boolean }): Promise<void> {
+    let entry: IDatabaseEntry | undefined;
+
     if (!name) {
         if (cmdOptions.yes) {
             console.error(pc.red('✗ <name> is required with --yes'));
@@ -641,7 +663,7 @@ async function dbsRemove(name: string | undefined, cmdOptions: { yes?: boolean }
         const selected = await select({
             message: 'Select a database to remove:',
             options: databases.map(database => ({
-                value: database.name,
+                value: database.path,
                 label: `${database.name} (${database.path})`,
             })),
         });
@@ -651,10 +673,11 @@ async function dbsRemove(name: string | undefined, cmdOptions: { yes?: boolean }
             return;
         }
 
-        name = selected as string;
+        entry = databases.find(database => database.path === selected as string);
     }
-
-    const entry = await findDatabaseByName(name);
+    else {
+        entry = await findDatabaseByName(name);
+    }
 
     if (!entry) {
         console.error(pc.red(`✗ No database named "${name}" found.`));

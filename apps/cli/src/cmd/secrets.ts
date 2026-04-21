@@ -180,7 +180,14 @@ async function secretsAdd(cmdOptions: ISecretsAddOptions): Promise<void> {
             return;
         }
 
-        await vault.set({ name: cmdOptions.name.trim(), type: cmdOptions.type, value: cmdOptions.value });
+        const existing = await vault.get(cmdOptions.name);
+        if (existing) {
+            console.error(pc.red(`✗ A secret named "${cmdOptions.name}" already exists. Use "secrets edit" to update it.`));
+            await exit(1);
+            return;
+        }
+
+        await vault.set({ name: cmdOptions.name, type: cmdOptions.type, value: cmdOptions.value });
         console.log(pc.green(`✓ Secret "${cmdOptions.name}" added.`));
         return;
     }
@@ -199,6 +206,14 @@ async function secretsAdd(cmdOptions: ISecretsAddOptions): Promise<void> {
 
     if (isCancel(name)) {
         outro(pc.yellow('Cancelled.'));
+        return;
+    }
+
+    const trimmedName = (name as string).trim();
+    const existing = await vault.get(trimmedName);
+    if (existing) {
+        outro(pc.red(`✗ A secret named "${trimmedName}" already exists. Use "secrets edit" to update it.`));
+        await exit(1);
         return;
     }
 
@@ -227,9 +242,9 @@ async function secretsAdd(cmdOptions: ISecretsAddOptions): Promise<void> {
         return;
     }
 
-    await vault.set({ name: (name as string).trim(), type: type as string, value: value as string });
+    await vault.set({ name: trimmedName, type: type as string, value: value as string });
 
-    outro(pc.green(`✓ Secret "${name}" added.`));
+    outro(pc.green(`✓ Secret "${trimmedName}" added.`));
 }
 
 //
@@ -385,7 +400,7 @@ async function secretsEdit(name: string | undefined, cmdOptions: ISecretsEditOpt
             return;
         }
 
-        const updatedName = cmdOptions.name?.trim() || secret.name;
+        const updatedName = cmdOptions.name || secret.name;
         const updatedValue = cmdOptions.value || secret.value;
 
         if (updatedName !== secret.name) {
