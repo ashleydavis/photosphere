@@ -11,7 +11,7 @@ export async function resolveDatabaseSharePayload(entry: IDatabaseEntry): Promis
 
     let s3Credentials: IShareS3Credentials | undefined;
     if (entry.s3CredentialId) {
-        const secret = await vault.get(`shared:${entry.s3CredentialId}`);
+        const secret = await vault.get(entry.s3CredentialId);
         if (secret) {
             const parsed = JSON.parse(secret.value);
             s3Credentials = {
@@ -26,7 +26,7 @@ export async function resolveDatabaseSharePayload(entry: IDatabaseEntry): Promis
 
     let encryptionKey: IShareEncryptionKey | undefined;
     if (entry.encryptionKeyId) {
-        const secret = await vault.get(`shared:${entry.encryptionKeyId}`);
+        const secret = await vault.get(entry.encryptionKeyId);
         if (secret) {
             const parsed = JSON.parse(secret.value);
             encryptionKey = {
@@ -39,7 +39,7 @@ export async function resolveDatabaseSharePayload(entry: IDatabaseEntry): Promis
 
     let geocodingKey: IShareGeocodingKey | undefined;
     if (entry.geocodingKeyId) {
-        const secret = await vault.get(`shared:${entry.geocodingKeyId}`);
+        const secret = await vault.get(entry.geocodingKeyId);
         if (secret) {
             const parsed = JSON.parse(secret.value);
             geocodingKey = {

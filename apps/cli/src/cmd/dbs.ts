@@ -94,11 +94,11 @@ async function pickOrCreateSecret(secretType: string, label: string, currentId?:
     const vault = getVault(getDefaultVaultType());
     const secrets = await vault.list();
 
-    // Find existing shared secrets of the matching type.
+    // Find existing secrets of the matching type.
     const matchingSecrets = secrets
-        .filter(secret => secret.name.startsWith('shared:') && secret.type === secretType)
+        .filter(secret => secret.type === secretType)
         .map(secret => {
-            const secretId = secret.name.slice('shared:'.length);
+            const secretId = secret.name;
             let displayLabel = secretId;
             try {
                 const parsed = JSON.parse(secret.value);
@@ -175,7 +175,7 @@ async function createSharedSecret(secretType: string): Promise<string> {
         }
 
         await vault.set({
-            name: `shared:${secretId}`,
+            name: secretId,
             type: 's3-credentials',
             value: JSON.stringify(value),
         });
@@ -215,7 +215,7 @@ async function createSharedSecret(secretType: string): Promise<string> {
         }
 
         await vault.set({
-            name: `shared:${secretId}`,
+            name: secretId,
             type: 'encryption-key',
             value: JSON.stringify({ label, privateKeyPem, publicKeyPem }),
         });
@@ -227,7 +227,7 @@ async function createSharedSecret(secretType: string): Promise<string> {
         const apiKey = await promptRequired('API key value:');
 
         await vault.set({
-            name: `shared:${secretId}`,
+            name: secretId,
             type: 'api-key',
             value: JSON.stringify({ label, apiKey }),
         });
@@ -327,13 +327,14 @@ export function dbsCommand(): Command {
     cmd.command('send [name]')
         .description('Send a database config (with secrets) to another device over the LAN.')
         .option('--yes', 'Skip confirmation prompts and field editing')
-        .option('--code <code>', 'Pairing code (required with --yes)')
+        .option('--code <code>', 'Use a specific pairing code instead of generating one (useful for scripted use)')
         .action(dbsSend);
 
     // psi dbs receive
     cmd.command('receive')
         .description('Receive a database config (with secrets) from another device over the LAN.')
         .option('--yes', 'Skip confirmation prompts and field editing')
+        .option('--code <code>', 'Pairing code shown on the sender (required with --yes)')
         .action(dbsReceive);
 
     return cmd;
@@ -685,6 +686,11 @@ async function dbsSend(name: string | undefined, cmdOptions: { yes?: boolean; co
 
     const skipPrompts = !!cmdOptions.yes;
 
+    note(
+        'Both devices must be on the same local network (wired or Wi-Fi).\nThis does not work over the internet.',
+        pc.cyan('ℹ Network Requirement')
+    );
+
     let entry: IDatabaseEntry | undefined;
 
     if (name) {
@@ -724,8 +730,6 @@ async function dbsSend(name: string | undefined, cmdOptions: { yes?: boolean; co
             return;
         }
     }
-
-    console.log(pc.dim('Hint: Run `psi dbs receive` on another device to receive this database.'));
 
     // Security warning
     note(
@@ -852,10 +856,17 @@ async function dbsSend(name: string | undefined, cmdOptions: { yes?: boolean; co
         }
     }
 
-    // Search for receiver
-    const sender = new LanShareSender(payload);
+    // Create sender (generates or uses supplied pairing code)
+    const sender = new LanShareSender(payload, cmdOptions.code);
+
+    // Display the pairing code — the user must enter this on the receiver device
+    console.log('');
+    console.log(pc.cyan(`  Pairing code: ${pc.bold(sender.pairingCode)}`));
+    console.log(pc.dim('  Enter this code on the receiver device, then wait.'));
+    console.log('');
+
     const spin = spinner();
-    spin.start('Searching for receiver on the LAN... (Ctrl+C to cancel)');
+    spin.start('Waiting for receiver on the LAN... (Ctrl+C to cancel)');
 
     const sigintHandler = () => {
         sender.cancel();
@@ -872,20 +883,45 @@ async function dbsSend(name: string | undefined, cmdOptions: { yes?: boolean; co
 
     spin.stop(pc.green('Receiver found!'));
 
+    const success = await sender.send(endpoint);
+
+    if (success) {
+        outro(pc.green('✓ Database sent successfully!'));
+    }
+    else {
+        console.error(pc.red('✗ Pairing code rejected by receiver.'));
+        await exit(1);
+    }
+}
+
+//
+// psi dbs receive — receive a database config with secrets from another device.
+//
+async function dbsReceive(cmdOptions: { yes?: boolean; code?: string }): Promise<void> {
+    intro(pc.cyan('Receive Database'));
+
+    const skipPrompts = !!cmdOptions.yes;
+
+    note(
+        'Both devices must be on the same local network (wired or Wi-Fi).\nThis does not work over the internet.',
+        pc.cyan('ℹ Network Requirement')
+    );
+
+    console.log(pc.dim('Hint: Run `psi dbs send` on another device to send a database.'));
+
     let code: string;
 
     if (skipPrompts) {
         if (!cmdOptions.code) {
-            console.error(pc.red('✗ --code is required when using --yes'));
+            console.error(pc.red('✗ --code is required with --yes'));
             await exit(1);
             return;
         }
         code = cmdOptions.code;
     }
     else {
-        // Prompt for pairing code
         const codeInput = await text({
-            message: 'Enter the 4-digit pairing code shown on the receiver:',
+            message: 'Enter the 4-digit pairing code shown on the sender:',
             validate: (val) => {
                 if (!val || !/^\d{4}$/.test(val.trim())) {
                     return 'Please enter a 4-digit code';
@@ -902,36 +938,11 @@ async function dbsSend(name: string | undefined, cmdOptions: { yes?: boolean; co
         code = (codeInput as string).trim();
     }
 
-    const success = await sender.send(endpoint, code);
-
-    if (success) {
-        outro(pc.green('✓ Database sent successfully!'));
-    }
-    else {
-        console.error(pc.red('✗ Pairing code rejected by receiver.'));
-        await exit(1);
-    }
-}
-
-//
-// psi dbs receive — receive a database config with secrets from another device.
-//
-async function dbsReceive(cmdOptions: { yes?: boolean }): Promise<void> {
-    intro(pc.cyan('Receive Database'));
-
-    const skipPrompts = !!cmdOptions.yes;
-
-    console.log(pc.dim('Hint: Run `psi dbs send` on another device to send a database.'));
-
     const receiver = new LanShareReceiver(60000);
-    const receiverInfo = await receiver.start();
-
-    console.log('');
-    console.log(pc.cyan(`  Pairing code: ${pc.bold(receiverInfo.code)}`));
-    console.log('');
+    await receiver.start(code);
 
     const spin = spinner();
-    spin.start(`Waiting for sender... Code: ${receiverInfo.code} (Ctrl+C to cancel)`);
+    spin.start('Waiting for sender on the LAN... (Ctrl+C to cancel)');
 
     const sigintHandler = () => {
         receiver.cancel();

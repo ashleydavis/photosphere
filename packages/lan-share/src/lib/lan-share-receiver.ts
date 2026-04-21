@@ -4,12 +4,13 @@ import { createHash, generateKeyPairSync, createSign } from "crypto";
 import type { Server as HttpsServer } from "https";
 import type { Socket as DgramSocket } from "dgram";
 import type { IncomingMessage, ServerResponse } from "http";
-import type { IReceiverInfo } from "./lan-share-types";
+import type { IPairingCodeHashResponse } from "./lan-share-types";
 
 //
-// Maximum number of failed pin attempts before the receiver aborts.
+// Maximum number of incoming requests before the receiver aborts (covers both endpoints).
+// A legitimate share requires exactly one GET /pairing-code-hash and one POST /share-payload.
 //
-const MAX_PIN_FAILURES = 3;
+const MAX_REQUESTS = 5;
 
 //
 // Interval in milliseconds between UDP broadcast announcements.
@@ -255,19 +256,11 @@ function encodeAsn1Explicit(tagNumber: number, content: Buffer): Buffer {
 }
 
 //
-// Generates a random 4-digit pairing code.
-//
-function generatePairingCode(): string {
-    const code = Math.floor(1000 + Math.random() * 9000);
-    return String(code);
-}
-
-//
 // Request body sent by the sender to deliver a payload.
 //
 interface IShareRequest {
     // SHA-256 hash of the pairing code, hex-encoded.
-    pinHash: string;
+    codeHash: string;
 
     // The opaque JSON payload to deliver.
     payload: unknown;
@@ -296,8 +289,8 @@ export class LanShareReceiver {
     // Interval timer for periodic UDP broadcasts.
     private broadcastTimer: NodeJS.Timeout | null;
 
-    // Number of failed pin attempts so far.
-    private pinFailures: number;
+    // Total number of incoming requests so far (across all endpoints).
+    private requestCount: number;
 
     // Resolve function for the receive() promise.
     private receiveResolve: ((payload: unknown) => void) | null;
@@ -315,20 +308,20 @@ export class LanShareReceiver {
         this.httpsServer = null;
         this.udpSocket = null;
         this.broadcastTimer = null;
-        this.pinFailures = 0;
+        this.requestCount = 0;
         this.receiveResolve = null;
         this.timeoutTimer = null;
         this.isDone = false;
     }
 
     //
-    // Starts the receiver: generates a pairing code, creates an HTTPS server,
+    // Starts the receiver: stores the caller-supplied pairing code, creates an HTTPS server,
     // and begins broadcasting availability via UDP.
-    // Returns the pairing code so the caller can display it to the user.
+    // The pairing code is provided by the caller (entered by the user after reading it off the sender).
     //
-    async start(): Promise<IReceiverInfo> {
-        this.code = generatePairingCode();
-        this.codeHash = createHash("sha256").update(this.code).digest("hex");
+    async start(code: string): Promise<void> {
+        this.code = code;
+        this.codeHash = createHash("sha256").update(code).digest("hex");
 
         const selfSigned = generateSelfSignedCert();
 
@@ -359,8 +352,6 @@ export class LanShareReceiver {
             // Send first broadcast immediately
             this.udpSocket!.send(message, 0, message.length, DISCOVERY_PORT, "255.255.255.255");
         });
-
-        return { code: this.code };
     }
 
     //
@@ -388,47 +379,53 @@ export class LanShareReceiver {
     // Handles an incoming HTTP request to the HTTPS server.
     //
     private handleRequest(request: IncomingMessage, response: ServerResponse): void {
-        if (request.method !== "POST" || request.url !== "/share-payload") {
-            response.writeHead(404, { "Content-Type": "application/json" });
-            response.end(JSON.stringify({ error: "Not found" }));
+        this.requestCount++;
+        if (this.requestCount > MAX_REQUESTS) {
+            response.writeHead(429, { "Content-Type": "application/json" });
+            response.end(JSON.stringify({ error: "Too many requests" }));
+            this.complete(null);
             return;
         }
 
-        const chunks: Buffer[] = [];
-        request.on("data", (chunk: Buffer) => {
-            chunks.push(chunk);
-        });
-        request.on("end", () => {
-            const body = Buffer.concat(chunks).toString("utf-8");
-            let parsed: IShareRequest;
-            try {
-                parsed = JSON.parse(body) as IShareRequest;
-            }
-            catch {
-                response.writeHead(400, { "Content-Type": "application/json" });
-                response.end(JSON.stringify({ error: "Invalid JSON" }));
-                return;
-            }
+        if (request.method === "GET" && request.url === "/pairing-code-hash") {
+            const body: IPairingCodeHashResponse = { codeHash: this.codeHash! };
+            response.writeHead(200, { "Content-Type": "application/json" });
+            response.end(JSON.stringify(body));
+            return;
+        }
 
-            // Verify the pairing code
-            if (parsed.pinHash !== this.codeHash) {
-                this.pinFailures++;
-                if (this.pinFailures >= MAX_PIN_FAILURES) {
-                    response.writeHead(403, { "Content-Type": "application/json" });
-                    response.end(JSON.stringify({ error: "Too many failed attempts" }));
-                    this.complete(null);
+        if (request.method === "POST" && request.url === "/share-payload") {
+            const chunks: Buffer[] = [];
+            request.on("data", (chunk: Buffer) => {
+                chunks.push(chunk);
+            });
+            request.on("end", () => {
+                const rawBody = Buffer.concat(chunks).toString("utf-8");
+                let parsed: IShareRequest;
+                try {
+                    parsed = JSON.parse(rawBody) as IShareRequest;
+                }
+                catch {
+                    response.writeHead(400, { "Content-Type": "application/json" });
+                    response.end(JSON.stringify({ error: "Invalid JSON" }));
                     return;
                 }
-                response.writeHead(403, { "Content-Type": "application/json" });
-                response.end(JSON.stringify({ error: "Invalid pairing code" }));
-                return;
-            }
 
-            // Pin matches — accept the payload
-            response.writeHead(200, { "Content-Type": "application/json" });
-            response.end(JSON.stringify({ success: true }));
-            this.complete(parsed.payload);
-        });
+                if (parsed.codeHash !== this.codeHash) {
+                    response.writeHead(403, { "Content-Type": "application/json" });
+                    response.end(JSON.stringify({ error: "Invalid pairing code" }));
+                    return;
+                }
+
+                response.writeHead(200, { "Content-Type": "application/json" });
+                response.end(JSON.stringify({ success: true }));
+                this.complete(parsed.payload);
+            });
+            return;
+        }
+
+        response.writeHead(404, { "Content-Type": "application/json" });
+        response.end(JSON.stringify({ error: "Not found" }));
     }
 
     //

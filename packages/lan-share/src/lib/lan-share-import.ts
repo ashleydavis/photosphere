@@ -26,7 +26,7 @@ export async function importDatabasePayload(payload: IDatabaseSharePayload): Pro
     if (payload.s3Credentials) {
         s3CredentialId = generateSharedSecretId();
         await vault.set({
-            name: `shared:${s3CredentialId}`,
+            name: s3CredentialId,
             type: "s3-credentials",
             value: JSON.stringify({
                 label: payload.s3Credentials.label,
@@ -42,7 +42,7 @@ export async function importDatabasePayload(payload: IDatabaseSharePayload): Pro
     if (payload.encryptionKey) {
         encryptionKeyId = generateSharedSecretId();
         await vault.set({
-            name: `shared:${encryptionKeyId}`,
+            name: encryptionKeyId,
             type: "encryption-key",
             value: JSON.stringify({
                 label: payload.encryptionKey.label,
@@ -56,7 +56,7 @@ export async function importDatabasePayload(payload: IDatabaseSharePayload): Pro
     if (payload.geocodingKey) {
         geocodingKeyId = generateSharedSecretId();
         await vault.set({
-            name: `shared:${geocodingKeyId}`,
+            name: geocodingKeyId,
             type: "api-key",
             value: JSON.stringify({
                 label: payload.geocodingKey.label,

@@ -4077,6 +4077,11 @@ test_keychain_vault_list_empty() {
     export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
     mkdir -p "$PHOTOSPHERE_CONFIG_DIR"
 
+    # Clear any leftover test secrets from previous runs (keychain is OS-global).
+    for secret_name in keychain-test-secret view-secret edit-secret renamed-secret keep-secret delete-secret; do
+        eval "$(get_cli_command) secrets delete --yes --name $secret_name" 2>/dev/null || true
+    done
+
     local list_output
     invoke_command "List secrets (empty keychain)" "$(get_cli_command) secrets list" 0 "list_output"
 

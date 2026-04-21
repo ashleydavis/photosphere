@@ -308,7 +308,7 @@ ipcMain.handle('get-database-secrets', logExceptions(async (_event, databasePath
 
     if (dbEntry) {
         if (dbEntry.s3CredentialId) {
-            const s3Secret = await vault.get(`shared:${dbEntry.s3CredentialId}`);
+            const s3Secret = await vault.get(dbEntry.s3CredentialId);
             if (s3Secret) {
                 const parsed = JSON.parse(s3Secret.value);
                 secrets.s3Credentials = {
@@ -320,7 +320,7 @@ ipcMain.handle('get-database-secrets', logExceptions(async (_event, databasePath
             }
         }
         if (dbEntry.encryptionKeyId) {
-            const encryptionSecret = await vault.get(`shared:${dbEntry.encryptionKeyId}`);
+            const encryptionSecret = await vault.get(dbEntry.encryptionKeyId);
             if (encryptionSecret) {
                 const parsed = JSON.parse(encryptionSecret.value);
                 secrets.encryptionKeyPair = {
@@ -330,7 +330,7 @@ ipcMain.handle('get-database-secrets', logExceptions(async (_event, databasePath
             }
         }
         if (dbEntry.geocodingKeyId) {
-            const geocodingSecret = await vault.get(`shared:${dbEntry.geocodingKeyId}`);
+            const geocodingSecret = await vault.get(dbEntry.geocodingKeyId);
             if (geocodingSecret) {
                 const parsed = JSON.parse(geocodingSecret.value);
                 secrets.geocodingApiKey = parsed.apiKey;
@@ -383,7 +383,7 @@ ipcMain.handle('get-recent-databases', logExceptions(async () => {
 // IPC handler for listing directory names under an S3 bucket and prefix
 ipcMain.handle('list-s3-dirs', logExceptions(async (_event, credentialId: string, bucket: string, prefix: string) => {
     const vault = getVault(getDefaultVaultType());
-    const secret = await vault.get(`shared:${credentialId}`);
+    const secret = await vault.get(credentialId);
     if (!secret) {
         return [];
     }
@@ -489,10 +489,10 @@ ipcMain.handle('import-assets', logExceptions(async (_event, paths?: string[]) =
     return await selectAndImportAssets(paths);
 }, 'Error importing assets'));
 
-// IPC handler for starting a LAN share receiver
-ipcMain.handle('start-share-receive', logExceptions(async () => {
+// IPC handler for starting a LAN share receiver with the code entered by the user.
+ipcMain.handle('start-share-receive', logExceptions(async (_event, code: string) => {
     activeReceiver = new LanShareReceiver(60000);
-    return await activeReceiver.start();
+    await activeReceiver.start(code);
 }, 'Error starting share receiver'));
 
 // IPC handler for waiting for a sender payload on the active receiver
@@ -513,19 +513,21 @@ ipcMain.handle('cancel-share-receive', logExceptions(async () => {
     }
 }, 'Error cancelling share receiver'));
 
-// IPC handler for creating a sender and waiting for a receiver on the LAN
+// IPC handler for creating a sender and waiting for a receiver on the LAN.
+// Returns { endpoint, pairingCode } so the UI can display the code to the user.
 ipcMain.handle('wait-for-receiver', logExceptions(async (_event, payload: unknown) => {
     activeSender = new LanShareSender(payload);
     const endpoint = await activeSender.waitForReceiver(60000);
-    return endpoint;
+    return { endpoint, pairingCode: activeSender.pairingCode };
 }, 'Error waiting for receiver'));
 
-// IPC handler for sending a payload to a discovered receiver
-ipcMain.handle('send-to-receiver', logExceptions(async (_event, endpoint: unknown, code: string) => {
+// IPC handler for sending a payload to a discovered receiver.
+// The pairing code is already embedded in activeSender from when it was created.
+ipcMain.handle('send-to-receiver', logExceptions(async (_event, endpoint: unknown) => {
     if (!activeSender) {
         throw new Error('No active share sender');
     }
-    const result = await activeSender.send(endpoint as IReceiverEndpoint, code);
+    const result = await activeSender.send(endpoint as IReceiverEndpoint);
     activeSender = null;
     return result;
 }, 'Error sending to receiver'));
@@ -1021,7 +1023,7 @@ async function startImportWithPaths(paths: string[]): Promise<IImportSession | u
     if (dbEntry) {
         const vault = getVault(getDefaultVaultType());
         if (dbEntry.s3CredentialId) {
-            const s3Secret = await vault.get(`shared:${dbEntry.s3CredentialId}`);
+            const s3Secret = await vault.get(dbEntry.s3CredentialId);
             if (s3Secret) {
                 const parsed = JSON.parse(s3Secret.value);
                 s3Config = {
@@ -1033,14 +1035,14 @@ async function startImportWithPaths(paths: string[]): Promise<IImportSession | u
             }
         }
         if (dbEntry.geocodingKeyId) {
-            const geocodingSecret = await vault.get(`shared:${dbEntry.geocodingKeyId}`);
+            const geocodingSecret = await vault.get(dbEntry.geocodingKeyId);
             if (geocodingSecret) {
                 const parsed = JSON.parse(geocodingSecret.value);
                 googleApiKey = parsed.apiKey;
             }
         }
         if (dbEntry.encryptionKeyId) {
-            const encryptionSecret = await vault.get(`shared:${dbEntry.encryptionKeyId}`);
+            const encryptionSecret = await vault.get(dbEntry.encryptionKeyId);
             if (encryptionSecret) {
                 const parsed = JSON.parse(encryptionSecret.value);
                 encryptionKeyPems = [{ privateKeyPem: parsed.privateKeyPem, publicKeyPem: parsed.publicKeyPem }];

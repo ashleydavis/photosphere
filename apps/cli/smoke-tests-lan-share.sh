@@ -112,36 +112,36 @@ seed_databases_config() {
 CONFIG_EOF
 }
 
-# Start a receiver in background and wait for its pairing code.
-# Sets: RECEIVER_PID, PAIRING_CODE
-start_receiver_and_get_code() {
+# Start a receiver in background with the given pairing code and wait for it to be ready.
+# Sets: RECEIVER_PID
+start_receiver_with_code() {
     local cmd_prefix="$1"  # "dbs" or "secrets"
     local log_file="$2"
+    local code="$3"
 
     PHOTOSPHERE_VAULT_DIR="$RECEIVER_VAULT_DIR" \
     PHOTOSPHERE_CONFIG_DIR="$RECEIVER_CONFIG_DIR" \
-        $CLI_CMD $cmd_prefix receive --yes > "$log_file" 2>&1 &
+        $CLI_CMD $cmd_prefix receive --yes --code "$code" > "$log_file" 2>&1 &
     RECEIVER_PID=$!
 
-    PAIRING_CODE=""
+    # Poll until the receiver logs that it is waiting for a sender.
     for attempt in $(seq 1 25); do
         sleep 0.2
-        if [ -f "$log_file" ]; then
-            local line
-            line=$(grep "Pairing code:" "$log_file" 2>/dev/null | head -1 || true)
-            PAIRING_CODE="${line##*Pairing code: }"
-            PAIRING_CODE="${PAIRING_CODE:0:4}"
-            # Clear if we didn't get 4 digits.
-            case "$PAIRING_CODE" in [0-9][0-9][0-9][0-9]) ;; *) PAIRING_CODE="" ;; esac
-            if [ -n "$PAIRING_CODE" ]; then
-                # Give the HTTPS server and UDP broadcast time to be ready.
-                sleep 0.3
-                return 0
-            fi
+        if [ -f "$log_file" ] && grep -q "Waiting for sender" "$log_file" 2>/dev/null; then
+            # Give the HTTPS server and UDP broadcast a moment to be fully ready.
+            sleep 0.3
+            return 0
+        fi
+        # Also check for an early exit indicating an error.
+        if ! kill -0 "$RECEIVER_PID" 2>/dev/null; then
+            log_fail "Receiver process exited unexpectedly."
+            cat "$log_file" 2>/dev/null || true
+            test_cleanup
+            return 1
         fi
     done
 
-    log_fail "Receiver did not produce a pairing code within 5 seconds."
+    log_fail "Receiver was not ready within 5 seconds."
     cat "$log_file" 2>/dev/null || true
     test_cleanup
     return 1
@@ -202,23 +202,23 @@ test_share_database() {
     log_info "--- Test: Share a database over LAN (CLI) ---"
     reset_dirs
 
-    seed_vault_secret "$SENDER_VAULT_DIR" "shared:s3sender" "s3-credentials" \
+    seed_vault_secret "$SENDER_VAULT_DIR" "s3sender" "s3-credentials" \
         '{"label":"Test S3","region":"us-east-1","accessKeyId":"AKIATEST","secretAccessKey":"secret123","endpoint":"http://localhost:9000"}'
 
-    seed_vault_secret "$SENDER_VAULT_DIR" "shared:encsndr1" "encryption-key" \
+    seed_vault_secret "$SENDER_VAULT_DIR" "encsndr1" "encryption-key" \
         '{"label":"Test Encryption","privateKeyPem":"-----BEGIN PRIVATE KEY-----\nMIItest\n-----END PRIVATE KEY-----","publicKeyPem":"-----BEGIN PUBLIC KEY-----\nMIItest\n-----END PUBLIC KEY-----"}'
 
     seed_databases_config "$SENDER_CONFIG_DIR" \
         '[{"name":"share-test-db","description":"A database for LAN share testing","path":"s3:test-bucket:/photos","s3CredentialId":"s3sender","encryptionKeyId":"encsndr1"}]'
 
+    local test_code="1234"
     local receiver_log="${TEST_TMP_DIR}/receiver-db.log"
-    start_receiver_and_get_code "dbs" "$receiver_log" || return 1
-    log_info "Receiver pairing code: $PAIRING_CODE"
+    start_receiver_with_code "dbs" "$receiver_log" "$test_code" || return 1
 
     local sender_log="${TEST_TMP_DIR}/sender-db.log"
     PHOTOSPHERE_VAULT_DIR="$SENDER_VAULT_DIR" \
     PHOTOSPHERE_CONFIG_DIR="$SENDER_CONFIG_DIR" \
-        $CLI_CMD dbs send share-test-db --yes --code "$PAIRING_CODE" > "$sender_log" 2>&1 || true
+        $CLI_CMD dbs send share-test-db --yes --code "$test_code" > "$sender_log" 2>&1 || true
 
     # Give receiver a moment to process.
     sleep 0.2
@@ -262,17 +262,17 @@ test_share_secret() {
     log_info "--- Test: Share a secret over LAN (CLI) ---"
     reset_dirs
 
-    seed_vault_secret "$SENDER_VAULT_DIR" "shared:apikey01" "api-key" \
+    seed_vault_secret "$SENDER_VAULT_DIR" "apikey01" "api-key" \
         '{"label":"Test Geocoding","apiKey":"AIzaFakeKey123"}'
 
+    local test_code="2345"
     local receiver_log="${TEST_TMP_DIR}/receiver-secret.log"
-    start_receiver_and_get_code "secrets" "$receiver_log" || return 1
-    log_info "Receiver pairing code: $PAIRING_CODE"
+    start_receiver_with_code "secrets" "$receiver_log" "$test_code" || return 1
 
     local sender_log="${TEST_TMP_DIR}/sender-secret.log"
     PHOTOSPHERE_VAULT_DIR="$SENDER_VAULT_DIR" \
     PHOTOSPHERE_CONFIG_DIR="$SENDER_CONFIG_DIR" \
-        $CLI_CMD secrets send "shared:apikey01" --yes --code "$PAIRING_CODE" > "$sender_log" 2>&1 || true
+        $CLI_CMD secrets send "apikey01" --yes --code "$test_code" > "$sender_log" 2>&1 || true
 
     sleep 0.2
 
@@ -308,21 +308,20 @@ test_wrong_pairing_code() {
     log_info "--- Test: Wrong pairing code is rejected ---"
     reset_dirs
 
-    seed_vault_secret "$SENDER_VAULT_DIR" "shared:apikey01" "api-key" \
+    seed_vault_secret "$SENDER_VAULT_DIR" "apikey01" "api-key" \
         '{"label":"Test Geocoding","apiKey":"AIzaFakeKey123"}'
 
-    local receiver_log="${TEST_TMP_DIR}/receiver-wrong-code.log"
-    start_receiver_and_get_code "secrets" "$receiver_log" || return 1
-    log_info "Receiver pairing code: $PAIRING_CODE"
+    local receiver_code="3456"
+    local wrong_code="7890"
+    log_info "Receiver code: $receiver_code, sender will use wrong code: $wrong_code"
 
-    local wrong_code
-    wrong_code=$(printf "%04d" $(( (10#$PAIRING_CODE + 1) % 10000 )))
-    log_info "Sending wrong code: $wrong_code"
+    local receiver_log="${TEST_TMP_DIR}/receiver-wrong-code.log"
+    start_receiver_with_code "secrets" "$receiver_log" "$receiver_code" || return 1
 
     local sender_log="${TEST_TMP_DIR}/sender-wrong-code.log"
     PHOTOSPHERE_VAULT_DIR="$SENDER_VAULT_DIR" \
     PHOTOSPHERE_CONFIG_DIR="$SENDER_CONFIG_DIR" \
-        $CLI_CMD secrets send "shared:apikey01" --yes --code "$wrong_code" > "$sender_log" 2>&1 || true
+        $CLI_CMD secrets send "apikey01" --yes --code "$wrong_code" > "$sender_log" 2>&1 || true
 
     if grep -q "Pairing code rejected" "$sender_log" 2>/dev/null; then
         log_success "Wrong code: sender reports rejection"
@@ -353,14 +352,14 @@ test_share_database_no_secrets() {
     seed_databases_config "$SENDER_CONFIG_DIR" \
         '[{"name":"plain-db","description":"No secrets attached","path":"/tmp/plain-db"}]'
 
+    local test_code="4567"
     local receiver_log="${TEST_TMP_DIR}/receiver-no-secrets.log"
-    start_receiver_and_get_code "dbs" "$receiver_log" || return 1
-    log_info "Receiver pairing code: $PAIRING_CODE"
+    start_receiver_with_code "dbs" "$receiver_log" "$test_code" || return 1
 
     local sender_log="${TEST_TMP_DIR}/sender-no-secrets.log"
     PHOTOSPHERE_VAULT_DIR="$SENDER_VAULT_DIR" \
     PHOTOSPHERE_CONFIG_DIR="$SENDER_CONFIG_DIR" \
-        $CLI_CMD dbs send plain-db --yes --code "$PAIRING_CODE" > "$sender_log" 2>&1 || true
+        $CLI_CMD dbs send plain-db --yes --code "$test_code" > "$sender_log" 2>&1 || true
 
     sleep 0.2
 
@@ -399,8 +398,8 @@ test_receiver_cancel() {
     mkdir -p "$RECEIVER_VAULT_DIR" "$RECEIVER_CONFIG_DIR"
 
     local receiver_log="${TEST_TMP_DIR}/receiver-timeout.log"
-    start_receiver_and_get_code "secrets" "$receiver_log" || return 1
-    log_info "Receiver pairing code: $PAIRING_CODE (no sender will connect)"
+    start_receiver_with_code "secrets" "$receiver_log" "5678" || return 1
+    log_info "Receiver started (no sender will connect)"
 
     kill -INT "$RECEIVER_PID" 2>/dev/null || true
     wait "$RECEIVER_PID" 2>/dev/null || true
@@ -423,12 +422,12 @@ test_rogue_receiver_rejected() {
 
     reset_dirs
 
-    seed_vault_secret "$SENDER_VAULT_DIR" "shared:roguekey" "api-key" \
+    seed_vault_secret "$SENDER_VAULT_DIR" "roguekey" "api-key" \
         '{"label":"Rogue Test Key","apiKey":"ROGUE_SECRET_VALUE_12345"}'
 
     local receiver_log="${TEST_TMP_DIR}/receiver-rogue.log"
-    start_receiver_and_get_code "secrets" "$receiver_log" || return 1
-    log_info "Rogue test: legitimate receiver code is $PAIRING_CODE"
+    start_receiver_with_code "secrets" "$receiver_log" "6789" || return 1
+    log_info "Rogue test: receiver started"
 
     local broadcast_msg
     broadcast_msg=$(timeout 5 bun run test/udp-listen.ts 2>/dev/null || true)
@@ -451,10 +450,10 @@ test_rogue_receiver_rejected() {
 
     log_info "Rogue test: receiver is on port $receiver_port"
 
-    # Attack 1: Wrong pin via HTTPS.
-    local rogue_pin_hash
-    rogue_pin_hash=$(echo -n "9999" | sha256sum | cut -d' ' -f1)
-    local rogue_body="{\"pinHash\":\"${rogue_pin_hash}\",\"payload\":{\"type\":\"secret\",\"secretType\":\"api-key\",\"value\":\"{\\\"label\\\":\\\"evil\\\",\\\"apiKey\\\":\\\"EVIL\\\"}\"}}"
+    # Attack 1: Wrong code hash via HTTPS.
+    local rogue_code_hash
+    rogue_code_hash=$(echo -n "9999" | sha256sum | cut -d' ' -f1)
+    local rogue_body="{\"codeHash\":\"${rogue_code_hash}\",\"payload\":{\"type\":\"secret\",\"secretType\":\"api-key\",\"value\":\"{\\\"label\\\":\\\"evil\\\",\\\"apiKey\\\":\\\"EVIL\\\"}\"}}"
 
     local rogue_status
     rogue_status=$(curl -s -o /dev/null -w "%{http_code}" -k --max-time 3 \
@@ -499,7 +498,7 @@ test_cert_fingerprint_matches_broadcast() {
     mkdir -p "$RECEIVER_VAULT_DIR" "$RECEIVER_CONFIG_DIR"
 
     local receiver_log="${TEST_TMP_DIR}/receiver-cert.log"
-    start_receiver_and_get_code "secrets" "$receiver_log" || return 1
+    start_receiver_with_code "secrets" "$receiver_log" "8901" || return 1
 
     local broadcast_msg
     broadcast_msg=$(timeout 5 bun run test/udp-listen.ts 2>/dev/null || true)
