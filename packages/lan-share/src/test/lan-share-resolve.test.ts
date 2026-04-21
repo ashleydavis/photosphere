@@ -25,9 +25,9 @@ test("resolves database payload with all secrets", async () => {
     };
 
     mockVaultGet.mockImplementation(async (name: string) => {
-        if (name === "shared:abc12345") {
+        if (name === "abc12345") {
             return {
-                name: "shared:abc12345",
+                name: "abc12345",
                 type: "s3-credentials",
                 value: JSON.stringify({
                     label: "My S3",
@@ -38,9 +38,9 @@ test("resolves database payload with all secrets", async () => {
                 }),
             };
         }
-        if (name === "shared:def67890") {
+        if (name === "def67890") {
             return {
-                name: "shared:def67890",
+                name: "def67890",
                 type: "encryption-key",
                 value: JSON.stringify({
                     label: "My Key",
@@ -49,9 +49,9 @@ test("resolves database payload with all secrets", async () => {
                 }),
             };
         }
-        if (name === "shared:ghi11111") {
+        if (name === "ghi11111") {
             return {
-                name: "shared:ghi11111",
+                name: "ghi11111",
                 type: "api-key",
                 value: JSON.stringify({
                     label: "Geocoding",

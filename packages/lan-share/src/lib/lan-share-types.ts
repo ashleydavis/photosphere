@@ -88,11 +88,11 @@ export interface ISecretSharePayload {
 }
 
 //
-// Information returned when a receiver starts, so the caller can display the pairing code.
+// Response body from GET /pairing-code-hash on the receiver.
 //
-export interface IReceiverInfo {
-    // The 4-digit pairing code the user must relay to the sender.
-    code: string;
+export interface IPairingCodeHashResponse {
+    // SHA-256 hash of the pairing code the receiver has on file, hex-encoded.
+    codeHash: string;
 }
 
 //

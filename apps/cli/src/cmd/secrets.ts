@@ -147,13 +147,14 @@ export function secretsCommand(): Command {
     cmd.command('send [name]')
         .description('Send a secret to another device over the LAN.')
         .option('--yes', 'Skip confirmation prompts')
-        .option('--code <code>', 'Pairing code (required with --yes)')
+        .option('--code <code>', 'Use a specific pairing code instead of generating one (useful for scripted use)')
         .action(secretsSend);
 
     // psi secrets receive
     cmd.command('receive')
         .description('Receive a secret from another device over the LAN.')
         .option('--yes', 'Skip confirmation prompts and field editing')
+        .option('--code <code>', 'Pairing code shown on the sender (required with --yes)')
         .action(secretsReceive);
 
     return cmd;
@@ -595,6 +596,11 @@ async function secretsSend(name: string | undefined, cmdOptions: { yes?: boolean
     const vault = getVault(getDefaultVaultType());
     let secretName: string;
 
+    note(
+        'Both devices must be on the same local network (wired or Wi-Fi).\nThis does not work over the internet.',
+        pc.cyan('ℹ Network Requirement')
+    );
+
     if (name) {
         const secret = await vault.get(name);
         if (!secret) {
@@ -657,10 +663,16 @@ async function secretsSend(name: string | undefined, cmdOptions: { yes?: boolean
     console.log(pc.cyan('  Type: ') + payload.secretType);
     console.log('');
 
-    // Search for receiver
-    const sender = new LanShareSender(payload);
+    // Create sender (generates or uses supplied pairing code)
+    const sender = new LanShareSender(payload, cmdOptions.code);
+
+    // Display the pairing code — the user must enter this on the receiver device
+    console.log(pc.cyan(`  Pairing code: ${pc.bold(sender.pairingCode)}`));
+    console.log(pc.dim('  Enter this code on the receiver device, then wait.'));
+    console.log('');
+
     const spin = spinner();
-    spin.start('Searching for receiver on the LAN... (Ctrl+C to cancel)');
+    spin.start('Waiting for receiver on the LAN... (Ctrl+C to cancel)');
 
     const sigintHandler = () => {
         sender.cancel();
@@ -677,20 +689,46 @@ async function secretsSend(name: string | undefined, cmdOptions: { yes?: boolean
 
     spin.stop(pc.green('Receiver found!'));
 
+    const success = await sender.send(endpoint);
+
+    if (success) {
+        outro(pc.green('✓ Secret sent successfully!'));
+    }
+    else {
+        console.error(pc.red('✗ Pairing code rejected by receiver.'));
+        await exit(1);
+    }
+}
+
+//
+// psi secrets receive — receive a secret from another device over the LAN.
+//
+async function secretsReceive(cmdOptions: { yes?: boolean; code?: string }): Promise<void> {
+    await checkVaultPrereqs();
+    intro(pc.cyan('Receive Secret'));
+
+    const skipPrompts = !!cmdOptions.yes;
+
+    note(
+        'Both devices must be on the same local network (wired or Wi-Fi).\nThis does not work over the internet.',
+        pc.cyan('ℹ Network Requirement')
+    );
+
+    console.log(pc.dim('Hint: Run `psi secrets send` on another device to send a secret.'));
+
     let code: string;
 
     if (skipPrompts) {
         if (!cmdOptions.code) {
-            console.error(pc.red('✗ --code is required when using --yes'));
+            console.error(pc.red('✗ --code is required with --yes'));
             await exit(1);
             return;
         }
         code = cmdOptions.code;
     }
     else {
-        // Prompt for pairing code
         const codeInput = await text({
-            message: 'Enter the 4-digit pairing code shown on the receiver:',
+            message: 'Enter the 4-digit pairing code shown on the sender:',
             validate: (val) => {
                 if (!val || !/^\d{4}$/.test(val.trim())) {
                     return 'Please enter a 4-digit code';
@@ -707,37 +745,11 @@ async function secretsSend(name: string | undefined, cmdOptions: { yes?: boolean
         code = (codeInput as string).trim();
     }
 
-    const success = await sender.send(endpoint, code);
-
-    if (success) {
-        outro(pc.green('✓ Secret sent successfully!'));
-    }
-    else {
-        console.error(pc.red('✗ Pairing code rejected by receiver.'));
-        await exit(1);
-    }
-}
-
-//
-// psi secrets receive — receive a secret from another device over the LAN.
-//
-async function secretsReceive(cmdOptions: { yes?: boolean }): Promise<void> {
-    await checkVaultPrereqs();
-    intro(pc.cyan('Receive Secret'));
-
-    const skipPrompts = !!cmdOptions.yes;
-
-    console.log(pc.dim('Hint: Run `psi secrets send` on another device to send a secret.'));
-
     const receiver = new LanShareReceiver(60000);
-    const receiverInfo = await receiver.start();
-
-    console.log('');
-    console.log(pc.cyan(`  Pairing code: ${pc.bold(receiverInfo.code)}`));
-    console.log('');
+    await receiver.start(code);
 
     const spin = spinner();
-    spin.start(`Waiting for sender... Code: ${receiverInfo.code} (Ctrl+C to cancel)`);
+    spin.start('Waiting for sender on the LAN... (Ctrl+C to cancel)');
 
     const sigintHandler = () => {
         receiver.cancel();
@@ -774,7 +786,7 @@ async function secretsReceive(cmdOptions: { yes?: boolean }): Promise<void> {
         catch {
             // Ignore parse errors.
         }
-        saveName = `shared:${defaultName || generateSharedSecretId()}`;
+        saveName = defaultName || generateSharedSecretId();
     }
     else {
         // Ask what name to save it as
