@@ -4081,7 +4081,7 @@ test_keychain_vault_list_empty() {
 
     # Clear any leftover test secrets from previous runs (keychain is OS-global).
     for secret_name in keychain-test-secret view-secret edit-secret renamed-secret keep-secret delete-secret; do
-        eval "$(get_cli_command) secrets delete --yes --name $secret_name" 2>/dev/null || true
+        eval "$(get_cli_command) secrets delete $secret_name --yes" 2>/dev/null || true
     done
 
     local list_output
@@ -4114,7 +4114,7 @@ test_keychain_vault_add() {
 
     expect_output_string "$list_output" "keychain-test-secret" "Added keychain secret appears in list"
 
-    eval "$(get_cli_command) secrets delete --yes --name keychain-test-secret" 2>/dev/null || true
+    eval "$(get_cli_command) secrets delete keychain-test-secret --yes" 2>/dev/null || true
     export PHOTOSPHERE_VAULT_TYPE="$saved_vault_type"
     export PHOTOSPHERE_CONFIG_DIR="$saved_config"
     test_passed
@@ -4142,7 +4142,7 @@ test_keychain_vault_view() {
     expect_output_string "$view_output" "plain" "Secret type appears in view output"
     expect_output_string "$view_output" "my-secret-value" "Secret value appears in view output"
 
-    eval "$(get_cli_command) secrets delete --yes --name view-secret" 2>/dev/null || true
+    eval "$(get_cli_command) secrets delete view-secret --yes" 2>/dev/null || true
     export PHOTOSPHERE_VAULT_TYPE="$saved_vault_type"
     export PHOTOSPHERE_CONFIG_DIR="$saved_config"
     test_passed
@@ -4178,7 +4178,7 @@ test_keychain_vault_edit() {
     expect_output_string "$list_output" "renamed-secret" "Renamed keychain secret appears in list"
     expect_output_string "$list_output" "edit-secret" "Old keychain secret name gone after rename" "false"
 
-    eval "$(get_cli_command) secrets delete --yes --name renamed-secret" 2>/dev/null || true
+    eval "$(get_cli_command) secrets delete renamed-secret --yes" 2>/dev/null || true
     export PHOTOSPHERE_VAULT_TYPE="$saved_vault_type"
     export PHOTOSPHERE_CONFIG_DIR="$saved_config"
     test_passed
@@ -4208,7 +4208,7 @@ test_keychain_vault_delete() {
     expect_output_string "$list_output" "keep-secret" "Remaining keychain secret still present"
     expect_output_string "$list_output" "delete-secret" "Deleted keychain secret is absent" false
 
-    eval "$(get_cli_command) secrets delete --yes --name keep-secret" 2>/dev/null || true
+    eval "$(get_cli_command) secrets delete keep-secret --yes" 2>/dev/null || true
     export PHOTOSPHERE_VAULT_TYPE="$saved_vault_type"
     export PHOTOSPHERE_CONFIG_DIR="$saved_config"
     test_passed
