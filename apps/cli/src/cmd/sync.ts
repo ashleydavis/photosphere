@@ -1,11 +1,10 @@
-import { loadDatabase, IBaseCommandOptions, ICommandContext, selectEncryptionKey, resolveKeyPems } from "../lib/init-cmd";
+import { loadDatabase, IBaseCommandOptions, ICommandContext, selectEncryptionKey, resolveKeyPems, configureS3IfNeeded, getDefaultS3Config } from "../lib/init-cmd";
 import { getDirectoryForCommand } from "../lib/directory-picker";
 import { log } from "utils";
 import pc from "picocolors";
 import { exit } from "node-utils";
 import { syncDatabases, merkleTreeExists, isDatabaseEncrypted, loadDatabaseConfig, updateDatabaseConfig } from "api";
 import { createStorage, loadEncryptionKeysFromPem } from "storage";
-import { configureIfNeeded, getS3Config } from '../lib/config';
 
 //
 // Options for the sync command.
@@ -54,10 +53,10 @@ export async function syncCommand(context: ICommandContext, options: ISyncComman
 
     // Check if destination database exists and handle encryption (storage scoped to db root, paths use .db/...)
     if (destPath.startsWith("s3:")) {
-        await configureIfNeeded(['s3'], nonInteractive);
+        await configureS3IfNeeded(nonInteractive);
     }
 
-    const s3Config = await getS3Config();
+    const s3Config = await getDefaultS3Config();
     const { storage: destMetadataStorage } = createStorage(destPath, s3Config);
 
     // Check if destination database exists (uses .db/files.dat from API)

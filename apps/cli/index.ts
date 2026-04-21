@@ -2,7 +2,6 @@ import { program } from 'commander';
 import { addCommand } from './src/cmd/add';
 import { checkCommand } from './src/cmd/check';
 import { initCommand } from './src/cmd/init';
-import { configureCommand } from './src/cmd/config';
 import { infoCommand } from './src/cmd/info';
 import { toolsCommand } from './src/cmd/tools';
 import { summaryCommand } from './src/cmd/summary';
@@ -30,7 +29,6 @@ import { originCommand } from './src/cmd/origin';
 import { setOriginCommand, ISetOriginCommandOptions } from './src/cmd/set-origin';
 import { encryptCommand } from './src/cmd/encrypt';
 import { decryptCommand } from './src/cmd/decrypt';
-import { fixConfigCommand } from './src/cmd/fix-config';
 import { secretsCommand } from './src/cmd/secrets';
 import { dbsCommand } from './src/cmd/dbs';
 import { initContext } from './src/lib/init-cmd';
@@ -149,14 +147,6 @@ Resources:
         .option(...maxOption)
         .addHelpText('after', getCommandExamplesHelp('compare'))
         .action(initContext(compareCommand));
-
-    program
-        .command("config")
-        .alias("cfg")
-        .description("Interactive configuration wizard for S3 credentials and Google API key.")
-        .option("-c, --clear", "Clear all configuration files")
-        .addHelpText('after', getCommandExamplesHelp('config'))
-        .action(configureCommand);
 
     program
         .command("examples")
@@ -281,16 +271,6 @@ Resources:
         .option(...yesOption)
         .option(...cwdOption)
         .action(initContext(debugBuildFilesTreeCommand));
-
-    debugCommand
-        .command("fix-config")
-        .description("Decrypts .db/config.json in place if it was accidentally encrypted.")
-        .option(...dbOption)
-        .option(...keyOption)
-        .option(...verboseOption)
-        .option(...yesOption)
-        .option(...cwdOption)
-        .action(initContext(fixConfigCommand));
 
     program
         .command("help [command]")

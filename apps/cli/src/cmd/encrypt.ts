@@ -7,9 +7,8 @@ import { createStorage, exportPublicKeyToPem, loadEncryptionKeysFromPem, generat
 import pc from "picocolors";
 import { log } from "utils";
 import { exit } from "node-utils";
-import { configureIfNeeded, getS3Config } from "../lib/config";
 import { getDirectoryForCommand } from "../lib/directory-picker";
-import { resolveKeyPems, IBaseCommandOptions, ICommandContext, promptForEncryption, selectEncryptionKey } from "../lib/init-cmd";
+import { resolveKeyPems, IBaseCommandOptions, ICommandContext, promptForEncryption, selectEncryptionKey, configureS3IfNeeded, getDefaultS3Config } from "../lib/init-cmd";
 import { getVault, getDefaultVaultType } from "vault";
 import { writeProgress, clearProgressMessage } from "../lib/terminal-utils";
 import { confirm, isCancel } from "../lib/clack/prompts";
@@ -48,10 +47,10 @@ export async function encryptCommand(context: ICommandContext, options: IEncrypt
     }
 
     if (dbDir.startsWith("s3:")) {
-        await configureIfNeeded(["s3"], nonInteractive);
+        await configureS3IfNeeded(nonInteractive);
     }
 
-    const s3Config = await getS3Config();
+    const s3Config = await getDefaultS3Config();
 
     //
     // Key handling:

@@ -2,8 +2,7 @@ import { log } from "utils";
 import { createStorage, loadEncryptionKeysFromPem, pathJoin, generateKeyPair, exportPublicKeyToPem } from "storage";
 import pc from "picocolors";
 import { exit } from "node-utils";
-import { configureIfNeeded, getS3Config } from '../lib/config';
-import { loadDatabase, IBaseCommandOptions, resolveKeyPems, promptForEncryption, selectEncryptionKey, ICommandContext } from "../lib/init-cmd";
+import { loadDatabase, IBaseCommandOptions, resolveKeyPems, promptForEncryption, selectEncryptionKey, ICommandContext, configureS3IfNeeded, getDefaultS3Config } from "../lib/init-cmd";
 import { getVault, getDefaultVaultType } from "vault";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import { getDirectoryForCommand } from "../lib/directory-picker";
@@ -115,16 +114,12 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
 
     const destMetaPath = pathJoin(destDir, '.db');
 
-    if (destDir.startsWith("s3:")) {
-        await configureIfNeeded(['s3'], nonInteractive);
+    if (destDir.startsWith("s3:") || destMetaPath.startsWith("s3:")) {
+        await configureS3IfNeeded(nonInteractive);
     }
-    
-    if (destMetaPath.startsWith("s3:")) {
-        await configureIfNeeded(['s3'], nonInteractive);
-    }
-    
+
     // Check if destination database already exists (using plain metadata probe storage)
-    const s3Config = await getS3Config();
+    const s3Config = await getDefaultS3Config();
     const { storage: destMetadataProbeStorage } = createStorage(destDir, s3Config, undefined);
 
     // Check if destination database already has a files tree

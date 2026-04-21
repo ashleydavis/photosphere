@@ -6,7 +6,6 @@ import { loadDatabase, IBaseCommandOptions, ICommandContext, resolveKeyPems } fr
 import { formatBytes } from "../lib/format";
 import { verify, verifyDatabaseFiles, IDatabaseFileVerifyResult } from "api";
 import { IStorageDescriptor } from "storage";
-import { getS3Config } from "../lib/config";
 
 export interface IVerifyCommandOptions extends IBaseCommandOptions {
     //
@@ -25,7 +24,7 @@ export interface IVerifyCommandOptions extends IBaseCommandOptions {
 //
 export async function verifyCommand(context: ICommandContext, options: IVerifyCommandOptions): Promise<void> {
     const { uuidGenerator, timestampProvider, sessionId } = context;
-    const { assetStorage, databaseDir, metadataCollection } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
+    const { assetStorage, databaseDir, metadataCollection, s3Config } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
 
     // Create storage descriptor for passing to workers
     const keyPems = await resolveKeyPems(options.key);
@@ -33,9 +32,6 @@ export async function verifyCommand(context: ICommandContext, options: IVerifyCo
         dbDir: databaseDir,
         encryptionKeyPems: keyPems
     };
-    
-    // Get S3 config to pass to workers (needed for S3-hosted storage)
-    const s3Config = await getS3Config();
 
     //
     // First, verify database files (metadata and sort index files) when verifying the full database.
