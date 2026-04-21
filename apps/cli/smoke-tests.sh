@@ -3968,6 +3968,14 @@ test_secrets_edit() {
 
     expect_output_string "$view_output" "updated-value" "Secret value updated after edit"
 
+    invoke_command "Rename secret via CLI" "$(get_cli_command) secrets edit edit-secret --yes --name renamed-secret" 0
+
+    local list_output
+    invoke_command "List secrets after rename" "$(get_cli_command) secrets list" 0 "list_output"
+
+    expect_output_string "$list_output" "renamed-secret" "Renamed secret appears in list"
+    expect_output_string "$list_output" "edit-secret" "Old secret name gone after rename" "false"
+
     # Restore shared vault and config.
     export PHOTOSPHERE_VAULT_DIR="$saved_vault"
     export PHOTOSPHERE_CONFIG_DIR="$saved_config"
@@ -4026,12 +4034,22 @@ test_secrets_import() {
     openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$key_dir/test-import.key" 2>/dev/null
     openssl rsa -in "$key_dir/test-import.key" -pubout -out "$key_dir/test-import.key.pub" 2>/dev/null
 
-    invoke_command "Import key pair" "$(get_cli_command) secrets import --yes --private-key \"$key_dir/test-import.key\" --key-name test-import" 0
+    invoke_command "Import key pair" "$(get_cli_command) secrets import --yes --private-key \"$key_dir/test-import.key\"" 0
 
     local list_output
     invoke_command "List secrets after import" "$(get_cli_command) secrets list" 0 "list_output"
 
-    expect_output_string "$list_output" "cli:encryption:test-import" "Imported key appears in secrets list"
+    expect_output_string "$list_output" "test-import" "Imported key appears in secrets list"
+
+    # Generate a private key with no accompanying .pub file to test public key derivation.
+    openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$key_dir/no-pub.key" 2>/dev/null
+
+    invoke_command "Import key (no .pub file)" "$(get_cli_command) secrets import --yes --private-key \"$key_dir/no-pub.key\"" 0
+
+    local list_output2
+    invoke_command "List secrets after no-pub import" "$(get_cli_command) secrets list" 0 "list_output2"
+
+    expect_output_string "$list_output2" "no-pub" "Key imported without .pub file appears in secrets list"
 
     # Restore shared vault and config.
     export PHOTOSPHERE_VAULT_DIR="$saved_vault"
@@ -4055,7 +4073,7 @@ test_dbs_edit() {
 
     seed_databases_config '[{"name":"edit-db","description":"","path":"/tmp/edit-db"}]'
 
-    invoke_command "Edit database entry" "$(get_cli_command) dbs edit edit-db --yes --new-name renamed-db" 0
+    invoke_command "Edit database entry" "$(get_cli_command) dbs edit edit-db --yes --name renamed-db" 0
 
     local dbs_output
     invoke_command "List databases after edit" "$(get_cli_command) dbs list" 0 "dbs_output"

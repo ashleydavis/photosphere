@@ -6,6 +6,7 @@ import { exit } from 'node-utils';
 import * as fs from 'fs/promises';
 import { existsSync } from 'fs';
 import { generateKeyPair, exportPublicKeyToPem } from 'storage';
+import { createPrivateKey, createPublicKey } from 'node:crypto';
 import { LanShareSender, LanShareReceiver, resolveSecretSharePayload, importSecretPayload } from 'lan-share';
 import type { ISecretSharePayload } from 'lan-share';
 
@@ -42,6 +43,8 @@ interface ISecretsViewOptions {
 interface ISecretsEditOptions {
     // Skip interactive prompts.
     yes?: boolean;
+    // New secret name.
+    name?: string;
     // New secret value.
     value?: string;
 }
@@ -64,8 +67,6 @@ interface ISecretsImportOptions {
     privateKey?: string;
     // Path to the public key file.
     publicKey?: string;
-    // Name for the imported key.
-    keyName?: string;
 }
 
 //
@@ -101,21 +102,22 @@ export function secretsCommand(): Command {
         .description('List all secrets (values are masked).')
         .action(secretsList);
 
-    // psi secrets view <name>
-    cmd.command('view <name>')
+    // psi secrets view [name]
+    cmd.command('view [name]')
         .description('Show the full value of a named secret.')
         .option('--yes', 'Skip confirmation prompt')
         .action(secretsView);
 
-    // psi secrets edit <name>
-    cmd.command('edit <name>')
+    // psi secrets edit [name]
+    cmd.command('edit [name]')
         .description('Edit an existing secret, field by field.')
         .option('--yes', 'Skip prompts')
+        .option('--name <name>', 'New secret name')
         .option('--value <value>', 'New value')
         .action(secretsEdit);
 
-    // psi secrets delete <name>
-    cmd.command('delete <name>')
+    // psi secrets delete [name]
+    cmd.command('delete [name]')
         .description('Delete a named secret.')
         .option('--yes', 'Skip confirmation prompt')
         .action(secretsDelete);
@@ -126,7 +128,6 @@ export function secretsCommand(): Command {
         .option('--yes', 'Skip prompts')
         .option('--private-key <path>', 'Path to private key file')
         .option('--public-key <path>', 'Path to public key file')
-        .option('--key-name <name>', 'Name for the imported key')
         .action(secretsImport);
 
     // psi secrets send [name]
@@ -240,10 +241,40 @@ async function secretsList(): Promise<void> {
 }
 
 //
-// psi secrets view <name> — show the full value after confirmation.
+// psi secrets view [name] — show the full value after confirmation.
 //
-async function secretsView(name: string, cmdOptions: ISecretsViewOptions): Promise<void> {
+async function secretsView(name: string | undefined, cmdOptions: ISecretsViewOptions): Promise<void> {
     const vault = getVault("plaintext");
+
+    if (!name) {
+        if (cmdOptions.yes) {
+            console.error(pc.red('✗ <name> is required with --yes'));
+            await exit(1);
+            return;
+        }
+
+        const secrets = await vault.list();
+        if (secrets.length === 0) {
+            console.log(pc.yellow('No secrets found.'));
+            return;
+        }
+
+        const selected = await select({
+            message: 'Select a secret to view:',
+            options: secrets.map(secret => ({
+                value: secret.name,
+                label: `${secret.name} (${secret.type})`,
+            })),
+        });
+
+        if (isCancel(selected)) {
+            outro(pc.yellow('Cancelled.'));
+            return;
+        }
+
+        name = selected as string;
+    }
+
     const secret = await vault.get(name);
 
     if (!secret) {
@@ -287,10 +318,40 @@ async function secretsView(name: string, cmdOptions: ISecretsViewOptions): Promi
 }
 
 //
-// psi secrets edit <name> — reload existing fields and re-prompt with current values pre-populated.
+// psi secrets edit [name] — reload existing fields and re-prompt with current values pre-populated.
 //
-async function secretsEdit(name: string, cmdOptions: ISecretsEditOptions): Promise<void> {
+async function secretsEdit(name: string | undefined, cmdOptions: ISecretsEditOptions): Promise<void> {
     const vault = getVault("plaintext");
+
+    if (!name) {
+        if (cmdOptions.yes) {
+            console.error(pc.red('✗ <name> is required with --yes'));
+            await exit(1);
+            return;
+        }
+
+        const secrets = await vault.list();
+        if (secrets.length === 0) {
+            console.log(pc.yellow('No secrets found.'));
+            return;
+        }
+
+        const selected = await select({
+            message: 'Select a secret to edit:',
+            options: secrets.map(secret => ({
+                value: secret.name,
+                label: `${secret.name} (${secret.type})`,
+            })),
+        });
+
+        if (isCancel(selected)) {
+            outro(pc.yellow('Cancelled.'));
+            return;
+        }
+
+        name = selected as string;
+    }
+
     const secret = await vault.get(name);
 
     if (!secret) {
@@ -300,18 +361,41 @@ async function secretsEdit(name: string, cmdOptions: ISecretsEditOptions): Promi
     }
 
     if (cmdOptions.yes) {
-        if (!cmdOptions.value) {
-            console.error(pc.red('✗ --value is required with --yes'));
+        if (!cmdOptions.name && !cmdOptions.value) {
+            console.error(pc.red('✗ --name or --value is required with --yes'));
             await exit(1);
             return;
         }
 
-        await vault.set({ name: secret.name, type: secret.type, value: cmdOptions.value });
-        console.log(pc.green(`✓ Secret "${name}" updated.`));
+        const updatedName = cmdOptions.name?.trim() || secret.name;
+        const updatedValue = cmdOptions.value || secret.value;
+
+        if (updatedName !== secret.name) {
+            await vault.delete(secret.name);
+        }
+
+        await vault.set({ name: updatedName, type: secret.type, value: updatedValue });
+        console.log(pc.green(`✓ Secret "${updatedName}" updated.`));
         return;
     }
 
     intro(pc.cyan(`Edit Secret: ${name}`));
+
+    const newName = await text({
+        message: 'Secret name:',
+        initialValue: secret.name,
+        validate: (val) => {
+            if (!val || val.trim().length === 0) {
+                return 'Name is required';
+            }
+            return undefined;
+        },
+    });
+
+    if (isCancel(newName)) {
+        outro(pc.yellow('Cancelled.'));
+        return;
+    }
 
     const newValue = await password({
         message: `New value (leave blank to keep current):`,
@@ -322,21 +406,57 @@ async function secretsEdit(name: string, cmdOptions: ISecretsEditOptions): Promi
         return;
     }
 
-    const updated = (newValue as string).trim();
-    if (updated.length > 0) {
-        await vault.set({ name: secret.name, type: secret.type, value: updated });
-        outro(pc.green(`✓ Secret "${name}" updated.`));
-    }
-    else {
+    const updatedName = (newName as string).trim();
+    const updatedValue = newValue ? (newValue as string).trim() : secret.value;
+
+    if (updatedName === secret.name && updatedValue === secret.value) {
         outro(pc.yellow('No changes made.'));
+        return;
     }
+
+    if (updatedName !== secret.name) {
+        await vault.delete(secret.name);
+    }
+
+    await vault.set({ name: updatedName, type: secret.type, value: updatedValue });
+    outro(pc.green(`✓ Secret "${updatedName}" updated.`));
 }
 
 //
-// psi secrets delete <name> — delete a secret after confirmation.
+// psi secrets delete [name] — delete a secret after confirmation.
 //
-async function secretsDelete(name: string, cmdOptions: ISecretsDeleteOptions): Promise<void> {
+async function secretsDelete(name: string | undefined, cmdOptions: ISecretsDeleteOptions): Promise<void> {
     const vault = getVault("plaintext");
+
+    if (!name) {
+        if (cmdOptions.yes) {
+            console.error(pc.red('✗ <name> is required with --yes'));
+            await exit(1);
+            return;
+        }
+
+        const secrets = await vault.list();
+        if (secrets.length === 0) {
+            console.log(pc.yellow('No secrets found.'));
+            return;
+        }
+
+        const selected = await select({
+            message: 'Select a secret to delete:',
+            options: secrets.map(secret => ({
+                value: secret.name,
+                label: `${secret.name} (${secret.type})`,
+            })),
+        });
+
+        if (isCancel(selected)) {
+            outro(pc.yellow('Cancelled.'));
+            return;
+        }
+
+        name = selected as string;
+    }
+
     const secret = await vault.get(name);
 
     if (!secret) {
@@ -379,25 +499,26 @@ async function secretsImport(cmdOptions: ISecretsImportOptions): Promise<void> {
             return;
         }
 
-        const publicPath = cmdOptions.publicKey?.trim() || `${privatePath}.pub`;
-        if (!existsSync(publicPath)) {
-            console.error(pc.red(`✗ Public key file not found: ${publicPath}`));
-            await exit(1);
-            return;
-        }
-
-        const keyName = cmdOptions.keyName?.trim() || privatePath.split('/').pop()?.replace(/\.key$/, '') || 'imported-key';
+        const keyName = privatePath.split('/').pop()?.replace(/\.key$/, '') || 'imported-key';
         const privateKeyPem = await fs.readFile(privatePath, 'utf-8');
-        const publicKeyPem = await fs.readFile(publicPath, 'utf-8');
+        let publicKeyPem: string;
+        const publicPath = cmdOptions.publicKey?.trim() || `${privatePath}.pub`;
+        if (existsSync(publicPath)) {
+            publicKeyPem = await fs.readFile(publicPath, 'utf-8');
+        }
+        else {
+            const privateKeyObj = createPrivateKey(privateKeyPem);
+            publicKeyPem = exportPublicKeyToPem(createPublicKey(privateKeyObj));
+        }
 
         const vault = getVault("plaintext");
         await vault.set({
-            name: `cli:encryption:${keyName}`,
+            name: keyName,
             type: 'encryption-key',
             value: JSON.stringify({ privateKeyPem, publicKeyPem }),
         });
 
-        console.log(pc.green(`✓ Key imported as "cli:encryption:${keyName}".`));
+        console.log(pc.green(`✓ Key imported as "${keyName}".`));
         return;
     }
 
@@ -422,64 +543,26 @@ async function secretsImport(cmdOptions: ISecretsImportOptions): Promise<void> {
     }
 
     const privatePath = (privateKeyPath as string).trim();
-    const defaultPublicPath = `${privatePath}.pub`;
-    let publicPath = defaultPublicPath;
-
-    try {
-        await fs.access(defaultPublicPath);
-    }
-    catch {
-        const publicKeyPath = await text({
-            message: `Public key file not found at "${defaultPublicPath}". Enter the path:`,
-            validate: (value) => {
-                if (!value || value.trim().length === 0) {
-                    return 'Path is required';
-                }
-                if (!existsSync(value.trim())) {
-                    return `File not found: ${value.trim()}`;
-                }
-                return undefined;
-            },
-        });
-
-        if (isCancel(publicKeyPath)) {
-            outro(pc.yellow('Cancelled.'));
-            return;
-        }
-
-        publicPath = (publicKeyPath as string).trim();
-    }
-
-    const defaultKeyName = privatePath.split('/').pop()?.replace(/\.key$/, '') ?? 'imported-key';
-
-    const keyNameInput = await text({
-        message: 'Key name:',
-        initialValue: defaultKeyName,
-        validate: (value) => {
-            if (!value || value.trim().length === 0) {
-                return 'Name is required';
-            }
-            return undefined;
-        },
-    });
-
-    if (isCancel(keyNameInput)) {
-        outro(pc.yellow('Cancelled.'));
-        return;
-    }
-
-    const keyName = (keyNameInput as string).trim();
+    const keyName = privatePath.split('/').pop()?.replace(/\.key$/, '') ?? 'imported-key';
     const privateKeyPem = await fs.readFile(privatePath, 'utf-8');
-    const publicKeyPem = await fs.readFile(publicPath, 'utf-8');
+    let publicKeyPem: string;
+    const defaultPublicPath = `${privatePath}.pub`;
+    if (existsSync(defaultPublicPath)) {
+        publicKeyPem = await fs.readFile(defaultPublicPath, 'utf-8');
+    }
+    else {
+        const privateKeyObj = createPrivateKey(privateKeyPem);
+        publicKeyPem = exportPublicKeyToPem(createPublicKey(privateKeyObj));
+    }
 
     const vault = getVault("plaintext");
     await vault.set({
-        name: `cli:encryption:${keyName}`,
+        name: keyName,
         type: 'encryption-key',
         value: JSON.stringify({ privateKeyPem, publicKeyPem }),
     });
 
-    outro(pc.green(`✓ Key imported as "cli:encryption:${keyName}".`));
+    outro(pc.green(`✓ Key imported as "${keyName}".`));
 }
 
 //

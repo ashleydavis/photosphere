@@ -36,7 +36,7 @@ interface IDbsEditOptions {
     // Skip interactive prompts.
     yes?: boolean;
     // New database name.
-    newName?: string;
+    name?: string;
     // New description.
     description?: string;
     // New database path.
@@ -299,16 +299,17 @@ export function dbsCommand(): Command {
         .option('--geocoding-key-id <id>', 'Geocoding API key secret ID')
         .action(dbsAdd);
 
-    // psi dbs view <name>
-    cmd.command('view <name>')
+    // psi dbs view [name]
+    cmd.command('view [name]')
         .description('Show all fields of a database entry.')
+        .option('--yes', 'Skip interactive selection (requires <name>)')
         .action(dbsView);
 
-    // psi dbs edit <name>
-    cmd.command('edit <name>')
+    // psi dbs edit [name]
+    cmd.command('edit [name]')
         .description('Edit fields of a database entry.')
         .option('--yes', 'Skip prompts')
-        .option('--new-name <name>', 'New database name')
+        .option('--name <name>', 'New database name')
         .option('--description <desc>', 'New description')
         .option('--path <path>', 'New database path')
         .option('--s3-cred-id <id>', 'S3 credential secret ID')
@@ -316,8 +317,8 @@ export function dbsCommand(): Command {
         .option('--geocoding-key-id <id>', 'Geocoding API key secret ID')
         .action(dbsEdit);
 
-    // psi dbs remove <name>
-    cmd.command('remove <name>')
+    // psi dbs remove [name]
+    cmd.command('remove [name]')
         .description('Remove a database entry from the list.')
         .option('--yes', 'Skip confirmation prompt')
         .action(dbsRemove);
@@ -411,9 +412,38 @@ async function dbsAdd(cmdOptions: IDbsAddOptions): Promise<void> {
 }
 
 //
-// psi dbs view <name> — show all fields of a database entry.
+// psi dbs view [name] — show all fields of a database entry.
 //
-async function dbsView(name: string): Promise<void> {
+async function dbsView(name: string | undefined, cmdOptions: { yes?: boolean }): Promise<void> {
+    if (!name) {
+        if (cmdOptions.yes) {
+            console.error(pc.red('✗ <name> is required with --yes'));
+            await exit(1);
+            return;
+        }
+
+        const databases = await getDatabases();
+        if (databases.length === 0) {
+            console.log(pc.yellow('No databases configured.'));
+            return;
+        }
+
+        const selected = await select({
+            message: 'Select a database to view:',
+            options: databases.map(database => ({
+                value: database.name,
+                label: `${database.name} (${database.path})`,
+            })),
+        });
+
+        if (isCancel(selected)) {
+            outro(pc.yellow('Cancelled.'));
+            return;
+        }
+
+        name = selected as string;
+    }
+
     const entry = await findDatabaseByName(name);
 
     if (!entry) {
@@ -457,9 +487,38 @@ async function dbsView(name: string): Promise<void> {
 }
 
 //
-// psi dbs edit <name> — edit fields with current values pre-populated.
+// psi dbs edit [name] — edit fields with current values pre-populated.
 //
-async function dbsEdit(name: string, cmdOptions: IDbsEditOptions): Promise<void> {
+async function dbsEdit(name: string | undefined, cmdOptions: IDbsEditOptions): Promise<void> {
+    if (!name) {
+        if (cmdOptions.yes) {
+            console.error(pc.red('✗ <name> is required with --yes'));
+            await exit(1);
+            return;
+        }
+
+        const databases = await getDatabases();
+        if (databases.length === 0) {
+            console.log(pc.yellow('No databases configured.'));
+            return;
+        }
+
+        const selected = await select({
+            message: 'Select a database to edit:',
+            options: databases.map(database => ({
+                value: database.name,
+                label: `${database.name} (${database.path})`,
+            })),
+        });
+
+        if (isCancel(selected)) {
+            outro(pc.yellow('Cancelled.'));
+            return;
+        }
+
+        name = selected as string;
+    }
+
     const entry = await findDatabaseByName(name);
 
     if (!entry) {
@@ -470,7 +529,7 @@ async function dbsEdit(name: string, cmdOptions: IDbsEditOptions): Promise<void>
 
     if (cmdOptions.yes) {
         const updated: IDatabaseEntry = {
-            name: cmdOptions.newName?.trim() || entry.name,
+            name: cmdOptions.name?.trim() || entry.name,
             description: cmdOptions.description?.trim() ?? entry.description ?? '',
             path: cmdOptions.path?.trim() || entry.path,
             origin: entry.origin,
@@ -562,9 +621,38 @@ async function dbsEdit(name: string, cmdOptions: IDbsEditOptions): Promise<void>
 }
 
 //
-// psi dbs remove <name> — remove a database entry after confirmation.
+// psi dbs remove [name] — remove a database entry after confirmation.
 //
-async function dbsRemove(name: string, cmdOptions: { yes?: boolean }): Promise<void> {
+async function dbsRemove(name: string | undefined, cmdOptions: { yes?: boolean }): Promise<void> {
+    if (!name) {
+        if (cmdOptions.yes) {
+            console.error(pc.red('✗ <name> is required with --yes'));
+            await exit(1);
+            return;
+        }
+
+        const databases = await getDatabases();
+        if (databases.length === 0) {
+            console.log(pc.yellow('No databases configured.'));
+            return;
+        }
+
+        const selected = await select({
+            message: 'Select a database to remove:',
+            options: databases.map(database => ({
+                value: database.name,
+                label: `${database.name} (${database.path})`,
+            })),
+        });
+
+        if (isCancel(selected)) {
+            outro(pc.yellow('Cancelled.'));
+            return;
+        }
+
+        name = selected as string;
+    }
+
     const entry = await findDatabaseByName(name);
 
     if (!entry) {
