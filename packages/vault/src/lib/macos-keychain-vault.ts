@@ -84,8 +84,7 @@ export class MacOSKeychainVault implements IVault {
         if (!result.ok) {
             throw new Error(result.message);
         }
-        const version = await runCommand([SECURITY_TOOL, "version"]);
-        console.log(`Using macOS Keychain via ${SECURITY_TOOL} ${version.trim()}`);
+        await runCommand([SECURITY_TOOL, "version"]);
     }
 
     //
