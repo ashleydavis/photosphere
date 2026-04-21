@@ -3749,7 +3749,7 @@ test_dbs_view() {
     seed_databases_config '[{"name":"view-db","description":"A test database","path":"/tmp/view-db","encryptionKeyId":"enc00001","s3CredentialId":"s3test01"}]'
 
     local dbs_output
-    invoke_command "View database entry" "$(get_cli_command) dbs view view-db" 0 "dbs_output"
+    invoke_command "View database entry" "$(get_cli_command) dbs view --name view-db" 0 "dbs_output"
 
     expect_output_string "$dbs_output" "view-db" "Name appears in view output"
     expect_output_string "$dbs_output" "/tmp/view-db" "Path appears in view output"
@@ -3765,7 +3765,7 @@ test_dbs_remove() {
 
     seed_databases_config '[{"name":"keep-db","description":"","path":"/tmp/keep-db"},{"name":"remove-db","description":"","path":"/tmp/remove-db"}]'
 
-    invoke_command "Remove database entry" "$(get_cli_command) dbs remove remove-db --yes" 0
+    invoke_command "Remove database entry" "$(get_cli_command) dbs remove --name remove-db --yes" 0
 
     local dbs_output
     invoke_command "List databases after remove" "$(get_cli_command) dbs list" 0 "dbs_output"
@@ -3941,7 +3941,7 @@ test_plaintext_vault_view() {
     seed_vault_secret "view-secret" "plain" "my-secret-value"
 
     local view_output
-    invoke_command "View secret" "$(get_cli_command) secrets view view-secret --yes" 0 "view_output"
+    invoke_command "View secret" "$(get_cli_command) secrets view --name view-secret --yes" 0 "view_output"
 
     expect_output_string "$view_output" "view-secret" "Secret name appears in view output"
     expect_output_string "$view_output" "plain" "Secret type appears in view output"
@@ -3969,14 +3969,14 @@ test_plaintext_vault_edit() {
 
     seed_vault_secret "edit-secret" "plain" "original-value"
 
-    invoke_command "Edit secret via CLI" "$(get_cli_command) secrets edit edit-secret --yes --value updated-value" 0
+    invoke_command "Edit secret via CLI" "$(get_cli_command) secrets edit --name edit-secret --yes --value updated-value" 0
 
     local view_output
-    invoke_command "View secret after edit" "$(get_cli_command) secrets view edit-secret --yes" 0 "view_output"
+    invoke_command "View secret after edit" "$(get_cli_command) secrets view --name edit-secret --yes" 0 "view_output"
 
     expect_output_string "$view_output" "updated-value" "Secret value updated after edit"
 
-    invoke_command "Rename secret via CLI" "$(get_cli_command) secrets edit edit-secret --yes --name renamed-secret" 0
+    invoke_command "Rename secret via CLI" "$(get_cli_command) secrets edit --name edit-secret --yes --new-name renamed-secret" 0
 
     local list_output
     invoke_command "List secrets after rename" "$(get_cli_command) secrets list" 0 "list_output"
@@ -4007,7 +4007,7 @@ test_plaintext_vault_delete() {
     seed_vault_secret "keep-secret" "plain" "keep-me"
     seed_vault_secret "delete-secret" "plain" "delete-me"
 
-    invoke_command "Delete secret via CLI" "$(get_cli_command) secrets delete delete-secret --yes" 0
+    invoke_command "Delete secret via CLI" "$(get_cli_command) secrets delete --name delete-secret --yes" 0
 
     local list_output
     invoke_command "List secrets after delete" "$(get_cli_command) secrets list" 0 "list_output"
@@ -4081,7 +4081,7 @@ test_keychain_vault_list_empty() {
 
     # Clear any leftover test secrets from previous runs (keychain is OS-global).
     for secret_name in keychain-test-secret view-secret edit-secret renamed-secret keep-secret delete-secret; do
-        eval "$(get_cli_command) secrets delete $secret_name --yes" 2>/dev/null || true
+        eval "$(get_cli_command) secrets delete --name $secret_name --yes" 2>/dev/null || true
     done
 
     local list_output
@@ -4114,7 +4114,7 @@ test_keychain_vault_add() {
 
     expect_output_string "$list_output" "keychain-test-secret" "Added keychain secret appears in list"
 
-    eval "$(get_cli_command) secrets delete keychain-test-secret --yes" 2>/dev/null || true
+    eval "$(get_cli_command) secrets delete --name keychain-test-secret --yes" 2>/dev/null || true
     export PHOTOSPHERE_VAULT_TYPE="$saved_vault_type"
     export PHOTOSPHERE_CONFIG_DIR="$saved_config"
     test_passed
@@ -4136,13 +4136,13 @@ test_keychain_vault_view() {
     invoke_command "Add view-secret to keychain" "$(get_cli_command) secrets add --yes --name view-secret --type plain --value my-secret-value" 0
 
     local view_output
-    invoke_command "View keychain secret" "$(get_cli_command) secrets view view-secret --yes" 0 "view_output"
+    invoke_command "View keychain secret" "$(get_cli_command) secrets view --name view-secret --yes" 0 "view_output"
 
     expect_output_string "$view_output" "view-secret" "Secret name appears in view output"
     expect_output_string "$view_output" "plain" "Secret type appears in view output"
     expect_output_string "$view_output" "my-secret-value" "Secret value appears in view output"
 
-    eval "$(get_cli_command) secrets delete view-secret --yes" 2>/dev/null || true
+    eval "$(get_cli_command) secrets delete --name view-secret --yes" 2>/dev/null || true
     export PHOTOSPHERE_VAULT_TYPE="$saved_vault_type"
     export PHOTOSPHERE_CONFIG_DIR="$saved_config"
     test_passed
@@ -4163,14 +4163,14 @@ test_keychain_vault_edit() {
 
     invoke_command "Add edit-secret to keychain" "$(get_cli_command) secrets add --yes --name edit-secret --type plain --value original-value" 0
 
-    invoke_command "Edit keychain secret value" "$(get_cli_command) secrets edit edit-secret --yes --value updated-value" 0
+    invoke_command "Edit keychain secret value" "$(get_cli_command) secrets edit --name edit-secret --yes --value updated-value" 0
 
     local view_output
-    invoke_command "View secret after edit" "$(get_cli_command) secrets view edit-secret --yes" 0 "view_output"
+    invoke_command "View secret after edit" "$(get_cli_command) secrets view --name edit-secret --yes" 0 "view_output"
 
     expect_output_string "$view_output" "updated-value" "Secret value updated after edit"
 
-    invoke_command "Rename keychain secret" "$(get_cli_command) secrets edit edit-secret --yes --name renamed-secret" 0
+    invoke_command "Rename keychain secret" "$(get_cli_command) secrets edit --name edit-secret --yes --new-name renamed-secret" 0
 
     local list_output
     invoke_command "List secrets after rename" "$(get_cli_command) secrets list" 0 "list_output"
@@ -4178,7 +4178,7 @@ test_keychain_vault_edit() {
     expect_output_string "$list_output" "renamed-secret" "Renamed keychain secret appears in list"
     expect_output_string "$list_output" "edit-secret" "Old keychain secret name gone after rename" "false"
 
-    eval "$(get_cli_command) secrets delete renamed-secret --yes" 2>/dev/null || true
+    eval "$(get_cli_command) secrets delete --name renamed-secret --yes" 2>/dev/null || true
     export PHOTOSPHERE_VAULT_TYPE="$saved_vault_type"
     export PHOTOSPHERE_CONFIG_DIR="$saved_config"
     test_passed
@@ -4200,7 +4200,7 @@ test_keychain_vault_delete() {
     invoke_command "Add keep-secret to keychain" "$(get_cli_command) secrets add --yes --name keep-secret --type plain --value keep-me" 0
     invoke_command "Add delete-secret to keychain" "$(get_cli_command) secrets add --yes --name delete-secret --type plain --value delete-me" 0
 
-    invoke_command "Delete keychain secret" "$(get_cli_command) secrets delete delete-secret --yes" 0
+    invoke_command "Delete keychain secret" "$(get_cli_command) secrets delete --name delete-secret --yes" 0
 
     local list_output
     invoke_command "List secrets after keychain delete" "$(get_cli_command) secrets list" 0 "list_output"
@@ -4208,7 +4208,7 @@ test_keychain_vault_delete() {
     expect_output_string "$list_output" "keep-secret" "Remaining keychain secret still present"
     expect_output_string "$list_output" "delete-secret" "Deleted keychain secret is absent" false
 
-    eval "$(get_cli_command) secrets delete keep-secret --yes" 2>/dev/null || true
+    eval "$(get_cli_command) secrets delete --name keep-secret --yes" 2>/dev/null || true
     export PHOTOSPHERE_VAULT_TYPE="$saved_vault_type"
     export PHOTOSPHERE_CONFIG_DIR="$saved_config"
     test_passed
@@ -4229,7 +4229,7 @@ test_dbs_edit() {
 
     seed_databases_config '[{"name":"edit-db","description":"","path":"/tmp/edit-db"}]'
 
-    invoke_command "Edit database entry" "$(get_cli_command) dbs edit edit-db --yes --name renamed-db" 0
+    invoke_command "Edit database entry" "$(get_cli_command) dbs edit --name edit-db --yes --new-name renamed-db" 0
 
     local dbs_output
     invoke_command "List databases after edit" "$(get_cli_command) dbs list" 0 "dbs_output"
@@ -4313,10 +4313,10 @@ test_secrets_add_duplicate() {
     export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
     mkdir -p "$PHOTOSPHERE_VAULT_DIR" "$PHOTOSPHERE_CONFIG_DIR"
 
-    invoke_command "Add secret first time" "$(get_cli_command) secrets add --yes --name dup-secret --type generic --value first" 0
+    invoke_command "Add secret first time" "$(get_cli_command) secrets add --yes --name dup-secret --type plain --value first" 0
 
     local error_output
-    invoke_command "Add secret with same name fails" "$(get_cli_command) secrets add --yes --name dup-secret --type generic --value second" 1 "error_output"
+    invoke_command "Add secret with same name fails" "$(get_cli_command) secrets add --yes --name dup-secret --type plain --value second" 1 "error_output"
 
     expect_output_string "$error_output" "already exists" "Error message mentions already exists"
 

@@ -30,13 +30,27 @@ interface IDbsAddOptions {
 }
 
 //
+// Options for the `dbs view` command.
+//
+interface IDbsViewOptions {
+    // Skip interactive selection (requires --name or --path).
+    yes?: boolean;
+    // Database name to look up.
+    name?: string;
+    // Database path to look up.
+    path?: string;
+}
+
+//
 // Options for the `dbs edit` command.
 //
 interface IDbsEditOptions {
     // Skip interactive prompts.
     yes?: boolean;
-    // New database name.
+    // Database name to edit (identifier).
     name?: string;
+    // New database name (rename).
+    newName?: string;
     // New description.
     description?: string;
     // New database path.
@@ -50,6 +64,32 @@ interface IDbsEditOptions {
 }
 
 //
+// Options for the `dbs remove` command.
+//
+interface IDbsRemoveOptions {
+    // Skip confirmation prompt.
+    yes?: boolean;
+    // Database name to look up.
+    name?: string;
+    // Database path to look up.
+    path?: string;
+}
+
+//
+// Options for the `dbs send` command.
+//
+interface IDbsSendOptions {
+    // Skip confirmation prompts.
+    yes?: boolean;
+    // Database name to look up.
+    name?: string;
+    // Database path to look up.
+    path?: string;
+    // Pairing code to use instead of generating one.
+    code?: string;
+}
+
+//
 // Generates an 8-character random alphanumeric ID for shared vault secrets.
 //
 function generateSharedSecretId(): string {
@@ -59,6 +99,27 @@ function generateSharedSecretId(): string {
         result += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     return result;
+}
+
+//
+// Finds a database entry by its exact path.
+//
+async function findDatabaseByPath(dbPath: string): Promise<IDatabaseEntry | undefined> {
+    const databases = await getDatabases();
+    return databases.find(dbEntry => dbEntry.path === dbPath);
+}
+
+//
+// Finds a database entry by name or path. Name takes precedence if both are provided.
+//
+async function findDatabaseByIdentifier(name: string | undefined, dbPath: string | undefined): Promise<IDatabaseEntry | undefined> {
+    if (name) {
+        return findDatabaseByName(name);
+    }
+    if (dbPath) {
+        return findDatabaseByPath(dbPath);
+    }
+    return undefined;
 }
 
 //
@@ -299,17 +360,20 @@ export function dbsCommand(): Command {
         .option('--geocoding-key-id <id>', 'Geocoding API key secret ID')
         .action(dbsAdd);
 
-    // psi dbs view [name]
-    cmd.command('view [name]')
+    // psi dbs view
+    cmd.command('view')
         .description('Show all fields of a database entry.')
-        .option('--yes', 'Skip interactive selection (requires <name>)')
+        .option('--yes', 'Skip interactive selection (requires --name or --path)')
+        .option('--name <name>', 'Database name')
+        .option('--path <path>', 'Database path')
         .action(dbsView);
 
-    // psi dbs edit [name]
-    cmd.command('edit [name]')
+    // psi dbs edit
+    cmd.command('edit')
         .description('Edit fields of a database entry.')
         .option('--yes', 'Skip prompts')
-        .option('--name <name>', 'New database name')
+        .option('--name <name>', 'Database name to edit')
+        .option('--new-name <name>', 'New database name')
         .option('--description <desc>', 'New description')
         .option('--path <path>', 'New database path')
         .option('--s3-cred-id <id>', 'S3 credential secret ID')
@@ -317,16 +381,20 @@ export function dbsCommand(): Command {
         .option('--geocoding-key-id <id>', 'Geocoding API key secret ID')
         .action(dbsEdit);
 
-    // psi dbs remove [name]
-    cmd.command('remove [name]')
+    // psi dbs remove
+    cmd.command('remove')
         .description('Remove a database entry from the list.')
         .option('--yes', 'Skip confirmation prompt')
+        .option('--name <name>', 'Database name')
+        .option('--path <path>', 'Database path')
         .action(dbsRemove);
 
-    // psi dbs send [name]
-    cmd.command('send [name]')
+    // psi dbs send
+    cmd.command('send')
         .description('Send a database config (with secrets) to another device over the LAN.')
         .option('--yes', 'Skip confirmation prompts and field editing')
+        .option('--name <name>', 'Database name')
+        .option('--path <path>', 'Database path')
         .option('--code <code>', 'Use a specific pairing code instead of generating one (useful for scripted use)')
         .action(dbsSend);
 
@@ -429,12 +497,12 @@ async function dbsAdd(cmdOptions: IDbsAddOptions): Promise<void> {
 //
 // psi dbs view [name] — show all fields of a database entry.
 //
-async function dbsView(name: string | undefined, cmdOptions: { yes?: boolean }): Promise<void> {
+async function dbsView(cmdOptions: IDbsViewOptions): Promise<void> {
     let entry: IDatabaseEntry | undefined;
 
-    if (!name) {
+    if (!cmdOptions.name && !cmdOptions.path) {
         if (cmdOptions.yes) {
-            console.error(pc.red('✗ <name> is required with --yes'));
+            console.error(pc.red('✗ --name or --path is required with --yes'));
             await exit(1);
             return;
         }
@@ -461,11 +529,11 @@ async function dbsView(name: string | undefined, cmdOptions: { yes?: boolean }):
         entry = databases.find(database => database.path === selected as string);
     }
     else {
-        entry = await findDatabaseByName(name);
+        entry = await findDatabaseByIdentifier(cmdOptions.name, cmdOptions.path);
     }
 
     if (!entry) {
-        console.error(pc.red(`✗ No database named "${name}" found.`));
+        console.error(pc.red(`✗ No database matching the given name or path was found.`));
         await exit(1);
         return;
     }
@@ -507,12 +575,12 @@ async function dbsView(name: string | undefined, cmdOptions: { yes?: boolean }):
 //
 // psi dbs edit [name] — edit fields with current values pre-populated.
 //
-async function dbsEdit(name: string | undefined, cmdOptions: IDbsEditOptions): Promise<void> {
+async function dbsEdit(cmdOptions: IDbsEditOptions): Promise<void> {
     let entry: IDatabaseEntry | undefined;
 
-    if (!name) {
+    if (!cmdOptions.name) {
         if (cmdOptions.yes) {
-            console.error(pc.red('✗ <name> is required with --yes'));
+            console.error(pc.red('✗ --name is required with --yes'));
             await exit(1);
             return;
         }
@@ -539,18 +607,18 @@ async function dbsEdit(name: string | undefined, cmdOptions: IDbsEditOptions): P
         entry = databases.find(database => database.path === selected as string);
     }
     else {
-        entry = await findDatabaseByName(name);
+        entry = await findDatabaseByName(cmdOptions.name);
     }
 
     if (!entry) {
-        console.error(pc.red(`✗ No database named "${name}" found.`));
+        console.error(pc.red(`✗ No database named "${cmdOptions.name}" found.`));
         await exit(1);
         return;
     }
 
     if (cmdOptions.yes) {
         const updated: IDatabaseEntry = {
-            name: cmdOptions.name || entry.name,
+            name: cmdOptions.newName || entry.name,
             description: cmdOptions.description ?? entry.description ?? '',
             path: cmdOptions.path || entry.path,
             origin: entry.origin,
@@ -644,12 +712,12 @@ async function dbsEdit(name: string | undefined, cmdOptions: IDbsEditOptions): P
 //
 // psi dbs remove [name] — remove a database entry after confirmation.
 //
-async function dbsRemove(name: string | undefined, cmdOptions: { yes?: boolean }): Promise<void> {
+async function dbsRemove(cmdOptions: IDbsRemoveOptions): Promise<void> {
     let entry: IDatabaseEntry | undefined;
 
-    if (!name) {
+    if (!cmdOptions.name && !cmdOptions.path) {
         if (cmdOptions.yes) {
-            console.error(pc.red('✗ <name> is required with --yes'));
+            console.error(pc.red('✗ --name or --path is required with --yes'));
             await exit(1);
             return;
         }
@@ -676,11 +744,11 @@ async function dbsRemove(name: string | undefined, cmdOptions: { yes?: boolean }
         entry = databases.find(database => database.path === selected as string);
     }
     else {
-        entry = await findDatabaseByName(name);
+        entry = await findDatabaseByIdentifier(cmdOptions.name, cmdOptions.path);
     }
 
     if (!entry) {
-        console.error(pc.red(`✗ No database named "${name}" found.`));
+        console.error(pc.red(`✗ No database matching the given name or path was found.`));
         await exit(1);
         return;
     }
@@ -704,7 +772,7 @@ async function dbsRemove(name: string | undefined, cmdOptions: { yes?: boolean }
 //
 // psi dbs send [name] — share a database config with secrets over the LAN.
 //
-async function dbsSend(name: string | undefined, cmdOptions: { yes?: boolean; code?: string }): Promise<void> {
+async function dbsSend(cmdOptions: IDbsSendOptions): Promise<void> {
     intro(pc.cyan('Send Database'));
 
     const skipPrompts = !!cmdOptions.yes;
@@ -716,10 +784,10 @@ async function dbsSend(name: string | undefined, cmdOptions: { yes?: boolean; co
 
     let entry: IDatabaseEntry | undefined;
 
-    if (name) {
-        entry = await findDatabaseByName(name);
+    if (cmdOptions.name || cmdOptions.path) {
+        entry = await findDatabaseByIdentifier(cmdOptions.name, cmdOptions.path);
         if (!entry) {
-            console.error(pc.red(`✗ No database named "${name}" found.`));
+            console.error(pc.red(`✗ No database matching the given name or path was found.`));
             await exit(1);
             return;
         }

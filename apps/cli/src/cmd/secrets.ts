@@ -48,6 +48,8 @@ interface ISecretsAddOptions {
 interface ISecretsViewOptions {
     // Skip confirmation prompt.
     yes?: boolean;
+    // Secret name to view.
+    name?: string;
 }
 
 //
@@ -56,8 +58,10 @@ interface ISecretsViewOptions {
 interface ISecretsEditOptions {
     // Skip interactive prompts.
     yes?: boolean;
-    // New secret name.
+    // Secret name to edit (identifier).
     name?: string;
+    // New secret name (rename).
+    newName?: string;
     // New secret value.
     value?: string;
 }
@@ -68,6 +72,20 @@ interface ISecretsEditOptions {
 interface ISecretsDeleteOptions {
     // Skip confirmation prompt.
     yes?: boolean;
+    // Secret name to delete.
+    name?: string;
+}
+
+//
+// Options for the `secrets send` command.
+//
+interface ISecretsSendOptions {
+    // Skip confirmation prompts.
+    yes?: boolean;
+    // Secret name to send.
+    name?: string;
+    // Pairing code to use instead of generating one.
+    code?: string;
 }
 
 //
@@ -115,24 +133,27 @@ export function secretsCommand(): Command {
         .description('List all secrets (values are masked).')
         .action(secretsList);
 
-    // psi secrets view [name]
-    cmd.command('view [name]')
+    // psi secrets view
+    cmd.command('view')
         .description('Show the full value of a named secret.')
         .option('--yes', 'Skip confirmation prompt')
+        .option('--name <name>', 'Secret name')
         .action(secretsView);
 
-    // psi secrets edit [name]
-    cmd.command('edit [name]')
+    // psi secrets edit
+    cmd.command('edit')
         .description('Edit an existing secret, field by field.')
         .option('--yes', 'Skip prompts')
-        .option('--name <name>', 'New secret name')
+        .option('--name <name>', 'Secret name to edit')
+        .option('--new-name <name>', 'New secret name')
         .option('--value <value>', 'New value')
         .action(secretsEdit);
 
-    // psi secrets delete [name]
-    cmd.command('delete [name]')
+    // psi secrets delete
+    cmd.command('delete')
         .description('Delete a named secret.')
         .option('--yes', 'Skip confirmation prompt')
+        .option('--name <name>', 'Secret name to delete')
         .action(secretsDelete);
 
     // psi secrets import
@@ -143,10 +164,11 @@ export function secretsCommand(): Command {
         .option('--public-key <path>', 'Path to public key file')
         .action(secretsImport);
 
-    // psi secrets send [name]
-    cmd.command('send [name]')
+    // psi secrets send
+    cmd.command('send')
         .description('Send a secret to another device over the LAN.')
         .option('--yes', 'Skip confirmation prompts')
+        .option('--name <name>', 'Secret name to send')
         .option('--code <code>', 'Use a specific pairing code instead of generating one (useful for scripted use)')
         .action(secretsSend);
 
@@ -274,13 +296,14 @@ async function secretsList(): Promise<void> {
 //
 // psi secrets view [name] — show the full value after confirmation.
 //
-async function secretsView(name: string | undefined, cmdOptions: ISecretsViewOptions): Promise<void> {
+async function secretsView(cmdOptions: ISecretsViewOptions): Promise<void> {
     await checkVaultPrereqs();
     const vault = getVault(getDefaultVaultType());
+    let secretName: string | undefined = cmdOptions.name;
 
-    if (!name) {
+    if (!secretName) {
         if (cmdOptions.yes) {
-            console.error(pc.red('✗ <name> is required with --yes'));
+            console.error(pc.red('✗ --name is required with --yes'));
             await exit(1);
             return;
         }
@@ -304,20 +327,20 @@ async function secretsView(name: string | undefined, cmdOptions: ISecretsViewOpt
             return;
         }
 
-        name = selected as string;
+        secretName = selected as string;
     }
 
-    const secret = await vault.get(name);
+    const secret = await vault.get(secretName);
 
     if (!secret) {
-        console.error(pc.red(`✗ No secret named "${name}" found.`));
+        console.error(pc.red(`✗ No secret named "${secretName}" found.`));
         await exit(1);
         return;
     }
 
     if (!cmdOptions.yes) {
         const confirmed = await confirm({
-            message: `Reveal the value of "${name}"? (This will display sensitive data.)`,
+            message: `Reveal the value of "${secretName}"? (This will display sensitive data.)`,
             initialValue: false,
         });
 
@@ -352,13 +375,14 @@ async function secretsView(name: string | undefined, cmdOptions: ISecretsViewOpt
 //
 // psi secrets edit [name] — reload existing fields and re-prompt with current values pre-populated.
 //
-async function secretsEdit(name: string | undefined, cmdOptions: ISecretsEditOptions): Promise<void> {
+async function secretsEdit(cmdOptions: ISecretsEditOptions): Promise<void> {
     await checkVaultPrereqs();
     const vault = getVault(getDefaultVaultType());
+    let secretName: string | undefined = cmdOptions.name;
 
-    if (!name) {
+    if (!secretName) {
         if (cmdOptions.yes) {
-            console.error(pc.red('✗ <name> is required with --yes'));
+            console.error(pc.red('✗ --name is required with --yes'));
             await exit(1);
             return;
         }
@@ -382,25 +406,25 @@ async function secretsEdit(name: string | undefined, cmdOptions: ISecretsEditOpt
             return;
         }
 
-        name = selected as string;
+        secretName = selected as string;
     }
 
-    const secret = await vault.get(name);
+    const secret = await vault.get(secretName);
 
     if (!secret) {
-        console.error(pc.red(`✗ No secret named "${name}" found.`));
+        console.error(pc.red(`✗ No secret named "${secretName}" found.`));
         await exit(1);
         return;
     }
 
     if (cmdOptions.yes) {
-        if (!cmdOptions.name && !cmdOptions.value) {
-            console.error(pc.red('✗ --name or --value is required with --yes'));
+        if (!cmdOptions.newName && !cmdOptions.value) {
+            console.error(pc.red('✗ --new-name or --value is required with --yes'));
             await exit(1);
             return;
         }
 
-        const updatedName = cmdOptions.name || secret.name;
+        const updatedName = cmdOptions.newName || secret.name;
         const updatedValue = cmdOptions.value || secret.value;
 
         if (updatedName !== secret.name) {
@@ -412,7 +436,7 @@ async function secretsEdit(name: string | undefined, cmdOptions: ISecretsEditOpt
         return;
     }
 
-    intro(pc.cyan(`Edit Secret: ${name}`));
+    intro(pc.cyan(`Edit Secret: ${secretName}`));
 
     const newName = await text({
         message: 'Secret name:',
@@ -458,13 +482,14 @@ async function secretsEdit(name: string | undefined, cmdOptions: ISecretsEditOpt
 //
 // psi secrets delete [name] — delete a secret after confirmation.
 //
-async function secretsDelete(name: string | undefined, cmdOptions: ISecretsDeleteOptions): Promise<void> {
+async function secretsDelete(cmdOptions: ISecretsDeleteOptions): Promise<void> {
     await checkVaultPrereqs();
     const vault = getVault(getDefaultVaultType());
+    let secretName: string | undefined = cmdOptions.name;
 
-    if (!name) {
+    if (!secretName) {
         if (cmdOptions.yes) {
-            console.error(pc.red('✗ <name> is required with --yes'));
+            console.error(pc.red('✗ --name is required with --yes'));
             await exit(1);
             return;
         }
@@ -488,20 +513,20 @@ async function secretsDelete(name: string | undefined, cmdOptions: ISecretsDelet
             return;
         }
 
-        name = selected as string;
+        secretName = selected as string;
     }
 
-    const secret = await vault.get(name);
+    const secret = await vault.get(secretName);
 
     if (!secret) {
-        console.error(pc.red(`✗ No secret named "${name}" found.`));
+        console.error(pc.red(`✗ No secret named "${secretName}" found.`));
         await exit(1);
         return;
     }
 
     if (!cmdOptions.yes) {
         const confirmed = await confirm({
-            message: `Delete secret "${name}"? This cannot be undone.`,
+            message: `Delete secret "${secretName}"? This cannot be undone.`,
             initialValue: false,
         });
 
@@ -511,8 +536,8 @@ async function secretsDelete(name: string | undefined, cmdOptions: ISecretsDelet
         }
     }
 
-    await vault.delete(name);
-    outro(pc.green(`✓ Secret "${name}" deleted.`));
+    await vault.delete(secretName);
+    outro(pc.green(`✓ Secret "${secretName}" deleted.`));
 }
 
 //
@@ -603,7 +628,7 @@ async function secretsImport(cmdOptions: ISecretsImportOptions): Promise<void> {
 //
 // psi secrets send [name] — share a secret with another device over the LAN.
 //
-async function secretsSend(name: string | undefined, cmdOptions: { yes?: boolean; code?: string }): Promise<void> {
+async function secretsSend(cmdOptions: ISecretsSendOptions): Promise<void> {
     await checkVaultPrereqs();
     intro(pc.cyan('Send Secret'));
 
@@ -616,14 +641,14 @@ async function secretsSend(name: string | undefined, cmdOptions: { yes?: boolean
         pc.cyan('ℹ Network Requirement')
     );
 
-    if (name) {
-        const secret = await vault.get(name);
+    if (cmdOptions.name) {
+        const secret = await vault.get(cmdOptions.name);
         if (!secret) {
-            console.error(pc.red(`✗ No secret named "${name}" found.`));
+            console.error(pc.red(`✗ No secret named "${cmdOptions.name}" found.`));
             await exit(1);
             return;
         }
-        secretName = name;
+        secretName = cmdOptions.name;
     }
     else {
         // Pick from all vault secrets
