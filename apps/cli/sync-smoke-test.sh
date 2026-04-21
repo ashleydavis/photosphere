@@ -8,6 +8,9 @@ set -e
 # Disable colors for consistent output parsing
 export NO_COLOR=1
 
+# Use plaintext vault so tests don't require secret-tool or a keychain daemon
+export PHOTOSPHERE_VAULT_TYPE="plaintext"
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
