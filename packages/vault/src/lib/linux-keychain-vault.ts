@@ -47,8 +47,7 @@ async function checkTool(): Promise<void> {
     if (!result.ok) {
         throw new Error(result.message);
     }
-    const path = await runCommand(["which", SECRET_TOOL]);
-    console.log(`Using Linux Keychain via secret-tool (${path})`);
+    await runCommand(["which", SECRET_TOOL]);
 }
 
 //

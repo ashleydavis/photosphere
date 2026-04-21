@@ -41,8 +41,7 @@ async function checkTool(): Promise<void> {
     if (!result.ok) {
         throw new Error(result.message);
     }
-    const version = await runCommand(["powershell", "-NoProfile", "-Command", "$PSVersionTable.PSVersion.ToString()"]);
-    console.log(`Using Windows Credential Vault via PowerShell ${version}`);
+    await runCommand(["powershell", "-NoProfile", "-Command", "$PSVersionTable.PSVersion.ToString()"]);
 }
 
 //
