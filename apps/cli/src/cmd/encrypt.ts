@@ -10,7 +10,7 @@ import { exit } from "node-utils";
 import { configureIfNeeded, getS3Config } from "../lib/config";
 import { getDirectoryForCommand } from "../lib/directory-picker";
 import { resolveKeyPems, IBaseCommandOptions, ICommandContext, promptForEncryption, selectEncryptionKey } from "../lib/init-cmd";
-import { getVault } from "vault";
+import { getVault, getDefaultVaultType } from "vault";
 import { writeProgress, clearProgressMessage } from "../lib/terminal-utils";
 import { confirm, isCancel } from "../lib/clack/prompts";
 import { merkleTreeExists, encrypt as apiEncrypt } from "api";
@@ -73,7 +73,7 @@ export async function encryptCommand(context: ICommandContext, options: IEncrypt
     // If --generate-key is set, generate the first key in the list if it doesn't exist in the vault.
     if (options.generateKey && options.key) {
         const firstKeyName = options.key.split(',')[0].trim();
-        const vault = getVault("plaintext");
+        const vault = getVault(getDefaultVaultType());
         const existing = await vault.get(`cli:encryption:${firstKeyName}`);
         if (!existing) {
             const keyPair = generateKeyPair();

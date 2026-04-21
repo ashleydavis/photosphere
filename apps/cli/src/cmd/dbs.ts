@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import pc from 'picocolors';
-import { getVault } from 'vault';
+import { getVault, getDefaultVaultType } from 'vault';
 import { getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry } from 'node-utils';
 import { confirm, intro, outro, text, select, isCancel, spinner, note } from '../lib/clack/prompts';
 import { exit } from 'node-utils';
@@ -91,7 +91,7 @@ async function findDatabaseByName(name: string): Promise<IDatabaseEntry | undefi
 // Returns the secret ID to store on the database entry, or undefined for "None".
 //
 async function pickOrCreateSecret(secretType: string, label: string, currentId?: string): Promise<string | undefined> {
-    const vault = getVault("plaintext");
+    const vault = getVault(getDefaultVaultType());
     const secrets = await vault.list();
 
     // Find existing shared secrets of the matching type.
@@ -159,7 +159,7 @@ async function pickOrCreateSecret(secretType: string, label: string, currentId?:
 // Returns the generated secret ID.
 //
 async function createSharedSecret(secretType: string): Promise<string> {
-    const vault = getVault("plaintext");
+    const vault = getVault(getDefaultVaultType());
     const secretId = generateSharedSecretId();
 
     if (secretType === 's3-credentials') {

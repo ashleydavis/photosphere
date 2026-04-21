@@ -28,6 +28,7 @@ DUPLICATE_IMAGES_DIR="../../test/duplicate-images"
 # Isolate the vault and config so tests don't pollute the user's real data.
 export PHOTOSPHERE_VAULT_DIR="${TEST_TMP_DIR}/vault"
 export PHOTOSPHERE_CONFIG_DIR="${TEST_TMP_DIR}/config"
+export PHOTOSPHERE_VAULT_TYPE="plaintext"
 
 # Use built binary instead of bun run start (set by --binary)
 USE_BINARY=false
@@ -91,12 +92,17 @@ declare -a TEST_TABLE=(
     "dbs-resolve-by-name:test_dbs_resolve_by_name:Resolve database by name with auto-resolved encryption key"
     "dbs-resolve-by-path:test_dbs_resolve_by_path:Resolve database by path with auto-resolved encryption key"
     "dbs-no-match-fallback:test_dbs_no_match_fallback:No databases.json match falls back to existing flow"
-    "secrets-list-empty:test_secrets_list_empty:Empty vault shows No secrets message"
-    "secrets-add:test_secrets_add:Add a secret via CLI and verify with list"
-    "secrets-view:test_secrets_view:View a secret with --yes and verify output"
-    "secrets-edit:test_secrets_edit:Edit a secret with --yes and verify updated value"
-    "secrets-delete:test_secrets_delete:Delete a secret with --yes and verify removal"
+    "plaintext-vault-list-empty:test_plaintext_vault_list_empty:Empty plaintext vault shows No secrets message"
+    "plaintext-vault-add:test_plaintext_vault_add:Add a secret to plaintext vault and verify with list"
+    "plaintext-vault-view:test_plaintext_vault_view:View a plaintext vault secret with --yes and verify output"
+    "plaintext-vault-edit:test_plaintext_vault_edit:Edit a plaintext vault secret with --yes and verify updated value"
+    "plaintext-vault-delete:test_plaintext_vault_delete:Delete a plaintext vault secret with --yes and verify removal"
     "secrets-import:test_secrets_import:Import a PEM key pair and verify via list"
+    "keychain-vault-list-empty:test_keychain_vault_list_empty:Empty keychain vault shows No secrets message"
+    "keychain-vault-add:test_keychain_vault_add:Add a secret to OS keychain and verify it appears in list"
+    "keychain-vault-view:test_keychain_vault_view:Add a secret to OS keychain and verify secrets view returns correct value"
+    "keychain-vault-edit:test_keychain_vault_edit:Add a secret to OS keychain, edit its value, verify updated value"
+    "keychain-vault-delete:test_keychain_vault_delete:Add a secret to OS keychain, delete it, verify it is gone from list"
     "dbs-edit:test_dbs_edit:Edit a database entry with --yes and verify rename"
     "dbs-add-cli:test_dbs_add_cli:Add a database via CLI with --yes and verify"
 )
@@ -3865,9 +3871,9 @@ test_dbs_no_match_fallback() {
 # Secrets & dbs non-interactive CLI smoke tests
 # -----------------------------------------------------------------------------
 
-test_secrets_list_empty() {
+test_plaintext_vault_list_empty() {
     local test_number="$1"
-    print_test_header "$test_number" "SECRETS LIST EMPTY"
+    print_test_header "$test_number" "PLAINTEXT VAULT LIST EMPTY"
 
     # Use an isolated vault and config for this test.
     local saved_vault="$PHOTOSPHERE_VAULT_DIR"
@@ -3890,9 +3896,9 @@ test_secrets_list_empty() {
     test_passed
 }
 
-test_secrets_add() {
+test_plaintext_vault_add() {
     local test_number="$1"
-    print_test_header "$test_number" "SECRETS ADD"
+    print_test_header "$test_number" "PLAINTEXT VAULT ADD"
 
     # Use an isolated vault and config for this test.
     local saved_vault="$PHOTOSPHERE_VAULT_DIR"
@@ -3917,9 +3923,9 @@ test_secrets_add() {
     test_passed
 }
 
-test_secrets_view() {
+test_plaintext_vault_view() {
     local test_number="$1"
-    print_test_header "$test_number" "SECRETS VIEW"
+    print_test_header "$test_number" "PLAINTEXT VAULT VIEW"
 
     # Use an isolated vault and config for this test.
     local saved_vault="$PHOTOSPHERE_VAULT_DIR"
@@ -3946,9 +3952,9 @@ test_secrets_view() {
     test_passed
 }
 
-test_secrets_edit() {
+test_plaintext_vault_edit() {
     local test_number="$1"
-    print_test_header "$test_number" "SECRETS EDIT"
+    print_test_header "$test_number" "PLAINTEXT VAULT EDIT"
 
     # Use an isolated vault and config for this test.
     local saved_vault="$PHOTOSPHERE_VAULT_DIR"
@@ -3983,9 +3989,9 @@ test_secrets_edit() {
     test_passed
 }
 
-test_secrets_delete() {
+test_plaintext_vault_delete() {
     local test_number="$1"
-    print_test_header "$test_number" "SECRETS DELETE"
+    print_test_header "$test_number" "PLAINTEXT VAULT DELETE"
 
     # Use an isolated vault and config for this test.
     local saved_vault="$PHOTOSPHERE_VAULT_DIR"
@@ -4055,6 +4061,149 @@ test_secrets_import() {
     export PHOTOSPHERE_VAULT_DIR="$saved_vault"
     export PHOTOSPHERE_CONFIG_DIR="$saved_config"
 
+    test_passed
+}
+
+test_keychain_vault_list_empty() {
+    local test_number="$1"
+    print_test_header "$test_number" "KEYCHAIN VAULT LIST EMPTY"
+
+    local saved_vault_type="$PHOTOSPHERE_VAULT_TYPE"
+    export PHOTOSPHERE_VAULT_TYPE="keychain"
+
+    local test_dir="$TEST_TMP_DIR/keychain-vault-list-empty"
+    rm -rf "$test_dir"
+    local saved_config="$PHOTOSPHERE_CONFIG_DIR"
+    export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
+    mkdir -p "$PHOTOSPHERE_CONFIG_DIR"
+
+    local list_output
+    invoke_command "List secrets (empty keychain)" "$(get_cli_command) secrets list" 0 "list_output"
+
+    expect_output_string "$list_output" "No secrets" "Empty keychain vault shows 'No secrets' message"
+
+    export PHOTOSPHERE_VAULT_TYPE="$saved_vault_type"
+    export PHOTOSPHERE_CONFIG_DIR="$saved_config"
+    test_passed
+}
+
+test_keychain_vault_add() {
+    local test_number="$1"
+    print_test_header "$test_number" "KEYCHAIN VAULT ADD"
+
+    local saved_vault_type="$PHOTOSPHERE_VAULT_TYPE"
+    export PHOTOSPHERE_VAULT_TYPE="keychain"
+
+    local test_dir="$TEST_TMP_DIR/keychain-vault-add"
+    rm -rf "$test_dir"
+    local saved_config="$PHOTOSPHERE_CONFIG_DIR"
+    export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
+    mkdir -p "$PHOTOSPHERE_CONFIG_DIR"
+
+    invoke_command "Add secret via CLI to keychain" "$(get_cli_command) secrets add --yes --name keychain-test-secret --type plain --value hello123" 0
+
+    local list_output
+    invoke_command "List secrets after keychain add" "$(get_cli_command) secrets list" 0 "list_output"
+
+    expect_output_string "$list_output" "keychain-test-secret" "Added keychain secret appears in list"
+
+    eval "$(get_cli_command) secrets delete --yes --name keychain-test-secret" 2>/dev/null || true
+    export PHOTOSPHERE_VAULT_TYPE="$saved_vault_type"
+    export PHOTOSPHERE_CONFIG_DIR="$saved_config"
+    test_passed
+}
+
+test_keychain_vault_view() {
+    local test_number="$1"
+    print_test_header "$test_number" "KEYCHAIN VAULT VIEW"
+
+    local saved_vault_type="$PHOTOSPHERE_VAULT_TYPE"
+    export PHOTOSPHERE_VAULT_TYPE="keychain"
+
+    local test_dir="$TEST_TMP_DIR/keychain-vault-view"
+    rm -rf "$test_dir"
+    local saved_config="$PHOTOSPHERE_CONFIG_DIR"
+    export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
+    mkdir -p "$PHOTOSPHERE_CONFIG_DIR"
+
+    invoke_command "Add view-secret to keychain" "$(get_cli_command) secrets add --yes --name view-secret --type plain --value my-secret-value" 0
+
+    local view_output
+    invoke_command "View keychain secret" "$(get_cli_command) secrets view view-secret --yes" 0 "view_output"
+
+    expect_output_string "$view_output" "view-secret" "Secret name appears in view output"
+    expect_output_string "$view_output" "plain" "Secret type appears in view output"
+    expect_output_string "$view_output" "my-secret-value" "Secret value appears in view output"
+
+    eval "$(get_cli_command) secrets delete --yes --name view-secret" 2>/dev/null || true
+    export PHOTOSPHERE_VAULT_TYPE="$saved_vault_type"
+    export PHOTOSPHERE_CONFIG_DIR="$saved_config"
+    test_passed
+}
+
+test_keychain_vault_edit() {
+    local test_number="$1"
+    print_test_header "$test_number" "KEYCHAIN VAULT EDIT"
+
+    local saved_vault_type="$PHOTOSPHERE_VAULT_TYPE"
+    export PHOTOSPHERE_VAULT_TYPE="keychain"
+
+    local test_dir="$TEST_TMP_DIR/keychain-vault-edit"
+    rm -rf "$test_dir"
+    local saved_config="$PHOTOSPHERE_CONFIG_DIR"
+    export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
+    mkdir -p "$PHOTOSPHERE_CONFIG_DIR"
+
+    invoke_command "Add edit-secret to keychain" "$(get_cli_command) secrets add --yes --name edit-secret --type plain --value original-value" 0
+
+    invoke_command "Edit keychain secret value" "$(get_cli_command) secrets edit edit-secret --yes --value updated-value" 0
+
+    local view_output
+    invoke_command "View secret after edit" "$(get_cli_command) secrets view edit-secret --yes" 0 "view_output"
+
+    expect_output_string "$view_output" "updated-value" "Secret value updated after edit"
+
+    invoke_command "Rename keychain secret" "$(get_cli_command) secrets edit edit-secret --yes --name renamed-secret" 0
+
+    local list_output
+    invoke_command "List secrets after rename" "$(get_cli_command) secrets list" 0 "list_output"
+
+    expect_output_string "$list_output" "renamed-secret" "Renamed keychain secret appears in list"
+    expect_output_string "$list_output" "edit-secret" "Old keychain secret name gone after rename" "false"
+
+    eval "$(get_cli_command) secrets delete --yes --name renamed-secret" 2>/dev/null || true
+    export PHOTOSPHERE_VAULT_TYPE="$saved_vault_type"
+    export PHOTOSPHERE_CONFIG_DIR="$saved_config"
+    test_passed
+}
+
+test_keychain_vault_delete() {
+    local test_number="$1"
+    print_test_header "$test_number" "KEYCHAIN VAULT DELETE"
+
+    local saved_vault_type="$PHOTOSPHERE_VAULT_TYPE"
+    export PHOTOSPHERE_VAULT_TYPE="keychain"
+
+    local test_dir="$TEST_TMP_DIR/keychain-vault-delete"
+    rm -rf "$test_dir"
+    local saved_config="$PHOTOSPHERE_CONFIG_DIR"
+    export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
+    mkdir -p "$PHOTOSPHERE_CONFIG_DIR"
+
+    invoke_command "Add keep-secret to keychain" "$(get_cli_command) secrets add --yes --name keep-secret --type plain --value keep-me" 0
+    invoke_command "Add delete-secret to keychain" "$(get_cli_command) secrets add --yes --name delete-secret --type plain --value delete-me" 0
+
+    invoke_command "Delete keychain secret" "$(get_cli_command) secrets delete delete-secret --yes" 0
+
+    local list_output
+    invoke_command "List secrets after keychain delete" "$(get_cli_command) secrets list" 0 "list_output"
+
+    expect_output_string "$list_output" "keep-secret" "Remaining keychain secret still present"
+    expect_output_string "$list_output" "delete-secret" "Deleted keychain secret is absent" false
+
+    eval "$(get_cli_command) secrets delete --yes --name keep-secret" 2>/dev/null || true
+    export PHOTOSPHERE_VAULT_TYPE="$saved_vault_type"
+    export PHOTOSPHERE_CONFIG_DIR="$saved_config"
     test_passed
 }
 

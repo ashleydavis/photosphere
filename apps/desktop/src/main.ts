@@ -18,7 +18,7 @@ import { verifyTools } from 'tools';
 import type { IStorageDescriptor, IEncryptionKeyPem } from 'storage';
 import { createStorage, CloudStorage } from 'storage';
 import { checkConnectivity, loadDatabaseConfig } from 'api';
-import { getVault } from 'vault';
+import { getVault, getDefaultVaultType } from 'vault';
 import { LanShareSender, LanShareReceiver, importDatabasePayload, importSecretPayload } from 'lan-share';
 import type { IDatabaseSharePayload, ISecretSharePayload, IReceiverEndpoint } from 'lan-share';
 
@@ -238,25 +238,25 @@ ipcMain.handle('remove-database-entry', logExceptions(async (_event, databasePat
 
 // IPC handler for retrieving a vault secret by name
 ipcMain.handle('vault-get', logExceptions(async (_event, name: string) => {
-    const vault = getVault("plaintext");
+    const vault = getVault(getDefaultVaultType());
     return await vault.get(name);
 }, 'Error getting vault secret'));
 
 // IPC handler for creating or overwriting a vault secret
 ipcMain.handle('vault-set', logExceptions(async (_event, secret: { name: string; type: string; value: string }) => {
-    const vault = getVault("plaintext");
+    const vault = getVault(getDefaultVaultType());
     await vault.set(secret);
 }, 'Error setting vault secret'));
 
 // IPC handler for deleting a vault secret by name
 ipcMain.handle('vault-delete', logExceptions(async (_event, name: string) => {
-    const vault = getVault("plaintext");
+    const vault = getVault(getDefaultVaultType());
     await vault.delete(name);
 }, 'Error deleting vault secret'));
 
 // IPC handler for listing all vault secrets
 ipcMain.handle('vault-list', logExceptions(async () => {
-    const vault = getVault("plaintext");
+    const vault = getVault(getDefaultVaultType());
     return await vault.list();
 }, 'Error listing vault secrets'));
 
@@ -301,7 +301,7 @@ ipcMain.handle('update-database', logExceptions(async (_event, entry: IDatabaseE
 
 // IPC handler for reading vault secrets for a database (resolved via shared secret reference IDs)
 ipcMain.handle('get-database-secrets', logExceptions(async (_event, databasePath: string) => {
-    const vault = getVault("plaintext");
+    const vault = getVault(getDefaultVaultType());
     const databases = await getDatabases();
     const dbEntry = databases.find(entry => entry.path === databasePath);
     const secrets: IDatabaseSecrets = {};
@@ -382,7 +382,7 @@ ipcMain.handle('get-recent-databases', logExceptions(async () => {
 
 // IPC handler for listing directory names under an S3 bucket and prefix
 ipcMain.handle('list-s3-dirs', logExceptions(async (_event, credentialId: string, bucket: string, prefix: string) => {
-    const vault = getVault("plaintext");
+    const vault = getVault(getDefaultVaultType());
     const secret = await vault.get(`shared:${credentialId}`);
     if (!secret) {
         return [];
@@ -1019,7 +1019,7 @@ async function startImportWithPaths(paths: string[]): Promise<IImportSession | u
     let encryptionKeyPems: IEncryptionKeyPem[] | undefined = undefined;
 
     if (dbEntry) {
-        const vault = getVault("plaintext");
+        const vault = getVault(getDefaultVaultType());
         if (dbEntry.s3CredentialId) {
             const s3Secret = await vault.get(`shared:${dbEntry.s3CredentialId}`);
             if (s3Secret) {

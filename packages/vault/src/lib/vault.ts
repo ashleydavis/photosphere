@@ -50,4 +50,26 @@ export interface IVault {
     // Does nothing if the secret does not exist.
     //
     delete(name: string): Promise<void>;
+
+    //
+    // Checks that all required external tools or dependencies are present.
+    // Returns ok=true when everything is available, or ok=false with a
+    // human-readable message describing what is missing and how to fix it.
+    //
+    checkPrereqs(): Promise<IPrereqCheckResult>;
+}
+
+//
+// Result returned by IVault.checkPrereqs().
+//
+export interface IPrereqCheckResult {
+    //
+    // True when all prerequisites are satisfied.
+    //
+    ok: boolean;
+
+    //
+    // Human-readable error message when ok is false, undefined otherwise.
+    //
+    message: string | undefined;
 }

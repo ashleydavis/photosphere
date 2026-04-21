@@ -1,5 +1,8 @@
 import { IVault } from "./vault";
 import { PlaintextVault } from "./plaintext-vault";
+import { MacOSKeychainVault } from "./macos-keychain-vault";
+import { LinuxKeychainVault } from "./linux-keychain-vault";
+import { WindowsKeychainVault } from "./windows-keychain-vault";
 
 //
 // Cache of vault instances keyed by type string.
@@ -8,10 +11,19 @@ import { PlaintextVault } from "./plaintext-vault";
 const vaultInstances = new Map<string, IVault>();
 
 //
+// Returns the default vault type from the PHOTOSPHERE_VAULT_TYPE environment
+// variable, falling back to "keychain" when the variable is not set.
+//
+export function getDefaultVaultType(): string {
+    return process.env.PHOTOSPHERE_VAULT_TYPE ?? "keychain";
+}
+
+//
 // Returns the vault instance for the given type string, creating it on first
 // call and reusing it on subsequent calls.
 //
 // Supported types:
+//   "keychain"  — stores secrets in the OS keychain (macOS, Linux, Windows)
 //   "plaintext" — stores secrets as plain-text JSON files under ~/.config/vault
 //
 // Throws if the type is not recognised.
@@ -35,5 +47,17 @@ function instantiateVault(type: string): IVault {
         const vaultDir = process.env.PHOTOSPHERE_VAULT_DIR;
         return vaultDir ? new PlaintextVault(vaultDir) : new PlaintextVault();
     }
-    throw new Error(`Unknown vault type: "${type}". Supported types: "plaintext".`);
+    if (type === "keychain") {
+        if (process.platform === "darwin") {
+            return new MacOSKeychainVault();
+        }
+        if (process.platform === "linux") {
+            return new LinuxKeychainVault();
+        }
+        if (process.platform === "win32") {
+            return new WindowsKeychainVault();
+        }
+        throw new Error(`Keychain vault is not supported on platform "${process.platform}".`);
+    }
+    throw new Error(`Unknown vault type: "${type}". Supported types: "keychain", "plaintext".`);
 }
