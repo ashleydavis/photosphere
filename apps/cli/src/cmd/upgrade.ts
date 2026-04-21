@@ -1,10 +1,9 @@
 import { log, retry } from "utils";
 import pc from "picocolors";
 import { exit } from "node-utils";
-import { IBaseCommandOptions, ICommandContext, resolveKeyPems, selectEncryptionKey } from "../lib/init-cmd";
+import { IBaseCommandOptions, ICommandContext, resolveKeyPems, selectEncryptionKey, configureS3IfNeeded, getDefaultS3Config } from "../lib/init-cmd";
 import { getDirectoryForCommand } from "../lib/directory-picker";
 import { ensureMediaProcessingTools } from "../lib/ensure-tools";
-import { configureIfNeeded, getS3Config } from "../lib/config";
 import { intro, confirm, outro } from "../lib/clack/prompts";
 import { createStorage, loadEncryptionKeysFromPem } from "storage";
 import { addItem, CURRENT_DATABASE_VERSION, loadTree, rebuildTree, saveTree, SortNode, traverseTreeAsync } from "merkle-tree";
@@ -45,16 +44,13 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
     }
 
     const metaPath = pathJoin(databaseDir, ".db");
-    if (databaseDir.startsWith("s3:")) {
-        await configureIfNeeded(["s3"], nonInteractive);
-    }
-    if (metaPath.startsWith("s3:")) {
-        await configureIfNeeded(["s3"], nonInteractive);
+    if (databaseDir.startsWith("s3:") || metaPath.startsWith("s3:")) {
+        await configureS3IfNeeded(nonInteractive);
     }
 
     let keyPems = await resolveKeyPems(options.key);
     let { options: storageOptions } = await loadEncryptionKeysFromPem(keyPems);
-    const s3Config = await getS3Config();
+    const s3Config = await getDefaultS3Config();
     let { storage: assetStorage, rawStorage } = createStorage(databaseDir, s3Config, storageOptions);
 
     const hasFilesDat = await assetStorage.fileExists(".db/files.dat");

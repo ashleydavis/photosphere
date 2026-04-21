@@ -11,16 +11,164 @@ import { exit, TestUuidGenerator, TestTimestampProvider, registerTerminationCall
 import { log, RandomUuidGenerator, TimestampProvider } from "utils";
 import type { IDatabaseEntry } from 'electron-defs';
 import type { IS3Credentials } from 'storage';
-import { configureIfNeeded, getS3Config } from './config';
 import { getDirectoryForCommand } from './directory-picker';
 import { ensureMediaProcessingTools } from './ensure-tools';
 import * as fs from 'fs/promises';
 import * as os from 'os';
 import pc from "picocolors";
-import { confirm, text, isCancel, outro, select } from './clack/prompts';
+import { confirm, text, password, isCancel, outro, select } from './clack/prompts';
 import * as path from "path";
 import { CURRENT_DATABASE_VERSION, loadTreeVersion } from "merkle-tree";
 import { getVault, getDefaultVaultType } from 'vault';
+
+//
+// Reads the default S3 credentials fallback from the vault.
+//
+export async function getDefaultS3Config(): Promise<IS3Credentials | undefined> {
+    const vault = getVault(getDefaultVaultType());
+    const secret = await vault.get('default:s3');
+    if (!secret) {
+        return undefined;
+    }
+    const parsed = JSON.parse(secret.value);
+    return {
+        region: parsed.region,
+        accessKeyId: parsed.accessKeyId,
+        secretAccessKey: parsed.secretAccessKey,
+        endpoint: parsed.endpoint,
+    };
+}
+
+//
+// Prompts the user to configure S3 credentials and stores them in the vault as a named secret.
+// Returns the configured credentials, or undefined if AWS env vars are already set.
+//
+export async function configureS3IfNeeded(nonInteractive: boolean): Promise<IS3Credentials | undefined> {
+    if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
+        return undefined;
+    }
+
+    const existing = await getDefaultS3Config();
+    if (existing) {
+        return existing;
+    }
+
+    if (nonInteractive) {
+        console.error(pc.red('✗ S3 credentials are required. Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables, or run interactively to configure credentials.'));
+        await exit(1);
+        return undefined;
+    }
+
+    console.log(pc.yellow('\nNo S3 credentials found.'));
+    const shouldConfigure = await confirm({
+        message: 'Would you like to configure S3 credentials now?',
+        initialValue: true,
+    });
+
+    if (isCancel(shouldConfigure) || !shouldConfigure) {
+        console.error(pc.red('S3 credentials are required.'));
+        await exit(1);
+        return undefined;
+    }
+
+    const label = await text({
+        message: 'Name for these credentials:',
+        initialValue: 'S3 credentials',
+        validate: (value) => {
+            if (!value || value.trim() === '') {
+                return 'Name is required';
+            }
+            return undefined;
+        },
+    });
+
+    if (isCancel(label)) {
+        await exit(0);
+        return undefined;
+    }
+
+    const endpoint = await text({
+        message: 'S3 Endpoint URL (leave empty for AWS S3):',
+        placeholder: 'https://nyc3.digitaloceanspaces.com',
+        validate: (value) => {
+            if (value && !value.startsWith('http://') && !value.startsWith('https://')) {
+                return 'Endpoint must start with http:// or https://';
+            }
+            return undefined;
+        },
+    });
+
+    if (isCancel(endpoint)) {
+        await exit(0);
+        return undefined;
+    }
+
+    const region = await text({
+        message: 'Region:',
+        initialValue: 'us-east-1',
+        validate: (value) => {
+            if (!value || value.trim() === '') {
+                return 'Region is required';
+            }
+            return undefined;
+        },
+    });
+
+    if (isCancel(region)) {
+        await exit(0);
+        return undefined;
+    }
+
+    const accessKeyId = await text({
+        message: 'Access Key ID:',
+        validate: (value) => {
+            if (!value || value.trim() === '') {
+                return 'Access Key ID is required';
+            }
+            return undefined;
+        },
+    });
+
+    if (isCancel(accessKeyId)) {
+        await exit(0);
+        return undefined;
+    }
+
+    const secretAccessKey = await password({
+        message: 'Secret Access Key:',
+        validate: (value) => {
+            if (!value || value.trim() === '') {
+                return 'Secret Access Key is required';
+            }
+            return undefined;
+        },
+    });
+
+    if (isCancel(secretAccessKey)) {
+        await exit(0);
+        return undefined;
+    }
+
+    const credentials: IS3Credentials = {
+        region: (region as string).trim(),
+        accessKeyId: (accessKeyId as string).trim(),
+        secretAccessKey: (secretAccessKey as string).trim(),
+    };
+
+    const endpointStr = typeof endpoint === 'string' ? endpoint.trim() : '';
+    if (endpointStr) {
+        credentials.endpoint = endpointStr;
+    }
+
+    const vault = getVault(getDefaultVaultType());
+    await vault.set({
+        name: 'default:s3',
+        type: 's3-credentials',
+        value: JSON.stringify({ label: (label as string).trim(), ...credentials }),
+    });
+
+    return credentials;
+}
 
 //
 // Lists vault key names for all encryption keys stored under cli:encryption:*.
@@ -448,14 +596,14 @@ export interface IInitResult {
     metadataCollection: IBsonCollection<IAsset>;
 
     //
-    // The resolved metadata path
-    //
-    metaPath: string;
-
-    //
     // Google geocoding API key resolved from the database entry's linked shared secret.
     //
     googleApiKey?: string;
+
+    //
+    // S3 credentials resolved from the database entry's linked shared secret.
+    //
+    s3Config?: IS3Credentials;
 }
 
 //
@@ -493,15 +641,9 @@ export async function loadDatabase(
 
     const metaPath = pathJoin(dbDir, '.db');
 
-    if (dbDir.startsWith("s3:")) {
+    if (dbDir.startsWith('s3:') || metaPath.startsWith('s3:')) {
         if (!resolvedSecrets?.s3Config) {
-            await configureIfNeeded(['s3'], nonInteractive);
-        }
-    }
-    
-    if (metaPath.startsWith("s3:")) {
-        if (!resolvedSecrets?.s3Config) {
-            await configureIfNeeded(['s3'], nonInteractive);
+            await configureS3IfNeeded(nonInteractive);
         }
     }
 
@@ -519,7 +661,7 @@ export async function loadDatabase(
 
     let { options: storageOptions } = await loadEncryptionKeysFromPem(keyPems);
 
-    const s3Config = resolvedSecrets?.s3Config ?? await getS3Config();
+    const s3Config = resolvedSecrets?.s3Config ?? await getDefaultS3Config();
     let { storage: assetStorage, rawStorage: rawAssetStorage } = createStorage(dbDir, s3Config, storageOptions);
 
     //
@@ -583,13 +725,13 @@ export async function loadDatabase(
 
     return {
         databaseDir: dbDir,
-        metaPath,
         assetStorage,
         rawAssetStorage,
         bsonDatabase: database.bsonDatabase,
         sessionId,
         metadataCollection: database.metadataCollection,
-        googleApiKey: resolvedSecrets?.googleApiKey,
+        googleApiKey: resolvedSecrets?.googleApiKey ?? process.env.GOOGLE_API_KEY?.trim(),
+        s3Config,
     };
 }
 
@@ -642,13 +784,8 @@ export async function createDatabase(
 
     const metaPath = pathJoin(dbDir, '.db');
 
-    // Configure S3 if the paths require it
-    if (dbDir.startsWith("s3:")) {
-        await configureIfNeeded(['s3'], nonInteractive);
-    }
-    
-    if (metaPath.startsWith("s3:")) {
-        await configureIfNeeded(['s3'], nonInteractive);
+    if (dbDir.startsWith('s3:') || metaPath.startsWith('s3:')) {
+        await configureS3IfNeeded(nonInteractive);
     }
 
     // Load encryption key pair from vault
@@ -683,7 +820,7 @@ export async function createDatabase(
 
     const { options: storageOptions, isEncrypted } = await loadEncryptionKeysFromPem(keyPems);
 
-    const s3Config = await getS3Config();
+    const s3Config = await getDefaultS3Config();
     const { storage: assetStorage, rawStorage: rawAssetStorage } = createStorage(dbDir, s3Config, storageOptions);
 
     // Check the requested directory is empty or non-existent using the storage interface.
@@ -710,7 +847,6 @@ export async function createDatabase(
 
     return {
         databaseDir: dbDir,
-        metaPath,
         assetStorage,
         rawAssetStorage,
         bsonDatabase: database.bsonDatabase,

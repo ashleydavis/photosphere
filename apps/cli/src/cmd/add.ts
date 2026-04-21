@@ -3,7 +3,6 @@ import pc from "picocolors";
 import { exit } from "node-utils";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import { loadDatabase, IBaseCommandOptions, ICommandContext, resolveKeyPems } from "../lib/init-cmd";
-import { configureIfNeeded, getGoogleApiKey, getS3Config } from '../lib/config';
 import { getFileLogger } from "../lib/log";
 import { pathExists } from 'node-utils';
 import { formatBytes } from "../lib/format";
@@ -33,11 +32,7 @@ export async function addCommand(context: ICommandContext, paths: string[], opti
         }
     }
     
-    // Configure Google API key for reverse geocoding on first use
-    await configureIfNeeded(['google'], nonInteractive);
-    const googleApiKey = await getGoogleApiKey();
-
-    const { databaseDir } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
+    const { databaseDir, googleApiKey, s3Config } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
 
     // Create storage descriptor for passing to workers
     const keyPems = await resolveKeyPems(options.key);
@@ -45,9 +40,6 @@ export async function addCommand(context: ICommandContext, paths: string[], opti
         dbDir: databaseDir,
         encryptionKeyPems: keyPems
     };
-    
-    // Get S3 config to pass to workers (needed for S3-hosted storage)
-    const s3Config = await getS3Config();
 
     writeProgress(`Searching for files...`);
 
