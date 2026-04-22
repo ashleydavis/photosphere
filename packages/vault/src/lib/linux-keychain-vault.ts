@@ -1,6 +1,6 @@
 import { spawn } from "child_process";
 import { ISecret, IVault, IPrereqCheckResult } from "./vault";
-import { IKeychainPayload, toKeychainName, fromKeychainName, runCommand } from "./keychain-types";
+import { toKeychainName, fromKeychainName, runCommand } from "./keychain-types";
 
 //
 // The secret-tool CLI name on Linux.
@@ -51,12 +51,61 @@ async function checkTool(): Promise<void> {
 }
 
 //
-// Runs `secret-tool search` and returns the stderr output.
-// secret-tool search writes attribute lines (attribute.account, attribute.service)
-// to stderr and item details (label, secret value) to stdout, so capturing stderr
-// is required to parse which secrets exist.
+// A parsed entry from `secret-tool search` stderr output.
 //
-function runSecretToolSearch(): Promise<string> {
+interface ISearchEntry {
+    //
+    // The keychain account name (includes psi- prefix).
+    //
+    account: string;
+
+    //
+    // The photosphere secret type stored as the secrettype attribute.
+    //
+    secretType: string;
+}
+
+//
+// Parses `secret-tool search` stderr output into account/secrettype pairs.
+// Each entry block contains attribute lines; blank lines separate entries.
+//
+function parseSearchOutput(output: string): ISearchEntry[] {
+    const entries: ISearchEntry[] = [];
+    let currentAccount: string | undefined;
+    let currentSecretType: string | undefined;
+
+    const flushEntry = () => {
+        if (currentAccount !== undefined && currentAccount.startsWith("psi-")) {
+            entries.push({ account: currentAccount, secretType: currentSecretType ?? "plain" });
+        }
+        currentAccount = undefined;
+        currentSecretType = undefined;
+    };
+
+    for (const line of output.split("\n")) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith("attribute.account = ")) {
+            flushEntry();
+            currentAccount = trimmed.slice("attribute.account = ".length).trim();
+        }
+        else if (trimmed.startsWith("attribute.secrettype = ")) {
+            currentSecretType = trimmed.slice("attribute.secrettype = ".length).trim();
+        }
+        else if (trimmed === "") {
+            flushEntry();
+        }
+    }
+    flushEntry();
+
+    return entries;
+}
+
+//
+// Runs `secret-tool search` filtered to our service and returns the stderr output.
+// secret-tool search writes attribute lines to stderr, so capturing stderr
+// is required to parse which secrets exist and their types.
+//
+function runSecretToolSearchAll(): Promise<string> {
     return new Promise<string>((resolve, reject) => {
         const child = spawn(SECRET_TOOL, [
             "search", "--all",
@@ -85,17 +134,51 @@ function runSecretToolSearch(): Promise<string> {
 }
 
 //
-// Runs `secret-tool store` with the given secret JSON piped to stdin.
-// secret-tool store reads the password from stdin, which requires a
-// dedicated spawn rather than the generic runCommand helper.
+// Runs `secret-tool search` for a single account and returns the stderr output.
+// Used by get() to retrieve the secrettype attribute for a specific entry.
 //
-function runSecretToolStore(keychainName: string, json: string): Promise<void> {
+function runSecretToolSearchOne(keychainName: string): Promise<string> {
+    return new Promise<string>((resolve, reject) => {
+        const child = spawn(SECRET_TOOL, [
+            "search", "--all",
+            "service", KEYCHAIN_SERVICE,
+            "account", keychainName,
+        ], { stdio: ["pipe", "pipe", "pipe"] });
+
+        const stderrChunks: Buffer[] = [];
+
+        child.stderr.on("data", (chunk: Buffer) => {
+            stderrChunks.push(chunk);
+        });
+
+        child.on("close", (code: number | null) => {
+            if (code === 0 || code === 1) {
+                resolve(Buffer.concat(stderrChunks).toString("utf8"));
+            }
+            else {
+                reject(new Error(`secret-tool search exited with code ${code}`));
+            }
+        });
+
+        child.on("error", (err: Error) => {
+            reject(err);
+        });
+    });
+}
+
+//
+// Runs `secret-tool store` with the secret value piped to stdin.
+// The secret type is stored as a `secrettype` attribute so the raw value
+// is visible in keychain GUI tools instead of a JSON wrapper.
+//
+function runSecretToolStore(keychainName: string, secretType: string, value: string): Promise<void> {
     return new Promise<void>((resolve, reject) => {
         const child = spawn(SECRET_TOOL, [
             "store",
             `--label=${keychainName}`,
             "service", KEYCHAIN_SERVICE,
             "account", keychainName,
+            "secrettype", secretType,
         ], { stdio: ["pipe", "pipe", "pipe"] });
 
         const stderrChunks: Buffer[] = [];
@@ -118,7 +201,7 @@ function runSecretToolStore(keychainName: string, json: string): Promise<void> {
             reject(err);
         });
 
-        child.stdin.write(json, "utf8");
+        child.stdin.write(value, "utf8");
         child.stdin.end();
     });
 }
@@ -131,6 +214,9 @@ function runSecretToolStore(keychainName: string, json: string): Promise<void> {
 // clearly identifiable.  Native listing via `secret-tool search` means no
 // index file is needed on Linux.
 //
+// The secret type is stored as a `secrettype` attribute so the raw secret value
+// is visible in keychain GUI tools instead of being wrapped in JSON.
+//
 export class LinuxKeychainVault implements IVault {
     //
     // Retrieves a secret by name from the Secret Service.
@@ -139,60 +225,64 @@ export class LinuxKeychainVault implements IVault {
     async get(name: string): Promise<ISecret | undefined> {
         await checkTool();
         const keychainName = toKeychainName(name);
-        let raw: string;
+        let value: string;
         try {
-            raw = await runCommand([SECRET_TOOL, "lookup", "service", KEYCHAIN_SERVICE, "account", keychainName]);
+            value = await runCommand([SECRET_TOOL, "lookup", "service", KEYCHAIN_SERVICE, "account", keychainName]);
         }
         catch {
             return undefined;
         }
-        if (raw === "") {
+        if (value === "") {
             return undefined;
         }
-        const payload = JSON.parse(raw) as IKeychainPayload;
-        return { name, type: payload.type, value: payload.value };
+        const searchOutput = await runSecretToolSearchOne(keychainName);
+        const entries = parseSearchOutput(searchOutput);
+        const secretType = entries.find(entry => entry.account === keychainName)?.secretType ?? "plain";
+        return { name, type: secretType, value };
     }
 
     //
     // Creates or overwrites a secret in the Secret Service.
+    // The type is stored as a keychain attribute; the value is stored as-is.
     //
     async set(secret: ISecret): Promise<void> {
         await checkTool();
         const keychainName = toKeychainName(secret.name);
-        const payload: IKeychainPayload = { type: secret.type, value: secret.value };
-        const json = JSON.stringify(payload);
-        await runSecretToolStore(keychainName, json);
+        await runSecretToolStore(keychainName, secret.type, secret.value);
     }
 
     //
-    // Returns all photosphere secrets from the Secret Service by searching
-    // for entries with service=photosphere and parsing the account attribute.
+    // Returns all photosphere secrets from the Secret Service.
+    // Reads type from the secrettype attribute and value from a per-entry lookup.
     //
     async list(): Promise<ISecret[]> {
         await checkTool();
         let output: string;
         try {
-            output = await runSecretToolSearch();
+            output = await runSecretToolSearchAll();
         }
         catch {
             return [];
         }
 
+        const entries = parseSearchOutput(output);
         const secrets: ISecret[] = [];
-        const lines = output.split("\n");
-        for (const line of lines) {
-            const trimmed = line.trim();
-            if (trimmed.startsWith("attribute.account = ")) {
-                const keychainName = trimmed.slice("attribute.account = ".length).trim();
-                if (keychainName.startsWith("psi-")) {
-                    const name = fromKeychainName(keychainName);
-                    const secret = await this.get(name);
-                    if (secret !== undefined) {
-                        secrets.push(secret);
-                    }
-                }
+
+        for (const entry of entries) {
+            const name = fromKeychainName(entry.account);
+            let value: string;
+            try {
+                value = await runCommand([SECRET_TOOL, "lookup", "service", KEYCHAIN_SERVICE, "account", entry.account]);
             }
+            catch {
+                continue;
+            }
+            if (value === "") {
+                continue;
+            }
+            secrets.push({ name, type: entry.secretType, value });
         }
+
         return secrets;
     }
 

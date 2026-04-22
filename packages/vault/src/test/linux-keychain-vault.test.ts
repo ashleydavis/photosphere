@@ -4,19 +4,30 @@ import * as keychainTypes from "../lib/keychain-types";
 
 //
 // In-memory map used as the fake secret-tool backend.
+// Keyed by keychain account name; stores type and value separately.
 //
-type SecretStore = Map<string, string>;
+interface IStoreEntry {
+    //
+    // The photosphere secret type (e.g. "api-key").
+    //
+    type: string;
+
+    //
+    // The raw secret value.
+    //
+    value: string;
+}
+
+type SecretStore = Map<string, IStoreEntry>;
 
 //
 // Builds a mock implementation of runCommand backed by an in-memory store.
-// Also stubs the stdin-based store path used internally.
 //
 function makeRunCommandMock(store: SecretStore): jest.SpyInstance {
     return jest.spyOn(keychainTypes, "runCommand").mockImplementation(async (args: string[]) => {
         const tool = args[0];
 
         if (tool === "which") {
-            // which secret-tool — return a fake path to indicate it is available.
             return "/usr/bin/secret-tool";
         }
 
@@ -33,11 +44,11 @@ function makeRunCommandMock(store: SecretStore): jest.SpyInstance {
         if (subcommand === "lookup") {
             // args: secret-tool lookup service photosphere account <keychainName>
             const keychainName = args[5];
-            const raw = store.get(keychainName);
-            if (raw === undefined) {
+            const entry = store.get(keychainName);
+            if (entry === undefined) {
                 throw new Error("No such secret");
             }
-            return raw;
+            return entry.value;
         }
 
         if (subcommand === "clear") {
@@ -52,7 +63,7 @@ function makeRunCommandMock(store: SecretStore): jest.SpyInstance {
 }
 
 //
-// Patches child_process.spawn to handle both `secret-tool store` (stdin-based)
+// Patches child_process.spawn to handle `secret-tool store` (stdin-based)
 // and `secret-tool search` (stderr-based) using the in-memory store.
 //
 function makeSpawnStub(store: SecretStore): jest.SpyInstance {
@@ -61,9 +72,12 @@ function makeSpawnStub(store: SecretStore): jest.SpyInstance {
         const args: string[] = spawnArgs[1];
 
         if (args.indexOf("store") !== -1) {
-            // secret-tool store: read JSON from stdin, save to store.
+            // secret-tool store: read value from stdin; extract type from args.
+            // Args: store --label=<name> service photosphere account <name> secrettype <type>
             const labelArg = args.find((arg: string) => arg.startsWith("--label="));
             const keychainName = labelArg ? labelArg.slice("--label=".length) : "";
+            const secretTypeIndex = args.indexOf("secrettype");
+            const secretType = secretTypeIndex !== -1 ? args[secretTypeIndex + 1] : "plain";
 
             const chunks: Buffer[] = [];
             let closeCb: (code: number) => void = () => {};
@@ -73,8 +87,8 @@ function makeSpawnStub(store: SecretStore): jest.SpyInstance {
                     chunks.push(Buffer.from(data, "utf8"));
                 },
                 end: () => {
-                    const json = Buffer.concat(chunks).toString("utf8");
-                    store.set(keychainName, json);
+                    const value = Buffer.concat(chunks).toString("utf8");
+                    store.set(keychainName, { type: secretType, value });
                     process.nextTick(() => {
                         closeCb(0);
                     });
@@ -94,16 +108,25 @@ function makeSpawnStub(store: SecretStore): jest.SpyInstance {
         }
 
         if (args.indexOf("search") !== -1) {
-            // secret-tool search: emit attribute lines via stderr (matches real behaviour).
+            // secret-tool search: emit attribute lines via stderr for matching entries.
+            // If an "account" filter arg is present, emit only that entry.
+            const accountFilterIndex = args.indexOf("account");
+            const accountFilter = accountFilterIndex !== -1 ? args[accountFilterIndex + 1] : undefined;
+
             const stderrCallbacks: Map<string, (chunk: Buffer) => void> = new Map();
             let closeCb: (code: number) => void = () => {};
 
             process.nextTick(() => {
                 const dataCallback = stderrCallbacks.get("data");
                 if (dataCallback) {
-                    for (const keychainName of store.keys()) {
+                    for (const [keychainName, entry] of store.entries()) {
+                        if (accountFilter !== undefined && keychainName !== accountFilter) {
+                            continue;
+                        }
                         dataCallback(Buffer.from(`attribute.service = photosphere\n`, "utf8"));
                         dataCallback(Buffer.from(`attribute.account = ${keychainName}\n`, "utf8"));
+                        dataCallback(Buffer.from(`attribute.secrettype = ${entry.type}\n`, "utf8"));
+                        dataCallback(Buffer.from(`\n`, "utf8"));
                     }
                 }
                 closeCb(0);
@@ -140,14 +163,11 @@ describe("LinuxKeychainVault", () => {
         runCommandSpy = makeRunCommandMock(store);
         spawnSpy = makeSpawnStub(store);
         vault = new LinuxKeychainVault();
-        // Reset the module-level toolChecked flag between tests by creating a
-        // fresh vault instance; the flag is module-level so reset via jest isolation.
     });
 
     afterEach(() => {
         runCommandSpy.mockRestore();
         spawnSpy.mockRestore();
-        jest.resetModules();
     });
 
     describe("get", () => {
@@ -172,6 +192,13 @@ describe("LinuxKeychainVault", () => {
             expect(result?.type).toBe("s3-credentials");
             expect(result?.value).toBe("creds");
         });
+
+        test("stores multiline values without truncation", async () => {
+            const multilineValue = "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBg==\n-----END PRIVATE KEY-----";
+            await vault.set({ name: "pem-key", type: "encryption-key", value: multilineValue });
+            const result = await vault.get("pem-key");
+            expect(result?.value).toBe(multilineValue);
+        });
     });
 
     describe("list", () => {
@@ -186,6 +213,15 @@ describe("LinuxKeychainVault", () => {
             const result = await vault.list();
             const names = result.map((secret: ISecret) => secret.name).sort();
             expect(names).toEqual(["a", "b"]);
+        });
+
+        test("returns correct types for each secret", async () => {
+            await vault.set({ name: "key1", type: "api-key", value: "v1" });
+            await vault.set({ name: "key2", type: "encryption-key", value: "v2" });
+            const result = await vault.list();
+            const byName = Object.fromEntries(result.map(secret => [secret.name, secret.type]));
+            expect(byName["key1"]).toBe("api-key");
+            expect(byName["key2"]).toBe("encryption-key");
         });
     });
 

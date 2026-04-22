@@ -1,4 +1,4 @@
-import { getVault } from "vault";
+import { getVault, getDefaultVaultType } from "vault";
 import type { IDatabaseEntry } from "electron-defs";
 import type { IDatabaseSharePayload, ISecretSharePayload } from "./lan-share-types";
 
@@ -20,7 +20,7 @@ function generateSharedSecretId(): string {
 // The caller is responsible for calling addDatabaseEntry with the result.
 //
 export async function importDatabasePayload(payload: IDatabaseSharePayload): Promise<IDatabaseEntry> {
-    const vault = getVault("plaintext");
+    const vault = getVault(getDefaultVaultType());
 
     let s3CredentialId: string | undefined;
     if (payload.s3Credentials) {
@@ -80,7 +80,7 @@ export async function importDatabasePayload(payload: IDatabaseSharePayload): Pro
 // Imports a secret share payload by creating a vault entry with the given name.
 //
 export async function importSecretPayload(payload: ISecretSharePayload, secretName: string): Promise<void> {
-    const vault = getVault("plaintext");
+    const vault = getVault(getDefaultVaultType());
     await vault.set({
         name: secretName,
         type: payload.secretType,

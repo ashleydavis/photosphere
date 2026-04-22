@@ -4,6 +4,7 @@ import type { IDatabaseSharePayload, ISecretSharePayload } from "../lib/lan-shar
 // Mock the vault module
 const mockVaultSet = jest.fn();
 jest.mock("vault", () => ({
+    getDefaultVaultType: () => "plaintext",
     getVault: () => ({
         set: mockVaultSet,
     }),
@@ -97,6 +98,7 @@ test("imports database payload with no secrets", async () => {
 test("imports secret payload", async () => {
     const payload: ISecretSharePayload = {
         type: "secret",
+        name: "s3:my-s3",
         secretType: "s3-credentials",
         value: JSON.stringify({ label: "My S3", region: "us-east-1", accessKeyId: "AKID", secretAccessKey: "SECRET" }),
     };

@@ -9,6 +9,7 @@ export * from './limit-options';
 export * from './log';
 export * from './messages';
 export * from './multi-select';
+export * from './multiline';
 export * from './note';
 export * from './password';
 export * from './path';

@@ -822,24 +822,6 @@ async function dbsSend(cmdOptions: IDbsSendOptions): Promise<void> {
         }
     }
 
-    // Security warning
-    note(
-        'This will share sensitive credentials over your local network.\nOnly use this on a trusted network.',
-        pc.yellow('⚠ Security Warning')
-    );
-
-    if (!skipPrompts) {
-        const confirmed = await confirm({
-            message: 'Continue with sending?',
-            initialValue: true,
-        });
-
-        if (isCancel(confirmed) || !confirmed) {
-            outro(pc.yellow('Cancelled.'));
-            return;
-        }
-    }
-
     // Resolve the database payload with secrets
     const payload = await resolveDatabaseSharePayload(entry);
 
