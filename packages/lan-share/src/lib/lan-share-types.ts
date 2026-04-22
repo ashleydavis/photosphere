@@ -80,6 +80,9 @@ export interface ISecretSharePayload {
     // Discriminator for payload type.
     type: "secret";
 
+    // The name of the secret in the sender's vault.
+    name: string;
+
     // The category of the secret being shared.
     secretType: "s3-credentials" | "encryption-key" | "api-key";
 

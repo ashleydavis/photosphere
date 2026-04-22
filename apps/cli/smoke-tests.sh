@@ -103,6 +103,7 @@ declare -a TEST_TABLE=(
     "keychain-vault-view:test_keychain_vault_view:Add a secret to OS keychain and verify secrets view returns correct value"
     "keychain-vault-edit:test_keychain_vault_edit:Add a secret to OS keychain, edit its value, verify updated value"
     "keychain-vault-delete:test_keychain_vault_delete:Add a secret to OS keychain, delete it, verify it is gone from list"
+    "keychain-vault-list-multiple:test_keychain_vault_list_multiple:Add multiple secrets to OS keychain and verify all appear in list"
     "dbs-edit:test_dbs_edit:Edit a database entry with --yes and verify rename"
     "dbs-add-cli:test_dbs_add_cli:Add a database via CLI with --yes and verify"
     "dbs-add-duplicate:test_dbs_add_duplicate:Adding a database with a duplicate name fails with error"
@@ -4209,6 +4210,44 @@ test_keychain_vault_delete() {
     expect_output_string "$list_output" "delete-secret" "Deleted keychain secret is absent" false
 
     eval "$(get_cli_command) secrets delete --name keep-secret --yes" 2>/dev/null || true
+    export PHOTOSPHERE_VAULT_TYPE="$saved_vault_type"
+    export PHOTOSPHERE_CONFIG_DIR="$saved_config"
+    test_passed
+}
+
+test_keychain_vault_list_multiple() {
+    local test_number="$1"
+    print_test_header "$test_number" "KEYCHAIN VAULT LIST MULTIPLE"
+
+    local saved_vault_type="$PHOTOSPHERE_VAULT_TYPE"
+    export PHOTOSPHERE_VAULT_TYPE="keychain"
+
+    local test_dir="$TEST_TMP_DIR/keychain-vault-list-multiple"
+    rm -rf "$test_dir"
+    local saved_config="$PHOTOSPHERE_CONFIG_DIR"
+    export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
+    mkdir -p "$PHOTOSPHERE_CONFIG_DIR"
+
+    # Clean up any leftover secrets from previous runs.
+    for secret_name in list-multi-secret-a list-multi-secret-b list-multi-secret-c; do
+        eval "$(get_cli_command) secrets delete --name $secret_name --yes" 2>/dev/null || true
+    done
+
+    invoke_command "Add first secret" "$(get_cli_command) secrets add --yes --name list-multi-secret-a --type plain --value value-a" 0
+    invoke_command "Add second secret" "$(get_cli_command) secrets add --yes --name list-multi-secret-b --type api-key --value value-b" 0
+    invoke_command "Add third secret" "$(get_cli_command) secrets add --yes --name list-multi-secret-c --type s3-credentials --value value-c" 0
+
+    local list_output
+    invoke_command "List all secrets" "$(get_cli_command) secrets list" 0 "list_output"
+
+    expect_output_string "$list_output" "list-multi-secret-a" "First secret appears in list"
+    expect_output_string "$list_output" "list-multi-secret-b" "Second secret appears in list"
+    expect_output_string "$list_output" "list-multi-secret-c" "Third secret appears in list"
+
+    for secret_name in list-multi-secret-a list-multi-secret-b list-multi-secret-c; do
+        eval "$(get_cli_command) secrets delete --name $secret_name --yes" 2>/dev/null || true
+    done
+
     export PHOTOSPHERE_VAULT_TYPE="$saved_vault_type"
     export PHOTOSPHERE_CONFIG_DIR="$saved_config"
     test_passed

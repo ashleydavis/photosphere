@@ -4,6 +4,7 @@ import type { IDatabaseEntry } from "electron-defs";
 // Mock the vault module
 const mockVaultGet = jest.fn();
 jest.mock("vault", () => ({
+    getDefaultVaultType: () => "plaintext",
     getVault: () => ({
         get: mockVaultGet,
     }),

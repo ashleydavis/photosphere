@@ -4,6 +4,8 @@ export type { ClackSettings } from './utils/settings';
 export { default as ConfirmPrompt } from './prompts/confirm';
 export { default as GroupMultiSelectPrompt } from './prompts/group-multiselect';
 export { default as MultiSelectPrompt } from './prompts/multi-select';
+export { MultilinePrompt } from './prompts/multiline';
+export type { MultilinePromptOptions } from './prompts/multiline';
 export { default as PasswordPrompt } from './prompts/password';
 export { default as Prompt } from './prompts/prompt';
 export { default as SelectPrompt } from './prompts/select';

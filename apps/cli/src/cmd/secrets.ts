@@ -1,11 +1,11 @@
 import { Command } from 'commander';
 import pc from 'picocolors';
 import { getVault, getDefaultVaultType } from 'vault';
-import { confirm, intro, outro, text, password, select, isCancel, spinner, note } from '../lib/clack/prompts';
+import { confirm, intro, outro, text, password, select, isCancel, spinner, note, multiline } from '../lib/clack/prompts';
 import { exit } from 'node-utils';
 import * as fs from 'fs/promises';
 import { existsSync } from 'fs';
-import { generateKeyPair, exportPublicKeyToPem } from 'storage';
+import { exportPublicKeyToPem } from 'storage';
 import { createPrivateKey, createPublicKey } from 'node:crypto';
 import { LanShareSender, LanShareReceiver, resolveSecretSharePayload, importSecretPayload } from 'lan-share';
 import type { ISecretSharePayload } from 'lan-share';
@@ -67,12 +67,12 @@ interface ISecretsEditOptions {
 }
 
 //
-// Options for the `secrets delete` command.
+// Options for the `secrets remove` command.
 //
-interface ISecretsDeleteOptions {
+interface ISecretsRemoveOptions {
     // Skip confirmation prompt.
     yes?: boolean;
-    // Secret name to delete.
+    // Secret name to remove.
     name?: string;
 }
 
@@ -98,18 +98,6 @@ interface ISecretsImportOptions {
     privateKey?: string;
     // Path to the public key file.
     publicKey?: string;
-}
-
-//
-// Generates an 8-character random alphanumeric ID for shared vault secrets.
-//
-function generateSharedSecretId(): string {
-    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-    let result = '';
-    for (let index = 0; index < 8; index++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return result;
 }
 
 //
@@ -149,12 +137,18 @@ export function secretsCommand(): Command {
         .option('--value <value>', 'New value')
         .action(secretsEdit);
 
-    // psi secrets delete
-    cmd.command('delete')
-        .description('Delete a named secret.')
+    // psi secrets remove
+    cmd.command('remove')
+        .description('Remove a named secret.')
         .option('--yes', 'Skip confirmation prompt')
-        .option('--name <name>', 'Secret name to delete')
-        .action(secretsDelete);
+        .option('--name <name>', 'Secret name to remove')
+        .action(secretsRemove);
+
+    // psi secrets clear
+    cmd.command('clear')
+        .description('Remove all secrets.')
+        .option('--yes', 'Skip confirmation prompt')
+        .action(secretsClear);
 
     // psi secrets import
     cmd.command('import')
@@ -249,22 +243,46 @@ async function secretsAdd(cmdOptions: ISecretsAddOptions): Promise<void> {
         return;
     }
 
-    const value = await password({
-        message: 'Secret value:',
-        validate: (val) => {
-            if (!val || val.trim().length === 0) {
-                return 'Value is required';
-            }
-            return undefined;
-        },
-    });
+    let value: string;
 
-    if (isCancel(value)) {
-        outro(pc.yellow('Cancelled.'));
-        return;
+    if (type === 'encryption-key') {
+        const multilineResult = await multiline({
+            message: 'Secret value (paste your key, then press Ctrl+D to submit):',
+            validate: (val) => {
+                if (!val || val.trim().length === 0) {
+                    return 'Value is required';
+                }
+                return undefined;
+            },
+        });
+
+        if (isCancel(multilineResult)) {
+            outro(pc.yellow('Cancelled.'));
+            return;
+        }
+
+        value = multilineResult as string;
+    }
+    else {
+        const passwordResult = await password({
+            message: 'Secret value:',
+            validate: (val) => {
+                if (!val || val.trim().length === 0) {
+                    return 'Value is required';
+                }
+                return undefined;
+            },
+        });
+
+        if (isCancel(passwordResult)) {
+            outro(pc.yellow('Cancelled.'));
+            return;
+        }
+
+        value = passwordResult as string;
     }
 
-    await vault.set({ name: trimmedName, type: type as string, value: value as string });
+    await vault.set({ name: trimmedName, type: type as string, value });
 
     outro(pc.green(`✓ Secret "${trimmedName}" added.`));
 }
@@ -480,9 +498,9 @@ async function secretsEdit(cmdOptions: ISecretsEditOptions): Promise<void> {
 }
 
 //
-// psi secrets delete [name] — delete a secret after confirmation.
+// psi secrets remove [name] — remove a secret after confirmation.
 //
-async function secretsDelete(cmdOptions: ISecretsDeleteOptions): Promise<void> {
+async function secretsRemove(cmdOptions: ISecretsRemoveOptions): Promise<void> {
     await checkVaultPrereqs();
     const vault = getVault(getDefaultVaultType());
     let secretName: string | undefined = cmdOptions.name;
@@ -538,6 +556,62 @@ async function secretsDelete(cmdOptions: ISecretsDeleteOptions): Promise<void> {
 
     await vault.delete(secretName);
     outro(pc.green(`✓ Secret "${secretName}" deleted.`));
+}
+
+//
+// Options for the `secrets clear` command.
+//
+interface ISecretsClearOptions {
+    // Skip confirmation prompt.
+    yes?: boolean;
+}
+
+//
+// psi secrets clear — remove all secrets after confirmation.
+//
+async function secretsClear(cmdOptions: ISecretsClearOptions): Promise<void> {
+    await checkVaultPrereqs();
+    const vault = getVault(getDefaultVaultType());
+    const secrets = await vault.list();
+
+    if (secrets.length === 0) {
+        console.log(pc.yellow('No secrets found.'));
+        return;
+    }
+
+    if (!cmdOptions.yes) {
+        console.log(pc.cyan(`\nSecrets to be deleted:`));
+        for (const secret of secrets) {
+            console.log(`  ${secret.name} (${secret.type})`);
+        }
+        console.log('');
+
+        const firstConfirm = await confirm({
+            message: `Delete all ${secrets.length} secret(s)? This cannot be undone.`,
+            initialValue: false,
+        });
+
+        if (isCancel(firstConfirm) || !firstConfirm) {
+            outro(pc.yellow('Cancelled.'));
+            return;
+        }
+
+        const secondConfirm = await confirm({
+            message: `Are you sure? All secrets will be permanently deleted.`,
+            initialValue: false,
+        });
+
+        if (isCancel(secondConfirm) || !secondConfirm) {
+            outro(pc.yellow('Cancelled.'));
+            return;
+        }
+    }
+
+    for (const secret of secrets) {
+        await vault.delete(secret.name);
+    }
+
+    outro(pc.green(`✓ Deleted ${secrets.length} secret(s).`));
 }
 
 //
@@ -632,7 +706,6 @@ async function secretsSend(cmdOptions: ISecretsSendOptions): Promise<void> {
     await checkVaultPrereqs();
     intro(pc.cyan('Send Secret'));
 
-    const skipPrompts = !!cmdOptions.yes;
     const vault = getVault(getDefaultVaultType());
     let secretName: string;
 
@@ -676,24 +749,6 @@ async function secretsSend(cmdOptions: ISecretsSendOptions): Promise<void> {
     }
 
     console.log(pc.dim('Hint: Run `psi secrets receive` on another device to receive this secret.'));
-
-    // Security warning
-    note(
-        'This will share sensitive credentials over your local network.\nOnly use this on a trusted network.',
-        pc.yellow('⚠ Security Warning')
-    );
-
-    if (!skipPrompts) {
-        const confirmed = await confirm({
-            message: 'Continue with sending?',
-            initialValue: true,
-        });
-
-        if (isCancel(confirmed) || !confirmed) {
-            outro(pc.yellow('Cancelled.'));
-            return;
-        }
-    }
 
     // Build the payload
     const payload = await resolveSecretSharePayload(secretName);
@@ -815,23 +870,13 @@ async function secretsReceive(cmdOptions: { yes?: boolean; code?: string }): Pro
     let saveName: string;
 
     if (skipPrompts) {
-        // Auto-generate a save name from the payload label or a random ID.
-        let defaultName = "";
-        try {
-            const parsed = JSON.parse(payload.value);
-            if (parsed.label) {
-                defaultName = parsed.label;
-            }
-        }
-        catch {
-            // Ignore parse errors.
-        }
-        saveName = defaultName || generateSharedSecretId();
+        saveName = payload.name;
     }
     else {
-        // Ask what name to save it as
+        // Ask what name to save it as, pre-populated with the sender's name.
         const nameInput = await text({
             message: 'Save secret as (name):',
+            initialValue: payload.name,
             validate: (val) => {
                 if (!val || val.trim().length === 0) {
                     return 'Name is required';

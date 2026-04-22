@@ -1,4 +1,4 @@
-import { getVault } from "vault";
+import { getVault, getDefaultVaultType } from "vault";
 import type { IDatabaseEntry } from "electron-defs";
 import type { IDatabaseSharePayload, ISecretSharePayload, IShareS3Credentials, IShareEncryptionKey, IShareGeocodingKey } from "./lan-share-types";
 
@@ -7,7 +7,7 @@ import type { IDatabaseSharePayload, ISecretSharePayload, IShareS3Credentials, I
 // secret references on the given database entry into full credential objects.
 //
 export async function resolveDatabaseSharePayload(entry: IDatabaseEntry): Promise<IDatabaseSharePayload> {
-    const vault = getVault("plaintext");
+    const vault = getVault(getDefaultVaultType());
 
     let s3Credentials: IShareS3Credentials | undefined;
     if (entry.s3CredentialId) {
@@ -66,7 +66,7 @@ export async function resolveDatabaseSharePayload(entry: IDatabaseEntry): Promis
 // and wrapping it in the share payload format.
 //
 export async function resolveSecretSharePayload(secretName: string): Promise<ISecretSharePayload> {
-    const vault = getVault("plaintext");
+    const vault = getVault(getDefaultVaultType());
     const secret = await vault.get(secretName);
     if (!secret) {
         throw new Error(`Secret "${secretName}" not found in vault.`);
@@ -74,6 +74,7 @@ export async function resolveSecretSharePayload(secretName: string): Promise<ISe
 
     return {
         type: "secret",
+        name: secretName,
         secretType: secret.type as "s3-credentials" | "encryption-key" | "api-key",
         value: secret.value,
     };
