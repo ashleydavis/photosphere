@@ -5,6 +5,7 @@ import Button from '@mui/joy/Button';
 import Table from '@mui/joy/Table';
 import IconButton from '@mui/joy/IconButton';
 import Modal from '@mui/joy/Modal';
+import ModalClose from '@mui/joy/ModalClose';
 import ModalDialog from '@mui/joy/ModalDialog';
 import DialogTitle from '@mui/joy/DialogTitle';
 import DialogContent from '@mui/joy/DialogContent';
@@ -331,6 +332,7 @@ export function DatabasesPage() {
             {/* Add / Edit dialog */}
             <Modal open={dialogOpen} onClose={() => setDialogOpen(false)}>
                 <ModalDialog sx={{ minWidth: 500, maxWidth: 700, overflowY: 'auto' }}>
+                    <ModalClose />
                     <DialogTitle>{editingEntry ? 'Edit Database' : 'Add Database'}</DialogTitle>
                     <DialogContent>
                         <FormControl sx={{ mb: 1 }}>
