@@ -15,8 +15,10 @@ import FormControl from '@mui/joy/FormControl';
 import FormLabel from '@mui/joy/FormLabel';
 import Select from '@mui/joy/Select';
 import Option from '@mui/joy/Option';
-import { Edit, Delete, Refresh } from '@mui/icons-material';
+import { Edit, Delete, Refresh, FolderOpen } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
 import { usePlatform, type IDatabaseEntry, type ISharedSecretEntry } from '../../context/platform-context';
+import { useAssetDatabase } from '../../context/asset-database-source';
 import { CreateSecretDialog } from '../../components/create-secret-dialog';
 import { CreateDatabaseModal } from '../../components/create-database-modal';
 import { AddDatabaseModal } from '../../components/add-database-modal';
@@ -55,6 +57,8 @@ function emptyFormState(): IDatabaseFormState {
 //
 export function DatabasesPage() {
     const platform = usePlatform();
+    const { openDatabase } = useAssetDatabase();
+    const navigate = useNavigate();
 
     // All known database entries.
     const [databases, setDatabases] = useState<IDatabaseEntry[]>([]);
@@ -191,6 +195,14 @@ export function DatabasesPage() {
     }
 
     //
+    // Opens the selected database and navigates to the home page.
+    //
+    async function handleOpen(entry: IDatabaseEntry): Promise<void> {
+        await openDatabase(entry.path);
+        navigate('/');
+    }
+
+    //
     // Opens a folder picker and sets the path field.
     //
     async function handleBrowse(): Promise<void> {
@@ -297,7 +309,7 @@ export function DatabasesPage() {
                         <th>Description</th>
                         <th>Path</th>
                         <th>Origin</th>
-                        <th style={{ width: '80px' }}>Actions</th>
+                        <th style={{ width: '112px', whiteSpace: 'nowrap' }}>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -307,7 +319,14 @@ export function DatabasesPage() {
                             <td>{entry.description}</td>
                             <td>{entry.path}</td>
                             <td>{entry.origin ?? ''}</td>
-                            <td>
+                            <td style={{ whiteSpace: 'nowrap' }}>
+                                <IconButton
+                                    size="sm"
+                                    variant="plain"
+                                    onClick={() => handleOpen(entry).catch(err => console.error('Open database error:', err))}
+                                >
+                                    <FolderOpen fontSize="small" />
+                                </IconButton>
                                 <IconButton
                                     size="sm"
                                     variant="plain"
