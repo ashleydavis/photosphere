@@ -90,6 +90,14 @@ interface IDbsSendOptions {
 }
 
 //
+// Returns true if the path refers to a local filesystem location rather than
+// a network-accessible storage like S3. Local paths won't be valid on other devices.
+//
+function isLocalPath(dbPath: string): boolean {
+    return !dbPath.startsWith('s3:');
+}
+
+//
 // Generates an 8-character random alphanumeric ID for shared vault secrets.
 //
 function generateSharedSecretId(): string {
@@ -388,6 +396,12 @@ export function dbsCommand(): Command {
         .option('--name <name>', 'Database name')
         .option('--path <path>', 'Database path')
         .action(dbsRemove);
+
+    // psi dbs clear
+    cmd.command('clear')
+        .description('Remove all database entries from the list.')
+        .option('--yes', 'Skip confirmation prompt')
+        .action(dbsClear);
 
     // psi dbs send
     cmd.command('send')
@@ -770,6 +784,60 @@ async function dbsRemove(cmdOptions: IDbsRemoveOptions): Promise<void> {
 }
 
 //
+// Options for the `dbs clear` command.
+//
+interface IDbsClearOptions {
+    // Skip confirmation prompt.
+    yes?: boolean;
+}
+
+//
+// psi dbs clear — remove all database entries after confirmation.
+//
+async function dbsClear(cmdOptions: IDbsClearOptions): Promise<void> {
+    const databases = await getDatabases();
+
+    if (databases.length === 0) {
+        console.log(pc.yellow('No databases configured.'));
+        return;
+    }
+
+    if (!cmdOptions.yes) {
+        console.log(pc.cyan(`\nDatabases to be removed:`));
+        for (const dbEntry of databases) {
+            console.log(`  ${dbEntry.name} (${dbEntry.path})`);
+        }
+        console.log('');
+
+        const firstConfirm = await confirm({
+            message: `Remove all ${databases.length} database(s) from the list? This does not delete database files.`,
+            initialValue: false,
+        });
+
+        if (isCancel(firstConfirm) || !firstConfirm) {
+            outro(pc.yellow('Cancelled.'));
+            return;
+        }
+
+        const secondConfirm = await confirm({
+            message: `Are you sure? All database entries will be permanently removed from the list.`,
+            initialValue: false,
+        });
+
+        if (isCancel(secondConfirm) || !secondConfirm) {
+            outro(pc.yellow('Cancelled.'));
+            return;
+        }
+    }
+
+    for (const dbEntry of databases) {
+        await removeDatabaseEntry(dbEntry.path);
+    }
+
+    outro(pc.green(`✓ Removed ${databases.length} database(s) from the list.`));
+}
+
+//
 // psi dbs send [name] — share a database config with secrets over the LAN.
 //
 async function dbsSend(cmdOptions: IDbsSendOptions): Promise<void> {
@@ -840,6 +908,13 @@ async function dbsSend(cmdOptions: IDbsSendOptions): Promise<void> {
         console.log(pc.cyan('  Geocoding:   ') + payload.geocodingKey.label);
     }
     console.log('');
+
+    if (isLocalPath(payload.path)) {
+        note(
+            'The database path is a local filesystem path.\nThis works if the receiver has access to the same path (e.g. a shared network drive),\nbut will need updating if the path is specific to this machine.',
+            pc.yellow('⚠ Local Path')
+        );
+    }
 
     if (!skipPrompts) {
         // Allow editing fields
@@ -1049,6 +1124,13 @@ async function dbsReceive(cmdOptions: { yes?: boolean; code?: string }): Promise
         console.log(pc.cyan('  Geocoding:   ') + payload.geocodingKey.label);
     }
     console.log('');
+
+    if (isLocalPath(payload.path)) {
+        note(
+            'The database path is a local filesystem path from the sender\'s machine.\nThis works if you have access to the same path (e.g. a shared network drive),\nbut you may need to update it if the path is specific to their machine.',
+            pc.yellow('⚠ Local Path')
+        );
+    }
 
     if (!skipPrompts) {
         // Allow editing fields before saving
