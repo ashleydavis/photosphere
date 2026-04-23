@@ -182,15 +182,14 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
     // If --generate-key is set, generate the dest key in the vault if it doesn't exist yet.
     if (options.generateKey && options.destKey) {
         const vault = getVault(getDefaultVaultType());
-        const existing = await vault.get(`cli:encryption:${options.destKey}`);
+        const existing = await vault.get(options.destKey);
         if (!existing) {
             const keyPair = generateKeyPair();
             const privateKeyPem = keyPair.privateKey.export({ type: 'pkcs8', format: 'pem' }) as string;
-            const publicKeyPem = exportPublicKeyToPem(keyPair.publicKey);
             await vault.set({
-                name: `cli:encryption:${options.destKey}`,
+                name: options.destKey,
                 type: 'encryption-key',
-                value: JSON.stringify({ privateKeyPem, publicKeyPem }),
+                value: privateKeyPem,
             });
         }
     }

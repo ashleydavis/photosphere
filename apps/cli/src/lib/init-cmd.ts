@@ -1,5 +1,6 @@
 import { createMediaFileDatabase, createDatabase as createMediaDatabase, loadSortIndexes } from "api";
 import { createStorage, loadEncryptionKeysFromPem, generateKeyPair, exportPublicKeyToPem, pathJoin, IStorage, IEncryptionKeyPem } from "storage";
+import { createPrivateKey, createPublicKey } from "node:crypto";
 import type { BsonDatabase, IBsonCollection } from "bdb";
 import type { IUuidGenerator, ITimestampProvider } from "utils";
 import type { IAsset } from "defs";
@@ -171,19 +172,18 @@ export async function configureS3IfNeeded(nonInteractive: boolean): Promise<IS3C
 }
 
 //
-// Lists vault key names for all encryption keys stored under cli:encryption:*.
+// Lists vault key names for all encryption keys stored in the vault.
 //
 export async function getAvailableKeys(): Promise<string[]> {
     const vault = getVault(getDefaultVaultType());
     const secrets = await vault.list();
     return secrets
-        .filter(secret => secret.name.startsWith('cli:encryption:'))
-        .map(secret => secret.name.slice('cli:encryption:'.length));
+        .filter(secret => secret.type === 'encryption-key')
+        .map(secret => secret.name);
 }
 
 //
 // Prompts the user to pick an encryption key from those stored in the vault.
-// Returns the vault key name (the part after "cli:encryption:").
 //
 export async function selectEncryptionKey(message: string): Promise<string> {
     const keyNames = await getAvailableKeys();
@@ -210,10 +210,9 @@ export async function selectEncryptionKey(message: string): Promise<string> {
 
 //
 // Result of encryption prompting.
-// keyName is the vault key name (e.g. "my-photos"); generateKey indicates a new key should be created.
 //
 export interface IEncryptionPromptResult {
-    // Vault key name (the part after "cli:encryption:").
+    // Vault key name (e.g. "my-photos").
     keyName?: string;
 
     // True when a new key pair should be generated and stored in the vault.
@@ -280,13 +279,12 @@ export async function promptForEncryption(message: string = 'Would you like to e
         const keyName = (keyNameInput as string).trim();
         const keyPair = generateKeyPair();
         const privateKeyPem = keyPair.privateKey.export({ type: 'pkcs8', format: 'pem' }) as string;
-        const publicKeyPem = exportPublicKeyToPem(keyPair.publicKey);
 
         const vault = getVault(getDefaultVaultType());
         await vault.set({
-            name: `cli:encryption:${keyName}`,
+            name: keyName,
             type: 'encryption-key',
-            value: JSON.stringify({ privateKeyPem, publicKeyPem }),
+            value: privateKeyPem,
         });
 
         log.info(pc.green(`✓ Encryption key "${keyName}" stored.`));
@@ -322,11 +320,14 @@ export async function resolveKeyPems(keyNames?: string): Promise<IEncryptionKeyP
 //
 async function loadKeyPairFromVault(keyName: string): Promise<IEncryptionKeyPem | undefined> {
     const vault = getVault(getDefaultVaultType());
-    const secret = await vault.get(`cli:encryption:${keyName}`);
-    if (!secret) {
+    const secret = await vault.get(keyName);
+    if (!secret || secret.type !== 'encryption-key') {
         return undefined;
     }
-    return JSON.parse(secret.value) as IEncryptionKeyPem;
+    const privateKeyPem = secret.value;
+    const privateKeyObj = createPrivateKey(privateKeyPem);
+    const publicKeyPem = exportPublicKeyToPem(createPublicKey(privateKeyObj));
+    return { privateKeyPem, publicKeyPem };
 }
 
 //
@@ -404,11 +405,10 @@ export async function resolveSecretsFromEntry(entry: IDatabaseEntry): Promise<IR
     if (entry.encryptionKeyId) {
         const encryptionSecret = await vault.get(`shared:${entry.encryptionKeyId}`);
         if (encryptionSecret) {
-            const parsed = JSON.parse(encryptionSecret.value);
-            result.keyPems.push({
-                privateKeyPem: parsed.privateKeyPem,
-                publicKeyPem: parsed.publicKeyPem,
-            });
+            const privateKeyPem = encryptionSecret.value;
+            const privateKeyObj = createPrivateKey(privateKeyPem);
+            const publicKeyPem = exportPublicKeyToPem(createPublicKey(privateKeyObj));
+            result.keyPems.push({ privateKeyPem, publicKeyPem });
         }
     }
 
@@ -798,13 +798,13 @@ export async function createDatabase(
             if (options.generateKey) {
                 const keyPair = generateKeyPair();
                 const privateKeyPem = keyPair.privateKey.export({ type: 'pkcs8', format: 'pem' }) as string;
-                const publicKeyPem = exportPublicKeyToPem(keyPair.publicKey);
                 const vault = getVault(getDefaultVaultType());
                 await vault.set({
-                    name: `cli:encryption:${options.key}`,
+                    name: options.key,
                     type: 'encryption-key',
-                    value: JSON.stringify({ privateKeyPem, publicKeyPem }),
+                    value: privateKeyPem,
                 });
+                const publicKeyPem = exportPublicKeyToPem(keyPair.publicKey);
                 pair = { privateKeyPem, publicKeyPem };
             }
             else {

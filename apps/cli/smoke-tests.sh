@@ -3796,16 +3796,14 @@ test_dbs_resolve_by_name() {
     # Add a test file.
     invoke_command "Add PNG to database" "$(get_cli_command) add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" 0
 
-    # Extract the key pair from the CLI vault key and store it as a shared secret.
-    local cli_key_file="${PHOTOSPHERE_VAULT_DIR}/cli%3Aencryption%3A${key_name}.json"
+    # Extract the private key PEM from the CLI vault and store it as a shared secret.
+    local cli_key_file="${PHOTOSPHERE_VAULT_DIR}/${key_name}.json"
     local key_value
     key_value=$(python3 -c "
 import json
 with open('$cli_key_file') as f:
     data = json.load(f)
-inner = json.loads(data['value'])
-inner['label'] = 'Resolve Test Key'
-print(json.dumps(inner))
+print(data['value'], end='')
 ")
     seed_vault_secret "shared:enc00001" "encryption-key" "$key_value"
 
@@ -4041,26 +4039,15 @@ test_secrets_import() {
     local key_dir="$test_dir/keys"
     mkdir -p "$key_dir"
 
-    # Generate a PEM key pair using openssl.
+    # Generate a PEM private key using openssl.
     openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$key_dir/test-import.key" 2>/dev/null
-    openssl rsa -in "$key_dir/test-import.key" -pubout -out "$key_dir/test-import.key.pub" 2>/dev/null
 
-    invoke_command "Import key pair" "$(get_cli_command) secrets import --yes --private-key \"$key_dir/test-import.key\"" 0
+    invoke_command "Import key" "$(get_cli_command) secrets import --yes --private-key \"$key_dir/test-import.key\"" 0
 
     local list_output
     invoke_command "List secrets after import" "$(get_cli_command) secrets list" 0 "list_output"
 
     expect_output_string "$list_output" "test-import" "Imported key appears in secrets list"
-
-    # Generate a private key with no accompanying .pub file to test public key derivation.
-    openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$key_dir/no-pub.key" 2>/dev/null
-
-    invoke_command "Import key (no .pub file)" "$(get_cli_command) secrets import --yes --private-key \"$key_dir/no-pub.key\"" 0
-
-    local list_output2
-    invoke_command "List secrets after no-pub import" "$(get_cli_command) secrets list" 0 "list_output2"
-
-    expect_output_string "$list_output2" "no-pub" "Key imported without .pub file appears in secrets list"
 
     # Restore shared vault and config.
     export PHOTOSPHERE_VAULT_DIR="$saved_vault"

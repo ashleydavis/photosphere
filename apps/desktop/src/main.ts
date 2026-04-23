@@ -280,7 +280,25 @@ ipcMain.handle('create-database-at-path', logExceptions(async (_event, databaseP
 
 // IPC handler for checking whether a database is accessible (works for local FS, S3, etc.)
 ipcMain.handle('check-database-exists', logExceptions(async (_event, databasePath: string) => {
-    return checkConnectivity(databasePath);
+    const vault = getVault(getDefaultVaultType());
+    const databases = await getDatabases();
+    const dbEntry = databases.find(entry => entry.path === databasePath);
+    let s3Credentials = undefined;
+
+    if (dbEntry?.s3CredentialId) {
+        const s3Secret = await vault.get(dbEntry.s3CredentialId);
+        if (s3Secret) {
+            const parsed = JSON.parse(s3Secret.value);
+            s3Credentials = {
+                region: parsed.region,
+                accessKeyId: parsed.accessKeyId,
+                secretAccessKey: parsed.secretAccessKey,
+                endpoint: parsed.endpoint,
+            };
+        }
+    }
+
+    return checkConnectivity(databasePath, s3Credentials);
 }, 'Error checking database exists'));
 
 // IPC handler for returning all configured database entries
