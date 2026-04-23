@@ -4010,7 +4010,7 @@ test_plaintext_vault_delete() {
     seed_vault_secret "keep-secret" "plain" "keep-me"
     seed_vault_secret "delete-secret" "plain" "delete-me"
 
-    invoke_command "Delete secret via CLI" "$(get_cli_command) secrets delete --name delete-secret --yes" 0
+    invoke_command "Delete secret via CLI" "$(get_cli_command) secrets remove --name delete-secret --yes" 0
 
     local list_output
     invoke_command "List secrets after delete" "$(get_cli_command) secrets list" 0 "list_output"
@@ -4084,7 +4084,7 @@ test_keychain_vault_list_empty() {
 
     # Clear any leftover test secrets from previous runs (keychain is OS-global).
     for secret_name in keychain-test-secret view-secret edit-secret renamed-secret keep-secret delete-secret; do
-        eval "$(get_cli_command) secrets delete --name $secret_name --yes" 2>/dev/null || true
+        eval "$(get_cli_command) secrets remove --name $secret_name --yes" 2>/dev/null || true
     done
 
     local list_output
@@ -4117,7 +4117,7 @@ test_keychain_vault_add() {
 
     expect_output_string "$list_output" "keychain-test-secret" "Added keychain secret appears in list"
 
-    eval "$(get_cli_command) secrets delete --name keychain-test-secret --yes" 2>/dev/null || true
+    eval "$(get_cli_command) secrets remove --name keychain-test-secret --yes" 2>/dev/null || true
     export PHOTOSPHERE_VAULT_TYPE="$saved_vault_type"
     export PHOTOSPHERE_CONFIG_DIR="$saved_config"
     test_passed
@@ -4145,7 +4145,7 @@ test_keychain_vault_view() {
     expect_output_string "$view_output" "plain" "Secret type appears in view output"
     expect_output_string "$view_output" "my-secret-value" "Secret value appears in view output"
 
-    eval "$(get_cli_command) secrets delete --name view-secret --yes" 2>/dev/null || true
+    eval "$(get_cli_command) secrets remove --name view-secret --yes" 2>/dev/null || true
     export PHOTOSPHERE_VAULT_TYPE="$saved_vault_type"
     export PHOTOSPHERE_CONFIG_DIR="$saved_config"
     test_passed
@@ -4181,7 +4181,7 @@ test_keychain_vault_edit() {
     expect_output_string "$list_output" "renamed-secret" "Renamed keychain secret appears in list"
     expect_output_string "$list_output" "edit-secret" "Old keychain secret name gone after rename" "false"
 
-    eval "$(get_cli_command) secrets delete --name renamed-secret --yes" 2>/dev/null || true
+    eval "$(get_cli_command) secrets remove --name renamed-secret --yes" 2>/dev/null || true
     export PHOTOSPHERE_VAULT_TYPE="$saved_vault_type"
     export PHOTOSPHERE_CONFIG_DIR="$saved_config"
     test_passed
@@ -4203,7 +4203,7 @@ test_keychain_vault_delete() {
     invoke_command "Add keep-secret to keychain" "$(get_cli_command) secrets add --yes --name keep-secret --type plain --value keep-me" 0
     invoke_command "Add delete-secret to keychain" "$(get_cli_command) secrets add --yes --name delete-secret --type plain --value delete-me" 0
 
-    invoke_command "Delete keychain secret" "$(get_cli_command) secrets delete --name delete-secret --yes" 0
+    invoke_command "Delete keychain secret" "$(get_cli_command) secrets remove --name delete-secret --yes" 0
 
     local list_output
     invoke_command "List secrets after keychain delete" "$(get_cli_command) secrets list" 0 "list_output"
@@ -4211,7 +4211,7 @@ test_keychain_vault_delete() {
     expect_output_string "$list_output" "keep-secret" "Remaining keychain secret still present"
     expect_output_string "$list_output" "delete-secret" "Deleted keychain secret is absent" false
 
-    eval "$(get_cli_command) secrets delete --name keep-secret --yes" 2>/dev/null || true
+    eval "$(get_cli_command) secrets remove --name keep-secret --yes" 2>/dev/null || true
     export PHOTOSPHERE_VAULT_TYPE="$saved_vault_type"
     export PHOTOSPHERE_CONFIG_DIR="$saved_config"
     test_passed
@@ -4232,7 +4232,7 @@ test_keychain_vault_list_multiple() {
 
     # Clean up any leftover secrets from previous runs.
     for secret_name in list-multi-secret-a list-multi-secret-b list-multi-secret-c; do
-        eval "$(get_cli_command) secrets delete --name $secret_name --yes" 2>/dev/null || true
+        eval "$(get_cli_command) secrets remove --name $secret_name --yes" 2>/dev/null || true
     done
 
     invoke_command "Add first secret" "$(get_cli_command) secrets add --yes --name list-multi-secret-a --type plain --value value-a" 0
@@ -4247,7 +4247,7 @@ test_keychain_vault_list_multiple() {
     expect_output_string "$list_output" "list-multi-secret-c" "Third secret appears in list"
 
     for secret_name in list-multi-secret-a list-multi-secret-b list-multi-secret-c; do
-        eval "$(get_cli_command) secrets delete --name $secret_name --yes" 2>/dev/null || true
+        eval "$(get_cli_command) secrets remove --name $secret_name --yes" 2>/dev/null || true
     done
 
     export PHOTOSPHERE_VAULT_TYPE="$saved_vault_type"
