@@ -10,12 +10,12 @@ export async function resolveDatabaseSharePayload(entry: IDatabaseEntry): Promis
     const vault = getVault(getDefaultVaultType());
 
     let s3Credentials: IShareS3Credentials | undefined;
-    if (entry.s3CredentialId) {
-        const secret = await vault.get(entry.s3CredentialId);
+    if (entry.s3Key) {
+        const secret = await vault.get(entry.s3Key);
         if (secret) {
             const parsed = JSON.parse(secret.value);
             s3Credentials = {
-                label: parsed.label || entry.s3CredentialId,
+                label: parsed.label || entry.s3Key,
                 region: parsed.region,
                 accessKeyId: parsed.accessKeyId,
                 secretAccessKey: parsed.secretAccessKey,
@@ -25,12 +25,12 @@ export async function resolveDatabaseSharePayload(entry: IDatabaseEntry): Promis
     }
 
     let encryptionKey: IShareEncryptionKey | undefined;
-    if (entry.encryptionKeyId) {
-        const secret = await vault.get(entry.encryptionKeyId);
+    if (entry.encryptionKey) {
+        const secret = await vault.get(entry.encryptionKey);
         if (secret) {
             const parsed = JSON.parse(secret.value);
             encryptionKey = {
-                label: parsed.label || entry.encryptionKeyId,
+                label: parsed.label || entry.encryptionKey,
                 privateKeyPem: parsed.privateKeyPem,
                 publicKeyPem: parsed.publicKeyPem,
             };
@@ -38,12 +38,12 @@ export async function resolveDatabaseSharePayload(entry: IDatabaseEntry): Promis
     }
 
     let geocodingKey: IShareGeocodingKey | undefined;
-    if (entry.geocodingKeyId) {
-        const secret = await vault.get(entry.geocodingKeyId);
+    if (entry.geocodingKey) {
+        const secret = await vault.get(entry.geocodingKey);
         if (secret) {
             const parsed = JSON.parse(secret.value);
             geocodingKey = {
-                label: parsed.label || entry.geocodingKeyId,
+                label: parsed.label || entry.geocodingKey,
                 apiKey: parsed.apiKey,
             };
         }

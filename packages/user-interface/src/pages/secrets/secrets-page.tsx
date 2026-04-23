@@ -226,9 +226,9 @@ export function SecretsPage() {
         const allDatabases = await platform.getDatabases();
         const referencing = allDatabases.filter(
             dbEntry =>
-                dbEntry.s3CredentialId === deletingSecret.id ||
-                dbEntry.encryptionKeyId === deletingSecret.id ||
-                dbEntry.geocodingKeyId === deletingSecret.id
+                dbEntry.s3Key === deletingSecret.id ||
+                dbEntry.encryptionKey === deletingSecret.id ||
+                dbEntry.geocodingKey === deletingSecret.id
         );
         if (referencing.length > 0) {
             setReferencingDatabases(referencing);

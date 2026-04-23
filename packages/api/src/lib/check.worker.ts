@@ -6,20 +6,21 @@ import * as fs from "fs/promises";
 import { ensureDir } from "node-utils";
 import os from "os";
 import path from "path";
-import { FileStorage, createStorage, loadEncryptionKeysFromPem, IStorageDescriptor, IS3Credentials } from "storage";
+import { FileStorage, createStorage, loadEncryptionKeysFromPem } from "storage";
 import type { ITaskContext } from "task-queue";
 import { validateAndHash, getHashFromCache } from "./hash";
 import { HashCache } from "./hash-cache";
 import { IFileStat } from "./file-scanner";
 import { createMediaFileDatabase } from "./media-file-database";
+import { IDatabaseDescriptor } from "./database-descriptor";
+import { resolveStorageCredentials } from "./resolve-storage-credentials";
 
 export interface ICheckFileData {
     filePath: string; // Actual file path (always a valid file, possibly temp file from zip)
     fileStat: IFileStat;
     contentType: string;
-    storageDescriptor: IStorageDescriptor;
+    storageDescriptor: IDatabaseDescriptor;
     hashCacheDir: string;
-    s3Config?: IS3Credentials;
     logicalPath: string; // Logical path for display (always set - equals filePath for non-zip files)
 }
 
@@ -38,7 +39,7 @@ export interface ICheckFileResult {
 // Note: Hash cache is loaded read-only in workers. Saving is handled in the main thread.
 //
 export async function checkFileHandler(data: ICheckFileData, context: ITaskContext): Promise<ICheckFileResult> {
-    const { filePath, fileStat, contentType, storageDescriptor, hashCacheDir, s3Config } = data;
+    const { filePath, fileStat, contentType, storageDescriptor, hashCacheDir } = data;
     const { uuidGenerator, timestampProvider } = context;
     
     // Load hash cache (read-only)
@@ -59,8 +60,9 @@ export async function checkFileHandler(data: ICheckFileData, context: ITaskConte
     }
     
     // Recreate storage and metadata collection in the worker
-    const { options: storageOptions } = await loadEncryptionKeysFromPem(storageDescriptor.encryptionKeyPems ?? []);
-    const { storage } = createStorage(storageDescriptor.dbDir, s3Config, storageOptions);
+    const { s3Config, encryptionKeyPems } = await resolveStorageCredentials(storageDescriptor.databasePath, storageDescriptor.encryptionKey);
+    const { options: storageOptions } = await loadEncryptionKeysFromPem(encryptionKeyPems);
+    const { storage } = createStorage(storageDescriptor.databasePath, s3Config, storageOptions);
     const database = createMediaFileDatabase(storage, uuidGenerator, timestampProvider);
     const metadataCollection = database.metadataCollection;
 

@@ -2,10 +2,9 @@ import { log } from "utils";
 import pc from "picocolors";
 import { exit } from "node-utils";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
-import { loadDatabase, IBaseCommandOptions, ICommandContext, resolveKeyPems } from "../lib/init-cmd";
+import { loadDatabase, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
 import { getFileLogger } from "../lib/log";
-import { checkPaths } from "api";
-import { IStorageDescriptor } from "storage";
+import { checkPaths, IDatabaseDescriptor } from "api";
 
 export interface ICheckCommandOptions extends IBaseCommandOptions {
 }
@@ -15,13 +14,11 @@ export interface ICheckCommandOptions extends IBaseCommandOptions {
 //
 export async function checkCommand(context: ICommandContext, paths: string[], options: ICheckCommandOptions): Promise<void> {
     const { uuidGenerator, timestampProvider, sessionId, sessionTempDir } = context;
-    const { databaseDir, s3Config } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
+    const { databaseDir } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
 
-    // Create storage descriptor for passing to workers
-    const keyPems = await resolveKeyPems(options.key);
-    const storageDescriptor: IStorageDescriptor = {
-        dbDir: databaseDir,
-        encryptionKeyPems: keyPems
+    const storageDescriptor: IDatabaseDescriptor = {
+        databasePath: databaseDir,
+        encryptionKey: options.key,
     };
 
     writeProgress(`Searching for files...`);
@@ -44,7 +41,6 @@ export async function checkCommand(context: ICommandContext, paths: string[], op
             progressMessage += " | Abort with Ctrl-C";
             writeProgress(progressMessage);
         },
-        s3Config,
         uuidGenerator,
         sessionTempDir
     );

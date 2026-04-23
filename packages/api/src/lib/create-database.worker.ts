@@ -1,6 +1,7 @@
 import type { ITaskContext } from "task-queue";
-import { createStorage } from "storage";
+import { createStorage, loadEncryptionKeysFromPem } from "storage";
 import { createDatabase, createMediaFileDatabase } from "./media-file-database";
+import { resolveStorageCredentials } from "./resolve-storage-credentials";
 
 //
 // Input data for the create-database task.
@@ -23,7 +24,9 @@ export async function createDatabaseHandler(
         throw new Error("databasePath is required");
     }
 
-    const { storage, rawStorage } = createStorage(data.databasePath, undefined, undefined);
+    const { s3Config, encryptionKeyPems } = await resolveStorageCredentials(data.databasePath);
+    const { options: storageOptions } = await loadEncryptionKeysFromPem(encryptionKeyPems);
+    const { storage, rawStorage } = createStorage(data.databasePath, s3Config, storageOptions);
     const database = createMediaFileDatabase(storage, context.uuidGenerator, context.timestampProvider);
     await createDatabase(storage, rawStorage, context.uuidGenerator, database.metadataCollection);
 }

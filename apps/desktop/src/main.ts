@@ -15,7 +15,7 @@ import type { IRestApiWorkerStopMessage, IRestApiWorkerStartMessage } from './re
 import { FileLoggerElectron } from './lib/file-logger-electron';
 import type { IImportSession, IRendererLogMessage, ISaveAssetItem, IDatabaseEntry, IDatabaseSecrets } from 'electron-defs';
 import { verifyTools } from 'tools';
-import type { IStorageDescriptor, IEncryptionKeyPem } from 'storage';
+import type { IDatabaseDescriptor } from 'api';
 import { createStorage, CloudStorage } from 'storage';
 import { checkConnectivity, loadDatabaseConfig } from 'api';
 import { getVault, getDefaultVaultType } from 'vault';
@@ -285,8 +285,8 @@ ipcMain.handle('check-database-exists', logExceptions(async (_event, databasePat
     const dbEntry = databases.find(entry => entry.path === databasePath);
     let s3Credentials = undefined;
 
-    if (dbEntry?.s3CredentialId) {
-        const s3Secret = await vault.get(dbEntry.s3CredentialId);
+    if (dbEntry?.s3Key) {
+        const s3Secret = await vault.get(dbEntry.s3Key);
         if (s3Secret) {
             const parsed = JSON.parse(s3Secret.value);
             s3Credentials = {
@@ -325,8 +325,8 @@ ipcMain.handle('get-database-secrets', logExceptions(async (_event, databasePath
     const secrets: IDatabaseSecrets = {};
 
     if (dbEntry) {
-        if (dbEntry.s3CredentialId) {
-            const s3Secret = await vault.get(dbEntry.s3CredentialId);
+        if (dbEntry.s3Key) {
+            const s3Secret = await vault.get(dbEntry.s3Key);
             if (s3Secret) {
                 const parsed = JSON.parse(s3Secret.value);
                 secrets.s3Credentials = {
@@ -337,8 +337,8 @@ ipcMain.handle('get-database-secrets', logExceptions(async (_event, databasePath
                 };
             }
         }
-        if (dbEntry.encryptionKeyId) {
-            const encryptionSecret = await vault.get(dbEntry.encryptionKeyId);
+        if (dbEntry.encryptionKey) {
+            const encryptionSecret = await vault.get(dbEntry.encryptionKey);
             if (encryptionSecret) {
                 const parsed = JSON.parse(encryptionSecret.value);
                 secrets.encryptionKeyPair = {
@@ -347,8 +347,8 @@ ipcMain.handle('get-database-secrets', logExceptions(async (_event, databasePath
                 };
             }
         }
-        if (dbEntry.geocodingKeyId) {
-            const geocodingSecret = await vault.get(dbEntry.geocodingKeyId);
+        if (dbEntry.geocodingKey) {
+            const geocodingSecret = await vault.get(dbEntry.geocodingKey);
             if (geocodingSecret) {
                 const parsed = JSON.parse(geocodingSecret.value);
                 secrets.geocodingApiKey = parsed.apiKey;
@@ -1032,55 +1032,16 @@ async function startImportWithPaths(paths: string[]): Promise<IImportSession | u
         throw new Error('Worker pool not initialized');
     }
 
-    const databases = await getDatabases();
-    const dbEntry = databases.find(entry => entry.path === currentDatabasePath);
-    let s3Config = undefined;
-    let googleApiKey = undefined;
-    let encryptionKeyPems: IEncryptionKeyPem[] | undefined = undefined;
-
-    if (dbEntry) {
-        const vault = getVault(getDefaultVaultType());
-        if (dbEntry.s3CredentialId) {
-            const s3Secret = await vault.get(dbEntry.s3CredentialId);
-            if (s3Secret) {
-                const parsed = JSON.parse(s3Secret.value);
-                s3Config = {
-                    region: parsed.region,
-                    accessKeyId: parsed.accessKeyId,
-                    secretAccessKey: parsed.secretAccessKey,
-                    endpoint: parsed.endpoint,
-                };
-            }
-        }
-        if (dbEntry.geocodingKeyId) {
-            const geocodingSecret = await vault.get(dbEntry.geocodingKeyId);
-            if (geocodingSecret) {
-                const parsed = JSON.parse(geocodingSecret.value);
-                googleApiKey = parsed.apiKey;
-            }
-        }
-        if (dbEntry.encryptionKeyId) {
-            const encryptionSecret = await vault.get(dbEntry.encryptionKeyId);
-            if (encryptionSecret) {
-                const parsed = JSON.parse(encryptionSecret.value);
-                encryptionKeyPems = [{ privateKeyPem: parsed.privateKeyPem, publicKeyPem: parsed.publicKeyPem }];
-            }
-        }
-    }
-
-    const storageDescriptor: IStorageDescriptor = {
-        dbDir: currentDatabasePath,
-        encryptionKeyPems,
+    const storageDescriptor: IDatabaseDescriptor = {
+        databasePath: currentDatabasePath,
     };
 
     const sessionId = randomUUID();
     const importAssetsTaskId = workerPool.addTask('add-paths', {
         paths,
         storageDescriptor,
-        googleApiKey,
         sessionId,
         dryRun: false,
-        s3Config,
     }, sessionId);
 
     return { importAssetsTaskId, sessionId };

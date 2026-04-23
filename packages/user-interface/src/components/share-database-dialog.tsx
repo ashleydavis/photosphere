@@ -80,9 +80,9 @@ export function ShareDatabaseDialog({ open, entry, onClose }: IShareDatabaseDial
                 name: entry.name,
                 description: entry.description || "",
                 path: entry.path,
-                includeS3: !!entry.s3CredentialId,
-                includeEncryption: !!entry.encryptionKeyId,
-                includeGeocoding: !!entry.geocodingKeyId,
+                includeS3: !!entry.s3Key,
+                includeEncryption: !!entry.encryptionKey,
+                includeGeocoding: !!entry.geocodingKey,
             });
             setPairingCode("");
             setEndpoint(null);
@@ -108,9 +108,9 @@ export function ShareDatabaseDialog({ open, entry, onClose }: IShareDatabaseDial
             includeEncryption: form.includeEncryption,
             includeGeocoding: form.includeGeocoding,
             // The main process will resolve the actual secrets from the vault
-            s3CredentialId: form.includeS3 ? entry.s3CredentialId : undefined,
-            encryptionKeyId: form.includeEncryption ? entry.encryptionKeyId : undefined,
-            geocodingKeyId: form.includeGeocoding ? entry.geocodingKeyId : undefined,
+            s3Key: form.includeS3 ? entry.s3Key : undefined,
+            encryptionKey: form.includeEncryption ? entry.encryptionKey : undefined,
+            geocodingKey: form.includeGeocoding ? entry.geocodingKey : undefined,
         };
 
         const foundEndpoint = await platform.waitForReceiver(payload);
@@ -191,7 +191,7 @@ export function ShareDatabaseDialog({ open, entry, onClose }: IShareDatabaseDial
                                 />
                             </FormControl>
 
-                            {entry.s3CredentialId && (
+                            {entry.s3Key && (
                                 <Checkbox
                                     label="Include S3 credentials"
                                     checked={form.includeS3}
@@ -200,7 +200,7 @@ export function ShareDatabaseDialog({ open, entry, onClose }: IShareDatabaseDial
                                 />
                             )}
 
-                            {entry.encryptionKeyId && (
+                            {entry.encryptionKey && (
                                 <Checkbox
                                     label="Include encryption key"
                                     checked={form.includeEncryption}
@@ -209,7 +209,7 @@ export function ShareDatabaseDialog({ open, entry, onClose }: IShareDatabaseDial
                                 />
                             )}
 
-                            {entry.geocodingKeyId && (
+                            {entry.geocodingKey && (
                                 <Checkbox
                                     label="Include geocoding key"
                                     checked={form.includeGeocoding}

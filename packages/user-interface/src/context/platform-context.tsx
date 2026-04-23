@@ -78,14 +78,14 @@ export interface IDatabaseEntry {
     // Optional origin string read from .db/config.json; refreshed each time the database is opened.
     origin?: string;
 
-    // References an ISharedSecretEntry.id for S3 credentials.
-    s3CredentialId?: string;
+    // Vault secret name for S3 credentials.
+    s3Key?: string;
 
-    // References an ISharedSecretEntry.id for the encryption key pair.
-    encryptionKeyId?: string;
+    // Vault secret name for the encryption key pair.
+    encryptionKey?: string;
 
-    // References an ISharedSecretEntry.id for the geocoding API key.
-    geocodingKeyId?: string;
+    // Vault secret name for the geocoding API key.
+    geocodingKey?: string;
 }
 
 

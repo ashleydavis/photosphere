@@ -1,6 +1,7 @@
 import type { ITaskContext } from "task-queue";
-import { createStorage } from "storage";
+import { createStorage, loadEncryptionKeysFromPem } from "storage";
 import { createMediaFileDatabase, checkConnectivity } from "./media-file-database";
+import { resolveStorageCredentials } from "./resolve-storage-credentials";
 import { loadDatabaseConfig, updateDatabaseConfig } from "./database-config";
 import { syncDatabases } from "./sync";
 import type { ISyncDatabaseData, ISyncChange, ISyncBatchMessage } from "./sync-database.types";
@@ -28,8 +29,10 @@ export async function syncDatabaseHandler(
         throw new Error("databasePath is required");
     }
 
+    const { s3Config: localS3Config, encryptionKeyPems: localEncryptionKeyPems } = await resolveStorageCredentials(data.databasePath);
+    const { options: localStorageOptions } = await loadEncryptionKeysFromPem(localEncryptionKeyPems);
     const { storage: localStorage, rawStorage: localRawStorage } =
-        createStorage(data.databasePath, undefined, undefined);
+        createStorage(data.databasePath, localS3Config, localStorageOptions);
 
     const config = await loadDatabaseConfig(localRawStorage);
     if (!config?.origin) {
@@ -47,8 +50,10 @@ export async function syncDatabaseHandler(
 
     context.sendMessage({ type: "sync-started", databasePath: data.databasePath });
 
+    const { s3Config: originS3Config, encryptionKeyPems: originEncryptionKeyPems } = await resolveStorageCredentials(config.origin);
+    const { options: originStorageOptions } = await loadEncryptionKeysFromPem(originEncryptionKeyPems);
     const { storage: originStorage, rawStorage: originRawStorage } =
-        createStorage(config.origin, undefined, undefined);
+        createStorage(config.origin, originS3Config, originStorageOptions);
 
     const localDb = createMediaFileDatabase(localStorage, uuidGenerator, timestampProvider);
     const originDb = createMediaFileDatabase(originStorage, uuidGenerator, timestampProvider);

@@ -3,16 +3,17 @@
 //
 
 import { SortNode } from "merkle-tree";
-import { createStorage, loadEncryptionKeysFromPem, IStorageDescriptor, IS3Credentials } from "storage";
+import { createStorage, loadEncryptionKeysFromPem } from "storage";
 import type { ITaskContext } from "task-queue";
 import { computeAssetHash } from "./hash";
 import { formatFileSize, log, retry } from "utils";
 import { LARGE_FILE_TIMEOUT } from "./constants";
+import { IDatabaseDescriptor } from "./database-descriptor";
+import { resolveStorageCredentials } from "./resolve-storage-credentials";
 
 export interface IVerifyFileData {
     node: SortNode;
-    storageDescriptor: IStorageDescriptor; // Storage descriptor containing location and encryption info
-    s3Config?: IS3Credentials; // S3 config for accessing S3-hosted storage
+    storageDescriptor: IDatabaseDescriptor;
     options?: {
         full?: boolean;
     };
@@ -28,12 +29,12 @@ export interface IVerifyFileResult {
 // Handler for verifying a single file
 //
 export async function verifyFileHandler(data: IVerifyFileData, context: ITaskContext): Promise<IVerifyFileResult> {
-    const { node, storageDescriptor, s3Config, options } = data;
+    const { node, storageDescriptor, options } = data;
     const fileName = node.name!;
 
-    // Recreate the storage in the worker (storage objects can't be passed through worker messages)
-    const { options: storageOptions } = await loadEncryptionKeysFromPem(storageDescriptor.encryptionKeyPems ?? []);
-    const { storage } = createStorage(storageDescriptor.dbDir, s3Config, storageOptions);
+    const { s3Config, encryptionKeyPems } = await resolveStorageCredentials(storageDescriptor.databasePath, storageDescriptor.encryptionKey);
+    const { options: storageOptions } = await loadEncryptionKeysFromPem(encryptionKeyPems);
+    const { storage } = createStorage(storageDescriptor.databasePath, s3Config, storageOptions);
 
     const fileInfo = await retry(() => storage.info(fileName));
     if (!fileInfo) {
@@ -44,7 +45,7 @@ export async function verifyFileHandler(data: IVerifyFileData, context: ITaskCon
     }
 
     const sizeChanged = node.size !== fileInfo.length;
-    const timestampChanged = node.lastModified === undefined || node.lastModified!.getTime() !== fileInfo.lastModified.getTime();             
+    const timestampChanged = node.lastModified === undefined || node.lastModified!.getTime() !== fileInfo.lastModified.getTime();
     if (sizeChanged || timestampChanged) {
         // File metadata has changed - check if content actually changed by computing the hash.
         const freshHash = await retry(async () => computeAssetHash(await storage.readStream(fileName), fileInfo), 3, 1_000, 2, LARGE_FILE_TIMEOUT);
@@ -72,14 +73,16 @@ export async function verifyFileHandler(data: IVerifyFileData, context: ITaskCon
                 status: "modified",
                 reasons
             };
-        } else {
+        }
+        else {
             // Metadata changed but content is the same - file is unmodified.
             return {
                 fileName,
                 status: "unmodified",
             };
         }
-    } else {
+    }
+    else {
         // File metadata hasn't changed - file is unmodified.
         return {
             fileName,

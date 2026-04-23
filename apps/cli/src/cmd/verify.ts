@@ -2,10 +2,9 @@ import { log } from "utils";
 import pc from "picocolors";
 import { exit } from "node-utils";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
-import { loadDatabase, IBaseCommandOptions, ICommandContext, resolveKeyPems } from "../lib/init-cmd";
+import { loadDatabase, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
 import { formatBytes } from "../lib/format";
-import { verify, verifyDatabaseFiles, IDatabaseFileVerifyResult } from "api";
-import { IStorageDescriptor } from "storage";
+import { verify, verifyDatabaseFiles, IDatabaseFileVerifyResult, IDatabaseDescriptor } from "api";
 
 export interface IVerifyCommandOptions extends IBaseCommandOptions {
     //
@@ -24,13 +23,11 @@ export interface IVerifyCommandOptions extends IBaseCommandOptions {
 //
 export async function verifyCommand(context: ICommandContext, options: IVerifyCommandOptions): Promise<void> {
     const { uuidGenerator, timestampProvider, sessionId } = context;
-    const { assetStorage, databaseDir, metadataCollection, s3Config } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
+    const { assetStorage, databaseDir, metadataCollection } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
 
-    // Create storage descriptor for passing to workers
-    const keyPems = await resolveKeyPems(options.key);
-    const storageDescriptor: IStorageDescriptor = {
-        dbDir: databaseDir,
-        encryptionKeyPems: keyPems
+    const storageDescriptor: IDatabaseDescriptor = {
+        databasePath: databaseDir,
+        encryptionKey: options.key,
     };
 
     //
@@ -52,7 +49,6 @@ export async function verifyCommand(context: ICommandContext, options: IVerifyCo
     const result = await verify(storageDescriptor, assetStorage, context.uuidGenerator, metadataCollection, {
         full: options.full,
         pathFilter: options.path,
-        s3Config
     }, (progress) => {
         writeProgress(`🔍 ${progress}`);
     });

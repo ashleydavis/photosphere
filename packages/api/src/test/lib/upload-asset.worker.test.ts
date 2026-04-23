@@ -1,5 +1,5 @@
 import type { ITaskContext } from 'task-queue';
-import type { IStorageDescriptor } from 'storage';
+import type { IDatabaseDescriptor } from '../../lib/database-descriptor';
 import type { IUploadAssetData } from '../../lib/upload-asset.worker';
 
 // ── module mocks ────────────────────────────────────────────────────────────
@@ -29,6 +29,14 @@ jest.mock('../../lib/video', () => ({
 jest.mock('node-utils', () => ({
     ensureDir: jest.fn().mockResolvedValue(undefined),
     remove: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock('../../lib/resolve-storage-credentials', () => ({
+    resolveStorageCredentials: jest.fn().mockResolvedValue({
+        s3Config: undefined,
+        encryptionKeyPems: [],
+        googleApiKey: undefined,
+    }),
 }));
 
 jest.mock('../../lib/media-file-database', () => ({
@@ -74,9 +82,9 @@ function makeContext(overrides: Partial<ITaskContext> = {}): ITaskContext {
 //
 // Builds a minimal storage descriptor for testing.
 //
-function makeStorageDescriptor(): IStorageDescriptor {
+function makeStorageDescriptor(): IDatabaseDescriptor {
     return {
-        dbDir: '/test/db',
+        databasePath: '/test/db',
     };
 }
 
@@ -89,7 +97,6 @@ function makeUploadAssetData(overrides: Partial<IUploadAssetData> = {}): IUpload
         fileStat: { length: 1000, lastModified: new Date('2024-01-01') },
         contentType: 'image/jpeg',
         storageDescriptor: makeStorageDescriptor(),
-        s3Config: undefined,
         logicalPath: '/test/photos/img.jpg',
         assetId: 'asset-1',
         labels: ['photos'],

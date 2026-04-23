@@ -1,5 +1,5 @@
 import type { ITaskContext } from 'task-queue';
-import type { IStorageDescriptor } from 'storage';
+import type { IDatabaseDescriptor } from '../../lib/database-descriptor';
 import type { IHashFileData } from '../../lib/hash-file.worker';
 
 // ── module mocks ─────────────────────────────────────────────────────────────
@@ -57,8 +57,8 @@ function makeContext(overrides: Partial<ITaskContext> = {}): ITaskContext {
 // Builds a minimal IHashFileData for testing.
 //
 function makeData(overrides: Partial<IHashFileData> = {}): IHashFileData {
-    const storageDescriptor: IStorageDescriptor = {
-        dbDir: '/test/db',
+    const storageDescriptor: IDatabaseDescriptor = {
+        databasePath: '/test/db',
     };
     return {
         filePath: '/test/photos/img.jpg',
@@ -66,7 +66,6 @@ function makeData(overrides: Partial<IHashFileData> = {}): IHashFileData {
         contentType: 'image/jpeg',
         storageDescriptor,
         hashCacheDir: '/tmp/photosphere',
-        s3Config: undefined,
         logicalPath: '/test/photos/img.jpg',
         labels: ['photos'],
         googleApiKey: undefined,
@@ -184,29 +183,6 @@ describe('hashFileHandler', () => {
         setupStorageMock();
 
         await expect(hashFileHandler(data, context)).rejects.toThrow('Failed to validate and hash file');
-    });
-
-    test('when s3Config is provided, storage is created with the S3 credentials', async () => {
-        const context = makeContext();
-        const s3Config = { endpoint: 'https://s3.example.com', bucket: 'my-bucket', accessKeyId: 'key', secretAccessKey: 'secret', region: 'us-east-1' };
-        const data = makeData({ s3Config });
-        const hash = { hash: Buffer.from('aabbcc', 'hex'), length: 1000, lastModified: new Date() };
-
-        mockGetHashFromCache.mockResolvedValue(hash as any);
-        setupStorageMock();
-
-        const mockMetadataCollection = makeMockMetadataCollection([]);
-        mockCreateMediaFileDatabase.mockReturnValue({
-            metadataCollection: mockMetadataCollection as any,
-        } as any);
-
-        await hashFileHandler(data, context);
-
-        expect(mockCreateStorage).toHaveBeenCalledWith(
-            expect.any(String),
-            s3Config,
-            expect.anything()
-        );
     });
 
     test('dryRun true does not change the return value (hash-file is read-only regardless)', async () => {

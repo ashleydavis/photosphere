@@ -20,9 +20,9 @@ test("resolves database payload with all secrets", async () => {
         description: "Family photos",
         path: "/data/photos",
         origin: "https://example.com",
-        s3CredentialId: "abc12345",
-        encryptionKeyId: "def67890",
-        geocodingKeyId: "ghi11111",
+        s3Key: "abc12345",
+        encryptionKey: "def67890",
+        geocodingKey: "ghi11111",
     };
 
     mockVaultGet.mockImplementation(async (name: string) => {
@@ -109,7 +109,7 @@ test("resolves database payload when secret ID exists but vault entry is missing
         name: "orphaned-db",
         description: "",
         path: "/data/orphaned",
-        s3CredentialId: "missing123",
+        s3Key: "missing123",
     };
 
     mockVaultGet.mockResolvedValue(undefined);

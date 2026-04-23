@@ -1,7 +1,7 @@
 import { IAddSummary } from "./media-file-database";
 import { TaskQueue } from "task-queue";
 import type { ITaskMessageData } from "task-queue";
-import { IStorageDescriptor, IS3Credentials } from "storage";
+import { IDatabaseDescriptor } from "./database-descriptor";
 import type { IUuidGenerator } from "utils";
 
 //
@@ -16,15 +16,14 @@ export type AddPathsProgressCallback = (currentlyScanning: string | undefined, s
 //
 export async function addPaths(
     uuidGenerator: IUuidGenerator,
-    storageDescriptor: IStorageDescriptor,
+    storageDescriptor: IDatabaseDescriptor,
     paths: string[],
     googleApiKey: string | undefined,
     sessionId: string,
-    s3Config: IS3Credentials | undefined,
     dryRun: boolean,
     onProgress?: AddPathsProgressCallback
 ): Promise<IAddSummary> {
-    const queue = new TaskQueue(uuidGenerator, storageDescriptor.dbDir);
+    const queue = new TaskQueue(uuidGenerator, storageDescriptor.databasePath);
 
     const summary: IAddSummary = {
         filesAdded: 0,
@@ -71,7 +70,6 @@ export async function addPaths(
         googleApiKey,
         sessionId,
         dryRun,
-        s3Config,
     });
 
     await queue.awaitTask(taskId);

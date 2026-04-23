@@ -4,7 +4,7 @@ import { scanPaths } from "./file-scanner";
 import { IAddSummary } from "./media-file-database";
 import { TaskStatus, TaskQueue } from "task-queue";
 import { ICheckFileData, ICheckFileResult } from "./check.worker";
-import { IStorageDescriptor, IS3Credentials } from "storage";
+import { IDatabaseDescriptor } from "./database-descriptor";
 import * as os from "os";
 import * as path from "path";
 
@@ -17,10 +17,9 @@ export type CheckPathsProgressCallback = (currentlyScanning: string | undefined,
 // Checks a list of files or directories to find files already added to the media file database.
 //
 export async function checkPaths(
-    storageDescriptor: IStorageDescriptor,
+    storageDescriptor: IDatabaseDescriptor,
     paths: string[],
     progressCallback: CheckPathsProgressCallback | undefined,
-    s3Config: IS3Credentials | undefined,
     uuidGenerator: IUuidGenerator,
     sessionTempDir: string
 ): Promise<IAddSummary> {
@@ -38,7 +37,7 @@ export async function checkPaths(
         totalSize: 0,
         averageSize: 0,
     };
-    const queue = new TaskQueue(uuidGenerator, storageDescriptor.dbDir);
+    const queue = new TaskQueue(uuidGenerator, storageDescriptor.databasePath);
     let filesAddedToCache = 0;
 
     try {
@@ -108,13 +107,12 @@ export async function checkPaths(
         await scanPaths(paths, async (result) => {
             // Queue all files for worker processing (workers will check cache and database)
             queue.addTask("check-file", {
-                filePath: result.filePath, // Use filePath for checking (always a valid file, possibly temp file from zip)
+                filePath: result.filePath,
                 fileStat: result.fileStat,
                 contentType: result.contentType,
                 storageDescriptor,
                 hashCacheDir,
-                s3Config,
-                logicalPath: result.logicalPath, // Use logicalPath for display to user
+                logicalPath: result.logicalPath,
             } as ICheckFileData);
         }, (currentlyScanning, state) => {
             summary.filesIgnored = state.numFilesIgnored;

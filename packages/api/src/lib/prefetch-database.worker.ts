@@ -1,5 +1,6 @@
 import type { ITaskContext } from "task-queue";
-import { createStorage, walkDirectory } from "storage";
+import { createStorage, loadEncryptionKeysFromPem, walkDirectory } from "storage";
+import { resolveStorageCredentials } from "./resolve-storage-credentials";
 import { loadMerkleTree } from "./tree";
 import { loadDatabaseConfig } from "./database-config";
 import { retry, batchGenerator } from "utils";
@@ -38,7 +39,9 @@ export async function prefetchDatabaseHandler(
     //
     // Check whether this is a partial database. Skip immediately for full databases.
     //
-    const { storage: localStorage, rawStorage } = createStorage(data.databasePath, undefined, undefined);
+    const { s3Config: localS3Config, encryptionKeyPems: localEncryptionKeyPems } = await resolveStorageCredentials(data.databasePath);
+    const { options: localStorageOptions } = await loadEncryptionKeysFromPem(localEncryptionKeyPems);
+    const { storage: localStorage, rawStorage } = createStorage(data.databasePath, localS3Config, localStorageOptions);
     const merkleTree = await loadMerkleTree(localStorage);
     if (!merkleTree?.databaseMetadata?.isPartial) {
         return;
@@ -52,7 +55,9 @@ export async function prefetchDatabaseHandler(
         return;
     }
 
-    const { storage: originStorage } = createStorage(config.origin, undefined, undefined);
+    const { s3Config: originS3Config, encryptionKeyPems: originEncryptionKeyPems } = await resolveStorageCredentials(config.origin);
+    const { options: originStorageOptions } = await loadEncryptionKeysFromPem(originEncryptionKeyPems);
+    const { storage: originStorage } = createStorage(config.origin, originS3Config, originStorageOptions);
 
     //
     // Yields file paths that exist in origin but are missing locally,

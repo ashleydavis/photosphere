@@ -45,9 +45,9 @@ test("imports database payload with all secrets", async () => {
     expect(entry.description).toBe("Photos from another device");
     expect(entry.path).toBe("/data/shared-photos");
     expect(entry.origin).toBe("https://example.com");
-    expect(entry.s3CredentialId).toBeDefined();
-    expect(entry.encryptionKeyId).toBeDefined();
-    expect(entry.geocodingKeyId).toBeDefined();
+    expect(entry.s3Key).toBeDefined();
+    expect(entry.encryptionKey).toBeDefined();
+    expect(entry.geocodingKey).toBeDefined();
 
     // Verify vault.set was called 3 times (one for each secret)
     expect(mockVaultSet).toHaveBeenCalledTimes(3);
@@ -89,9 +89,9 @@ test("imports database payload with no secrets", async () => {
     const entry = await importDatabasePayload(payload);
 
     expect(entry.name).toBe("simple-db");
-    expect(entry.s3CredentialId).toBeUndefined();
-    expect(entry.encryptionKeyId).toBeUndefined();
-    expect(entry.geocodingKeyId).toBeUndefined();
+    expect(entry.s3Key).toBeUndefined();
+    expect(entry.encryptionKey).toBeUndefined();
+    expect(entry.geocodingKey).toBeUndefined();
     expect(mockVaultSet).not.toHaveBeenCalled();
 });
 
@@ -135,8 +135,8 @@ test("imported database entry has unique secret IDs", async () => {
     const entry = await importDatabasePayload(payload);
 
     // The two secret IDs should be different
-    expect(entry.s3CredentialId).not.toBe(entry.encryptionKeyId);
+    expect(entry.s3Key).not.toBe(entry.encryptionKey);
     // Each ID should be 8 characters
-    expect(entry.s3CredentialId!.length).toBe(8);
-    expect(entry.encryptionKeyId!.length).toBe(8);
+    expect(entry.s3Key!.length).toBe(8);
+    expect(entry.encryptionKey!.length).toBe(8);
 });
