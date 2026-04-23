@@ -108,6 +108,8 @@ declare -a TEST_TABLE=(
     "dbs-add-cli:test_dbs_add_cli:Add a database via CLI with --yes and verify"
     "dbs-add-duplicate:test_dbs_add_duplicate:Adding a database with a duplicate name fails with error"
     "secrets-add-duplicate:test_secrets_add_duplicate:Adding a secret with a duplicate name fails with error"
+    "dbs-clear:test_dbs_clear:psi dbs clear --yes removes all database entries from the list"
+    "secrets-clear:test_secrets_clear:psi secrets clear --yes removes all secrets from the vault"
 )
 
 # Test table helper functions
@@ -4358,6 +4360,65 @@ test_secrets_add_duplicate() {
     invoke_command "Add secret with same name fails" "$(get_cli_command) secrets add --yes --name dup-secret --type plain --value second" 1 "error_output"
 
     expect_output_string "$error_output" "already exists" "Error message mentions already exists"
+
+    export PHOTOSPHERE_VAULT_DIR="$saved_vault"
+    export PHOTOSPHERE_CONFIG_DIR="$saved_config"
+
+    test_passed
+}
+
+test_dbs_clear() {
+    local test_number="$1"
+    print_test_header "$test_number" "DBS CLEAR"
+
+    local saved_vault="$PHOTOSPHERE_VAULT_DIR"
+    local saved_config="$PHOTOSPHERE_CONFIG_DIR"
+    local test_dir="$TEST_TMP_DIR/dbs-clear"
+    rm -rf "$test_dir"
+    export PHOTOSPHERE_VAULT_DIR="$test_dir/vault"
+    export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
+    mkdir -p "$PHOTOSPHERE_VAULT_DIR" "$PHOTOSPHERE_CONFIG_DIR"
+
+    seed_databases_config '[{"name":"db-one","description":"","path":"/tmp/db-one"},{"name":"db-two","description":"","path":"/tmp/db-two"}]'
+
+    invoke_command "Clear all databases" "$(get_cli_command) dbs clear --yes" 0
+
+    local dbs_output
+    invoke_command "List databases after clear" "$(get_cli_command) dbs list" 0 "dbs_output"
+
+    expect_output_string "$dbs_output" "db-one" "db-one is absent after clear" false
+    expect_output_string "$dbs_output" "db-two" "db-two is absent after clear" false
+    expect_output_string "$dbs_output" "No databases" "Empty message shown after clear"
+
+    export PHOTOSPHERE_VAULT_DIR="$saved_vault"
+    export PHOTOSPHERE_CONFIG_DIR="$saved_config"
+
+    test_passed
+}
+
+test_secrets_clear() {
+    local test_number="$1"
+    print_test_header "$test_number" "SECRETS CLEAR"
+
+    local saved_vault="$PHOTOSPHERE_VAULT_DIR"
+    local saved_config="$PHOTOSPHERE_CONFIG_DIR"
+    local test_dir="$TEST_TMP_DIR/secrets-clear"
+    rm -rf "$test_dir"
+    export PHOTOSPHERE_VAULT_DIR="$test_dir/vault"
+    export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
+    mkdir -p "$PHOTOSPHERE_VAULT_DIR" "$PHOTOSPHERE_CONFIG_DIR"
+
+    seed_vault_secret "clear-secret-one" "plain" "value-one"
+    seed_vault_secret "clear-secret-two" "plain" "value-two"
+
+    invoke_command "Clear all secrets" "$(get_cli_command) secrets clear --yes" 0
+
+    local list_output
+    invoke_command "List secrets after clear" "$(get_cli_command) secrets list" 0 "list_output"
+
+    expect_output_string "$list_output" "clear-secret-one" "clear-secret-one is absent after clear" false
+    expect_output_string "$list_output" "clear-secret-two" "clear-secret-two is absent after clear" false
+    expect_output_string "$list_output" "No secrets" "Empty message shown after clear"
 
     export PHOTOSPHERE_VAULT_DIR="$saved_vault"
     export PHOTOSPHERE_CONFIG_DIR="$saved_config"
