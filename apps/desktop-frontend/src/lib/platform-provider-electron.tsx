@@ -344,13 +344,15 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
     const listSecrets = useCallback(async (): Promise<ISharedSecretEntry[]> => {
         const vault = new ProxyVault(electronAPI);
         const allSecrets = await vault.list();
-        return allSecrets
-            .filter(secret => secret.name.startsWith('shared:'))
-            .map(secret => {
-                const id = secret.name.slice('shared:'.length);
+        return allSecrets.map(secret => {
+            try {
                 const parsed = JSON.parse(secret.value);
-                return { id, name: parsed.label, type: secret.type };
-            });
+                return { id: secret.name, name: parsed.label ?? secret.name, type: secret.type };
+            }
+            catch {
+                return { id: secret.name, name: secret.name, type: secret.type };
+            }
+        });
     }, [electronAPI]);
 
     const addSecret = useCallback(async (entry: Omit<ISharedSecretEntry, 'id'>, value: string): Promise<ISharedSecretEntry> => {
@@ -361,7 +363,7 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
             id += chars[Math.floor(Math.random() * chars.length)];
         }
         const valueWithLabel = JSON.stringify({ label: entry.name, ...JSON.parse(value) });
-        await vault.set({ name: `shared:${id}`, type: entry.type, value: valueWithLabel });
+        await vault.set({ name: id, type: entry.type, value: valueWithLabel });
         return { id, name: entry.name, type: entry.type };
     }, [electronAPI]);
 
@@ -369,26 +371,26 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         const vault = new ProxyVault(electronAPI);
         if (value !== undefined) {
             const valueWithLabel = JSON.stringify({ label: entry.name, ...JSON.parse(value) });
-            await vault.set({ name: `shared:${entry.id}`, type: entry.type, value: valueWithLabel });
+            await vault.set({ name: entry.id, type: entry.type, value: valueWithLabel });
         }
         else {
-            const existing = await vault.get(`shared:${entry.id}`);
+            const existing = await vault.get(entry.id);
             if (existing) {
                 const parsed = JSON.parse(existing.value);
                 parsed.label = entry.name;
-                await vault.set({ name: `shared:${entry.id}`, type: entry.type, value: JSON.stringify(parsed) });
+                await vault.set({ name: entry.id, type: entry.type, value: JSON.stringify(parsed) });
             }
         }
     }, [electronAPI]);
 
     const deleteSecret = useCallback(async (id: string): Promise<void> => {
         const vault = new ProxyVault(electronAPI);
-        await vault.delete(`shared:${id}`);
+        await vault.delete(id);
     }, [electronAPI]);
 
     const getSecretValue = useCallback(async (id: string): Promise<string | undefined> => {
         const vault = new ProxyVault(electronAPI);
-        const secret = await vault.get(`shared:${id}`);
+        const secret = await vault.get(id);
         return secret?.value;
     }, [electronAPI]);
 
