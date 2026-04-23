@@ -459,9 +459,9 @@ async function dbsAdd(cmdOptions: IDbsAddOptions): Promise<void> {
             name: cmdOptions.name,
             description: cmdOptions.description || '',
             path: cmdOptions.path,
-            s3CredentialId: cmdOptions.s3CredId,
-            encryptionKeyId: cmdOptions.encryptionKeyId,
-            geocodingKeyId: cmdOptions.geocodingKeyId,
+            s3Key: cmdOptions.s3CredId,
+            encryptionKey: cmdOptions.encryptionKeyId,
+            geocodingKey: cmdOptions.geocodingKeyId,
         };
 
         const existing = await findDatabaseByName(entry.name);
@@ -490,17 +490,17 @@ async function dbsAdd(cmdOptions: IDbsAddOptions): Promise<void> {
     }
 
     // Secret linking
-    const s3CredentialId = await pickOrCreateSecret('s3-credentials', 'S3 credentials:');
-    const encryptionKeyId = await pickOrCreateSecret('encryption-key', 'Encryption key:');
-    const geocodingKeyId = await pickOrCreateSecret('api-key', 'Geocoding API key:');
+    const s3Key = await pickOrCreateSecret('s3-credentials', 'S3 credentials:');
+    const encryptionKey = await pickOrCreateSecret('encryption-key', 'Encryption key:');
+    const geocodingKey = await pickOrCreateSecret('api-key', 'Geocoding API key:');
 
     const entry: IDatabaseEntry = {
         name,
         description,
         path: dbPath,
-        s3CredentialId,
-        encryptionKeyId,
-        geocodingKeyId,
+        s3Key,
+        encryptionKey,
+        geocodingKey,
     };
 
     await addDatabaseEntry(entry);
@@ -558,22 +558,22 @@ async function dbsView(cmdOptions: IDbsViewOptions): Promise<void> {
     console.log(pc.cyan('Description: ') + (entry.description || pc.dim('(none)')));
     console.log(pc.cyan('Path:        ') + entry.path);
 
-    if (entry.s3CredentialId) {
-        console.log(pc.cyan('S3 Creds:    ') + entry.s3CredentialId);
+    if (entry.s3Key) {
+        console.log(pc.cyan('S3 Creds:    ') + entry.s3Key);
     }
     else {
         console.log(pc.cyan('S3 Creds:    ') + pc.dim('(none)'));
     }
 
-    if (entry.encryptionKeyId) {
-        console.log(pc.cyan('Encryption:  ') + entry.encryptionKeyId);
+    if (entry.encryptionKey) {
+        console.log(pc.cyan('Encryption:  ') + entry.encryptionKey);
     }
     else {
         console.log(pc.cyan('Encryption:  ') + pc.dim('(none)'));
     }
 
-    if (entry.geocodingKeyId) {
-        console.log(pc.cyan('Geocoding:   ') + entry.geocodingKeyId);
+    if (entry.geocodingKey) {
+        console.log(pc.cyan('Geocoding:   ') + entry.geocodingKey);
     }
     else {
         console.log(pc.cyan('Geocoding:   ') + pc.dim('(none)'));
@@ -636,9 +636,9 @@ async function dbsEdit(cmdOptions: IDbsEditOptions): Promise<void> {
             description: cmdOptions.description ?? entry.description ?? '',
             path: cmdOptions.path || entry.path,
             origin: entry.origin,
-            s3CredentialId: cmdOptions.s3CredId ?? entry.s3CredentialId,
-            encryptionKeyId: cmdOptions.encryptionKeyId ?? entry.encryptionKeyId,
-            geocodingKeyId: cmdOptions.geocodingKeyId ?? entry.geocodingKeyId,
+            s3Key: cmdOptions.s3CredId ?? entry.s3Key,
+            encryptionKey: cmdOptions.encryptionKeyId ?? entry.encryptionKey,
+            geocodingKey: cmdOptions.geocodingKeyId ?? entry.geocodingKey,
         };
 
         await updateDatabaseEntry({ ...updated, path: entry.path });
@@ -697,18 +697,18 @@ async function dbsEdit(cmdOptions: IDbsEditOptions): Promise<void> {
     }
 
     // Secret linking (with current selections highlighted).
-    const s3CredentialId = await pickOrCreateSecret('s3-credentials', 'S3 credentials:', entry.s3CredentialId);
-    const encryptionKeyId = await pickOrCreateSecret('encryption-key', 'Encryption key:', entry.encryptionKeyId);
-    const geocodingKeyId = await pickOrCreateSecret('api-key', 'Geocoding API key:', entry.geocodingKeyId);
+    const s3Key = await pickOrCreateSecret('s3-credentials', 'S3 credentials:', entry.s3Key);
+    const encryptionKey = await pickOrCreateSecret('encryption-key', 'Encryption key:', entry.encryptionKey);
+    const geocodingKey = await pickOrCreateSecret('api-key', 'Geocoding API key:', entry.geocodingKey);
 
     const updated: IDatabaseEntry = {
         name: (newName as string).trim(),
         description: (newDescription as string).trim(),
         path: (newPath as string).trim(),
         origin: entry.origin,
-        s3CredentialId,
-        encryptionKeyId,
-        geocodingKeyId,
+        s3Key,
+        encryptionKey,
+        geocodingKey,
     };
 
     // Update uses the original path as the match key.

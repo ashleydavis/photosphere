@@ -45,6 +45,7 @@
     "serialize-error": "^12.0.0",
     "storage": "workspace:*",
     "task-queue": "workspace:*",
+    "vault": "workspace:*",
     "tools": "workspace:*",
     "utils": "workspace:*"
   }

@@ -4,7 +4,6 @@ import { CloudStorage, IS3Credentials } from './cloud-storage';
 import { EncryptedStorage } from './encrypted-storage';
 import { StoragePrefixWrapper } from './storage-prefix-wrapper';
 import type { IStorageOptions } from 'encryption';
-import { IEncryptionKeyPem } from 'encryption';
 import path from 'node:path';
 
 //
@@ -17,22 +16,6 @@ export function pathJoin(...paths: string[]): string {
     result = result.replace(/\/{2,}/g, '/');    
 
     return result;
-}
-
-//
-// Descriptor for storage configuration that can be serialized and passed to workers.
-// Contains all information needed to recreate a storage instance.
-//
-export interface IStorageDescriptor {
-    //
-    // Storage location string (e.g., "fs:path" or "s3:bucket/path").
-    //
-    dbDir: string;
-
-    //
-    // PEM key pairs for encryption (empty array means no encryption).
-    //
-    encryptionKeyPems?: IEncryptionKeyPem[];
 }
 
 //

@@ -1,6 +1,7 @@
 import { BsonDatabase, IBsonDatabase, IBsonCollection, getDatabaseRootHash } from "bdb";
 import { loadDatabaseConfig, saveDatabaseConfig, updateDatabaseConfig } from "./database-config";
-import { createStorage, IStorage, IS3Credentials, pathJoin, StoragePrefixWrapper } from "storage";
+import { createStorage, IStorage, IS3Credentials, IStorageOptions, loadEncryptionKeysFromPem, pathJoin, StoragePrefixWrapper } from "storage";
+import { resolveStorageCredentials } from "./resolve-storage-credentials";
 import { LazyOriginStorage } from "./lazy-origin-storage";
 import { ILocation, log, retry, IUuidGenerator, ITimestampProvider } from "utils";
 import dayjs from "dayjs";
@@ -581,8 +582,12 @@ export async function isDatabasePartial(databasePath: string): Promise<boolean> 
 // known origin, wraps the local storage in a LazyOriginStorage so that missing files are
 // fetched from the origin and cached locally on first access.
 //
-export async function createLazyDatabaseStorage(databasePath: string): Promise<IStorage> {
-    const { storage, rawStorage } = createStorage(databasePath, undefined, undefined);
+export async function createLazyDatabaseStorage(
+    databasePath: string,
+    s3Config?: IS3Credentials,
+    storageOptions?: IStorageOptions
+): Promise<IStorage> {
+    const { storage, rawStorage } = createStorage(databasePath, s3Config, storageOptions);
 
     const config = await loadDatabaseConfig(rawStorage);
     if (!config?.origin) {
@@ -594,7 +599,9 @@ export async function createLazyDatabaseStorage(databasePath: string): Promise<I
         return storage;
     }
 
-    const originStorage = createStorage(config.origin, undefined, undefined).storage;
+    const { s3Config: originS3Config, encryptionKeyPems: originEncryptionKeyPems } = await resolveStorageCredentials(config.origin);
+    const { options: originStorageOptions } = await loadEncryptionKeysFromPem(originEncryptionKeyPems);
+    const originStorage = createStorage(config.origin, originS3Config, originStorageOptions).storage;
     return new LazyOriginStorage(storage, originStorage);
 }
 

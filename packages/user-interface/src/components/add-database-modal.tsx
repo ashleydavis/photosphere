@@ -51,13 +51,13 @@ interface IAddDatabaseFormState {
     encrypted: boolean;
 
     // Optional shared secret id for S3 credentials.
-    s3CredentialId: string | undefined;
+    s3Key: string | undefined;
 
     // Optional shared secret id for the encryption key pair.
-    encryptionKeyId: string | undefined;
+    encryptionKey: string | undefined;
 
     // Optional shared secret id for the geocoding API key.
-    geocodingKeyId: string | undefined;
+    geocodingKey: string | undefined;
 }
 
 //
@@ -70,9 +70,9 @@ function emptyFormState(): IAddDatabaseFormState {
         path: '',
         storageType: 'filesystem',
         encrypted: false,
-        s3CredentialId: undefined,
-        encryptionKeyId: undefined,
-        geocodingKeyId: undefined,
+        s3Key: undefined,
+        encryptionKey: undefined,
+        geocodingKey: undefined,
     };
 }
 
@@ -128,9 +128,9 @@ export function AddDatabaseModal({ open, onClose }: IAddDatabaseModalProps) {
             name: form.name,
             description: form.description,
             path: form.path,
-            s3CredentialId: form.s3CredentialId,
-            encryptionKeyId: form.encryptionKeyId,
-            geocodingKeyId: form.geocodingKeyId,
+            s3Key: form.s3Key,
+            encryptionKey: form.encryptionKey,
+            geocodingKey: form.geocodingKey,
         });
         await openDatabase(form.path);
         onClose();
@@ -141,15 +141,15 @@ export function AddDatabaseModal({ open, onClose }: IAddDatabaseModalProps) {
     //
     function handleSecretSelected(secret: ISharedSecretEntry): void {
         if (selectSecretType === 's3-credentials') {
-            setForm(prev => ({ ...prev, s3CredentialId: secret.id }));
+            setForm(prev => ({ ...prev, s3Key: secret.id }));
             setS3SecretName(secret.name);
         }
         else if (selectSecretType === 'encryption-key') {
-            setForm(prev => ({ ...prev, encryptionKeyId: secret.id }));
+            setForm(prev => ({ ...prev, encryptionKey: secret.id }));
             setEncryptionSecretName(secret.name);
         }
         else if (selectSecretType === 'api-key') {
-            setForm(prev => ({ ...prev, geocodingKeyId: secret.id }));
+            setForm(prev => ({ ...prev, geocodingKey: secret.id }));
             setGeocodingSecretName(secret.name);
         }
         setSelectSecretType(undefined);
@@ -182,7 +182,7 @@ export function AddDatabaseModal({ open, onClose }: IAddDatabaseModalProps) {
         );
     }
 
-    const browseDisabled = form.storageType === 's3' && !form.s3CredentialId;
+    const browseDisabled = form.storageType === 's3' && !form.s3Key;
 
     return (
         <>
@@ -210,7 +210,7 @@ export function AddDatabaseModal({ open, onClose }: IAddDatabaseModalProps) {
                             <FormLabel>Type</FormLabel>
                             <Select
                                 value={form.storageType}
-                                onChange={(_event, value) => setForm(prev => ({ ...prev, storageType: value as StorageType, path: '', s3CredentialId: undefined }))}
+                                onChange={(_event, value) => setForm(prev => ({ ...prev, storageType: value as StorageType, path: '', s3Key: undefined }))}
                             >
                                 <Option value="filesystem">File system</Option>
                                 <Option value="s3">S3</Option>
@@ -241,7 +241,7 @@ export function AddDatabaseModal({ open, onClose }: IAddDatabaseModalProps) {
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                 <Switch
                                     checked={form.encrypted}
-                                    onChange={event => setForm(prev => ({ ...prev, encrypted: event.target.checked, encryptionKeyId: undefined }))}
+                                    onChange={event => setForm(prev => ({ ...prev, encrypted: event.target.checked, encryptionKey: undefined }))}
                                 />
                                 <FormLabel>Encrypted</FormLabel>
                             </Box>
@@ -272,10 +272,10 @@ export function AddDatabaseModal({ open, onClose }: IAddDatabaseModalProps) {
                 />
             )}
 
-            {s3BrowserOpen && form.s3CredentialId && (
+            {s3BrowserOpen && form.s3Key && (
                 <S3BrowserModal
                     open={true}
-                    credentialId={form.s3CredentialId}
+                    credentialId={form.s3Key}
                     onClose={() => setS3BrowserOpen(false)}
                     onSelect={path => {
                         setForm(prev => ({ ...prev, path }));

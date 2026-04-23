@@ -2,7 +2,7 @@ import { importAssetsHandler } from '../../lib/import-assets.worker';
 import type { IImportAssetsData } from '../../lib/import-assets.worker';
 import type { ITaskContext, IQueueBackend, ITaskResult, WorkerTaskCompletionCallback, UnsubscribeFn } from 'task-queue';
 import { TaskStatus, setQueueBackend } from 'task-queue';
-import type { IStorageDescriptor } from 'storage';
+import type { IDatabaseDescriptor } from '../../lib/database-descriptor';
 import type { IHashFileData, IHashFileResult } from '../../lib/hash-file.worker';
 import type { IUploadAssetData, IUploadAssetResult, IAssetDatabaseData } from '../../lib/upload-asset.worker';
 
@@ -72,6 +72,14 @@ jest.mock('merkle-tree', () => ({
 
 jest.mock('../../lib/database-config', () => ({
     updateDatabaseConfig: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock('../../lib/resolve-storage-credentials', () => ({
+    resolveStorageCredentials: jest.fn().mockResolvedValue({
+        s3Config: undefined,
+        encryptionKeyPems: [],
+        googleApiKey: undefined,
+    }),
 }));
 
 jest.mock('utils', () => ({
@@ -168,8 +176,8 @@ function makeContext(overrides: Partial<ITaskContext> = {}): ITaskContext {
 // Builds a minimal IImportAssetsData for testing.
 //
 function makeData(overrides: Partial<IImportAssetsData> = {}): IImportAssetsData {
-    const storageDescriptor: IStorageDescriptor = {
-        dbDir: '/test/db',
+    const storageDescriptor: IDatabaseDescriptor = {
+        databasePath: '/test/db',
     };
     return {
         paths: ['/test/photos'],
@@ -177,7 +185,6 @@ function makeData(overrides: Partial<IImportAssetsData> = {}): IImportAssetsData
         googleApiKey: undefined,
         sessionId: 'session-1',
         dryRun: false,
-        s3Config: undefined,
         ...overrides,
     };
 }

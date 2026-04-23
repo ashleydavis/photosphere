@@ -33,9 +33,9 @@ interface IDatabaseFormState {
     path: string;
 
     // References to shared secrets by id.
-    s3CredentialId: string | undefined;
-    encryptionKeyId: string | undefined;
-    geocodingKeyId: string | undefined;
+    s3Key: string | undefined;
+    encryptionKey: string | undefined;
+    geocodingKey: string | undefined;
 }
 
 //
@@ -46,9 +46,9 @@ function emptyFormState(): IDatabaseFormState {
         name: '',
         description: '',
         path: '',
-        s3CredentialId: undefined,
-        encryptionKeyId: undefined,
-        geocodingKeyId: undefined,
+        s3Key: undefined,
+        encryptionKey: undefined,
+        geocodingKey: undefined,
     };
 }
 
@@ -143,9 +143,9 @@ export function DatabasesPage() {
             name: entry.name,
             description: entry.description,
             path: entry.path,
-            s3CredentialId: entry.s3CredentialId,
-            encryptionKeyId: entry.encryptionKeyId,
-            geocodingKeyId: entry.geocodingKeyId,
+            s3Key: entry.s3Key,
+            encryptionKey: entry.encryptionKey,
+            geocodingKey: entry.geocodingKey,
         });
         setDialogOpen(true);
     }
@@ -158,9 +158,9 @@ export function DatabasesPage() {
             name: form.name,
             description: form.description,
             path: form.path,
-            s3CredentialId: form.s3CredentialId,
-            encryptionKeyId: form.encryptionKeyId,
-            geocodingKeyId: form.geocodingKeyId,
+            s3Key: form.s3Key,
+            encryptionKey: form.encryptionKey,
+            geocodingKey: form.geocodingKey,
         };
 
         if (editingEntry) {
@@ -219,13 +219,13 @@ export function DatabasesPage() {
         setQuickCreateType(undefined);
         await loadData();
         if (newSecret.type === 's3-credentials') {
-            setForm(prev => ({ ...prev, s3CredentialId: newSecret.id }));
+            setForm(prev => ({ ...prev, s3Key: newSecret.id }));
         }
         else if (newSecret.type === 'encryption-key') {
-            setForm(prev => ({ ...prev, encryptionKeyId: newSecret.id }));
+            setForm(prev => ({ ...prev, encryptionKey: newSecret.id }));
         }
         else {
-            setForm(prev => ({ ...prev, geocodingKeyId: newSecret.id }));
+            setForm(prev => ({ ...prev, geocodingKey: newSecret.id }));
         }
     }
 
@@ -387,24 +387,24 @@ export function DatabasesPage() {
                         {renderSecretSelector(
                             'S3 Credentials',
                             s3Secrets,
-                            form.s3CredentialId,
-                            id => setForm(prev => ({ ...prev, s3CredentialId: id })),
+                            form.s3Key,
+                            id => setForm(prev => ({ ...prev, s3Key: id })),
                             's3-credentials'
                         )}
 
                         {renderSecretSelector(
                             'Encryption Key',
                             encryptionSecrets,
-                            form.encryptionKeyId,
-                            id => setForm(prev => ({ ...prev, encryptionKeyId: id })),
+                            form.encryptionKey,
+                            id => setForm(prev => ({ ...prev, encryptionKey: id })),
                             'encryption-key'
                         )}
 
                         {renderSecretSelector(
                             'Geocoding API Key',
                             geocodingSecrets,
-                            form.geocodingKeyId,
-                            id => setForm(prev => ({ ...prev, geocodingKeyId: id })),
+                            form.geocodingKey,
+                            id => setForm(prev => ({ ...prev, geocodingKey: id })),
                             'api-key'
                         )}
                     </DialogContent>

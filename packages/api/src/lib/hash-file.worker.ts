@@ -1,9 +1,11 @@
-import { createStorage, IStorageDescriptor, IS3Credentials, loadEncryptionKeysFromPem } from "storage";
+import { createStorage, loadEncryptionKeysFromPem } from "storage";
 import type { ITaskContext } from "task-queue";
 import { createMediaFileDatabase } from "./media-file-database";
 import { HashCache } from "./hash-cache";
 import { getHashFromCache, validateAndHash } from "./hash";
 import { IFileStat } from "./file-scanner";
+import { IDatabaseDescriptor } from "./database-descriptor";
+import { resolveStorageCredentials } from "./resolve-storage-credentials";
 
 //
 // Payload for the hash-file task. Contains everything needed to compute the content
@@ -19,14 +21,11 @@ export interface IHashFileData {
     // MIME type of the file.
     contentType: string;
 
-    // Identifies the target database and encryption keys.
-    storageDescriptor: IStorageDescriptor;
+    // Identifies the target database and encryption key name.
+    storageDescriptor: IDatabaseDescriptor;
 
     // Directory for the hash cache.
     hashCacheDir: string;
-
-    // S3 credentials when the database is hosted in cloud storage (optional).
-    s3Config?: IS3Credentials;
 
     // Path used in UI (e.g. path inside a zip).
     logicalPath: string;
@@ -67,7 +66,7 @@ export interface IHashFileResult {
 // Does not queue any downstream tasks; the orchestrator (import-assets) handles that.
 //
 export async function hashFileHandler(data: IHashFileData, context: ITaskContext): Promise<IHashFileResult> {
-    const { filePath, fileStat, contentType, storageDescriptor, hashCacheDir, s3Config, logicalPath } = data;
+    const { filePath, fileStat, contentType, storageDescriptor, hashCacheDir, logicalPath } = data;
     const { uuidGenerator, timestampProvider } = context;
 
     // Load the hash cache in read-only mode.
@@ -93,8 +92,9 @@ export async function hashFileHandler(data: IHashFileData, context: ITaskContext
     }
 
     // Check whether this hash is already present in the database.
-    const { options: storageOptions } = await loadEncryptionKeysFromPem(storageDescriptor.encryptionKeyPems ?? []);
-    const { storage } = createStorage(storageDescriptor.dbDir, s3Config, storageOptions);
+    const { s3Config, encryptionKeyPems } = await resolveStorageCredentials(storageDescriptor.databasePath, storageDescriptor.encryptionKey);
+    const { options: storageOptions } = await loadEncryptionKeysFromPem(encryptionKeyPems);
+    const { storage } = createStorage(storageDescriptor.databasePath, s3Config, storageOptions);
     const database = createMediaFileDatabase(storage, uuidGenerator, timestampProvider);
     const hashHex = hashBuffer.toString("hex");
     const existingRecords = await database.metadataCollection.sortIndex("hash", "asc").findByValue(hashHex);

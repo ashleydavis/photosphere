@@ -209,7 +209,7 @@ test_share_database() {
         '{"label":"Test Encryption","privateKeyPem":"-----BEGIN PRIVATE KEY-----\nMIItest\n-----END PRIVATE KEY-----","publicKeyPem":"-----BEGIN PUBLIC KEY-----\nMIItest\n-----END PUBLIC KEY-----"}'
 
     seed_databases_config "$SENDER_CONFIG_DIR" \
-        '[{"name":"share-test-db","description":"A database for LAN share testing","path":"s3:test-bucket:/photos","s3CredentialId":"s3sender","encryptionKeyId":"encsndr1"}]'
+        '[{"name":"share-test-db","description":"A database for LAN share testing","path":"s3:test-bucket:/photos","s3Key":"s3sender","encryptionKey":"encsndr1"}]'
 
     local test_code="1234"
     local receiver_log="${TEST_TMP_DIR}/receiver-db.log"
@@ -218,7 +218,7 @@ test_share_database() {
     local sender_log="${TEST_TMP_DIR}/sender-db.log"
     PHOTOSPHERE_VAULT_DIR="$SENDER_VAULT_DIR" \
     PHOTOSPHERE_CONFIG_DIR="$SENDER_CONFIG_DIR" \
-        $CLI_CMD dbs send share-test-db --yes --code "$test_code" > "$sender_log" 2>&1 || true
+        $CLI_CMD dbs send --name share-test-db --yes --code "$test_code" > "$sender_log" 2>&1 || true
 
     # Give receiver a moment to process.
     sleep 0.2
@@ -272,7 +272,7 @@ test_share_secret() {
     local sender_log="${TEST_TMP_DIR}/sender-secret.log"
     PHOTOSPHERE_VAULT_DIR="$SENDER_VAULT_DIR" \
     PHOTOSPHERE_CONFIG_DIR="$SENDER_CONFIG_DIR" \
-        $CLI_CMD secrets send "apikey01" --yes --code "$test_code" > "$sender_log" 2>&1 || true
+        $CLI_CMD secrets send --name "apikey01" --yes --code "$test_code" > "$sender_log" 2>&1 || true
 
     sleep 0.2
 
@@ -321,7 +321,7 @@ test_wrong_pairing_code() {
     local sender_log="${TEST_TMP_DIR}/sender-wrong-code.log"
     PHOTOSPHERE_VAULT_DIR="$SENDER_VAULT_DIR" \
     PHOTOSPHERE_CONFIG_DIR="$SENDER_CONFIG_DIR" \
-        $CLI_CMD secrets send "apikey01" --yes --code "$wrong_code" > "$sender_log" 2>&1 || true
+        $CLI_CMD secrets send --name "apikey01" --yes --code "$wrong_code" > "$sender_log" 2>&1 || true
 
     if grep -q "Pairing code rejected" "$sender_log" 2>/dev/null; then
         log_success "Wrong code: sender reports rejection"
@@ -359,7 +359,7 @@ test_share_database_no_secrets() {
     local sender_log="${TEST_TMP_DIR}/sender-no-secrets.log"
     PHOTOSPHERE_VAULT_DIR="$SENDER_VAULT_DIR" \
     PHOTOSPHERE_CONFIG_DIR="$SENDER_CONFIG_DIR" \
-        $CLI_CMD dbs send plain-db --yes --code "$test_code" > "$sender_log" 2>&1 || true
+        $CLI_CMD dbs send --name plain-db --yes --code "$test_code" > "$sender_log" 2>&1 || true
 
     sleep 0.2
 

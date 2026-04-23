@@ -389,8 +389,8 @@ export async function resolveSecretsFromEntry(entry: IDatabaseEntry): Promise<IR
         keyPems: [],
     };
 
-    if (entry.s3CredentialId) {
-        const s3Secret = await vault.get(`shared:${entry.s3CredentialId}`);
+    if (entry.s3Key) {
+        const s3Secret = await vault.get(entry.s3Key);
         if (s3Secret) {
             const parsed = JSON.parse(s3Secret.value);
             result.s3Config = {
@@ -402,18 +402,27 @@ export async function resolveSecretsFromEntry(entry: IDatabaseEntry): Promise<IR
         }
     }
 
-    if (entry.encryptionKeyId) {
-        const encryptionSecret = await vault.get(`shared:${entry.encryptionKeyId}`);
+    if (entry.encryptionKey) {
+        const encryptionSecret = await vault.get(entry.encryptionKey);
         if (encryptionSecret) {
-            const privateKeyPem = encryptionSecret.value;
-            const privateKeyObj = createPrivateKey(privateKeyPem);
-            const publicKeyPem = exportPublicKeyToPem(createPublicKey(privateKeyObj));
+            let privateKeyPem: string;
+            let publicKeyPem: string;
+            try {
+                const parsed = JSON.parse(encryptionSecret.value);
+                privateKeyPem = parsed.privateKeyPem;
+                publicKeyPem = parsed.publicKeyPem;
+            }
+            catch {
+                privateKeyPem = encryptionSecret.value;
+                const privateKeyObj = createPrivateKey(privateKeyPem);
+                publicKeyPem = exportPublicKeyToPem(createPublicKey(privateKeyObj));
+            }
             result.keyPems.push({ privateKeyPem, publicKeyPem });
         }
     }
 
-    if (entry.geocodingKeyId) {
-        const geocodingSecret = await vault.get(`shared:${entry.geocodingKeyId}`);
+    if (entry.geocodingKey) {
+        const geocodingSecret = await vault.get(entry.geocodingKey);
         if (geocodingSecret) {
             const parsed = JSON.parse(geocodingSecret.value);
             result.googleApiKey = parsed.apiKey;

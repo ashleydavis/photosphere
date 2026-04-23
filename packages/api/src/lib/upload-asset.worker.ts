@@ -8,7 +8,9 @@ import { createReadStream } from "fs";
 import { ensureDir, remove } from "node-utils";
 import os from "os";
 import path from "path";
-import { createStorage, loadEncryptionKeysFromPem, IStorageDescriptor, IS3Credentials } from "storage";
+import { createStorage, loadEncryptionKeysFromPem } from "storage";
+import { IDatabaseDescriptor } from "./database-descriptor";
+import { resolveStorageCredentials } from "./resolve-storage-credentials";
 import type { ITaskContext } from "task-queue";
 import { computeAssetHash } from "./hash";
 import { IFileStat } from "./file-scanner";
@@ -34,11 +36,8 @@ export interface IUploadAssetData {
     // MIME type of the file.
     contentType: string;
 
-    // Identifies the target database and encryption keys.
-    storageDescriptor: IStorageDescriptor;
-
-    // S3 credentials when the database is hosted in cloud storage (optional).
-    s3Config?: IS3Credentials;
+    // Identifies the target database and optional encryption key name.
+    storageDescriptor: IDatabaseDescriptor;
 
     // Path used in UI (e.g. path inside a zip).
     logicalPath: string;
@@ -132,7 +131,7 @@ export async function uploadAssetHandler(data: IUploadAssetData, context: ITaskC
 
     context.sendMessage({ type: "import-pending", assetId: data.assetId, logicalPath: data.logicalPath });
 
-    const { filePath, fileStat, contentType, storageDescriptor, s3Config, googleApiKey, dryRun } = data;
+    const { filePath, fileStat, contentType, storageDescriptor, googleApiKey, dryRun } = data;
     const { uuidGenerator, timestampProvider } = context;
 
     const assetId = data.assetId;
@@ -140,8 +139,9 @@ export async function uploadAssetHandler(data: IUploadAssetData, context: ITaskC
 
     const expectedHashBuffer = Buffer.from(data.expectedHash);
 
-    const { options: storageOptions } = await loadEncryptionKeysFromPem(storageDescriptor.encryptionKeyPems ?? []);
-    const { storage } = createStorage(storageDescriptor.dbDir, s3Config, storageOptions);
+    const { s3Config, encryptionKeyPems } = await resolveStorageCredentials(storageDescriptor.databasePath, storageDescriptor.encryptionKey);
+    const { options: storageOptions } = await loadEncryptionKeysFromPem(encryptionKeyPems);
+    const { storage } = createStorage(storageDescriptor.databasePath, s3Config, storageOptions);
 
     const assetTempDir = path.join(os.tmpdir(), `photosphere`, `assets`, uuidGenerator.generate());
     await ensureDir(assetTempDir);

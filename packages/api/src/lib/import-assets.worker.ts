@@ -1,7 +1,9 @@
 import * as os from "os";
 import * as path from "path";
 import { ensureDir, remove } from "node-utils";
-import { createStorage, IStorageDescriptor, IS3Credentials, loadEncryptionKeysFromPem } from "storage";
+import { createStorage, loadEncryptionKeysFromPem } from "storage";
+import { IDatabaseDescriptor } from "./database-descriptor";
+import { resolveStorageCredentials } from "./resolve-storage-credentials";
 import type { ITaskContext } from "task-queue";
 import { TaskStatus, TaskQueue } from "task-queue";
 import { IAsset } from "defs";
@@ -25,8 +27,8 @@ export interface IImportAssetsData {
     // Filesystem paths (files or directories) to import.
     paths: string[];
 
-    // Identifies the target database and encryption keys.
-    storageDescriptor: IStorageDescriptor;
+    // Identifies the target database and optional encryption key name.
+    storageDescriptor: IDatabaseDescriptor;
 
     // Google Maps API key for reverse geocoding (optional).
     googleApiKey?: string;
@@ -36,9 +38,6 @@ export interface IImportAssetsData {
 
     // When true, files are scanned and hashed but not written to the database.
     dryRun: boolean;
-
-    // S3 credentials when the database is hosted in cloud storage (optional).
-    s3Config?: IS3Credentials;
 }
 
 //
@@ -65,12 +64,13 @@ interface IPendingDatabaseUpdate {
 // throttled write lock per batch.
 //
 export async function importAssetsHandler(data: IImportAssetsData, context: ITaskContext): Promise<void> {
-    const { paths, storageDescriptor, googleApiKey, sessionId, dryRun, s3Config } = data;
+    const { paths, storageDescriptor, googleApiKey, sessionId, dryRun } = data;
     const { uuidGenerator, timestampProvider } = context;
     const hashCacheDir = path.join(os.tmpdir(), "photosphere");
 
-    const { options: storageOptions } = await loadEncryptionKeysFromPem(storageDescriptor.encryptionKeyPems ?? []);
-    const { storage, rawStorage } = createStorage(storageDescriptor.dbDir, s3Config, storageOptions);
+    const { s3Config, encryptionKeyPems } = await resolveStorageCredentials(storageDescriptor.databasePath, storageDescriptor.encryptionKey);
+    const { options: storageOptions } = await loadEncryptionKeysFromPem(encryptionKeyPems);
+    const { storage, rawStorage } = createStorage(storageDescriptor.databasePath, s3Config, storageOptions);
     const bsonDatabase = new BsonDatabase(storage, ".db/bson", uuidGenerator, timestampProvider);
     const metadataCollection = bsonDatabase.collection<IAsset>("metadata");
 
@@ -239,7 +239,6 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
                             fileStat: hashFileData.fileStat,
                             contentType: hashFileData.contentType,
                             storageDescriptor: hashFileData.storageDescriptor,
-                            s3Config: hashFileData.s3Config,
                             logicalPath: hashFileData.logicalPath,
                             labels: hashFileData.labels,
                             googleApiKey: hashFileData.googleApiKey,
@@ -296,7 +295,6 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
                     contentType: result.contentType,
                     storageDescriptor,
                     hashCacheDir,
-                    s3Config,
                     logicalPath: result.logicalPath,
                     labels: result.labels,
                     googleApiKey,

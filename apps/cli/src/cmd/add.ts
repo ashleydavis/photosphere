@@ -2,12 +2,11 @@ import { log } from "utils";
 import pc from "picocolors";
 import { exit } from "node-utils";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
-import { loadDatabase, IBaseCommandOptions, ICommandContext, resolveKeyPems } from "../lib/init-cmd";
+import { loadDatabase, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
 import { getFileLogger } from "../lib/log";
 import { pathExists } from 'node-utils';
 import { formatBytes } from "../lib/format";
-import { addPaths } from "api";
-import { IStorageDescriptor } from "storage";
+import { addPaths, IDatabaseDescriptor } from "api";
 
 export interface IAddCommandOptions extends IBaseCommandOptions {
     dryRun?: boolean;
@@ -32,13 +31,11 @@ export async function addCommand(context: ICommandContext, paths: string[], opti
         }
     }
     
-    const { databaseDir, googleApiKey, s3Config } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
+    const { databaseDir, googleApiKey } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
 
-    // Create storage descriptor for passing to workers
-    const keyPems = await resolveKeyPems(options.key);
-    const storageDescriptor: IStorageDescriptor = {
-        dbDir: databaseDir,
-        encryptionKeyPems: keyPems
+    const storageDescriptor: IDatabaseDescriptor = {
+        databasePath: databaseDir,
+        encryptionKey: options.key,
     };
 
     writeProgress(`Searching for files...`);
@@ -49,7 +46,6 @@ export async function addCommand(context: ICommandContext, paths: string[], opti
         paths,
         googleApiKey,
         sessionId,
-        s3Config,
         options.dryRun || false,
         (currentlyScanning, summary) => {
             let progressMessage = options.dryRun

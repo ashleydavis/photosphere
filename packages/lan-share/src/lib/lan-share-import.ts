@@ -22,11 +22,11 @@ function generateSharedSecretId(): string {
 export async function importDatabasePayload(payload: IDatabaseSharePayload): Promise<IDatabaseEntry> {
     const vault = getVault(getDefaultVaultType());
 
-    let s3CredentialId: string | undefined;
+    let s3Key: string | undefined;
     if (payload.s3Credentials) {
-        s3CredentialId = generateSharedSecretId();
+        s3Key = generateSharedSecretId();
         await vault.set({
-            name: s3CredentialId,
+            name: s3Key,
             type: "s3-credentials",
             value: JSON.stringify({
                 label: payload.s3Credentials.label,
@@ -38,11 +38,11 @@ export async function importDatabasePayload(payload: IDatabaseSharePayload): Pro
         });
     }
 
-    let encryptionKeyId: string | undefined;
+    let encryptionKey: string | undefined;
     if (payload.encryptionKey) {
-        encryptionKeyId = generateSharedSecretId();
+        encryptionKey = generateSharedSecretId();
         await vault.set({
-            name: encryptionKeyId,
+            name: encryptionKey,
             type: "encryption-key",
             value: JSON.stringify({
                 label: payload.encryptionKey.label,
@@ -52,11 +52,11 @@ export async function importDatabasePayload(payload: IDatabaseSharePayload): Pro
         });
     }
 
-    let geocodingKeyId: string | undefined;
+    let geocodingKey: string | undefined;
     if (payload.geocodingKey) {
-        geocodingKeyId = generateSharedSecretId();
+        geocodingKey = generateSharedSecretId();
         await vault.set({
-            name: geocodingKeyId,
+            name: geocodingKey,
             type: "api-key",
             value: JSON.stringify({
                 label: payload.geocodingKey.label,
@@ -70,9 +70,9 @@ export async function importDatabasePayload(payload: IDatabaseSharePayload): Pro
         description: payload.description,
         path: payload.path,
         origin: payload.origin,
-        s3CredentialId,
-        encryptionKeyId,
-        geocodingKeyId,
+        s3Key,
+        encryptionKey,
+        geocodingKey,
     };
 }
 

@@ -3,7 +3,8 @@ import type { IUuidGenerator } from "utils";
 import { ProgressCallback } from "./media-file-database";
 import { SortNode, traverseTreeAsync } from "merkle-tree";
 import { loadMerkleTree } from "./tree";
-import { IStorage, IStorageDescriptor, IS3Credentials } from "storage";
+import { IStorage } from "storage";
+import { IDatabaseDescriptor } from "./database-descriptor";
 import { TaskStatus, TaskQueue } from "task-queue";
 import { IVerifyFileData } from "./verify.worker";
 import { verify as verifySerializedFile } from "serialization";
@@ -24,10 +25,6 @@ export interface IVerifyOptions {
     //
     pathFilter?: string;
 
-    //
-    // Optional S3 configuration for accessing S3-hosted storage.
-    //
-    s3Config?: IS3Credentials;
 }
 
 //
@@ -96,7 +93,7 @@ export interface IVerifyResult {
 // If any files are corrupted, this will pick them up as modified.
 // Also checks each asset in the merkle tree has a database record with the correct id and hash.
 //
-export async function verify(storageDescriptor: IStorageDescriptor, databaseStorage: IStorage, uuidGenerator: IUuidGenerator, metadataCollection: IBsonCollection<IAsset>, options?: IVerifyOptions, progressCallback?: ProgressCallback) : Promise<IVerifyResult> {
+export async function verify(storageDescriptor: IDatabaseDescriptor, databaseStorage: IStorage, uuidGenerator: IUuidGenerator, metadataCollection: IBsonCollection<IAsset>, options?: IVerifyOptions, progressCallback?: ProgressCallback) : Promise<IVerifyResult> {
 
     let pathFilter = options?.pathFilter 
         ? options.pathFilter.replace(/\\/g, '/') // Normalize path separators
@@ -148,7 +145,7 @@ export async function verify(storageDescriptor: IStorageDescriptor, databaseStor
     // Handlers are registered in the worker file (apps/cli/src/lib/worker.ts).
     // maxWorkers is set in the provider constructor (defaults to number of CPUs).
     //
-    const queue = new TaskQueue(uuidGenerator, storageDescriptor.dbDir);
+    const queue = new TaskQueue(uuidGenerator, storageDescriptor.databasePath);
 
     try {
         //
@@ -243,7 +240,6 @@ export async function verify(storageDescriptor: IStorageDescriptor, databaseStor
                 queue.addTask("verify-file", {
                     node,
                     storageDescriptor,
-                    s3Config: options?.s3Config,
                     options: {
                         full: options?.full,
                     },
