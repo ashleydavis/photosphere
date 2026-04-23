@@ -1,6 +1,6 @@
 import { BsonDatabase, IBsonDatabase, IBsonCollection, getDatabaseRootHash } from "bdb";
 import { loadDatabaseConfig, saveDatabaseConfig, updateDatabaseConfig } from "./database-config";
-import { createStorage, IStorage, pathJoin, StoragePrefixWrapper } from "storage";
+import { createStorage, IStorage, IS3Credentials, pathJoin, StoragePrefixWrapper } from "storage";
 import { LazyOriginStorage } from "./lazy-origin-storage";
 import { ILocation, log, retry, IUuidGenerator, ITimestampProvider } from "utils";
 import dayjs from "dayjs";
@@ -603,9 +603,9 @@ export async function createLazyDatabaseStorage(databasePath: string): Promise<I
 // Works for any storage path (local filesystem, S3, network).
 // Used by sync scheduling to avoid queuing tasks when the target is unreachable.
 //
-export async function checkConnectivity(databasePath: string): Promise<boolean> {
+export async function checkConnectivity(databasePath: string, s3Credentials?: IS3Credentials): Promise<boolean> {
     try {
-        const { storage } = createStorage(databasePath, undefined, undefined);
+        const { storage } = createStorage(databasePath, s3Credentials, undefined);
         return await merkleTreeExists(storage);
     }
     catch {

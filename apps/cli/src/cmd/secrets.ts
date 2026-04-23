@@ -5,8 +5,6 @@ import { confirm, intro, outro, text, password, select, isCancel, spinner, note,
 import { exit } from 'node-utils';
 import * as fs from 'fs/promises';
 import { existsSync } from 'fs';
-import { exportPublicKeyToPem } from 'storage';
-import { createPrivateKey, createPublicKey } from 'node:crypto';
 import { LanShareSender, LanShareReceiver, resolveSecretSharePayload, importSecretPayload } from 'lan-share';
 import type { ISecretSharePayload } from 'lan-share';
 
@@ -96,8 +94,6 @@ interface ISecretsImportOptions {
     yes?: boolean;
     // Path to the private key file.
     privateKey?: string;
-    // Path to the public key file.
-    publicKey?: string;
 }
 
 //
@@ -152,10 +148,9 @@ export function secretsCommand(): Command {
 
     // psi secrets import
     cmd.command('import')
-        .description('Import a .key / .key.pub PEM key pair file.')
+        .description('Import a PEM private key file as an encryption key.')
         .option('--yes', 'Skip prompts')
         .option('--private-key <path>', 'Path to private key file')
-        .option('--public-key <path>', 'Path to public key file')
         .action(secretsImport);
 
     // psi secrets send
@@ -371,7 +366,7 @@ async function secretsView(cmdOptions: ISecretsViewOptions): Promise<void> {
     console.log(pc.cyan(`\nName: `) + secret.name);
     console.log(pc.cyan(`Type: `) + secret.type);
 
-    if (secret.type === 's3-credentials' || secret.type === 'encryption-key') {
+    if (secret.type === 's3-credentials') {
         try {
             const parsed = JSON.parse(secret.value);
             console.log(pc.cyan(`Value:`));
@@ -635,23 +630,8 @@ async function secretsImport(cmdOptions: ISecretsImportOptions): Promise<void> {
 
         const keyName = privatePath.split('/').pop()?.replace(/\.key$/, '') || 'imported-key';
         const privateKeyPem = await fs.readFile(privatePath, 'utf-8');
-        let publicKeyPem: string;
-        const publicPath = cmdOptions.publicKey?.trim() || `${privatePath}.pub`;
-        if (existsSync(publicPath)) {
-            publicKeyPem = await fs.readFile(publicPath, 'utf-8');
-        }
-        else {
-            const privateKeyObj = createPrivateKey(privateKeyPem);
-            publicKeyPem = exportPublicKeyToPem(createPublicKey(privateKeyObj));
-        }
-
         const vault = getVault(getDefaultVaultType());
-        await vault.set({
-            name: keyName,
-            type: 'encryption-key',
-            value: JSON.stringify({ privateKeyPem, publicKeyPem }),
-        });
-
+        await vault.set({ name: keyName, type: 'encryption-key', value: privateKeyPem });
         console.log(pc.green(`✓ Key imported as "${keyName}".`));
         return;
     }
@@ -679,23 +659,8 @@ async function secretsImport(cmdOptions: ISecretsImportOptions): Promise<void> {
     const privatePath = (privateKeyPath as string).trim();
     const keyName = privatePath.split('/').pop()?.replace(/\.key$/, '') ?? 'imported-key';
     const privateKeyPem = await fs.readFile(privatePath, 'utf-8');
-    let publicKeyPem: string;
-    const defaultPublicPath = `${privatePath}.pub`;
-    if (existsSync(defaultPublicPath)) {
-        publicKeyPem = await fs.readFile(defaultPublicPath, 'utf-8');
-    }
-    else {
-        const privateKeyObj = createPrivateKey(privateKeyPem);
-        publicKeyPem = exportPublicKeyToPem(createPublicKey(privateKeyObj));
-    }
-
     const vault = getVault(getDefaultVaultType());
-    await vault.set({
-        name: keyName,
-        type: 'encryption-key',
-        value: JSON.stringify({ privateKeyPem, publicKeyPem }),
-    });
-
+    await vault.set({ name: keyName, type: 'encryption-key', value: privateKeyPem });
     outro(pc.green(`✓ Key imported as "${keyName}".`));
 }
 

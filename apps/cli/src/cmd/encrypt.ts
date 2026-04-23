@@ -73,15 +73,14 @@ export async function encryptCommand(context: ICommandContext, options: IEncrypt
     if (options.generateKey && options.key) {
         const firstKeyName = options.key.split(',')[0].trim();
         const vault = getVault(getDefaultVaultType());
-        const existing = await vault.get(`cli:encryption:${firstKeyName}`);
+        const existing = await vault.get(firstKeyName);
         if (!existing) {
             const keyPair = generateKeyPair();
             const privateKeyPem = keyPair.privateKey.export({ type: 'pkcs8', format: 'pem' }) as string;
-            const publicKeyPem = exportPublicKeyToPem(keyPair.publicKey);
             await vault.set({
-                name: `cli:encryption:${firstKeyName}`,
+                name: firstKeyName,
                 type: 'encryption-key',
-                value: JSON.stringify({ privateKeyPem, publicKeyPem }),
+                value: privateKeyPem,
             });
         }
     }
