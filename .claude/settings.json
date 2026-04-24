@@ -1,0 +1,47 @@
+{
+  "permissions": {
+    "deny": [   
+      "Bash(git stash*)"
+    ],    
+    "allow": [
+      "Read",
+      "Glob",
+      "Grep",
+      "Bash(bun run *)",
+      "Bash(git log *)",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git show *)",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(find *)",
+      "Bash(echo *)",
+      "Edit(./*)",
+      "Write(./*)",
+      "MultiEdit(./*)"
+    ],
+    "additionalDirectories": [
+      "../photosphere.wiki"
+    ]
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun run compile",
+            "timeout": 120,
+            "statusMessage": "Compiling..."
+          },
+          {
+            "type": "command",
+            "command": "bun run test:cli",
+            "timeout": 120,
+            "statusMessage": "Testing..."
+          }
+        ]
+      }
+    ]
+  }
+}
