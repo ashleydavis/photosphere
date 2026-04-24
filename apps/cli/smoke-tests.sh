@@ -4,6 +4,9 @@
 # Based on test plan from photosphere-wiki/Test-plan-from-repo.md
 # This script runs smoke tests to verify basic CLI functionality
 
+# Absolute path to this script's directory, resolved before any cd takes place.
+SMOKE_TESTS_DIR="$(cd "$(dirname "$0")" && pwd)"
+
 # Set NODE_ENV to testing for deterministic UUID generation
 export NODE_ENV=testing
 
@@ -971,10 +974,8 @@ test_setup() {
 }
 
 check_tools() {
-    local script_dir
-    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     # shellcheck source=./check-tools.sh
-    source "$script_dir/check-tools.sh"
+    source "$SMOKE_TESTS_DIR/check-tools.sh"
     run_check_tools
 }
 

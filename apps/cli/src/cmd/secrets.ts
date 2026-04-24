@@ -62,6 +62,8 @@ interface ISecretsEditOptions {
     newName?: string;
     // New secret value.
     value?: string;
+    // Path to a file whose content is used as the new secret value (for multiline values such as PEM keys).
+    valueFile?: string;
 }
 
 //
@@ -131,6 +133,7 @@ export function secretsCommand(): Command {
         .option('--name <name>', 'Secret name to edit')
         .option('--new-name <name>', 'New secret name')
         .option('--value <value>', 'New value')
+        .option('--value-file <path>', 'Read new value from a file (for multiline values such as PEM keys)')
         .action(secretsEdit);
 
     // psi secrets remove
@@ -431,14 +434,28 @@ async function secretsEdit(cmdOptions: ISecretsEditOptions): Promise<void> {
     }
 
     if (cmdOptions.yes) {
-        if (!cmdOptions.newName && !cmdOptions.value) {
-            console.error(pc.red('✗ --new-name or --value is required with --yes'));
+        if (!cmdOptions.newName && !cmdOptions.value && !cmdOptions.valueFile) {
+            console.error(pc.red('✗ --new-name, --value, or --value-file is required with --yes'));
             await exit(1);
             return;
         }
 
+        let updatedValue = secret.value;
+
+        if (cmdOptions.valueFile) {
+            if (!existsSync(cmdOptions.valueFile)) {
+                console.error(pc.red(`✗ File not found: ${cmdOptions.valueFile}`));
+                await exit(1);
+                return;
+            }
+
+            updatedValue = await fs.readFile(cmdOptions.valueFile, 'utf-8');
+        }
+        else if (cmdOptions.value) {
+            updatedValue = cmdOptions.value;
+        }
+
         const updatedName = cmdOptions.newName || secret.name;
-        const updatedValue = cmdOptions.value || secret.value;
 
         if (updatedName !== secret.name) {
             await vault.delete(secret.name);
@@ -467,9 +484,18 @@ async function secretsEdit(cmdOptions: ISecretsEditOptions): Promise<void> {
         return;
     }
 
-    const newValue = await password({
-        message: `New value (leave blank to keep current):`,
-    });
+    let newValue: string | symbol;
+
+    if (secret.type === 'encryption-key') {
+        newValue = await multiline({
+            message: 'New value (paste your key, then press Ctrl+D to submit; leave empty and Ctrl+D to keep current):',
+        });
+    }
+    else {
+        newValue = await password({
+            message: `New value (leave blank to keep current):`,
+        });
+    }
 
     if (isCancel(newValue)) {
         outro(pc.yellow('Cancelled.'));
