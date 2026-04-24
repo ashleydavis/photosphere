@@ -3,7 +3,7 @@ import utc from "dayjs/plugin/utc";
 
 dayjs.extend(utc);
 import { execLogged } from "node-utils";
-import { convertExifCoordinates, getImageTransformation, IImageTransformation, ILocation, isLocationInRange, IUuidGenerator } from "utils";
+import { convertExifCoordinates, getImageTransformation, IImageTransformation, ILocation, isLocationInRange, IUuidGenerator, log } from "utils";
 import * as fs from "fs/promises";
 import { DISPLAY_MIN_SIZE, DISPLAY_QUALITY, IAssetDetails, MICRO_MIN_SIZE, MICRO_QUALITY, THUMBNAIL_MIN_SIZE, THUMBNAIL_QUALITY } from "./media-file-database";
 import { getFileInfo, Image } from "tools";
@@ -68,7 +68,7 @@ export async function getImageMetadata(filePath: string, contentType: string): P
             if (exif && exif.tags && exif.tags.GPSLatitude && exif.tags.GPSLongitude) {
                 coordinates = convertExifCoordinates(exif.tags);
                 if (!isLocationInRange(coordinates)) {
-                    console.error(`Ignoring out of range GPS coordinates: ${JSON.stringify(coordinates)}, for asset ${filePath}.`);
+                    log.error(`Ignoring out of range GPS coordinates: ${JSON.stringify(coordinates)}, for asset ${filePath}.`);
                     coordinates = undefined;
                 }
             }
@@ -81,8 +81,7 @@ export async function getImageMetadata(filePath: string, contentType: string): P
                         photoDate = dayjs.utc(dateStr, "YYYY:MM:DD HH:mm:ss").toISOString();
                     }
                     catch (err) {
-                        console.error(`Failed to parse date from ${dateStr}`);
-                        console.error(err);
+                        log.exception(`Failed to parse date from ${dateStr}`, err as Error);
                     }
                 }
             }
@@ -94,8 +93,7 @@ export async function getImageMetadata(filePath: string, contentType: string): P
             };
         }
         catch (err) {
-            console.error(`Failed to get exif data from ${filePath}`);
-            console.error(err);
+            log.exception(`Failed to get exif data from ${filePath}`, err as Error);
 
             return {};
         }

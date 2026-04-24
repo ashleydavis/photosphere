@@ -1,6 +1,7 @@
 import { exit } from "node-utils";
 import { loadDatabase, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
 import { loadMerkleTree } from "api";
+import { log } from "utils";
 
 export interface IDatabaseIdCommandOptions extends IBaseCommandOptions {
 }
@@ -18,7 +19,7 @@ export async function databaseIdCommand(context: ICommandContext, options: IData
         throw new Error("Failed to load merkle tree");
     }
     
-    console.log(merkleTree.id);
+    log.info(merkleTree.id);
     
     await exit(0);
 }

@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import pc from 'picocolors';
 import { getVault, getDefaultVaultType } from 'vault';
+import { log } from 'utils';
 import { getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry } from 'node-utils';
 import { confirm, intro, outro, text, select, isCancel, spinner, note } from '../lib/clack/prompts';
 import { exit } from 'node-utils';
@@ -145,9 +146,9 @@ async function findDatabaseByName(name: string): Promise<IDatabaseEntry | undefi
     }
 
     if (matches.length > 1) {
-        console.error(pc.red(`✗ Ambiguous name "${name}" — matches ${matches.length} entries:`));
+        log.error(pc.red(`✗ Ambiguous name "${name}" — matches ${matches.length} entries:`));
         for (const match of matches) {
-            console.error(`  • ${match.name} → ${match.path}`);
+            log.error(`  • ${match.name} → ${match.path}`);
         }
         await exit(1);
     }
@@ -249,7 +250,7 @@ async function createSharedSecret(secretType: string): Promise<string> {
             value: JSON.stringify(value),
         });
 
-        console.log(pc.green(`  ✓ S3 credential "${label}" created (${secretId})`));
+        log.info(pc.green(`  ✓ S3 credential "${label}" created (${secretId})`));
     }
     else if (secretType === 'encryption-key') {
         const label = await promptRequired('Label for this encryption key:');
@@ -289,7 +290,7 @@ async function createSharedSecret(secretType: string): Promise<string> {
             value: JSON.stringify({ label, privateKeyPem, publicKeyPem }),
         });
 
-        console.log(pc.green(`  ✓ Encryption key "${label}" created (${secretId})`));
+        log.info(pc.green(`  ✓ Encryption key "${label}" created (${secretId})`));
     }
     else if (secretType === 'api-key') {
         const label = await promptRequired('Label for this API key:');
@@ -301,7 +302,7 @@ async function createSharedSecret(secretType: string): Promise<string> {
             value: JSON.stringify({ label, apiKey }),
         });
 
-        console.log(pc.green(`  ✓ API key "${label}" created (${secretId})`));
+        log.info(pc.green(`  ✓ API key "${label}" created (${secretId})`));
     }
 
     return secretId;
@@ -429,19 +430,19 @@ async function dbsList(): Promise<void> {
     const databases = await getDatabases();
 
     if (databases.length === 0) {
-        console.log(pc.yellow('No databases configured.'));
-        console.log(pc.dim('Use "psi dbs add" to add a database.'));
+        log.info(pc.yellow('No databases configured.'));
+        log.info(pc.dim('Use "psi dbs add" to add a database.'));
         return;
     }
 
-    console.log(pc.cyan(`\n${'Name'.padEnd(25)} Path`));
-    console.log('─'.repeat(70));
+    log.info(pc.cyan(`\n${'Name'.padEnd(25)} Path`));
+    log.info('─'.repeat(70));
 
     for (const dbEntry of databases) {
-        console.log(`${dbEntry.name.padEnd(25)} ${dbEntry.path}`);
+        log.info(`${dbEntry.name.padEnd(25)} ${dbEntry.path}`);
     }
 
-    console.log('');
+    log.info('');
 }
 
 //
@@ -450,7 +451,7 @@ async function dbsList(): Promise<void> {
 async function dbsAdd(cmdOptions: IDbsAddOptions): Promise<void> {
     if (cmdOptions.yes) {
         if (!cmdOptions.name || !cmdOptions.path) {
-            console.error(pc.red('✗ --name and --path are required with --yes'));
+            log.error(pc.red('✗ --name and --path are required with --yes'));
             await exit(1);
             return;
         }
@@ -466,13 +467,13 @@ async function dbsAdd(cmdOptions: IDbsAddOptions): Promise<void> {
 
         const existing = await findDatabaseByName(entry.name);
         if (existing) {
-            console.error(pc.red(`✗ A database named "${entry.name}" already exists (${existing.path}). Use a different name or remove the existing entry first.`));
+            log.error(pc.red(`✗ A database named "${entry.name}" already exists (${existing.path}). Use a different name or remove the existing entry first.`));
             await exit(1);
             return;
         }
 
         await addDatabaseEntry(entry);
-        console.log(pc.green(`✓ Database "${entry.name}" added.`));
+        log.info(pc.green(`✓ Database "${entry.name}" added.`));
         return;
     }
 
@@ -516,14 +517,14 @@ async function dbsView(cmdOptions: IDbsViewOptions): Promise<void> {
 
     if (!cmdOptions.name && !cmdOptions.path) {
         if (cmdOptions.yes) {
-            console.error(pc.red('✗ --name or --path is required with --yes'));
+            log.error(pc.red('✗ --name or --path is required with --yes'));
             await exit(1);
             return;
         }
 
         const databases = await getDatabases();
         if (databases.length === 0) {
-            console.log(pc.yellow('No databases configured.'));
+            log.info(pc.yellow('No databases configured.'));
             return;
         }
 
@@ -547,43 +548,43 @@ async function dbsView(cmdOptions: IDbsViewOptions): Promise<void> {
     }
 
     if (!entry) {
-        console.error(pc.red(`✗ No database matching the given name or path was found.`));
+        log.error(pc.red(`✗ No database matching the given name or path was found.`));
         await exit(1);
         return;
     }
 
-    console.log(pc.cyan('\nDatabase Entry'));
-    console.log('─'.repeat(50));
-    console.log(pc.cyan('Name:        ') + entry.name);
-    console.log(pc.cyan('Description: ') + (entry.description || pc.dim('(none)')));
-    console.log(pc.cyan('Path:        ') + entry.path);
+    log.info(pc.cyan('\nDatabase Entry'));
+    log.info('─'.repeat(50));
+    log.info(pc.cyan('Name:        ') + entry.name);
+    log.info(pc.cyan('Description: ') + (entry.description || pc.dim('(none)')));
+    log.info(pc.cyan('Path:        ') + entry.path);
 
     if (entry.s3Key) {
-        console.log(pc.cyan('S3 Creds:    ') + entry.s3Key);
+        log.info(pc.cyan('S3 Creds:    ') + entry.s3Key);
     }
     else {
-        console.log(pc.cyan('S3 Creds:    ') + pc.dim('(none)'));
+        log.info(pc.cyan('S3 Creds:    ') + pc.dim('(none)'));
     }
 
     if (entry.encryptionKey) {
-        console.log(pc.cyan('Encryption:  ') + entry.encryptionKey);
+        log.info(pc.cyan('Encryption:  ') + entry.encryptionKey);
     }
     else {
-        console.log(pc.cyan('Encryption:  ') + pc.dim('(none)'));
+        log.info(pc.cyan('Encryption:  ') + pc.dim('(none)'));
     }
 
     if (entry.geocodingKey) {
-        console.log(pc.cyan('Geocoding:   ') + entry.geocodingKey);
+        log.info(pc.cyan('Geocoding:   ') + entry.geocodingKey);
     }
     else {
-        console.log(pc.cyan('Geocoding:   ') + pc.dim('(none)'));
+        log.info(pc.cyan('Geocoding:   ') + pc.dim('(none)'));
     }
 
     if (entry.origin) {
-        console.log(pc.cyan('Origin:      ') + entry.origin);
+        log.info(pc.cyan('Origin:      ') + entry.origin);
     }
 
-    console.log('');
+    log.info('');
 }
 
 //
@@ -594,14 +595,14 @@ async function dbsEdit(cmdOptions: IDbsEditOptions): Promise<void> {
 
     if (!cmdOptions.name) {
         if (cmdOptions.yes) {
-            console.error(pc.red('✗ --name is required with --yes'));
+            log.error(pc.red('✗ --name is required with --yes'));
             await exit(1);
             return;
         }
 
         const databases = await getDatabases();
         if (databases.length === 0) {
-            console.log(pc.yellow('No databases configured.'));
+            log.info(pc.yellow('No databases configured.'));
             return;
         }
 
@@ -625,7 +626,7 @@ async function dbsEdit(cmdOptions: IDbsEditOptions): Promise<void> {
     }
 
     if (!entry) {
-        console.error(pc.red(`✗ No database named "${cmdOptions.name}" found.`));
+        log.error(pc.red(`✗ No database named "${cmdOptions.name}" found.`));
         await exit(1);
         return;
     }
@@ -648,7 +649,7 @@ async function dbsEdit(cmdOptions: IDbsEditOptions): Promise<void> {
             await addDatabaseEntry(updated);
         }
 
-        console.log(pc.green(`✓ Database "${updated.name}" updated.`));
+        log.info(pc.green(`✓ Database "${updated.name}" updated.`));
         return;
     }
 
@@ -731,14 +732,14 @@ async function dbsRemove(cmdOptions: IDbsRemoveOptions): Promise<void> {
 
     if (!cmdOptions.name && !cmdOptions.path) {
         if (cmdOptions.yes) {
-            console.error(pc.red('✗ --name or --path is required with --yes'));
+            log.error(pc.red('✗ --name or --path is required with --yes'));
             await exit(1);
             return;
         }
 
         const databases = await getDatabases();
         if (databases.length === 0) {
-            console.log(pc.yellow('No databases configured.'));
+            log.info(pc.yellow('No databases configured.'));
             return;
         }
 
@@ -762,7 +763,7 @@ async function dbsRemove(cmdOptions: IDbsRemoveOptions): Promise<void> {
     }
 
     if (!entry) {
-        console.error(pc.red(`✗ No database matching the given name or path was found.`));
+        log.error(pc.red(`✗ No database matching the given name or path was found.`));
         await exit(1);
         return;
     }
@@ -798,16 +799,16 @@ async function dbsClear(cmdOptions: IDbsClearOptions): Promise<void> {
     const databases = await getDatabases();
 
     if (databases.length === 0) {
-        console.log(pc.yellow('No databases configured.'));
+        log.info(pc.yellow('No databases configured.'));
         return;
     }
 
     if (!cmdOptions.yes) {
-        console.log(pc.cyan(`\nDatabases to be removed:`));
+        log.info(pc.cyan(`\nDatabases to be removed:`));
         for (const dbEntry of databases) {
-            console.log(`  ${dbEntry.name} (${dbEntry.path})`);
+            log.info(`  ${dbEntry.name} (${dbEntry.path})`);
         }
-        console.log('');
+        log.info('');
 
         const firstConfirm = await confirm({
             message: `Remove all ${databases.length} database(s) from the list? This does not delete database files.`,
@@ -855,7 +856,7 @@ async function dbsSend(cmdOptions: IDbsSendOptions): Promise<void> {
     if (cmdOptions.name || cmdOptions.path) {
         entry = await findDatabaseByIdentifier(cmdOptions.name, cmdOptions.path);
         if (!entry) {
-            console.error(pc.red(`✗ No database matching the given name or path was found.`));
+            log.error(pc.red(`✗ No database matching the given name or path was found.`));
             await exit(1);
             return;
         }
@@ -864,8 +865,8 @@ async function dbsSend(cmdOptions: IDbsSendOptions): Promise<void> {
         // Pick from configured databases
         const databases = await getDatabases();
         if (databases.length === 0) {
-            console.log(pc.yellow('No databases configured.'));
-            console.log(pc.dim('Use "psi dbs add" to add a database first.'));
+            log.info(pc.yellow('No databases configured.'));
+            log.info(pc.dim('Use "psi dbs add" to add a database first.'));
             return;
         }
 
@@ -884,7 +885,7 @@ async function dbsSend(cmdOptions: IDbsSendOptions): Promise<void> {
 
         entry = databases.find(dbEntry => dbEntry.path === selected as string);
         if (!entry) {
-            console.error(pc.red('✗ Database not found.'));
+            log.error(pc.red('✗ Database not found.'));
             await exit(1);
             return;
         }
@@ -894,20 +895,20 @@ async function dbsSend(cmdOptions: IDbsSendOptions): Promise<void> {
     const payload = await resolveDatabaseSharePayload(entry);
 
     // Display resolved fields
-    console.log(pc.cyan('\nDatabase to send:'));
-    console.log(pc.cyan('  Name:        ') + payload.name);
-    console.log(pc.cyan('  Description: ') + (payload.description || pc.dim('(none)')));
-    console.log(pc.cyan('  Path:        ') + payload.path);
+    log.info(pc.cyan('\nDatabase to send:'));
+    log.info(pc.cyan('  Name:        ') + payload.name);
+    log.info(pc.cyan('  Description: ') + (payload.description || pc.dim('(none)')));
+    log.info(pc.cyan('  Path:        ') + payload.path);
     if (payload.s3Credentials) {
-        console.log(pc.cyan('  S3 Creds:    ') + payload.s3Credentials.label);
+        log.info(pc.cyan('  S3 Creds:    ') + payload.s3Credentials.label);
     }
     if (payload.encryptionKey) {
-        console.log(pc.cyan('  Encryption:  ') + payload.encryptionKey.label);
+        log.info(pc.cyan('  Encryption:  ') + payload.encryptionKey.label);
     }
     if (payload.geocodingKey) {
-        console.log(pc.cyan('  Geocoding:   ') + payload.geocodingKey.label);
+        log.info(pc.cyan('  Geocoding:   ') + payload.geocodingKey.label);
     }
-    console.log('');
+    log.info('');
 
     if (isLocalPath(payload.path)) {
         note(
@@ -1008,10 +1009,10 @@ async function dbsSend(cmdOptions: IDbsSendOptions): Promise<void> {
     const sender = new LanShareSender(payload, cmdOptions.code);
 
     // Display the pairing code — the user must enter this on the receiver device
-    console.log('');
-    console.log(pc.cyan(`  Pairing code: ${pc.bold(sender.pairingCode)}`));
-    console.log(pc.dim('  Enter this code on the receiver device, then wait.'));
-    console.log('');
+    log.info('');
+    log.info(pc.cyan(`  Pairing code: ${pc.bold(sender.pairingCode)}`));
+    log.info(pc.dim('  Enter this code on the receiver device, then wait.'));
+    log.info('');
 
     const spin = spinner();
     spin.start('Waiting for receiver on the LAN... (Ctrl+C to cancel)');
@@ -1037,7 +1038,7 @@ async function dbsSend(cmdOptions: IDbsSendOptions): Promise<void> {
         outro(pc.green('✓ Database sent successfully!'));
     }
     else {
-        console.error(pc.red('✗ Pairing code rejected by receiver.'));
+        log.error(pc.red('✗ Pairing code rejected by receiver.'));
         await exit(1);
     }
 }
@@ -1055,13 +1056,13 @@ async function dbsReceive(cmdOptions: { yes?: boolean; code?: string }): Promise
         pc.cyan('ℹ Network Requirement')
     );
 
-    console.log(pc.dim('Hint: Run `psi dbs send` on another device to send a database.'));
+    log.info(pc.dim('Hint: Run `psi dbs send` on another device to send a database.'));
 
     let code: string;
 
     if (skipPrompts) {
         if (!cmdOptions.code) {
-            console.error(pc.red('✗ --code is required with --yes'));
+            log.error(pc.red('✗ --code is required with --yes'));
             await exit(1);
             return;
         }
@@ -1110,20 +1111,20 @@ async function dbsReceive(cmdOptions: { yes?: boolean; code?: string }): Promise
     const payload = rawPayload as IDatabaseSharePayload;
 
     // Display received fields
-    console.log(pc.cyan('\nReceived database:'));
-    console.log(pc.cyan('  Name:        ') + payload.name);
-    console.log(pc.cyan('  Description: ') + (payload.description || pc.dim('(none)')));
-    console.log(pc.cyan('  Path:        ') + payload.path);
+    log.info(pc.cyan('\nReceived database:'));
+    log.info(pc.cyan('  Name:        ') + payload.name);
+    log.info(pc.cyan('  Description: ') + (payload.description || pc.dim('(none)')));
+    log.info(pc.cyan('  Path:        ') + payload.path);
     if (payload.s3Credentials) {
-        console.log(pc.cyan('  S3 Creds:    ') + payload.s3Credentials.label);
+        log.info(pc.cyan('  S3 Creds:    ') + payload.s3Credentials.label);
     }
     if (payload.encryptionKey) {
-        console.log(pc.cyan('  Encryption:  ') + payload.encryptionKey.label);
+        log.info(pc.cyan('  Encryption:  ') + payload.encryptionKey.label);
     }
     if (payload.geocodingKey) {
-        console.log(pc.cyan('  Geocoding:   ') + payload.geocodingKey.label);
+        log.info(pc.cyan('  Geocoding:   ') + payload.geocodingKey.label);
     }
-    console.log('');
+    log.info('');
 
     if (isLocalPath(payload.path)) {
         note(

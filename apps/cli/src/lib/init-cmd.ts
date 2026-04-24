@@ -55,24 +55,24 @@ export async function configureS3IfNeeded(nonInteractive: boolean): Promise<IS3C
     }
 
     if (nonInteractive) {
-        console.error(pc.red('✗ S3 credentials are required. Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables, or run interactively to configure credentials.'));
+        log.error(pc.red('✗ S3 credentials are required. Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables, or run interactively to configure credentials.'));
         await exit(1);
         return undefined;
     }
 
-    console.log(pc.yellow('\nNo S3 credentials found.'));
+    log.info(pc.yellow('\nNo S3 credentials found.'));
     const shouldConfigure = await confirm({
         message: 'Would you like to configure S3 credentials now?',
         initialValue: true,
     });
 
     if (isCancel(shouldConfigure) || !shouldConfigure) {
-        console.error(pc.red('S3 credentials are required.'));
+        log.error(pc.red('S3 credentials are required.'));
         await exit(1);
         return undefined;
     }
 
-    console.log(pc.cyan('Your credentials will be stored securely in your OS keychain.'));
+    log.info(pc.cyan('Your credentials will be stored securely in your OS keychain.'));
 
     const label = await text({
         message: 'Name for these credentials:',
@@ -371,9 +371,9 @@ export async function resolveDatabaseEntry(dbValue: string): Promise<IDatabaseEn
     }
 
     if (nameMatches.length > 1) {
-        console.error(pc.red(`✗ Ambiguous database name "${dbValue}" — matches ${nameMatches.length} entries:`));
+        log.error(pc.red(`✗ Ambiguous database name "${dbValue}" — matches ${nameMatches.length} entries:`));
         for (const match of nameMatches) {
-            console.error(`  • ${match.name} → ${match.path}`);
+            log.error(`  • ${match.name} → ${match.path}`);
         }
         await exit(1);
     }

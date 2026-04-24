@@ -1,4 +1,4 @@
-import { getVideoTransformation, ILocation } from "utils";
+import { getVideoTransformation, ILocation, log } from "utils";
 import * as fs from "fs/promises";
 import { pathExists } from "node-utils";
 import dayjs from "dayjs";
@@ -57,11 +57,10 @@ export async function getVideoDetails(filePath: string, tempDir: string, content
             if (photoData.photoTakenTime?.timestamp) {
                 try {
                     photoDate = dayjs.unix(parseInt(photoData.photoTakenTime.timestamp)).toISOString();
-                    console.log(`Parsed date ${photoDate} from timestamp ${parseInt(photoData.photoTakenTime.timestamp)} in JSON file ${jsonFilePath}`);
+                    log.verbose(`Parsed date ${photoDate} from timestamp ${parseInt(photoData.photoTakenTime.timestamp)} in JSON file ${jsonFilePath}`);
                 }
                 catch (err) {
-                    console.error(`Failed to parse date ${photoData.photoTakenTime.timestamp} from JSON file ${jsonFilePath}`);
-                    console.error(err);
+                    log.exception(`Failed to parse date ${photoData.photoTakenTime.timestamp} from JSON file ${jsonFilePath}`, err as Error);
                 }    
             }
         }
