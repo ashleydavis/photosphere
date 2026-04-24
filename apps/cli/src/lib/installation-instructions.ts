@@ -1,13 +1,14 @@
 import pc from "picocolors";
 import { platform } from "os";
+import { log } from "utils";
 
 /**
  * Shows platform-specific installation instructions for missing tools
  */
 export function showInstallationInstructions(missingTools: string[]): void {
-    console.log();
-    console.log(pc.bold('Installation Instructions:'));
-    console.log();
+    log.info('');
+    log.info(pc.bold('Installation Instructions:'));
+    log.info('');
     
     // Check which tools are missing to provide targeted instructions
     const needsImageMagick = missingTools.includes('ImageMagick');
@@ -33,166 +34,166 @@ export function showInstallationInstructions(missingTools: string[]): void {
             showGenericInstructions(needsImageMagick, needsFfmpeg);
     }
     
-    console.log();
-    console.log(pc.dim('After installation, run this command again to verify all tools are available.'));
+    log.info('');
+    log.info(pc.dim('After installation, run this command again to verify all tools are available.'));
 }
 
 function showWindowsInstructions(needsImageMagick: boolean, needsFfmpeg: boolean): void {
-    console.log(pc.cyan('Windows:'));
-    console.log();
+    log.info(pc.cyan('Windows:'));
+    log.info('');
     
     if (needsImageMagick && needsFfmpeg) {
-        console.log(pc.bold('Using Chocolatey') + ' (recommended):');
-        console.log('  choco install imagemagick ffmpeg');
-        console.log('  Chocolatey: https://chocolatey.org/install');
-        console.log();
-        console.log(pc.bold('Using Scoop:'));
-        console.log('  scoop install imagemagick ffmpeg');
-        console.log('  Scoop: https://scoop.sh');
+        log.info(pc.bold('Using Chocolatey') + ' (recommended):');
+        log.info('  choco install imagemagick ffmpeg');
+        log.info('  Chocolatey: https://chocolatey.org/install');
+        log.info('');
+        log.info(pc.bold('Using Scoop:'));
+        log.info('  scoop install imagemagick ffmpeg');
+        log.info('  Scoop: https://scoop.sh');
     } else if (needsImageMagick) {
-        console.log(pc.bold('Using Chocolatey') + ' (recommended):');
-        console.log('  choco install imagemagick');
-        console.log('  Chocolatey: https://chocolatey.org/install');
-        console.log();
-        console.log(pc.bold('Using Scoop:'));
-        console.log('  scoop install imagemagick');
-        console.log('  Scoop: https://scoop.sh');
+        log.info(pc.bold('Using Chocolatey') + ' (recommended):');
+        log.info('  choco install imagemagick');
+        log.info('  Chocolatey: https://chocolatey.org/install');
+        log.info('');
+        log.info(pc.bold('Using Scoop:'));
+        log.info('  scoop install imagemagick');
+        log.info('  Scoop: https://scoop.sh');
     } else if (needsFfmpeg) {
-        console.log(pc.bold('Using Chocolatey') + ' (recommended):');
-        console.log('  choco install ffmpeg');
-        console.log('  Chocolatey: https://chocolatey.org/install');
-        console.log();
-        console.log(pc.bold('Using Scoop:'));
-        console.log('  scoop install ffmpeg');
-        console.log('  Scoop: https://scoop.sh');
+        log.info(pc.bold('Using Chocolatey') + ' (recommended):');
+        log.info('  choco install ffmpeg');
+        log.info('  Chocolatey: https://chocolatey.org/install');
+        log.info('');
+        log.info(pc.bold('Using Scoop:'));
+        log.info('  scoop install ffmpeg');
+        log.info('  Scoop: https://scoop.sh');
     }
     
-    console.log();
-    console.log(pc.bold('Manual installation:'));
+    log.info('');
+    log.info(pc.bold('Manual installation:'));
     if (needsImageMagick) {
-        console.log('  • ImageMagick: https://imagemagick.org/script/download.php#windows');
-        console.log('    (Installs both modern "magick" and legacy "convert/identify" commands)');
+        log.info('  • ImageMagick: https://imagemagick.org/script/download.php#windows');
+        log.info('    (Installs both modern "magick" and legacy "convert/identify" commands)');
     }
     if (needsFfmpeg) {
-        console.log('  • ffmpeg: https://www.gyan.dev/ffmpeg/builds/');
-        console.log('    (Download "release essentials" build - includes ffprobe)');
+        log.info('  • ffmpeg: https://www.gyan.dev/ffmpeg/builds/');
+        log.info('    (Download "release essentials" build - includes ffprobe)');
     }
 }
 
 function showMacOSInstructions(needsImageMagick: boolean, needsFfmpeg: boolean): void {
-    console.log(pc.cyan('macOS:'));
-    console.log();
+    log.info(pc.cyan('macOS:'));
+    log.info('');
     
     if (needsImageMagick && needsFfmpeg) {
-        console.log(pc.bold('Using Homebrew') + ' (recommended):');
-        console.log('  brew install imagemagick ffmpeg');
-        console.log('  Homebrew: https://brew.sh');
-        console.log();
-        console.log(pc.bold('Using MacPorts:'));
-        console.log('  sudo port install ImageMagick +universal');
-        console.log('  sudo port install ffmpeg +universal');
-        console.log('  MacPorts: https://www.macports.org/install.php');
+        log.info(pc.bold('Using Homebrew') + ' (recommended):');
+        log.info('  brew install imagemagick ffmpeg');
+        log.info('  Homebrew: https://brew.sh');
+        log.info('');
+        log.info(pc.bold('Using MacPorts:'));
+        log.info('  sudo port install ImageMagick +universal');
+        log.info('  sudo port install ffmpeg +universal');
+        log.info('  MacPorts: https://www.macports.org/install.php');
     } else if (needsImageMagick) {
-        console.log(pc.bold('Using Homebrew') + ' (recommended):');
-        console.log('  brew install imagemagick');
-        console.log('  Homebrew: https://brew.sh');
-        console.log();
-        console.log(pc.bold('Using MacPorts:'));
-        console.log('  sudo port install ImageMagick +universal');
-        console.log('  MacPorts: https://www.macports.org/install.php');
+        log.info(pc.bold('Using Homebrew') + ' (recommended):');
+        log.info('  brew install imagemagick');
+        log.info('  Homebrew: https://brew.sh');
+        log.info('');
+        log.info(pc.bold('Using MacPorts:'));
+        log.info('  sudo port install ImageMagick +universal');
+        log.info('  MacPorts: https://www.macports.org/install.php');
     } else if (needsFfmpeg) {
-        console.log(pc.bold('Using Homebrew') + ' (recommended):');
-        console.log('  brew install ffmpeg');
-        console.log('  Homebrew: https://brew.sh');
-        console.log();
-        console.log(pc.bold('Using MacPorts:'));
-        console.log('  sudo port install ffmpeg +universal');
-        console.log('  MacPorts: https://www.macports.org/install.php');
+        log.info(pc.bold('Using Homebrew') + ' (recommended):');
+        log.info('  brew install ffmpeg');
+        log.info('  Homebrew: https://brew.sh');
+        log.info('');
+        log.info(pc.bold('Using MacPorts:'));
+        log.info('  sudo port install ffmpeg +universal');
+        log.info('  MacPorts: https://www.macports.org/install.php');
     }
     
-    console.log();
-    console.log(pc.bold('Manual installation:'));
+    log.info('');
+    log.info(pc.bold('Manual installation:'));
     if (needsImageMagick) {
-        console.log('  • ImageMagick: https://imagemagick.org/script/download.php#macosx');
-        console.log('    (Installs both modern "magick" and legacy "convert/identify" commands)');
+        log.info('  • ImageMagick: https://imagemagick.org/script/download.php#macosx');
+        log.info('    (Installs both modern "magick" and legacy "convert/identify" commands)');
     }
     if (needsFfmpeg) {
-        console.log('  • ffmpeg: https://evermeet.cx/ffmpeg/');
-        console.log('    (Includes ffprobe)');
+        log.info('  • ffmpeg: https://evermeet.cx/ffmpeg/');
+        log.info('    (Includes ffprobe)');
     }
 }
 
 function showLinuxInstructions(needsImageMagick: boolean, needsFfmpeg: boolean): void {
-    console.log(pc.cyan('Linux:'));
-    console.log();
+    log.info(pc.cyan('Linux:'));
+    log.info('');
     
     if (needsImageMagick && needsFfmpeg) {
-        console.log(pc.bold('Ubuntu/Debian:'));
-        console.log('  sudo apt update');
-        console.log('  sudo apt install imagemagick ffmpeg');
-        console.log();
-        console.log(pc.bold('Fedora/RHEL/CentOS:'));
-        console.log('  sudo dnf install ImageMagick ffmpeg');
-        console.log();
-        console.log(pc.bold('Arch Linux:'));
-        console.log('  sudo pacman -S imagemagick ffmpeg');
-        console.log();
-        console.log(pc.bold('Alpine Linux:'));
-        console.log('  sudo apk add imagemagick ffmpeg');
+        log.info(pc.bold('Ubuntu/Debian:'));
+        log.info('  sudo apt update');
+        log.info('  sudo apt install imagemagick ffmpeg');
+        log.info('');
+        log.info(pc.bold('Fedora/RHEL/CentOS:'));
+        log.info('  sudo dnf install ImageMagick ffmpeg');
+        log.info('');
+        log.info(pc.bold('Arch Linux:'));
+        log.info('  sudo pacman -S imagemagick ffmpeg');
+        log.info('');
+        log.info(pc.bold('Alpine Linux:'));
+        log.info('  sudo apk add imagemagick ffmpeg');
     } else if (needsImageMagick) {
-        console.log(pc.bold('Ubuntu/Debian:'));
-        console.log('  sudo apt update');
-        console.log('  sudo apt install imagemagick');
-        console.log();
-        console.log(pc.bold('Fedora/RHEL/CentOS:'));
-        console.log('  sudo dnf install ImageMagick');
-        console.log();
-        console.log(pc.bold('Arch Linux:'));
-        console.log('  sudo pacman -S imagemagick');
-        console.log();
-        console.log(pc.bold('Alpine Linux:'));
-        console.log('  sudo apk add imagemagick');
+        log.info(pc.bold('Ubuntu/Debian:'));
+        log.info('  sudo apt update');
+        log.info('  sudo apt install imagemagick');
+        log.info('');
+        log.info(pc.bold('Fedora/RHEL/CentOS:'));
+        log.info('  sudo dnf install ImageMagick');
+        log.info('');
+        log.info(pc.bold('Arch Linux:'));
+        log.info('  sudo pacman -S imagemagick');
+        log.info('');
+        log.info(pc.bold('Alpine Linux:'));
+        log.info('  sudo apk add imagemagick');
     } else if (needsFfmpeg) {
-        console.log(pc.bold('Ubuntu/Debian:'));
-        console.log('  sudo apt update');
-        console.log('  sudo apt install ffmpeg');
-        console.log();
-        console.log(pc.bold('Fedora/RHEL/CentOS:'));
-        console.log('  sudo dnf install ffmpeg');
-        console.log();
-        console.log(pc.bold('Arch Linux:'));
-        console.log('  sudo pacman -S ffmpeg');
-        console.log();
-        console.log(pc.bold('Alpine Linux:'));
-        console.log('  sudo apk add ffmpeg');
+        log.info(pc.bold('Ubuntu/Debian:'));
+        log.info('  sudo apt update');
+        log.info('  sudo apt install ffmpeg');
+        log.info('');
+        log.info(pc.bold('Fedora/RHEL/CentOS:'));
+        log.info('  sudo dnf install ffmpeg');
+        log.info('');
+        log.info(pc.bold('Arch Linux:'));
+        log.info('  sudo pacman -S ffmpeg');
+        log.info('');
+        log.info(pc.bold('Alpine Linux:'));
+        log.info('  sudo apk add ffmpeg');
     }
     
-    console.log();
-    console.log(pc.bold('Manual/Binary installation:'));
+    log.info('');
+    log.info(pc.bold('Manual/Binary installation:'));
     if (needsImageMagick) {
-        console.log('  • ImageMagick: https://imagemagick.org/script/download.php#linux');
-        console.log('    (Both modern "magick" and legacy "convert/identify" commands supported)');
+        log.info('  • ImageMagick: https://imagemagick.org/script/download.php#linux');
+        log.info('    (Both modern "magick" and legacy "convert/identify" commands supported)');
     }
     if (needsFfmpeg) {
-        console.log('  • ffmpeg: https://johnvansickle.com/ffmpeg/');
-        console.log('    (Static builds for Linux - includes ffprobe)');
+        log.info('  • ffmpeg: https://johnvansickle.com/ffmpeg/');
+        log.info('    (Static builds for Linux - includes ffprobe)');
     }
 }
 
 function showGenericInstructions(needsImageMagick: boolean, needsFfmpeg: boolean): void {
-    console.log('Please install the following tools for your system:');
-    console.log();
+    log.info('Please install the following tools for your system:');
+    log.info('');
     
     if (needsImageMagick) {
-        console.log(pc.bold('ImageMagick:'));
-        console.log('  Official site: https://imagemagick.org');
-        console.log('  Downloads: https://imagemagick.org/script/download.php');
-        console.log('  (Provides both modern "magick" and legacy "convert/identify" commands)');
-        console.log();
+        log.info(pc.bold('ImageMagick:'));
+        log.info('  Official site: https://imagemagick.org');
+        log.info('  Downloads: https://imagemagick.org/script/download.php');
+        log.info('  (Provides both modern "magick" and legacy "convert/identify" commands)');
+        log.info('');
     }
     if (needsFfmpeg) {
-        console.log(pc.bold('ffmpeg (includes ffprobe):'));
-        console.log('  Official site: https://ffmpeg.org');
-        console.log('  Downloads: https://ffmpeg.org/download.html');
+        log.info(pc.bold('ffmpeg (includes ffprobe):'));
+        log.info('  Official site: https://ffmpeg.org');
+        log.info('  Downloads: https://ffmpeg.org/download.html');
     }
 }

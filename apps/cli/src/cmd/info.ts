@@ -201,10 +201,10 @@ async function analyzeFile(filePath: string, contentType: string, fileInfo: IFil
 function displayFileInfo(analysis: FileAnalysis, options: IInfoCommandOptions) {
     const { path, fileStat: fileInfo, assetInfo, hash, error, logicalPath, asset } = analysis;
 
-    console.log(pc.bold(pc.blue(`📁 ${logicalPath}`)));
+    log.info(pc.bold(pc.blue(`📁 ${logicalPath}`)));
 
     if (error) {
-        console.log(`   ${pc.red(`Error: ${error}`)}`);
+        log.info(`   ${pc.red(`Error: ${error}`)}`);
         return;
     }
 
@@ -218,47 +218,47 @@ function displayFileInfo(analysis: FileAnalysis, options: IInfoCommandOptions) {
     }
 
     const mimeType = fileInfo.contentType || mime.getType(path) || 'application/octet-stream';
-    console.log(`   Type: ${mimeType}`);
+    log.info(`   Type: ${mimeType}`);
     if (hash) {
-        console.log(`   Hash: ${hash}`);
+        log.info(`   Hash: ${hash}`);
     }
-    console.log(`   Size: ${formatBytes(fileInfo.length)}`);
-    console.log(`   Modified: ${fileInfo.lastModified.toLocaleString()}`);
+    log.info(`   Size: ${formatBytes(fileInfo.length)}`);
+    log.info(`   Modified: ${fileInfo.lastModified.toLocaleString()}`);
     if (assetInfo?.dimensions) {
-        console.log(`   Dimensions: ${assetInfo.dimensions.width} × ${assetInfo.dimensions.height}`);
+        log.info(`   Dimensions: ${assetInfo.dimensions.width} × ${assetInfo.dimensions.height}`);
     }
     if (analysis.error) {
-        console.log(`   ${pc.yellow(`Analysis Error: ${analysis.error}`)}`);
+        log.info(`   ${pc.yellow(`Analysis Error: ${analysis.error}`)}`);
     }
 }
 
 function displayAssetInfo(asset: IAsset) {
-    console.log(`   Asset ID: ${asset._id}`);
-    console.log(`   Original file: ${asset.origFileName}`);
+    log.info(`   Asset ID: ${asset._id}`);
+    log.info(`   Original file: ${asset.origFileName}`);
     if (asset.origPath) {
-        console.log(`   Original path: ${asset.origPath}`);
+        log.info(`   Original path: ${asset.origPath}`);
     }
-    console.log(`   Type: ${asset.contentType}`);
-    console.log(`   Hash: ${asset.hash}`);
-    console.log(`   Dimensions: ${asset.width} × ${asset.height}`);
-    console.log(`   File date: ${asset.fileDate}`);
+    log.info(`   Type: ${asset.contentType}`);
+    log.info(`   Hash: ${asset.hash}`);
+    log.info(`   Dimensions: ${asset.width} × ${asset.height}`);
+    log.info(`   File date: ${asset.fileDate}`);
     if (asset.photoDate) {
-        console.log(`   Photo date: ${asset.photoDate}`);
+        log.info(`   Photo date: ${asset.photoDate}`);
     }
-    console.log(`   Upload date: ${asset.uploadDate}`);
+    log.info(`   Upload date: ${asset.uploadDate}`);
     if (asset.duration !== undefined) {
-        console.log(`   Duration: ${asset.duration}s`);
+        log.info(`   Duration: ${asset.duration}s`);
     }
     if (asset.location) {
-        console.log(`   Location: ${asset.location}`);
+        log.info(`   Location: ${asset.location}`);
     }
     if (asset.coordinates) {
-        console.log(`   Coordinates: ${asset.coordinates.lat}, ${asset.coordinates.lng}`);
+        log.info(`   Coordinates: ${asset.coordinates.lat}, ${asset.coordinates.lng}`);
     }
     if (asset.labels?.length) {
-        console.log(`   Labels: ${asset.labels.join(", ")}`);
+        log.info(`   Labels: ${asset.labels.join(", ")}`);
     }
     if (asset.description) {
-        console.log(`   Description: ${asset.description}`);
+        log.info(`   Description: ${asset.description}`);
     }
 }

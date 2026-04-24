@@ -1,5 +1,6 @@
 import { exit } from "node-utils";
 import { loadDatabase, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
+import { log } from "utils";
 
 export interface IRootHashCommandOptions extends IBaseCommandOptions {
 }
@@ -14,7 +15,7 @@ export async function rootHashCommand(context: ICommandContext, options: IRootHa
     const { getDatabaseSummary } = await import("api");
     const summary = await getDatabaseSummary(assetStorage);
     
-    console.log(summary.fullHash);
+    log.info(summary.fullHash);
     
     await exit(0);
 }

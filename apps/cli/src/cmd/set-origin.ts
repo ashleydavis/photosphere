@@ -4,6 +4,7 @@
 
 import pc from "picocolors";
 import { exit } from "node-utils";
+import { log } from "utils";
 import { loadDatabase, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
 import { loadDatabaseConfig, updateDatabaseConfig } from "api";
 
@@ -17,6 +18,6 @@ export async function setOriginCommand(context: ICommandContext, options: ISetOr
     const existing = await loadDatabaseConfig(rawAssetStorage);
     await updateDatabaseConfig(rawAssetStorage, { ...existing ?? {}, origin: originPath });
 
-    console.log(pc.green(`✓ Origin set to: ${originPath}`));
+    log.info(pc.green(`✓ Origin set to: ${originPath}`));
     await exit(0);
 }

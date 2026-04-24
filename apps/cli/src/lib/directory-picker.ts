@@ -4,6 +4,7 @@ import { existsSync } from 'fs';
 import { join, resolve } from 'path';
 import pc from 'picocolors';
 import { exit, pathExists } from 'node-utils';
+import { log } from 'utils';
 
 //
 // Checks if a directory is a valid Photosphere media database
@@ -242,7 +243,7 @@ export async function getDirectoryForCommand(
         } else {
             // Current directory is not empty, skip asking and go straight to picker in interactive mode
             if (nonInteractive) {
-                console.error(pc.red('Current directory is not empty. Please specify an empty directory or use a different location.'));
+                log.error(pc.red('Current directory is not empty. Please specify an empty directory or use a different location.'));
                 await exit(1);
             }
         }
@@ -255,9 +256,9 @@ export async function getDirectoryForCommand(
     // If non-interactive and we get here, we can't proceed
     if (nonInteractive) {
         if (commandType === 'init') {
-            console.error(pc.red('Current directory is not empty. Please specify an empty directory or use a different location.'));
+            log.error(pc.red('Current directory is not empty. Please specify an empty directory or use a different location.'));
         } else {
-            console.error(pc.red('Current directory is not a media database. Please specify a valid media database directory.'));
+            log.error(pc.red('Current directory is not a media database. Please specify a valid media database directory.'));
         }
         await exit(1);
     }

@@ -274,7 +274,7 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
             await destRawStorage.write('.db/encryption.pub', undefined, Buffer.from(destKeyPems[0].publicKeyPem, 'utf-8'));
             log.info(pc.green(`✓ Wrote public key to destination database directory`));
         } catch (error) {
-            console.warn(pc.yellow(`⚠️ Warning: Could not write public key to destination database directory: ${error instanceof Error ? error.message : 'Unknown error'}`));
+            log.warn(pc.yellow(`⚠️ Warning: Could not write public key to destination database directory: ${error instanceof Error ? error.message : 'Unknown error'}`));
         }
     }
 

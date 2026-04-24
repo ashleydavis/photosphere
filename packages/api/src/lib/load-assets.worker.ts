@@ -8,6 +8,7 @@ import { createLazyDatabaseStorage, createMediaFileDatabase, isDatabasePartial }
 import { createStorage, loadEncryptionKeysFromPem } from "storage";
 import { resolveStorageCredentials } from "./resolve-storage-credentials";
 import type { ILoadAssetsData, ILoadAssetsResult } from "./load-assets.types";
+import { log } from "utils";
 
 //
 // Handler for loading assets from database
@@ -24,7 +25,7 @@ export async function loadAssetsHandler(
         throw new Error("databasePath is required");
     }
 
-    console.log(`Loading assets from database ${data.databasePath}`);
+    log.info(`Loading assets from database ${data.databasePath}`);
 
     const isPartial = await isDatabasePartial(data.databasePath);
 

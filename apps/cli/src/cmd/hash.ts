@@ -2,6 +2,7 @@ import { createStorage, loadEncryptionKeysFromPem } from "storage";
 import { computeHash } from "api";
 import { exit } from "node-utils";
 import pc from "picocolors";
+import { log } from "utils";
 import { resolveKeyPems, configureS3IfNeeded, getDefaultS3Config } from "../lib/init-cmd";
 import path from 'node:path';
 
@@ -17,7 +18,7 @@ export interface IHashCommandOptions {
 export async function hashCommand(filePath: string, options: IHashCommandOptions): Promise<void> {
     
     if (!filePath) {
-        console.error(pc.red("File path is required."));
+        log.error(pc.red("File path is required."));
         await exit(1);
         return;
     }
@@ -36,13 +37,13 @@ export async function hashCommand(filePath: string, options: IHashCommandOptions
     const { storage, normalizedPath, type } = createStorage(dirPath, s3Config, storageOptions);
     
     if (options.verbose) {
-        console.log(pc.cyan(`Storage type: ${type}`));
-        console.log(pc.cyan(`Path for storage operations: ${normalizedPath}`));
+        log.info(pc.cyan(`Storage type: ${type}`));
+        log.info(pc.cyan(`Path for storage operations: ${normalizedPath}`));
     }
        
     const fileInfo = await storage.info(fileName);
     if (!fileInfo) {
-        console.error(pc.red(`File not found: ${filePath}`));
+        log.error(pc.red(`File not found: ${filePath}`));
         await exit(1);
         return;
     }
@@ -52,10 +53,10 @@ export async function hashCommand(filePath: string, options: IHashCommandOptions
     const hashHex = hashBuffer.toString('hex');
     
     // Print results
-    console.log(pc.green(`File: ${filePath}`));
-    console.log(pc.green(`Hash: ${hashHex}`));
+    log.info(pc.green(`File: ${filePath}`));
+    log.info(pc.green(`Hash: ${hashHex}`));
     if (fileInfo) {
-        console.log(pc.green(`Date: ${fileInfo.lastModified.toISOString().replace('T', ' ').slice(0, 19)}`));
-        console.log(pc.green(`Size: ${fileInfo.length} bytes`));
+        log.info(pc.green(`Date: ${fileInfo.lastModified.toISOString().replace('T', ' ').slice(0, 19)}`));
+        log.info(pc.green(`Size: ${fileInfo.length} bytes`));
     }
 }

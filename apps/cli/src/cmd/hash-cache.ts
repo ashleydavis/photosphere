@@ -4,6 +4,7 @@ import { exit } from "node-utils";
 import path from "path";
 import os from "os";
 import pc from "picocolors";
+import { log } from "utils";
 import { formatBytes } from "../lib/format";
 
 export interface IHashCacheCommandOptions {
@@ -19,30 +20,30 @@ export interface IHashCacheCommandOptions {
 export async function hashCacheCommand(options: IHashCacheCommandOptions): Promise<void> {
     
     try {
-        console.log(pc.blue("\n=== Local Hash Cache ==="));
+        log.info(pc.blue("\n=== Local Hash Cache ==="));
         const localHashCachePath = path.join(os.tmpdir(), "photosphere");
         const localHashCache = new HashCache(localHashCachePath);
         
         const loaded = await localHashCache.load();
         if (!loaded) {
-            console.log(pc.yellow("Local hash cache not found or empty."));
+            log.info(pc.yellow("Local hash cache not found or empty."));
         } else {
             const entryCount = localHashCache.getEntryCount();
-            console.log(`Location: ${localHashCachePath}`);
-            console.log(`Entries: ${entryCount}`);
+            log.info(`Location: ${localHashCachePath}`);
+            log.info(`Entries: ${entryCount}`);
             
             if (entryCount > 0) {
-                console.log("\nCache entries:");
+                log.info("\nCache entries:");
                 displayHashCacheEntries(localHashCache);
             }
         }
         
-        console.log(); // Empty line at end
+        log.info(''); // Empty line at end
         
     } catch (err: any) {
-        console.error(pc.red(`Error reading hash cache: ${err.message}`));
+        log.error(pc.red(`Error reading hash cache: ${err.message}`));
         if (options.verbose && err.stack) {
-            console.error(pc.red(err.stack));
+            log.error(pc.red(err.stack));
         }
         await exit(1);
     }
@@ -55,20 +56,20 @@ function displayHashCacheEntries(hashCache: HashCache): void {
     const entries = hashCache.getAllEntries();
     
     if (entries.length === 0) {
-        console.log("  No entries found.");
+        log.info("  No entries found.");
         return;
     }
     
-    console.log("");
+    log.info("");
     
     // Display entries
     for (const entry of entries) {
-        console.log(pc.cyan(`  ${entry.filePath}`));
-        console.log(`    Size: ${formatBytes(entry.size)}`);
-        console.log(`    Modified: ${entry.lastModified.toISOString().replace('T', ' ').slice(0, 19)}`);
-        console.log(`    Hash: ${entry.hash}`);
-        console.log("");
+        log.info(pc.cyan(`  ${entry.filePath}`));
+        log.info(`    Size: ${formatBytes(entry.size)}`);
+        log.info(`    Modified: ${entry.lastModified.toISOString().replace('T', ' ').slice(0, 19)}`);
+        log.info(`    Hash: ${entry.hash}`);
+        log.info("");
     }
     
-    console.log(`  Total: ${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}`);
+    log.info(`  Total: ${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}`);
 }

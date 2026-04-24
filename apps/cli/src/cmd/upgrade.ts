@@ -109,7 +109,7 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
     else {
         log.warn(pc.yellow(`    cp -r "${databaseDir}" "${databaseDir}-backup"`));
     }
-    console.log("");
+    log.info("");
     
     let shouldProceed: boolean;
     

@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import pc from 'picocolors';
 import { getVault, getDefaultVaultType } from 'vault';
+import { log } from 'utils';
 import { confirm, intro, outro, text, password, select, isCancel, spinner, note, multiline } from '../lib/clack/prompts';
 import { exit } from 'node-utils';
 import * as fs from 'fs/promises';
@@ -21,7 +22,7 @@ async function checkVaultPrereqs(): Promise<void> {
     const vault = getVault(getDefaultVaultType());
     const result = await vault.checkPrereqs();
     if (!result.ok) {
-        console.error(pc.red(`✗ ${result.message}`));
+        log.error(pc.red(`✗ ${result.message}`));
         await exit(1);
     }
 }
@@ -183,26 +184,26 @@ async function secretsAdd(cmdOptions: ISecretsAddOptions): Promise<void> {
 
     if (cmdOptions.yes) {
         if (!cmdOptions.name || !cmdOptions.type || !cmdOptions.value) {
-            console.error(pc.red('✗ --name, --type, and --value are required with --yes'));
+            log.error(pc.red('✗ --name, --type, and --value are required with --yes'));
             await exit(1);
             return;
         }
 
         if (!SECRET_TYPES.includes(cmdOptions.type)) {
-            console.error(pc.red(`✗ Invalid secret type "${cmdOptions.type}". Must be one of: ${SECRET_TYPES.join(', ')}`));
+            log.error(pc.red(`✗ Invalid secret type "${cmdOptions.type}". Must be one of: ${SECRET_TYPES.join(', ')}`));
             await exit(1);
             return;
         }
 
         const existing = await vault.get(cmdOptions.name);
         if (existing) {
-            console.error(pc.red(`✗ A secret named "${cmdOptions.name}" already exists. Use "secrets edit" to update it.`));
+            log.error(pc.red(`✗ A secret named "${cmdOptions.name}" already exists. Use "secrets edit" to update it.`));
             await exit(1);
             return;
         }
 
         await vault.set({ name: cmdOptions.name, type: cmdOptions.type, value: cmdOptions.value });
-        console.log(pc.green(`✓ Secret "${cmdOptions.name}" added.`));
+        log.info(pc.green(`✓ Secret "${cmdOptions.name}" added.`));
         return;
     }
 
@@ -241,7 +242,7 @@ async function secretsAdd(cmdOptions: ISecretsAddOptions): Promise<void> {
         return;
     }
 
-    console.log(pc.cyan('Your secret will be stored securely in your OS keychain.'));
+    log.info(pc.cyan('Your secret will be stored securely in your OS keychain.'));
 
     let value: string;
 
@@ -296,19 +297,19 @@ async function secretsList(): Promise<void> {
     const secrets = await vault.list();
 
     if (secrets.length === 0) {
-        console.log(pc.yellow('No secrets found.'));
+        log.info(pc.yellow('No secrets found.'));
         return;
     }
 
-    console.log(pc.cyan(`\n${'Name'.padEnd(40)} ${'Type'.padEnd(20)} Value`));
-    console.log('─'.repeat(80));
+    log.info(pc.cyan(`\n${'Name'.padEnd(40)} ${'Type'.padEnd(20)} Value`));
+    log.info('─'.repeat(80));
 
     for (const secret of secrets) {
         const masked = '****';
-        console.log(`${secret.name.padEnd(40)} ${secret.type.padEnd(20)} ${masked}`);
+        log.info(`${secret.name.padEnd(40)} ${secret.type.padEnd(20)} ${masked}`);
     }
 
-    console.log('');
+    log.info('');
 }
 
 //
@@ -321,14 +322,14 @@ async function secretsView(cmdOptions: ISecretsViewOptions): Promise<void> {
 
     if (!secretName) {
         if (cmdOptions.yes) {
-            console.error(pc.red('✗ --name is required with --yes'));
+            log.error(pc.red('✗ --name is required with --yes'));
             await exit(1);
             return;
         }
 
         const secrets = await vault.list();
         if (secrets.length === 0) {
-            console.log(pc.yellow('No secrets found.'));
+            log.info(pc.yellow('No secrets found.'));
             return;
         }
 
@@ -351,7 +352,7 @@ async function secretsView(cmdOptions: ISecretsViewOptions): Promise<void> {
     const secret = await vault.get(secretName);
 
     if (!secret) {
-        console.error(pc.red(`✗ No secret named "${secretName}" found.`));
+        log.error(pc.red(`✗ No secret named "${secretName}" found.`));
         await exit(1);
         return;
     }
@@ -368,26 +369,26 @@ async function secretsView(cmdOptions: ISecretsViewOptions): Promise<void> {
         }
     }
 
-    console.log(pc.cyan(`\nName: `) + secret.name);
-    console.log(pc.cyan(`Type: `) + secret.type);
+    log.info(pc.cyan(`\nName: `) + secret.name);
+    log.info(pc.cyan(`Type: `) + secret.type);
 
     if (secret.type === 's3-credentials') {
         try {
             const parsed = JSON.parse(secret.value);
-            console.log(pc.cyan(`Value:`));
+            log.info(pc.cyan(`Value:`));
             for (const [fieldKey, fieldVal] of Object.entries(parsed)) {
-                console.log(`  ${fieldKey}: ${fieldVal}`);
+                log.info(`  ${fieldKey}: ${fieldVal}`);
             }
         }
         catch {
-            console.log(pc.cyan(`Value: `) + secret.value);
+            log.info(pc.cyan(`Value: `) + secret.value);
         }
     }
     else {
-        console.log(pc.cyan(`Value: `) + secret.value);
+        log.info(pc.cyan(`Value: `) + secret.value);
     }
 
-    console.log('');
+    log.info('');
 }
 
 //
@@ -400,14 +401,14 @@ async function secretsEdit(cmdOptions: ISecretsEditOptions): Promise<void> {
 
     if (!secretName) {
         if (cmdOptions.yes) {
-            console.error(pc.red('✗ --name is required with --yes'));
+            log.error(pc.red('✗ --name is required with --yes'));
             await exit(1);
             return;
         }
 
         const secrets = await vault.list();
         if (secrets.length === 0) {
-            console.log(pc.yellow('No secrets found.'));
+            log.info(pc.yellow('No secrets found.'));
             return;
         }
 
@@ -430,14 +431,14 @@ async function secretsEdit(cmdOptions: ISecretsEditOptions): Promise<void> {
     const secret = await vault.get(secretName);
 
     if (!secret) {
-        console.error(pc.red(`✗ No secret named "${secretName}" found.`));
+        log.error(pc.red(`✗ No secret named "${secretName}" found.`));
         await exit(1);
         return;
     }
 
     if (cmdOptions.yes) {
         if (!cmdOptions.newName && !cmdOptions.value && !cmdOptions.valueFile) {
-            console.error(pc.red('✗ --new-name, --value, or --value-file is required with --yes'));
+            log.error(pc.red('✗ --new-name, --value, or --value-file is required with --yes'));
             await exit(1);
             return;
         }
@@ -446,7 +447,7 @@ async function secretsEdit(cmdOptions: ISecretsEditOptions): Promise<void> {
 
         if (cmdOptions.valueFile) {
             if (!existsSync(cmdOptions.valueFile)) {
-                console.error(pc.red(`✗ File not found: ${cmdOptions.valueFile}`));
+                log.error(pc.red(`✗ File not found: ${cmdOptions.valueFile}`));
                 await exit(1);
                 return;
             }
@@ -464,7 +465,7 @@ async function secretsEdit(cmdOptions: ISecretsEditOptions): Promise<void> {
         }
 
         await vault.set({ name: updatedName, type: secret.type, value: updatedValue });
-        console.log(pc.green(`✓ Secret "${updatedName}" updated.`));
+        log.info(pc.green(`✓ Secret "${updatedName}" updated.`));
         return;
     }
 
@@ -486,7 +487,7 @@ async function secretsEdit(cmdOptions: ISecretsEditOptions): Promise<void> {
         return;
     }
 
-    console.log(pc.cyan('Your secret will be stored securely in your OS keychain.'));
+    log.info(pc.cyan('Your secret will be stored securely in your OS keychain.'));
 
     let newValue: string | symbol;
 
@@ -532,14 +533,14 @@ async function secretsRemove(cmdOptions: ISecretsRemoveOptions): Promise<void> {
 
     if (!secretName) {
         if (cmdOptions.yes) {
-            console.error(pc.red('✗ --name is required with --yes'));
+            log.error(pc.red('✗ --name is required with --yes'));
             await exit(1);
             return;
         }
 
         const secrets = await vault.list();
         if (secrets.length === 0) {
-            console.log(pc.yellow('No secrets found.'));
+            log.info(pc.yellow('No secrets found.'));
             return;
         }
 
@@ -562,7 +563,7 @@ async function secretsRemove(cmdOptions: ISecretsRemoveOptions): Promise<void> {
     const secret = await vault.get(secretName);
 
     if (!secret) {
-        console.error(pc.red(`✗ No secret named "${secretName}" found.`));
+        log.error(pc.red(`✗ No secret named "${secretName}" found.`));
         await exit(1);
         return;
     }
@@ -600,16 +601,16 @@ async function secretsClear(cmdOptions: ISecretsClearOptions): Promise<void> {
     const secrets = await vault.list();
 
     if (secrets.length === 0) {
-        console.log(pc.yellow('No secrets found.'));
+        log.info(pc.yellow('No secrets found.'));
         return;
     }
 
     if (!cmdOptions.yes) {
-        console.log(pc.cyan(`\nSecrets to be deleted:`));
+        log.info(pc.cyan(`\nSecrets to be deleted:`));
         for (const secret of secrets) {
-            console.log(`  ${secret.name} (${secret.type})`);
+            log.info(`  ${secret.name} (${secret.type})`);
         }
-        console.log('');
+        log.info('');
 
         const firstConfirm = await confirm({
             message: `Delete all ${secrets.length} secret(s)? This cannot be undone.`,
@@ -646,14 +647,14 @@ async function secretsImport(cmdOptions: ISecretsImportOptions): Promise<void> {
     await checkVaultPrereqs();
     if (cmdOptions.yes) {
         if (!cmdOptions.privateKey) {
-            console.error(pc.red('✗ --private-key is required with --yes'));
+            log.error(pc.red('✗ --private-key is required with --yes'));
             await exit(1);
             return;
         }
 
         const privatePath = cmdOptions.privateKey.trim();
         if (!existsSync(privatePath)) {
-            console.error(pc.red(`✗ File not found: ${privatePath}`));
+            log.error(pc.red(`✗ File not found: ${privatePath}`));
             await exit(1);
             return;
         }
@@ -662,7 +663,7 @@ async function secretsImport(cmdOptions: ISecretsImportOptions): Promise<void> {
         const privateKeyPem = await fs.readFile(privatePath, 'utf-8');
         const vault = getVault(getDefaultVaultType());
         await vault.set({ name: keyName, type: 'encryption-key', value: privateKeyPem });
-        console.log(pc.green(`✓ Key imported as "${keyName}".`));
+        log.info(pc.green(`✓ Key imported as "${keyName}".`));
         return;
     }
 
@@ -712,7 +713,7 @@ async function secretsSend(cmdOptions: ISecretsSendOptions): Promise<void> {
     if (cmdOptions.name) {
         const secret = await vault.get(cmdOptions.name);
         if (!secret) {
-            console.error(pc.red(`✗ No secret named "${cmdOptions.name}" found.`));
+            log.error(pc.red(`✗ No secret named "${cmdOptions.name}" found.`));
             await exit(1);
             return;
         }
@@ -722,8 +723,8 @@ async function secretsSend(cmdOptions: ISecretsSendOptions): Promise<void> {
         // Pick from all vault secrets
         const secrets = await vault.list();
         if (secrets.length === 0) {
-            console.log(pc.yellow('No secrets found.'));
-            console.log(pc.dim('Use "psi secrets add" to add a secret first.'));
+            log.info(pc.yellow('No secrets found.'));
+            log.info(pc.dim('Use "psi secrets add" to add a secret first.'));
             return;
         }
 
@@ -743,23 +744,23 @@ async function secretsSend(cmdOptions: ISecretsSendOptions): Promise<void> {
         secretName = selected as string;
     }
 
-    console.log(pc.dim('Hint: Run `psi secrets receive` on another device to receive this secret.'));
+    log.info(pc.dim('Hint: Run `psi secrets receive` on another device to receive this secret.'));
 
     // Build the payload
     const payload = await resolveSecretSharePayload(secretName);
 
-    console.log(pc.cyan('\nSecret to send:'));
-    console.log(pc.cyan('  Name: ') + secretName);
-    console.log(pc.cyan('  Type: ') + payload.secretType);
-    console.log('');
+    log.info(pc.cyan('\nSecret to send:'));
+    log.info(pc.cyan('  Name: ') + secretName);
+    log.info(pc.cyan('  Type: ') + payload.secretType);
+    log.info('');
 
     // Create sender (generates or uses supplied pairing code)
     const sender = new LanShareSender(payload, cmdOptions.code);
 
     // Display the pairing code — the user must enter this on the receiver device
-    console.log(pc.cyan(`  Pairing code: ${pc.bold(sender.pairingCode)}`));
-    console.log(pc.dim('  Enter this code on the receiver device, then wait.'));
-    console.log('');
+    log.info(pc.cyan(`  Pairing code: ${pc.bold(sender.pairingCode)}`));
+    log.info(pc.dim('  Enter this code on the receiver device, then wait.'));
+    log.info('');
 
     const spin = spinner();
     spin.start('Waiting for receiver on the LAN... (Ctrl+C to cancel)');
@@ -785,7 +786,7 @@ async function secretsSend(cmdOptions: ISecretsSendOptions): Promise<void> {
         outro(pc.green('✓ Secret sent successfully!'));
     }
     else {
-        console.error(pc.red('✗ Pairing code rejected by receiver.'));
+        log.error(pc.red('✗ Pairing code rejected by receiver.'));
         await exit(1);
     }
 }
@@ -804,13 +805,13 @@ async function secretsReceive(cmdOptions: { yes?: boolean; code?: string }): Pro
         pc.cyan('ℹ Network Requirement')
     );
 
-    console.log(pc.dim('Hint: Run `psi secrets send` on another device to send a secret.'));
+    log.info(pc.dim('Hint: Run `psi secrets send` on another device to send a secret.'));
 
     let code: string;
 
     if (skipPrompts) {
         if (!cmdOptions.code) {
-            console.error(pc.red('✗ --code is required with --yes'));
+            log.error(pc.red('✗ --code is required with --yes'));
             await exit(1);
             return;
         }
@@ -858,9 +859,9 @@ async function secretsReceive(cmdOptions: { yes?: boolean; code?: string }): Pro
 
     const payload = rawPayload as ISecretSharePayload;
 
-    console.log(pc.cyan('\nReceived secret:'));
-    console.log(pc.cyan('  Type: ') + payload.secretType);
-    console.log('');
+    log.info(pc.cyan('\nReceived secret:'));
+    log.info(pc.cyan('  Type: ') + payload.secretType);
+    log.info('');
 
     let saveName: string;
 
