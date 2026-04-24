@@ -241,6 +241,8 @@ async function secretsAdd(cmdOptions: ISecretsAddOptions): Promise<void> {
         return;
     }
 
+    console.log(pc.cyan('Your secret will be stored securely in your OS keychain.'));
+
     let value: string;
 
     if (type === 'encryption-key') {
@@ -483,6 +485,8 @@ async function secretsEdit(cmdOptions: ISecretsEditOptions): Promise<void> {
         outro(pc.yellow('Cancelled.'));
         return;
     }
+
+    console.log(pc.cyan('Your secret will be stored securely in your OS keychain.'));
 
     let newValue: string | symbol;
 

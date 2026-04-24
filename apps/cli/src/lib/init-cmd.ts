@@ -72,6 +72,8 @@ export async function configureS3IfNeeded(nonInteractive: boolean): Promise<IS3C
         return undefined;
     }
 
+    console.log(pc.cyan('Your credentials will be stored securely in your OS keychain.'));
+
     const label = await text({
         message: 'Name for these credentials:',
         initialValue: 'S3 credentials',
