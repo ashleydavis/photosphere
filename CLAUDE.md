@@ -12,83 +12,29 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 
 ## Commands
 
-### Monorepo-wide commands (run from root):
-- `bun run compile` (alias: `bun run c`) - Compile all TypeScript across the monorepo
-- `bun run test` (alias: `bun run t`) - Run all tests
-- `bun run test:watch` (alias: `bun run tw`) - Run tests in watch mode
+### Root (run from repo root):
+- `bun run compile` - Compile all TypeScript
+- `bun run test` - Run all tests
 - `bun run clean` - Clean all build artifacts
-- `bun run dev` (alias: `bun run d`) - Build renderer and start the Electron desktop app in dev mode
-- `bun run dev:web` - Start the dev-server and dev-frontend concurrently (without Electron)
+- `bun run dev` - Start Electron desktop app in dev mode
+- `bun run dev:web` - Start dev-server and frontend concurrently (no Electron)
+- `bun run test:cli` - Run CLI smoke tests
+- `bun run test:electron` - Build and run Electron smoke tests
 
-### Backend development (in apps/backend/):
-- `bun run dev` - Start with sample data (multi-set)
-- `bun run start:dev-50-assets` - Start with 50 test assets
-- `bun run start:dev-no-assets` - Start with empty database
-- `bun run test` - Run backend tests
-- `bun run compile:watch` - Watch mode compilation
-
-### Frontend development (in apps/dev-frontend/):
-    - `bun run start` - Start dev server on port 8080
-    - `bun run build` - Build production bundle
-    - `bun run test-e2e` - Run Playwright E2E tests
-    - `bun run test-e2e:debug` - Debug E2E tests with Playwright UI
-
-### CLI tool (in apps/cli/):
+### CLI (in apps/cli/):
 - `bun run start -- <command> [db-path]` - Run CLI commands locally
-- `bun run build-linux/win/mac` - Build standalone executables
-- `bun run test` (alias: `bun run t`) - Run CLI tests
+- `bun run test` (alias: `t`) - Run tests
 
 ### Running a single test:
-- Backend: `cd apps/backend && bun test path/to/test.test.ts`
-- Frontend E2E: `cd apps/dev-frontend && bun run test-e2e path/to/test.test.ts`
+- Jest: `cd apps/cli && bun run test -- path/to/test.test.ts`
+- Playwright: `cd apps/dev-frontend && bun run test-e2e path/to/test.test.ts`
 
 ## Architecture
 
-### Storage Architecture
-The application uses a flexible storage abstraction layer (`packages/storage`) that supports:
-- **Filesystem storage**: `fs:path/to/directory`
-- **S3-compatible storage**: `s3:bucket-name:/path`
-- **Encrypted storage**: Wraps other storage types
-
-Storage is divided into:
-- **Asset Storage** (`ASSET_STORAGE_CONNECTION`): Stores photos/videos in collections
-- **Database Storage** (`DB_STORAGE_CONNECTION`): Stores user records and metadata
-
-### Asset Database (ADB)
-Located in `packages/adb`, implements a content-addressable storage system with:
-- Merkle tree-based indexing for efficient syncing
-- BSON format for metadata storage
-- Support for multiple asset types (original, display, thumbnail)
-- Collection-based organization
-
-### Frontend Architecture
-- React 18 with TypeScript
-- Vite for bundling and development
-- React Router for navigation
-- Shared UI components in `packages/user-interface`
-- Context providers for state management (scan context, gallery source context)
-
-### Mobile/Desktop Apps
-- Mobile apps use Capacitor to wrap the React frontend
-- Electron app embeds the React frontend
-- Both share the same frontend codebase with platform-specific wrappers
-
-### Key Environment Variables
-Backend:
-- `PORT` (default: 3000)
-- `APP_MODE` (readonly, readwrite)
-- `ASSET_STORAGE_CONNECTION`
-- `DB_STORAGE_CONNECTION`
-
-Frontend:
-- `VITE_BASE_URL` - Backend API URL
-
-### Testing Infrastructure
-- The most important tests are the smoke tests in `./apps/cli/smoke-tests.sh`.
-- Jest for unit tests (configured per package)
-- Playwright for E2E tests (frontend)
-- Test fixtures in `/test/fixtures/` with various asset configurations
-- HTTP test files (`.http`) for REST API testing with VS Code REST Client extension
+- **Storage**: `packages/storage` abstracts filesystem (`fs:path`), S3-compatible (`s3:bucket:/path`), and encrypted storage.
+- **Frontend**: React 18 + TypeScript, Vite, shared UI in `packages/user-interface`.
+- **Mobile**: Capacitor wraps the frontend for iOS/Android.
+- **Desktop**: Electron embeds the frontend via `apps/desktop`.
 
 ## Code Style
 - **Types**: Use interfaces with PascalCase (`IStorage`) for types, explicit return types
@@ -124,5 +70,5 @@ Frontend:
 - All imports should be at the top of the file and not inside any functions.
 - Don't use dynamic imports.
 - Don't add exception handling unless I ask for it.
-- Don't use default parameter values unless specifically asked to.
+- Don't use default or optional parameter values unless specifically asked to.
 - Never reformat or rewrite entire files. Only edit the specific lines that need to change.
