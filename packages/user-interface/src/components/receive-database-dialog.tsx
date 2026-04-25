@@ -13,6 +13,9 @@ import Alert from '@mui/joy/Alert';
 import CircularProgress from '@mui/joy/CircularProgress';
 import Checkbox from '@mui/joy/Checkbox';
 import Box from '@mui/joy/Box';
+import Select from '@mui/joy/Select';
+import Option from '@mui/joy/Option';
+import type { IConflictResolution } from 'lan-share';
 import { usePlatform } from '../context/platform-context';
 
 export interface IReceiveDatabaseDialogProps {
@@ -26,7 +29,18 @@ export interface IReceiveDatabaseDialogProps {
 //
 // Steps in the receive database flow.
 //
-type ReceiveStep = "waiting" | "review" | "success" | "error";
+type ReceiveStep = "waiting" | "review" | "conflict" | "success" | "error";
+
+//
+// A single secret included in a received payload (name + label only).
+//
+interface IReceivedSecret {
+    // Vault key name from the sender.
+    name: string;
+
+    // Human-readable label.
+    label: string;
+}
 
 //
 // Payload shape received from the sender (matches IDatabaseSharePayload).
@@ -48,13 +62,27 @@ interface IReceivedDatabasePayload {
     origin?: string;
 
     // Resolved S3 credentials, if included.
-    s3Credentials?: { label: string };
+    s3Credentials?: IReceivedSecret;
 
     // Resolved encryption key, if included.
-    encryptionKey?: { label: string };
+    encryptionKey?: IReceivedSecret;
 
     // Resolved geocoding key, if included.
-    geocodingKey?: { label: string };
+    geocodingKey?: IReceivedSecret;
+}
+
+//
+// A conflicting secret that needs the user to choose a resolution.
+//
+interface ISecretConflict {
+    // Vault key name that already exists on this device.
+    secretName: string;
+
+    // Secret type (e.g. "s3-credentials", "encryption-key").
+    secretType: string;
+
+    // Current resolution chosen by the user.
+    resolution: IConflictResolution;
 }
 
 //
@@ -71,6 +99,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
     const [importS3, setImportS3] = useState(true);
     const [importEncryption, setImportEncryption] = useState(true);
     const [importGeocoding, setImportGeocoding] = useState(true);
+    const [conflicts, setConflicts] = useState<ISecretConflict[]>([]);
     const [errorMessage, setErrorMessage] = useState("");
 
     // Start receiving when dialog opens
@@ -129,14 +158,70 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
     }, [open, platform]);
 
     //
-    // Saves the received database payload locally.
+    // Checks whether any of the secrets to be imported already exist in the
+    // vault. Returns the list of conflicts found.
+    //
+    async function detectConflicts(currentPayload: IReceivedDatabasePayload): Promise<ISecretConflict[]> {
+        const secretsToCheck: Array<{ secret: IReceivedSecret; secretType: string; shouldImport: boolean }> = [
+            { secret: currentPayload.s3Credentials!, secretType: "s3-credentials", shouldImport: importS3 && !!currentPayload.s3Credentials },
+            { secret: currentPayload.encryptionKey!, secretType: "encryption-key", shouldImport: importEncryption && !!currentPayload.encryptionKey },
+            { secret: currentPayload.geocodingKey!, secretType: "api-key", shouldImport: importGeocoding && !!currentPayload.geocodingKey },
+        ];
+
+        const found: ISecretConflict[] = [];
+        for (const entry of secretsToCheck) {
+            if (!entry.shouldImport) {
+                continue;
+            }
+            const existing = await platform.getSecretValue(entry.secret.name);
+            if (existing !== undefined) {
+                found.push({
+                    secretName: entry.secret.name,
+                    secretType: entry.secretType,
+                    resolution: { action: "reuse" },
+                });
+            }
+        }
+        return found;
+    }
+
+    //
+    // Attempts to save the received database, checking for conflicts first.
     //
     const handleSave = useCallback(async () => {
         if (!payload) {
             return;
         }
 
-        // Build the import payload with edited fields
+        const found = await detectConflicts(payload);
+        if (found.length > 0) {
+            setConflicts(found);
+            setStep("conflict");
+            return;
+        }
+
+        await doImport({});
+    }, [payload, importS3, importEncryption, importGeocoding]);
+
+    //
+    // Proceeds with the import after conflicts have been resolved.
+    //
+    const handleConflictsResolved = useCallback(async () => {
+        const resolutions: Record<string, IConflictResolution> = {};
+        for (const conflict of conflicts) {
+            resolutions[conflict.secretName] = conflict.resolution;
+        }
+        await doImport(resolutions);
+    }, [conflicts]);
+
+    //
+    // Performs the actual import with the given conflict resolutions map.
+    //
+    async function doImport(conflictResolutions: Record<string, IConflictResolution>): Promise<void> {
+        if (!payload) {
+            return;
+        }
+
         const importPayload = {
             ...payload,
             name: editedName,
@@ -147,9 +232,36 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
             geocodingKey: importGeocoding ? payload.geocodingKey : undefined,
         };
 
-        await platform.importSharePayload(importPayload);
+        await platform.importSharePayload(importPayload, conflictResolutions);
         setStep("success");
-    }, [payload, editedName, editedDescription, editedPath, importS3, importEncryption, importGeocoding, platform]);
+    }
+
+    //
+    // Updates the resolution action for a specific conflict.
+    //
+    function setConflictAction(secretName: string, action: IConflictResolution["action"]): void {
+        setConflicts(prev => prev.map(conflict => {
+            if (conflict.secretName !== secretName) {
+                return conflict;
+            }
+            if (action === "rename") {
+                return { ...conflict, resolution: { action, newName: secretName } };
+            }
+            return { ...conflict, resolution: { action } };
+        }));
+    }
+
+    //
+    // Updates the rename target for a specific conflict.
+    //
+    function setConflictNewName(secretName: string, newName: string): void {
+        setConflicts(prev => prev.map(conflict => {
+            if (conflict.secretName !== secretName) {
+                return conflict;
+            }
+            return { ...conflict, resolution: { action: "rename", newName } };
+        }));
+    }
 
     //
     // Cancels the receiver and closes the dialog.
@@ -160,6 +272,10 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
         }
         onClose();
     }, [step, platform, onClose]);
+
+    const conflictResolutionInvalid = conflicts.some(
+        conflict => conflict.resolution.action === "rename" && !conflict.resolution.newName?.trim()
+    );
 
     return (
         <Modal open={open} onClose={handleCancel}>
@@ -247,6 +363,43 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
                         </>
                     )}
 
+                    {step === "conflict" && (
+                        <>
+                            <Alert color="warning" sx={{ mb: 2 }}>
+                                Some secrets already exist in your vault. Choose what to do with each one.
+                            </Alert>
+
+                            {conflicts.map(conflict => (
+                                <Box key={conflict.secretName} sx={{ mb: 2, p: 1.5, border: "1px solid", borderColor: "neutral.300", borderRadius: "sm" }}>
+                                    <Typography level="body-sm" fontWeight="bold" sx={{ mb: 0.5 }}>
+                                        {conflict.secretName}
+                                        <Typography component="span" level="body-xs" color="neutral" sx={{ ml: 1 }}>
+                                            ({conflict.secretType})
+                                        </Typography>
+                                    </Typography>
+
+                                    <Select
+                                        value={conflict.resolution.action}
+                                        onChange={(_event, value) => setConflictAction(conflict.secretName, value as IConflictResolution["action"])}
+                                        sx={{ mb: 1 }}
+                                    >
+                                        <Option value="reuse">Reuse existing — skip importing this secret</Option>
+                                        <Option value="replace">Replace existing — may break other databases using this secret</Option>
+                                        <Option value="rename">Save with a new name</Option>
+                                    </Select>
+
+                                    {conflict.resolution.action === "rename" && (
+                                        <Input
+                                            placeholder="New secret name"
+                                            value={conflict.resolution.newName || ""}
+                                            onChange={event => setConflictNewName(conflict.secretName, event.target.value)}
+                                        />
+                                    )}
+                                </Box>
+                            ))}
+                        </>
+                    )}
+
                     {step === "success" && (
                         <Alert color="success">
                             Database imported successfully!
@@ -272,6 +425,18 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
                                 onClick={() => { handleSave().catch(err => console.error("Import error:", err)); }}
                             >
                                 Save
+                            </Button>
+                        </>
+                    )}
+
+                    {step === "conflict" && (
+                        <>
+                            <Button variant="plain" onClick={() => setStep("review")}>Back</Button>
+                            <Button
+                                disabled={conflictResolutionInvalid}
+                                onClick={() => { handleConflictsResolved().catch(err => console.error("Import error:", err)); }}
+                            >
+                                Continue
                             </Button>
                         </>
                     )}

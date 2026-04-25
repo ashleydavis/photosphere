@@ -17,6 +17,7 @@ export async function resolveDatabaseSharePayload(entry: IDatabaseEntry): Promis
         if (secret) {
             const parsed = JSON.parse(secret.value);
             s3Credentials = {
+                name: entry.s3Key,
                 label: parsed.label || entry.s3Key,
                 region: parsed.region,
                 accessKeyId: parsed.accessKeyId,
@@ -45,7 +46,7 @@ export async function resolveDatabaseSharePayload(entry: IDatabaseEntry): Promis
                 privateKeyPem = secret.value;
                 publicKeyPem = exportPublicKeyToPem(createPublicKey(createPrivateKey(secret.value)));
             }
-            encryptionKey = { label, privateKeyPem, publicKeyPem };
+            encryptionKey = { name: entry.encryptionKey, label, privateKeyPem, publicKeyPem };
         }
     }
 
@@ -55,6 +56,7 @@ export async function resolveDatabaseSharePayload(entry: IDatabaseEntry): Promis
         if (secret) {
             const parsed = JSON.parse(secret.value);
             geocodingKey = {
+                name: entry.geocodingKey,
                 label: parsed.label || entry.geocodingKey,
                 apiKey: parsed.apiKey,
             };

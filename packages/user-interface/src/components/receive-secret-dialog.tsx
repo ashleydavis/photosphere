@@ -126,7 +126,7 @@ export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps
         await platform.importSharePayload({
             ...payload,
             saveName: `shared:${saveName}`,
-        });
+        }, {});
         setStep("success");
     }, [payload, saveName, platform]);
 

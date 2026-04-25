@@ -10,6 +10,11 @@ jest.mock("vault", () => ({
     }),
 }));
 
+// Mock storage to avoid the ESM-only serialize-error transitive dependency
+jest.mock("storage", () => ({
+    exportPublicKeyToPem: jest.fn(() => "-----MOCKED PUBLIC-----"),
+}));
+
 beforeEach(() => {
     mockVaultGet.mockReset();
 });
@@ -72,6 +77,7 @@ test("resolves database payload with all secrets", async () => {
     expect(payload.origin).toBe("https://example.com");
 
     expect(payload.s3Credentials).toBeDefined();
+    expect(payload.s3Credentials!.name).toBe("abc12345");
     expect(payload.s3Credentials!.label).toBe("My S3");
     expect(payload.s3Credentials!.region).toBe("us-east-1");
     expect(payload.s3Credentials!.accessKeyId).toBe("AKID");
@@ -79,11 +85,13 @@ test("resolves database payload with all secrets", async () => {
     expect(payload.s3Credentials!.endpoint).toBe("https://s3.example.com");
 
     expect(payload.encryptionKey).toBeDefined();
+    expect(payload.encryptionKey!.name).toBe("def67890");
     expect(payload.encryptionKey!.label).toBe("My Key");
     expect(payload.encryptionKey!.privateKeyPem).toBe("-----PRIVATE-----");
     expect(payload.encryptionKey!.publicKeyPem).toBe("-----PUBLIC-----");
 
     expect(payload.geocodingKey).toBeDefined();
+    expect(payload.geocodingKey!.name).toBe("ghi11111");
     expect(payload.geocodingKey!.label).toBe("Geocoding");
     expect(payload.geocodingKey!.apiKey).toBe("geo-key-123");
 });

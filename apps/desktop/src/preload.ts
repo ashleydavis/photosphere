@@ -122,8 +122,8 @@ const electronAPI: IElectronAPI = {
     cancelShareSend: (): Promise<void> => {
         return ipcRenderer.invoke('cancel-share-send');
     },
-    importSharePayload: (payload: unknown): Promise<void> => {
-        return ipcRenderer.invoke('import-share-payload', payload);
+    importSharePayload: (payload: unknown, conflictResolutions: unknown): Promise<void> => {
+        return ipcRenderer.invoke('import-share-payload', payload, conflictResolutions);
     },
 };
 

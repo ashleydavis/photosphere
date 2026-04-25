@@ -339,7 +339,9 @@ export interface IElectronAPI {
 
     //
     // Imports a share payload (database or secret) into the local vault and config.
+    // conflictResolutions maps each incoming secret name to its resolution when that
+    // name already exists in the vault on this device.
     //
-    importSharePayload: (payload: unknown) => Promise<void>;
+    importSharePayload: (payload: unknown, conflictResolutions: unknown) => Promise<void>;
 }
 

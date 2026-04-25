@@ -49,6 +49,7 @@
     "config": "workspace:*",
     "dayjs": "^1.11.7",
     "defs": "workspace:*",
+    "lan-share": "workspace:*",
     "jszip": "^3.10.1",
     "leaflet": "^1.9.4",
     "lodash": "^4.17.21",
