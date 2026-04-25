@@ -402,7 +402,7 @@ ipcMain.handle('notify-database-opened', logExceptions(async (_event, databasePa
     }
     await markDatabaseOpenedByPath(databasePath);
     const desktopConfig = await loadDesktopConfig();
-    (desktopConfig as Record<string, unknown>).lastDatabase = databasePath;
+    desktopConfig.lastDatabase = databasePath;
     await saveDesktopConfig(desktopConfig);
     isDatabaseOpen = true;
     await updateMenu();
@@ -436,7 +436,7 @@ ipcMain.handle('list-s3-dirs', logExceptions(async (_event, credentialId: string
 // IPC handler for notifying that database was closed from frontend
 ipcMain.handle('notify-database-closed', logExceptions(async () => {
     const desktopConfig = await loadDesktopConfig();
-    delete (desktopConfig as Record<string, unknown>).lastDatabase;
+    delete desktopConfig.lastDatabase;
     await saveDesktopConfig(desktopConfig);
     isDatabaseOpen = false;
     await updateMenu();

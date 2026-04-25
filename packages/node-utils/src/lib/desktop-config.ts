@@ -25,6 +25,11 @@ export interface IDesktopConfig {
     // The last folder used when downloading assets.
     //
     lastDownloadFolder?: string;
+
+    //
+    // The path of the last database that was opened; absent when none.
+    //
+    lastDatabase?: string;
 }
 
 const CONFIG_DIR = path.join(os.homedir(), ".config", "photosphere");
