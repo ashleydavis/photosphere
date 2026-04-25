@@ -1,8 +1,9 @@
 import { log } from "utils";
-import { createStorage, loadEncryptionKeysFromPem, pathJoin, generateKeyPair, exportPublicKeyToPem } from "storage";
+import { loadEncryptionKeysFromPem, pathJoin, generateKeyPair, exportPublicKeyToPem } from "storage";
 import pc from "picocolors";
 import { exit } from "node-utils";
-import { loadDatabase, IBaseCommandOptions, resolveKeyPemsWithPrompt, promptForEncryption, selectEncryptionKey, ICommandContext, configureS3IfNeeded, getDefaultS3Config } from "../lib/init-cmd";
+import { loadDatabase, IBaseCommandOptions, resolveKeyPemsWithPrompt, promptForEncryption, selectEncryptionKey, ICommandContext, configureS3IfNeeded } from "../lib/init-cmd";
+import { createStorageForPath } from "../lib/storage-helper";
 import { getVault, getDefaultVaultType } from "vault";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import { getDirectoryForCommand } from "../lib/directory-picker";
@@ -119,8 +120,7 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
     }
 
     // Check if destination database already exists (using plain metadata probe storage)
-    const s3Config = await getDefaultS3Config();
-    const { storage: destMetadataProbeStorage } = createStorage(destDir, s3Config, undefined);
+    const { storage: destMetadataProbeStorage } = await createStorageForPath(destDir, undefined);
 
     // Check if destination database already has a files tree
     let destDbExists = await merkleTreeExists(destMetadataProbeStorage);    
@@ -204,7 +204,7 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
         await exit(1);
     }
     const { options: destStorageOptions, isEncrypted: destIsEncrypted } = await loadEncryptionKeysFromPem(destKeyPems);
-    const { storage: destAssetStorage, rawStorage: destRawStorage } = createStorage(destDir, s3Config, destStorageOptions);
+    const { storage: destAssetStorage, rawStorage: destRawStorage } = await createStorageForPath(destDir, destStorageOptions);
 
     // If destination database exists, warn user and ask for confirmation (unless --ues is used)
     if (destDbExists && !options.yes) {

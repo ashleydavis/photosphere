@@ -1,11 +1,12 @@
 import { log, retry } from "utils";
 import pc from "picocolors";
 import { exit } from "node-utils";
-import { IBaseCommandOptions, ICommandContext, resolveKeyPems, resolveKeyPemsWithPrompt, selectEncryptionKey, configureS3IfNeeded, getDefaultS3Config } from "../lib/init-cmd";
+import { IBaseCommandOptions, ICommandContext, resolveKeyPems, resolveKeyPemsWithPrompt, selectEncryptionKey, configureS3IfNeeded } from "../lib/init-cmd";
+import { createStorageForPath } from "../lib/storage-helper";
 import { getDirectoryForCommand } from "../lib/directory-picker";
 import { ensureMediaProcessingTools } from "../lib/ensure-tools";
 import { intro, confirm, outro } from "../lib/clack/prompts";
-import { createStorage, loadEncryptionKeysFromPem } from "storage";
+import { loadEncryptionKeysFromPem } from "storage";
 import { addItem, CURRENT_DATABASE_VERSION, loadTree, rebuildTree, saveTree, SortNode, traverseTreeAsync } from "merkle-tree";
 import { IDatabaseMetadata, acquireWriteLock, releaseWriteLock, createReadme, ensureSortIndex, loadDatabaseConfig, saveDatabaseConfig } from "api";
 import { BsonDatabase, buildDatabaseMerkleTree, deleteDatabaseMerkleTree, saveDatabaseMerkleTree } from "bdb";
@@ -50,8 +51,7 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
 
     let keyPems = await resolveKeyPemsWithPrompt(options.key, nonInteractive, false);
     let { options: storageOptions } = await loadEncryptionKeysFromPem(keyPems);
-    const s3Config = await getDefaultS3Config();
-    let { storage: assetStorage, rawStorage } = createStorage(databaseDir, s3Config, storageOptions);
+    let { storage: assetStorage, rawStorage } = await createStorageForPath(databaseDir, storageOptions);
 
     const hasFilesDat = await assetStorage.fileExists(".db/files.dat");
     const hasTreeDat = await assetStorage.fileExists(".db/tree.dat");
@@ -72,7 +72,7 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
             keyPems = await resolveKeyPems(options.key);
             const { options: newStorageOptions } = await loadEncryptionKeysFromPem(keyPems);
             storageOptions = newStorageOptions;
-            const { storage: newAssetStorage } = createStorage(databaseDir, s3Config, storageOptions);
+            const { storage: newAssetStorage } = await createStorageForPath(databaseDir, storageOptions);
             assetStorage = newAssetStorage;
         }
     }
