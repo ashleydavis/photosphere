@@ -9,6 +9,7 @@
       "Grep",
       "Bash(bun install *)",
       "Bash(bun run *)",
+      "Bash(git -C */.claude/worktrees/*)",
       "Bash(git log *)",
       "Bash(git status *)",
       "Bash(git diff *)",
