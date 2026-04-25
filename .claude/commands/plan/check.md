@@ -1,4 +1,4 @@
-Analyse the current plan for problems. Use the plan from the current conversation, or read the most recent file in `docs/plans/` if no plan is in context.
+Analyse the current plan for problems. Use the plan from the current conversation, or read the most recent file in `docs/plans/new/` if no plan is in context.
 
 Check each of the following and report findings under labelled headings:
 

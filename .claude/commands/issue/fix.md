@@ -2,7 +2,7 @@ Given the root cause, proposed fix, and implementation plan from this conversati
 
 0. **Choose working location** — ask the user whether to implement in the main working copy or a git worktree. If they choose a worktree: (1) run `git branch --show-current` to get the current branch, (2) run `git worktree add -b <new-branch> .claude/worktrees/<name> <current-branch>` to create the worktree branching from the current branch, (3) use `EnterWorktree` with the `path` parameter to enter it, then run `bun install '*'` inside it before proceeding.
 
-1. **Read the plan** — find the plan in context or read the most recent file from `docs/plans/`.
+1. **Read the plan** — find the plan in context or read the most recent file from `docs/plans/new/`.
 
 2. **Check for open issues** — if the plan file has an issues section with unchecked checkboxes (`- [ ]`), stop and report them to the user before proceeding.
 
