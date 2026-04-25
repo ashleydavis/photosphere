@@ -12,9 +12,6 @@ Save the current plan to a markdown file in `docs/plans/`.
 ## Overview
 <One paragraph describing the intent>
 
-## Issues
-<Checkbox list of problems to resolve before implementation — leave empty if none>
-
 ## Steps
 <Numbered list of implementation steps>
 
