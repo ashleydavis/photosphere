@@ -1,5 +1,7 @@
 Implement the current plan. Use the plan from the current conversation, or read the most recent file in `docs/plans/` if no plan is in context.
 
+0. **Choose working location** — ask the user whether to implement in the main working copy or a git worktree. If they choose a worktree, use the `EnterWorktree` tool to create one, then run `bun install '*'` inside it before proceeding.
+
 1. **Read the plan** — if not already in context, find and read the relevant file from `docs/plans/`.
 
 2. **Check for open issues** — look at the top of the plan file for an issues section with checkboxes. If any unchecked items (`- [ ]`) exist, stop and report them to the user before proceeding. Only continue if all issues are checked off (`- [x]`).
