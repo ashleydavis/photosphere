@@ -2,7 +2,7 @@ import * as fs from "fs/promises";
 import { createPrivateKey, createPublicKey } from "node:crypto";
 import { IS3Credentials, IEncryptionKeyPem, exportPublicKeyToPem } from "storage";
 import { getVault, getDefaultVaultType, IVault } from "vault";
-import { getDatabases } from "node-utils";
+import { getDatabases } from "./databases-config";
 import { log } from "utils";
 
 //

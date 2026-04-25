@@ -7,7 +7,7 @@ jest.mock('vault', () => ({
     getVault: () => ({ get: mockVaultGet }),
 }));
 
-jest.mock('node-utils', () => ({
+jest.mock('../../lib/databases-config', () => ({
     getDatabases: jest.fn(),
 }));
 
@@ -32,7 +32,7 @@ jest.mock('utils', () => ({
 // ── imports after mocks ───────────────────────────────────────────────────────
 
 import { resolveStorageCredentials } from '../../lib/resolve-storage-credentials';
-import { getDatabases } from 'node-utils';
+import { getDatabases } from '../../lib/databases-config';
 import * as fsPromises from 'fs/promises';
 
 const mockGetDatabases = getDatabases as jest.MockedFunction<typeof getDatabases>;

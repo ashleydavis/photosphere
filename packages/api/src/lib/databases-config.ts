@@ -1,6 +1,6 @@
 import * as os from "os";
 import * as path from "path";
-import { readJson, writeJson, pathExists } from "./fs";
+import { readJson, writeJson, pathExists } from "node-utils";
 import type { IDatabaseEntry } from "electron-defs";
 
 //

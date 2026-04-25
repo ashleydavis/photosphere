@@ -1,6 +1,6 @@
 import * as os from "os";
 import * as path from "path";
-import { readJson, writeJson, pathExists } from "./fs";
+import { readJson, writeJson, pathExists } from "node-utils";
 
 //
 // Configuration for the desktop app stored in ~/.config/photosphere/desktop.json

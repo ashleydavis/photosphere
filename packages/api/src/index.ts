@@ -26,3 +26,5 @@ export * from "./lib/database-config";
 export * from "./lib/apply-database-ops";
 export * from "./lib/database-descriptor";
 export * from "./lib/resolve-storage-credentials";
+export * from "./lib/databases-config";
+export * from "./lib/desktop-config";

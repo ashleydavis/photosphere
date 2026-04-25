@@ -1,14 +1,16 @@
 // Mock all heavy dependencies before importing the module under test.
 jest.mock('node-utils', () => ({
     exit: jest.fn().mockResolvedValue(undefined),
-    getDatabases: jest.fn().mockResolvedValue([]),
-    addDatabaseEntry: jest.fn().mockResolvedValue(undefined),
-    updateDatabaseEntry: jest.fn().mockResolvedValue(undefined),
-    removeDatabaseEntry: jest.fn().mockResolvedValue(undefined),
     TestUuidGenerator: jest.fn(),
     TestTimestampProvider: jest.fn(),
     registerTerminationCallback: jest.fn(),
     pathExists: jest.fn(),
+}));
+jest.mock('api', () => ({
+    getDatabases: jest.fn().mockResolvedValue([]),
+    addDatabaseEntry: jest.fn().mockResolvedValue(undefined),
+    updateDatabaseEntry: jest.fn().mockResolvedValue(undefined),
+    removeDatabaseEntry: jest.fn().mockResolvedValue(undefined),
 }));
 jest.mock('vault', () => ({
     getVault: jest.fn(),
@@ -32,7 +34,8 @@ jest.mock('../../lib/init-cmd', () => ({
 }));
 
 import { dbsView, dbsAdd, dbsEdit, dbsRemove, dbsSend } from '../../cmd/dbs';
-import { getDatabases, exit, addDatabaseEntry } from 'node-utils';
+import { exit } from 'node-utils';
+import { getDatabases, addDatabaseEntry } from 'api';
 import { log } from 'utils';
 import { getVault } from 'vault';
 import { findSimilarDatabaseNames, findSimilarKeyNames, findSimilarSecretNames } from '../../lib/init-cmd';
