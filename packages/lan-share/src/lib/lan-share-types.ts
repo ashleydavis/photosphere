@@ -3,6 +3,9 @@
 // Resolved S3 credentials included in a share payload.
 //
 export interface IShareS3Credentials {
+    // The vault key name used by the sender.
+    name: string;
+
     // Human-readable label for this credential set.
     label: string;
 
@@ -23,6 +26,9 @@ export interface IShareS3Credentials {
 // Resolved encryption key pair included in a share payload.
 //
 export interface IShareEncryptionKey {
+    // The vault key name used by the sender.
+    name: string;
+
     // Human-readable label for this key pair.
     label: string;
 
@@ -37,6 +43,9 @@ export interface IShareEncryptionKey {
 // Resolved geocoding API key included in a share payload.
 //
 export interface IShareGeocodingKey {
+    // The vault key name used by the sender.
+    name: string;
+
     // Human-readable label for this API key.
     label: string;
 
@@ -89,6 +98,26 @@ export interface ISecretSharePayload {
     // JSON string containing the secret value, same format as the vault value field.
     value: string;
 }
+
+//
+// Resolution chosen by the user when an incoming secret name conflicts with
+// an existing vault entry.
+//
+export interface IConflictResolution {
+    // 'replace': overwrite the existing vault entry.
+    // 'reuse': skip importing; keep the existing entry as-is.
+    // 'rename': save the incoming secret under a different name.
+    action: "replace" | "reuse" | "rename";
+
+    // Required when action is 'rename'; the new vault key name to use.
+    newName?: string;
+}
+
+//
+// Callback invoked by importDatabasePayload when an incoming secret's name
+// already exists in the vault. Returns how to resolve the conflict.
+//
+export type ConflictResolver = (secretName: string, secretType: string) => Promise<IConflictResolution>;
 
 //
 // Response body from GET /pairing-code-hash on the receiver.

@@ -8,7 +8,7 @@ import { exit } from 'node-utils';
 import { generateKeyPair, exportPublicKeyToPem } from 'storage';
 import type { IDatabaseEntry } from 'electron-defs';
 import { LanShareSender, LanShareReceiver, resolveDatabaseSharePayload, importDatabasePayload } from 'lan-share';
-import type { IDatabaseSharePayload } from 'lan-share';
+import type { IDatabaseSharePayload, ConflictResolver, IConflictResolution } from 'lan-share';
 
 //
 // Options for the `dbs add` command.
@@ -1044,6 +1044,59 @@ async function dbsSend(cmdOptions: IDbsSendOptions): Promise<void> {
 }
 
 //
+// Builds a ConflictResolver for use during dbs receive.
+// When skipPrompts is true the resolver logs a message and reuses the
+// existing secret without prompting.  Otherwise it presents an interactive
+// menu offering replace, reuse, or rename.
+//
+function buildConflictResolver(skipPrompts: boolean): ConflictResolver {
+    return async (secretName: string, secretType: string): Promise<IConflictResolution> => {
+        if (skipPrompts) {
+            log.info(pc.yellow(`  ⚠ Secret "${secretName}" already exists — reusing existing.`));
+            return { action: 'reuse' };
+        }
+
+        log.info('');
+
+        const choice = await select({
+            message: `Secret "${secretName}" (${secretType}) already exists in your vault. What would you like to do?`,
+            options: [
+                { value: 'reuse', label: 'Reuse existing — skip importing this secret' },
+                { value: 'replace', label: `Replace existing — ⚠ may break other databases that use "${secretName}"` },
+                { value: 'rename', label: 'Save with a new name' },
+            ],
+        });
+
+        if (isCancel(choice)) {
+            outro(pc.yellow('Cancelled.'));
+            await exit(0);
+        }
+
+        if (choice === 'rename') {
+            const newName = await text({
+                message: 'New secret name:',
+                initialValue: secretName,
+                validate: (val) => {
+                    if (!val || val.trim().length === 0) {
+                        return 'Name is required';
+                    }
+                    return undefined;
+                },
+            });
+
+            if (isCancel(newName)) {
+                outro(pc.yellow('Cancelled.'));
+                await exit(0);
+            }
+
+            return { action: 'rename', newName: (newName as string).trim() };
+        }
+
+        return { action: choice as 'replace' | 'reuse' };
+    };
+}
+
+//
 // psi dbs receive — receive a database config with secrets from another device.
 //
 async function dbsReceive(cmdOptions: { yes?: boolean; code?: string }): Promise<void> {
@@ -1222,7 +1275,7 @@ async function dbsReceive(cmdOptions: { yes?: boolean; code?: string }): Promise
     }
 
     // Import the payload
-    const dbEntry = await importDatabasePayload(payload);
+    const dbEntry = await importDatabasePayload(payload, buildConflictResolver(skipPrompts));
     await addDatabaseEntry(dbEntry);
 
     outro(pc.green(`✓ Database "${dbEntry.name}" imported successfully!`));

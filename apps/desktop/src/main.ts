@@ -20,7 +20,7 @@ import { createStorage, CloudStorage } from 'storage';
 import { checkConnectivity, loadDatabaseConfig } from 'api';
 import { getVault, getDefaultVaultType } from 'vault';
 import { LanShareSender, LanShareReceiver, importDatabasePayload, importSecretPayload } from 'lan-share';
-import type { IDatabaseSharePayload, ISecretSharePayload, IReceiverEndpoint } from 'lan-share';
+import type { IDatabaseSharePayload, ISecretSharePayload, IReceiverEndpoint, IConflictResolution } from 'lan-share';
 
 // Main application window
 let mainWindow: BrowserWindow | null = null;
@@ -576,10 +576,11 @@ ipcMain.handle('cancel-share-send', logExceptions(async () => {
 }, 'Error cancelling share sender'));
 
 // IPC handler for importing a share payload (database or secret)
-ipcMain.handle('import-share-payload', logExceptions(async (_event, payload: unknown) => {
+ipcMain.handle('import-share-payload', logExceptions(async (_event, payload: unknown, conflictResolutions: Record<string, IConflictResolution>) => {
     const typed = payload as { type: string };
     if (typed.type === 'database') {
-        const dbEntry = await importDatabasePayload(payload as IDatabaseSharePayload);
+        const resolver = async (secretName: string) => conflictResolutions[secretName] ?? { action: 'replace' as const };
+        const dbEntry = await importDatabasePayload(payload as IDatabaseSharePayload, resolver);
         await addDatabaseEntry(dbEntry);
     }
     else if (typed.type === 'secret') {

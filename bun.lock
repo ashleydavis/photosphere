@@ -443,6 +443,7 @@
         "dayjs": "^1.11.7",
         "defs": "workspace:*",
         "jszip": "^3.10.1",
+        "lan-share": "workspace:*",
         "leaflet": "^1.9.4",
         "lodash": "^4.17.21",
         "mime-types": "^2.1.35",

@@ -1,6 +1,7 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
 import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext, type IImportSession, type IToolsStatus, type IDownloadAssetItem, type IShowNotificationData, convertToPng, type IDatabaseEntry, type ISharedSecretEntry } from "user-interface";
 import type { IElectronAPI, ISaveAssetItem } from "electron-defs";
+import type { IConflictResolution } from "lan-share";
 import { ProxyVault } from "./proxy-vault";
 
 export interface IPlatformProviderElectronProps {
@@ -426,8 +427,8 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         await electronAPI.cancelShareSend();
     }, [electronAPI]);
 
-    const importSharePayload = useCallback(async (payload: unknown): Promise<void> => {
-        await electronAPI.importSharePayload(payload);
+    const importSharePayload = useCallback(async (payload: unknown, conflictResolutions: Record<string, IConflictResolution>): Promise<void> => {
+        await electronAPI.importSharePayload(payload, conflictResolutions);
     }, [electronAPI]);
 
     const downloadAsset = useCallback(async (assetId: string, assetType: string, filename: string, _contentType: string, databasePath: string): Promise<void> => {

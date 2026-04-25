@@ -1,17 +1,24 @@
 import { importDatabasePayload, importSecretPayload } from "../lib/lan-share-import";
-import type { IDatabaseSharePayload, ISecretSharePayload } from "../lib/lan-share-types";
+import type { ConflictResolver, IDatabaseSharePayload, ISecretSharePayload } from "../lib/lan-share-types";
 
 // Mock the vault module
 const mockVaultSet = jest.fn();
+const mockVaultGet = jest.fn();
 jest.mock("vault", () => ({
     getDefaultVaultType: () => "plaintext",
     getVault: () => ({
         set: mockVaultSet,
+        get: mockVaultGet,
     }),
 }));
 
+// Resolver that always replaces; used in tests where no conflict is expected.
+const noConflictResolver: ConflictResolver = jest.fn().mockResolvedValue({ action: "replace" });
+
 beforeEach(() => {
     mockVaultSet.mockReset();
+    mockVaultGet.mockReset();
+    mockVaultGet.mockResolvedValue(undefined);
 });
 
 test("imports database payload with all secrets", async () => {
@@ -22,6 +29,7 @@ test("imports database payload with all secrets", async () => {
         path: "/data/shared-photos",
         origin: "https://example.com",
         s3Credentials: {
+            name: "default:s3",
             label: "My S3",
             region: "us-east-1",
             accessKeyId: "AKID",
@@ -29,17 +37,19 @@ test("imports database payload with all secrets", async () => {
             endpoint: "https://s3.example.com",
         },
         encryptionKey: {
+            name: "digital-ocean",
             label: "My Key",
             privateKeyPem: "-----PRIVATE-----",
             publicKeyPem: "-----PUBLIC-----",
         },
         geocodingKey: {
+            name: "geocoding-key",
             label: "Geocoding",
             apiKey: "geo-key-123",
         },
     };
 
-    const entry = await importDatabasePayload(payload);
+    const entry = await importDatabasePayload(payload, noConflictResolver);
 
     expect(entry.name).toBe("shared-photos");
     expect(entry.description).toBe("Photos from another device");
@@ -86,7 +96,7 @@ test("imports database payload with no secrets", async () => {
         path: "/data/simple",
     };
 
-    const entry = await importDatabasePayload(payload);
+    const entry = await importDatabasePayload(payload, noConflictResolver);
 
     expect(entry.name).toBe("simple-db");
     expect(entry.s3Key).toBeUndefined();
@@ -113,30 +123,135 @@ test("imports secret payload", async () => {
     });
 });
 
-test("imported database entry has unique secret IDs", async () => {
+test("imported database entry uses secret names from payload", async () => {
     const payload: IDatabaseSharePayload = {
         type: "database",
         name: "test-db",
         description: "",
         path: "/data/test",
         s3Credentials: {
+            name: "default:s3",
             label: "S3",
             region: "us-east-1",
             accessKeyId: "AK",
             secretAccessKey: "SK",
         },
         encryptionKey: {
+            name: "digital-ocean",
             label: "Key",
             privateKeyPem: "priv",
             publicKeyPem: "pub",
         },
     };
 
-    const entry = await importDatabasePayload(payload);
+    const entry = await importDatabasePayload(payload, noConflictResolver);
 
-    // The two secret IDs should be different
-    expect(entry.s3Key).not.toBe(entry.encryptionKey);
-    // Each ID should be 8 characters
-    expect(entry.s3Key!.length).toBe(8);
-    expect(entry.encryptionKey!.length).toBe(8);
+    // Secret names should match those in the payload, not random IDs.
+    expect(entry.s3Key).toBe("default:s3");
+    expect(entry.encryptionKey).toBe("digital-ocean");
+});
+
+test("conflict resolver reuse: skips vault.set and keeps original name", async () => {
+    mockVaultGet.mockResolvedValue({ name: "default:s3", type: "s3-credentials", value: "{}" });
+
+    const resolver: ConflictResolver = jest.fn().mockResolvedValue({ action: "reuse" });
+
+    const payload: IDatabaseSharePayload = {
+        type: "database",
+        name: "test-db",
+        description: "",
+        path: "/data/test",
+        s3Credentials: {
+            name: "default:s3",
+            label: "S3",
+            region: "us-east-1",
+            accessKeyId: "AK",
+            secretAccessKey: "SK",
+        },
+    };
+
+    const entry = await importDatabasePayload(payload, resolver);
+
+    expect(resolver).toHaveBeenCalledWith("default:s3", "s3-credentials");
+    expect(mockVaultSet).not.toHaveBeenCalled();
+    expect(entry.s3Key).toBe("default:s3");
+});
+
+test("conflict resolver replace: calls vault.set with original name", async () => {
+    mockVaultGet.mockResolvedValue({ name: "default:s3", type: "s3-credentials", value: "{}" });
+
+    const resolver: ConflictResolver = jest.fn().mockResolvedValue({ action: "replace" });
+
+    const payload: IDatabaseSharePayload = {
+        type: "database",
+        name: "test-db",
+        description: "",
+        path: "/data/test",
+        s3Credentials: {
+            name: "default:s3",
+            label: "S3",
+            region: "us-east-1",
+            accessKeyId: "AK",
+            secretAccessKey: "SK",
+        },
+    };
+
+    const entry = await importDatabasePayload(payload, resolver);
+
+    expect(resolver).toHaveBeenCalledWith("default:s3", "s3-credentials");
+    expect(mockVaultSet).toHaveBeenCalledTimes(1);
+    expect(mockVaultSet.mock.calls[0][0].name).toBe("default:s3");
+    expect(entry.s3Key).toBe("default:s3");
+});
+
+test("conflict resolver rename: calls vault.set with new name and updates entry", async () => {
+    mockVaultGet.mockResolvedValue({ name: "default:s3", type: "s3-credentials", value: "{}" });
+
+    const resolver: ConflictResolver = jest.fn().mockResolvedValue({ action: "rename", newName: "default:s3-imported" });
+
+    const payload: IDatabaseSharePayload = {
+        type: "database",
+        name: "test-db",
+        description: "",
+        path: "/data/test",
+        s3Credentials: {
+            name: "default:s3",
+            label: "S3",
+            region: "us-east-1",
+            accessKeyId: "AK",
+            secretAccessKey: "SK",
+        },
+    };
+
+    const entry = await importDatabasePayload(payload, resolver);
+
+    expect(resolver).toHaveBeenCalledWith("default:s3", "s3-credentials");
+    expect(mockVaultSet).toHaveBeenCalledTimes(1);
+    expect(mockVaultSet.mock.calls[0][0].name).toBe("default:s3-imported");
+    expect(entry.s3Key).toBe("default:s3-imported");
+});
+
+test("conflict resolver not called when no existing secret", async () => {
+    mockVaultGet.mockResolvedValue(undefined);
+
+    const resolver: ConflictResolver = jest.fn();
+
+    const payload: IDatabaseSharePayload = {
+        type: "database",
+        name: "test-db",
+        description: "",
+        path: "/data/test",
+        s3Credentials: {
+            name: "default:s3",
+            label: "S3",
+            region: "us-east-1",
+            accessKeyId: "AK",
+            secretAccessKey: "SK",
+        },
+    };
+
+    await importDatabasePayload(payload, resolver);
+
+    expect(resolver).not.toHaveBeenCalled();
+    expect(mockVaultSet).toHaveBeenCalledTimes(1);
 });
