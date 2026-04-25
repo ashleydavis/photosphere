@@ -1,3 +1,5 @@
+import { createPrivateKey, createPublicKey } from "node:crypto";
+import { exportPublicKeyToPem } from "storage";
 import { getVault, getDefaultVaultType } from "vault";
 import type { IDatabaseEntry } from "electron-defs";
 import type { IDatabaseSharePayload, ISecretSharePayload, IShareS3Credentials, IShareEncryptionKey, IShareGeocodingKey } from "./lan-share-types";
@@ -28,12 +30,22 @@ export async function resolveDatabaseSharePayload(entry: IDatabaseEntry): Promis
     if (entry.encryptionKey) {
         const secret = await vault.get(entry.encryptionKey);
         if (secret) {
-            const parsed = JSON.parse(secret.value);
-            encryptionKey = {
-                label: parsed.label || entry.encryptionKey,
-                privateKeyPem: parsed.privateKeyPem,
-                publicKeyPem: parsed.publicKeyPem,
-            };
+            let label: string;
+            let privateKeyPem: string;
+            let publicKeyPem: string;
+            try {
+                const parsed = JSON.parse(secret.value);
+                label = parsed.label || entry.encryptionKey;
+                privateKeyPem = parsed.privateKeyPem;
+                publicKeyPem = parsed.publicKeyPem;
+            }
+            catch {
+                // Raw PEM key — derive the public key from it.
+                label = entry.encryptionKey;
+                privateKeyPem = secret.value;
+                publicKeyPem = exportPublicKeyToPem(createPublicKey(createPrivateKey(secret.value)));
+            }
+            encryptionKey = { label, privateKeyPem, publicKeyPem };
         }
     }
 
