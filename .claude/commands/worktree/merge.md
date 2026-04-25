@@ -12,23 +12,29 @@ Steps:
 
 5. Ask the user to confirm before proceeding: show them the worktree path, its branch, and the current branch that will receive the rebase.
 
-6. Once confirmed, rebase the worktree branch onto the current branch (this is run from the worktree):
+6. Once confirmed, merge the current branch into the worktree to integrate any upstream changes and resolve conflicts:
+   ```
+   git -C <worktree-path> merge <current-branch>
+   ```
+   If the merge produces conflicts, stop and report them to the user. Do not proceed until conflicts are resolved.
+
+7. Rebase the worktree branch onto the current branch (this is run from the worktree):
    ```
    git -C <worktree-path> rebase <current-branch>
    ```
    If the rebase produces conflicts, stop and report them to the user. Do not proceed until conflicts are resolved.
 
-7. Fast-forward the current branch to include the rebased commits:
+8. Fast-forward the current branch to include the rebased commits:
    ```
    git merge <worktree-branch> --ff-only
    ```
 
-8. Remove the worktree:
+9. Remove the worktree:
    ```
    git worktree remove <worktree-path>
    ```
 
-9. Report success by running these two commands:
+10. Report success by running these two commands:
    - `git log --oneline -5` — show the recent commit history
    - `git worktree list` — confirm the worktree has been removed
 
