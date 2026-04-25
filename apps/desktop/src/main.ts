@@ -525,10 +525,14 @@ ipcMain.handle('import-assets', logExceptions(async (_event, paths?: string[]) =
     return await selectAndImportAssets(paths);
 }, 'Error importing assets'));
 
-// IPC handler for starting a LAN share receiver with the code entered by the user.
-ipcMain.handle('start-share-receive', logExceptions(async (_event, code: string) => {
+// IPC handler for starting a LAN share receiver.
+// Generates a random 4-digit pairing code, starts the receiver, and returns the code
+// so the UI can display it for the user to share with the sender.
+ipcMain.handle('start-share-receive', logExceptions(async () => {
+    const code = String(Math.floor(1000 + Math.random() * 9000));
     activeReceiver = new LanShareReceiver(60000);
     await activeReceiver.start(code);
+    return { code };
 }, 'Error starting share receiver'));
 
 // IPC handler for waiting for a sender payload on the active receiver
