@@ -37,6 +37,11 @@ async function text({ message, placeholder, defaultValue, validate }) {
     return defaultValue || 'test-input';
 }
 
+async function multiline({ message }) {
+    // Return a test PEM string in tests
+    return 'test-pem';
+}
+
 module.exports = {
     confirm,
     isCancel,
@@ -44,7 +49,8 @@ module.exports = {
     outro,
     intro,
     note,
-    text
+    text,
+    multiline
 };
 
 module.exports.default = module.exports;

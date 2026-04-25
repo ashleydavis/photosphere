@@ -1,7 +1,7 @@
 import { log, retry } from "utils";
 import pc from "picocolors";
 import { exit } from "node-utils";
-import { IBaseCommandOptions, ICommandContext, resolveKeyPems, selectEncryptionKey, configureS3IfNeeded, getDefaultS3Config } from "../lib/init-cmd";
+import { IBaseCommandOptions, ICommandContext, resolveKeyPems, resolveKeyPemsWithPrompt, selectEncryptionKey, configureS3IfNeeded, getDefaultS3Config } from "../lib/init-cmd";
 import { getDirectoryForCommand } from "../lib/directory-picker";
 import { ensureMediaProcessingTools } from "../lib/ensure-tools";
 import { intro, confirm, outro } from "../lib/clack/prompts";
@@ -48,7 +48,7 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
         await configureS3IfNeeded(nonInteractive);
     }
 
-    let keyPems = await resolveKeyPems(options.key);
+    let keyPems = await resolveKeyPemsWithPrompt(options.key, nonInteractive, false);
     let { options: storageOptions } = await loadEncryptionKeysFromPem(keyPems);
     const s3Config = await getDefaultS3Config();
     let { storage: assetStorage, rawStorage } = createStorage(databaseDir, s3Config, storageOptions);

@@ -134,6 +134,8 @@ ENCRYPTED_TESTS=(
     "export-with-multiple-keys"
     "multi-key-encrypt"
     "partial-encrypt"
+    "key-not-found-noninteractive"
+    "key-not-found-message"
 )
 
 # -----------------------------------------------------------------------------
@@ -1290,6 +1292,75 @@ test_partial_encrypt() {
     test_passed "$name"
 }
 
+test_key_not_found_noninteractive() {
+    local name="key-not-found-noninteractive"
+    print_test_header "$name"
+
+    local cli
+    cli="$(get_cli_command)"
+
+    local test_dir="$TEST_TMP_DIR/$name"
+    local db_dir="$test_dir/db"
+
+    prepare_test_dir "$test_dir"
+
+    invoke_command "Init plain database" "$cli init --db \"$db_dir\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    local output
+    output=$(eval "$cli compare --key nonexistent-key-xyz --db \"$db_dir\" --dest \"$db_dir\" --yes" 2>&1)
+    if [ $? -eq 0 ]; then
+        log_error "Expected non-zero exit when key not found in non-interactive mode"
+        echo "$output"
+        test_failed "$name"
+        return
+    fi
+
+    if ! echo "$output" | grep -qi "not found"; then
+        log_error "Expected 'not found' in output, got: $output"
+        test_failed "$name"
+        return
+    fi
+
+    test_passed "$name"
+}
+
+test_key_not_found_message() {
+    local name="key-not-found-message"
+    print_test_header "$name"
+
+    local cli
+    cli="$(get_cli_command)"
+
+    local test_dir="$TEST_TMP_DIR/$name"
+    local db_dir="$test_dir/db"
+
+    prepare_test_dir "$test_dir"
+
+    invoke_command "Init plain database" "$cli init --db \"$db_dir\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    for subcommand in "add --db \"$db_dir\" --key nonexistent-key-xyz --yes /dev/null" \
+                      "decrypt --db \"$db_dir\" --key nonexistent-key-xyz --yes" \
+                      "upgrade --db \"$db_dir\" --key nonexistent-key-xyz --yes"; do
+        local output
+        output=$(eval "$cli $subcommand" 2>&1)
+        local exit_code=$?
+        if [ $exit_code -eq 0 ]; then
+            log_error "Expected non-zero exit for: psi $subcommand"
+            echo "$output"
+            test_failed "$name"
+            return
+        fi
+    done
+
+    test_passed "$name"
+}
+
 # -----------------------------------------------------------------------------
 # Test runner
 # -----------------------------------------------------------------------------
@@ -1316,6 +1387,8 @@ run_single_test() {
         export-with-multiple-keys)        test_export_with_multiple_keys ;;
         multi-key-encrypt)                test_multi_key_encrypt ;;
         partial-encrypt)                 test_partial_encrypt ;;
+        key-not-found-noninteractive)    test_key_not_found_noninteractive ;;
+        key-not-found-message)           test_key_not_found_message ;;
         *)
             log_error "Unknown test: $name"
             return 1

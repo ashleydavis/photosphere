@@ -2,7 +2,7 @@ import { log } from "utils";
 import { createStorage, loadEncryptionKeysFromPem, pathJoin, generateKeyPair, exportPublicKeyToPem } from "storage";
 import pc from "picocolors";
 import { exit } from "node-utils";
-import { loadDatabase, IBaseCommandOptions, resolveKeyPems, promptForEncryption, selectEncryptionKey, ICommandContext, configureS3IfNeeded, getDefaultS3Config } from "../lib/init-cmd";
+import { loadDatabase, IBaseCommandOptions, resolveKeyPemsWithPrompt, promptForEncryption, selectEncryptionKey, ICommandContext, configureS3IfNeeded, getDefaultS3Config } from "../lib/init-cmd";
 import { getVault, getDefaultVaultType } from "vault";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import { getDirectoryForCommand } from "../lib/directory-picker";
@@ -149,7 +149,11 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
             }
             
             // Verify the key works by trying to load encryption keys
-            const verifyKeyPems = await resolveKeyPems(options.destKey);
+            const verifyKeyPems = await resolveKeyPemsWithPrompt(options.destKey, nonInteractive, false);
+            if (verifyKeyPems.length === 0) {
+                log.error(pc.red(`✗ Encryption key "${options.destKey}" not found. Use "psi secrets list" to see available keys.`));
+                await exit(1);
+            }
             try {
                 await loadEncryptionKeysFromPem(verifyKeyPems);
             } catch (error) {
@@ -194,7 +198,11 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
         }
     }
 
-    const destKeyPems = await resolveKeyPems(options.destKey);
+    const destKeyPems = await resolveKeyPemsWithPrompt(options.destKey, nonInteractive, true);
+    if (destKeyPems.length === 0 && options.destKey) {
+        log.error(pc.red(`✗ Encryption key "${options.destKey}" not found. Use "psi secrets list" to see available keys.`));
+        await exit(1);
+    }
     const { options: destStorageOptions, isEncrypted: destIsEncrypted } = await loadEncryptionKeysFromPem(destKeyPems);
     const { storage: destAssetStorage, rawStorage: destRawStorage } = createStorage(destDir, s3Config, destStorageOptions);
 
