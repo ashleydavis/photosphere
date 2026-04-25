@@ -36,6 +36,12 @@
           },
           {
             "type": "command",
+            "command": "if git status --porcelain | grep -qE '\\.tsx?$' && ! find /tmp/photosphere-test-unit-last-run -mmin -1 -type f 2>/dev/null | grep -q .; then bun run test; fi",
+            "timeout": 120,
+            "statusMessage": "Unit testing..."
+          },
+          {
+            "type": "command",
             "command": "if git status --porcelain | grep -qE '\\.tsx?$' && ! find /tmp/photosphere-test-cli-last-run -mmin -5 -type f 2>/dev/null | grep -q .; then bun run test:cli; fi",
             "timeout": 120,
             "statusMessage": "Testing..."

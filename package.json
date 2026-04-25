@@ -17,7 +17,7 @@
     "c": "bun run compile",
     "compile": "bun --filter '*' compile && touch /tmp/photosphere-compile-last-run",
     "clean": "bun --filter '*' clean",
-    "test": "bun --filter '*' test",
+    "test": "bun --filter '*' test && touch /tmp/photosphere-test-unit-last-run",
     "test:watch": "bun --filter '*' test:watch",
     "t": "bun run test",
     "tw": "bun run test:watch",
