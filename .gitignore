@@ -47,3 +47,4 @@ release/
 apps/desktop/test-results
 apps/cli/test/tmp-encrypted/
 apps/cli/test/tmp-lan-share/
+.claude/worktrees/
