@@ -554,11 +554,10 @@ ipcMain.handle('cancel-share-receive', logExceptions(async () => {
 }, 'Error cancelling share receiver'));
 
 // IPC handler for creating a sender and waiting for a receiver on the LAN.
-// Returns { endpoint, pairingCode } so the UI can display the code to the user.
+// Returns the receiver endpoint, or null on timeout or cancellation.
 ipcMain.handle('wait-for-receiver', logExceptions(async (_event, payload: unknown) => {
     activeSender = new LanShareSender(payload);
-    const endpoint = await activeSender.waitForReceiver(60000);
-    return { endpoint, pairingCode: activeSender.pairingCode };
+    return await activeSender.waitForReceiver(60000);
 }, 'Error waiting for receiver'));
 
 // IPC handler for sending a payload to a discovered receiver.
