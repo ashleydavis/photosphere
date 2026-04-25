@@ -2,7 +2,7 @@ import { Command } from 'commander';
 import pc from 'picocolors';
 import { getVault, getDefaultVaultType } from 'vault';
 import { log } from 'utils';
-import { getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry } from 'node-utils';
+import { getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry } from 'api';
 import { confirm, intro, outro, text, select, isCancel, spinner, note } from '../lib/clack/prompts';
 import { exit } from 'node-utils';
 import { generateKeyPair, exportPublicKeyToPem } from 'storage';

@@ -1,13 +1,14 @@
 // Mock heavy workspace packages that have ESM-only transitive dependencies.
 jest.mock('node-utils', () => ({
     exit: jest.fn(),
-    getDatabases: jest.fn().mockResolvedValue([]),
     pathExists: jest.fn(),
     TestUuidGenerator: jest.fn(),
     TestTimestampProvider: jest.fn(),
     registerTerminationCallback: jest.fn(),
 }));
-jest.mock('api', () => ({}));
+jest.mock('api', () => ({
+    getDatabases: jest.fn().mockResolvedValue([]),
+}));
 jest.mock('storage', () => ({ createStorage: jest.fn(), loadEncryptionKeysFromPem: jest.fn(), generateKeyPair: jest.fn(), exportPublicKeyToPem: jest.fn(), pathJoin: jest.fn() }));
 jest.mock('task-queue', () => ({ setQueueBackend: jest.fn() }));
 jest.mock('merkle-tree', () => ({}));
@@ -54,7 +55,7 @@ import { getVault } from 'vault';
 import { fuzzyMatch } from 'fuzzy-match';
 import { generateKeyPair, exportPublicKeyToPem } from 'storage';
 import * as fsPromises from 'fs/promises';
-import { getDatabases } from 'node-utils';
+import { getDatabases } from 'api';
 
 const mockGetVault = getVault as jest.Mock;
 const mockGenerateKeyPair = generateKeyPair as jest.Mock;
