@@ -27,10 +27,10 @@ export async function loadAssetsHandler(
 
     log.info(`Loading assets from database ${data.databasePath}`);
 
-    const isPartial = await isDatabasePartial(data.databasePath);
-
     const { s3Config, encryptionKeyPems } = await resolveStorageCredentials(data.databasePath);
     const { options: storageOptions } = await loadEncryptionKeysFromPem(encryptionKeyPems);
+
+    const isPartial = await isDatabasePartial(data.databasePath, s3Config, storageOptions);
 
     // Only wrap in lazy storage for partial databases; plain storage otherwise.
     const storage = isPartial
