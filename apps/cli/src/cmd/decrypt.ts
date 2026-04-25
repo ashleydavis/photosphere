@@ -8,7 +8,7 @@ import pc from "picocolors";
 import { log } from "utils";
 import { exit } from "node-utils";
 import { getDirectoryForCommand } from "../lib/directory-picker";
-import { resolveKeyPems, IBaseCommandOptions, ICommandContext, configureS3IfNeeded, getDefaultS3Config } from "../lib/init-cmd";
+import { resolveKeyPemsWithPrompt, IBaseCommandOptions, ICommandContext, configureS3IfNeeded, getDefaultS3Config } from "../lib/init-cmd";
 import { writeProgress, clearProgressMessage } from "../lib/terminal-utils";
 import { confirm, isCancel } from "../lib/clack/prompts";
 import { decrypt as apiDecrypt } from "api";
@@ -45,7 +45,7 @@ export async function decryptCommand(context: ICommandContext, options: IDecrypt
 
     const s3Config = await getDefaultS3Config();
 
-    const keyPems = await resolveKeyPems(options.key);
+    const keyPems = await resolveKeyPemsWithPrompt(options.key, nonInteractive, false);
     if (keyPems.length === 0) {
         log.error(pc.red(`✗ Decryption requires --key.`));
         await exit(1);

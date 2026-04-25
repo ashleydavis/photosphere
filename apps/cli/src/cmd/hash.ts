@@ -3,7 +3,7 @@ import { computeHash } from "api";
 import { exit } from "node-utils";
 import pc from "picocolors";
 import { log } from "utils";
-import { resolveKeyPems, configureS3IfNeeded, getDefaultS3Config } from "../lib/init-cmd";
+import { resolveKeyPemsWithPrompt, configureS3IfNeeded, getDefaultS3Config } from "../lib/init-cmd";
 import path from 'node:path';
 
 export interface IHashCommandOptions {
@@ -29,7 +29,7 @@ export async function hashCommand(filePath: string, options: IHashCommandOptions
 
     const s3Config = await getDefaultS3Config();
 
-    const keyPems = await resolveKeyPems(options.key);
+    let keyPems = await resolveKeyPemsWithPrompt(options.key, options.yes ?? false, false);
     let { options: storageOptions } = await loadEncryptionKeysFromPem(keyPems);
 
     const dirPath = path.dirname(filePath);  

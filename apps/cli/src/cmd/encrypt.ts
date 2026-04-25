@@ -8,7 +8,7 @@ import pc from "picocolors";
 import { log } from "utils";
 import { exit } from "node-utils";
 import { getDirectoryForCommand } from "../lib/directory-picker";
-import { resolveKeyPems, IBaseCommandOptions, ICommandContext, promptForEncryption, selectEncryptionKey, configureS3IfNeeded, getDefaultS3Config } from "../lib/init-cmd";
+import { resolveKeyPemsWithPrompt, IBaseCommandOptions, ICommandContext, promptForEncryption, selectEncryptionKey, configureS3IfNeeded, getDefaultS3Config } from "../lib/init-cmd";
 import { getVault, getDefaultVaultType } from "vault";
 import { writeProgress, clearProgressMessage } from "../lib/terminal-utils";
 import { confirm, isCancel } from "../lib/clack/prompts";
@@ -85,7 +85,7 @@ export async function encryptCommand(context: ICommandContext, options: IEncrypt
         }
     }
 
-    const keyPems = await resolveKeyPems(options.key);
+    const keyPems = await resolveKeyPemsWithPrompt(options.key, nonInteractive, true);
     if (keyPems.length === 0) {
         log.error(pc.red(`✗ Encryption requires --key.`));
         await exit(1);
