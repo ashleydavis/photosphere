@@ -31,8 +31,8 @@ Create a new plan and save it to `docs/plans/`.
 <Decisions, trade-offs, open questions, or constraints discovered during research>
 ```
 
-4. **Choose a filename** — derive a short kebab-case name from the plan subject (e.g. `plan-add-user-auth.md`). If a file with that name already exists in `docs/plans/`, choose a different name.
+4. **Choose a filename** — derive a short kebab-case name from the plan subject (e.g. `plan-add-user-auth.md`). If a file with that name already exists in `docs/plans/new/`, choose a different name.
 
-5. **Save** — write the plan to `docs/plans/<filename>`.
+5. **Save** — write the plan to `docs/plans/new/<filename>`.
 
 6. **Report** — print the path of the saved file and a one-line summary of what the plan covers.

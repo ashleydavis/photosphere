@@ -1,4 +1,4 @@
-Summarise the current plan. Use the plan from the current conversation, or read the most recent file in `docs/plans/` if no plan is in context.
+Summarise the current plan. Use the plan from the current conversation, or read the most recent file in `docs/plans/new/` if no plan is in context.
 
 Produce two things:
 

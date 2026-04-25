@@ -1,4 +1,4 @@
-Given the root cause and the chosen proposed fix from this conversation, produce a detailed implementation plan and save it to `docs/plans/`.
+Given the root cause and the chosen proposed fix from this conversation, produce a detailed implementation plan and save it to `docs/plans/new/`.
 
 1. **Identify the chosen fix** — read the root cause and proposed fixes from the conversation. If it is unclear which numbered fix was chosen, ask the user for clarification before continuing.
 
@@ -11,6 +11,6 @@ Given the root cause and the chosen proposed fix from this conversation, produce
      2. `bun run test` — if it fails, fix the failing tests before continuing
      3. `bun run test:cli` — if it fails, fix the failures before continuing
 
-3. **Save the plan** — write it as a markdown file to `docs/plans/` using a short descriptive filename (e.g. `docs/plans/fix-credential-lookup.md`).
+3. **Save the plan** — write it as a markdown file to `docs/plans/new/` using a short descriptive filename (e.g. `docs/plans/new/fix-credential-lookup.md`).
 
 4. **Report** — state the filename where the plan was saved.
