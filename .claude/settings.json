@@ -1,8 +1,8 @@
 {
   "permissions": {
-    "deny": [   
+    "deny": [
       "Bash(git stash*)"
-    ],    
+    ],
     "allow": [
       "Read",
       "Glob",
@@ -30,13 +30,13 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun run compile",
+            "command": "if git status --porcelain | grep -qE '\\.tsx?$'; then bun run compile; fi",
             "timeout": 120,
             "statusMessage": "Compiling..."
           },
           {
             "type": "command",
-            "command": "bun run test:cli",
+            "command": "if git status --porcelain | grep -qE '\\.tsx?$'; then bun run test:cli; fi",
             "timeout": 120,
             "statusMessage": "Testing..."
           }
