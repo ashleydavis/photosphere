@@ -193,6 +193,7 @@
         "bdb": "workspace:*",
         "dayjs": "^1.11.7",
         "defs": "workspace:*",
+        "electron-defs": "workspace:*",
         "exif-parser": "^0.1.12",
         "json-stable-stringify": "^1.3.0",
         "jszip": "^3.10.1",

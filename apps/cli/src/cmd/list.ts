@@ -3,7 +3,7 @@ import { exit } from "node-utils";
 import { formatBytes } from "../lib/format";
 import { loadDatabase, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
 import { log } from "utils";
-import { IAsset } from "defs";
+import { IAsset } from "api";
 import { readEncryptionHeader } from "storage";
 
 export interface IListCommandOptions extends IBaseCommandOptions {

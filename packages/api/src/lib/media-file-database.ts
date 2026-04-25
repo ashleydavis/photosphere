@@ -5,7 +5,7 @@ import { resolveStorageCredentials } from "./resolve-storage-credentials";
 import { LazyOriginStorage } from "./lazy-origin-storage";
 import { ILocation, log, retry, IUuidGenerator, ITimestampProvider } from "utils";
 import dayjs from "dayjs";
-import { IAsset } from "defs";
+import { IAsset } from "./asset";
 import { computeHash } from "./hash";
 import { IFileStat, ScannerOptions } from "./file-scanner";
 

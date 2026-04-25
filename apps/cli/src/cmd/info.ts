@@ -12,7 +12,7 @@ import { createReadStream } from "fs";
 import { formatBytes } from "../lib/format";
 import { log } from "utils";
 import mime from "mime";
-import type { IAsset } from "defs";
+import type { IAsset } from "api";
 
 export interface IInfoCommandOptions extends IBaseCommandOptions {
     //

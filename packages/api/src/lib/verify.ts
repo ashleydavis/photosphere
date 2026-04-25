@@ -9,7 +9,7 @@ import { TaskStatus, TaskQueue } from "task-queue";
 import { IVerifyFileData } from "./verify.worker";
 import { verify as verifySerializedFile } from "serialization";
 import type { IBsonCollection } from "bdb";
-import type { IAsset } from "defs";
+import type { IAsset } from "./asset";
 
 //
 // Options for verifying the media file database.

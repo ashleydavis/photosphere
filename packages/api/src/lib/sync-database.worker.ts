@@ -5,7 +5,7 @@ import { resolveStorageCredentials } from "./resolve-storage-credentials";
 import { loadDatabaseConfig, updateDatabaseConfig } from "./database-config";
 import { syncDatabases } from "./sync";
 import type { ISyncDatabaseData, ISyncChange, ISyncBatchMessage } from "./sync-database.types";
-import type { IAsset } from "defs";
+import type { IAsset } from "./asset";
 import { log } from "utils";
 
 //

@@ -10,7 +10,7 @@ import { loadEncryptionKeysFromPem } from "storage";
 import { addItem, CURRENT_DATABASE_VERSION, loadTree, rebuildTree, saveTree, SortNode, traverseTreeAsync } from "merkle-tree";
 import { IDatabaseMetadata, acquireWriteLock, releaseWriteLock, createReadme, ensureSortIndex, loadDatabaseConfig, saveDatabaseConfig } from "api";
 import { BsonDatabase, buildDatabaseMerkleTree, deleteDatabaseMerkleTree, saveDatabaseMerkleTree } from "bdb";
-import type { IAsset } from "defs";
+import type { IAsset } from "api";
 import type { IStorage } from "storage";
 import { pathJoin, walkDirectory } from "storage";
 import { computeHash } from "api";

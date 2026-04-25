@@ -10,7 +10,7 @@ import {
     writeAssetStream,
     resolveStorageCredentials,
 } from "api";
-import type { IDatabaseOp } from "defs";
+import type { IDatabaseOp } from "api";
 import { type IUuidGenerator, type ITimestampProvider, log } from "utils";
 
 //

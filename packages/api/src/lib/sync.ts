@@ -1,5 +1,5 @@
 import { IBsonCollection, IBsonDatabase, IInternalRecord, IRecord, mergeRecords, toExternal } from "bdb";
-import type { IAsset } from "defs";
+import type { IAsset } from "./asset";
 import type { ISyncChange } from "./sync-database.types";
 import { deleteItem, findMerkleTreeDifferences, getItemInfo, IMerkleTree, MerkleNode, upsertItem, buildMerkleTree } from "merkle-tree";
 import { IStorage, pathJoin } from "storage";
