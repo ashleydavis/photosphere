@@ -12,11 +12,11 @@ Steps:
 
 5. Ask the user to confirm before proceeding: show them the worktree path, its branch, and the current branch that will receive the rebase.
 
-6. Once confirmed, merge the current branch into the worktree to integrate any upstream changes and resolve conflicts:
+6. Once confirmed, merge the current branch in the main repo into the worktree to integrate any upstream changes and resolve conflicts:
    ```
    git -C <worktree-path> merge <current-branch>
    ```
-   If the merge produces conflicts, stop and report them to the user. Do not proceed until conflicts are resolved.
+   If the merge produces conflicts, resolve them by editing the conflicted files to produce a correct result, then stage the resolved files and complete the merge with `git -C <worktree-path> merge --continue`. If you are unsure how to resolve a conflict, stop and ask the user.
 
 7. Rebase the worktree branch onto the current branch (this is run from the worktree):
    ```
