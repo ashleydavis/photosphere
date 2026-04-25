@@ -64,6 +64,7 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 - Never use anonymous object types inline (e.g. `Promise<{ foo: number }>`). Always define a named interface instead, unless specifically asked to use an anonymous type.
 - Never use IIFE async generator pattern (`(async function* () { ... })()`). Extract to a named `async function*` instead.
 - Never use `ReturnType<typeof ...>`. Use the actual type directly (e.g. `NodeJS.Timeout` instead of `ReturnType<typeof setTimeout>`).
+- Never use the `unknown` type. Use the actual type directly.
 
 ## Restrictions
 - TypeScript code should always compile after making changes.

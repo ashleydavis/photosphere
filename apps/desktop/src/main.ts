@@ -16,7 +16,7 @@ import type { IRestApiWorkerStopMessage, IRestApiWorkerStartMessage } from './re
 import { FileLoggerElectron } from './lib/file-logger-electron';
 import type { IImportSession, IRendererLogMessage, ISaveAssetItem, IDatabaseEntry, IDatabaseSecrets } from 'electron-defs';
 import { verifyTools } from 'tools';
-import type { IDatabaseDescriptor } from 'api';
+import type { IDatabaseDescriptor, IDesktopConfig } from 'api';
 import { createStorage, CloudStorage } from 'storage';
 import { checkConnectivity, loadDatabaseConfig } from 'api';
 import { getVault, getDefaultVaultType } from 'vault';
@@ -453,13 +453,13 @@ ipcMain.on('notify-database-edited', () => {
 // IPC handler for reading a value from the desktop config file
 ipcMain.handle('get-config', logExceptions(async (_event, key: string) => {
     const config = await loadDesktopConfig();
-    return (config as Record<string, unknown>)[key];
+    return config[key as keyof IDesktopConfig];
 }, 'Error getting config value'));
 
 // IPC handler for writing a value to the desktop config file
-ipcMain.handle('set-config', logExceptions(async (_event, key: string, value: unknown) => {
+ipcMain.handle('set-config', logExceptions(async (_event, key: string, value: IDesktopConfig[keyof IDesktopConfig]) => {
     const config = await loadDesktopConfig();
-    (config as Record<string, unknown>)[key] = value;
+    (config as Record<string, IDesktopConfig[keyof IDesktopConfig]>)[key] = value;
     await saveDesktopConfig(config);
     // Keep the theme-changed event so the menu bar can react to theme changes
     if (key === 'theme' && mainWindow) {
@@ -555,18 +555,18 @@ ipcMain.handle('cancel-share-receive', logExceptions(async () => {
 
 // IPC handler for creating a sender and waiting for a receiver on the LAN.
 // Returns the receiver endpoint, or null on timeout or cancellation.
-ipcMain.handle('wait-for-receiver', logExceptions(async (_event, payload: unknown) => {
+ipcMain.handle('wait-for-receiver', logExceptions(async (_event, payload: IDatabaseSharePayload | ISecretSharePayload) => {
     activeSender = new LanShareSender(payload);
     return await activeSender.waitForReceiver(60000);
 }, 'Error waiting for receiver'));
 
 // IPC handler for sending a payload to a discovered receiver.
-// The pairing code is already embedded in activeSender from when it was created.
-ipcMain.handle('send-to-receiver', logExceptions(async (_event, endpoint: unknown) => {
+ipcMain.handle('send-to-receiver', logExceptions(async (_event, endpoint: IReceiverEndpoint, code: string) => {
     if (!activeSender) {
         throw new Error('No active share sender');
     }
-    const result = await activeSender.send(endpoint as IReceiverEndpoint);
+    activeSender.pairingCode = code;
+    const result = await activeSender.send(endpoint);
     activeSender = null;
     return result;
 }, 'Error sending to receiver'));
@@ -579,16 +579,23 @@ ipcMain.handle('cancel-share-send', logExceptions(async () => {
     }
 }, 'Error cancelling share sender'));
 
+//
+// Secret share payload extended with the name to save it under on this device.
+//
+interface ISecretShareImportPayload extends ISecretSharePayload {
+    // The vault key name chosen by the user on the receiving device.
+    saveName: string;
+}
+
 // IPC handler for importing a share payload (database or secret)
-ipcMain.handle('import-share-payload', logExceptions(async (_event, payload: unknown, conflictResolutions: Record<string, IConflictResolution>) => {
-    const typed = payload as { type: string };
-    if (typed.type === 'database') {
+ipcMain.handle('import-share-payload', logExceptions(async (_event, payload: IDatabaseSharePayload | ISecretShareImportPayload, conflictResolutions: Record<string, IConflictResolution>) => {
+    if (payload.type === 'database') {
         const resolver = async (secretName: string) => conflictResolutions[secretName] ?? { action: 'replace' as const };
-        const dbEntry = await importDatabasePayload(payload as IDatabaseSharePayload, resolver);
+        const dbEntry = await importDatabasePayload(payload, resolver);
         await addDatabaseEntry(dbEntry);
     }
-    else if (typed.type === 'secret') {
-        const secretPayload = payload as ISecretSharePayload & { saveName: string };
+    else if (payload.type === 'secret') {
+        const secretPayload = payload as ISecretShareImportPayload;
         await importSecretPayload(secretPayload, secretPayload.saveName);
     }
 }, 'Error importing share payload'));

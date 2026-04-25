@@ -38,7 +38,7 @@ export class LanShareSender {
     private isCancelled: boolean;
 
     // The 4-digit pairing code displayed to the user.
-    readonly pairingCode: string;
+    pairingCode: string;
 
     constructor(payload: unknown, pairingCode?: string) {
         this.payload = payload;
