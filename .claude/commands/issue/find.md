@@ -1,5 +1,7 @@
 Find the root cause of the problem described in the conversation. Do not propose a fix — only identify and prove the root cause.
 
+0. **Choose working location** — ask the user whether to run experiments in the main working copy or a git worktree. If they choose a worktree, use the `EnterWorktree` tool to create one, then run `bun install '*'` inside it before proceeding.
+
 1. **Understand the problem** — restate the issue in one sentence so it is unambiguous.
 
 2. **Reproduce the problem** — run the relevant test, command, or minimal script that triggers the failure. Confirm you can see the bad behaviour before investigating further. If you cannot reproduce it, report that clearly and stop.
