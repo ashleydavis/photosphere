@@ -44,8 +44,14 @@ jest.mock('./clack/prompts', () => ({
     password: jest.fn(),
 }));
 
-import { getDefaultS3Config, promptToAddKey, promptToGenerateOrAddKey, resolveKeyPemsWithPrompt, levenshteinDistance, findSimilarDatabaseNames } from '../../lib/init-cmd';
+// Mock fuzzy-match so tests don't depend on the real Levenshtein implementation.
+jest.mock('fuzzy-match', () => ({
+    fuzzyMatch: jest.fn().mockReturnValue([]),
+}));
+
+import { getDefaultS3Config, promptToAddKey, promptToGenerateOrAddKey, resolveKeyPemsWithPrompt, findSimilarDatabaseNames, findSimilarSecretNames, findSimilarKeyNames } from '../../lib/init-cmd';
 import { getVault } from 'vault';
+import { fuzzyMatch } from 'fuzzy-match';
 import { generateKeyPair, exportPublicKeyToPem } from 'storage';
 import * as fsPromises from 'fs/promises';
 import { getDatabases } from 'node-utils';
@@ -55,6 +61,7 @@ const mockGenerateKeyPair = generateKeyPair as jest.Mock;
 const mockExportPublicKeyToPem = exportPublicKeyToPem as jest.Mock;
 const mockFsReadFile = fsPromises.readFile as jest.MockedFunction<typeof fsPromises.readFile>;
 const mockGetDatabases = getDatabases as jest.Mock;
+const mockFuzzyMatch = fuzzyMatch as jest.Mock;
 
 // Access the clack prompt mocks via jest.requireMock since the moduleNameMapper
 // redirects './clack/prompts' to the shared mock file.
@@ -78,6 +85,8 @@ function makeMockVault(secret: { name: string; type: string; value: string } | u
         checkPrereqs: jest.fn(),
     };
 }
+
+
 
 describe('getDefaultS3Config', () => {
     beforeEach(() => {
@@ -273,86 +282,152 @@ describe('resolveKeyPemsWithPrompt', () => {
     });
 });
 
-describe('levenshteinDistance', () => {
-    test('returns 0 for identical strings', () => {
-        expect(levenshteinDistance('abc', 'abc')).toBe(0);
-    });
-
-    test('returns 1 for a single substitution', () => {
-        expect(levenshteinDistance('abc', 'axc')).toBe(1);
-    });
-
-    test('returns 1 for a single insertion', () => {
-        expect(levenshteinDistance('abc', 'abcd')).toBe(1);
-    });
-
-    test('returns 1 for a single deletion', () => {
-        expect(levenshteinDistance('abcd', 'abc')).toBe(1);
-    });
-
-    test('returns 4 for ant-and-ash vs ash-and-ant', () => {
-        expect(levenshteinDistance('ant-and-ash', 'ash-and-ant')).toBe(4);
-    });
-
-    test('returns 0 for two empty strings', () => {
-        expect(levenshteinDistance('', '')).toBe(0);
-    });
-
-    test('returns length of b when a is empty', () => {
-        expect(levenshteinDistance('', 'abc')).toBe(3);
-    });
-});
-
 describe('findSimilarDatabaseNames', () => {
     beforeEach(() => {
         jest.clearAllMocks();
     });
 
+    test('returns empty array when fuzzyMatch returns nothing', async () => {
+        mockGetDatabases.mockResolvedValue([{ name: 'mydb', path: '/path' }]);
+        mockFuzzyMatch.mockReturnValue([]);
+
+        const result = await findSimilarDatabaseNames('my-database');
+
+        expect(result).toEqual([]);
+    });
+
+    test('returns names returned by fuzzyMatch', async () => {
+        mockGetDatabases.mockResolvedValue([
+            { name: 'my-db', path: '/path1' },
+            { name: 'my-database', path: '/path2' },
+        ]);
+        mockFuzzyMatch.mockReturnValue(['my-db']);
+
+        const result = await findSimilarDatabaseNames('my-databse');
+
+        expect(result).toEqual(['my-db']);
+    });
+
+    test('calls fuzzyMatch with the query string and database names array', async () => {
+        mockGetDatabases.mockResolvedValue([{ name: 'mydb', path: '/path' }]);
+        mockFuzzyMatch.mockReturnValue([]);
+
+        await findSimilarDatabaseNames('my-query');
+
+        expect(mockFuzzyMatch).toHaveBeenCalledWith('my-query', ['mydb']);
+    });
+
     test('returns empty array when no databases are registered', async () => {
         mockGetDatabases.mockResolvedValue([]);
+        mockFuzzyMatch.mockReturnValue([]);
 
         const result = await findSimilarDatabaseNames('my-database');
 
         expect(result).toEqual([]);
     });
+});
 
-    test('returns similar name when within edit distance threshold', async () => {
-        mockGetDatabases.mockResolvedValue([
-            { name: 'ash-and-ant-digital-ocean', path: 's3:bucket' },
-        ]);
-
-        const result = await findSimilarDatabaseNames('ant-and-ash-digital-ocean');
-
-        expect(result).toEqual(['ash-and-ant-digital-ocean']);
+describe('findSimilarSecretNames', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
     });
 
-    test('excludes exact case-insensitive match (distance 0)', async () => {
-        mockGetDatabases.mockResolvedValue([
-            { name: 'my-database', path: '/some/path' },
-        ]);
+    test('returns names from fuzzyMatch when no type filter is provided', async () => {
+        const mockVault = {
+            get: jest.fn(),
+            list: jest.fn().mockResolvedValue([
+                { name: 'my-secret', type: 'api-key', value: 'val' },
+                { name: 'other-secret', type: 'encryption-key', value: 'val' },
+            ]),
+            set: jest.fn(),
+            delete: jest.fn(),
+            checkPrereqs: jest.fn(),
+        };
+        mockGetVault.mockReturnValue(mockVault);
+        mockFuzzyMatch.mockReturnValue(['my-secrt']);
 
-        const result = await findSimilarDatabaseNames('my-database');
+        const result = await findSimilarSecretNames('my-secrt');
+
+        expect(result).toEqual(['my-secrt']);
+        expect(mockFuzzyMatch).toHaveBeenCalledWith('my-secrt', expect.anything());
+    });
+
+    test('filters by type when type is provided', async () => {
+        const mockVault = {
+            get: jest.fn(),
+            list: jest.fn().mockResolvedValue([
+                { name: 'my-key', type: 'encryption-key', value: 'pem' },
+                { name: 'my-s3', type: 's3-credentials', value: 'creds' },
+            ]),
+            set: jest.fn(),
+            delete: jest.fn(),
+            checkPrereqs: jest.fn(),
+        };
+        mockGetVault.mockReturnValue(mockVault);
+        mockFuzzyMatch.mockReturnValue([]);
+
+        await findSimilarSecretNames('my-ke', 'encryption-key');
+
+        expect(mockFuzzyMatch).toHaveBeenCalledWith('my-ke', ['my-key']);
+    });
+
+    test('returns empty array when no secrets match', async () => {
+        const mockVault = {
+            get: jest.fn(),
+            list: jest.fn().mockResolvedValue([]),
+            set: jest.fn(),
+            delete: jest.fn(),
+            checkPrereqs: jest.fn(),
+        };
+        mockGetVault.mockReturnValue(mockVault);
+        mockFuzzyMatch.mockReturnValue([]);
+
+        const result = await findSimilarSecretNames('anything');
 
         expect(result).toEqual([]);
     });
+});
 
-    test('excludes names that exceed the edit distance threshold', async () => {
-        mockGetDatabases.mockResolvedValue([
-            { name: 'completely-different-name', path: '/some/path' },
-        ]);
-
-        const result = await findSimilarDatabaseNames('abc');
-
-        expect(result).toEqual([]);
+describe('findSimilarKeyNames', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
     });
 
-    test('performs case-insensitive comparison', async () => {
-        mockGetDatabases.mockResolvedValue([
-            { name: 'My-Database', path: '/some/path' },
-        ]);
+    test('only passes encryption-key entries as candidates', async () => {
+        const mockVault = {
+            get: jest.fn(),
+            list: jest.fn().mockResolvedValue([
+                { name: 'my-key', type: 'encryption-key', value: 'pem' },
+                { name: 'my-s3', type: 's3-credentials', value: 'creds' },
+                { name: 'my-api', type: 'api-key', value: 'key' },
+            ]),
+            set: jest.fn(),
+            delete: jest.fn(),
+            checkPrereqs: jest.fn(),
+        };
+        mockGetVault.mockReturnValue(mockVault);
+        mockFuzzyMatch.mockReturnValue([]);
 
-        const result = await findSimilarDatabaseNames('my-databaxe');
+        await findSimilarKeyNames('my-ke');
 
-        expect(result).toEqual(['My-Database']);
+        expect(mockFuzzyMatch).toHaveBeenCalledWith('my-ke', ['my-key']);
+    });
+
+    test('returns names returned by fuzzyMatch', async () => {
+        const mockVault = {
+            get: jest.fn(),
+            list: jest.fn().mockResolvedValue([
+                { name: 'my-photos', type: 'encryption-key', value: 'pem' },
+            ]),
+            set: jest.fn(),
+            delete: jest.fn(),
+            checkPrereqs: jest.fn(),
+        };
+        mockGetVault.mockReturnValue(mockVault);
+        mockFuzzyMatch.mockReturnValue(['my-photos']);
+
+        const result = await findSimilarKeyNames('my-phtos');
+
+        expect(result).toEqual(['my-photos']);
     });
 });

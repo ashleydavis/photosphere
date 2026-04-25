@@ -57,6 +57,7 @@
     "defs": "workspace:*",
     "task-queue": "workspace:*",
     "vault": "workspace:*",
-    "lan-share": "workspace:*"
+    "lan-share": "workspace:*",
+    "fuzzy-match": "workspace:*"
   }
 }

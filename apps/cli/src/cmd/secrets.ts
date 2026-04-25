@@ -8,6 +8,7 @@ import * as fs from 'fs/promises';
 import { existsSync } from 'fs';
 import { LanShareSender, LanShareReceiver, resolveSecretSharePayload, importSecretPayload } from 'lan-share';
 import type { ISecretSharePayload } from 'lan-share';
+import { findSimilarSecretNames } from '../lib/init-cmd';
 
 //
 // Secret types supported by the secrets CLI.
@@ -315,7 +316,7 @@ async function secretsList(): Promise<void> {
 //
 // psi secrets view [name] — show the full value after confirmation.
 //
-async function secretsView(cmdOptions: ISecretsViewOptions): Promise<void> {
+export async function secretsView(cmdOptions: ISecretsViewOptions): Promise<void> {
     await checkVaultPrereqs();
     const vault = getVault(getDefaultVaultType());
     let secretName: string | undefined = cmdOptions.name;
@@ -353,6 +354,10 @@ async function secretsView(cmdOptions: ISecretsViewOptions): Promise<void> {
 
     if (!secret) {
         log.error(pc.red(`✗ No secret named "${secretName}" found.`));
+        const similarSecretNames = await findSimilarSecretNames(secretName);
+        if (similarSecretNames.length > 0) {
+            log.info(`Did you mean:\n${similarSecretNames.map(similarName => `  • ${pc.cyan(similarName)}`).join('\n')}`);
+        }
         await exit(1);
         return;
     }
@@ -394,7 +399,7 @@ async function secretsView(cmdOptions: ISecretsViewOptions): Promise<void> {
 //
 // psi secrets edit [name] — reload existing fields and re-prompt with current values pre-populated.
 //
-async function secretsEdit(cmdOptions: ISecretsEditOptions): Promise<void> {
+export async function secretsEdit(cmdOptions: ISecretsEditOptions): Promise<void> {
     await checkVaultPrereqs();
     const vault = getVault(getDefaultVaultType());
     let secretName: string | undefined = cmdOptions.name;
@@ -432,6 +437,10 @@ async function secretsEdit(cmdOptions: ISecretsEditOptions): Promise<void> {
 
     if (!secret) {
         log.error(pc.red(`✗ No secret named "${secretName}" found.`));
+        const similarSecretNames = await findSimilarSecretNames(secretName);
+        if (similarSecretNames.length > 0) {
+            log.info(`Did you mean:\n${similarSecretNames.map(similarName => `  • ${pc.cyan(similarName)}`).join('\n')}`);
+        }
         await exit(1);
         return;
     }
@@ -526,7 +535,7 @@ async function secretsEdit(cmdOptions: ISecretsEditOptions): Promise<void> {
 //
 // psi secrets remove [name] — remove a secret after confirmation.
 //
-async function secretsRemove(cmdOptions: ISecretsRemoveOptions): Promise<void> {
+export async function secretsRemove(cmdOptions: ISecretsRemoveOptions): Promise<void> {
     await checkVaultPrereqs();
     const vault = getVault(getDefaultVaultType());
     let secretName: string | undefined = cmdOptions.name;
@@ -564,6 +573,10 @@ async function secretsRemove(cmdOptions: ISecretsRemoveOptions): Promise<void> {
 
     if (!secret) {
         log.error(pc.red(`✗ No secret named "${secretName}" found.`));
+        const similarSecretNames = await findSimilarSecretNames(secretName);
+        if (similarSecretNames.length > 0) {
+            log.info(`Did you mean:\n${similarSecretNames.map(similarName => `  • ${pc.cyan(similarName)}`).join('\n')}`);
+        }
         await exit(1);
         return;
     }
@@ -698,7 +711,7 @@ async function secretsImport(cmdOptions: ISecretsImportOptions): Promise<void> {
 //
 // psi secrets send [name] — share a secret with another device over the LAN.
 //
-async function secretsSend(cmdOptions: ISecretsSendOptions): Promise<void> {
+export async function secretsSend(cmdOptions: ISecretsSendOptions): Promise<void> {
     await checkVaultPrereqs();
     intro(pc.cyan('Send Secret'));
 
@@ -714,6 +727,10 @@ async function secretsSend(cmdOptions: ISecretsSendOptions): Promise<void> {
         const secret = await vault.get(cmdOptions.name);
         if (!secret) {
             log.error(pc.red(`✗ No secret named "${cmdOptions.name}" found.`));
+            const similarSecretNames = await findSimilarSecretNames(cmdOptions.name);
+            if (similarSecretNames.length > 0) {
+                log.info(`Did you mean:\n${similarSecretNames.map(similarName => `  • ${pc.cyan(similarName)}`).join('\n')}`);
+            }
             await exit(1);
             return;
         }
