@@ -17,7 +17,7 @@ import { ensureMediaProcessingTools } from './ensure-tools';
 import * as fs from 'fs/promises';
 import * as os from 'os';
 import pc from "picocolors";
-import { confirm, text, password, isCancel, outro, select } from './clack/prompts';
+import { confirm, text, password, isCancel, outro, select, multiline } from './clack/prompts';
 import * as path from "path";
 import { CURRENT_DATABASE_VERSION, loadTreeVersion } from "merkle-tree";
 import { getVault, getDefaultVaultType } from 'vault';
@@ -314,6 +314,132 @@ async function loadKeyPairFromVault(keyName: string): Promise<IEncryptionKeyPem 
     const privateKeyObj = createPrivateKey(privateKeyPem);
     const publicKeyPem = exportPublicKeyToPem(createPublicKey(privateKeyObj));
     return { privateKeyPem, publicKeyPem };
+}
+
+//
+// Builds an IEncryptionKeyPem from a private key PEM string and stores it in the vault.
+//
+async function buildAndStoreKeyPem(keyName: string, privateKeyPem: string): Promise<IEncryptionKeyPem> {
+    const vault = getVault(getDefaultVaultType());
+    await vault.set({ name: keyName, type: 'encryption-key', value: privateKeyPem });
+    const privateKeyObj = createPrivateKey(privateKeyPem);
+    const publicKeyPem = exportPublicKeyToPem(createPublicKey(privateKeyObj));
+    return { privateKeyPem, publicKeyPem };
+}
+
+//
+// Interactively prompts the user to add a missing encryption key (paste PEM or import from file).
+// Returns undefined when non-interactive or cancelled.
+//
+export async function promptToAddKey(keyName: string, nonInteractive: boolean): Promise<IEncryptionKeyPem | undefined> {
+    if (nonInteractive) {
+        return undefined;
+    }
+
+    const choice = await select({
+        message: `Encryption key "${keyName}" was not found. How would you like to add it?`,
+        options: [
+            { value: 'paste', label: 'Paste PEM' },
+            { value: 'import', label: 'Import from file' },
+            { value: 'cancel', label: 'Cancel' },
+        ],
+    });
+
+    if (isCancel(choice) || choice === 'cancel') {
+        return undefined;
+    }
+
+    if (choice === 'paste') {
+        const pem = await multiline({ message: 'Paste the private key PEM:' });
+        if (isCancel(pem)) {
+            return undefined;
+        }
+        return buildAndStoreKeyPem(keyName, pem as string);
+    }
+
+    if (choice === 'import') {
+        const filePath = await text({ message: 'Enter the path to the PEM file:' });
+        if (isCancel(filePath)) {
+            return undefined;
+        }
+        const pem = await fs.readFile(filePath as string, 'utf-8');
+        return buildAndStoreKeyPem(keyName, pem);
+    }
+
+    return undefined;
+}
+
+//
+// Interactively prompts the user to generate a new key, paste a PEM, or import from file.
+// Returns undefined when non-interactive or cancelled.
+//
+export async function promptToGenerateOrAddKey(keyName: string, nonInteractive: boolean): Promise<IEncryptionKeyPem | undefined> {
+    if (nonInteractive) {
+        return undefined;
+    }
+
+    const choice = await select({
+        message: `Encryption key "${keyName}" was not found. How would you like to add it?`,
+        options: [
+            { value: 'generate', label: 'Generate a new key' },
+            { value: 'paste', label: 'Paste PEM' },
+            { value: 'import', label: 'Import from file' },
+            { value: 'cancel', label: 'Cancel' },
+        ],
+    });
+
+    if (isCancel(choice) || choice === 'cancel') {
+        return undefined;
+    }
+
+    if (choice === 'generate') {
+        const keyPair = generateKeyPair();
+        const privateKeyPem = keyPair.privateKey.export({ type: 'pkcs8', format: 'pem' }) as string;
+        return buildAndStoreKeyPem(keyName, privateKeyPem);
+    }
+
+    if (choice === 'paste') {
+        const pem = await multiline({ message: 'Paste the private key PEM:' });
+        if (isCancel(pem)) {
+            return undefined;
+        }
+        return buildAndStoreKeyPem(keyName, pem as string);
+    }
+
+    if (choice === 'import') {
+        const filePath = await text({ message: 'Enter the path to the PEM file:' });
+        if (isCancel(filePath)) {
+            return undefined;
+        }
+        const pem = await fs.readFile(filePath as string, 'utf-8');
+        return buildAndStoreKeyPem(keyName, pem);
+    }
+
+    return undefined;
+}
+
+//
+// Resolves key PEMs by name. When the key is not found in the vault and a
+// name was provided, the user is prompted to add the key (or generate one
+// when canGenerate is true). Returns the resolved or newly-added key pems,
+// or an empty array when the user cancels or non-interactive mode is active.
+//
+export async function resolveKeyPemsWithPrompt(
+    keyName: string | undefined,
+    nonInteractive: boolean,
+    canGenerate: boolean
+): Promise<IEncryptionKeyPem[]> {
+    const keyPems = await resolveKeyPems(keyName);
+    if (keyPems.length > 0 || !keyName) {
+        return keyPems;
+    }
+    const newPair = canGenerate
+        ? await promptToGenerateOrAddKey(keyName, nonInteractive)
+        : await promptToAddKey(keyName, nonInteractive);
+    if (newPair === undefined) {
+        return [];
+    }
+    return [newPair];
 }
 
 //
@@ -647,7 +773,7 @@ export async function loadDatabase(
 
     if (keyName) {
         // Explicit --key overrides any resolved keys.
-        keyPems = await resolveKeyPems(keyName);
+        keyPems = await resolveKeyPemsWithPrompt(keyName, nonInteractive, false);
         if (keyPems.length === 0) {
             outro(pc.red(`✗ Encryption key "${keyName}" not found.\n  Use "psi secrets list" to see available keys.`));
             await exit(1);
@@ -803,8 +929,14 @@ export async function createDatabase(
                 pair = { privateKeyPem, publicKeyPem };
             }
             else {
-                outro(pc.red(`✗ Encryption key "${options.key}" not found in vault.`));
-                await exit(1);
+                const newPair = await promptToGenerateOrAddKey(options.key!, nonInteractive);
+                if (newPair === undefined) {
+                    outro(pc.red(`✗ Encryption key "${options.key}" not found in vault.`));
+                    await exit(1);
+                }
+                else {
+                    pair = newPair;
+                }
             }
         }
         if (pair) {
