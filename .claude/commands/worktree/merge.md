@@ -1,4 +1,4 @@
-Bring changes from a git worktree back into the current branch by merging its branch, then remove the worktree.
+Bring changes from a git worktree back into the current branch by rebasing its commits, then remove the worktree.
 
 Steps:
 
@@ -10,20 +10,26 @@ Steps:
 
 4. Note the branch name of the worktree (from `git worktree list --porcelain`).
 
-5. Ask the user to confirm before proceeding: show them the worktree path, its branch, and the current branch that will receive the merge.
+5. Ask the user to confirm before proceeding: show them the worktree path, its branch, and the current branch that will receive the rebase.
 
-6. Once confirmed, merge the worktree branch into the current branch:
+6. Once confirmed, rebase the worktree branch onto the current branch (this is run from the worktree):
    ```
-   git merge <worktree-branch> --no-ff -m "Merge worktree branch '<worktree-branch>'"
+   git -C <worktree-path> rebase <current-branch>
+   ```
+   If the rebase produces conflicts, stop and report them to the user. Do not proceed until conflicts are resolved.
+
+7. Fast-forward the current branch to include the rebased commits:
+   ```
+   git merge <worktree-branch> --ff-only
    ```
 
-7. If the merge succeeds, remove the worktree:
+8. Remove the worktree:
    ```
    git worktree remove <worktree-path>
    ```
 
-8. Report success by running these two commands:
-   - `git log -1 --oneline` — show the merge commit hash
+9. Report success by running these two commands:
+   - `git log --oneline -5` — show the recent commit history
    - `git worktree list` — confirm the worktree has been removed
 
    Report the output of both commands to the user. Do not run any other commands.
