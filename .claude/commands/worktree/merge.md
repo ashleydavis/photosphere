@@ -24,19 +24,20 @@ Steps:
    ```
    If the rebase produces conflicts, stop and report them to the user. Do not proceed until conflicts are resolved.
 
-8. Fast-forward the current branch to include the rebased commits:
+8. Fast-forward the current branch to include the rebased commits. **IMPORTANT**: the shell may be anchored to the worktree path — always use `-C` with the main repo path to ensure this runs against the correct checkout:
    ```
-   git merge <worktree-branch> --ff-only
+   git -C <main-repo-path> merge <worktree-branch> --ff-only
    ```
+   After running, verify the main branch HEAD has advanced by checking `git -C <main-repo-path> log --oneline -1` and confirming it matches the worktree's tip commit.
 
 9. Remove the worktree:
    ```
    git worktree remove <worktree-path>
    ```
 
-10. Report success by running these two commands:
-   - `git log --oneline -5` — show the recent commit history
-   - `git worktree list` — confirm the worktree has been removed
+10. Report success by running these two commands (use `-C <main-repo-path>` since the shell may still be anchored to the removed worktree):
+   - `git -C <main-repo-path> log --oneline -5` — show the recent commit history
+   - `git -C <main-repo-path> worktree list` — confirm the worktree has been removed
 
    Report the output of both commands to the user. Do not run any other commands.
 
