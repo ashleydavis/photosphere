@@ -10,9 +10,6 @@ Given the root cause, proposed fix, and implementation plan from this conversati
 
 4. **Implement** — make only the changes described in the plan. Do not add unrequested features, refactoring, or cleanup beyond what the plan specifies.
 
-5. **Verify** — once all tasks are done, run the following checks in order:
-   1. `bun run compile` — if it fails, fix the compile errors and re-run before continuing
-   2. `bun run test` — if it fails, fix the failing tests and re-run before continuing
-   3. `bun run test:cli` — if it fails, fix the failures and re-run before continuing
+5. **Verify** — once all tasks are done, run `/verify` to confirm the full test suite and compile checks pass.
 
 6. **Report** — once all checks pass, summarise what was changed (files and functions) and confirm that compile, unit tests, and smoke tests all passed.
