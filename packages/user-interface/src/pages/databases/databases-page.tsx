@@ -15,13 +15,15 @@ import FormControl from '@mui/joy/FormControl';
 import FormLabel from '@mui/joy/FormLabel';
 import Select from '@mui/joy/Select';
 import Option from '@mui/joy/Option';
-import { Edit, Delete, Refresh, FolderOpen } from '@mui/icons-material';
+import { Edit, Delete, Refresh, FolderOpen, IosShare } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { usePlatform, type IDatabaseEntry, type ISharedSecretEntry } from '../../context/platform-context';
 import { useAssetDatabase } from '../../context/asset-database-source';
 import { CreateSecretDialog } from '../../components/create-secret-dialog';
 import { CreateDatabaseModal } from '../../components/create-database-modal';
 import { AddDatabaseModal } from '../../components/add-database-modal';
+import { ShareDatabaseDialog } from '../../components/share-database-dialog';
+import { ReceiveDatabaseDialog } from '../../components/receive-database-dialog';
 
 //
 // Form state for the add/edit dialog.
@@ -94,6 +96,12 @@ export function DatabasesPage() {
 
     // Whether a refresh is in progress (drives the spin animation).
     const [refreshing, setRefreshing] = useState(false);
+
+    // The database entry being shared via LAN share (undefined when no share is in progress).
+    const [sharingEntry, setSharingEntry] = useState<IDatabaseEntry | undefined>(undefined);
+
+    // Whether the receive-database dialog is open.
+    const [receiveDbDialogOpen, setReceiveDbDialogOpen] = useState(false);
 
     //
     // Loads database entries and secrets from the platform.
@@ -296,9 +304,16 @@ export function DatabasesPage() {
                 </Button>
                 <Button
                     variant="outlined"
+                    sx={{ mr: 1 }}
                     onClick={() => setAddModalOpen(true)}
                 >
                     Add database
+                </Button>
+                <Button
+                    variant="outlined"
+                    onClick={() => setReceiveDbDialogOpen(true)}
+                >
+                    Receive database
                 </Button>
             </Box>
 
@@ -326,6 +341,13 @@ export function DatabasesPage() {
                                     onClick={() => handleOpen(entry).catch(err => console.error('Open database error:', err))}
                                 >
                                     <FolderOpen fontSize="small" />
+                                </IconButton>
+                                <IconButton
+                                    size="sm"
+                                    variant="plain"
+                                    onClick={() => setSharingEntry(entry)}
+                                >
+                                    <IosShare fontSize="small" />
                                 </IconButton>
                                 <IconButton
                                     size="sm"
@@ -463,6 +485,22 @@ export function DatabasesPage() {
                 open={addModalOpen}
                 onClose={() => {
                     setAddModalOpen(false);
+                    loadData().catch(err => console.error('Failed to reload data:', err));
+                }}
+            />
+
+            {sharingEntry && (
+                <ShareDatabaseDialog
+                    open={sharingEntry !== undefined}
+                    entry={sharingEntry}
+                    onClose={() => setSharingEntry(undefined)}
+                />
+            )}
+
+            <ReceiveDatabaseDialog
+                open={receiveDbDialogOpen}
+                onClose={() => {
+                    setReceiveDbDialogOpen(false);
                     loadData().catch(err => console.error('Failed to reload data:', err));
                 }}
             />
