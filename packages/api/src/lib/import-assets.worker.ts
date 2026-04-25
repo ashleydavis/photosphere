@@ -6,7 +6,7 @@ import { IDatabaseDescriptor } from "./database-descriptor";
 import { resolveStorageCredentials } from "./resolve-storage-credentials";
 import type { ITaskContext } from "task-queue";
 import { TaskStatus, TaskQueue } from "task-queue";
-import { IAsset } from "defs";
+import { IAsset } from "./asset";
 import { log, retry, retryOrLog, sleep, swallowError } from "utils";
 import { BsonDatabase } from "bdb";
 import { addItem, BufferSet } from "merkle-tree";

@@ -1,4 +1,4 @@
-import type { IAsset } from "defs";
+import type { IAsset } from "./asset";
 
 //
 // Input data for the sync-database background task.

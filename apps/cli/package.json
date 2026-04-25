@@ -54,7 +54,6 @@
     "config": "workspace:*",
     "wrap-ansi": "^9.0.0",
     "bdb": "workspace:*",
-    "defs": "workspace:*",
     "task-queue": "workspace:*",
     "vault": "workspace:*",
     "lan-share": "workspace:*",

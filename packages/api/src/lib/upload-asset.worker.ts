@@ -20,7 +20,7 @@ import { getImageDetails } from "./image";
 import { ILocation, log, retry, reverseGeocode, swallowError } from "utils";
 import { LARGE_FILE_TIMEOUT } from "./constants";
 import dayjs from "dayjs";
-import { IAsset } from "defs";
+import { IAsset } from "./asset";
 import { IHashedData } from "merkle-tree";
 
 //

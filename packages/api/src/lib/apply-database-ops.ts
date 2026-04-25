@@ -1,5 +1,6 @@
 import type { IBsonCollection } from "bdb";
-import type { IAsset, IDatabaseOp } from "defs";
+import type { IAsset } from "./asset";
+import type { IDatabaseOp } from "./database-op";
 import type { IUuidGenerator, ITimestampProvider } from "utils";
 import { createStorage } from "storage";
 import { acquireWriteLock, releaseWriteLock } from "./write-lock";

@@ -1,4 +1,4 @@
-import type { IAsset } from "defs";
+import type { IAsset } from "./asset";
 
 export interface ILoadAssetsData {
     databasePath: string;

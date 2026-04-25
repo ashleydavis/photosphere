@@ -5,7 +5,7 @@ import { log, retry } from "utils";
 import { IMerkleTree, SortNode, traverseTreeAsync } from "merkle-tree";
 import { loadMerkleTree } from "./tree";
 import type { IBsonCollection, IBsonDatabase } from "bdb";
-import type { IAsset } from "defs";
+import type { IAsset } from "./asset";
 
 //
 // Options for repairing the media file database.

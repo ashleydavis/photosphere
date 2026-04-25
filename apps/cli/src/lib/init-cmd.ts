@@ -3,7 +3,7 @@ import { createStorage, loadEncryptionKeysFromPem, generateKeyPair, exportPublic
 import { createPrivateKey, createPublicKey } from "node:crypto";
 import type { BsonDatabase, IBsonCollection } from "bdb";
 import type { IUuidGenerator, ITimestampProvider } from "utils";
-import type { IAsset } from "defs";
+import type { IAsset } from "api";
 import type { IQueueBackend } from "task-queue";
 import { setQueueBackend } from "task-queue";
 import { WorkerPoolBun } from "./worker-pool-bun";
