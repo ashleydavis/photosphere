@@ -2,12 +2,13 @@ import { pipeline } from "stream/promises";
 import express from "express";
 import type { Request, Response, Application } from "express";
 import { createServer, type Server } from "http";
-import { createStorage, type IStorage } from "storage";
+import { createStorage, loadEncryptionKeysFromPem, type IStorage } from "storage";
 import {
     applyDatabaseOps,
     createLazyDatabaseStorage,
     streamAsset,
     writeAssetStream,
+    resolveStorageCredentials,
 } from "api";
 import type { IDatabaseOp } from "defs";
 import { type IUuidGenerator, type ITimestampProvider, log } from "utils";
@@ -89,7 +90,9 @@ export async function createAssetServer(options: IAssetServerOptions): Promise<I
         if (cached) {
             return cached;
         }
-        const storage = await createLazyDatabaseStorage(databasePath);
+        const { s3Config, encryptionKeyPems } = await resolveStorageCredentials(databasePath);
+        const { options: storageOptions } = await loadEncryptionKeysFromPem(encryptionKeyPems);
+        const storage = await createLazyDatabaseStorage(databasePath, s3Config, storageOptions);
         storageCache.set(databasePath, storage);
         return storage;
     }

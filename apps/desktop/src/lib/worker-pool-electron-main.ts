@@ -516,6 +516,14 @@ export class WorkerPoolElectronMain implements IQueueBackend {
             workerEnv.TMPDIR = process.env.TMPDIR;
         }
 
+        // Pass through D-Bus and XDG session variables needed for Linux keychain (secret-tool).
+        if (process.env.DBUS_SESSION_BUS_ADDRESS) {
+            workerEnv.DBUS_SESSION_BUS_ADDRESS = process.env.DBUS_SESSION_BUS_ADDRESS;
+        }
+        if (process.env.XDG_RUNTIME_DIR) {
+            workerEnv.XDG_RUNTIME_DIR = process.env.XDG_RUNTIME_DIR;
+        }
+
         const workerId = this.workers.length + 1;
         const workerOptions: IWorkerOptions = {
             ...this.backendOptions,
@@ -782,6 +790,14 @@ export class WorkerPoolElectronMain implements IQueueBackend {
         }
         if (process.env.TMPDIR) {
             workerEnv.TMPDIR = process.env.TMPDIR;
+        }
+
+        // Pass through D-Bus and XDG session variables needed for Linux keychain (secret-tool).
+        if (process.env.DBUS_SESSION_BUS_ADDRESS) {
+            workerEnv.DBUS_SESSION_BUS_ADDRESS = process.env.DBUS_SESSION_BUS_ADDRESS;
+        }
+        if (process.env.XDG_RUNTIME_DIR) {
+            workerEnv.XDG_RUNTIME_DIR = process.env.XDG_RUNTIME_DIR;
         }
 
         const workerOptions: IWorkerOptions = {
