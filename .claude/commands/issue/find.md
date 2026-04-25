@@ -1,6 +1,6 @@
 Find the root cause of the problem described in the conversation. Do not propose a fix — only identify and prove the root cause.
 
-0. **Choose working location** — ask the user whether to run experiments in the main working copy or a git worktree. If they choose a worktree, use the `EnterWorktree` tool to create one, then run `bun install '*'` inside it before proceeding.
+0. **Choose working location** — ask the user whether to run experiments in the main working copy or a git worktree. If they choose a worktree: (1) run `git branch --show-current` to get the current branch, (2) run `git worktree add -b <new-branch> .claude/worktrees/<name> <current-branch>` to create the worktree branching from the current branch, (3) use `EnterWorktree` with the `path` parameter to enter it, then run `bun install '*'` inside it before proceeding.
 
 1. **Understand the problem** — restate the issue in one sentence so it is unambiguous.
 
