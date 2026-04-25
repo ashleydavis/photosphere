@@ -511,6 +511,55 @@ export async function resolveDatabaseEntry(dbValue: string): Promise<IDatabaseEn
 }
 
 //
+// Computes the Levenshtein edit distance between two strings.
+//
+export function levenshteinDistance(a: string, b: string): number {
+    const matrix: number[][] = [];
+
+    for (let i = 0; i <= b.length; i++) {
+        matrix[i] = [i];
+    }
+
+    for (let j = 0; j <= a.length; j++) {
+        matrix[0][j] = j;
+    }
+
+    for (let i = 1; i <= b.length; i++) {
+        for (let j = 1; j <= a.length; j++) {
+            if (b[i - 1] === a[j - 1]) {
+                matrix[i][j] = matrix[i - 1][j - 1];
+            }
+            else {
+                matrix[i][j] = Math.min(
+                    matrix[i - 1][j - 1] + 1,
+                    matrix[i][j - 1] + 1,
+                    matrix[i - 1][j] + 1
+                );
+            }
+        }
+    }
+
+    return matrix[b.length][a.length];
+}
+
+//
+// Returns registered database names whose edit distance from dbValue is within
+// the fuzzy threshold. Used to suggest alternatives in "No database found" errors.
+//
+export async function findSimilarDatabaseNames(dbValue: string): Promise<string[]> {
+    const databases = await getDatabases();
+    const lowerValue = dbValue.toLowerCase();
+    const threshold = Math.max(3, Math.floor(lowerValue.length / 4));
+
+    return databases
+        .filter(dbEntry => {
+            const distance = levenshteinDistance(lowerValue, dbEntry.name.toLowerCase());
+            return distance > 0 && distance <= threshold;
+        })
+        .map(dbEntry => dbEntry.name);
+}
+
+//
 // Resolves vault secrets linked to a database entry.
 // S3 credentials are only fetched when the entry path uses the s3: scheme.
 // Encryption and geocoding key names are returned without vault access — the
@@ -792,7 +841,17 @@ export async function loadDatabase(
     const hasFilesDat = await assetStorage.fileExists(".db/files.dat");
     const hasTreeDat = await assetStorage.fileExists(".db/tree.dat");
     if (!hasFilesDat && !hasTreeDat) {
-        outro(pc.red(`✗ No database found at: ${pc.cyan(dbDir)}\n  The database directory must contain a ".db" folder with files.dat or tree.dat.\n\nTo create a new database at this directory, use:\n  ${pc.cyan(`psi init --db ${dbDir}`)}`));
+        let notFoundMessage = pc.red(`✗ No database found at: ${pc.cyan(dbDir)}\n  The database directory must contain a ".db" folder with files.dat or tree.dat.`)
+            + `\n\nTo create a new database at this directory, use:\n  ${pc.cyan(`psi init --db ${dbDir}`)}`;
+
+        if (!matchedEntry) {
+            const similarNames = await findSimilarDatabaseNames(dbDir);
+            if (similarNames.length > 0) {
+                notFoundMessage += `\n\nDid you mean:\n${similarNames.map(similarName => `  • ${pc.cyan(similarName)}`).join('\n')}`;
+            }
+        }
+
+        outro(notFoundMessage);
         await exit(1);
     }
 

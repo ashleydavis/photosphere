@@ -1,4 +1,12 @@
 // Mock heavy workspace packages that have ESM-only transitive dependencies.
+jest.mock('node-utils', () => ({
+    exit: jest.fn(),
+    getDatabases: jest.fn().mockResolvedValue([]),
+    pathExists: jest.fn(),
+    TestUuidGenerator: jest.fn(),
+    TestTimestampProvider: jest.fn(),
+    registerTerminationCallback: jest.fn(),
+}));
 jest.mock('api', () => ({}));
 jest.mock('storage', () => ({ createStorage: jest.fn(), loadEncryptionKeysFromPem: jest.fn(), generateKeyPair: jest.fn(), exportPublicKeyToPem: jest.fn(), pathJoin: jest.fn() }));
 jest.mock('task-queue', () => ({ setQueueBackend: jest.fn() }));
@@ -36,15 +44,17 @@ jest.mock('./clack/prompts', () => ({
     password: jest.fn(),
 }));
 
-import { getDefaultS3Config, promptToAddKey, promptToGenerateOrAddKey, resolveKeyPemsWithPrompt } from '../../lib/init-cmd';
+import { getDefaultS3Config, promptToAddKey, promptToGenerateOrAddKey, resolveKeyPemsWithPrompt, levenshteinDistance, findSimilarDatabaseNames } from '../../lib/init-cmd';
 import { getVault } from 'vault';
 import { generateKeyPair, exportPublicKeyToPem } from 'storage';
 import * as fsPromises from 'fs/promises';
+import { getDatabases } from 'node-utils';
 
 const mockGetVault = getVault as jest.Mock;
 const mockGenerateKeyPair = generateKeyPair as jest.Mock;
 const mockExportPublicKeyToPem = exportPublicKeyToPem as jest.Mock;
 const mockFsReadFile = fsPromises.readFile as jest.MockedFunction<typeof fsPromises.readFile>;
+const mockGetDatabases = getDatabases as jest.Mock;
 
 // Access the clack prompt mocks via jest.requireMock since the moduleNameMapper
 // redirects './clack/prompts' to the shared mock file.
@@ -260,5 +270,89 @@ describe('resolveKeyPemsWithPrompt', () => {
             value: 'new-private-pem',
         });
         expect(result).toEqual([{ privateKeyPem: 'new-private-pem', publicKeyPem: '---PUBLIC---' }]);
+    });
+});
+
+describe('levenshteinDistance', () => {
+    test('returns 0 for identical strings', () => {
+        expect(levenshteinDistance('abc', 'abc')).toBe(0);
+    });
+
+    test('returns 1 for a single substitution', () => {
+        expect(levenshteinDistance('abc', 'axc')).toBe(1);
+    });
+
+    test('returns 1 for a single insertion', () => {
+        expect(levenshteinDistance('abc', 'abcd')).toBe(1);
+    });
+
+    test('returns 1 for a single deletion', () => {
+        expect(levenshteinDistance('abcd', 'abc')).toBe(1);
+    });
+
+    test('returns 4 for ant-and-ash vs ash-and-ant', () => {
+        expect(levenshteinDistance('ant-and-ash', 'ash-and-ant')).toBe(4);
+    });
+
+    test('returns 0 for two empty strings', () => {
+        expect(levenshteinDistance('', '')).toBe(0);
+    });
+
+    test('returns length of b when a is empty', () => {
+        expect(levenshteinDistance('', 'abc')).toBe(3);
+    });
+});
+
+describe('findSimilarDatabaseNames', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+    });
+
+    test('returns empty array when no databases are registered', async () => {
+        mockGetDatabases.mockResolvedValue([]);
+
+        const result = await findSimilarDatabaseNames('my-database');
+
+        expect(result).toEqual([]);
+    });
+
+    test('returns similar name when within edit distance threshold', async () => {
+        mockGetDatabases.mockResolvedValue([
+            { name: 'ash-and-ant-digital-ocean', path: 's3:bucket' },
+        ]);
+
+        const result = await findSimilarDatabaseNames('ant-and-ash-digital-ocean');
+
+        expect(result).toEqual(['ash-and-ant-digital-ocean']);
+    });
+
+    test('excludes exact case-insensitive match (distance 0)', async () => {
+        mockGetDatabases.mockResolvedValue([
+            { name: 'my-database', path: '/some/path' },
+        ]);
+
+        const result = await findSimilarDatabaseNames('my-database');
+
+        expect(result).toEqual([]);
+    });
+
+    test('excludes names that exceed the edit distance threshold', async () => {
+        mockGetDatabases.mockResolvedValue([
+            { name: 'completely-different-name', path: '/some/path' },
+        ]);
+
+        const result = await findSimilarDatabaseNames('abc');
+
+        expect(result).toEqual([]);
+    });
+
+    test('performs case-insensitive comparison', async () => {
+        mockGetDatabases.mockResolvedValue([
+            { name: 'My-Database', path: '/some/path' },
+        ]);
+
+        const result = await findSimilarDatabaseNames('my-databaxe');
+
+        expect(result).toEqual(['My-Database']);
     });
 });
