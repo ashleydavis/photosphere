@@ -8,8 +8,10 @@ Gather context in priority order, stopping as soon as you have enough to write a
 
 Then produce two things:
 
-**Commit message** — one short line, plain English, no period at the end. Should convey the intent of the change, not just describe what files changed. Keep it under 72 characters.
+**Commit message** — one short line, plain English, past tense, no period at the end. Should convey the intent of the change, not just describe what files changed. Keep it under 72 characters.
 
 **Commit description** — a longer paragraph or bullet list with more detail: what changed, why, and any notable decisions or trade-offs. This goes in the body of the commit, separated from the subject by a blank line.
 
 Output both clearly labelled so the user can copy them. Do not commit anything — just produce the text.
+
+When you are done, tell the user they can run `/commit:do` to have Claude stage and commit the changes using these details.
