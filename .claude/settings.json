@@ -30,13 +30,13 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if git status --porcelain | grep -qE '\\.tsx?$'; then bun run compile; fi",
+            "command": "if git status --porcelain | grep -qE '\\.tsx?$' && ! find /tmp/photosphere-compile-last-run -mmin -1 -type f 2>/dev/null | grep -q .; then bun run compile; fi",
             "timeout": 120,
             "statusMessage": "Compiling..."
           },
           {
             "type": "command",
-            "command": "if git status --porcelain | grep -qE '\\.tsx?$'; then bun run test:cli; fi",
+            "command": "if git status --porcelain | grep -qE '\\.tsx?$' && ! find /tmp/photosphere-test-cli-last-run -mmin -1 -type f 2>/dev/null | grep -q .; then bun run test:cli; fi",
             "timeout": 120,
             "statusMessage": "Testing..."
           }
