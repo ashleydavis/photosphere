@@ -158,7 +158,7 @@ export function ShareDatabaseDialog({ open, entry, onClose }: IShareDatabaseDial
                 <DialogTitle>Share Database</DialogTitle>
                 <DialogContent>
                     <Alert color="warning" sx={{ mb: 2 }}>
-                        Credentials will be shared over your local network. Only use this on a trusted network.
+                        Both devices must be on the same local network (wired or Wi-Fi). This does not work over the internet.
                     </Alert>
 
                     <Typography level="body-sm" sx={{ mb: 2 }} color="neutral">
