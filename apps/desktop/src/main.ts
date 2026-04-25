@@ -366,11 +366,28 @@ ipcMain.handle('pick-folder', logExceptions(async () => {
 
 // IPC handler for notifying that database was opened from frontend
 ipcMain.handle('notify-database-opened', logExceptions(async (_event, databasePath: string) => {
-    const { rawStorage } = createStorage(databasePath);
+    const vault = getVault(getDefaultVaultType());
+    const databases = await getDatabases();
+    const dbEntry = databases.find(entry => entry.path === databasePath);
+    let s3Credentials = undefined;
+
+    if (dbEntry?.s3Key) {
+        const s3Secret = await vault.get(dbEntry.s3Key);
+        if (s3Secret) {
+            const parsed = JSON.parse(s3Secret.value);
+            s3Credentials = {
+                region: parsed.region,
+                accessKeyId: parsed.accessKeyId,
+                secretAccessKey: parsed.secretAccessKey,
+                endpoint: parsed.endpoint,
+            };
+        }
+    }
+
+    const { rawStorage } = createStorage(databasePath, s3Credentials);
     const dbConfig = await loadDatabaseConfig(rawStorage);
     const origin = dbConfig?.origin;
-    const databases = await getDatabases();
-    const existing = databases.find(dbEntry => dbEntry.path === databasePath);
+    const existing = databases.find(existingEntry => existingEntry.path === databasePath);
     if (!existing) {
         const newEntry: IDatabaseEntry = {
             name: basename(databasePath),
