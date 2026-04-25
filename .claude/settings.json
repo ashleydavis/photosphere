@@ -23,6 +23,7 @@
       "Bash(cat *)",
       "Bash(find *)",
       "Bash(echo *)",
+      "Bash(grep *)",
       "Edit(./*)",
       "Write(./*)",
       "MultiEdit(./*)"
