@@ -406,7 +406,7 @@ export function dbsCommand(): Command {
 
     // psi dbs send
     cmd.command('send')
-        .description('Send a database config (with secrets) to another device over the LAN.')
+        .description('Send a database config (with secrets) to another device over the local network.')
         .option('--yes', 'Skip confirmation prompts and field editing')
         .option('--name <name>', 'Database name')
         .option('--path <path>', 'Database path')
@@ -415,9 +415,9 @@ export function dbsCommand(): Command {
 
     // psi dbs receive
     cmd.command('receive')
-        .description('Receive a database config (with secrets) from another device over the LAN.')
+        .description('Receive a database config (with secrets) from another device over the local network.')
         .option('--yes', 'Skip confirmation prompts and field editing')
-        .option('--code <code>', 'Pairing code shown on the sender (required with --yes)')
+        .option('--code <code>', 'Pairing code shown on the other device (required with --yes)')
         .action(dbsReceive);
 
     return cmd;
@@ -912,7 +912,7 @@ async function dbsSend(cmdOptions: IDbsSendOptions): Promise<void> {
 
     if (isLocalPath(payload.path)) {
         note(
-            'The database path is a local filesystem path.\nThis works if the receiver has access to the same path (e.g. a shared network drive),\nbut will need updating if the path is specific to this machine.',
+            'The database path is a local filesystem path.\nThis works if the other device has access to the same path (e.g. a shared network drive),\nbut will need updating if the path is specific to this machine.',
             pc.yellow('⚠ Local Path')
         );
     }
@@ -1008,14 +1008,14 @@ async function dbsSend(cmdOptions: IDbsSendOptions): Promise<void> {
     // Create sender (generates or uses supplied pairing code)
     const sender = new LanShareSender(payload, cmdOptions.code);
 
-    // Display the pairing code — the user must enter this on the receiver device
+    // Display the pairing code — the user must enter this on the other device
     log.info('');
     log.info(pc.cyan(`  Pairing code: ${pc.bold(sender.pairingCode)}`));
-    log.info(pc.dim('  Enter this code on the receiver device, then wait.'));
+    log.info(pc.dim('  Enter this code on the other device, then wait.'));
     log.info('');
 
     const spin = spinner();
-    spin.start('Waiting for receiver on the LAN... (Ctrl+C to cancel)');
+    spin.start('Waiting for other device on local network... (Ctrl+C to cancel)');
 
     const sigintHandler = () => {
         sender.cancel();
@@ -1026,11 +1026,11 @@ async function dbsSend(cmdOptions: IDbsSendOptions): Promise<void> {
     process.removeListener('SIGINT', sigintHandler);
 
     if (!endpoint) {
-        spin.stop(pc.yellow('No receiver found within 60 seconds.'));
+        spin.stop(pc.yellow('No device found within 60 seconds.'));
         return;
     }
 
-    spin.stop(pc.green('Receiver found!'));
+    spin.stop(pc.green('Device found!'));
 
     const success = await sender.send(endpoint);
 
@@ -1038,7 +1038,7 @@ async function dbsSend(cmdOptions: IDbsSendOptions): Promise<void> {
         outro(pc.green('✓ Database sent successfully!'));
     }
     else {
-        log.error(pc.red('✗ Pairing code rejected by receiver.'));
+        log.error(pc.red('✗ Pairing code rejected by other device.'));
         await exit(1);
     }
 }
@@ -1070,7 +1070,7 @@ async function dbsReceive(cmdOptions: { yes?: boolean; code?: string }): Promise
     }
     else {
         const codeInput = await text({
-            message: 'Enter the 4-digit pairing code shown on the sender:',
+            message: 'Enter the 4-digit pairing code shown on the other device:',
             validate: (val) => {
                 if (!val || !/^\d{4}$/.test(val.trim())) {
                     return 'Please enter a 4-digit code';
@@ -1091,7 +1091,7 @@ async function dbsReceive(cmdOptions: { yes?: boolean; code?: string }): Promise
     await receiver.start(code);
 
     const spin = spinner();
-    spin.start('Waiting for sender on the LAN... (Ctrl+C to cancel)');
+    spin.start('Waiting for other device on local network... (Ctrl+C to cancel)');
 
     const sigintHandler = () => {
         receiver.cancel();
@@ -1102,7 +1102,7 @@ async function dbsReceive(cmdOptions: { yes?: boolean; code?: string }): Promise
     process.removeListener('SIGINT', sigintHandler);
 
     if (!rawPayload) {
-        spin.stop(pc.yellow('No sender connected within 60 seconds.'));
+        spin.stop(pc.yellow('No device connected within 60 seconds.'));
         return;
     }
 
@@ -1128,7 +1128,7 @@ async function dbsReceive(cmdOptions: { yes?: boolean; code?: string }): Promise
 
     if (isLocalPath(payload.path)) {
         note(
-            'The database path is a local filesystem path from the sender\'s machine.\nThis works if you have access to the same path (e.g. a shared network drive),\nbut you may need to update it if the path is specific to their machine.',
+            'The database path is a local filesystem path from the other device.\nThis works if you have access to the same path (e.g. a shared network drive),\nbut you may need to update it if the path is specific to their machine.',
             pc.yellow('⚠ Local Path')
         );
     }

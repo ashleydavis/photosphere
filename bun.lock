@@ -283,6 +283,7 @@
       "dependencies": {
         "electron-defs": "workspace:*",
         "node-utils": "workspace:*",
+        "storage": "workspace:*",
         "vault": "workspace:*",
       },
       "devDependencies": {
