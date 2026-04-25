@@ -2,7 +2,7 @@ import { log } from "utils";
 import { loadEncryptionKeysFromPem, pathJoin, generateKeyPair, exportPublicKeyToPem } from "storage";
 import pc from "picocolors";
 import { exit } from "node-utils";
-import { loadDatabase, IBaseCommandOptions, resolveKeyPemsWithPrompt, promptForEncryption, selectEncryptionKey, ICommandContext, configureS3IfNeeded } from "../lib/init-cmd";
+import { loadDatabase, IBaseCommandOptions, resolveKeyPemsWithPrompt, promptForEncryption, selectEncryptionKey, ICommandContext, configureS3IfNeeded, findSimilarKeyNames } from "../lib/init-cmd";
 import { createStorageForPath } from "../lib/storage-helper";
 import { getVault, getDefaultVaultType } from "vault";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
@@ -152,6 +152,10 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
             const verifyKeyPems = await resolveKeyPemsWithPrompt(options.destKey, nonInteractive, false);
             if (verifyKeyPems.length === 0) {
                 log.error(pc.red(`✗ Encryption key "${options.destKey}" not found. Use "psi secrets list" to see available keys.`));
+                const similarKeyNames = await findSimilarKeyNames(options.destKey!);
+                if (similarKeyNames.length > 0) {
+                    log.info(`Did you mean:\n${similarKeyNames.map(similarName => `  • ${pc.cyan(similarName)}`).join('\n')}`);
+                }
                 await exit(1);
             }
             try {
@@ -201,6 +205,10 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
     const destKeyPems = await resolveKeyPemsWithPrompt(options.destKey, nonInteractive, true);
     if (destKeyPems.length === 0 && options.destKey) {
         log.error(pc.red(`✗ Encryption key "${options.destKey}" not found. Use "psi secrets list" to see available keys.`));
+        const similarKeyNames = await findSimilarKeyNames(options.destKey);
+        if (similarKeyNames.length > 0) {
+            log.info(`Did you mean:\n${similarKeyNames.map(similarName => `  • ${pc.cyan(similarName)}`).join('\n')}`);
+        }
         await exit(1);
     }
     const { options: destStorageOptions, isEncrypted: destIsEncrypted } = await loadEncryptionKeysFromPem(destKeyPems);

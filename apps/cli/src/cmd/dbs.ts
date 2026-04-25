@@ -9,6 +9,7 @@ import { generateKeyPair, exportPublicKeyToPem } from 'storage';
 import type { IDatabaseEntry } from 'electron-defs';
 import { LanShareSender, LanShareReceiver, resolveDatabaseSharePayload, importDatabasePayload } from 'lan-share';
 import type { IDatabaseSharePayload, ConflictResolver, IConflictResolution } from 'lan-share';
+import { findSimilarDatabaseNames, findSimilarKeyNames, findSimilarSecretNames } from '../lib/init-cmd';
 
 //
 // Options for the `dbs add` command.
@@ -22,12 +23,12 @@ interface IDbsAddOptions {
     description?: string;
     // Database path.
     path?: string;
-    // S3 credential secret ID.
-    s3CredId?: string;
-    // Encryption key secret ID.
-    encryptionKeyId?: string;
-    // Geocoding API key secret ID.
-    geocodingKeyId?: string;
+    // S3 credential secret name.
+    s3Cred?: string;
+    // Encryption key secret name.
+    encryptionKey?: string;
+    // Geocoding API key secret name.
+    geocodingKey?: string;
 }
 
 //
@@ -56,12 +57,12 @@ interface IDbsEditOptions {
     description?: string;
     // New database path.
     path?: string;
-    // S3 credential secret ID.
-    s3CredId?: string;
-    // Encryption key secret ID.
-    encryptionKeyId?: string;
-    // Geocoding API key secret ID.
-    geocodingKeyId?: string;
+    // S3 credential secret name.
+    s3Cred?: string;
+    // Encryption key secret name.
+    encryptionKey?: string;
+    // Geocoding API key secret name.
+    geocodingKey?: string;
 }
 
 //
@@ -364,9 +365,9 @@ export function dbsCommand(): Command {
         .option('--name <name>', 'Database name')
         .option('--description <desc>', 'Database description')
         .option('--path <path>', 'Database path')
-        .option('--s3-cred-id <id>', 'S3 credential secret ID')
-        .option('--encryption-key-id <id>', 'Encryption key secret ID')
-        .option('--geocoding-key-id <id>', 'Geocoding API key secret ID')
+        .option('--s3-cred <name>', 'S3 credential secret name')
+        .option('--encryption-key <name>', 'Encryption key secret name')
+        .option('--geocoding-key <name>', 'Geocoding API key secret name')
         .action(dbsAdd);
 
     // psi dbs view
@@ -385,9 +386,9 @@ export function dbsCommand(): Command {
         .option('--new-name <name>', 'New database name')
         .option('--description <desc>', 'New description')
         .option('--path <path>', 'New database path')
-        .option('--s3-cred-id <id>', 'S3 credential secret ID')
-        .option('--encryption-key-id <id>', 'Encryption key secret ID')
-        .option('--geocoding-key-id <id>', 'Geocoding API key secret ID')
+        .option('--s3-cred <name>', 'S3 credential secret name')
+        .option('--encryption-key <name>', 'Encryption key secret name')
+        .option('--geocoding-key <name>', 'Geocoding API key secret name')
         .action(dbsEdit);
 
     // psi dbs remove
@@ -448,7 +449,7 @@ async function dbsList(): Promise<void> {
 //
 // psi dbs add — interactively add a new database entry.
 //
-async function dbsAdd(cmdOptions: IDbsAddOptions): Promise<void> {
+export async function dbsAdd(cmdOptions: IDbsAddOptions): Promise<void> {
     if (cmdOptions.yes) {
         if (!cmdOptions.name || !cmdOptions.path) {
             log.error(pc.red('✗ --name and --path are required with --yes'));
@@ -460,9 +461,9 @@ async function dbsAdd(cmdOptions: IDbsAddOptions): Promise<void> {
             name: cmdOptions.name,
             description: cmdOptions.description || '',
             path: cmdOptions.path,
-            s3Key: cmdOptions.s3CredId,
-            encryptionKey: cmdOptions.encryptionKeyId,
-            geocodingKey: cmdOptions.geocodingKeyId,
+            s3Key: cmdOptions.s3Cred,
+            encryptionKey: cmdOptions.encryptionKey,
+            geocodingKey: cmdOptions.geocodingKey,
         };
 
         const existing = await findDatabaseByName(entry.name);
@@ -470,6 +471,48 @@ async function dbsAdd(cmdOptions: IDbsAddOptions): Promise<void> {
             log.error(pc.red(`✗ A database named "${entry.name}" already exists (${existing.path}). Use a different name or remove the existing entry first.`));
             await exit(1);
             return;
+        }
+
+        if (cmdOptions.encryptionKey) {
+            const vault = getVault(getDefaultVaultType());
+            const encryptionKeySecret = await vault.get(cmdOptions.encryptionKey);
+            if (!encryptionKeySecret) {
+                log.error(pc.red(`✗ Encryption key "${cmdOptions.encryptionKey}" not found in vault.`));
+                const similarKeyNames = await findSimilarKeyNames(cmdOptions.encryptionKey);
+                if (similarKeyNames.length > 0) {
+                    log.info(`Did you mean:\n${similarKeyNames.map(similarName => `  • ${pc.cyan(similarName)}`).join('\n')}`);
+                }
+                await exit(1);
+                return;
+            }
+        }
+
+        if (cmdOptions.s3Cred) {
+            const vault = getVault(getDefaultVaultType());
+            const s3CredSecret = await vault.get(cmdOptions.s3Cred);
+            if (!s3CredSecret) {
+                log.error(pc.red(`✗ S3 credential "${cmdOptions.s3Cred}" not found in vault.`));
+                const similarS3Names = await findSimilarSecretNames(cmdOptions.s3Cred, 's3-credentials');
+                if (similarS3Names.length > 0) {
+                    log.info(`Did you mean:\n${similarS3Names.map(similarName => `  • ${pc.cyan(similarName)}`).join('\n')}`);
+                }
+                await exit(1);
+                return;
+            }
+        }
+
+        if (cmdOptions.geocodingKey) {
+            const vault = getVault(getDefaultVaultType());
+            const geocodingKeySecret = await vault.get(cmdOptions.geocodingKey);
+            if (!geocodingKeySecret) {
+                log.error(pc.red(`✗ Geocoding API key "${cmdOptions.geocodingKey}" not found in vault.`));
+                const similarGeoNames = await findSimilarSecretNames(cmdOptions.geocodingKey, 'api-key');
+                if (similarGeoNames.length > 0) {
+                    log.info(`Did you mean:\n${similarGeoNames.map(similarName => `  • ${pc.cyan(similarName)}`).join('\n')}`);
+                }
+                await exit(1);
+                return;
+            }
         }
 
         await addDatabaseEntry(entry);
@@ -512,7 +555,7 @@ async function dbsAdd(cmdOptions: IDbsAddOptions): Promise<void> {
 //
 // psi dbs view [name] — show all fields of a database entry.
 //
-async function dbsView(cmdOptions: IDbsViewOptions): Promise<void> {
+export async function dbsView(cmdOptions: IDbsViewOptions): Promise<void> {
     let entry: IDatabaseEntry | undefined;
 
     if (!cmdOptions.name && !cmdOptions.path) {
@@ -549,6 +592,12 @@ async function dbsView(cmdOptions: IDbsViewOptions): Promise<void> {
 
     if (!entry) {
         log.error(pc.red(`✗ No database matching the given name or path was found.`));
+        if (cmdOptions.name) {
+            const similarNames = await findSimilarDatabaseNames(cmdOptions.name);
+            if (similarNames.length > 0) {
+                log.info(`Did you mean:\n${similarNames.map(similarName => `  • ${pc.cyan(similarName)}`).join('\n')}`);
+            }
+        }
         await exit(1);
         return;
     }
@@ -590,7 +639,7 @@ async function dbsView(cmdOptions: IDbsViewOptions): Promise<void> {
 //
 // psi dbs edit [name] — edit fields with current values pre-populated.
 //
-async function dbsEdit(cmdOptions: IDbsEditOptions): Promise<void> {
+export async function dbsEdit(cmdOptions: IDbsEditOptions): Promise<void> {
     let entry: IDatabaseEntry | undefined;
 
     if (!cmdOptions.name) {
@@ -627,19 +676,65 @@ async function dbsEdit(cmdOptions: IDbsEditOptions): Promise<void> {
 
     if (!entry) {
         log.error(pc.red(`✗ No database named "${cmdOptions.name}" found.`));
+        const similarNames = await findSimilarDatabaseNames(cmdOptions.name!);
+        if (similarNames.length > 0) {
+            log.info(`Did you mean:\n${similarNames.map(similarName => `  • ${pc.cyan(similarName)}`).join('\n')}`);
+        }
         await exit(1);
         return;
     }
 
     if (cmdOptions.yes) {
+        if (cmdOptions.encryptionKey) {
+            const vault = getVault(getDefaultVaultType());
+            const encryptionKeySecret = await vault.get(cmdOptions.encryptionKey);
+            if (!encryptionKeySecret) {
+                log.error(pc.red(`✗ Encryption key "${cmdOptions.encryptionKey}" not found in vault.`));
+                const similarKeyNames = await findSimilarKeyNames(cmdOptions.encryptionKey);
+                if (similarKeyNames.length > 0) {
+                    log.info(`Did you mean:\n${similarKeyNames.map(similarName => `  • ${pc.cyan(similarName)}`).join('\n')}`);
+                }
+                await exit(1);
+                return;
+            }
+        }
+
+        if (cmdOptions.s3Cred) {
+            const vault = getVault(getDefaultVaultType());
+            const s3CredSecret = await vault.get(cmdOptions.s3Cred);
+            if (!s3CredSecret) {
+                log.error(pc.red(`✗ S3 credential "${cmdOptions.s3Cred}" not found in vault.`));
+                const similarS3Names = await findSimilarSecretNames(cmdOptions.s3Cred, 's3-credentials');
+                if (similarS3Names.length > 0) {
+                    log.info(`Did you mean:\n${similarS3Names.map(similarName => `  • ${pc.cyan(similarName)}`).join('\n')}`);
+                }
+                await exit(1);
+                return;
+            }
+        }
+
+        if (cmdOptions.geocodingKey) {
+            const vault = getVault(getDefaultVaultType());
+            const geocodingKeySecret = await vault.get(cmdOptions.geocodingKey);
+            if (!geocodingKeySecret) {
+                log.error(pc.red(`✗ Geocoding API key "${cmdOptions.geocodingKey}" not found in vault.`));
+                const similarGeoNames = await findSimilarSecretNames(cmdOptions.geocodingKey, 'api-key');
+                if (similarGeoNames.length > 0) {
+                    log.info(`Did you mean:\n${similarGeoNames.map(similarName => `  • ${pc.cyan(similarName)}`).join('\n')}`);
+                }
+                await exit(1);
+                return;
+            }
+        }
+
         const updated: IDatabaseEntry = {
             name: cmdOptions.newName || entry.name,
             description: cmdOptions.description ?? entry.description ?? '',
             path: cmdOptions.path || entry.path,
             origin: entry.origin,
-            s3Key: cmdOptions.s3CredId ?? entry.s3Key,
-            encryptionKey: cmdOptions.encryptionKeyId ?? entry.encryptionKey,
-            geocodingKey: cmdOptions.geocodingKeyId ?? entry.geocodingKey,
+            s3Key: cmdOptions.s3Cred ?? entry.s3Key,
+            encryptionKey: cmdOptions.encryptionKey ?? entry.encryptionKey,
+            geocodingKey: cmdOptions.geocodingKey ?? entry.geocodingKey,
         };
 
         await updateDatabaseEntry({ ...updated, path: entry.path });
@@ -727,7 +822,7 @@ async function dbsEdit(cmdOptions: IDbsEditOptions): Promise<void> {
 //
 // psi dbs remove [name] — remove a database entry after confirmation.
 //
-async function dbsRemove(cmdOptions: IDbsRemoveOptions): Promise<void> {
+export async function dbsRemove(cmdOptions: IDbsRemoveOptions): Promise<void> {
     let entry: IDatabaseEntry | undefined;
 
     if (!cmdOptions.name && !cmdOptions.path) {
@@ -764,6 +859,12 @@ async function dbsRemove(cmdOptions: IDbsRemoveOptions): Promise<void> {
 
     if (!entry) {
         log.error(pc.red(`✗ No database matching the given name or path was found.`));
+        if (cmdOptions.name) {
+            const similarNames = await findSimilarDatabaseNames(cmdOptions.name);
+            if (similarNames.length > 0) {
+                log.info(`Did you mean:\n${similarNames.map(similarName => `  • ${pc.cyan(similarName)}`).join('\n')}`);
+            }
+        }
         await exit(1);
         return;
     }
@@ -841,7 +942,7 @@ async function dbsClear(cmdOptions: IDbsClearOptions): Promise<void> {
 //
 // psi dbs send [name] — share a database config with secrets over the LAN.
 //
-async function dbsSend(cmdOptions: IDbsSendOptions): Promise<void> {
+export async function dbsSend(cmdOptions: IDbsSendOptions): Promise<void> {
     intro(pc.cyan('Send Database'));
 
     const skipPrompts = !!cmdOptions.yes;
@@ -857,6 +958,12 @@ async function dbsSend(cmdOptions: IDbsSendOptions): Promise<void> {
         entry = await findDatabaseByIdentifier(cmdOptions.name, cmdOptions.path);
         if (!entry) {
             log.error(pc.red(`✗ No database matching the given name or path was found.`));
+            if (cmdOptions.name) {
+                const similarNames = await findSimilarDatabaseNames(cmdOptions.name);
+                if (similarNames.length > 0) {
+                    log.info(`Did you mean:\n${similarNames.map(similarName => `  • ${pc.cyan(similarName)}`).join('\n')}`);
+                }
+            }
             await exit(1);
             return;
         }

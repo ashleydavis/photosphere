@@ -1,4 +1,4 @@
-import { loadDatabase, IBaseCommandOptions, ICommandContext, selectEncryptionKey, resolveKeyPemsWithPrompt, configureS3IfNeeded } from "../lib/init-cmd";
+import { loadDatabase, IBaseCommandOptions, ICommandContext, selectEncryptionKey, resolveKeyPemsWithPrompt, configureS3IfNeeded, findSimilarKeyNames } from "../lib/init-cmd";
 import { getDirectoryForCommand } from "../lib/directory-picker";
 import { log } from "utils";
 import pc from "picocolors";
@@ -89,6 +89,10 @@ export async function syncCommand(context: ICommandContext, options: ISyncComman
             const destKeyPems = await resolveKeyPemsWithPrompt(options.destKey, nonInteractive, false);
             if (destKeyPems.length === 0) {
                 log.error(pc.red(`✗ Encryption key "${options.destKey}" not found. Use "psi secrets list" to see available keys.`));
+                const similarKeyNames = await findSimilarKeyNames(options.destKey!);
+                if (similarKeyNames.length > 0) {
+                    log.info(`Did you mean:\n${similarKeyNames.map(similarName => `  • ${pc.cyan(similarName)}`).join('\n')}`);
+                }
                 await exit(1);
             }
             try {

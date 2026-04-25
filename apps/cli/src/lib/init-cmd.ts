@@ -21,6 +21,7 @@ import { confirm, text, password, isCancel, outro, select, multiline } from './c
 import * as path from "path";
 import { CURRENT_DATABASE_VERSION, loadTreeVersion } from "merkle-tree";
 import { getVault, getDefaultVaultType } from 'vault';
+import { fuzzyMatch } from 'fuzzy-match';
 
 //
 // Reads the default S3 credentials fallback from the vault.
@@ -511,52 +512,32 @@ export async function resolveDatabaseEntry(dbValue: string): Promise<IDatabaseEn
 }
 
 //
-// Computes the Levenshtein edit distance between two strings.
-//
-export function levenshteinDistance(a: string, b: string): number {
-    const matrix: number[][] = [];
-
-    for (let i = 0; i <= b.length; i++) {
-        matrix[i] = [i];
-    }
-
-    for (let j = 0; j <= a.length; j++) {
-        matrix[0][j] = j;
-    }
-
-    for (let i = 1; i <= b.length; i++) {
-        for (let j = 1; j <= a.length; j++) {
-            if (b[i - 1] === a[j - 1]) {
-                matrix[i][j] = matrix[i - 1][j - 1];
-            }
-            else {
-                matrix[i][j] = Math.min(
-                    matrix[i - 1][j - 1] + 1,
-                    matrix[i][j - 1] + 1,
-                    matrix[i - 1][j] + 1
-                );
-            }
-        }
-    }
-
-    return matrix[b.length][a.length];
-}
-
-//
 // Returns registered database names whose edit distance from dbValue is within
 // the fuzzy threshold. Used to suggest alternatives in "No database found" errors.
 //
 export async function findSimilarDatabaseNames(dbValue: string): Promise<string[]> {
     const databases = await getDatabases();
-    const lowerValue = dbValue.toLowerCase();
-    const threshold = Math.max(3, Math.floor(lowerValue.length / 4));
+    return fuzzyMatch(dbValue, databases.map(dbEntry => dbEntry.name));
+}
 
-    return databases
-        .filter(dbEntry => {
-            const distance = levenshteinDistance(lowerValue, dbEntry.name.toLowerCase());
-            return distance > 0 && distance <= threshold;
-        })
-        .map(dbEntry => dbEntry.name);
+//
+// Returns vault secret names whose edit distance from secretName is within the
+// fuzzy threshold. When type is provided only secrets of that type are considered.
+// Used to suggest alternatives in "No secret found" errors.
+//
+export async function findSimilarSecretNames(secretName: string, type?: string): Promise<string[]> {
+    const vault = getVault(getDefaultVaultType());
+    const secrets = await vault.list();
+    const filtered = type !== undefined ? secrets.filter(secret => secret.type === type) : secrets;
+    return fuzzyMatch(secretName, filtered.map(secret => secret.name));
+}
+
+//
+// Returns encryption-key secret names whose edit distance from keyName is within
+// the fuzzy threshold. Thin wrapper around findSimilarSecretNames with type='encryption-key'.
+//
+export function findSimilarKeyNames(keyName: string): Promise<string[]> {
+    return findSimilarSecretNames(keyName, 'encryption-key');
 }
 
 //
@@ -878,6 +859,10 @@ export async function loadDatabase(
                 keyPems = await resolveKeyPems(resolvedSecrets.encryptionKeyName);
                 if (keyPems.length === 0) {
                     outro(pc.red(`✗ Encryption key "${resolvedSecrets.encryptionKeyName}" not found.\n  Use "psi secrets list" to see available keys.`));
+                    const similarKeyNames = await findSimilarKeyNames(resolvedSecrets.encryptionKeyName);
+                    if (similarKeyNames.length > 0) {
+                        log.info(`Did you mean:\n${similarKeyNames.map(similarName => `  • ${pc.cyan(similarName)}`).join('\n')}`);
+                    }
                     await exit(1);
                 }
 
@@ -901,6 +886,10 @@ export async function loadDatabase(
                 keyPems = await resolveKeyPems(keyName);
                 if (keyPems.length === 0) {
                     outro(pc.red(`✗ Encryption key "${keyName}" not found.`));
+                    const similarKeyNames = await findSimilarKeyNames(keyName);
+                    if (similarKeyNames.length > 0) {
+                        log.info(`Did you mean:\n${similarKeyNames.map(similarName => `  • ${pc.cyan(similarName)}`).join('\n')}`);
+                    }
                     await exit(1);
                 }
 
