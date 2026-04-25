@@ -4,7 +4,7 @@ Steps:
 
 1. Run `git worktree list --porcelain` to identify all active worktrees. Show the list to the user.
 
-2. If there is only one non-main worktree, use that one. If there are multiple, ask the user which worktree to merge from (show the path and branch for each).
+2. If a worktree was used in the current session, use that one. Otherwise, if there is only one non-main worktree, use that one. If there are multiple and it's unclear which to use, ask the user which worktree to merge from (show the path and branch for each).
 
 3. Check for uncommitted changes in the chosen worktree by running `git -C <worktree-path> status --short`. If there are uncommitted changes, run `/commit:detz` to produce a commit message and description, then show it to the user and wait for their approval before running `/commit:do` to stage and commit them inside the worktree.
 
@@ -22,6 +22,10 @@ Steps:
    git worktree remove <worktree-path>
    ```
 
-8. Report success: confirm the merge commit hash and that the worktree has been removed.
+8. Report success by running these two commands:
+   - `git log -1 --oneline` — show the merge commit hash
+   - `git worktree list` — confirm the worktree has been removed
+
+   Report the output of both commands to the user. Do not run any other commands.
 
 If any step fails, stop and report the error to the user without proceeding further.
