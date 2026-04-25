@@ -3,12 +3,13 @@
 // (encrypted → plain). Removes .db/encryption.pub at the end.
 //
 
-import { createStorage, loadEncryptionKeysFromPem } from "storage";
+import { loadEncryptionKeysFromPem } from "storage";
 import pc from "picocolors";
 import { log } from "utils";
 import { exit } from "node-utils";
 import { getDirectoryForCommand } from "../lib/directory-picker";
-import { resolveKeyPemsWithPrompt, IBaseCommandOptions, ICommandContext, configureS3IfNeeded, getDefaultS3Config } from "../lib/init-cmd";
+import { resolveKeyPems, IBaseCommandOptions, ICommandContext, configureS3IfNeeded } from "../lib/init-cmd";
+import { createStorageForPath } from "../lib/storage-helper";
 import { writeProgress, clearProgressMessage } from "../lib/terminal-utils";
 import { confirm, isCancel } from "../lib/clack/prompts";
 import { decrypt as apiDecrypt } from "api";
@@ -43,9 +44,7 @@ export async function decryptCommand(context: ICommandContext, options: IDecrypt
         await configureS3IfNeeded(nonInteractive);
     }
 
-    const s3Config = await getDefaultS3Config();
-
-    const keyPems = await resolveKeyPemsWithPrompt(options.key, nonInteractive, false);
+    const keyPems = await resolveKeyPems(options.key);
     if (keyPems.length === 0) {
         log.error(pc.red(`✗ Decryption requires --key.`));
         await exit(1);
@@ -53,14 +52,14 @@ export async function decryptCommand(context: ICommandContext, options: IDecrypt
 
     const { options: readStorageOptions } = await loadEncryptionKeysFromPem(keyPems);
 
-    const { storage: rawStorage } = createStorage(dbDir, s3Config, undefined);
+    const { storage: rawStorage } = await createStorageForPath(dbDir, undefined);
     const hasEncryptionPub = await rawStorage.fileExists(".db/encryption.pub");
     if (!hasEncryptionPub) {
         log.error(pc.red(`✗ Database at ${pc.cyan(dbDir)} does not appear to be encrypted (no .db/encryption.pub).`));
         await exit(1);
     }
 
-    const { storage: readStorage } = createStorage(dbDir, s3Config, readStorageOptions);
+    const { storage: readStorage } = await createStorageForPath(dbDir, readStorageOptions);
 
     if (nonInteractive) {
         if (!yes) {

@@ -41,6 +41,25 @@ export async function getDefaultS3Config(): Promise<IS3Credentials | undefined> 
 }
 
 //
+// Resolves the Google geocoding API key from the vault when a vault key name is provided,
+// or falls back to the GOOGLE_API_KEY environment variable.
+// Only touches the vault when geocodingKeyName is set — call this lazily at the point
+// where geocoding is actually needed.
+//
+export async function resolveGeocodingApiKey(geocodingKeyName: string | undefined): Promise<string | undefined> {
+    if (geocodingKeyName) {
+        const vault = getVault(getDefaultVaultType());
+        const geocodingSecret = await vault.get(geocodingKeyName);
+        if (geocodingSecret) {
+            const parsed = JSON.parse(geocodingSecret.value);
+            return parsed.apiKey as string;
+        }
+        return undefined;
+    }
+    return process.env.GOOGLE_API_KEY?.trim();
+}
+
+//
 // Prompts the user to configure S3 credentials and stores them in the vault as a named secret.
 // Returns the configured credentials, or undefined if AWS env vars are already set.
 //
@@ -449,11 +468,11 @@ export interface IResolvedDatabaseSecrets {
     // S3 credentials resolved from the linked shared secret.
     s3Config?: IS3Credentials;
 
-    // Encryption key PEM pairs resolved from the linked shared secret.
-    keyPems: IEncryptionKeyPem[];
+    // Vault key name for the encryption key pair linked to this database entry.
+    encryptionKeyName?: string;
 
-    // Google geocoding API key resolved from the linked shared secret.
-    googleApiKey?: string;
+    // Vault key name for the Google geocoding API key linked to this database entry.
+    geocodingKeyName?: string;
 }
 
 //
@@ -493,15 +512,15 @@ export async function resolveDatabaseEntry(dbValue: string): Promise<IDatabaseEn
 
 //
 // Resolves vault secrets linked to a database entry.
-// Follows the same pattern as the desktop main.ts secret resolution.
+// S3 credentials are only fetched when the entry path uses the s3: scheme.
+// Encryption and geocoding key names are returned without vault access — the
+// caller fetches them lazily when the secret is actually needed.
 //
 export async function resolveSecretsFromEntry(entry: IDatabaseEntry): Promise<IResolvedDatabaseSecrets> {
-    const vault = getVault(getDefaultVaultType());
-    const result: IResolvedDatabaseSecrets = {
-        keyPems: [],
-    };
+    const result: IResolvedDatabaseSecrets = {};
 
-    if (entry.s3Key) {
+    if (entry.s3Key && entry.path.startsWith('s3:')) {
+        const vault = getVault(getDefaultVaultType());
         const s3Secret = await vault.get(entry.s3Key);
         if (s3Secret) {
             const parsed = JSON.parse(s3Secret.value);
@@ -515,30 +534,11 @@ export async function resolveSecretsFromEntry(entry: IDatabaseEntry): Promise<IR
     }
 
     if (entry.encryptionKey) {
-        const encryptionSecret = await vault.get(entry.encryptionKey);
-        if (encryptionSecret) {
-            let privateKeyPem: string;
-            let publicKeyPem: string;
-            try {
-                const parsed = JSON.parse(encryptionSecret.value);
-                privateKeyPem = parsed.privateKeyPem;
-                publicKeyPem = parsed.publicKeyPem;
-            }
-            catch {
-                privateKeyPem = encryptionSecret.value;
-                const privateKeyObj = createPrivateKey(privateKeyPem);
-                publicKeyPem = exportPublicKeyToPem(createPublicKey(privateKeyObj));
-            }
-            result.keyPems.push({ privateKeyPem, publicKeyPem });
-        }
+        result.encryptionKeyName = entry.encryptionKey;
     }
 
     if (entry.geocodingKey) {
-        const geocodingSecret = await vault.get(entry.geocodingKey);
-        if (geocodingSecret) {
-            const parsed = JSON.parse(geocodingSecret.value);
-            result.googleApiKey = parsed.apiKey;
-        }
+        result.geocodingKeyName = entry.geocodingKey;
     }
 
     return result;
@@ -717,9 +717,10 @@ export interface IInitResult {
     metadataCollection: IBsonCollection<IAsset>;
 
     //
-    // Google geocoding API key resolved from the database entry's linked shared secret.
+    // Vault key name for the Google geocoding API key linked to this database entry.
+    // Call resolveGeocodingApiKey() with this value to obtain the actual API key.
     //
-    googleApiKey?: string;
+    geocodingKeyName?: string;
 
     //
     // S3 credentials resolved from the database entry's linked shared secret.
@@ -769,7 +770,7 @@ export async function loadDatabase(
     }
 
     let keyName = options.key;
-    let keyPems: IEncryptionKeyPem[] = resolvedSecrets?.keyPems ?? [];
+    let keyPems: IEncryptionKeyPem[] = [];
 
     if (keyName) {
         // Explicit --key overrides any resolved keys.
@@ -782,7 +783,7 @@ export async function loadDatabase(
 
     let { options: storageOptions } = await loadEncryptionKeysFromPem(keyPems);
 
-    const s3Config = resolvedSecrets?.s3Config ?? await getDefaultS3Config();
+    const s3Config = resolvedSecrets?.s3Config ?? (dbDir.startsWith('s3:') ? await getDefaultS3Config() : undefined);
     let { storage: assetStorage, rawStorage: rawAssetStorage } = createStorage(dbDir, s3Config, storageOptions);
 
     //
@@ -813,7 +814,21 @@ export async function loadDatabase(
     //
     if (await assetStorage.fileExists('.db/encryption.pub')) {
         if (keyPems.length === 0) {
-            if (nonInteractive) {
+            if (resolvedSecrets?.encryptionKeyName) {
+                // Lazy fetch: the database is confirmed encrypted, so retrieve the key from vault now.
+                keyPems = await resolveKeyPems(resolvedSecrets.encryptionKeyName);
+                if (keyPems.length === 0) {
+                    outro(pc.red(`✗ Encryption key "${resolvedSecrets.encryptionKeyName}" not found.\n  Use "psi secrets list" to see available keys.`));
+                    await exit(1);
+                }
+
+                const { options: newStorageOptions } = await loadEncryptionKeysFromPem(keyPems);
+                storageOptions = newStorageOptions;
+
+                const { storage: newAssetStorage } = createStorage(dbDir, s3Config, storageOptions);
+                assetStorage = newAssetStorage;
+            }
+            else if (nonInteractive) {
                 outro(pc.red(`✗ This database is encrypted and requires a private key to access.\n  Please provide the key name using the --key option.\n\nExample:\n    ${pc.cyan(`psi <command> --key my-photos`)}`));
                 await exit(1);
             }
@@ -851,7 +866,7 @@ export async function loadDatabase(
         bsonDatabase: database.bsonDatabase,
         sessionId,
         metadataCollection: database.metadataCollection,
-        googleApiKey: resolvedSecrets?.googleApiKey ?? process.env.GOOGLE_API_KEY?.trim(),
+        geocodingKeyName: resolvedSecrets?.geocodingKeyName,
         s3Config,
     };
 }
@@ -947,7 +962,7 @@ export async function createDatabase(
 
     const { options: storageOptions, isEncrypted } = await loadEncryptionKeysFromPem(keyPems);
 
-    const s3Config = await getDefaultS3Config();
+    const s3Config = dbDir.startsWith('s3:') ? await getDefaultS3Config() : undefined;
     const { storage: assetStorage, rawStorage: rawAssetStorage } = createStorage(dbDir, s3Config, storageOptions);
 
     // Check the requested directory is empty or non-existent using the storage interface.

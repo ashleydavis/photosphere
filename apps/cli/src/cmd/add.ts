@@ -2,7 +2,7 @@ import { log } from "utils";
 import pc from "picocolors";
 import { exit } from "node-utils";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
-import { loadDatabase, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
+import { loadDatabase, IBaseCommandOptions, ICommandContext, resolveGeocodingApiKey } from "../lib/init-cmd";
 import { getFileLogger } from "../lib/log";
 import { pathExists } from 'node-utils';
 import { formatBytes } from "../lib/format";
@@ -31,7 +31,8 @@ export async function addCommand(context: ICommandContext, paths: string[], opti
         }
     }
     
-    const { databaseDir, googleApiKey } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
+    const { databaseDir, geocodingKeyName } = await loadDatabase(options.db, options, uuidGenerator, timestampProvider, sessionId);
+    const googleApiKey = await resolveGeocodingApiKey(geocodingKeyName);
 
     const storageDescriptor: IDatabaseDescriptor = {
         databasePath: databaseDir,

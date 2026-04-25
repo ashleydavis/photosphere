@@ -3,12 +3,13 @@
 // (plain → encrypted, re-encrypt with new key, or old-format → new format).
 //
 
-import { createStorage, exportPublicKeyToPem, loadEncryptionKeysFromPem, generateKeyPair } from "storage";
+import { exportPublicKeyToPem, loadEncryptionKeysFromPem, generateKeyPair } from "storage";
 import pc from "picocolors";
 import { log } from "utils";
 import { exit } from "node-utils";
 import { getDirectoryForCommand } from "../lib/directory-picker";
-import { resolveKeyPemsWithPrompt, IBaseCommandOptions, ICommandContext, promptForEncryption, selectEncryptionKey, configureS3IfNeeded, getDefaultS3Config } from "../lib/init-cmd";
+import { resolveKeyPemsWithPrompt, IBaseCommandOptions, ICommandContext, promptForEncryption, selectEncryptionKey, configureS3IfNeeded } from "../lib/init-cmd";
+import { createStorageForPath } from "../lib/storage-helper";
 import { getVault, getDefaultVaultType } from "vault";
 import { writeProgress, clearProgressMessage } from "../lib/terminal-utils";
 import { confirm, isCancel } from "../lib/clack/prompts";
@@ -49,8 +50,6 @@ export async function encryptCommand(context: ICommandContext, options: IEncrypt
     if (dbDir.startsWith("s3:")) {
         await configureS3IfNeeded(nonInteractive);
     }
-
-    const s3Config = await getDefaultS3Config();
 
     //
     // Key handling:
@@ -97,15 +96,15 @@ export async function encryptCommand(context: ICommandContext, options: IEncrypt
         await exit(1);
     }
 
-    const { storage: rawStorage } = createStorage(dbDir, s3Config, undefined);
+    const { storage: rawStorage } = await createStorageForPath(dbDir, undefined);
     const hasTree = await merkleTreeExists(rawStorage);
     if (!hasTree) {
         log.error(pc.red(`✗ No database found at: ${pc.cyan(dbDir)}`));
         await exit(1);
     }
 
-    const { storage: readStorage } = createStorage(dbDir, s3Config, writeStorageOptions);
-    const { storage: writeStorage } = createStorage(dbDir, s3Config, writeStorageOptions);
+    const { storage: readStorage } = await createStorageForPath(dbDir, writeStorageOptions);
+    const { storage: writeStorage } = await createStorageForPath(dbDir, writeStorageOptions);
 
     if (nonInteractive) {
         if (!yes) {

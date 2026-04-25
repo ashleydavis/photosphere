@@ -1,9 +1,10 @@
-import { createStorage, loadEncryptionKeysFromPem } from "storage";
+import { loadEncryptionKeysFromPem } from "storage";
 import { computeHash } from "api";
 import { exit } from "node-utils";
 import pc from "picocolors";
 import { log } from "utils";
-import { resolveKeyPemsWithPrompt, configureS3IfNeeded, getDefaultS3Config } from "../lib/init-cmd";
+import { resolveKeyPems, configureS3IfNeeded } from "../lib/init-cmd";
+import { createStorageForPath } from "../lib/storage-helper";
 import path from 'node:path';
 
 export interface IHashCommandOptions {
@@ -27,14 +28,12 @@ export async function hashCommand(filePath: string, options: IHashCommandOptions
         await configureS3IfNeeded(options.yes ?? false);
     }
 
-    const s3Config = await getDefaultS3Config();
-
-    let keyPems = await resolveKeyPemsWithPrompt(options.key, options.yes ?? false, false);
+    const keyPems = await resolveKeyPems(options.key);
     let { options: storageOptions } = await loadEncryptionKeysFromPem(keyPems);
 
-    const dirPath = path.dirname(filePath);  
-    const fileName = path.basename(filePath);          
-    const { storage, normalizedPath, type } = createStorage(dirPath, s3Config, storageOptions);
+    const dirPath = path.dirname(filePath);
+    const fileName = path.basename(filePath);
+    const { storage, normalizedPath, type } = await createStorageForPath(dirPath, storageOptions);
     
     if (options.verbose) {
         log.info(pc.cyan(`Storage type: ${type}`));
