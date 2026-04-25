@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Rules
 
-- Never stash code or use Git without permission.
+- Never use memory.
+- All Claude configuration goes in this repository only, not in the home directory.
+- Never stash code unless asked.
 
 ## Project Overview
 
