@@ -16,8 +16,10 @@ import FormControl from '@mui/joy/FormControl';
 import FormLabel from '@mui/joy/FormLabel';
 import Select from '@mui/joy/Select';
 import Option from '@mui/joy/Option';
-import { Edit, Delete, Add, Refresh } from '@mui/icons-material';
+import { Edit, Delete, Add, Refresh, IosShare } from '@mui/icons-material';
 import { usePlatform, type ISharedSecretEntry, type IDatabaseEntry } from '../../context/platform-context';
+import { ShareSecretDialog } from '../../components/share-secret-dialog';
+import { ReceiveSecretDialog } from '../../components/receive-secret-dialog';
 
 //
 // The supported secret type identifiers.
@@ -142,6 +144,12 @@ export function SecretsPage() {
 
     // Whether a refresh is in progress (drives the spin animation).
     const [refreshing, setRefreshing] = useState(false);
+
+    // The secret being shared via LAN share (undefined when no share is in progress).
+    const [sharingSecret, setSharingSecret] = useState<ISharedSecretEntry | undefined>(undefined);
+
+    // Whether the receive-secret dialog is open.
+    const [receiveDialogOpen, setReceiveDialogOpen] = useState(false);
 
     //
     // Loads all shared secrets from the platform.
@@ -346,6 +354,13 @@ export function SecretsPage() {
                     />
                 </IconButton>
                 <Button
+                    variant="outlined"
+                    sx={{ mr: 1 }}
+                    onClick={() => setReceiveDialogOpen(true)}
+                >
+                    Receive Secret
+                </Button>
+                <Button
                     startDecorator={<Add />}
                     onClick={openAddDialog}
                 >
@@ -358,7 +373,7 @@ export function SecretsPage() {
                     <tr>
                         <th>Name</th>
                         <th>Type</th>
-                        <th style={{ width: '80px' }}>Actions</th>
+                        <th style={{ width: '112px', whiteSpace: 'nowrap' }}>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -366,7 +381,14 @@ export function SecretsPage() {
                         <tr key={secret.id}>
                             <td>{secret.name}</td>
                             <td>{secret.type}</td>
-                            <td>
+                            <td style={{ whiteSpace: 'nowrap' }}>
+                                <IconButton
+                                    size="sm"
+                                    variant="plain"
+                                    onClick={() => setSharingSecret(secret)}
+                                >
+                                    <IosShare fontSize="small" />
+                                </IconButton>
                                 <IconButton
                                     size="sm"
                                     variant="plain"
@@ -473,6 +495,22 @@ export function SecretsPage() {
                     </DialogActions>
                 </ModalDialog>
             </Modal>
+
+            {sharingSecret && (
+                <ShareSecretDialog
+                    open={sharingSecret !== undefined}
+                    entry={sharingSecret}
+                    onClose={() => setSharingSecret(undefined)}
+                />
+            )}
+
+            <ReceiveSecretDialog
+                open={receiveDialogOpen}
+                onClose={() => {
+                    setReceiveDialogOpen(false);
+                    loadSecrets().catch(err => console.error('Failed to reload secrets:', err));
+                }}
+            />
         </Box>
     );
 }
