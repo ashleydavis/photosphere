@@ -72,23 +72,7 @@ export async function configureS3IfNeeded(nonInteractive: boolean): Promise<IS3C
         return undefined;
     }
 
-    log.info(pc.cyan('Your credentials will be stored securely in your OS keychain.'));
-
-    const label = await text({
-        message: 'Name for these credentials:',
-        initialValue: 'S3 credentials',
-        validate: (value) => {
-            if (!value || value.trim() === '') {
-                return 'Name is required';
-            }
-            return undefined;
-        },
-    });
-
-    if (isCancel(label)) {
-        await exit(0);
-        return undefined;
-    }
+    log.info(pc.cyan('Your credentials will be stored securely in your OS keychain as \'default:s3\'.'));
 
     const endpoint = await text({
         message: 'S3 Endpoint URL (leave empty for AWS S3):',
@@ -167,7 +151,7 @@ export async function configureS3IfNeeded(nonInteractive: boolean): Promise<IS3C
     await vault.set({
         name: 'default:s3',
         type: 's3-credentials',
-        value: JSON.stringify({ label: (label as string).trim(), ...credentials }),
+        value: JSON.stringify(credentials),
     });
 
     return credentials;
