@@ -129,12 +129,12 @@ test("resolves database payload when secret ID exists but vault entry is missing
 
 test("resolves secret share payload", async () => {
     mockVaultGet.mockResolvedValue({
-        name: "shared:abc12345",
+        name: "abc12345",
         type: "s3-credentials",
         value: JSON.stringify({ label: "My S3", region: "us-east-1", accessKeyId: "AKID", secretAccessKey: "SECRET" }),
     });
 
-    const payload = await resolveSecretSharePayload("shared:abc12345");
+    const payload = await resolveSecretSharePayload("abc12345");
 
     expect(payload.type).toBe("secret");
     expect(payload.secretType).toBe("s3-credentials");
@@ -144,7 +144,7 @@ test("resolves secret share payload", async () => {
 test("resolves secret share payload throws when secret not found", async () => {
     mockVaultGet.mockResolvedValue(undefined);
 
-    await expect(resolveSecretSharePayload("shared:nonexistent")).rejects.toThrow(
-        'Secret "shared:nonexistent" not found in vault.'
+    await expect(resolveSecretSharePayload("nonexistent")).rejects.toThrow(
+        'Secret "nonexistent" not found in vault.'
     );
 });
