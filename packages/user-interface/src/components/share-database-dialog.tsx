@@ -29,7 +29,7 @@ export interface IShareDatabaseDialogProps {
 //
 // Steps in the share database flow.
 //
-type ShareStep = "review" | "searching" | "enter-code" | "success" | "error";
+type ShareStep = "review" | "searching" | "showing-code" | "success" | "error";
 
 //
 // Form state for the share database dialog.
@@ -69,7 +69,6 @@ export function ShareDatabaseDialog({ open, entry, onClose }: IShareDatabaseDial
         includeGeocoding: true,
     });
     const [pairingCode, setPairingCode] = useState("");
-    const [endpoint, setEndpoint] = useState<unknown>(null);
     const [errorMessage, setErrorMessage] = useState("");
 
     // Reset state when dialog opens
@@ -85,16 +84,17 @@ export function ShareDatabaseDialog({ open, entry, onClose }: IShareDatabaseDial
                 includeGeocoding: !!entry.geocodingKey,
             });
             setPairingCode("");
-            setEndpoint(null);
             setErrorMessage("");
         }
     }, [open, entry]);
 
     //
-    // Builds the share payload from form state and starts searching for a receiver.
+    // Generates a pairing code, shows it to the user, then waits for a receiver and auto-sends.
     //
     const handleStartSend = useCallback(async () => {
-        setStep("searching");
+        const code = String(Math.floor(1000 + Math.random() * 9000));
+        setPairingCode(code);
+        setStep("showing-code");
 
         // Build payload from the entry — the main process resolves secrets server-side
         // so we pass the database entry fields plus flags for which secrets to include.
@@ -113,26 +113,14 @@ export function ShareDatabaseDialog({ open, entry, onClose }: IShareDatabaseDial
             geocodingKey: form.includeGeocoding ? entry.geocodingKey : undefined,
         };
 
-        const foundEndpoint = await platform.waitForReceiver(payload);
+        const foundEndpoint = await platform.waitForReceiver(payload, code);
         if (!foundEndpoint) {
             setErrorMessage("No receiver found within 60 seconds.");
             setStep("error");
             return;
         }
 
-        setEndpoint(foundEndpoint);
-        setStep("enter-code");
-    }, [form, entry, platform]);
-
-    //
-    // Sends the payload to the receiver with the entered pairing code.
-    //
-    const handleSend = useCallback(async () => {
-        if (!endpoint) {
-            return;
-        }
-
-        const success = await platform.sendToReceiver(endpoint, pairingCode);
+        const success = await platform.sendToReceiver(foundEndpoint);
         if (success) {
             setStep("success");
         }
@@ -140,13 +128,13 @@ export function ShareDatabaseDialog({ open, entry, onClose }: IShareDatabaseDial
             setErrorMessage("Pairing code rejected by receiver.");
             setStep("error");
         }
-    }, [endpoint, pairingCode, platform]);
+    }, [form, entry, platform]);
 
     //
     // Cancels the sender and closes the dialog.
     //
     const handleCancel = useCallback(async () => {
-        if (step === "searching") {
+        if (step === "showing-code") {
             await platform.cancelShareSend();
         }
         onClose();
@@ -227,16 +215,14 @@ export function ShareDatabaseDialog({ open, entry, onClose }: IShareDatabaseDial
                         </Box>
                     )}
 
-                    {step === "enter-code" && (
-                        <FormControl>
-                            <FormLabel>Enter the 4-digit pairing code shown on the receiver</FormLabel>
-                            <Input
-                                value={pairingCode}
-                                onChange={event => setPairingCode(event.target.value)}
-                                slotProps={{ input: { maxLength: 4 } }}
-                                placeholder="0000"
-                            />
-                        </FormControl>
+                    {step === "showing-code" && (
+                        <Box sx={{ textAlign: "center", py: 3 }}>
+                            <Typography level="body-lg" sx={{ mb: 1 }}>Pairing Code</Typography>
+                            <Typography level="h2" sx={{ fontFamily: "monospace", letterSpacing: "0.3em", mb: 2 }}>
+                                {pairingCode}
+                            </Typography>
+                            <Typography level="body-sm">Tell the receiver to enter this code.</Typography>
+                        </Box>
                     )}
 
                     {step === "success" && (
@@ -265,16 +251,8 @@ export function ShareDatabaseDialog({ open, entry, onClose }: IShareDatabaseDial
                         <Button variant="plain" onClick={handleCancel}>Cancel</Button>
                     )}
 
-                    {step === "enter-code" && (
-                        <>
-                            <Button variant="plain" onClick={handleCancel}>Cancel</Button>
-                            <Button
-                                disabled={!/^\d{4}$/.test(pairingCode)}
-                                onClick={() => { handleSend().catch(err => console.error("Send error:", err)); }}
-                            >
-                                Send
-                            </Button>
-                        </>
+                    {step === "showing-code" && (
+                        <Button variant="plain" onClick={handleCancel}>Cancel</Button>
                     )}
 
                     {(step === "success" || step === "error") && (

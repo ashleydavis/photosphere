@@ -29,7 +29,7 @@ export interface IReceiveDatabaseDialogProps {
 //
 // Steps in the receive database flow.
 //
-type ReceiveStep = "waiting" | "review" | "conflict" | "success" | "error";
+type ReceiveStep = "enter-code" | "waiting" | "review" | "conflict" | "success" | "error";
 
 //
 // A single secret included in a received payload (name + label only).
@@ -90,8 +90,8 @@ interface ISecretConflict {
 //
 export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogProps) {
     const platform = usePlatform();
-    const [step, setStep] = useState<ReceiveStep>("waiting");
-    const [pairingCode, setPairingCode] = useState("");
+    const [step, setStep] = useState<ReceiveStep>("enter-code");
+    const [enteredCode, setEnteredCode] = useState("");
     const [payload, setPayload] = useState<IReceivedDatabasePayload | null>(null);
     const [editedName, setEditedName] = useState("");
     const [editedDescription, setEditedDescription] = useState("");
@@ -102,60 +102,42 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
     const [conflicts, setConflicts] = useState<ISecretConflict[]>([]);
     const [errorMessage, setErrorMessage] = useState("");
 
-    // Start receiving when dialog opens
+    // Reset state when dialog opens
     useEffect(() => {
         if (!open) {
             return;
         }
-
-        setStep("waiting");
-        setPairingCode("");
+        setStep("enter-code");
+        setEnteredCode("");
         setPayload(null);
         setErrorMessage("");
+    }, [open]);
 
-        let cancelled = false;
+    //
+    // Starts the receiver with the entered code, waits for the sender payload, then moves to review.
+    //
+    const handleStartReceiving = useCallback(async () => {
+        await platform.startShareReceive(enteredCode);
+        setStep("waiting");
 
-        async function startReceiving(): Promise<void> {
-            const info = await platform.startShareReceive();
-            if (cancelled) {
-                return;
-            }
-            setPairingCode(info.code);
+        const received = await platform.waitShareReceive();
 
-            const received = await platform.waitShareReceive();
-            if (cancelled) {
-                return;
-            }
-
-            if (!received) {
-                setErrorMessage("No sender connected within 60 seconds.");
-                setStep("error");
-                return;
-            }
-
-            const receivedPayload = received as IReceivedDatabasePayload;
-            setPayload(receivedPayload);
-            setEditedName(receivedPayload.name);
-            setEditedDescription(receivedPayload.description || "");
-            setEditedPath(receivedPayload.path);
-            setImportS3(!!receivedPayload.s3Credentials);
-            setImportEncryption(!!receivedPayload.encryptionKey);
-            setImportGeocoding(!!receivedPayload.geocodingKey);
-            setStep("review");
+        if (!received) {
+            setErrorMessage("No sender connected within 60 seconds.");
+            setStep("error");
+            return;
         }
 
-        startReceiving().catch(error => {
-            if (!cancelled) {
-                setErrorMessage(String(error));
-                setStep("error");
-            }
-        });
-
-        return () => {
-            cancelled = true;
-            platform.cancelShareReceive().catch(() => {});
-        };
-    }, [open, platform]);
+        const receivedPayload = received as IReceivedDatabasePayload;
+        setPayload(receivedPayload);
+        setEditedName(receivedPayload.name);
+        setEditedDescription(receivedPayload.description || "");
+        setEditedPath(receivedPayload.path);
+        setImportS3(!!receivedPayload.s3Credentials);
+        setImportEncryption(!!receivedPayload.encryptionKey);
+        setImportGeocoding(!!receivedPayload.geocodingKey);
+        setStep("review");
+    }, [enteredCode, platform]);
 
     //
     // Checks whether any of the secrets to be imported already exist in the
@@ -286,25 +268,22 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
                         Click Share on a database on another device to send it here.
                     </Typography>
 
+                    {step === "enter-code" && (
+                        <FormControl>
+                            <FormLabel>Enter the 4-digit pairing code shown on the sender</FormLabel>
+                            <Input
+                                value={enteredCode}
+                                onChange={event => setEnteredCode(event.target.value)}
+                                slotProps={{ input: { maxLength: 4 } }}
+                                placeholder="0000"
+                            />
+                        </FormControl>
+                    )}
+
                     {step === "waiting" && (
-                        <Box sx={{ textAlign: "center", py: 3 }}>
-                            {pairingCode ? (
-                                <>
-                                    <Typography level="body-lg" sx={{ mb: 1 }}>Pairing Code</Typography>
-                                    <Typography level="h2" sx={{ fontFamily: "monospace", letterSpacing: "0.3em", mb: 2 }}>
-                                        {pairingCode}
-                                    </Typography>
-                                    <Box sx={{ display: "flex", alignItems: "center", gap: 2, justifyContent: "center" }}>
-                                        <CircularProgress size="sm" />
-                                        <Typography level="body-sm">Waiting for sender...</Typography>
-                                    </Box>
-                                </>
-                            ) : (
-                                <Box sx={{ display: "flex", alignItems: "center", gap: 2, justifyContent: "center" }}>
-                                    <CircularProgress size="sm" />
-                                    <Typography>Starting receiver...</Typography>
-                                </Box>
-                            )}
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 2, py: 3, justifyContent: "center" }}>
+                            <CircularProgress size="sm" />
+                            <Typography>Waiting for sender...</Typography>
                         </Box>
                     )}
 
@@ -413,6 +392,18 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
                     )}
                 </DialogContent>
                 <DialogActions>
+                    {step === "enter-code" && (
+                        <>
+                            <Button variant="plain" onClick={handleCancel}>Cancel</Button>
+                            <Button
+                                disabled={!/^\d{4}$/.test(enteredCode)}
+                                onClick={() => { handleStartReceiving().catch(err => console.error("Receive error:", err)); }}
+                            >
+                                Start
+                            </Button>
+                        </>
+                    )}
+
                     {step === "waiting" && (
                         <Button variant="plain" onClick={handleCancel}>Cancel</Button>
                     )}

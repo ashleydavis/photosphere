@@ -25,7 +25,7 @@ export interface IReceiveSecretDialogProps {
 //
 // Steps in the receive secret flow.
 //
-type ReceiveStep = "waiting" | "review" | "success" | "error";
+type ReceiveStep = "enter-code" | "waiting" | "review" | "success" | "error";
 
 //
 // Payload shape received from the sender (matches ISecretSharePayload).
@@ -49,63 +49,44 @@ interface IReceivedSecretPayload {
 //
 export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps) {
     const platform = usePlatform();
-    const [step, setStep] = useState<ReceiveStep>("waiting");
-    const [pairingCode, setPairingCode] = useState("");
+    const [step, setStep] = useState<ReceiveStep>("enter-code");
+    const [enteredCode, setEnteredCode] = useState("");
     const [payload, setPayload] = useState<IReceivedSecretPayload | null>(null);
     const [saveName, setSaveName] = useState("");
     const [errorMessage, setErrorMessage] = useState("");
 
-    // Start receiving when dialog opens
+    // Reset state when dialog opens
     useEffect(() => {
         if (!open) {
             return;
         }
-
-        setStep("waiting");
-        setPairingCode("");
+        setStep("enter-code");
+        setEnteredCode("");
         setPayload(null);
         setSaveName("");
         setErrorMessage("");
+    }, [open]);
 
-        let cancelled = false;
+    //
+    // Starts the receiver with the entered code, waits for the sender payload, then moves to review.
+    //
+    const handleStartReceiving = useCallback(async () => {
+        await platform.startShareReceive(enteredCode);
+        setStep("waiting");
 
-        async function startReceiving(): Promise<void> {
-            const info = await platform.startShareReceive();
-            if (cancelled) {
-                return;
-            }
-            setPairingCode(info.code);
+        const received = await platform.waitShareReceive();
 
-            const received = await platform.waitShareReceive();
-            if (cancelled) {
-                return;
-            }
-
-            if (!received) {
-                setErrorMessage("No sender connected within 60 seconds.");
-                setStep("error");
-                return;
-            }
-
-            const receivedPayload = received as IReceivedSecretPayload;
-            setPayload(receivedPayload);
-
-            setSaveName(receivedPayload.name);
-            setStep("review");
+        if (!received) {
+            setErrorMessage("No sender connected within 60 seconds.");
+            setStep("error");
+            return;
         }
 
-        startReceiving().catch(error => {
-            if (!cancelled) {
-                setErrorMessage(String(error));
-                setStep("error");
-            }
-        });
-
-        return () => {
-            cancelled = true;
-            platform.cancelShareReceive().catch(() => {});
-        };
-    }, [open, platform]);
+        const receivedPayload = received as IReceivedSecretPayload;
+        setPayload(receivedPayload);
+        setSaveName(receivedPayload.name);
+        setStep("review");
+    }, [enteredCode, platform]);
 
     //
     // Saves the received secret payload locally.
@@ -141,25 +122,22 @@ export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps
                         Click Share on a secret on another device to send it here.
                     </Typography>
 
+                    {step === "enter-code" && (
+                        <FormControl>
+                            <FormLabel>Enter the 4-digit pairing code shown on the sender</FormLabel>
+                            <Input
+                                value={enteredCode}
+                                onChange={event => setEnteredCode(event.target.value)}
+                                slotProps={{ input: { maxLength: 4 } }}
+                                placeholder="0000"
+                            />
+                        </FormControl>
+                    )}
+
                     {step === "waiting" && (
-                        <Box sx={{ textAlign: "center", py: 3 }}>
-                            {pairingCode ? (
-                                <>
-                                    <Typography level="body-lg" sx={{ mb: 1 }}>Pairing Code</Typography>
-                                    <Typography level="h2" sx={{ fontFamily: "monospace", letterSpacing: "0.3em", mb: 2 }}>
-                                        {pairingCode}
-                                    </Typography>
-                                    <Box sx={{ display: "flex", alignItems: "center", gap: 2, justifyContent: "center" }}>
-                                        <CircularProgress size="sm" />
-                                        <Typography level="body-sm">Waiting for sender...</Typography>
-                                    </Box>
-                                </>
-                            ) : (
-                                <Box sx={{ display: "flex", alignItems: "center", gap: 2, justifyContent: "center" }}>
-                                    <CircularProgress size="sm" />
-                                    <Typography>Starting receiver...</Typography>
-                                </Box>
-                            )}
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 2, py: 3, justifyContent: "center" }}>
+                            <CircularProgress size="sm" />
+                            <Typography>Waiting for sender...</Typography>
                         </Box>
                     )}
 
@@ -193,6 +171,18 @@ export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps
                     )}
                 </DialogContent>
                 <DialogActions>
+                    {step === "enter-code" && (
+                        <>
+                            <Button variant="plain" onClick={handleCancel}>Cancel</Button>
+                            <Button
+                                disabled={!/^\d{4}$/.test(enteredCode)}
+                                onClick={() => { handleStartReceiving().catch(err => console.error("Receive error:", err)); }}
+                            >
+                                Start
+                            </Button>
+                        </>
+                    )}
+
                     {step === "waiting" && (
                         <Button variant="plain" onClick={handleCancel}>Cancel</Button>
                     )}

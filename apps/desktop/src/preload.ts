@@ -104,8 +104,8 @@ const electronAPI: IElectronAPI = {
     getRecentDatabases: (): Promise<IDatabaseEntry[]> => {
         return ipcRenderer.invoke('get-recent-databases');
     },
-    startShareReceive: (): Promise<{ code: string }> => {
-        return ipcRenderer.invoke('start-share-receive');
+    startShareReceive: (code: string): Promise<void> => {
+        return ipcRenderer.invoke('start-share-receive', code);
     },
     waitShareReceive: (): Promise<unknown> => {
         return ipcRenderer.invoke('wait-share-receive');
@@ -113,11 +113,11 @@ const electronAPI: IElectronAPI = {
     cancelShareReceive: (): Promise<void> => {
         return ipcRenderer.invoke('cancel-share-receive');
     },
-    waitForReceiver: (payload: unknown): Promise<unknown> => {
-        return ipcRenderer.invoke('wait-for-receiver', payload);
+    waitForReceiver: (payload: unknown, code: string): Promise<unknown> => {
+        return ipcRenderer.invoke('wait-for-receiver', payload, code);
     },
-    sendToReceiver: (endpoint: unknown, code: string): Promise<boolean> => {
-        return ipcRenderer.invoke('send-to-receiver', endpoint, code);
+    sendToReceiver: (endpoint: unknown): Promise<boolean> => {
+        return ipcRenderer.invoke('send-to-receiver', endpoint);
     },
     cancelShareSend: (): Promise<void> => {
         return ipcRenderer.invoke('cancel-share-send');
