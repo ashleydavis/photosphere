@@ -137,7 +137,7 @@ export function ShareSecretDialog({ open, entry, onClose }: IShareSecretDialogPr
                     {step === "searching" && (
                         <Box sx={{ display: "flex", alignItems: "center", gap: 2, py: 3, justifyContent: "center" }}>
                             <CircularProgress size="sm" />
-                            <Typography>Searching for receiver on the LAN...</Typography>
+                            <Typography>Searching for receiver on the local network...</Typography>
                         </Box>
                     )}
 

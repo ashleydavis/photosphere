@@ -143,8 +143,8 @@ export const COMMAND_EXAMPLES: ICommandExamples = {
         { command: "psi secrets edit my-key", description: "Edit an existing secret." },
         { command: "psi secrets delete my-key", description: "Delete a secret." },
         { command: "psi secrets import", description: "Import a .key / .key.pub PEM key pair file." },
-        { command: "psi secrets send my-key", description: "Send a secret to another device over the LAN." },
-        { command: "psi secrets receive", description: "Receive a secret from another device over the LAN." },
+        { command: "psi secrets send my-key", description: "Send a secret to another device over the local network." },
+        { command: "psi secrets receive", description: "Receive a secret from another device over the local network." },
     ],
 
     dbs: [
@@ -153,8 +153,8 @@ export const COMMAND_EXAMPLES: ICommandExamples = {
         { command: "psi dbs view my-photos", description: "View details of a database entry." },
         { command: "psi dbs edit my-photos", description: "Edit a database entry." },
         { command: "psi dbs remove my-photos", description: "Remove a database entry." },
-        { command: "psi dbs send my-photos", description: "Send a database config to another device over the LAN." },
-        { command: "psi dbs receive", description: "Receive a database config from another device over the LAN." },
+        { command: "psi dbs send my-photos", description: "Send a database config to another device over the local network." },
+        { command: "psi dbs receive", description: "Receive a database config from another device over the local network." },
     ]
 };
 
