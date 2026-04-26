@@ -105,6 +105,8 @@ interface ISecretsImportOptions {
 //
 export function secretsCommand(): Command {
     const cmd = new Command('secrets')
+        .alias('sec')
+        .alias('s')
         .description('Manage secrets stored in the Photosphere secrets store.');
 
     // psi secrets add
@@ -118,11 +120,14 @@ export function secretsCommand(): Command {
 
     // psi secrets list
     cmd.command('list')
+        .alias('l')
+        .alias('ls')
         .description('List all secrets (values are masked).')
         .action(secretsList);
 
     // psi secrets view
     cmd.command('view')
+        .alias('v')
         .description('Show the full value of a named secret.')
         .option('--yes', 'Skip confirmation prompt')
         .option('--name <name>', 'Secret name')
@@ -130,6 +135,7 @@ export function secretsCommand(): Command {
 
     // psi secrets edit
     cmd.command('edit')
+        .alias('e')
         .description('Edit an existing secret, field by field.')
         .option('--yes', 'Skip prompts')
         .option('--name <name>', 'Secret name to edit')

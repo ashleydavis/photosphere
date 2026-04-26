@@ -341,6 +341,7 @@ Resources:
     program
         .command("list")
         .alias("ls")
+        .alias("l")
         .description("Lists all files in the database sorted by date (newest first) with pagination.")
         .option(...dbOption)
         .option(...keyOption)
