@@ -351,10 +351,13 @@ async function promptOptional(message: string): Promise<string | undefined> {
 //
 export function dbsCommand(): Command {
     const cmd = new Command('dbs')
+        .alias('d')
         .description('Manage the list of configured databases.');
 
     // psi dbs list
     cmd.command('list')
+        .alias('l')
+        .alias('ls')
         .description('List all configured databases.')
         .action(dbsList);
 
@@ -372,6 +375,7 @@ export function dbsCommand(): Command {
 
     // psi dbs view
     cmd.command('view')
+        .alias('v')
         .description('Show all fields of a database entry.')
         .option('--yes', 'Skip interactive selection (requires --name or --path)')
         .option('--name <name>', 'Database name')
@@ -380,6 +384,7 @@ export function dbsCommand(): Command {
 
     // psi dbs edit
     cmd.command('edit')
+        .alias('e')
         .description('Edit fields of a database entry.')
         .option('--yes', 'Skip prompts')
         .option('--name <name>', 'Database name to edit')
