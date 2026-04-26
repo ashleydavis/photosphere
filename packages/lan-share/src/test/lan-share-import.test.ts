@@ -113,11 +113,11 @@ test("imports secret payload", async () => {
         value: JSON.stringify({ label: "My S3", region: "us-east-1", accessKeyId: "AKID", secretAccessKey: "SECRET" }),
     };
 
-    await importSecretPayload(payload, "shared:imported1");
+    await importSecretPayload(payload, "imported1");
 
     expect(mockVaultSet).toHaveBeenCalledTimes(1);
     expect(mockVaultSet).toHaveBeenCalledWith({
-        name: "shared:imported1",
+        name: "imported1",
         type: "s3-credentials",
         value: payload.value,
     });

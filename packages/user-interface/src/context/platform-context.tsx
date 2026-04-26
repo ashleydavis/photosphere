@@ -49,10 +49,10 @@ export interface IDatabaseSecrets {
 }
 
 //
-// A shared secret entry, derived from a vault entry with key "shared:{id}".
+// A shared secret entry stored in the vault.
 //
 export interface ISharedSecretEntry {
-    // 8-char random alphanumeric ID, extracted from the vault key "shared:{id}".
+    // The vault key name for this secret.
     id: string;
 
     // Human-readable display name chosen by the user (the "label" field in the vault value JSON).
@@ -363,7 +363,7 @@ export interface IPlatformContext {
     createDatabaseAtPath: (path: string) => Promise<void>;
 
     //
-    // Returns all shared secrets (vault entries with name starting with "shared:").
+    // Returns all shared secrets stored in the vault.
     //
     listSecrets: () => Promise<ISharedSecretEntry[]>;
 

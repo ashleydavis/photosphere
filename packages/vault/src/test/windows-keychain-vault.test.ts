@@ -145,9 +145,9 @@ describe("WindowsKeychainVault", () => {
 
     describe("special characters", () => {
         test("handles names with colons", async () => {
-            const secret: ISecret = { name: "shared:s3test01", type: "s3-credentials", value: "data" };
+            const secret: ISecret = { name: "my:s3test01", type: "s3-credentials", value: "data" };
             await vault.set(secret);
-            const result = await vault.get("shared:s3test01");
+            const result = await vault.get("my:s3test01");
             expect(result).toEqual(secret);
         });
     });
