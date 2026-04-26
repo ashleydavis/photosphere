@@ -114,6 +114,7 @@ export function OpenDatabaseModal({ open, onClose }: IOpenDatabaseModalProps) {
                         <IconButton
                             variant="outlined"
                             disabled={refreshing}
+                            title="Refresh"
                             onClick={() => handleRefresh().catch(err => console.error('Failed to refresh databases:', err))}
                         >
                             <RefreshIcon

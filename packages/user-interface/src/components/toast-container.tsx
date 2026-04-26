@@ -41,6 +41,7 @@ function ToastItem({ toast }: { toast: IToast }) {
                         size="sm"
                         variant="plain"
                         color={toast.color}
+                        title="Dismiss"
                         onClick={() => removeToast(toast.id)}
                     >
                         <Close />

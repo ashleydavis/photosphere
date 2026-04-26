@@ -77,6 +77,7 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                 <div className="flex-grow" />
                 <button
                     className="mr-3 text-xl"
+                    title="Close sidebar"
                     onClick={() => setSidebarOpen(!sidebarOpen)}
                     >
                     <i className="fa-solid fa-arrow-left"></i>

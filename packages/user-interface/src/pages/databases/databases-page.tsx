@@ -283,6 +283,7 @@ export function DatabasesPage() {
                     variant="outlined"
                     sx={{ mr: 1 }}
                     disabled={refreshing}
+                    title="Refresh"
                     onClick={() => handleRefresh().catch(err => console.error('Failed to refresh data:', err))}
                 >
                     <Refresh
@@ -338,6 +339,7 @@ export function DatabasesPage() {
                                 <IconButton
                                     size="sm"
                                     variant="plain"
+                                    title="Open database"
                                     onClick={() => handleOpen(entry).catch(err => console.error('Open database error:', err))}
                                 >
                                     <FolderOpen fontSize="small" />
@@ -345,6 +347,7 @@ export function DatabasesPage() {
                                 <IconButton
                                     size="sm"
                                     variant="plain"
+                                    title="Share database"
                                     onClick={() => setSharingEntry(entry)}
                                 >
                                     <IosShare fontSize="small" />
@@ -352,6 +355,7 @@ export function DatabasesPage() {
                                 <IconButton
                                     size="sm"
                                     variant="plain"
+                                    title="Edit database"
                                     onClick={() => openEditDialog(entry)}
                                 >
                                     <Edit fontSize="small" />
@@ -360,6 +364,7 @@ export function DatabasesPage() {
                                     size="sm"
                                     variant="plain"
                                     color="danger"
+                                    title="Remove database"
                                     onClick={() => promptRemove(entry)}
                                 >
                                     <Delete fontSize="small" />

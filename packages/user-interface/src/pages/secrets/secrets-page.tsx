@@ -341,6 +341,7 @@ export function SecretsPage() {
                     variant="outlined"
                     sx={{ mr: 1 }}
                     disabled={refreshing}
+                    title="Refresh"
                     onClick={() => handleRefresh().catch(err => console.error('Failed to refresh secrets:', err))}
                 >
                     <Refresh
@@ -385,6 +386,7 @@ export function SecretsPage() {
                                 <IconButton
                                     size="sm"
                                     variant="plain"
+                                    title="Share secret"
                                     onClick={() => setSharingSecret(secret)}
                                 >
                                     <IosShare fontSize="small" />
@@ -392,6 +394,7 @@ export function SecretsPage() {
                                 <IconButton
                                     size="sm"
                                     variant="plain"
+                                    title="Edit secret"
                                     onClick={() => openEditDialog(secret).catch(err => console.error('Failed to open edit dialog:', err))}
                                 >
                                     <Edit fontSize="small" />
@@ -400,6 +403,7 @@ export function SecretsPage() {
                                     size="sm"
                                     variant="plain"
                                     color="danger"
+                                    title="Delete secret"
                                     onClick={() => promptDelete(secret)}
                                 >
                                     <Delete fontSize="small" />
