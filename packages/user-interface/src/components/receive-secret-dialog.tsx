@@ -34,6 +34,9 @@ interface IReceivedSecretPayload {
     // Discriminator.
     type: "secret";
 
+    // The name of the secret on the sender's device.
+    name: string;
+
     // Category of secret.
     secretType: string;
 
@@ -87,18 +90,7 @@ export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps
             const receivedPayload = received as IReceivedSecretPayload;
             setPayload(receivedPayload);
 
-            // Try to extract a label from the value JSON to pre-fill the name
-            let defaultName = "";
-            try {
-                const parsed = JSON.parse(receivedPayload.value);
-                if (parsed.label) {
-                    defaultName = parsed.label;
-                }
-            }
-            catch {
-                // Ignore parse errors
-            }
-            setSaveName(defaultName);
+            setSaveName(receivedPayload.name);
             setStep("review");
         }
 
