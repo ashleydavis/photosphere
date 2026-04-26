@@ -1,6 +1,7 @@
 import * as fs from 'fs/promises';
 import * as fsSync from 'fs';
 import * as path from 'path';
+import { parse as tomlParse, stringify as tomlStringify } from 'smol-toml';
 
 //
 // Ensures that the directory exists. If the directory structure does not exist, it is created.
@@ -79,6 +80,22 @@ export async function outputFile(filePath: string, data: string | Buffer, option
 export async function readJson<T = any>(filePath: string, options?: { encoding?: BufferEncoding; flag?: string }): Promise<T> {
     const data = await fs.readFile(filePath, options || { encoding: 'utf8' });
     return JSON.parse(data.toString());
+}
+
+//
+// Reads a TOML file and parses it.
+//
+export async function readToml<T = any>(filePath: string): Promise<T> {
+    const data = await fs.readFile(filePath, { encoding: 'utf8' });
+    return tomlParse(data.toString()) as T;
+}
+
+//
+// Writes an object to a TOML file, creating parent directories as needed.
+//
+export async function writeToml(filePath: string, object: Record<string, any>): Promise<void> {
+    const tomlString = tomlStringify(object);
+    await outputFile(filePath, tomlString, { encoding: 'utf8' });
 }
 
 //

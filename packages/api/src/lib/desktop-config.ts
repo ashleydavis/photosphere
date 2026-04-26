@@ -1,9 +1,9 @@
 import * as os from "os";
 import * as path from "path";
-import { readJson, writeJson, pathExists } from "node-utils";
+import { readJson, readToml, writeToml, pathExists, remove } from "node-utils";
 
 //
-// Configuration for the desktop app stored in ~/.config/photosphere/desktop.json
+// Configuration for the desktop app stored in ~/.config/photosphere/desktop.toml
 //
 export interface IDesktopConfig {
     //
@@ -32,9 +32,76 @@ export interface IDesktopConfig {
     lastDatabase?: string;
 }
 
+//
+// TOML on-disk shape for the desktop config file (snake_case keys).
+//
+interface ITomlDesktopConfig {
+    // The last folder that was opened in the file dialog.
+    last_folder?: string;
+
+    // The theme preference.
+    theme?: 'light' | 'dark' | 'system';
+
+    // List of recently executed searches.
+    recent_searches?: string[];
+
+    // The last folder used when downloading assets.
+    last_download_folder?: string;
+
+    // The path of the last database that was opened.
+    last_database?: string;
+}
+
 const CONFIG_DIR = path.join(os.homedir(), ".config", "photosphere");
-const CONFIG_FILE = path.join(CONFIG_DIR, "desktop.json");
+const CONFIG_FILE = path.join(CONFIG_DIR, "desktop.toml");
+const OLD_CONFIG_FILE = path.join(CONFIG_DIR, "desktop.json");
 const MAX_RECENT_SEARCHES = 10;
+
+//
+// Converts a TOML-shaped desktop config to the TypeScript IDesktopConfig type.
+//
+function tomlToDesktopConfig(toml: ITomlDesktopConfig): IDesktopConfig {
+    const config: IDesktopConfig = {};
+    if (toml.last_folder !== undefined) {
+        config.lastFolder = toml.last_folder;
+    }
+    if (toml.theme !== undefined) {
+        config.theme = toml.theme;
+    }
+    if (toml.recent_searches !== undefined) {
+        config.recentSearches = toml.recent_searches;
+    }
+    if (toml.last_download_folder !== undefined) {
+        config.lastDownloadFolder = toml.last_download_folder;
+    }
+    if (toml.last_database !== undefined) {
+        config.lastDatabase = toml.last_database;
+    }
+    return config;
+}
+
+//
+// Converts the TypeScript IDesktopConfig to the TOML on-disk shape.
+//
+function desktopConfigToToml(config: IDesktopConfig): ITomlDesktopConfig {
+    const toml: ITomlDesktopConfig = {};
+    if (config.lastFolder !== undefined) {
+        toml.last_folder = config.lastFolder;
+    }
+    if (config.theme !== undefined) {
+        toml.theme = config.theme;
+    }
+    if (config.recentSearches !== undefined) {
+        toml.recent_searches = config.recentSearches;
+    }
+    if (config.lastDownloadFolder !== undefined) {
+        toml.last_download_folder = config.lastDownloadFolder;
+    }
+    if (config.lastDatabase !== undefined) {
+        toml.last_database = config.lastDatabase;
+    }
+    return toml;
+}
 
 //
 // Gets the path to the config file.
@@ -45,22 +112,29 @@ export function getConfigPath(): string {
 
 //
 // Loads the desktop configuration from disk.
-// Returns default config if file doesn't exist.
+// If the TOML file does not exist but an old JSON file does, migrates automatically.
+// Returns default config if neither file exists.
 //
 export async function loadDesktopConfig(): Promise<IDesktopConfig> {
     if (!await pathExists(CONFIG_FILE)) {
+        if (await pathExists(OLD_CONFIG_FILE)) {
+            const jsonConfig = await readJson<IDesktopConfig>(OLD_CONFIG_FILE);
+            await saveDesktopConfig(jsonConfig);
+            await remove(OLD_CONFIG_FILE);
+            return jsonConfig;
+        }
         return {};
     }
 
-    const config = await readJson<IDesktopConfig>(CONFIG_FILE);
-    return config;
+    const toml = await readToml<ITomlDesktopConfig>(CONFIG_FILE);
+    return tomlToDesktopConfig(toml);
 }
 
 //
 // Saves the desktop configuration to disk.
 //
 export async function saveDesktopConfig(config: IDesktopConfig): Promise<void> {
-    await writeJson(CONFIG_FILE, config, { spaces: 2 });
+    await writeToml(CONFIG_FILE, desktopConfigToToml(config));
 }
 
 //

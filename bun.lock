@@ -29,7 +29,6 @@
         "bdb": "workspace:*",
         "commander": "^13.1.0",
         "config": "workspace:*",
-        "defs": "workspace:*",
         "exif-parser": "^0.1.12",
         "fuzzy-match": "workspace:*",
         "is-unicode-supported": "^2.1.0",
@@ -192,7 +191,6 @@
         "axios": "^0.27.2",
         "bdb": "workspace:*",
         "dayjs": "^1.11.7",
-        "defs": "workspace:*",
         "electron-defs": "workspace:*",
         "exif-parser": "^0.1.12",
         "json-stable-stringify": "^1.3.0",
@@ -242,14 +240,6 @@
     },
     "packages/config": {
       "name": "config",
-      "version": "1.0.0",
-      "devDependencies": {
-        "@types/node": "^22.9.1",
-        "typescript": "^5.6.3",
-      },
-    },
-    "packages/defs": {
-      "name": "defs",
       "version": "1.0.0",
       "devDependencies": {
         "@types/node": "^22.9.1",
@@ -330,11 +320,11 @@
       "dependencies": {
         "axios": "^0.27.2",
         "dayjs": "^1.11.7",
-        "defs": "workspace:*",
         "electron-defs": "workspace:*",
         "jszip": "^3.10.1",
         "lodash": "^4.17.21",
         "mime-types": "^2.1.35",
+        "smol-toml": "^1.3.4",
         "tools": "workspace:*",
         "utils": "workspace:*",
       },
@@ -454,7 +444,6 @@
         "colorthief": "^2.6.0",
         "config": "workspace:*",
         "dayjs": "^1.11.7",
-        "defs": "workspace:*",
         "jszip": "^3.10.1",
         "lan-share": "workspace:*",
         "leaflet": "^1.9.4",
@@ -495,7 +484,6 @@
         "blob-util": "^2.0.2",
         "classnames": "^2.5.1",
         "dayjs": "^1.11.7",
-        "defs": "workspace:*",
         "jszip": "^3.10.1",
         "lodash": "^4.17.21",
         "mime-types": "^2.1.35",
@@ -1524,8 +1512,6 @@
 
     "define-properties": ["define-properties@1.2.1", "", { "dependencies": { "define-data-property": "^1.0.1", "has-property-descriptors": "^1.0.0", "object-keys": "^1.1.1" } }, "sha512-8QmQKqEASLd5nx0U1B1okLElbUuuttJ/AnYmRXbbbGDWh6uS208EjD4Xqq/I9wK7u0v6O08XhTWnt5XtEbR6Dg=="],
 
-    "defs": ["defs@workspace:packages/defs"],
-
     "delayed-stream": ["delayed-stream@1.0.0", "", {}, "sha512-ZySD7Nf91aLB0RxL4KGrKHBXl7Eds1DAmEdcoVawXnLD7SDhpNgtuII2aAkg7a7QS41jxPSZ17p4VdGnMHk3MQ=="],
 
     "depd": ["depd@2.0.0", "", {}, "sha512-g7nH6P6dyDioJogAAGprGpCtVImJhpPk/roCzdb3fIh61/s/nPsfR6onyMwkCAR/OlC3yBC0lESvUoQEAssIrw=="],
@@ -2385,6 +2371,8 @@
     "slice-ansi": ["slice-ansi@3.0.0", "", { "dependencies": { "ansi-styles": "^4.0.0", "astral-regex": "^2.0.0", "is-fullwidth-code-point": "^3.0.0" } }, "sha512-pSyv7bSTC7ig9Dcgbw9AuRNUb5k5V6oDudjZoMBSr13qpLBG7tB+zgCkARjq7xIUgdz5P1Qe8u+rSGdouOOIyQ=="],
 
     "smart-buffer": ["smart-buffer@4.2.0", "", {}, "sha512-94hK0Hh8rPqQl2xXc3HsaBoOXKV20MToPkcXvwbISWLEs+64sBq5kFgn2kJDHb1Pry9yrP0dxrCI9RRci7RXKg=="],
+
+    "smol-toml": ["smol-toml@1.6.1", "", {}, "sha512-dWUG8F5sIIARXih1DTaQAX4SsiTXhInKf1buxdY9DIg4ZYPZK5nGM1VRIYmEbDbsHt7USo99xSLFu5Q1IqTmsg=="],
 
     "socks": ["socks@2.8.7", "", { "dependencies": { "ip-address": "^10.0.1", "smart-buffer": "^4.2.0" } }, "sha512-HLpt+uLy/pxB+bum/9DzAgiKS8CX1EvbWxI4zlmgGCExImLdiad2iCwXT5Z4c9c3Eq8rP2318mPW2c+QbtjK8A=="],
 

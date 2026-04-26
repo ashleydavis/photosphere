@@ -1,12 +1,16 @@
 // Mock node-utils fs helpers so tests don't touch the real filesystem.
 const mockPathExists = jest.fn();
+const mockReadToml = jest.fn();
+const mockWriteToml = jest.fn();
 const mockReadJson = jest.fn();
-const mockWriteJson = jest.fn();
+const mockRemove = jest.fn();
 
 jest.mock('node-utils', () => ({
     pathExists: mockPathExists,
+    readToml: mockReadToml,
+    writeToml: mockWriteToml,
     readJson: mockReadJson,
-    writeJson: mockWriteJson,
+    remove: mockRemove,
 }));
 
 import {
@@ -23,50 +27,100 @@ import {
 } from '../../lib/desktop-config';
 
 describe('getConfigPath', () => {
-    test('returns a string ending with desktop.json', () => {
+    test('returns a string ending with desktop.toml', () => {
         const result = getConfigPath();
 
         expect(typeof result).toBe('string');
-        expect(result).toMatch(/desktop\.json$/);
+        expect(result).toMatch(/desktop\.toml$/);
     });
 });
 
 describe('loadDesktopConfig', () => {
     beforeEach(() => jest.clearAllMocks());
 
-    test('returns {} when file does not exist', async () => {
+    test('returns {} when no file exists', async () => {
         mockPathExists.mockResolvedValue(false);
 
         const config = await loadDesktopConfig();
 
         expect(config).toEqual({});
-        expect(mockReadJson).not.toHaveBeenCalled();
+        expect(mockReadToml).not.toHaveBeenCalled();
     });
 
-    test('returns config from disk when file exists', async () => {
-        mockPathExists.mockResolvedValue(true);
-        mockReadJson.mockResolvedValue({ theme: 'dark', lastFolder: '/photos' });
+    test('returns config from TOML when file exists', async () => {
+        mockPathExists.mockImplementation((filePath: string) => filePath.endsWith('.toml'));
+        mockReadToml.mockResolvedValue({ theme: 'dark', last_folder: '/photos' });
 
         const config = await loadDesktopConfig();
 
         expect(config.theme).toBe('dark');
         expect(config.lastFolder).toBe('/photos');
     });
+
+    test('converts snake_case TOML keys to camelCase TypeScript fields', async () => {
+        mockPathExists.mockImplementation((filePath: string) => filePath.endsWith('.toml'));
+        mockReadToml.mockResolvedValue({
+            last_folder: '/folder',
+            recent_searches: ['cats'],
+            last_download_folder: '/downloads',
+            last_database: '/db',
+        });
+
+        const config = await loadDesktopConfig();
+
+        expect(config.lastFolder).toBe('/folder');
+        expect(config.recentSearches).toEqual(['cats']);
+        expect(config.lastDownloadFolder).toBe('/downloads');
+        expect(config.lastDatabase).toBe('/db');
+    });
+});
+
+describe('loadDesktopConfig migration', () => {
+    beforeEach(() => jest.clearAllMocks());
+
+    test('migrates from JSON when TOML does not exist but JSON does', async () => {
+        mockPathExists.mockImplementation((filePath: string) => filePath.endsWith('.json'));
+        mockReadJson.mockResolvedValue({ theme: 'dark', lastFolder: '/photos' });
+
+        const config = await loadDesktopConfig();
+
+        expect(config.theme).toBe('dark');
+        expect(config.lastFolder).toBe('/photos');
+        expect(mockWriteToml).toHaveBeenCalled();
+        expect(mockRemove).toHaveBeenCalledWith(expect.stringContaining('desktop.json'));
+    });
 });
 
 describe('saveDesktopConfig', () => {
     beforeEach(() => jest.clearAllMocks());
 
-    test('writes config JSON', async () => {
+    test('writes TOML with snake_case keys', async () => {
         const config = { theme: 'light' as const };
 
         await saveDesktopConfig(config);
 
-        expect(mockWriteJson).toHaveBeenCalledWith(
+        expect(mockWriteToml).toHaveBeenCalledWith(
             expect.any(String),
-            config,
-            { spaces: 2 }
+            expect.objectContaining({ theme: 'light' })
         );
+    });
+
+    test('converts camelCase fields to snake_case in TOML', async () => {
+        const config = {
+            lastFolder: '/folder',
+            recentSearches: ['cats'],
+            lastDownloadFolder: '/downloads',
+            lastDatabase: '/db',
+        };
+
+        await saveDesktopConfig(config);
+
+        const tomlArg = mockWriteToml.mock.calls[0][1];
+        expect(tomlArg.last_folder).toBe('/folder');
+        expect(tomlArg.recent_searches).toEqual(['cats']);
+        expect(tomlArg.last_download_folder).toBe('/downloads');
+        expect(tomlArg.last_database).toBe('/db');
+        expect(tomlArg.lastFolder).toBeUndefined();
     });
 });
 
@@ -74,16 +128,13 @@ describe('updateLastFolder', () => {
     beforeEach(() => jest.clearAllMocks());
 
     test('sets lastFolder and saves', async () => {
-        mockPathExists.mockResolvedValue(true);
-        mockReadJson.mockResolvedValue({});
+        mockPathExists.mockImplementation((filePath: string) => filePath.endsWith('.toml'));
+        mockReadToml.mockResolvedValue({});
 
         await updateLastFolder('/new/folder');
 
-        expect(mockWriteJson).toHaveBeenCalledWith(
-            expect.any(String),
-            expect.objectContaining({ lastFolder: '/new/folder' }),
-            { spaces: 2 }
-        );
+        const tomlArg = mockWriteToml.mock.calls[0][1];
+        expect(tomlArg.last_folder).toBe('/new/folder');
     });
 });
 
@@ -91,8 +142,8 @@ describe('getTheme', () => {
     beforeEach(() => jest.clearAllMocks());
 
     test('returns system when theme is unset', async () => {
-        mockPathExists.mockResolvedValue(true);
-        mockReadJson.mockResolvedValue({});
+        mockPathExists.mockImplementation((filePath: string) => filePath.endsWith('.toml'));
+        mockReadToml.mockResolvedValue({});
 
         const result = await getTheme();
 
@@ -100,8 +151,8 @@ describe('getTheme', () => {
     });
 
     test('returns stored value', async () => {
-        mockPathExists.mockResolvedValue(true);
-        mockReadJson.mockResolvedValue({ theme: 'dark' });
+        mockPathExists.mockImplementation((filePath: string) => filePath.endsWith('.toml'));
+        mockReadToml.mockResolvedValue({ theme: 'dark' });
 
         const result = await getTheme();
 
@@ -113,16 +164,13 @@ describe('setTheme', () => {
     beforeEach(() => jest.clearAllMocks());
 
     test('sets theme and saves', async () => {
-        mockPathExists.mockResolvedValue(true);
-        mockReadJson.mockResolvedValue({});
+        mockPathExists.mockImplementation((filePath: string) => filePath.endsWith('.toml'));
+        mockReadToml.mockResolvedValue({});
 
         await setTheme('light');
 
-        expect(mockWriteJson).toHaveBeenCalledWith(
-            expect.any(String),
-            expect.objectContaining({ theme: 'light' }),
-            { spaces: 2 }
-        );
+        const tomlArg = mockWriteToml.mock.calls[0][1];
+        expect(tomlArg.theme).toBe('light');
     });
 });
 
@@ -130,25 +178,22 @@ describe('updateLastDownloadFolder', () => {
     beforeEach(() => jest.clearAllMocks());
 
     test('sets lastDownloadFolder and saves', async () => {
-        mockPathExists.mockResolvedValue(true);
-        mockReadJson.mockResolvedValue({});
+        mockPathExists.mockImplementation((filePath: string) => filePath.endsWith('.toml'));
+        mockReadToml.mockResolvedValue({});
 
         await updateLastDownloadFolder('/downloads');
 
-        expect(mockWriteJson).toHaveBeenCalledWith(
-            expect.any(String),
-            expect.objectContaining({ lastDownloadFolder: '/downloads' }),
-            { spaces: 2 }
-        );
+        const tomlArg = mockWriteToml.mock.calls[0][1];
+        expect(tomlArg.last_download_folder).toBe('/downloads');
     });
 });
 
 describe('getRecentSearches', () => {
     beforeEach(() => jest.clearAllMocks());
 
-    test('returns [] when recentSearches is unset', async () => {
-        mockPathExists.mockResolvedValue(true);
-        mockReadJson.mockResolvedValue({});
+    test('returns [] when recent_searches is unset', async () => {
+        mockPathExists.mockImplementation((filePath: string) => filePath.endsWith('.toml'));
+        mockReadToml.mockResolvedValue({});
 
         const result = await getRecentSearches();
 
@@ -156,8 +201,8 @@ describe('getRecentSearches', () => {
     });
 
     test('returns stored list', async () => {
-        mockPathExists.mockResolvedValue(true);
-        mockReadJson.mockResolvedValue({ recentSearches: ['cats', 'dogs'] });
+        mockPathExists.mockImplementation((filePath: string) => filePath.endsWith('.toml'));
+        mockReadToml.mockResolvedValue({ recent_searches: ['cats', 'dogs'] });
 
         const result = await getRecentSearches();
 
@@ -169,35 +214,35 @@ describe('addRecentSearch', () => {
     beforeEach(() => jest.clearAllMocks());
 
     test('deduplicates and prepends', async () => {
-        mockPathExists.mockResolvedValue(true);
-        mockReadJson.mockResolvedValue({ recentSearches: ['cats', 'dogs'] });
+        mockPathExists.mockImplementation((filePath: string) => filePath.endsWith('.toml'));
+        mockReadToml.mockResolvedValue({ recent_searches: ['cats', 'dogs'] });
 
         await addRecentSearch('cats');
 
-        const written = mockWriteJson.mock.calls[0][1];
-        expect(written.recentSearches).toEqual(['cats', 'dogs']);
+        const tomlArg = mockWriteToml.mock.calls[0][1];
+        expect(tomlArg.recent_searches).toEqual(['cats', 'dogs']);
     });
 
     test('prepends new search at front', async () => {
-        mockPathExists.mockResolvedValue(true);
-        mockReadJson.mockResolvedValue({ recentSearches: ['cats'] });
+        mockPathExists.mockImplementation((filePath: string) => filePath.endsWith('.toml'));
+        mockReadToml.mockResolvedValue({ recent_searches: ['cats'] });
 
         await addRecentSearch('dogs');
 
-        const written = mockWriteJson.mock.calls[0][1];
-        expect(written.recentSearches[0]).toBe('dogs');
+        const tomlArg = mockWriteToml.mock.calls[0][1];
+        expect(tomlArg.recent_searches[0]).toBe('dogs');
     });
 
     test('caps list at 10 entries', async () => {
         const existing = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
-        mockPathExists.mockResolvedValue(true);
-        mockReadJson.mockResolvedValue({ recentSearches: existing });
+        mockPathExists.mockImplementation((filePath: string) => filePath.endsWith('.toml'));
+        mockReadToml.mockResolvedValue({ recent_searches: existing });
 
         await addRecentSearch('new');
 
-        const written = mockWriteJson.mock.calls[0][1];
-        expect(written.recentSearches).toHaveLength(10);
-        expect(written.recentSearches[0]).toBe('new');
+        const tomlArg = mockWriteToml.mock.calls[0][1];
+        expect(tomlArg.recent_searches).toHaveLength(10);
+        expect(tomlArg.recent_searches[0]).toBe('new');
     });
 });
 
@@ -205,12 +250,12 @@ describe('removeRecentSearch', () => {
     beforeEach(() => jest.clearAllMocks());
 
     test('filters out given search', async () => {
-        mockPathExists.mockResolvedValue(true);
-        mockReadJson.mockResolvedValue({ recentSearches: ['cats', 'dogs', 'birds'] });
+        mockPathExists.mockImplementation((filePath: string) => filePath.endsWith('.toml'));
+        mockReadToml.mockResolvedValue({ recent_searches: ['cats', 'dogs', 'birds'] });
 
         await removeRecentSearch('dogs');
 
-        const written = mockWriteJson.mock.calls[0][1];
-        expect(written.recentSearches).toEqual(['cats', 'birds']);
+        const tomlArg = mockWriteToml.mock.calls[0][1];
+        expect(tomlArg.recent_searches).toEqual(['cats', 'birds']);
     });
 });
