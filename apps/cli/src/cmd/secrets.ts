@@ -160,7 +160,7 @@ export function secretsCommand(): Command {
 
     // psi secrets send
     cmd.command('send')
-        .description('Send a secret to another device over the LAN.')
+        .description('Send a secret to another device over the local network.')
         .option('--yes', 'Skip confirmation prompts')
         .option('--name <name>', 'Secret name to send')
         .option('--code <code>', 'Use a specific pairing code instead of generating one (useful for scripted use)')
@@ -168,7 +168,7 @@ export function secretsCommand(): Command {
 
     // psi secrets receive
     cmd.command('receive')
-        .description('Receive a secret from another device over the LAN.')
+        .description('Receive a secret from another device over the local network.')
         .option('--yes', 'Skip confirmation prompts and field editing')
         .option('--code <code>', 'Pairing code shown on the sender (required with --yes)')
         .action(secretsReceive);
@@ -780,7 +780,7 @@ export async function secretsSend(cmdOptions: ISecretsSendOptions): Promise<void
     log.info('');
 
     const spin = spinner();
-    spin.start('Waiting for receiver on the LAN... (Ctrl+C to cancel)');
+    spin.start('Waiting for receiver on the local network... (Ctrl+C to cancel)');
 
     const sigintHandler = () => {
         sender.cancel();
@@ -857,7 +857,7 @@ async function secretsReceive(cmdOptions: { yes?: boolean; code?: string }): Pro
     await receiver.start(code);
 
     const spin = spinner();
-    spin.start('Waiting for sender on the LAN... (Ctrl+C to cancel)');
+    spin.start('Waiting for sender on the local network... (Ctrl+C to cancel)');
 
     const sigintHandler = () => {
         receiver.cancel();
