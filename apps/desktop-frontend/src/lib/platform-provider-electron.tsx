@@ -403,8 +403,8 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         return await electronAPI.listS3Dirs(credentialId, bucket, prefix);
     }, [electronAPI]);
 
-    const startShareReceive = useCallback(async (): Promise<{ code: string }> => {
-        return await electronAPI.startShareReceive();
+    const startShareReceive = useCallback(async (code: string): Promise<void> => {
+        await electronAPI.startShareReceive(code);
     }, [electronAPI]);
 
     const waitShareReceive = useCallback(async (): Promise<unknown> => {
@@ -415,12 +415,12 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         await electronAPI.cancelShareReceive();
     }, [electronAPI]);
 
-    const waitForReceiver = useCallback(async (payload: unknown): Promise<unknown> => {
-        return await electronAPI.waitForReceiver(payload);
+    const waitForReceiver = useCallback(async (payload: unknown, code: string): Promise<unknown> => {
+        return await electronAPI.waitForReceiver(payload, code);
     }, [electronAPI]);
 
-    const sendToReceiver = useCallback(async (endpoint: unknown, code: string): Promise<boolean> => {
-        return await electronAPI.sendToReceiver(endpoint, code);
+    const sendToReceiver = useCallback(async (endpoint: unknown): Promise<boolean> => {
+        return await electronAPI.sendToReceiver(endpoint);
     }, [electronAPI]);
 
     const cancelShareSend = useCallback(async (): Promise<void> => {

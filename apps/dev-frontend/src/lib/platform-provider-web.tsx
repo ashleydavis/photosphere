@@ -267,9 +267,8 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         return [];
     }, []);
 
-    const startShareReceive = useCallback(async (): Promise<{ code: string }> => {
+    const startShareReceive = useCallback(async (_code: string): Promise<void> => {
         // Not supported on web platform.
-        return { code: "0000" };
     }, []);
 
     const waitShareReceive = useCallback(async (): Promise<unknown> => {
@@ -281,12 +280,12 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         // Not supported on web platform.
     }, []);
 
-    const waitForReceiver = useCallback(async (_payload: unknown): Promise<unknown> => {
+    const waitForReceiver = useCallback(async (_payload: unknown, _code: string): Promise<unknown> => {
         // Not supported on web platform.
         return null;
     }, []);
 
-    const sendToReceiver = useCallback(async (_endpoint: unknown, _code: string): Promise<boolean> => {
+    const sendToReceiver = useCallback(async (_endpoint: unknown): Promise<boolean> => {
         // Not supported on web platform.
         return false;
     }, []);

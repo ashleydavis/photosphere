@@ -5,9 +5,6 @@ import DialogTitle from '@mui/joy/DialogTitle';
 import DialogContent from '@mui/joy/DialogContent';
 import DialogActions from '@mui/joy/DialogActions';
 import Button from '@mui/joy/Button';
-import Input from '@mui/joy/Input';
-import FormControl from '@mui/joy/FormControl';
-import FormLabel from '@mui/joy/FormLabel';
 import Typography from '@mui/joy/Typography';
 import Alert from '@mui/joy/Alert';
 import CircularProgress from '@mui/joy/CircularProgress';
@@ -28,7 +25,7 @@ export interface IShareSecretDialogProps {
 //
 // Steps in the share secret flow.
 //
-type ShareStep = "confirm" | "searching" | "enter-code" | "success" | "error";
+type ShareStep = "confirm" | "searching" | "showing-code" | "success" | "error";
 
 //
 // Dialog for sharing a secret to another device over the LAN.
@@ -37,7 +34,6 @@ export function ShareSecretDialog({ open, entry, onClose }: IShareSecretDialogPr
     const platform = usePlatform();
     const [step, setStep] = useState<ShareStep>("confirm");
     const [pairingCode, setPairingCode] = useState("");
-    const [endpoint, setEndpoint] = useState<unknown>(null);
     const [errorMessage, setErrorMessage] = useState("");
 
     // Reset state when dialog opens
@@ -45,16 +41,17 @@ export function ShareSecretDialog({ open, entry, onClose }: IShareSecretDialogPr
         if (open) {
             setStep("confirm");
             setPairingCode("");
-            setEndpoint(null);
             setErrorMessage("");
         }
     }, [open]);
 
     //
-    // Builds the secret payload and starts searching for a receiver.
+    // Generates a pairing code, shows it to the user, then waits for a receiver and auto-sends.
     //
     const handleStartSend = useCallback(async () => {
-        setStep("searching");
+        const code = String(Math.floor(1000 + Math.random() * 9000));
+        setPairingCode(code);
+        setStep("showing-code");
 
         // Get the secret value and build the payload
         const value = await platform.getSecretValue(entry.id);
@@ -71,26 +68,14 @@ export function ShareSecretDialog({ open, entry, onClose }: IShareSecretDialogPr
             value,
         };
 
-        const foundEndpoint = await platform.waitForReceiver(payload);
+        const foundEndpoint = await platform.waitForReceiver(payload, code);
         if (!foundEndpoint) {
             setErrorMessage("No receiver found within 60 seconds.");
             setStep("error");
             return;
         }
 
-        setEndpoint(foundEndpoint);
-        setStep("enter-code");
-    }, [entry, platform]);
-
-    //
-    // Sends the payload to the receiver with the entered pairing code.
-    //
-    const handleSend = useCallback(async () => {
-        if (!endpoint) {
-            return;
-        }
-
-        const success = await platform.sendToReceiver(endpoint, pairingCode);
+        const success = await platform.sendToReceiver(foundEndpoint);
         if (success) {
             setStep("success");
         }
@@ -98,13 +83,13 @@ export function ShareSecretDialog({ open, entry, onClose }: IShareSecretDialogPr
             setErrorMessage("Pairing code rejected by receiver.");
             setStep("error");
         }
-    }, [endpoint, pairingCode, platform]);
+    }, [entry, platform]);
 
     //
     // Cancels the sender and closes the dialog.
     //
     const handleCancel = useCallback(async () => {
-        if (step === "searching") {
+        if (step === "showing-code") {
             await platform.cancelShareSend();
         }
         onClose();
@@ -141,16 +126,14 @@ export function ShareSecretDialog({ open, entry, onClose }: IShareSecretDialogPr
                         </Box>
                     )}
 
-                    {step === "enter-code" && (
-                        <FormControl>
-                            <FormLabel>Enter the 4-digit pairing code shown on the receiver</FormLabel>
-                            <Input
-                                value={pairingCode}
-                                onChange={event => setPairingCode(event.target.value)}
-                                slotProps={{ input: { maxLength: 4 } }}
-                                placeholder="0000"
-                            />
-                        </FormControl>
+                    {step === "showing-code" && (
+                        <Box sx={{ textAlign: "center", py: 3 }}>
+                            <Typography level="body-lg" sx={{ mb: 1 }}>Pairing Code</Typography>
+                            <Typography level="h2" sx={{ fontFamily: "monospace", letterSpacing: "0.3em", mb: 2 }}>
+                                {pairingCode}
+                            </Typography>
+                            <Typography level="body-sm">Tell the receiver to enter this code.</Typography>
+                        </Box>
                     )}
 
                     {step === "success" && (
@@ -179,16 +162,8 @@ export function ShareSecretDialog({ open, entry, onClose }: IShareSecretDialogPr
                         <Button variant="plain" onClick={handleCancel}>Cancel</Button>
                     )}
 
-                    {step === "enter-code" && (
-                        <>
-                            <Button variant="plain" onClick={handleCancel}>Cancel</Button>
-                            <Button
-                                disabled={!/^\d{4}$/.test(pairingCode)}
-                                onClick={() => { handleSend().catch(err => console.error("Send error:", err)); }}
-                            >
-                                Send
-                            </Button>
-                        </>
+                    {step === "showing-code" && (
+                        <Button variant="plain" onClick={handleCancel}>Cancel</Button>
                     )}
 
                     {(step === "success" || step === "error") && (
