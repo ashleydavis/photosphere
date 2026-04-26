@@ -140,6 +140,7 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                                 className="ml-4 pointer-events-auto"
                                 variant="outlined"
                                 color="neutral"
+                                title="Previous"
                                 onClick={() => onPrev()}
                                 >
                                 <i className="fa-solid fa-arrow-left"></i>
@@ -153,6 +154,7 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                                 className="mr-4 pointer-events-auto"
                                 variant="outlined"
                                 color="neutral"
+                                title="Next"
                                 onClick={() => onNext()}
                                 >
                                 <i className="fa-solid fa-arrow-right"></i>
@@ -169,6 +171,7 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                             className="pointer-events-auto"
                             variant="outlined"
                             color="neutral"
+                            title="Close"
                             onClick={() => {
                                 onClose();
                                 setOpenInfo(false);
@@ -278,6 +281,7 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                         variant="outlined"
                         color="neutral"
                         sx={{ ml: 1 }}
+                        title="Asset info"
                         onClick={() => {
                             setOpenInfo(true);
                         }}
@@ -426,6 +430,7 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                                 size="sm"
                                 variant="plain"
                                 color="neutral"
+                                title="Remove label"
                                 onClick={event => {
                                     event.stopPropagation();
                                     onRemoveLabel(label);

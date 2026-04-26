@@ -130,6 +130,7 @@ export function AssetInfo({ onClose, onDeleted, onLabelSearch }: IAssetInfoProps
                         size="sm"
                         variant="plain"
                         color="neutral"
+                        title="Remove label"
                         onClick={event => {
                             event.stopPropagation();
                             onRemoveLabel(name);
@@ -159,6 +160,7 @@ export function AssetInfo({ onClose, onDeleted, onLabelSearch }: IAssetInfoProps
                     <IconButton
                         variant="plain"
                         color="neutral"
+                        title="Close"
                         onClick={() => {
                             onClose();
                         }}
@@ -285,6 +287,7 @@ export function AssetInfo({ onClose, onDeleted, onLabelSearch }: IAssetInfoProps
                                             className="ml-2"
                                             variant="plain"
                                             color="neutral"
+                                            title="Add label"
                                             onClick={() => setAddingLabel(true)}
                                             >
                                             <i className="fa-solid fa-square-plus" />

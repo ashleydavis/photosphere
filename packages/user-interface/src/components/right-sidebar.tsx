@@ -352,6 +352,7 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
                 <div className="flex flex-row items-center mt-4" style={{ paddingLeft: "15px" }}>
                     <button
                         className="ml-3 text-xl"
+                        title="Close menu"
                         onClick={() => setSidebarOpen(!sidebarOpen)}
                         >
                         <i className="fa-solid fa-arrow-right"></i>
@@ -475,6 +476,7 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
                                                 size="sm"
                                                 variant="plain"
                                                 color="neutral"
+                                                title="Remove saved search"
                                                 onClick={async (e) => {
                                                     e.stopPropagation();
                                                     await unsaveSearch(savedSearch);
@@ -536,6 +538,7 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
                                                     size="sm"
                                                     variant="plain"
                                                     color="neutral"
+                                                    title="Remove from recent searches"
                                                     onClick={async (e) => {
                                                         e.stopPropagation();
                                                         await removeRecentSearch(recentSearch);

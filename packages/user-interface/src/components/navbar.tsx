@@ -82,6 +82,7 @@ export function Navbar({
             <div className="flex flex-col">
                 <div className="flex flex-row items-center pl-4 pt-3 pb-2">
                     <button
+                        title="Toggle sidebar"
                         onClick={() => setSidebarOpen(!sidebarOpen)}
                     >
                         <i className="fa-solid fa-bars"></i>
@@ -91,6 +92,7 @@ export function Navbar({
 
                     <button
                         className="ml-4 mr-1 sm:ml-8 sm:mr-3"
+                        title="Search"
                         onClick={event => {
                             setOpenSearch(true);
                         }}
@@ -161,6 +163,7 @@ export function Navbar({
                                 && <div className="flex flex-row items-center">
                                     <button
                                         className="w-6 text-sm"
+                                        title="Clear selection"
                                         onClick={clearMultiSelection}
                                     >
                                         <i className="fa-solid fa-close"></i>
@@ -176,6 +179,7 @@ export function Navbar({
                         sx={{ mr: 1 }}
                         variant="soft"
                         color="neutral"
+                        title="Open menu"
                         onClick={() => setRightSidebarOpen(true)}
                     >
                         <MoreVert />
@@ -247,6 +251,7 @@ export function Navbar({
                         </a>
                         <button
                             className="w-10 text-xl"
+                            title="Close search"
                             onClick={() => {
                                 searchDebounce.cancel();
                                 onCloseSearch();
