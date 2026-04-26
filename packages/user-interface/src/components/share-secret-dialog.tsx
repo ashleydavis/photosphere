@@ -66,6 +66,7 @@ export function ShareSecretDialog({ open, entry, onClose }: IShareSecretDialogPr
 
         const payload = {
             type: "secret" as const,
+            name: entry.name,
             secretType: entry.type,
             value,
         };
