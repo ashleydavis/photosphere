@@ -236,6 +236,11 @@ flowchart LR
 9. Ask Claude to export an asset to `/tmp/test.jpg` — confirm the file is written.
 10. Ask Claude to add a directory of photos — confirm `add_assets` is called and reports a result.
 
+**Wiki:**
+11. Open `photosphere.wiki/Claude-Integration.md` on GitHub and confirm the Mermaid diagram renders correctly.
+12. Follow the integration instructions in the wiki from scratch on a clean machine — confirm the config blocks are accurate and complete.
+13. Run each example prompt from the "What you can do" section against a real database and confirm they all produce sensible responses.
+
 ## Verify
 
 - `cd packages/mcp-tools && bun run compile` — compiles with zero errors
