@@ -78,6 +78,14 @@ class RendererLog implements ILog {
             toolData: data,
         });
     }
+
+    event(message: string): void {
+        console.log(`[EVENT] ${message}`);
+        this.electronAPI.log({
+            level: 'event',
+            message,
+        });
+    }
 }
 
 //

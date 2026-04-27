@@ -1,5 +1,6 @@
 import React, { ReactNode, createContext, useContext, useEffect, useState } from "react";
 import { usePlatform, type IDatabaseEntry } from "./platform-context";
+import { log } from "utils";
 
 export interface IAppContext {
     //
@@ -36,8 +37,7 @@ export function AppContextProvider({ children }: IProps) {
             setDbs(databases);
         }
         catch (err) {
-            console.error(`Failed to load databases:`);
-            console.error(err);
+            log.exception(`Failed to load databases:`, err as Error);
             setDbs([]);
         }
     }
@@ -53,8 +53,7 @@ export function AppContextProvider({ children }: IProps) {
     useEffect(() => {
         load()
             .catch(err => {
-                console.error(`Failed to load sets:`);
-                console.error(err)
+                log.exception(`Failed to load sets:`, err as Error);
             });
     }, [platform]);
 
@@ -62,8 +61,7 @@ export function AppContextProvider({ children }: IProps) {
         return platform.onDatabaseOpened(() => {
             load()
                 .catch(err => {
-                    console.error(`Failed to reload recent databases after database opened:`);
-                    console.error(err);
+                    log.exception(`Failed to reload recent databases after database opened:`, err as Error);
                 });
         });
     }, [platform]);

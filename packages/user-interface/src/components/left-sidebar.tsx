@@ -1,3 +1,4 @@
+import { log } from "utils";
 import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAssetDatabase } from '../context/asset-database-source';
@@ -55,7 +56,7 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
     function loadRecentDatabases(): void {
         platform.getRecentDatabases()
             .then(recent => setRecentDatabases(recent))
-            .catch(err => console.error('Failed to load recent databases:', err));
+            .catch(err => log.exception('Failed to load recent databases:', err as Error));
     }
 
     useEffect(() => {

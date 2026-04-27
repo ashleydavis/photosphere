@@ -1,3 +1,4 @@
+import { log } from "utils";
 import { useEffect, useState } from "react";
 import Box from "@mui/joy/Box";
 import Typography from "@mui/joy/Typography";
@@ -26,7 +27,7 @@ export function NoDatabaseLoaded() {
     useEffect(() => {
         platform.getRecentDatabases()
             .then(recent => setRecentDatabases(recent))
-            .catch(err => console.error('Failed to load recent databases:', err));
+            .catch(err => log.exception('Failed to load recent databases:', err as Error));
     }, [platform]);
 
     return (
@@ -79,7 +80,7 @@ export function NoDatabaseLoaded() {
                                         variant="outlined"
                                         color="neutral"
                                         startDecorator={<FolderOpenIcon />}
-                                        onClick={() => openDatabase(dbEntry.path).catch(err => console.error('Open database error:', err))}
+                                        onClick={() => openDatabase(dbEntry.path).catch(err => log.exception('Open database error:', err as Error))}
                                         sx={{ justifyContent: 'flex-start' }}
                                     >
                                         {dbEntry.name || dbEntry.path.split(/[\\/]/).filter(Boolean).pop() || dbEntry.path}

@@ -1,3 +1,4 @@
+import { log } from "utils";
 import React, { useState } from 'react';
 import Modal from '@mui/joy/Modal';
 import ModalDialog from '@mui/joy/ModalDialog';
@@ -141,7 +142,7 @@ export function SecretQuickCreateDialog({ open, secretType, defaultName, onClose
                 </DialogContent>
                 <DialogActions>
                     <Button variant="plain" onClick={onClose}>Cancel</Button>
-                    <Button onClick={() => handleSave().catch(err => console.error('Quick-create save error:', err))}>Create</Button>
+                    <Button onClick={() => handleSave().catch(err => log.exception('Quick-create save error:', err as Error))}>Create</Button>
                 </DialogActions>
             </ModalDialog>
         </Modal>

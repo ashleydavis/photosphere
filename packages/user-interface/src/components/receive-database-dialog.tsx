@@ -1,3 +1,4 @@
+import { log } from "utils";
 import React, { useState, useEffect, useCallback } from 'react';
 import Modal from '@mui/joy/Modal';
 import ModalDialog from '@mui/joy/ModalDialog';
@@ -397,7 +398,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
                             <Button variant="plain" onClick={handleCancel}>Cancel</Button>
                             <Button
                                 disabled={!/^\d{4}$/.test(enteredCode)}
-                                onClick={() => { handleStartReceiving().catch(err => console.error("Receive error:", err)); }}
+                                onClick={() => { handleStartReceiving().catch(err => log.exception("Receive error:", err as Error)); }}
                             >
                                 Start
                             </Button>
@@ -413,7 +414,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
                             <Button variant="plain" onClick={handleCancel}>Cancel</Button>
                             <Button
                                 disabled={!editedName || !editedPath}
-                                onClick={() => { handleSave().catch(err => console.error("Import error:", err)); }}
+                                onClick={() => { handleSave().catch(err => log.exception("Import error:", err as Error)); }}
                             >
                                 Save
                             </Button>
@@ -425,7 +426,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
                             <Button variant="plain" onClick={() => setStep("review")}>Back</Button>
                             <Button
                                 disabled={conflictResolutionInvalid}
-                                onClick={() => { handleConflictsResolved().catch(err => console.error("Import error:", err)); }}
+                                onClick={() => { handleConflictsResolved().catch(err => log.exception("Import error:", err as Error)); }}
                             >
                                 Continue
                             </Button>

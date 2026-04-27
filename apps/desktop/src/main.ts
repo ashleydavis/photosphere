@@ -22,6 +22,8 @@ import { checkConnectivity, loadDatabaseConfig } from 'api';
 import { getVault, getDefaultVaultType } from 'vault';
 import { LanShareSender, LanShareReceiver, importDatabasePayload, importSecretPayload } from 'lan-share';
 import type { IDatabaseSharePayload, ISecretSharePayload, IReceiverEndpoint, IConflictResolution } from 'lan-share';
+import { TestControlServer } from './lib/test-control-server';
+import type { ITestControlServer } from './lib/test-control-server';
 
 // Main application window
 let mainWindow: BrowserWindow | null = null;
@@ -62,6 +64,9 @@ let activeSender: LanShareSender | null = null;
 // Active LAN share receiver instance, if any.
 let activeReceiver: LanShareReceiver | null = null;
 
+// Test control server instance, only created when PHOTOSPHERE_TEST_MODE=1.
+let testControlServer: ITestControlServer | null = null;
+
 
 //
 // Creates and configures the main browser window for the Electron app.
@@ -92,7 +97,8 @@ async function createMainWindow() {
     // Pass restApiUrl and theme as query parameters so the frontend can use them
     const htmlPath = join(app.getAppPath(), 'bundle/frontend/index.html');
     const restApiUrl = `http://localhost:${restApiPort}`;
-    const fileUrl = `file://${htmlPath}?restApiUrl=${encodeURIComponent(restApiUrl)}&theme=${encodeURIComponent(theme)}`;
+    const testMode = process.env.PHOTOSPHERE_TEST_MODE === '1' ? '&testMode=1' : '';
+    const fileUrl = `file://${htmlPath}?restApiUrl=${encodeURIComponent(restApiUrl)}&theme=${encodeURIComponent(theme)}${testMode}`;
     mainWindow.loadURL(fileUrl);
 
     mainWindow.on('closed', () => {
@@ -111,10 +117,17 @@ async function createMainWindow() {
             shell.openExternal(url);
         }
     });
+
+    mainWindow.webContents.once('did-finish-load', () => {
+        if (testControlServer) {
+            testControlServer.notifyReady();
+        }
+    });
 }
 
 // Enforce single instance: if another instance is already running, focus its window and quit.
-const gotSingleInstanceLock = app.requestSingleInstanceLock();
+// In test mode each test runs its own instance, so skip the lock.
+const gotSingleInstanceLock = process.env.PHOTOSPHERE_TEST_MODE === '1' || app.requestSingleInstanceLock();
 if (!gotSingleInstanceLock) {
     app.quit();
 }
@@ -147,6 +160,30 @@ app.whenReady().then(async () => {
     startPeriodicSync();
 
     await createMainWindow();
+    log.event('Main window created');
+
+    if (process.env.PHOTOSPHERE_TEST_MODE === '1' && mainWindow) {
+        const server = new TestControlServer(mainWindow, {
+            createDatabaseAtPath: createDatabaseAtPathDirect,
+            openDatabase: (databasePath) => {
+                if (mainWindow) {
+                    mainWindow.webContents.send('database-opened', databasePath);
+                }
+            },
+            importAssets: (paths) => {
+                if (workerPool && currentDatabasePath) {
+                    workerPool.addTask('add-paths', {
+                        paths,
+                        storageDescriptor: { databasePath: currentDatabasePath },
+                        sessionId: `test-import-${Date.now()}`,
+                        dryRun: false,
+                    }, `test-import-${Date.now()}`);
+                }
+            },
+        });
+        server.start();
+        testControlServer = server;
+    }
 
     app.on('activate', async () => {
         if (BrowserWindow.getAllWindows().length === 0) {
@@ -174,6 +211,11 @@ app.on('before-quit', async () => {
         fileLogger.info('Photosphere Desktop shutting down...', 'Main');
     }
     
+    if (testControlServer) {
+        testControlServer.close();
+        testControlServer = null;
+    }
+
     // Cleanup worker pool
     if (workerPool) {
         workerPool.shutdown();
@@ -261,8 +303,11 @@ ipcMain.handle('vault-list', logExceptions(async () => {
     return await vault.list();
 }, 'Error listing vault secrets'));
 
-// IPC handler for creating a database at a known path (no file picker)
-ipcMain.handle('create-database-at-path', logExceptions(async (_event, databasePath: string) => {
+//
+// Creates a database at a known path (no file picker), notifies the renderer.
+// Shared by the IPC handler and the test control server.
+//
+async function createDatabaseAtPathDirect(databasePath: string): Promise<void> {
     if (!workerPool) {
         throw new Error('Worker pool not initialized');
     }
@@ -274,9 +319,16 @@ ipcMain.handle('create-database-at-path', logExceptions(async (_event, databaseP
     await createQueue.awaitTask(taskId);
     createQueue.shutdown();
 
+    log.event(`Database created: ${databasePath}`);
+
     if (mainWindow) {
         mainWindow.webContents.send('database-opened', databasePath);
     }
+}
+
+// IPC handler for creating a database at a known path (no file picker)
+ipcMain.handle('create-database-at-path', logExceptions(async (_event, databasePath: string) => {
+    await createDatabaseAtPathDirect(databasePath);
 }, 'Error creating database at path'));
 
 // IPC handler for checking whether a database is accessible (works for local FS, S3, etc.)
@@ -310,6 +362,7 @@ ipcMain.handle('get-databases', logExceptions(async () => {
 // IPC handler for adding a new database entry
 ipcMain.handle('add-database', logExceptions(async (_event, entry: IDatabaseEntry) => {
     await addDatabaseEntry(entry);
+    log.event('Database entry added');
     return entry;
 }, 'Error adding database'));
 
@@ -409,6 +462,7 @@ ipcMain.handle('notify-database-opened', logExceptions(async (_event, databasePa
     await updateMenu();
     resetSyncState();
     currentDatabasePath = databasePath;
+    log.event(`Database opened: ${basename(databasePath)}`);
 }, 'Error notifying database opened'));
 
 // IPC handler for returning the top-5 most recently opened database entries
@@ -676,13 +730,19 @@ function initWorkers() {
             }
         }
         if (result.type === "import-assets" && mainWindow) {
-            if (result.status !== TaskStatus.Succeeded) {
+            if (result.status === TaskStatus.Succeeded) {
+                log.event('Import task completed');
+            }
+            else {
                 mainWindow.webContents.send('show-notification', {
                     message: `Import failed: ${result.errorMessage || 'Unknown error'}`,
                     color: 'danger',
                     duration: 8000,
                 });
             }
+        }
+        if (result.type === "add-paths" && result.status === TaskStatus.Succeeded) {
+            log.info('Import task completed');
         }
         if (result.type === "save-assets-batch" && mainWindow) {
             const { succeededFiles, failedFiles, folderPath } = result.outputs as { succeededFiles: string[]; failedFiles: Array<{ filename: string; error: string }>; folderPath: string };
@@ -720,11 +780,11 @@ function initWorkers() {
                 message: data.message
             });
             if (data.message.type === "sync-started") {
-                log.info("Sync started");
+                log.event("Sync started");
                 mainWindow.webContents.send('sync-started');
             }
             else if (data.message.type === "sync-completed") {
-                log.info("Sync completed");
+                log.event("Sync completed");
                 mainWindow.webContents.send('sync-completed');
             }
         }
@@ -1062,7 +1122,7 @@ async function startImportWithPaths(paths: string[]): Promise<IImportSession | u
     };
 
     const sessionId = randomUUID();
-    const importAssetsTaskId = workerPool.addTask('add-paths', {
+    const importAssetsTaskId = workerPool.addTask('import-assets', {
         paths,
         storageDescriptor,
         sessionId,

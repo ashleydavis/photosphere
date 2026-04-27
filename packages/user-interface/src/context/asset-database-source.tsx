@@ -2,7 +2,7 @@ import React, { ReactNode, createContext, useContext, useEffect, useRef, useStat
 import { IGalleryItem } from "../lib/gallery-item";
 import { GallerySourceContext, IItemsUpdate, IGalleryItemMap, IGallerySource } from "./gallery-source";
 import { IAsset, IDatabaseOp } from "api";
-import { RandomUuidGenerator } from "utils";
+import { RandomUuidGenerator, log } from "utils";
 import { IObservable, Observable } from "../lib/subscription";
 import { loadAssets as loadAssetsApi } from "api/src/lib/load-assets";
 import type { ILoadAssetsData, ILoadAssetsResult } from "api/src/lib/load-assets.types";
@@ -488,17 +488,17 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
 
         // If a load is already in progress for the same database path, just return
         if (loadingDatabasePath.current === dbPath) {
-            console.log(`[loadAssets] Load already in progress for database: ${dbPath}, skipping`);
+            log.info(`[loadAssets] Load already in progress for database: ${dbPath}, skipping`);
             return;
         }
 
         // If a load is in progress for a different database path, cancel it
         if (loadingDatabasePath.current !== undefined) {
-            console.log(`[loadAssets] Cancelling previous load for database: ${loadingDatabasePath.current}`);
+            log.info(`[loadAssets] Cancelling previous load for database: ${loadingDatabasePath.current}`);
             cancelDatabaseLoad(loadingDatabasePath.current);
         }
     
-        console.log(`[loadAssets] Starting load for database: ${dbPath}`);
+        log.info(`[loadAssets] Starting load for database: ${dbPath}`);
         loadingDatabasePath.current = dbPath;
         setIsLoading(true);
 
@@ -506,7 +506,7 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
         // Start with no assets.
         // This clears out any existing database of assets.
         //
-        console.log(`[loadAssets] Clearing loadedAssets.current`);
+        log.info(`[loadAssets] Clearing loadedAssets.current`);
         loadedAssets.current = {};
 
         //
@@ -525,10 +525,10 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
         const unsubscribeComplete = queue.onTaskComplete<ILoadAssetsData, ILoadAssetsResult>((result) => {
             if (result.type === "load-assets") {
                 if (result.status === TaskStatus.Succeeded) {
-                    console.log(`Load assets task completed: ${result.outputs?.totalAssets} assets loaded`);
+                    log.info(`Load assets task completed: ${result.outputs?.totalAssets} assets loaded`);
                 }
                 else {
-                    console.error("Load assets task failed:", result.errorMessage);
+                    log.error(`Load assets task failed: ${result.errorMessage}`);
                 }
 
                 if (result.inputs?.databasePath === currentDatabasePath) {
@@ -581,7 +581,7 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
         const unsubscribeOpened = platform.onDatabaseOpened((dbPath: string) => {
             if (databasePath) {
                 closeDatabase().catch(err => {
-                    console.error('Error closing database:', err);
+                    log.exception('Error closing database:', err as Error);
                 });
             }
             setDatabasePath(dbPath);
@@ -589,7 +589,7 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
 
         const unsubscribeClosed = platform.onDatabaseClosed(() => {
             closeDatabase().catch(err => {
-                console.error('Error closing database:', err);
+                log.exception('Error closing database:', err as Error);
             });
         });
 
@@ -677,8 +677,7 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
         if (databasePath) {
             loadAssets(databasePath)
                 .catch(err => {
-                    console.error(`Failed to load assets:`);
-                    console.error(err);
+                    log.exception(`Failed to load assets:`, err as Error);
                 });
         }
 

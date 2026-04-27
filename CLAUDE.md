@@ -33,7 +33,6 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 
 ### Running a single test:
 - Jest: `cd apps/cli && bun run test -- path/to/test.test.ts`
-- Playwright: `cd apps/dev-frontend && bun run test-e2e path/to/test.test.ts`
 
 ## Architecture
 

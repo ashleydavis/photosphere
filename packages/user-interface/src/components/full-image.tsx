@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { log } from "utils";
 import { IGalleryItem } from "../lib/gallery-item";
 import { useGallery } from "../context/gallery-context";
 
@@ -30,8 +31,7 @@ export function FullImage({ asset }: IImageProps) {
                 }
             })
             .catch(err => {
-                console.error(`Failed to load asset: thumb:${asset._id}`);
-                console.error(err);
+                log.exception(`Failed to load asset: thumb:${asset._id}`, err as Error);
             });
 
         loadAsset(asset._id, "display")
@@ -44,8 +44,7 @@ export function FullImage({ asset }: IImageProps) {
                 }
             })
             .catch(err => {
-                console.error(`Failed to load asset: display:${asset._id}`);
-                console.error(err);
+                log.exception(`Failed to load asset: display:${asset._id}`, err as Error);
             });
 
         return () => {

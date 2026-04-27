@@ -1,3 +1,4 @@
+import { log } from "utils";
 import React, { useEffect, useState } from 'react';
 import Modal from '@mui/joy/Modal';
 import ModalDialog from '@mui/joy/ModalDialog';
@@ -44,7 +45,7 @@ export function SelectSecretModal({ open, secretType, onClose, onSelect }: ISele
             setSelectedId(undefined);
             platform.listSecrets()
                 .then(allSecrets => setSecrets(allSecrets.filter(secret => secret.type === secretType)))
-                .catch(err => console.error('Failed to load secrets:', err));
+                .catch(err => log.exception('Failed to load secrets:', err as Error));
         }
     }, [open, platform, secretType]);
 
@@ -143,7 +144,7 @@ export function SelectSecretModal({ open, secretType, onClose, onSelect }: ISele
                     secretType={secretType}
                     defaultName=""
                     onClose={() => setCreateDialogOpen(false)}
-                    onSave={newSecret => handleCreated(newSecret).catch(err => console.error('Create secret error:', err))}
+                    onSave={newSecret => handleCreated(newSecret).catch(err => log.exception('Create secret error:', err as Error))}
                 />
             )}
         </>

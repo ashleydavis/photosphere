@@ -800,6 +800,38 @@ jobs:
           name: photosphere-cli-macos-arm64
           path: ./apps/cli/bin/arm64/mac/psi
 
+  electron-smoke-tests:
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb imagemagick ffmpeg
+
+      - name: Run Electron smoke tests
+        working-directory: ./apps/desktop
+        run: xvfb-run -a ./smoke-tests.sh --sequential
+
   build-desktop:
     timeout-minutes: 60
     runs-on: ${{ matrix.os }}
@@ -899,13 +931,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y xvfb
 
-      - name: Run smoke tests (Linux)
+      - name: Run Electron smoke tests against binary (Linux)
         if: runner.os == 'Linux'
-        run: xvfb-run -a bun run --filter=photosphere test:smoke
+        working-directory: ./apps/desktop
+        run: xvfb-run -a ./smoke-tests.sh --binary --sequential
 
-      - name: Run smoke tests (Not Linux)
+      - name: Run Electron smoke tests against binary (Not Linux)
         if: runner.os != 'Linux'
-        run: bun run --filter=photosphere test:smoke
+        working-directory: ./apps/desktop
+        run: ./smoke-tests.sh --binary --sequential
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -917,7 +951,7 @@ jobs:
 
   create-release:
     timeout-minutes: 20
-    needs: [compile, unit-tests, build-linux, build-windows, build-windows-baseline, build-macos-x64, build-macos-arm64, build-desktop, smoke-test, smoke-test-encrypted, write-lock-tests, sync-tests, lan-share-smoke-test]
+    needs: [compile, unit-tests, build-linux, build-windows, build-windows-baseline, build-macos-x64, build-macos-arm64, build-desktop, smoke-test, smoke-test-encrypted, write-lock-tests, sync-tests, lan-share-smoke-test, electron-smoke-tests]
     runs-on: ubuntu-latest
     permissions:
       contents: write

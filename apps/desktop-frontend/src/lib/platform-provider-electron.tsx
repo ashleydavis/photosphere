@@ -4,6 +4,17 @@ import type { IElectronAPI, ISaveAssetItem } from "electron-defs";
 import type { IConflictResolution } from "lan-share";
 import { ProxyVault } from "./proxy-vault";
 
+const isTestMode = typeof window !== 'undefined'
+    && new URLSearchParams(window.location.search).get('testMode') === '1';
+
+//
+// Extends the standard File interface with an optional test-injected filesystem path.
+// Set by the test-drop handler in index.tsx to bypass the Electron context bridge.
+//
+interface IDroppedFile extends File {
+    __testPath?: string;
+}
+
 export interface IPlatformProviderElectronProps {
     children: ReactNode | ReactNode[];
     electronAPI: IElectronAPI;
@@ -289,6 +300,12 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
     }, [electronAPI]);
 
     const getPathForFile = useCallback((file: File): string | undefined => {
+        if (isTestMode) {
+            const testPath = (file as IDroppedFile).__testPath;
+            if (testPath) {
+                return testPath;
+            }
+        }
         return electronAPI.getPathForFile(file);
     }, [electronAPI]);
 

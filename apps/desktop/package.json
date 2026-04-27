@@ -22,31 +22,30 @@
     "bundle": "bun bundle:main && bun bundle:preload && bun bundle:worker && bun bundle:rest-api-worker",
     "build": "bun run bundle && electron-builder",
     "setup-electron-builder": "powershell -ExecutionPolicy Bypass -File scripts/setup-electron-builder.ps1",
-    "test:smoke": "playwright test tests/smoke.spec.ts",
-    "test:smoke:gui": "cross-env SHOW_GUI=1 playwright test tests/smoke.spec.ts",
     "test:post-install": "bash scripts/test-post-install.sh"
   },
   "dependencies": {
-    "task-queue": "workspace:*",
+    "@types/express": "^5.0.6",
     "api": "workspace:*",
-    "utils": "workspace:*",
     "config": "workspace:*",
-    "node-utils": "workspace:*",
     "electron-defs": "workspace:*",
-    "serialize-error": "^11.0.0",
+    "express": "^5.2.1",
+    "lan-share": "workspace:*",
+    "node-utils": "workspace:*",
     "rest-api": "workspace:*",
-    "tools": "workspace:*",
-    "vault": "workspace:*",
+    "serialize-error": "^11.0.0",
     "storage": "workspace:*",
-    "lan-share": "workspace:*"
+    "task-queue": "workspace:*",
+    "tools": "workspace:*",
+    "utils": "workspace:*",
+    "vault": "workspace:*"
   },
   "devDependencies": {
     "cross-env": "^7.0.3",
     "electron": "^40.0.0",
     "@types/node": "^20.10.0",
     "electron-builder": "^26.4.0",
-    "typescript": "^5.3.3",
-    "@playwright/test": "^1.57.0"
+    "typescript": "^5.3.3"
   },
   "build": {
     "appId": "com.codecapers.photosphere",
@@ -91,4 +90,3 @@
     }
   }
 }
-

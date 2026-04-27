@@ -1,4 +1,5 @@
 import React, { ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { log } from "utils";
 import { IGalleryItem } from "../../lib/gallery-item";
 import { GallerySourceContext, IGalleryItemMap, IGallerySource, IItemsUpdate, useGallerySource } from "../../context/gallery-source";
 import { GalleryContextProvider } from "../../context/gallery-context";
@@ -135,16 +136,16 @@ export function ClusterModal({ items, lat, lng, onClose }: IClusterModalProps) {
     useEffect(() => {
         setGeocodedName(undefined);
         const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`;
-        console.log(`Reverse geocoding: GET ${url}`);
+        log.info(`Reverse geocoding: GET ${url}`);
         fetch(url, {
             headers: { "Accept-Language": "en" },
         })
             .then(response => {
-                console.log(`Reverse geocoding response: ${response.status} ${response.statusText}`);
+                log.info(`Reverse geocoding response: ${response.status} ${response.statusText}`);
                 return response.json();
             })
             .then(data => {
-                console.log(`Reverse geocoding data:`, data);
+                log.info(`Reverse geocoding data: ${JSON.stringify(data)}`);
                 const address = data.address;
                 const name = address?.city
                     || address?.town
@@ -158,7 +159,7 @@ export function ClusterModal({ items, lat, lng, onClose }: IClusterModalProps) {
                 }
             })
             .catch(error => {
-                console.error(`Reverse geocoding failed:`, error);
+                log.exception(`Reverse geocoding failed:`, error as Error);
                 setGeocodedName(null);
             });
     }, [lat, lng]);

@@ -1,3 +1,4 @@
+import { log } from "utils";
 import React, { useState } from 'react';
 import Modal from '@mui/joy/Modal';
 import ModalDialog from '@mui/joy/ModalDialog';
@@ -141,7 +142,7 @@ export function CreateSecretDialog({ open, secretType, defaultName, onClose, onS
                 </DialogContent>
                 <DialogActions>
                     <Button variant="plain" onClick={onClose}>Cancel</Button>
-                    <Button onClick={() => handleSave().catch(err => console.error('Create secret error:', err))}>Create</Button>
+                    <Button onClick={() => handleSave().catch(err => log.exception('Create secret error:', err as Error))}>Create</Button>
                 </DialogActions>
             </ModalDialog>
         </Modal>

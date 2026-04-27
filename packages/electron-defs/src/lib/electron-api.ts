@@ -98,7 +98,7 @@ export interface IDatabaseEntry {
 //
 // Log levels supported by the logging system
 //
-export type LogLevel = 'info' | 'verbose' | 'error' | 'exception' | 'warn' | 'debug' | 'tool';
+export type LogLevel = 'info' | 'verbose' | 'error' | 'exception' | 'warn' | 'debug' | 'tool' | 'event';
 
 //
 // Log message structure sent from renderer to main process

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { log } from 'utils';
 import Box from '@mui/joy/Box';
 import Typography from '@mui/joy/Typography';
 import Button from '@mui/joy/Button';
@@ -160,7 +161,8 @@ export function SecretsPage() {
     }
 
     useEffect(() => {
-        loadSecrets().catch(err => console.error('Failed to load secrets:', err));
+        log.info('Secrets page loaded');
+        loadSecrets().catch(err => log.exception('Failed to load secrets:', err as Error));
     }, []);
 
     //
@@ -182,6 +184,7 @@ export function SecretsPage() {
         setEditingSecret(undefined);
         setForm(emptyFormState());
         setDialogOpen(true);
+        log.info('Add secret dialog opened');
     }
 
     //
@@ -210,6 +213,7 @@ export function SecretsPage() {
         }
         else {
             await platform.addSecret({ name: form.name, type: form.type }, valueJson);
+            log.info('Secret added');
         }
         setDialogOpen(false);
         await loadSecrets();
@@ -325,6 +329,7 @@ export function SecretsPage() {
             <FormControl sx={{ mb: 1 }}>
                 <FormLabel>API Key</FormLabel>
                 <Input
+                    data-id="secret-value-input"
                     value={form.apiKey}
                     onChange={event => setForm(prev => ({ ...prev, apiKey: event.target.value }))}
                 />
@@ -342,7 +347,7 @@ export function SecretsPage() {
                     sx={{ mr: 1 }}
                     disabled={refreshing}
                     title="Refresh"
-                    onClick={() => handleRefresh().catch(err => console.error('Failed to refresh secrets:', err))}
+                    onClick={() => handleRefresh().catch(err => log.exception('Failed to refresh secrets:', err as Error))}
                 >
                     <Refresh
                         sx={refreshing ? {
@@ -362,6 +367,7 @@ export function SecretsPage() {
                     Receive Secret
                 </Button>
                 <Button
+                    data-id="add-secret-button"
                     startDecorator={<Add />}
                     onClick={openAddDialog}
                 >
@@ -395,7 +401,7 @@ export function SecretsPage() {
                                     size="sm"
                                     variant="plain"
                                     title="Edit secret"
-                                    onClick={() => openEditDialog(secret).catch(err => console.error('Failed to open edit dialog:', err))}
+                                    onClick={() => openEditDialog(secret).catch(err => log.exception('Failed to open edit dialog:', err as Error))}
                                 >
                                     <Edit fontSize="small" />
                                 </IconButton>
@@ -423,6 +429,7 @@ export function SecretsPage() {
                         <FormControl sx={{ mb: 1 }}>
                             <FormLabel>Name</FormLabel>
                             <Input
+                                data-id="secret-name-input"
                                 value={form.name}
                                 onChange={event => setForm(prev => ({ ...prev, name: event.target.value }))}
                             />
@@ -445,7 +452,12 @@ export function SecretsPage() {
                     </DialogContent>
                     <DialogActions>
                         <Button variant="plain" onClick={() => setDialogOpen(false)}>Cancel</Button>
-                        <Button onClick={() => handleSave().catch(err => console.error('Save error:', err))}>Save</Button>
+                        <Button
+                            data-id="add-secret-confirm"
+                            onClick={() => handleSave().catch(err => log.exception('Save error:', err as Error))}
+                        >
+                            Save
+                        </Button>
                     </DialogActions>
                 </ModalDialog>
             </Modal>
@@ -463,7 +475,7 @@ export function SecretsPage() {
                         <Button variant="plain" onClick={() => setConfirmDeleteOpen(false)}>Cancel</Button>
                         <Button
                             color="danger"
-                            onClick={() => handleFirstConfirm().catch(err => console.error('Delete confirm error:', err))}
+                            onClick={() => handleFirstConfirm().catch(err => log.exception('Delete confirm error:', err as Error))}
                         >
                             Delete
                         </Button>
@@ -492,7 +504,7 @@ export function SecretsPage() {
                         <Button variant="plain" onClick={() => setConfirmDeleteSecondOpen(false)}>Cancel</Button>
                         <Button
                             color="danger"
-                            onClick={() => executeDelete().catch(err => console.error('Delete error:', err))}
+                            onClick={() => executeDelete().catch(err => log.exception('Delete error:', err as Error))}
                         >
                             Delete
                         </Button>
@@ -512,7 +524,7 @@ export function SecretsPage() {
                 open={receiveDialogOpen}
                 onClose={() => {
                     setReceiveDialogOpen(false);
-                    loadSecrets().catch(err => console.error('Failed to reload secrets:', err));
+                    loadSecrets().catch(err => log.exception('Failed to reload secrets:', err as Error));
                 }}
             />
         </Box>

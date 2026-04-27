@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { log } from 'utils';
 import Box from '@mui/joy/Box';
 import Modal from '@mui/joy/Modal';
 import ModalDialog from '@mui/joy/ModalDialog';
@@ -102,6 +103,7 @@ export function CreateDatabaseModal({ open, onClose }: ICreateDatabaseModalProps
             setS3SecretName(undefined);
             setEncryptionSecretName(undefined);
             setGeocodingSecretName(undefined);
+            log.info('Create database dialog opened');
         }
     }, [open]);
 
@@ -133,6 +135,7 @@ export function CreateDatabaseModal({ open, onClose }: ICreateDatabaseModalProps
             geocodingKey: form.geocodingKey,
         });
         await platform.createDatabaseAtPath(form.path);
+        log.info(`Database created: ${form.path}`);
         await openDatabase(form.path);
         onClose();
     }
@@ -224,6 +227,7 @@ export function CreateDatabaseModal({ open, onClose }: ICreateDatabaseModalProps
                             <FormLabel>Path</FormLabel>
                             <Box sx={{ display: 'flex', gap: 1 }}>
                                 <Input
+                                    data-id="database-path-input"
                                     sx={{ flexGrow: 1 }}
                                     value={form.path}
                                     onChange={event => setForm(prev => ({ ...prev, path: event.target.value }))}
@@ -231,7 +235,7 @@ export function CreateDatabaseModal({ open, onClose }: ICreateDatabaseModalProps
                                 <Button
                                     variant="outlined"
                                     disabled={browseDisabled}
-                                    onClick={() => handleBrowse().catch(err => console.error('Browse error:', err))}
+                                    onClick={() => handleBrowse().catch(err => log.exception('Browse error:', err as Error))}
                                 >
                                     {form.storageType === 's3' ? 'Browse S3' : 'Browse'}
                                 </Button>
@@ -255,8 +259,9 @@ export function CreateDatabaseModal({ open, onClose }: ICreateDatabaseModalProps
                     <DialogActions>
                         <Button variant="plain" onClick={onClose}>Cancel</Button>
                         <Button
+                            data-id="create-database-confirm"
                             disabled={!form.path}
-                            onClick={() => handleCreate().catch(err => console.error('Create database error:', err))}
+                            onClick={() => handleCreate().catch(err => log.exception('Create database error:', err as Error))}
                         >
                             Create
                         </Button>

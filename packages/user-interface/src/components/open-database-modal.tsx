@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import React from 'react';
+import { log } from 'utils';
 import Modal from '@mui/joy/Modal';
 import ModalDialog from '@mui/joy/ModalDialog';
 import DialogTitle from '@mui/joy/DialogTitle';
@@ -47,7 +49,7 @@ export function OpenDatabaseModal({ open, onClose }: IOpenDatabaseModalProps) {
     function loadDatabases(): void {
         platform.getDatabases()
             .then(entries => setDatabases(entries))
-            .catch(err => console.error('Failed to load databases:', err));
+            .catch(err => log.exception('Failed to load databases:', err as Error));
     }
 
     //
@@ -65,6 +67,7 @@ export function OpenDatabaseModal({ open, onClose }: IOpenDatabaseModalProps) {
     useEffect(() => {
         if (open) {
             loadDatabases();
+            log.info('Open database dialog opened');
         }
     }, [open, platform]);
 
@@ -90,13 +93,14 @@ export function OpenDatabaseModal({ open, onClose }: IOpenDatabaseModalProps) {
                             )
                             : (
                                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                                    {databases.map(dbEntry => (
+                                    {databases.map((dbEntry, index) => (
                                         <Button
                                             key={dbEntry.path}
+                                            data-id={`database-list-item-${index}`}
                                             variant={dbEntry.path === databasePath ? 'soft' : 'outlined'}
                                             color="neutral"
                                             startDecorator={dbEntry.path === databasePath ? <FolderOpenIcon /> : <FolderIcon />}
-                                            onClick={() => openDatabase(dbEntry.path).then(onClose).catch(err => console.error('Open database error:', err))}
+                                            onClick={() => openDatabase(dbEntry.path).then(onClose).catch(err => log.exception('Open database error:', err as Error))}
                                             sx={{ justifyContent: 'flex-start' }}
                                         >
                                             {dbEntry.name || dbEntry.path.split(/[\\/]/).filter(Boolean).pop()}
@@ -115,7 +119,7 @@ export function OpenDatabaseModal({ open, onClose }: IOpenDatabaseModalProps) {
                             variant="outlined"
                             disabled={refreshing}
                             title="Refresh"
-                            onClick={() => handleRefresh().catch(err => console.error('Failed to refresh databases:', err))}
+                            onClick={() => handleRefresh().catch(err => log.exception('Failed to refresh databases:', err as Error))}
                         >
                             <RefreshIcon
                                 sx={refreshing ? {

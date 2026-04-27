@@ -26,6 +26,7 @@ export function EmptyDatabase() {
                     Import photos and videos from your filesystem to get started.
                 </Typography>
                 <Button
+                    data-id="import-button"
                     variant="soft"
                     color="neutral"
                     size="lg"

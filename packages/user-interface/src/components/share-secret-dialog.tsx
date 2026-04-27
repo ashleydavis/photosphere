@@ -1,3 +1,4 @@
+import { log } from "utils";
 import React, { useState, useEffect, useCallback } from 'react';
 import Modal from '@mui/joy/Modal';
 import ModalDialog from '@mui/joy/ModalDialog';
@@ -152,7 +153,7 @@ export function ShareSecretDialog({ open, entry, onClose }: IShareSecretDialogPr
                     {step === "confirm" && (
                         <>
                             <Button variant="plain" onClick={handleCancel}>Cancel</Button>
-                            <Button onClick={() => { handleStartSend().catch(err => console.error("Share error:", err)); }}>
+                            <Button onClick={() => { handleStartSend().catch(err => log.exception("Share error:", err as Error)); }}>
                                 Send
                             </Button>
                         </>

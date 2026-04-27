@@ -8,6 +8,7 @@ export interface ILog {
     warn(message: string): void;
     debug(message: string): void;
     tool(tool: string, data: { stdout?: string; stderr?: string }): void;
+    event(message: string): void;
     verboseEnabled: boolean;
 }
 
@@ -41,6 +42,10 @@ export let log: ILog = {
 
     tool(tool: string, data: { stdout?: string; stderr?: string }): void {
         // You have to override this method if you want to use it.
+    },
+
+    event(message: string): void {
+        console.log(`[EVENT] ${message}`);
     },
 
     verboseEnabled: false

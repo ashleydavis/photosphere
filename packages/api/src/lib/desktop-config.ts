@@ -52,7 +52,7 @@ interface ITomlDesktopConfig {
     last_database?: string;
 }
 
-const CONFIG_DIR = path.join(os.homedir(), ".config", "photosphere");
+const CONFIG_DIR = process.env.PHOTOSPHERE_CONFIG_DIR || path.join(os.homedir(), ".config", "photosphere");
 const CONFIG_FILE = path.join(CONFIG_DIR, "desktop.toml");
 const OLD_CONFIG_FILE = path.join(CONFIG_DIR, "desktop.json");
 const MAX_RECENT_SEARCHES = 10;
