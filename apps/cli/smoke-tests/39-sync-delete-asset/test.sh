@@ -1,4 +1,5 @@
 #!/bin/bash
+DESCRIPTION="Test sync after deleting asset (both ways)"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"

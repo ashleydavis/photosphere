@@ -1,4 +1,5 @@
 #!/bin/bash
+DESCRIPTION="Upgrade v4 database to v6"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"

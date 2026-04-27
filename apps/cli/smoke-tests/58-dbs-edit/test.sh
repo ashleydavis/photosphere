@@ -1,4 +1,5 @@
 #!/bin/bash
+DESCRIPTION="Edit a database entry with --yes and verify rename"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"

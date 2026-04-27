@@ -1,4 +1,5 @@
 #!/bin/bash
+DESCRIPTION="Import a PEM key pair and verify via list"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"

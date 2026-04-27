@@ -1,4 +1,5 @@
 #!/bin/bash
+DESCRIPTION="Edit a plaintext vault secret with --yes and verify updated value"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"

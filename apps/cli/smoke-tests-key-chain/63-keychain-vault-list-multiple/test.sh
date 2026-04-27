@@ -1,4 +1,5 @@
 #!/bin/bash
+DESCRIPTION="Add multiple secrets to OS keychain and verify all appear in list"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"

@@ -1,4 +1,5 @@
 #!/bin/bash
+DESCRIPTION="Seed shared secrets in vault and verify vault list"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"

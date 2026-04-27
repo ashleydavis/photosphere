@@ -1,4 +1,5 @@
 #!/bin/bash
+DESCRIPTION="Resolve database by name with auto-resolved encryption key"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
