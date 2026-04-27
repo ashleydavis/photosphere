@@ -130,7 +130,7 @@ export function ShareSecretDialog({ open, entry, onClose }: IShareSecretDialogPr
                     {step === "showing-code" && (
                         <Box sx={{ textAlign: "center", py: 3 }}>
                             <Typography level="body-lg" sx={{ mb: 1 }}>Pairing Code</Typography>
-                            <Typography level="h2" sx={{ fontFamily: "monospace", letterSpacing: "0.3em", mb: 2 }}>
+                            <Typography data-id="share-pairing-code" level="h2" sx={{ fontFamily: "monospace", letterSpacing: "0.3em", mb: 2 }}>
                                 {pairingCode}
                             </Typography>
                             <Typography level="body-sm">Tell the receiver to enter this code.</Typography>
@@ -153,7 +153,7 @@ export function ShareSecretDialog({ open, entry, onClose }: IShareSecretDialogPr
                     {step === "confirm" && (
                         <>
                             <Button variant="plain" onClick={handleCancel}>Cancel</Button>
-                            <Button onClick={() => { handleStartSend().catch(err => log.exception("Share error:", err as Error)); }}>
+                            <Button data-id="share-secret-send-button" onClick={() => { handleStartSend().catch(err => log.exception("Share error:", err as Error)); }}>
                                 Send
                             </Button>
                         </>

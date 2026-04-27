@@ -314,6 +314,7 @@ export function DatabasesPage() {
                     Add database
                 </Button>
                 <Button
+                    data-id="receive-database-button"
                     variant="outlined"
                     onClick={() => setReceiveDbDialogOpen(true)}
                 >
@@ -348,6 +349,7 @@ export function DatabasesPage() {
                                     <FolderOpen fontSize="small" />
                                 </IconButton>
                                 <IconButton
+                                    data-id="share-database-button"
                                     size="sm"
                                     variant="plain"
                                     title="Share database"

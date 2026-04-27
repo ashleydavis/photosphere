@@ -15,6 +15,7 @@ import CircularProgress from '@mui/joy/CircularProgress';
 import Checkbox from '@mui/joy/Checkbox';
 import Box from '@mui/joy/Box';
 import { usePlatform, type IDatabaseEntry } from '../context/platform-context';
+import type { IDatabaseSharePayload, IShareS3Credentials, IShareEncryptionKey, IShareGeocodingKey } from 'lan-share';
 
 export interface IShareDatabaseDialogProps {
     // Whether the dialog is visible.
@@ -97,21 +98,58 @@ export function ShareDatabaseDialog({ open, entry, onClose }: IShareDatabaseDial
         setPairingCode(code);
         setStep("showing-code");
 
-        // Build payload from the entry — the main process resolves secrets server-side
-        // so we pass the database entry fields plus flags for which secrets to include.
-        const payload = {
-            type: "database" as const,
+        let s3Credentials: IShareS3Credentials | undefined;
+        if (form.includeS3 && entry.s3Key) {
+            const valueJson = await platform.getSecretValue(entry.s3Key);
+            if (valueJson) {
+                const parsed = JSON.parse(valueJson);
+                s3Credentials = {
+                    name: entry.s3Key,
+                    label: parsed.label,
+                    region: parsed.region,
+                    accessKeyId: parsed.accessKeyId,
+                    secretAccessKey: parsed.secretAccessKey,
+                    endpoint: parsed.endpoint,
+                };
+            }
+        }
+
+        let encryptionKey: IShareEncryptionKey | undefined;
+        if (form.includeEncryption && entry.encryptionKey) {
+            const valueJson = await platform.getSecretValue(entry.encryptionKey);
+            if (valueJson) {
+                const parsed = JSON.parse(valueJson);
+                encryptionKey = {
+                    name: entry.encryptionKey,
+                    label: parsed.label,
+                    privateKeyPem: parsed.privateKeyPem,
+                    publicKeyPem: parsed.publicKeyPem,
+                };
+            }
+        }
+
+        let geocodingKey: IShareGeocodingKey | undefined;
+        if (form.includeGeocoding && entry.geocodingKey) {
+            const valueJson = await platform.getSecretValue(entry.geocodingKey);
+            if (valueJson) {
+                const parsed = JSON.parse(valueJson);
+                geocodingKey = {
+                    name: entry.geocodingKey,
+                    label: parsed.label,
+                    apiKey: parsed.apiKey,
+                };
+            }
+        }
+
+        const payload: IDatabaseSharePayload = {
+            type: "database",
             name: form.name,
             description: form.description,
             path: form.path,
             origin: entry.origin,
-            includeS3: form.includeS3,
-            includeEncryption: form.includeEncryption,
-            includeGeocoding: form.includeGeocoding,
-            // The main process will resolve the actual secrets from the vault
-            s3Key: form.includeS3 ? entry.s3Key : undefined,
-            encryptionKey: form.includeEncryption ? entry.encryptionKey : undefined,
-            geocodingKey: form.includeGeocoding ? entry.geocodingKey : undefined,
+            s3Credentials,
+            encryptionKey,
+            geocodingKey,
         };
 
         const foundEndpoint = await platform.waitForReceiver(payload, code);
@@ -219,7 +257,7 @@ export function ShareDatabaseDialog({ open, entry, onClose }: IShareDatabaseDial
                     {step === "showing-code" && (
                         <Box sx={{ textAlign: "center", py: 3 }}>
                             <Typography level="body-lg" sx={{ mb: 1 }}>Pairing Code</Typography>
-                            <Typography level="h2" sx={{ fontFamily: "monospace", letterSpacing: "0.3em", mb: 2 }}>
+                            <Typography data-id="share-pairing-code" level="h2" sx={{ fontFamily: "monospace", letterSpacing: "0.3em", mb: 2 }}>
                                 {pairingCode}
                             </Typography>
                             <Typography level="body-sm">Tell the receiver to enter this code.</Typography>
@@ -242,7 +280,7 @@ export function ShareDatabaseDialog({ open, entry, onClose }: IShareDatabaseDial
                     {step === "review" && (
                         <>
                             <Button variant="plain" onClick={handleCancel}>Cancel</Button>
-                            <Button onClick={() => { handleStartSend().catch(err => log.exception("Share error:", err as Error)); }}>
+                            <Button data-id="share-database-send-button" onClick={() => { handleStartSend().catch(err => log.exception("Share error:", err as Error)); }}>
                                 Send
                             </Button>
                         </>

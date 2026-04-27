@@ -96,11 +96,12 @@ get_release_binary() {
 
 #
 # Launches the Electron app in test mode as a background process.
-# Usage: start_app <port> <tmp_dir>
+# Usage: start_app <port> <tmp_dir> [x_position]
 #
 start_app() {
     local port="$1"
     local tmp_dir="$2"
+    local x_pos="${3:-0}"
     mkdir -p "$tmp_dir"
     local launch_args=()
     if [ "${USE_BINARY:-false}" = "true" ]; then
@@ -117,7 +118,7 @@ start_app() {
     PHOTOSPHERE_VAULT_TYPE=plaintext \
     PHOTOSPHERE_LOG_DIR="$tmp_dir" \
     NODE_ENV=testing \
-    "${launch_args[@]}" --no-sandbox --disable-gpu > "$tmp_dir/app.log" 2>&1 &
+    "${launch_args[@]}" --no-sandbox --disable-gpu -geometry "960x800+${x_pos}+0" > "$tmp_dir/app.log" 2>&1 &
     echo $! > "$tmp_dir/app.pid"
     log_info "App started (PID $(cat "$tmp_dir/app.pid"), port $port)"
 }

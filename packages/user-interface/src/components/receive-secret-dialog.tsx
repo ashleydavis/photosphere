@@ -61,6 +61,7 @@ export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps
         if (!open) {
             return;
         }
+        log.event('Receive secret dialog opened');
         setStep("enter-code");
         setEnteredCode("");
         setPayload(null);
@@ -87,6 +88,7 @@ export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps
         setPayload(receivedPayload);
         setSaveName(receivedPayload.name);
         setStep("review");
+        log.event('Secret review step');
     }, [enteredCode, platform]);
 
     //
@@ -102,6 +104,7 @@ export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps
             saveName,
         }, {});
         setStep("success");
+        log.event('Secret saved');
     }, [payload, saveName, platform]);
 
     //
@@ -127,6 +130,7 @@ export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps
                         <FormControl>
                             <FormLabel>Enter the 4-digit pairing code shown on the sender</FormLabel>
                             <Input
+                                data-id="receive-secret-code-input"
                                 value={enteredCode}
                                 onChange={event => setEnteredCode(event.target.value)}
                                 slotProps={{ input: { maxLength: 4 } }}
@@ -176,6 +180,7 @@ export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps
                         <>
                             <Button variant="plain" onClick={handleCancel}>Cancel</Button>
                             <Button
+                                data-id="receive-secret-start-button"
                                 disabled={!/^\d{4}$/.test(enteredCode)}
                                 onClick={() => { handleStartReceiving().catch(err => log.exception("Receive error:", err as Error)); }}
                             >
@@ -192,6 +197,7 @@ export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps
                         <>
                             <Button variant="plain" onClick={handleCancel}>Cancel</Button>
                             <Button
+                                data-id="receive-secret-save-button"
                                 disabled={!saveName.trim()}
                                 onClick={() => { handleSave().catch(err => log.exception("Import error:", err as Error)); }}
                             >
