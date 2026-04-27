@@ -108,6 +108,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
         if (!open) {
             return;
         }
+        log.event('Receive database dialog opened');
         setStep("enter-code");
         setEnteredCode("");
         setPayload(null);
@@ -138,6 +139,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
         setImportEncryption(!!receivedPayload.encryptionKey);
         setImportGeocoding(!!receivedPayload.geocodingKey);
         setStep("review");
+        log.event('Database review step');
     }, [enteredCode, platform]);
 
     //
@@ -217,6 +219,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
 
         await platform.importSharePayload(importPayload, conflictResolutions);
         setStep("success");
+        log.event('Database imported');
     }
 
     //
@@ -273,6 +276,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
                         <FormControl>
                             <FormLabel>Enter the 4-digit pairing code shown on the sender</FormLabel>
                             <Input
+                                data-id="receive-database-code-input"
                                 value={enteredCode}
                                 onChange={event => setEnteredCode(event.target.value)}
                                 slotProps={{ input: { maxLength: 4 } }}
@@ -397,6 +401,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
                         <>
                             <Button variant="plain" onClick={handleCancel}>Cancel</Button>
                             <Button
+                                data-id="receive-database-start-button"
                                 disabled={!/^\d{4}$/.test(enteredCode)}
                                 onClick={() => { handleStartReceiving().catch(err => log.exception("Receive error:", err as Error)); }}
                             >
@@ -413,6 +418,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
                         <>
                             <Button variant="plain" onClick={handleCancel}>Cancel</Button>
                             <Button
+                                data-id="receive-database-save-button"
                                 disabled={!editedName || !editedPath}
                                 onClick={() => { handleSave().catch(err => log.exception("Import error:", err as Error)); }}
                             >

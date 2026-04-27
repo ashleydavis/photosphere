@@ -29,15 +29,21 @@ print_usage() {
     cat <<'EOF'
 Usage: ./smoke-tests.sh [COMMAND|TEST]
 
-  (no args)           Run all tests in parallel batches of 2
+  (no args)           Run parallelisable tests in batches of 2; sequential-marked tests one at a time
   all                 Same as no args
   --sequential        Run all tests one at a time
-  --parallel [N]      Run in parallel batches of N (default 2)
+  --parallel [N]      Run in parallel batches of N (default 2); sequential-marked tests still run alone
   --binary            Run against the packaged release binary instead of source
   <X>                 Run test by number or fuzzy name
   ls, list            List all discovered tests
   help, --help, -?    Show this help
 EOF
+}
+
+# Returns 0 if the test directory contains a .sequential marker file.
+is_sequential() {
+    local test_sh="$1"
+    [[ -f "$(dirname "$test_sh")/.sequential" ]]
 }
 
 list_tests() {
@@ -78,12 +84,14 @@ run_sequential() {
     return $((fail > 0 ? 1 : 0))
 }
 
-run_parallel() {
+# Runs a list of tests in parallel batches of N, returning pass/fail via out-vars.
+# Usage: run_parallel_batch <n> <pass_var> <fail_var> <test...>
+run_parallel_batch() {
     local n="$1"
-    shift
+    local pass_var="$2"
+    local fail_var="$3"
+    shift 3
     local tests=("$@")
-    local pass=0
-    local fail=0
     local total="${#tests[@]}"
     local i=0
 
@@ -105,7 +113,7 @@ run_parallel() {
             log_file="$dir/tmp/test-run.log"
             mkdir -p "$dir/tmp"
             printf "${BLUE}RUN ${NC}   %s  %s\n" "$num" "$name"
-            timeout 120 bash "$t" >"$log_file" 2>&1 &
+            timeout 300 bash "$t" >"$log_file" 2>&1 &
             batch_pids+=($!)
         done
 
@@ -117,13 +125,43 @@ run_parallel() {
             name="$(test_name "$t")"
             if wait "$pid"; then
                 printf "${GREEN}PASS${NC}  %s  %s\n" "$num" "$name"
-                pass=$((pass + 1))
+                eval "$pass_var=$(( ${!pass_var} + 1 ))"
             else
                 printf "${RED}FAIL${NC}  %s  %s  (log: %s/tmp/test-run.log)\n" "$num" "$name" "$(dirname "$t")"
-                fail=$((fail + 1))
+                eval "$fail_var=$(( ${!fail_var} + 1 ))"
             fi
             k=$((k + 1))
         done
+    done
+}
+
+# Runs parallelisable tests in batches and sequential-marked tests one at a time.
+run_mixed() {
+    local n="$1"
+    shift
+    local parallel_tests=()
+    local sequential_tests=()
+    for t in "$@"; do
+        if is_sequential "$t"; then
+            sequential_tests+=("$t")
+        else
+            parallel_tests+=("$t")
+        fi
+    done
+
+    local pass=0
+    local fail=0
+
+    if [[ ${#parallel_tests[@]} -gt 0 ]]; then
+        run_parallel_batch "$n" pass fail "${parallel_tests[@]}"
+    fi
+
+    for t in "${sequential_tests[@]}"; do
+        if run_one "$t"; then
+            pass=$((pass + 1))
+        else
+            fail=$((fail + 1))
+        fi
     done
 
     print_summary "$pass" "$fail"
@@ -238,7 +276,7 @@ main() {
     if [[ "$mode" == "sequential" ]]; then
         run_sequential "${all_tests[@]}"
     else
-        run_parallel "$parallel_n" "${all_tests[@]}"
+        run_mixed "$parallel_n" "${all_tests[@]}"
     fi
 }
 

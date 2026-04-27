@@ -257,7 +257,7 @@ export function ImportPage() {
             ? JSON.parse(injectedPaths) as string[]
             : Array.from(event.dataTransfer.files)
                 .map(file => platform.getPathForFile(file))
-                .filter(filePath => filePath.length > 0);
+                .filter(filePath => filePath !== undefined && filePath.length > 0) as string[];
 
         if (droppedPaths.length > 0) {
             await startImport(droppedPaths);

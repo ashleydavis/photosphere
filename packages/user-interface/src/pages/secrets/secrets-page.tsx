@@ -360,6 +360,7 @@ export function SecretsPage() {
                     />
                 </IconButton>
                 <Button
+                    data-id="receive-secret-button"
                     variant="outlined"
                     sx={{ mr: 1 }}
                     onClick={() => setReceiveDialogOpen(true)}
@@ -390,6 +391,7 @@ export function SecretsPage() {
                             <td>{secret.type}</td>
                             <td style={{ whiteSpace: 'nowrap' }}>
                                 <IconButton
+                                    data-id="share-secret-button"
                                     size="sm"
                                     variant="plain"
                                     title="Share secret"

@@ -76,9 +76,19 @@ async function createMainWindow() {
         throw new Error('REST API port not initialized');
     }
 
+    const geometryArg = process.argv.find(arg => arg.startsWith('-geometry=') || arg === '-geometry');
+    const geometryVal = geometryArg?.startsWith('-geometry=')
+        ? geometryArg.slice('-geometry='.length)
+        : process.argv[process.argv.indexOf('-geometry') + 1];
+    const geometryMatch = geometryVal?.match(/^(\d+)x(\d+)\+(\d+)\+(\d+)$/);
+    const windowWidth = geometryMatch ? parseInt(geometryMatch[1], 10) : 1200;
+    const windowHeight = geometryMatch ? parseInt(geometryMatch[2], 10) : 800;
+    const windowX = geometryMatch ? parseInt(geometryMatch[3], 10) : undefined;
+    const windowY = geometryMatch ? parseInt(geometryMatch[4], 10) : undefined;
     mainWindow = new BrowserWindow({
-        width: 1200,
-        height: 800,
+        width: windowWidth,
+        height: windowHeight,
+        ...(windowX !== undefined && windowY !== undefined ? { x: windowX, y: windowY } : {}),
         title: `Photosphere ${version}`,
         webPreferences: {
             nodeIntegration: false,

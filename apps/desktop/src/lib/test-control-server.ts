@@ -1,7 +1,7 @@
 import express from 'express';
 import type { Express } from 'express';
 import http from 'http';
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, ipcMain } from 'electron';
 import { log } from 'utils';
 
 //
@@ -102,6 +102,17 @@ export class TestControlServer implements ITestControlServer {
         expressApp.post('/drop', (req, res) => {
             this.mainWindow.webContents.send('test-drop', { dataId: req.body.dataId, paths: req.body.paths });
             res.json({ ok: true });
+        });
+
+        expressApp.get('/get-value', async (req, res) => {
+            const dataId = req.query.dataId as string;
+            const value = await this.mainWindow.webContents.executeJavaScript(`
+                (() => {
+                    const el = document.querySelector('[data-id="${dataId}"]');
+                    return el ? (el.value || el.textContent || '') : '';
+                })()
+            `);
+            res.json({ ok: true, value });
         });
 
         expressApp.post('/import-assets', (req, res) => {
