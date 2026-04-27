@@ -81,6 +81,10 @@ class Log implements ILog {
             console.log(`== ${tool} stderr ==\n${data.stderr}`);
         }
     }
+
+    event(message: string): void {
+        console.log(`[EVENT] ${message}`);
+    }
 }
 
 //

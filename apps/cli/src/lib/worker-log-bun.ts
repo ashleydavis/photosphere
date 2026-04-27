@@ -80,6 +80,10 @@ class WorkerLogBun implements ILog {
             console.log(this.prefixMessage(`== ${tool} stderr ==\n${data.stderr}`));
         }
     }
+
+    event(message: string): void {
+        console.log(this.prefixMessage(`[EVENT] ${message}`));
+    }
 }
 
 // Global reference to the worker log instance for setting task ID

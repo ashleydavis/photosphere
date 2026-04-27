@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { log } from "utils";
 import { useGallery } from "../context/gallery-context";
 import { IGalleryItem } from "../lib/gallery-item";
 import { useLongPress } from "../lib/long-press";
@@ -61,8 +62,7 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
                 }
             })
             .catch(err => {
-                console.error(`Failed to load asset: thumb:${item._id}`);
-                console.error(err);
+                log.exception(`Failed to load asset: thumb:${item._id}`, err as Error);
             });
 
         return () => {

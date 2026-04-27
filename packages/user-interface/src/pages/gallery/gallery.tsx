@@ -5,6 +5,7 @@ import { useGallery } from "../../context/gallery-context";
 import { useAssetDatabase } from "../../context/asset-database-source";
 import { NoDatabaseLoaded } from "../../components/no-database-loaded";
 import { EmptyDatabase } from "../../components/empty-database";
+import { log } from "utils";
 
 export interface IGalleryPageProps {
 }
@@ -20,6 +21,14 @@ export function GalleryPage({}: IGalleryPageProps) {
             setSelectedItemId(assetId);
         }
     }, [assetId, selectedItemId, setSelectedItemId]);
+
+    useEffect(() => {
+        if (databasePath && !isLoading) {
+            const count = allItems().length;
+            log.info(`Gallery loaded: ${count} assets`);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isLoading, databasePath]);
 
     return (
         <div className="w-full h-full overflow-x-hidden overflow-y-auto relative">

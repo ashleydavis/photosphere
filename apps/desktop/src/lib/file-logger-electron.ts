@@ -33,9 +33,11 @@ export class FileLoggerElectron implements ILog {
     
     static async create(userDataPath: string): Promise<FileLoggerElectron> {
         const startTime = new Date();
-        
-        // Create logs directory in Photosphere temp (like CLI) for consistency
-        const photosphereTempDir = path.join(os.tmpdir(), 'photosphere');
+
+        // Allow tests to redirect log files to a controlled directory via env var.
+        const photosphereTempDir = process.env.PHOTOSPHERE_LOG_DIR
+            ? process.env.PHOTOSPHERE_LOG_DIR
+            : path.join(os.tmpdir(), 'photosphere');
         const logsDir = path.join(photosphereTempDir, 'logs');
         ensureDirSync(logsDir);
         
@@ -250,14 +252,14 @@ export class FileLoggerElectron implements ILog {
     error(message: string, source?: string): void {
         this.writeToFile('error', message, source);
         this.writeToErrorFile('error', message, source);
-        console.error(source ? `[${source}] ${message}` : message);
+        console.error(source ? `[ERROR] [${source}] ${message}` : `[ERROR] ${message}`);
     }
     
     exception(message: string, error: Error, source?: string): void {
         const fullMessage = `${message}\nStack trace: ${error.stack || error.message || error}`;
         this.writeToFile('exception', fullMessage, source);
         this.writeToErrorFile('exception', fullMessage, source);
-        console.error(source ? `[${source}] ${message}` : message);
+        console.error(source ? `[ERROR] [${source}] ${message}` : `[ERROR] ${message}`);
         console.error(error.stack || error.message || error);
     }
     
@@ -278,6 +280,11 @@ export class FileLoggerElectron implements ILog {
         if (data.stderr) {
             this.writeToFile('tool', `== ${tool} stderr ==\n${data.stderr}`, source);
         }
+    }
+
+    event(message: string, source?: string): void {
+        this.writeToFile('event', message, source);
+        console.log(source ? `[EVENT] [${source}] ${message}` : `[EVENT] ${message}`);
     }
     
     //
@@ -302,9 +309,9 @@ export class FileLoggerElectron implements ILog {
             case 'exception':
                 this.writeToFile('exception', error ? `${logMessage}\n${error}` : logMessage, source);
                 this.writeToErrorFile('exception', error ? `${logMessage}\n${error}` : logMessage, source);
-                console.error(`[${source}] ${logMessage}`);
+                console.error(`[ERROR] [${source}] ${logMessage}`);
                 if (error) {
-                    console.error(`[${source}] ${error}`);
+                    console.error(`[ERROR] [${source}] ${error}`);
                 }
                 break;
             case 'warn':
@@ -312,6 +319,9 @@ export class FileLoggerElectron implements ILog {
                 break;
             case 'debug':
                 this.debug(logMessage, source);
+                break;
+            case 'event':
+                this.event(logMessage, source);
                 break;
             case 'tool':
                 if (toolData) {

@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useAssetDatabase } from "../../context/asset-database-source";
 import { useImport } from "../../context/import-context";
 import { usePlatform, type IToolsStatus } from "../../context/platform-context";
+import { log } from "utils";
 import Box from "@mui/joy/Box";
 import Button from "@mui/joy/Button";
 import CircularProgress from "@mui/joy/CircularProgress";
@@ -208,6 +209,12 @@ export function ImportPage() {
     //
     // Runs the tool check and updates toolsStatus.
     //
+    useEffect(() => {
+        if (toolsStatus?.allAvailable) {
+            log.event('Import page ready');
+        }
+    }, [toolsStatus]);
+
     async function runToolCheck() {
         setIsCheckingTools(true);
         const result = await platform.checkTools();
@@ -245,13 +252,12 @@ export function ImportPage() {
         event.preventDefault();
         setIsDragOver(false);
 
-        const droppedPaths: string[] = [];
-        for (const file of Array.from(event.dataTransfer.files)) {
-            const filePath = platform.getPathForFile(file);
-            if (filePath) {
-                droppedPaths.push(filePath);
-            }
-        }
+        const injectedPaths = event.dataTransfer.getData('application/x-photosphere-paths');
+        const droppedPaths: string[] = injectedPaths
+            ? JSON.parse(injectedPaths) as string[]
+            : Array.from(event.dataTransfer.files)
+                .map(file => platform.getPathForFile(file))
+                .filter(filePath => filePath.length > 0);
 
         if (droppedPaths.length > 0) {
             await startImport(droppedPaths);
@@ -309,6 +315,7 @@ export function ImportPage() {
                 {/* Idle state */}
                 {status === 'idle' && (
                     <Box
+                        data-id="import-drop-zone"
                         className="flex flex-col items-center justify-center flex-grow"
                         onDragOver={toolsStatus?.allAvailable ? handleDragOver : undefined}
                         onDragLeave={toolsStatus?.allAvailable ? handleDragLeave : undefined}

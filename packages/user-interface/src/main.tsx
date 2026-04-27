@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect, useState } from "react";
+import { log } from "utils";
 import { Route, Routes, Navigate, useNavigate } from "react-router-dom";
 import { GalleryPage } from "./pages/gallery/gallery";
 import classNames from "classnames";
@@ -214,7 +215,7 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
                 }
             }
             catch (error) {
-                console.error("Error auto-opening last database:", error);
+                log.exception("Error auto-opening last database:", error as Error);
             }
         }
 

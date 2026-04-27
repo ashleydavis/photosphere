@@ -53,6 +53,27 @@ if (!parentPort) {
 }
 
 //
+// In test mode, patch console to forward output via parentPort so it appears in app.log.
+//
+if (process.env.NODE_ENV === 'testing') {
+    const originalConsoleLog = console.log.bind(console);
+    const originalConsoleWarn = console.warn.bind(console);
+    const originalConsoleError = console.error.bind(console);
+    console.log = (...args: unknown[]) => {
+        originalConsoleLog(...args);
+        parentPort.postMessage({ type: 'log', level: 'info', message: args.map(String).join(' ') });
+    };
+    console.warn = (...args: unknown[]) => {
+        originalConsoleWarn(...args);
+        parentPort.postMessage({ type: 'log', level: 'warn', message: args.map(String).join(' ') });
+    };
+    console.error = (...args: unknown[]) => {
+        originalConsoleError(...args);
+        parentPort.postMessage({ type: 'log', level: 'error', message: args.map(String).join(' ') });
+    };
+}
+
+//
 // Read worker options from environment variable (same as task worker)
 //
 const workerOptionsJson = process.env.WORKER_OPTIONS;

@@ -21,7 +21,6 @@
   "license": "MIT",
   "devDependencies": {
     "@peculiar/webcrypto": "^1.4.1",
-    "@playwright/test": "^1.30.0",
     "@types/jest": "^29.4.0",
     "@types/lodash": "^4.17.5",
     "@types/mime-types": "^2.1.1",

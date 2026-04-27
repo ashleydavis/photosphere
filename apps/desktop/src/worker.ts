@@ -40,6 +40,27 @@ catch (error: any) {
 // Post message function for Electron utility process
 //
 const parentPort = (process as any).parentPort;
+
+//
+// In test mode, patch console to forward output via parentPort so it appears in app.log.
+//
+if (process.env.NODE_ENV === 'testing' && parentPort) {
+    const originalConsoleLog = console.log.bind(console);
+    const originalConsoleWarn = console.warn.bind(console);
+    const originalConsoleError = console.error.bind(console);
+    console.log = (...args: unknown[]) => {
+        originalConsoleLog(...args);
+        parentPort.postMessage({ type: 'log', level: 'info', message: args.map(String).join(' ') });
+    };
+    console.warn = (...args: unknown[]) => {
+        originalConsoleWarn(...args);
+        parentPort.postMessage({ type: 'log', level: 'warn', message: args.map(String).join(' ') });
+    };
+    console.error = (...args: unknown[]) => {
+        originalConsoleError(...args);
+        parentPort.postMessage({ type: 'log', level: 'error', message: args.map(String).join(' ') });
+    };
+}
 if (!parentPort) {
     throw new Error('parentPort not available - this must run in an Electron utility process');
 }

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { log } from "utils";
 import { IGalleryItem } from "../lib/gallery-item";
 import { useGallery } from "../context/gallery-context";
 
@@ -26,8 +27,7 @@ export function Video({ asset }: IVideoProps) {
                 }
             })
             .catch(err => {
-                console.error(`Failed to load video asset: ${asset._id}`);
-                console.error(err);
+                log.exception(`Failed to load video asset: ${asset._id}`, err as Error);
             });
 
         return () => {

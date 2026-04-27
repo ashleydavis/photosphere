@@ -294,6 +294,11 @@ export class FileLogger implements ILog {
         }
         this.consoleLogger.tool(tool, data);
     }
+
+    event(message: string): void {
+        this.writeToFile('event', message);
+        this.consoleLogger.event(message);
+    }
     
     //
     // Write final log footer when command completes and flush all pending writes

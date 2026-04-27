@@ -1,4 +1,5 @@
 import React, { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
+import { log } from "utils";
 import { IGalleryItem } from "../lib/gallery-item";
 import { IItemsUpdate, useGallerySource } from "./gallery-source";
 import { applySearch } from "../lib/gallery-search";
@@ -737,7 +738,7 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     //
     async function search(newSearchText: string): Promise<void> {
         
-        console.log(`Setting asset search ${newSearchText}`);
+        log.info(`Setting asset search ${newSearchText}`);
 
         if (searchText === newSearchText) {
             //

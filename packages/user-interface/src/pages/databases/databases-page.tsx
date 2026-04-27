@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { log } from 'utils';
 import Box from '@mui/joy/Box';
 import Typography from '@mui/joy/Typography';
 import Button from '@mui/joy/Button';
@@ -118,7 +119,8 @@ export function DatabasesPage() {
     }
 
     useEffect(() => {
-        loadData().catch(err => console.error('Failed to load data:', err));
+        log.info('Databases page loaded');
+        loadData().catch(err => log.exception('Failed to load data:', err as Error));
     }, []);
 
     //
@@ -284,7 +286,7 @@ export function DatabasesPage() {
                     sx={{ mr: 1 }}
                     disabled={refreshing}
                     title="Refresh"
-                    onClick={() => handleRefresh().catch(err => console.error('Failed to refresh data:', err))}
+                    onClick={() => handleRefresh().catch(err => log.exception('Failed to refresh data:', err as Error))}
                 >
                     <Refresh
                         sx={refreshing ? {
@@ -304,6 +306,7 @@ export function DatabasesPage() {
                     New database
                 </Button>
                 <Button
+                    data-id="add-database-button"
                     variant="outlined"
                     sx={{ mr: 1 }}
                     onClick={() => setAddModalOpen(true)}
@@ -340,7 +343,7 @@ export function DatabasesPage() {
                                     size="sm"
                                     variant="plain"
                                     title="Open database"
-                                    onClick={() => handleOpen(entry).catch(err => console.error('Open database error:', err))}
+                                    onClick={() => handleOpen(entry).catch(err => log.exception('Open database error:', err as Error))}
                                 >
                                     <FolderOpen fontSize="small" />
                                 </IconButton>
@@ -405,7 +408,7 @@ export function DatabasesPage() {
                                     value={form.path}
                                     onChange={event => setForm(prev => ({ ...prev, path: event.target.value }))}
                                 />
-                                <Button variant="outlined" onClick={() => handleBrowse().catch(err => console.error('Browse error:', err))}>
+                                <Button variant="outlined" onClick={() => handleBrowse().catch(err => log.exception('Browse error:', err as Error))}>
                                     Browse
                                 </Button>
                             </Box>
@@ -437,7 +440,7 @@ export function DatabasesPage() {
                     </DialogContent>
                     <DialogActions>
                         <Button variant="plain" onClick={() => setDialogOpen(false)}>Cancel</Button>
-                        <Button onClick={() => handleSave().catch(err => console.error('Save error:', err))}>Save</Button>
+                        <Button onClick={() => handleSave().catch(err => log.exception('Save error:', err as Error))}>Save</Button>
                     </DialogActions>
                 </ModalDialog>
             </Modal>
@@ -459,7 +462,7 @@ export function DatabasesPage() {
                         <Button variant="plain" onClick={() => setConfirmRemoveOpen(false)}>Cancel</Button>
                         <Button
                             color="danger"
-                            onClick={() => handleConfirmRemove().catch(err => console.error('Remove error:', err))}
+                            onClick={() => handleConfirmRemove().catch(err => log.exception('Remove error:', err as Error))}
                         >
                             Remove
                         </Button>
@@ -474,7 +477,7 @@ export function DatabasesPage() {
                     secretType={quickCreateType}
                     defaultName={form.name || form.path}
                     onClose={() => setQuickCreateType(undefined)}
-                    onSave={newSecret => handleQuickCreateSave(newSecret).catch(err => console.error('Quick-create error:', err))}
+                    onSave={newSecret => handleQuickCreateSave(newSecret).catch(err => log.exception('Quick-create error:', err as Error))}
                 />
             )}
 
@@ -482,7 +485,7 @@ export function DatabasesPage() {
                 open={createModalOpen}
                 onClose={() => {
                     setCreateModalOpen(false);
-                    loadData().catch(err => console.error('Failed to reload data:', err));
+                    loadData().catch(err => log.exception('Failed to reload data:', err as Error));
                 }}
             />
 
@@ -490,7 +493,7 @@ export function DatabasesPage() {
                 open={addModalOpen}
                 onClose={() => {
                     setAddModalOpen(false);
-                    loadData().catch(err => console.error('Failed to reload data:', err));
+                    loadData().catch(err => log.exception('Failed to reload data:', err as Error));
                 }}
             />
 
@@ -506,7 +509,7 @@ export function DatabasesPage() {
                 open={receiveDbDialogOpen}
                 onClose={() => {
                     setReceiveDbDialogOpen(false);
-                    loadData().catch(err => console.error('Failed to reload data:', err));
+                    loadData().catch(err => log.exception('Failed to reload data:', err as Error));
                 }}
             />
         </Box>

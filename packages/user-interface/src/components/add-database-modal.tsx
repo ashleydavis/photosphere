@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { log } from 'utils';
 import Box from '@mui/joy/Box';
 import Modal from '@mui/joy/Modal';
 import ModalDialog from '@mui/joy/ModalDialog';
@@ -102,6 +103,7 @@ export function AddDatabaseModal({ open, onClose }: IAddDatabaseModalProps) {
             setS3SecretName(undefined);
             setEncryptionSecretName(undefined);
             setGeocodingSecretName(undefined);
+            log.info('Add database dialog opened');
         }
     }, [open]);
 
@@ -193,6 +195,7 @@ export function AddDatabaseModal({ open, onClose }: IAddDatabaseModalProps) {
                         <FormControl sx={{ mb: 1 }}>
                             <FormLabel>Name</FormLabel>
                             <Input
+                                data-id="database-name-input"
                                 value={form.name}
                                 onChange={event => setForm(prev => ({ ...prev, name: event.target.value }))}
                             />
@@ -223,6 +226,7 @@ export function AddDatabaseModal({ open, onClose }: IAddDatabaseModalProps) {
                             <FormLabel>Path</FormLabel>
                             <Box sx={{ display: 'flex', gap: 1 }}>
                                 <Input
+                                    data-id="database-path-input"
                                     sx={{ flexGrow: 1 }}
                                     value={form.path}
                                     onChange={event => setForm(prev => ({ ...prev, path: event.target.value }))}
@@ -230,7 +234,7 @@ export function AddDatabaseModal({ open, onClose }: IAddDatabaseModalProps) {
                                 <Button
                                     variant="outlined"
                                     disabled={browseDisabled}
-                                    onClick={() => handleBrowse().catch(err => console.error('Browse error:', err))}
+                                    onClick={() => handleBrowse().catch(err => log.exception('Browse error:', err as Error))}
                                 >
                                     {form.storageType === 's3' ? 'Browse S3' : 'Browse'}
                                 </Button>
@@ -254,8 +258,9 @@ export function AddDatabaseModal({ open, onClose }: IAddDatabaseModalProps) {
                     <DialogActions>
                         <Button variant="plain" onClick={onClose}>Cancel</Button>
                         <Button
+                            data-id="add-database-confirm"
                             disabled={!form.path}
-                            onClick={() => handleAdd().catch(err => console.error('Add database error:', err))}
+                            onClick={() => handleAdd().catch(err => log.exception('Add database error:', err as Error))}
                         >
                             Add
                         </Button>

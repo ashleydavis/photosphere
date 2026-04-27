@@ -73,7 +73,7 @@ This creates platform-specific installers in `apps/desktop/release/`:
 
 ## Testing
 
-### Smoke Tests
+### Playwright Smoke Tests
 
 Run Playwright smoke tests:
 
@@ -93,6 +93,80 @@ Tests verify:
 - App launches successfully
 - Basic UI interactions
 - File scanning functionality
+
+### Shell Smoke Tests
+
+A suite of end-to-end shell smoke tests lives in `smoke-tests/`. Each test is a numbered directory containing a `test.sh` script.
+
+**Run all tests (parallel, against bundled source):**
+
+```bash
+./smoke-tests.sh
+```
+
+**Run all tests sequentially:**
+
+```bash
+./smoke-tests.sh --sequential
+```
+
+**Run against the packaged release binary** (build first with `bun run build`):
+
+```bash
+./smoke-tests.sh --binary
+./smoke-tests.sh --binary --sequential
+```
+
+**Run a single test by number or name:**
+
+```bash
+./smoke-tests.sh 2          # by number
+./smoke-tests.sh create     # fuzzy name match
+```
+
+**List all tests:**
+
+```bash
+./smoke-tests.sh ls
+```
+
+On Linux, Electron requires a display server. Prefix with `xvfb-run -a` in headless environments:
+
+```bash
+xvfb-run -a ./smoke-tests.sh --binary --sequential
+```
+
+#### Adding a new test
+
+1. Create a numbered directory: `smoke-tests/<N>-<name>/`
+2. Create `test.sh` inside it using this template:
+
+```bash
+#!/bin/bash
+set -euo pipefail
+TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DESKTOP_DIR="$TEST_DIR/../.."
+source "$TEST_DIR/../lib/common.sh"
+
+PORT=$(find_free_port)
+TMP_DIR="$TEST_DIR/tmp"
+rm -rf "$TMP_DIR"
+
+trap 'stop_app "$PORT" "$TMP_DIR"' EXIT
+
+start_app "$PORT" "$TMP_DIR"
+wait_for_ready "$PORT"
+
+# ... send commands and assert outcomes ...
+
+check_no_errors "$TMP_DIR"
+log_success "Test passed"
+```
+
+3. Use `send_command <port> <endpoint> [json]` to drive the app via its test control server.
+4. Use `wait_for_log <tmp_dir> <pattern>` to assert that something happened.
+
+Shared helpers are in `smoke-tests/lib/common.sh`.
 
 ## Production Builds
 

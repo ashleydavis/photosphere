@@ -13,7 +13,7 @@ if (!parentPort) {
 //
 export interface IWorkerLogMessage {
     type: "log";
-    level: "info" | "verbose" | "error" | "exception" | "warn" | "debug" | "tool";
+    level: "info" | "verbose" | "error" | "exception" | "warn" | "debug" | "tool" | "event";
     message: string;
     error?: string; // For exception level
     toolData?: { stdout?: string; stderr?: string }; // For tool level
@@ -80,6 +80,10 @@ class WorkerLogElectron implements ILog {
         if (this.toolsEnabled) {
             this.sendLog("tool", tool, undefined, data);
         }
+    }
+
+    event(message: string): void {
+        this.sendLog("event", message);
     }
 }
 
