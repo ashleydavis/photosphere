@@ -483,11 +483,7 @@ run_one() {
     log_file="$dir/tmp/test-run.log"
     dir_name="$(basename "$dir")"
     mkdir -p "$dir/tmp"
-    if [ "$dir_name" != "01-core" ]; then
-        export ISOLATED_TEST_TMP_DIR="${TEST_TMP_DIR}/${dir_name}"
-    else
-        unset ISOLATED_TEST_TMP_DIR
-    fi
+    export ISOLATED_TEST_TMP_DIR="${TEST_TMP_DIR}/${dir_name}"
     printf "${BLUE}RUN ${NC}  %2s  %s\n" "$num" "$name"
     if timeout 300 bash "$test_sh" >"$log_file" 2>&1; then
         printf "${GREEN}PASS${NC}  %2s  %s\n" "$num" "$name"
@@ -585,19 +581,12 @@ discover_tests() {
     find smoke-tests -name "test.sh" | sort -V
 }
 
-# Map a test number to the script that contains it.
-# Tests 1-26 -> 01-core, test 43 -> 43-replicate-partial, all others map 1:1.
+# Map a test number to its individual script path.
 get_script_for_test() {
     local test_number="$1"
-    if [ "$test_number" -ge 1 ] && [ "$test_number" -le 26 ]; then
-        echo "smoke-tests/01-core/test.sh"
-    elif [ "$test_number" -eq 43 ]; then
-        echo "smoke-tests/43-replicate-partial/test.sh"
-    else
-        local script
-        script=$(find smoke-tests -maxdepth 2 -name "test.sh" | sort -V | grep -E "smoke-tests/${test_number}-" | head -1)
-        echo "$script"
-    fi
+    local script
+    script=$(find smoke-tests -maxdepth 2 -name "test.sh" | sort -V | grep -E "smoke-tests/${test_number}-" | head -1)
+    echo "$script"
 }
 
 # Invoke a single test script, export all env vars so subprocesses inherit them.
@@ -609,14 +598,10 @@ run_script() {
     export TEST_TMP_DIR TEST_DB_DIR TEST_FILES_DIR MULTIPLE_IMAGES_DIR DUPLICATE_IMAGES_DIR
     export USE_BINARY IMAGEMAGICK_IDENTIFY_CMD
 
-    # Give non-core scripts an isolated tmp dir so parallel runs don't conflict.
+    # Give each script an isolated tmp dir so parallel runs don't conflict.
     local dir_name
     dir_name=$(basename "$(dirname "$script_path")")
-    if [ "$dir_name" != "01-core" ]; then
-        export ISOLATED_TEST_TMP_DIR="${TEST_TMP_DIR}/${dir_name}"
-    else
-        unset ISOLATED_TEST_TMP_DIR
-    fi
+    export ISOLATED_TEST_TMP_DIR="${TEST_TMP_DIR}/${dir_name}"
 
     bash "$script_path" "$test_number"
     local exit_code=$?
@@ -951,30 +936,20 @@ main() {
 
             check_tools
 
-            # Always run 01-core first (tests 1-26).
-            echo ""
-            echo "--- Running 01-core (tests 1-26) ---"
-            unset ISOLATED_TEST_TMP_DIR
-            if ! run_one "smoke-tests/01-core/test.sh"; then
-                exit 1
-            fi
-
-            # Run individual scripts for tests 27–end_test sequentially.
-            if [ "$end_test" -gt 26 ]; then
-                local indep_scripts=()
-                declare -A seen_indep
-                for ((i=27; i<=end_test; i++)); do
-                    local script
-                    script=$(get_script_for_test "$i")
-                    if [ -n "$script" ] && [ -z "${seen_indep[$script]:-}" ]; then
-                        seen_indep["$script"]=1
-                        indep_scripts+=("$script")
-                    fi
-                done
-                if [ ${#indep_scripts[@]} -gt 0 ]; then
-                    if ! run_sequential "${indep_scripts[@]}"; then
-                        exit 1
-                    fi
+            # Run individual scripts for tests 1–end_test sequentially.
+            local indep_scripts=()
+            declare -A seen_indep
+            for ((i=1; i<=end_test; i++)); do
+                local script
+                script=$(get_script_for_test "$i")
+                if [ -n "$script" ] && [ -z "${seen_indep[$script]:-}" ]; then
+                    seen_indep["$script"]=1
+                    indep_scripts+=("$script")
+                fi
+            done
+            if [ ${#indep_scripts[@]} -gt 0 ]; then
+                if ! run_sequential "${indep_scripts[@]}"; then
+                    exit 1
                 fi
             fi
 
