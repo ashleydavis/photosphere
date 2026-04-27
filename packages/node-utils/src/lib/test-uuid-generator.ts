@@ -11,8 +11,8 @@ export class TestUuidGenerator implements IUuidGenerator {
     private initialized: boolean = false;
 
     constructor() {
-        // Store counter in test directory
-        this.counterFilePath = path.join('./test/tmp', 'photosphere-test-uuid-counter');
+        const testTmpDir = process.env.TEST_TMP_DIR || './test/tmp';
+        this.counterFilePath = path.join(testTmpDir, 'photosphere-test-uuid-counter');
     }
 
     generate(): string {

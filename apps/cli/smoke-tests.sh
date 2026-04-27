@@ -36,6 +36,12 @@ export PHOTOSPHERE_VAULT_TYPE="plaintext"
 # Use built binary instead of bun run start (set by --binary)
 USE_BINARY=false
 
+# Execution mode: "parallel" (default) or "sequential"
+EXECUTION_MODE=parallel
+
+# Batch size for parallel execution (default 5)
+PARALLEL_N=5
+
 # ============================================================================
 # Test Table Definition
 # ============================================================================
@@ -180,6 +186,45 @@ get_test_count() {
     echo "${#TEST_TABLE[@]}"
 }
 
+# Track test results
+TESTS_PASSED=0
+TESTS_FAILED=0
+FAILED_TESTS=()
+
+# Trap to show summary on exit (including failures)
+cleanup_and_show_summary() {
+    local exit_code=$?
+    echo ""
+    echo "============================================================================"
+    if [ $exit_code -eq 0 ]; then
+        echo -e "${GREEN}✓✓✓ ALL SMOKE TESTS PASSED ✓✓✓${NC}"
+    else
+        echo -e "${RED}✗✗✗ SMOKE TESTS FAILED ✗✗✗${NC}"
+    fi
+    echo "============================================================================"
+
+    exit $exit_code
+}
+
+trap cleanup_and_show_summary EXIT
+
+# Helper functions shared with check-tools.sh
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+log_success() {
+    echo -e "${GREEN}[PASS]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[FAIL]${NC} $1"
+}
+
+log_warning() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
 # Get CLI command: default is from code (bun run start --); use --binary for built executable
 get_cli_command() {
     if [ "$USE_BINARY" = "true" ]; then
@@ -208,629 +253,6 @@ get_cli_command() {
     fi
 }
 
-# Get mk command: default is from code; use --binary for built executable
-get_mk_command() {
-    if [ "$USE_BINARY" = "true" ]; then
-        local platform=$(detect_platform)
-        local arch=$(detect_architecture)
-        case "$platform" in
-            "linux")
-                echo "../mk-cli/bin/x64/linux/mk"
-                ;;
-            "mac")
-                if [ "$arch" = "arm64" ]; then
-                    echo "../mk-cli/bin/arm64/mac/mk"
-                else
-                    echo "../mk-cli/bin/x64/mac/mk"
-                fi
-                ;;
-            "win")
-                echo "../mk-cli/bin/x64/win/mk.exe"
-                ;;
-            *)
-                echo "../mk-cli/bin/x64/linux/mk"  # Default to linux
-                ;;
-        esac
-    else
-        echo "bun run ../mk-cli/src/index.ts --"
-    fi
-}
-
-# Get bdb command: default is from code; use --binary for built executable
-get_bdb_command() {
-    if [ "$USE_BINARY" = "true" ]; then
-        local platform=$(detect_platform)
-        local arch=$(detect_architecture)
-        case "$platform" in
-            "linux")
-                echo "../bdb-cli/bin/x64/linux/bdb"
-                ;;
-            "mac")
-                if [ "$arch" = "arm64" ]; then
-                    echo "../bdb-cli/bin/arm64/mac/bdb"
-                else
-                    echo "../bdb-cli/bin/x64/mac/bdb"
-                fi
-                ;;
-            "win")
-                echo "../bdb-cli/bin/x64/win/bdb.exe"
-                ;;
-            *)
-                echo "../bdb-cli/bin/x64/linux/bdb"  # Default to linux
-                ;;
-        esac
-    else
-        echo "bun run ../bdb-cli/src/index.ts"
-    fi
-}
-
-# Track test results
-TESTS_PASSED=0
-TESTS_FAILED=0
-FAILED_TESTS=()
-
-# Trap to show summary on exit (including failures)
-cleanup_and_show_summary() {
-    local exit_code=$?
-    echo ""
-    
-    # Show final status message - this should be the last thing printed
-    echo ""
-    echo "============================================================================"
-    echo "============================================================================"
-    if [ $TESTS_FAILED -eq 0 ] && [ $exit_code -eq 0 ]; then
-        echo -e "${GREEN}✓✓✓ ALL SMOKE TESTS PASSED ✓✓✓${NC}"
-        echo -e "${GREEN}Tests Passed: $TESTS_PASSED${NC}"
-    else
-        echo -e "${RED}✗✗✗ SMOKE TESTS FAILED ✗✗✗${NC}"
-        echo -e "${RED}Exit Code: $exit_code${NC}"
-        if [ $TESTS_FAILED -gt 0 ]; then
-            echo -e "${RED}Tests Failed: $TESTS_FAILED${NC}"
-            if [ ${#FAILED_TESTS[@]} -gt 0 ]; then
-                echo -e "${RED}Failed Tests:${NC}"
-                for failed_test in "${FAILED_TESTS[@]}"; do
-                    echo -e "${RED}  - $failed_test${NC}"
-                done
-            fi
-        else
-            echo -e "${RED}Test execution was aborted (likely due to an assertion failure)${NC}"
-        fi
-        if [ $TESTS_PASSED -gt 0 ]; then
-            echo -e "${GREEN}Tests Passed: $TESTS_PASSED${NC}"
-        fi
-    fi
-    echo "============================================================================"
-    echo "============================================================================"
-    
-    # Exit with the appropriate code
-    exit $exit_code
-}
-
-trap cleanup_and_show_summary EXIT
-
-# Global variable to store which ImageMagick command to use
-IMAGEMAGICK_IDENTIFY_CMD=""
-
-# Helper functions
-log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
-}
-
-# Print test header with double-line format
-print_test_header() {
-    local test_number="$1"
-    local test_name="$2"
-    echo ""
-    echo "============================================================================"
-    echo "============================================================================"
-    echo "=== TEST $test_number: $test_name ==="
-    echo "============================================================================"
-    echo "============================================================================"
-}
-
-log_success() {
-    echo -e "${GREEN}[PASS]${NC} $1"
-}
-
-log_error() {
-    echo -e "${RED}[FAIL]${NC} $1"
-}
-
-# Array to store test results with hashes
-TEST_RESULTS=()
-
-# Check that merkle tree leaf nodes are in sorted order
-check_merkle_tree_order() {
-    local tree_file="$1"
-    local description="${2:-merkle tree}"
-    
-    if [ ! -f "$tree_file" ]; then
-        return 0  # Tree doesn't exist, skip check
-    fi
-    
-    local mk_cmd=$(get_mk_command)
-    local check_cmd="$mk_cmd check \"$tree_file\""
-    local check_output
-    local exit_code
-    
-    # Run the check command and capture output and exit code
-    check_output=$($mk_cmd check "$tree_file" 2>&1)
-    exit_code=$?
-    
-    if [ $exit_code -ne 0 ]; then
-        log_error "Leaf nodes are not in sorted order for $description"
-        log_error "Tree file: $tree_file"
-        log_error "Command: $check_cmd"
-        log_error "Exit code: $exit_code"
-        echo "$check_output"
-        exit 1
-    fi
-}
-
-# Verify that aggregate root hashes match between original and replica
-verify_root_hashes_match() {
-    local original_dir="$1"
-    local replica_dir="$2"
-    local description="${3:-databases}"
-    
-    log_info "Verifying aggregate root hashes match for $description"
-    
-    # Get aggregate root hash (includes both files and BSON database merkle trees)
-    local original_hash_output
-    local replica_hash_output
-    invoke_command "Get original aggregate root hash" "$(get_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
-    invoke_command "Get replica aggregate root hash" "$(get_cli_command) root-hash --db $replica_dir --yes" 0 "replica_hash_output"
-    
-    local original_hash=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    local replica_hash=$(echo "$replica_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    
-    if [ "$original_hash" = "$replica_hash" ]; then
-        log_success "Aggregate root hashes match: $original_hash"
-    else
-        log_error "Aggregate root hashes do not match"
-        log_error "Original hash: $original_hash"
-        log_error "Replica hash: $replica_hash"
-        
-        # Show merkle trees for debugging
-        log_info "Showing merkle trees for original database:"
-        $(get_cli_command) debug merkle-tree --db "$original_dir" --yes --records
-        
-        log_info "Showing merkle trees for replica database:"
-        $(get_cli_command) debug merkle-tree --db "$replica_dir" --yes --records
-        
-        exit 1
-    fi
-}
-
-# Test counting functions - only increment once per test function
-test_passed() {
-    ((TESTS_PASSED++))
-    
-    # Capture database hash if database exists
-    if [ -d "$TEST_DB_DIR" ] && [ -f "$TEST_DB_DIR/.db/files.dat" ]; then
-        local hash_output
-        if hash_output=$($(get_cli_command) root-hash --db "$TEST_DB_DIR" --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs); then
-            TEST_RESULTS+=("PASS:$hash_output")
-        else
-            TEST_RESULTS+=("PASS:hash_failed")
-        fi
-        
-        # Check that merkle tree leaf nodes are in sorted order
-        check_merkle_tree_order "$TEST_DB_DIR/.db/files.dat" "main database"
-    fi
-}
-
-test_failed() {
-    local test_name="${1:-unknown}"
-    ((TESTS_FAILED++))
-    FAILED_TESTS+=("$test_name")
-    
-    # Capture database hash if database exists
-    if [ -d "$TEST_DB_DIR" ] && [ -f "$TEST_DB_DIR/.db/files.dat" ]; then
-        local hash_output
-        if hash_output=$($(get_cli_command) root-hash --db "$TEST_DB_DIR" --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs); then
-            TEST_RESULTS+=("FAIL:$test_name:$hash_output")
-        else
-            TEST_RESULTS+=("FAIL:$test_name:hash_failed")
-        fi
-    fi
-    
-    # Exit immediately on any test failure
-    log_error "Test failed: $test_name - aborting test suite"
-    exit 1
-}
-
-log_warning() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
-}
-
-
-# Show test hash summary for local console output
-# Check if a value matches expected value
-expect_value() {
-    local actual="$1"
-    local expected="$2"
-    local description="$3"
-    
-    if [ "$actual" = "$expected" ]; then
-        log_success "$description: $actual"
-        return 0
-    else
-        log_error "$description: expected $expected, got $actual"
-        exit 1
-    fi
-}
-
-# Parse a value from output and check if it matches expected value
-expect_output_value() {
-    local output="$1"
-    local pattern="$2"
-    local expected="$3"
-    local description="$4"
-    
-    local actual=$(parse_numeric "$output" "$pattern")
-    expect_value "$actual" "$expected" "$description"
-}
-
-# Check if output contains expected string pattern
-expect_output_string() {
-    local output="$1"
-    local pattern="$2"
-    local description="$3"
-    local should_contain="${4:-true}"
-    
-    if [ "$should_contain" = "true" ]; then
-        if echo "$output" | grep -q "$pattern"; then
-            log_success "$description"
-            return 0
-        else
-            log_error "$description (pattern '$pattern' not found in output)"
-            exit 1
-        fi
-    else
-        if echo "$output" | grep -q "$pattern"; then
-            log_error "$description (pattern '$pattern' should not be in output)"
-            exit 1
-        else
-            log_success "$description"
-            return 0
-        fi
-    fi
-}
-
-# Parse a numeric value from output based on a pattern
-parse_numeric() {
-    local output="$1"
-    local pattern="$2"
-    local default_value="${3:-0}"
-    
-    local clean_output="$output"
-    
-    # Escape special regex characters in the pattern - but keep parentheses as literals
-    local escaped_pattern=$(echo "$pattern" | sed 's/[[\.*^$+?{|]/\\&/g')
-    
-    # Try to extract numeric value in different positions relative to pattern
-    local value=""
-    
-    # First try: number follows pattern (e.g., "Total files: 15")
-    value=$(echo "$clean_output" | sed -n "s/.*${escaped_pattern}[[:space:]]*\([0-9][0-9]*\).*/\1/p" | head -1)
-    
-    # If not found, try: number precedes pattern (e.g., "15 files added")
-    if [ -z "$value" ]; then
-        value=$(echo "$clean_output" | sed -n "s/.*\([0-9][0-9]*\)[[:space:]]*${escaped_pattern}.*/\1/p" | head -1)
-    fi
-    
-    # Return the value or default if not found
-    echo "${value:-$default_value}"
-}
-
-# Validate that a file is a valid image with expected mime type
-expect_image() {
-    local file_path="$1"
-    local expected_mime="$2"
-    local description="$3"
-    
-    if [ ! -f "$file_path" ]; then
-        log_error "$description: File not found: $file_path"
-        exit 1
-    fi
-    
-    # Use ImageMagick to get format and validate the image
-    local format_output
-    local magick_error
-    local full_command="$IMAGEMAGICK_IDENTIFY_CMD -format \"%m\" \"$file_path\""
-    format_output=$(eval "$full_command" 2>&1)
-    local exit_code=$?
-    
-    if [ $exit_code -ne 0 ] || [ -z "$format_output" ]; then
-        log_error "$description: ImageMagick validation failed - corrupt or invalid image at $file_path"
-        echo "Failed command: $full_command"
-        echo "ImageMagick output:"
-        echo "$format_output"
-        exit 1
-    fi
-    
-    # Convert ImageMagick format to mime type
-    local mime_type=""
-    case "$format_output" in
-        "JPEG") mime_type="image/jpeg" ;;
-        "PNG") mime_type="image/png" ;;
-        "WEBP") mime_type="image/webp" ;;
-        "GIF") mime_type="image/gif" ;;
-        "TIFF") mime_type="image/tiff" ;;
-        "BMP") mime_type="image/bmp" ;;
-        *) mime_type="image/unknown" ;;
-    esac
-    
-    # Check if mime type matches expected
-    if [ "$mime_type" != "$expected_mime" ]; then
-        log_error "$description: Wrong mime type - expected $expected_mime, got $mime_type (format: $format_output) at $file_path"
-        exit 1
-    fi
-    
-    log_success "$description: Valid $mime_type"
-    return 0
-}
-
-# Validate that a file is a valid video with expected mime type
-expect_video() {
-    local file_path="$1"
-    local expected_mime="$2"
-    local description="$3"
-    
-    if [ ! -f "$file_path" ]; then
-        log_error "$description: File not found: $file_path"
-        exit 1
-    fi
-    
-    # Use ffprobe to get format and validate the video
-    local ffprobe_output
-    local format_command="ffprobe -v quiet -show_format -show_entries format=format_name \"$file_path\""
-    ffprobe_output=$(eval "$format_command" 2>&1)
-    local exit_code=$?
-    
-    if [ $exit_code -ne 0 ]; then
-        log_error "$description: ffprobe validation failed - not a valid video file at $file_path"
-        echo "Failed command: $format_command"
-        echo "ffprobe output:"
-        echo "$ffprobe_output"
-        exit 1
-    fi
-    
-    local format_output=$(echo "$ffprobe_output" | grep "format_name=" | cut -d'=' -f2)
-    if [ -z "$format_output" ]; then
-        log_error "$description: ffprobe validation failed - no format found at $file_path"
-        echo "Failed command: $format_command"
-        echo "ffprobe output:"
-        echo "$ffprobe_output"
-        exit 1
-    fi
-    
-    # Check that it has a video stream
-    local stream_output
-    local stream_command="ffprobe -v error -show_entries stream=codec_type -of default=noprint_wrappers=1:nokey=1 \"$file_path\""
-    stream_output=$(eval "$stream_command" 2>&1)
-    exit_code=$?
-    
-    if [ $exit_code -ne 0 ] || ! echo "$stream_output" | grep -q "video"; then
-        log_error "$description: ffprobe validation failed - no video stream found at $file_path"
-        echo "Failed command: $stream_command"
-        echo "ffprobe stream output:"
-        echo "$stream_output"
-        exit 1
-    fi
-    
-    # Convert ffprobe format to mime type
-    local mime_type=""
-    case "$format_output" in
-        *"mp4"*) mime_type="video/mp4" ;;
-        *"mov"*) mime_type="video/quicktime" ;;
-        *"avi"*) mime_type="video/x-msvideo" ;;
-        *"mkv"*) mime_type="video/x-matroska" ;;
-        *"webm"*) mime_type="video/webm" ;;
-        *"flv"*) mime_type="video/x-flv" ;;
-        *) mime_type="video/unknown" ;;
-    esac
-    
-    # Check if mime type matches expected
-    if [ "$mime_type" != "$expected_mime" ]; then
-        log_error "$description: Wrong mime type - expected $expected_mime, got $mime_type (format: $format_output) at $file_path"
-        exit 1
-    fi
-    
-    log_success "$description: Valid $mime_type"
-    return 0
-}
-
-# Validate assets added to the database
-validate_database_assets() {
-    local db_dir="$1"
-    local source_file="$2"
-    local expected_mime="$3"
-    local asset_type="$4"  # "image" or "video"
-    local add_output="$5"  # CLI output from add command
-    
-    # Extract asset ID from the verbose CLI output (path in output may be absolute, so match "Added file" and "with ID" only)
-    local asset_id=$(echo "$add_output" | grep "Added file.*to the database with ID" | sed -n 's/.*with ID "\([^"]*\)".*/\1/p' | head -1)
-    if [ -z "$asset_id" ]; then
-        # Try to extract from "matches existing records" line for files already in database
-        # The UUID is on the next line after "matches existing records:"
-        asset_id=$(echo "$add_output" | grep -A 1 "matches existing records:" | tail -1 | sed 's/^[[:space:]]*//' | head -1)
-    fi
-    if [ -z "$asset_id" ]; then
-        log_error "Failed to extract asset ID for $source_file from CLI output"
-        log_error "Full CLI output:"
-        echo "$add_output"
-        exit 1
-    fi
-    
-    log_info "Validating $asset_type assets for asset ID: $asset_id..."
-    
-    # Find the asset file using the asset ID
-    local asset_file="$db_dir/asset/$asset_id"
-    if [ ! -f "$asset_file" ]; then
-        log_error "Asset file not found in database for asset ID: $asset_id"
-        exit 1
-    fi
-    
-    # Validate the main asset
-    if [ "$asset_type" = "image" ]; then
-        expect_image "$asset_file" "$expected_mime" "Original $asset_type asset (expected: $expected_mime)"
-        
-        # Check for display version (always JPEG)
-        local display_file="$db_dir/display/$asset_id"
-        if [ -f "$display_file" ]; then
-            expect_image "$display_file" "image/jpeg" "Display version of $asset_type asset (expected: image/jpeg)"
-        fi
-        
-        # Check for thumbnail (always JPEG)
-        local thumb_file="$db_dir/thumb/$asset_id"
-        if [ -f "$thumb_file" ]; then
-            expect_image "$thumb_file" "image/jpeg" "Thumbnail version of $asset_type asset (expected: image/jpeg)"
-        fi
-    elif [ "$asset_type" = "video" ]; then
-        expect_video "$asset_file" "$expected_mime" "Original $asset_type asset (expected: $expected_mime)"
-        
-        # Check for video thumbnail (should be a JPEG image)
-        local thumb_file="$db_dir/thumb/$asset_id"
-        if [ -f "$thumb_file" ]; then
-            expect_image "$thumb_file" "image/jpeg" "Thumbnail of $asset_type asset (expected: image/jpeg)"
-        fi
-    fi
-    
-    log_success "All $asset_type assets validated successfully"
-}
-
-
-# Unified command invocation function
-invoke_command() {
-    local description="$1"
-    local command="$2"
-    local expected_exit_code="${3:-0}"
-    local output_var_name="${4:-}"
-    
-    log_info "Running: $description"
-    echo ""
-    echo -e "${YELLOW}NODE_ENV:${NC} ${NODE_ENV:-'(not set)'}"
-    echo -e "${YELLOW}Command:${NC}"
-    echo -e "${BLUE}$command${NC}"
-    echo ""
-    
-    # For macOS, check if binary exists and is executable
-    if [[ "$OSTYPE" == "darwin"* ]] && [[ "$command" == *"psi"* ]]; then
-        local binary_path=$(echo "$command" | awk '{print $1}')
-        if [ -f "$binary_path" ]; then
-            log_info "Binary exists at: $binary_path"
-            file "$binary_path" || true
-            log_info "Binary permissions: $(ls -la "$binary_path")"
-        fi
-    fi
-    
-    local command_output=""
-    local actual_exit_code=0
-    
-    # Ensure NODE_ENV is passed to the command - force it to testing for deterministic UUIDs
-    local env_prefix="NODE_ENV=testing "
-    local full_command="$env_prefix$command"
-    
-    if [ -n "$output_var_name" ]; then
-        # Capture output and display it, ensuring all output is visible
-        # Execute command and capture both output and exit code properly
-        command_output=$(eval "$full_command" 2>&1)
-        actual_exit_code=$?
-        # Display the output after capturing it
-        echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
-        echo "$command_output"
-        echo "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
-        
-        # Store output in caller's variable
-        eval "$output_var_name=\"\$command_output\""
-    else
-        # Execute without capturing output
-        echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
-        eval "$full_command"
-        actual_exit_code=$?
-        echo "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
-    fi
-    
-    # Check exit code and log results
-    if [ $actual_exit_code -eq $expected_exit_code ]; then
-        if [ $expected_exit_code -eq 0 ]; then
-            log_success "$description"
-            
-            # Print root hash after successful psi commands that might affect the database
-            if [[ "$command" == *"psi"* ]] || [[ "$command" == *"bun run start"* ]]; then
-                # Extract database path from command
-                local db_path=""
-                if [[ "$command" == *"--db "* ]]; then
-                    db_path=$(echo "$command" | sed -n 's/.*--db \([^ ]*\).*/\1/p')
-                elif [ -n "$TEST_DB_DIR" ]; then
-                    db_path="$TEST_DB_DIR"
-                fi
-                
-                # Check if database exists and print root hash
-                if [ -n "$db_path" ] && [ -d "$db_path" ] && [ -f "$db_path/.db/files.dat" ]; then
-                    echo ""
-                    echo -e "[@@@@@@] ${YELLOW}[ROOT-HASH]${NC} $($(get_cli_command) root-hash --db "$db_path" --yes 2>/dev/null || echo "N/A")"
-                    echo ""
-                    # echo -e "[@@@@@@] ${YELLOW}[MERKLE-TREE]${NC}"
-                    # $(get_mk_command) show "$db_path/.db/files.dat" 2>/dev/null | sed 's/^/[@@@@@@] /' || echo "[@@@@@@] N/A"
-                fi
-            fi
-        else
-            log_success "$description (expected failure with exit code $actual_exit_code)"
-        fi
-        return 0
-    else
-        if [ $expected_exit_code -eq 0 ]; then
-            log_error "$description (exit code: $actual_exit_code)"
-            # Special handling for macOS illegal instruction error
-            if [ $actual_exit_code -eq 132 ] && [[ "$OSTYPE" == "darwin"* ]]; then
-                log_error "Illegal instruction error on macOS - binary may be compiled for wrong architecture"
-            fi
-        else
-            log_error "$description (expected failure but command succeeded)"
-        fi
-        exit 1  # Exit immediately on failure
-    fi
-}
-
-
-# Check if a directory/file exists
-check_exists() {
-    local path="$1"
-    local description="$2"
-    
-    if [ -e "$path" ]; then
-        log_success "$description exists: $path"
-        return 0
-    else
-        log_error "$description missing: $path"
-        exit 1  # Exit immediately on failure
-    fi
-}
-
-# Check if a directory is empty
-check_empty() {
-    local path="$1"
-    local description="$2"
-    
-    if [ -z "$(ls -A "$path" 2>/dev/null)" ]; then
-        log_success "$description is empty: $path"
-        return 0
-    else
-        log_error "$description is not empty: $path"
-        exit 1  # Exit immediately on failure
-    fi
-}
-
-# Count files in summary output
-count_files_in_summary() {
-    local summary_output="$1"
-    # Extract number from summary output like "1 files in database"
-    echo "$summary_output" | grep -o '[0-9]\+ files' | grep -o '[0-9]\+' | head -1
-}
-
 # Detect platform and set build command
 detect_platform() {
     case "$(uname -s)" in
@@ -850,71 +272,79 @@ detect_architecture() {
     esac
 }
 
-# Cross-platform tree command
-show_tree() {
-    local directory="$1"
-    local platform=$(detect_platform)
-    
-    log_info "Attempting to show directory structure for: $directory"
-    
-    # Try different tree command approaches
-    if command -v tree &> /dev/null; then
-        case "$platform" in
-            "win")
-                # Windows tree command syntax: tree [path] [options]
-                # Try different Windows tree syntaxes
-                if tree /f /a "$directory" 2>/dev/null; then
-                    log_info "Used Windows tree command: tree /f /a $directory"
-                elif cmd //c tree "$directory" //f //a 2>/dev/null; then
-                    log_info "Used Windows tree via cmd: tree $directory //f //a"
-                elif cmd //c tree "$directory" /f /a 2>/dev/null; then
-                    log_info "Used Windows tree via cmd: tree $directory /f /a"
-                else
-                    # Fall back to Unix-style tree (if installed via chocolatey)
-                    log_info "Windows tree failed, trying Unix-style tree"
-                    tree "$directory" 2>/dev/null || {
-                        log_warning "tree command failed, using ls -la instead"
-                        ls -la "$directory"
-                    }
-                fi
-                ;;
-            *)
-                # Linux/macOS tree command
-                log_info "Using Unix-style tree command"
-                tree "$directory" 2>/dev/null || {
-                    log_warning "tree command failed, using ls -la instead"
-                    ls -la "$directory"
-                }
-                ;;
-        esac
+# Unified command invocation (needed by test_setup and check_tools)
+invoke_command() {
+    local description="$1"
+    local command="$2"
+    local expected_exit_code="${3:-0}"
+    local output_var_name="${4:-}"
+
+    log_info "Running: $description"
+    echo ""
+    echo -e "${YELLOW}NODE_ENV:${NC} ${NODE_ENV:-'(not set)'}"
+    echo -e "${YELLOW}Command:${NC}"
+    echo -e "${BLUE}$command${NC}"
+    echo ""
+
+    local command_output=""
+    local actual_exit_code=0
+
+    local env_prefix="NODE_ENV=testing "
+    local full_command="$env_prefix$command"
+
+    if [ -n "$output_var_name" ]; then
+        command_output=$(eval "$full_command" 2>&1)
+        actual_exit_code=$?
+        echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
+        echo "$command_output"
+        echo "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
+        eval "$output_var_name=\"\$command_output\""
     else
-        log_warning "tree command not available, using ls -la instead"
-        ls -la "$directory"
+        echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
+        eval "$full_command"
+        actual_exit_code=$?
+        echo "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
+    fi
+
+    if [ $actual_exit_code -eq $expected_exit_code ]; then
+        if [ $expected_exit_code -eq 0 ]; then
+            log_success "$description"
+        else
+            log_success "$description (expected failure with exit code $actual_exit_code)"
+        fi
+        return 0
+    else
+        if [ $expected_exit_code -eq 0 ]; then
+            log_error "$description (exit code: $actual_exit_code)"
+        else
+            log_error "$description (expected failure but command succeeded)"
+        fi
+        exit 1
     fi
 }
 
-# Individual test functions
+# Individual test functions (remain inline — not tests, just setup)
 test_setup() {
     local platform=$(detect_platform)
     local arch=$(detect_architecture)
     log_info "Detected platform: $platform"
     log_info "Detected architecture: $arch"
-    
+
     log_info "Changing to CLI directory"
     if ! cd "$(dirname "$0")"; then
         log_error "Failed to change to CLI directory"
         return 1
     fi
-    
+
     local cli_command=$(get_cli_command)
     log_info "Using CLI command: $cli_command"
-    
+
     log_info "Cleaning up previous test run"
     rm -rf "$TEST_TMP_DIR"
-    
+
     # Ensure tmp directory exists
     mkdir -p "$TEST_TMP_DIR"
-    
+
     log_info "Building CLI executable for platform: $platform ($arch)"
     case "$platform" in
         "linux")
@@ -931,7 +361,7 @@ test_setup() {
             invoke_command "Build Windows executable" "bun run build-win"
             ;;
     esac
-    
+
     log_info "Building mk CLI executable for platform: $platform ($arch)"
     cd ../mk-cli
     case "$platform" in
@@ -950,7 +380,7 @@ test_setup() {
             ;;
     esac
     cd ../cli
-    
+
     log_info "Building bdb CLI executable for platform: $platform ($arch)"
     cd ../bdb-cli
     case "$platform" in
@@ -969,3446 +399,14 @@ test_setup() {
             ;;
     esac
     cd ../cli
-    
-    test_passed
+
+    TESTS_PASSED=$((TESTS_PASSED + 1))
 }
 
 check_tools() {
     # shellcheck source=./check-tools.sh
     source "$SMOKE_TESTS_DIR/check-tools.sh"
     run_check_tools
-}
-
-test_create_database() {
-    local test_number="$1"
-    print_test_header "$test_number" "CREATE DATABASE"
-    
-    # Ensure shared directory exists and remove any existing test db so init can run
-    mkdir -p "$(dirname "$TEST_DB_DIR")"
-    if [ -d "$TEST_DB_DIR" ]; then
-        rm -rf "$TEST_DB_DIR"
-        log_info "Removed existing test database for clean init"
-    fi
-    
-    log_info "Database path: $TEST_DB_DIR"
-    
-    invoke_command "Initialize new database" "$(get_cli_command) init --db $TEST_DB_DIR --yes"
-    
-    # Check if required files were created (v6 layout: BSON under .db/bson)
-    check_exists "$TEST_DB_DIR" "Database directory"
-    check_exists "$TEST_DB_DIR/.db" "Database metadata directory"
-    check_exists "$TEST_DB_DIR/.db/files.dat" "Database tree file"
-    check_exists "$TEST_DB_DIR/.db/bson" "BSON data directory (v6)"
-    
-    # Test initial state - database creation is verified by file existence checks above
-    test_passed
-}
-
-test_view_media_files() {
-    local test_number="$1"
-    print_test_header "$test_number" "VIEW LOCAL MEDIA FILES"
-    
-    # Capture the output to validate it
-    local info_output
-    invoke_command "Show info for test files" "$(get_cli_command) info $TEST_FILES_DIR/ --yes" 0 "info_output"
-    
-    # Check that info output doesn't contain "Type: undefined" which indicates a bug
-    expect_output_string "$info_output" "Type: undefined" "Info output should not contain 'Type: undefined'" "false"
-    
-    # Check that each test file has the correct MIME type
-    expect_output_string "$info_output" "Type: image/jpeg" "Info output should contain JPEG MIME type for test.jpg"
-    expect_output_string "$info_output" "Type: image/png" "Info output should contain PNG MIME type for test.png"
-    expect_output_string "$info_output" "Type: video/mp4" "Info output should contain MP4 MIME type for test.mp4"
-    expect_output_string "$info_output" "Type: image/webp" "Info output should contain WebP MIME type for test.webp"
-    test_passed
-}
-
-# Parameterized function to test adding a single file
-test_add_file_parameterized() {
-    local file_path="$1"
-    local file_type="$2"
-    local test_description="$3"
-    local expected_mime="$4"
-    local asset_type="$5"
-    
-    # Check if file exists
-    check_exists "$file_path" "$file_type test file"
-    
-    # Get initial database state - count files in metadata collection
-    # Use the info command output to track actual media files added
-    local before_check=$($(get_cli_command) check --db $TEST_DB_DIR $file_path --yes 2>&1)
-    local already_in_db=$(parse_numeric "$before_check" "Already added:")
-    
-    # Add the file and capture output with verbose logging
-    local add_output
-    invoke_command "$test_description" "$(get_cli_command) add --db $TEST_DB_DIR $file_path --verbose --yes" 0 "add_output"
-    
-    # Verify exactly one file was added (or was already there)
-    if [ "$already_in_db" -eq "1" ]; then
-        # File was already in database
-        expect_output_value "$add_output" "Already added:" "1" "$file_type file already in database"
-        expect_output_value "$add_output" "Files added:" "0" "$file_type file imported (should be 0 since already exists)"
-    else
-        # File should be newly added
-        expect_output_value "$add_output" "Files added:" "1" "$file_type file imported"
-        expect_output_value "$add_output" "Files failed:" "0" "$file_type file failed"
-    fi
-    
-    # Check that the specific file is now in the database
-    invoke_command "Check $file_type file added" "$(get_cli_command) check --db $TEST_DB_DIR $file_path --yes"
-    
-    # Validate the assets in the database
-    validate_database_assets "$TEST_DB_DIR" "$file_path" "$expected_mime" "$asset_type" "$add_output"
-}
-
-test_add_png_file() {
-    local test_number="$1"
-    print_test_header "$test_number" "ADD PNG FILE"
-    
-    log_info "Database path: $TEST_DB_DIR"
-    
-    test_add_file_parameterized "$TEST_FILES_DIR/test.png" "PNG" "Add PNG file" "image/png" "image"
-    
-    test_passed
-}
-
-test_add_jpg_file() {
-    local test_number="$1"
-    print_test_header "$test_number" "ADD JPG FILE"
-    
-    log_info "Database path: $TEST_DB_DIR"
-    
-    test_add_file_parameterized "$TEST_FILES_DIR/test.jpg" "JPG" "Add JPG file" "image/jpeg" "image"
-    
-    test_passed
-}
-
-test_add_mp4_file() {
-    local test_number="$1"
-    print_test_header "$test_number" "ADD MP4 FILE"
-    
-    log_info "Database path: $TEST_DB_DIR"
-    
-    test_add_file_parameterized "$TEST_FILES_DIR/test.mp4" "MP4" "Add MP4 file" "video/mp4" "video"
-    
-    test_passed
-}
-
-test_add_same_file() {
-    local test_number="$1"
-    print_test_header "$test_number" "ADD SAME FILE (NO DUPLICATION)"
-    
-    log_info "Database path: $TEST_DB_DIR"
-    
-    # Try to re-add the PNG file (should not add it again)
-    invoke_command "Re-add same file" "$(get_cli_command) add --db $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
-    
-    invoke_command "Check file still in database" "$(get_cli_command) check --db $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
-    test_passed
-}
-
-test_add_multiple_files() {
-    local test_number="$1"
-    print_test_header "$test_number" "ADD MULTIPLE FILES"
-    
-    log_info "Database path: $TEST_DB_DIR"
-    
-    if [ -d "$MULTIPLE_IMAGES_DIR" ]; then
-        local add_output
-        invoke_command "Add multiple files" "$(get_cli_command) add --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes" 0 "add_output"
-        
-        # Check that 2 files were imported
-        expect_output_value "$add_output" "Files added:" "2" "Two files imported from multiple images directory"
-        
-        invoke_command "Check multiple files added" "$(get_cli_command) check --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
-    else
-        log_warning "Multiple images directory not found: $MULTIPLE_IMAGES_DIR"
-        log_warning "Skipping multiple file tests"
-    fi
-    test_passed
-}
-
-test_add_same_multiple_files() {
-    local test_number="$1"
-    print_test_header "$test_number" "ADD SAME MULTIPLE FILES (NO DUPLICATION)"
-    
-    log_info "Database path: $TEST_DB_DIR"
-    
-    if [ -d "$MULTIPLE_IMAGES_DIR" ]; then
-        invoke_command "Re-add multiple files" "$(get_cli_command) add --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
-        
-        invoke_command "Check multiple files still in database" "$(get_cli_command) check --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
-    else
-        log_warning "Multiple images directory not found: $MULTIPLE_IMAGES_DIR"
-        log_warning "Skipping multiple file tests"
-    fi
-    test_passed
-}
-
-test_add_duplicate_images() {
-    local test_number="$1"
-    print_test_header "$test_number" "ADD DUPLICATE IMAGES (DEDUPE TO 1 ASSET)"
-
-    if [ ! -d "$DUPLICATE_IMAGES_DIR" ]; then
-        log_warning "Duplicate images directory not found: $DUPLICATE_IMAGES_DIR"
-        log_warning "Skipping duplicate images test"
-        test_passed
-        return 0
-    fi
-
-    local test_dir=$(get_test_dir "$test_number")
-    mkdir -p "$test_dir"
-    local db_dir="$test_dir/duplicate-test-db"
-    rm -rf "$db_dir"
-
-    log_info "Creating new database at: $db_dir"
-    invoke_command "Initialize new database" "$(get_cli_command) init --db $db_dir --yes"
-
-    local add_output
-    invoke_command "Add duplicate images directory" "$(get_cli_command) add --db $db_dir $DUPLICATE_IMAGES_DIR/ --yes" 0 "add_output"
-
-    local summary_output
-    invoke_command "Get database summary" "$(get_cli_command) summary --db $db_dir --yes" 0 "summary_output"
-
-    local files_imported=$(parse_numeric "$summary_output" "Files imported:" "0")
-    expect_value "$files_imported" "1" "Database should have exactly 1 asset after importing two identical files"
-
-    rm -rf "$db_dir"
-    test_passed
-}
-
-test_database_summary() {
-    local test_number="$1"
-    print_test_header "$test_number" "DATABASE SUMMARY"
-    
-    log_info "Database path: $TEST_DB_DIR"
-    
-    # Run summary command and capture output for verification
-    local summary_output
-    invoke_command "Display database summary" "$(get_cli_command) summary --db $TEST_DB_DIR --yes" 0 "summary_output"
-    
-    # Check that summary contains expected fields
-    expect_output_string "$summary_output" "Files imported:" "Summary contains files imported count"
-    expect_output_string "$summary_output" "Total files:" "Summary contains total files count"
-    expect_output_string "$summary_output" "Total size:" "Summary contains total size"
-    expect_output_string "$summary_output" "Full root hash:" "Summary contains full root hash"
-    test_passed
-}
-
-test_database_list() {
-    local test_number="$1"
-    print_test_header "$test_number" "DATABASE LIST"
-    
-    log_info "Database path: $TEST_DB_DIR"
-    
-    # Run list command and capture output for verification
-    local list_output
-    invoke_command "List database files" "$(get_cli_command) list --db $TEST_DB_DIR --page-size 10 --yes" 0 "list_output"
-    
-    # Check that list contains expected fields and patterns
-    expect_output_string "$list_output" "Database Files" "List output contains header"
-    expect_output_string "$list_output" "sorted by date" "List output contains sorting information"
-    expect_output_string "$list_output" "Page 1" "List output contains page header"
-    expect_output_string "$list_output" "Date:" "List output contains date information"
-    expect_output_string "$list_output" "Size:" "List output contains size information"
-    expect_output_string "$list_output" "Type:" "List output contains type information"
-    expect_output_string "$list_output" "Encryption:" "List output contains encryption information"
-    expect_output_string "$list_output" "unencrypted" "List output shows unencrypted status for plain database"
-
-    # Check that it shows the expected number of files
-    expect_output_string "$list_output" "End of results" "List shows end of results message"
-    expect_output_string "$list_output" "Displayed 5 files total" "List shows correct total file count"
-    test_passed
-}
-
-test_export_assets() {
-    local test_number="$1"
-    print_test_header "$test_number" "EXPORT ASSETS"
-    
-    log_info "Database path: $TEST_DB_DIR"
-    
-    local test_dir=$(get_test_dir "$test_number")
-    mkdir -p "$test_dir"
-    # Create export test directory
-    local export_dir="$test_dir/exports"
-    mkdir -p "$export_dir"
-    
-    # Try to find assets in the database directory directly first
-    local assets_dir="$TEST_DB_DIR/asset"
-    local test_asset_id=""
-    
-    if [ -d "$assets_dir" ]; then
-        test_asset_id=$(ls "$assets_dir" | head -1)
-        log_info "Found asset files in asset directory"
-    fi
-    
-    if [ -z "$test_asset_id" ]; then
-        # Fallback: try to get a list of assets using the list command
-        local list_output
-        if invoke_command "List assets to find available asset IDs" "$(get_cli_command) list --db $TEST_DB_DIR --page-size 50 --yes" 0 "list_output"; then
-            # Extract the first asset ID from the list output
-            # The list output should contain lines with asset IDs
-            test_asset_id=$(echo "$list_output" | grep -o "[0-9a-f]\{8\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{12\}" | head -1)
-        fi
-    fi
-    
-    if [ -z "$test_asset_id" ]; then
-        log_error "Could not find any asset ID to test export with"
-        log_info "List output:"
-        echo "$list_output"
-        log_info "Assets directory contents:"
-        ls -la "$TEST_DB_DIR/asset" || echo "Assets directory not found"
-        exit 1
-    fi
-    
-    log_info "Using asset ID for export tests: $test_asset_id"
-    
-    # Test 1: Export original asset to specific file
-    local export_output
-    invoke_command "Export original asset to specific file" "$(get_cli_command) export --db $TEST_DB_DIR $test_asset_id $export_dir/exported-original.png --verbose --yes" 0 "export_output"
-    
-    # Verify the exported file exists
-    check_exists "$export_dir/exported-original.png" "Exported original file"
-    
-    # Check export output for success message
-    expect_output_string "$export_output" "Successfully exported" "Export success message"
-    
-    # Test 2: Export display version to directory (if it exists)
-    local display_file="$TEST_DB_DIR/display/$test_asset_id"
-    if [ -f "$display_file" ]; then
-        invoke_command "Export display version to directory" "$(get_cli_command) export --db $TEST_DB_DIR $test_asset_id $export_dir/ --type display --verbose --yes"
-        
-        # Check if the display file was exported (name will depend on original filename)
-        local exported_display_count=$(find "$export_dir" -name "*_display.*" | wc -l)
-        if [ "$exported_display_count" -eq 0 ]; then
-            log_warning "Display version export didn't create expected _display file"
-        else
-            log_success "Display version exported successfully"
-        fi
-    else
-        log_info "Display version not available for asset $test_asset_id, skipping display export test"
-    fi
-    
-    # Test 3: Export thumbnail version (if it exists)
-    local thumb_file="$TEST_DB_DIR/thumb/$test_asset_id"
-    if [ -f "$thumb_file" ]; then
-        invoke_command "Export thumbnail version" "$(get_cli_command) export --db $TEST_DB_DIR $test_asset_id $export_dir/thumb.jpg --type thumb --verbose --yes"
-        
-        check_exists "$export_dir/thumb.jpg" "Exported thumbnail file"
-    else
-        log_info "Thumbnail version not available for asset $test_asset_id, skipping thumbnail export test"
-    fi
-    
-    # Test 4: Try to export non-existent asset (should fail)
-    local invalid_asset_id="00000000-0000-0000-0000-000000000000"
-    invoke_command "Export non-existent asset (should fail)" "$(get_cli_command) export --db $TEST_DB_DIR $invalid_asset_id $export_dir/should-not-exist.png --yes" 1
-    
-    # Test 5: Export the same asset explicitly as original type
-    invoke_command "Export asset as original explicitly" "$(get_cli_command) export --db $TEST_DB_DIR $test_asset_id $export_dir/explicit-original.png --type original --verbose --yes"
-    
-    check_exists "$export_dir/explicit-original.png" "Explicitly exported original file"
-    
-    log_success "All export tests completed successfully"
-    test_passed
-}
-
-test_database_verify() {
-    local test_number="$1"
-    print_test_header "$test_number" "DATABASE VERIFICATION"
-    
-    log_info "Database path: $TEST_DB_DIR"
-    
-    # Show database structure with tree command
-    log_info "Showing database structure..."
-    show_tree "$TEST_DB_DIR"
-    
-    # Run verify command and capture output for checking
-    local verify_output
-    invoke_command "Verify database integrity" "$(get_cli_command) verify --db $TEST_DB_DIR --yes" 0 "verify_output"
-    
-    # Check that verification contains expected fields
-    expect_output_string "$verify_output" "Files imported:" "Verify output contains files imported count"
-    expect_output_string "$verify_output" "Total files:" "Verify output contains total files count"
-    expect_output_string "$verify_output" "Total size:" "Verify output contains total size"
-    
-    # Check that the database is in a good state (no new, modified, or removed files)
-    expect_output_value "$verify_output" "Files imported:" "5" "File imported"
-    expect_output_value "$verify_output" "Unmodified:" "15" "Unmodified files in verification"
-    expect_output_value "$verify_output" "New:" "0" "New files in verification"
-    expect_output_value "$verify_output" "Modified:" "0" "Modified files in verification"
-    expect_output_value "$verify_output" "Removed:" "0" "Removed files in verification"
-    test_passed
-}
-
-test_database_verify_full() {
-    local test_number="$1"
-    print_test_header "$test_number" "DATABASE VERIFICATION (FULL MODE)"
-    
-    log_info "Database path: $TEST_DB_DIR"
-    
-    # Run full verify command and capture output for checking
-    local verify_output
-    invoke_command "Verify database (full mode)" "$(get_cli_command) verify --db $TEST_DB_DIR --full --yes" 0 "verify_output"
-    
-    # Check that verification contains expected fields
-    expect_output_string "$verify_output" "Files imported:" "Full verify output contains files imported count"
-    expect_output_string "$verify_output" "Total files:" "Full verify output contains total files count"
-    expect_output_string "$verify_output" "Total size:" "Full verify output contains total size"
-    
-    # Check that the database is in a good state even with full verification
-    expect_output_value "$verify_output" "Unmodified:" "15" "Unmodified files in full verification"
-    expect_output_value "$verify_output" "New:" "0" "New files in full verification"
-    expect_output_value "$verify_output" "Modified:" "0" "Modified files in full verification"
-    expect_output_value "$verify_output" "Removed:" "0" "Removed files in full verification"
-    test_passed
-}
-
-test_detect_deleted_file() {
-    local test_number="$1"
-    print_test_header "$test_number" "DETECT DELETED FILE WITH VERIFY"
-    
-    local test_dir=$(get_test_dir "$test_number")
-    mkdir -p "$test_dir"
-    local test_copy_dir="$test_dir/test-db-deleted-file-test"
-    log_info "Source database path: $TEST_DB_DIR"
-    log_info "Test copy database path: $test_copy_dir"
-    
-    # Ensure source database exists before copying
-    if [ ! -d "$TEST_DB_DIR" ]; then
-        log_error "Source database not found at $TEST_DB_DIR. Run previous tests first."
-        exit 1
-    fi
-    
-    if [ ! -d "$TEST_DB_DIR/.db" ]; then
-        log_error "Source database .db subdirectory not found at $TEST_DB_DIR/.db"
-        exit 1
-    fi
-    
-    # Create fresh copy of database for testing
-    log_info "Creating fresh copy of database for deleted file test"
-    
-    # Ensure destination doesn't exist to avoid copying into subdirectory
-    rm -rf "$test_copy_dir"
-    
-    log_info "Copying database: cp -r \"$TEST_DB_DIR\" \"$test_copy_dir\""
-    cp -r "$TEST_DB_DIR" "$test_copy_dir"
-    
-    # Verify the copy includes the .db subdirectory
-    if [ ! -d "$test_copy_dir/.db" ]; then
-        log_error "Failed to copy .db subdirectory to $test_copy_dir"
-        exit 1
-    fi
-    
-    # Find and delete the first file from the asset directory
-    local file_to_delete=$(find "$test_copy_dir/asset" -type f | sort | head -1)
-    if [ -n "$file_to_delete" ]; then
-        local relative_path="${file_to_delete#$test_copy_dir/}"
-        rm "$file_to_delete"
-        log_info "Deleted file: $relative_path"
-    else
-        log_error "No file found in asset directory to delete"
-        exit 1
-    fi
-    
-    # Run verify and capture output - should detect the missing file
-    local verify_output
-    invoke_command "Verify database with deleted file" "$(get_cli_command) verify --db $test_copy_dir --yes" 0 "verify_output"
-    
-    # Check that verify detected the removed file
-    expect_output_value "$verify_output" "New:" "0" "No new files"
-    expect_output_value "$verify_output" "Unmodified:" "14" "Unmodified files"
-    expect_output_value "$verify_output" "Modified:" "0" "No modified files"
-    expect_output_value "$verify_output" "Removed:" "1" "Deleted file detected by verify"
-    
-    # Clean up test copy
-    rm -rf "$test_copy_dir"
-    log_success "Cleaned up test database copy"
-    test_passed
-}
-
-test_detect_modified_file() {
-    local test_number="$1"
-    print_test_header "$test_number" "DETECT MODIFIED FILE WITH VERIFY"
-    
-    local test_dir=$(get_test_dir "$test_number")
-    mkdir -p "$test_dir"
-    local test_copy_dir="$test_dir/test-db-modified-file-test"
-    log_info "Source database path: $TEST_DB_DIR"
-    log_info "Test copy database path: $test_copy_dir"
-    
-    # Ensure source database exists before copying
-    if [ ! -d "$TEST_DB_DIR" ]; then
-        log_error "Source database not found at $TEST_DB_DIR. Run previous tests first."
-        exit 1
-    fi
-    
-    if [ ! -d "$TEST_DB_DIR/.db" ]; then
-        log_error "Source database .db subdirectory not found at $TEST_DB_DIR/.db"
-        exit 1
-    fi
-    
-    # Create fresh copy of database for testing
-    log_info "Creating fresh copy of database for modified file test"
-    
-    # Ensure destination doesn't exist to avoid copying into subdirectory
-    rm -rf "$test_copy_dir"
-    
-    log_info "Copying database: cp -r \"$TEST_DB_DIR\" \"$test_copy_dir\""
-    cp -r "$TEST_DB_DIR" "$test_copy_dir"
-    
-    # Verify the copy includes the .db subdirectory
-    if [ ! -d "$test_copy_dir/.db" ]; then
-        log_error "Failed to copy .db subdirectory to $test_copy_dir"
-        exit 1
-    fi
-    
-    # Find and modify the first file from the asset directory
-    local file_to_modify=$(find "$test_copy_dir/asset" -type f | sort | head -1)
-    if [ -n "$file_to_modify" ]; then
-        local relative_path="${file_to_modify#$test_copy_dir/}"
-        # Append some data to modify the file
-        echo "Modified content" >> "$file_to_modify"
-        log_info "Modified file: $relative_path"
-    else
-        log_error "No file found in asset directory to modify"
-        exit 1
-    fi
-    
-    # Run verify and capture output - should detect the modified file
-    local verify_output
-    invoke_command "Verify database with modified file" "$(get_cli_command) verify --db $test_copy_dir --yes" 0 "verify_output"
-    
-    # Check that verify detected the modified file
-    expect_output_value "$verify_output" "New:" "0" "No new files"
-    expect_output_value "$verify_output" "Unmodified:" "14" "Unmodified files"
-    expect_output_value "$verify_output" "Modified:" "1" "Modified file detected by verify"
-    expect_output_value "$verify_output" "Removed:" "0" "No removed files"
-    
-    # Clean up test copy
-    rm -rf "$test_copy_dir"
-    log_success "Cleaned up test database copy"
-    test_passed
-}
-
-test_database_replicate() {
-    local test_number="$1"
-    print_test_header "$test_number" "DATABASE REPLICATION"
-    
-    local replica_dir="$TEST_DB_DIR-replica"
-    log_info "Source database path: $TEST_DB_DIR"
-    log_info "Replica database path: $replica_dir"
-    
-    # Clean up any existing replica
-    if [ -d "$replica_dir" ]; then
-        log_info "Cleaning up existing replica directory"
-        rm -rf "$replica_dir"
-    fi
-    
-    # Run replicate command and capture output
-    local replicate_output
-    invoke_command "Replicate database" "$(get_cli_command) replicate --db $TEST_DB_DIR --dest $replica_dir --yes --force" 0 "replicate_output"
-    
-    # Check if replication was successful
-    expect_output_string "$replicate_output" "Replication completed successfully" "Database replication completed successfully"
-    
-    # Check expected values from replication output
-    expect_output_value "$replicate_output" "Total files imported:" "5" "Total files imported"
-    expect_output_value "$replicate_output" "Total files copied:" "14" "Files copied"
-    
-    # Check that replica was created
-    check_exists "$replica_dir" "Replica database directory"
-    check_exists "$replica_dir/.db" "Replica metadata directory"
-    check_exists "$replica_dir/.db/files.dat" "Replica tree file"
-    
-    # Verify original and replica have the same aggregate root hash
-    verify_root_hashes_match "$TEST_DB_DIR" "$replica_dir" "original and replica"
-    
-    # Verify original and replica have the same database ID
-    log_info "Verifying database IDs match for original and replica"
-    local source_id_output
-    local replica_id_output
-    invoke_command "Get source database ID" "$(get_cli_command) database-id --db $TEST_DB_DIR --yes" 0 "source_id_output"
-    invoke_command "Get replica database ID" "$(get_cli_command) database-id --db $replica_dir --yes" 0 "replica_id_output"
-    
-    local source_id=$(echo "$source_id_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    local replica_id=$(echo "$replica_id_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    
-    if [ "$source_id" = "$replica_id" ]; then
-        log_success "Database IDs match: $source_id"
-    else
-        log_error "Database IDs do not match"
-        log_error "Source ID: $source_id"
-        log_error "Replica ID: $replica_id"
-        exit 1
-    fi
-    
-    # Get source and replica summaries to compare files imported count
-    local source_summary
-    invoke_command "Get source database summary" "$(get_cli_command) summary --db $TEST_DB_DIR --yes" 0 "source_summary"
-    
-    local replica_summary
-    invoke_command "Get replica database summary" "$(get_cli_command) summary --db $replica_dir --yes" 0 "replica_summary"
-    
-    # Extract and compare files imported count
-    local source_files_imported=$(parse_numeric "$source_summary" "Files imported:")
-    local replica_files_imported=$(parse_numeric "$replica_summary" "Files imported:")
-    expect_value "$replica_files_imported" "$source_files_imported" "Replica files imported count matches source"
-    
-    # Check merkle tree order for both original and replica
-    check_merkle_tree_order "$replica_dir/.db/files.dat" "replica database"
-    
-    test_passed
-}
-
-test_verify_replica() {
-    local test_number="$1"
-    print_test_header "$test_number" "VERIFY REPLICA"
-    
-    local replica_dir="$TEST_DB_DIR-replica"
-    log_info "Source database path: $TEST_DB_DIR"
-    log_info "Replica database path: $replica_dir"
-    
-    # Check that replica exists from previous test
-    check_exists "$replica_dir" "Replica directory from previous test"
-    
-    # Verify replica contents match source
-    local replica_verify_output
-    invoke_command "Verify replica integrity" "$(get_cli_command) verify --db $replica_dir --yes" 0 "replica_verify_output"
-    
-    # Get source and replica summaries to compare file counts
-    local source_summary
-    invoke_command "Get source database summary" "$(get_cli_command) summary --db $TEST_DB_DIR --yes" 0 "source_summary"
-    
-    local replica_summary
-    invoke_command "Get replica database summary" "$(get_cli_command) summary --db $replica_dir --yes" 0 "replica_summary"
-    
-    # Extract and compare file counts
-    local source_files=$(parse_numeric "$source_summary" "Total files:")
-    local replica_files=$(parse_numeric "$replica_summary" "Total files:")
-    expect_value "$replica_files" "$source_files" "Replica file count matches source"
-    
-    # Extract and compare node counts
-    local source_nodes=$(parse_numeric "$source_summary" "Total nodes:")
-    local replica_nodes=$(parse_numeric "$replica_summary" "Total nodes:")
-    expect_value "$replica_nodes" "$source_nodes" "Replica node count matches source"
-    
-    # Verify the replica verify command also shows the expected counts
-    expect_output_value "$replica_verify_output" "Total files:" "$source_files" "Replica verify shows correct file count"
-    test_passed
-}
-
-test_database_replicate_second() {
-    local test_number="$1"
-    print_test_header "$test_number" "SECOND DATABASE REPLICATION - NO CHANGES"
-    
-    local replica_dir="$TEST_DB_DIR-replica"
-    log_info "Source database path: $TEST_DB_DIR"
-    log_info "Replica database path: $replica_dir"
-    
-    # Check that replica exists from previous test
-    check_exists "$replica_dir" "Replica directory from previous test"
-    
-    # Run second replicate command and capture output
-    local second_replication_output
-    invoke_command "Second replication (no changes)" "$(get_cli_command) replicate --db $TEST_DB_DIR --dest $replica_dir --yes --force" 0 "second_replication_output"
-    
-    # Check if replication was successful
-    expect_output_string "$second_replication_output" "Replication completed successfully" "Second replication completed successfully"
-    
-    # Check expected values from second replication output
-    expect_output_value "$second_replication_output" "Total files imported:" "5" "Total files imported"
-    expect_output_value "$second_replication_output" "Total files copied:" "0" "Files copied (all up to date)"
-    
-    # Verify original and replica still have the same aggregate root hash after second replication
-    log_info "Verifying original and replica still have the same root hash after second replication"
-    verify_root_hashes_match "$TEST_DB_DIR" "$replica_dir" "original and replica after second replication"
-    
-    # Check merkle tree order for replica
-    check_merkle_tree_order "$replica_dir/.db/files.dat" "replica database"
-    
-    test_passed
-}
-
-test_database_compare() {
-    local test_number="$1"
-    print_test_header "$test_number" "DATABASE COMPARISON"
-    
-    local replica_dir="$TEST_DB_DIR-replica"
-    log_info "Source database path: $TEST_DB_DIR"
-    log_info "Replica database path: $replica_dir"
-    
-    # Check that replica exists from previous tests
-    check_exists "$replica_dir" "Replica directory from previous tests"
-    
-    # Test comparison between original and replica (should show no differences)
-    local compare_output
-    invoke_command "Compare original database with replica" "$(get_cli_command) compare --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "compare_output"
-    
-    # Check that comparison shows no differences for identical databases
-    expect_output_string "$compare_output" "No differences detected" "No differences detected between databases"
-    
-    # Test comparison with self (database vs itself)
-    invoke_command "Compare database with itself" "$(get_cli_command) compare --db $TEST_DB_DIR --dest $TEST_DB_DIR --yes"
-    test_passed
-}
-
-test_compare_with_changes() {
-    local test_number="$1"
-    print_test_header "$test_number" "COMPARE WITH CHANGES"
-    
-    local replica_dir="$TEST_DB_DIR-replica"
-    log_info "Source database path: $TEST_DB_DIR"
-    log_info "Replica database path: $replica_dir"
-    
-    # Check that replica exists from previous tests
-    check_exists "$replica_dir" "Replica directory from previous tests"
-    
-    # Add a new asset to the original database to create a difference
-    local new_test_file="$TEST_FILES_DIR/test.webp"
-    local webp_add_output
-    invoke_command "Add new asset to original database" "$(get_cli_command) add --db $TEST_DB_DIR $new_test_file --verbose --yes" 0 "webp_add_output"
-    
-    # Validate the WEBP asset in the database
-    validate_database_assets "$TEST_DB_DIR" "$new_test_file" "image/webp" "image" "$webp_add_output"
-    
-    # Test comparison between original and replica (should show differences after adding new asset)
-    local compare_output
-    invoke_command "Compare original database with replica after changes" "$(get_cli_command) compare --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "compare_output"
-    
-    # Check that comparison detects the specific number of differences (new asset creates 8 differences)
-    expect_output_string "$compare_output" "Databases have 3 differences" "Databases have 3 differences after adding new asset"
-    test_passed
-}
-
-test_replicate_after_changes() {
-    local test_number="$1"
-    print_test_header "$test_number" "REPLICATE AFTER CHANGES"
-    
-    local replica_dir="$TEST_DB_DIR-replica"
-    log_info "Source database path: $TEST_DB_DIR"
-    log_info "Replica database path: $replica_dir"
-    
-    # Check that replica exists from previous tests
-    check_exists "$replica_dir" "Replica directory from previous tests"
-    
-    # Replicate the changes from original to replica
-    local replication_output
-    invoke_command "Replicate changes to replica" "$(get_cli_command) replicate --db $TEST_DB_DIR --dest $replica_dir --yes --force" 0 "replication_output"
-    
-    # Check that the 8 changed files were replicated
-    expect_output_value "$replication_output" "Total files copied:" "3" "Files copied (the changes)"
-    
-    # Run compare command to verify databases are now identical again
-    local compare_output
-    invoke_command "Compare databases after replication" "$(get_cli_command) compare --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "compare_output"
-    
-    # Check that comparison shows no differences after replication
-    expect_output_string "$compare_output" "No differences detected" "No differences detected after replicating changes"
-    
-    # Verify original and replica have the same aggregate root hash after replication
-    log_info "Verifying original and replica have the same root hash after replication"
-    verify_root_hashes_match "$TEST_DB_DIR" "$replica_dir" "original and replica after replication"
-    
-    # Check merkle tree order for replica
-    check_merkle_tree_order "$replica_dir/.db/files.dat" "replica database"
-    
-    test_passed
-}
-
-test_cannot_create_over_existing() {
-    local test_number="$1"
-    print_test_header "$test_number" "CANNOT CREATE DATABASE OVER EXISTING"
-    
-    log_info "Database path: $TEST_DB_DIR"
-    
-    invoke_command "Fail to create database over existing" "$(get_cli_command) init --db $TEST_DB_DIR --yes" 1
-    test_passed
-}
-
-test_repair_ok_database() {
-    local test_number="$1"
-    print_test_header "$test_number" "REPAIR OK DATABASE (NO CHANGES)"
-    
-    local replica_dir="$TEST_DB_DIR-replica"
-    log_info "Database path: $TEST_DB_DIR"
-    log_info "Source database path (for repair): $replica_dir"
-    
-    # Check that replica exists from previous tests
-    check_exists "$replica_dir" "Replica directory from previous tests"
-    
-    # Run repair on the intact database using replica as source
-    local repair_output
-    invoke_command "Repair intact database" "$(get_cli_command) repair --db $TEST_DB_DIR --source $replica_dir --yes" 0 "repair_output"
-    
-    # Check that repair reports no issues found
-    expect_output_string "$repair_output" "Database repair completed - no issues found" "Repair of OK database shows no issues"
-    expect_output_value "$repair_output" "Repaired:" "0" "No files repaired"
-    expect_output_value "$repair_output" "Unrepaired:" "0" "No files unrepaired"
-    expect_output_value "$repair_output" "Modified:" "0" "No files modified"
-    expect_output_value "$repair_output" "Removed:" "0" "No files removed"
-    test_passed
-}
-
-test_remove_asset() {
-    local test_number="$1"
-    print_test_header "$test_number" "REMOVE ASSET BY ID"
-    
-    log_info "Database path: $TEST_DB_DIR"
-    
-    # Find an asset ID to remove by listing the asset directory
-    local assets_dir="$TEST_DB_DIR/asset"
-    local test_asset_id=""
-    
-    if [ -d "$assets_dir" ]; then
-        test_asset_id=$(ls "$assets_dir" | head -1)
-        log_info "Found asset files in asset directory"
-    fi
-    
-    if [ -z "$test_asset_id" ]; then
-        # Fallback: try to get a list of assets using the list command
-        local list_output
-        if invoke_command "List assets to find available asset IDs" "$(get_cli_command) list --db $TEST_DB_DIR --page-size 50 --yes" 0 "list_output"; then
-            # Extract the first asset ID from the list output
-            test_asset_id=$(echo "$list_output" | grep -o "[0-9a-f]\{8\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{12\}" | head -1)
-        fi
-    fi
-    
-    if [ -z "$test_asset_id" ]; then
-        log_error "Could not find any asset ID to test removal with"
-        exit 1
-    fi
-    
-    log_info "Using asset ID for removal test: $test_asset_id"
-    
-    # Get initial database summary before removal
-    local before_summary
-    invoke_command "Get database summary before removal" "$(get_cli_command) summary --db $TEST_DB_DIR --yes" 0 "before_summary"
-    local files_before=$(parse_numeric "$before_summary" "Files imported:")
-    
-    # Remove the asset
-    local remove_output
-    invoke_command "Remove asset from database" "$(get_cli_command) remove --db $TEST_DB_DIR $test_asset_id --verbose --yes" 0 "remove_output"
-    
-    # Check that removal was successful
-    expect_output_string "$remove_output" "Successfully removed asset" "Asset removal success message"
-    
-    # Get database summary after removal
-    local after_summary
-    invoke_command "Get database summary after removal" "$(get_cli_command) summary --db $TEST_DB_DIR --yes" 0 "after_summary"
-    local files_after=$(parse_numeric "$after_summary" "Files imported:")
-    
-    # Verify one less asset in the database
-    local expected_files=$((files_before - 1))
-    expect_value "$files_after" "$expected_files" "Asset count decreased by 1 after removal"
-    
-    # Try to export the removed asset (should fail)
-    invoke_command "Try to export removed asset (should fail)" "$(get_cli_command) export --db $TEST_DB_DIR $test_asset_id $TEST_TMP_DIR/should-fail.png --yes" 1
-    
-    # Verify the asset files no longer exist in storage
-    local original_file="$TEST_DB_DIR/asset/$test_asset_id"
-    local display_file="$TEST_DB_DIR/display/$test_asset_id"
-    local thumb_file="$TEST_DB_DIR/thumb/$test_asset_id"
-    
-    log_info "Checking that all asset files have been deleted from storage..."
-    
-    # Check original asset file
-    if [ -f "$original_file" ]; then
-        log_error "Original asset file still exists after removal: $original_file"
-        log_error "File size: $(stat -c%s "$original_file" 2>/dev/null || echo "unknown")"
-        log_error "File permissions: $(stat -c%A "$original_file" 2>/dev/null || echo "unknown")"
-        exit 1
-    else
-        log_success "Original asset file removed from storage: $original_file"
-    fi
-    
-    # Check display version file
-    if [ -f "$display_file" ]; then
-        log_error "Display asset file still exists after removal: $display_file"
-        log_error "File size: $(stat -c%s "$display_file" 2>/dev/null || echo "unknown")"
-        log_error "File permissions: $(stat -c%A "$display_file" 2>/dev/null || echo "unknown")"
-        exit 1
-    else
-        log_success "Display asset file removed from storage: $display_file"
-    fi
-    
-    # Check thumbnail file
-    if [ -f "$thumb_file" ]; then
-        log_error "Thumbnail asset file still exists after removal: $thumb_file"
-        log_error "File size: $(stat -c%s "$thumb_file" 2>/dev/null || echo "unknown")"
-        log_error "File permissions: $(stat -c%A "$thumb_file" 2>/dev/null || echo "unknown")"
-        exit 1
-    else
-        log_success "Thumbnail asset file removed from storage: $thumb_file"
-    fi
-    
-    
-    # Additional comprehensive check: scan all directories for any files containing the asset ID
-    log_info "Performing comprehensive scan for any remaining files with asset ID..."
-    local remaining_files=""
-    
-    # Check asset directory
-    if [ -d "$TEST_DB_DIR/asset" ]; then
-        remaining_files=$(find "$TEST_DB_DIR/asset" -name "*$test_asset_id*" 2>/dev/null || true)
-        if [ -n "$remaining_files" ]; then
-            log_error "Found remaining files in asset directory:"
-            echo "$remaining_files"
-            exit 1
-        fi
-    fi
-    
-    # Check display directory
-    if [ -d "$TEST_DB_DIR/display" ]; then
-        remaining_files=$(find "$TEST_DB_DIR/display" -name "*$test_asset_id*" 2>/dev/null || true)
-        if [ -n "$remaining_files" ]; then
-            log_error "Found remaining files in display directory:"
-            echo "$remaining_files"
-            exit 1
-        fi
-    fi
-    
-    # Check thumb directory
-    if [ -d "$TEST_DB_DIR/thumb" ]; then
-        remaining_files=$(find "$TEST_DB_DIR/thumb" -name "*$test_asset_id*" 2>/dev/null || true)
-        if [ -n "$remaining_files" ]; then
-            log_error "Found remaining files in thumb directory:"
-            echo "$remaining_files"
-            exit 1
-        fi
-    fi
-    
-    # Check metadata directory
-    if [ -d "$TEST_DB_DIR/metadata" ]; then
-        remaining_files=$(find "$TEST_DB_DIR/metadata" -name "*$test_asset_id*" 2>/dev/null || true)
-        if [ -n "$remaining_files" ]; then
-            log_error "Found remaining files in metadata directory:"
-            echo "$remaining_files"
-            exit 1
-        fi
-    fi
-    
-    # Check the entire database directory recursively for any missed files
-    local all_remaining_files=$(find "$TEST_DB_DIR" -name "*$test_asset_id*" -not -path "*/.db/*" 2>/dev/null || true)
-    if [ -n "$all_remaining_files" ]; then
-        log_error "Found remaining files containing asset ID in database directory:"
-        echo "$all_remaining_files"
-        log_error "These files should have been removed during asset deletion"
-        exit 1
-    fi
-    
-    log_success "Comprehensive file deletion check passed - no remaining files found for asset $test_asset_id"
-    
-    # Verify that the asset ID is no longer in the database listing
-    log_info "Verifying asset ID is no longer in database listing..."
-    local ls_output
-    invoke_command "List database contents after removal" "$(get_cli_command) list --db $TEST_DB_DIR --yes" 0 "ls_output"
-    
-    # Check that the removed asset ID is not in the output
-    if echo "$ls_output" | grep -q "$test_asset_id"; then
-        log_error "Asset ID $test_asset_id still appears in database listing after removal"
-        log_error "Database listing output:"
-        echo "$ls_output"
-        exit 1
-    else
-        log_success "Asset ID $test_asset_id no longer appears in database listing"
-    fi
-    
-    # Run verify to make sure the database is still in a good state
-    local verify_output
-    invoke_command "Verify database after asset removal" "$(get_cli_command) verify --db $TEST_DB_DIR --yes" 0 "verify_output"
-    
-    # The database should still be consistent
-    expect_output_value "$verify_output" "New:" "0" "No new files after removal"
-    expect_output_value "$verify_output" "Modified:" "0" "No modified files after removal"
-    
-    log_success "Asset removal test completed successfully"
-    test_passed
-}
-
-test_repair_damaged_database() {
-    local test_number="$1"
-    print_test_header "$test_number" "REPAIR DAMAGED DATABASE"
-    
-    local test_dir=$(get_test_dir "$test_number")
-    mkdir -p "$test_dir"
-    local replica_dir="$TEST_DB_DIR-replica"
-    local damaged_dir="$test_dir/test-db-damaged"
-    log_info "Damaged database path: $damaged_dir"
-    log_info "Source database path (for repair): $replica_dir"
-    
-    # Check that replica exists from previous tests
-    check_exists "$replica_dir" "Replica directory from previous tests"
-    
-    # Create a copy of the database to damage
-    log_info "Creating copy of database to damage"
-    rm -rf "$damaged_dir"
-    log_info "Copying database: cp -r \"$TEST_DB_DIR\" \"$damaged_dir\""
-    cp -r "$TEST_DB_DIR" "$damaged_dir"
-    
-    # Damage the database by:
-    # 1. Deleting one file
-    local file_to_delete=$(find "$damaged_dir/asset" -type f | head -1)
-    if [ -n "$file_to_delete" ]; then
-        local relative_path="${file_to_delete#$damaged_dir/}"
-        rm "$file_to_delete"
-        log_info "Deleted file to simulate damage: $relative_path"
-    else
-        log_error "No file found in asset directory to delete"
-        exit 1
-    fi
-    
-    # 2. Corrupting another file (if available)
-    local file_to_corrupt=$(find "$damaged_dir/asset" -type f | head -1)
-    if [ -n "$file_to_corrupt" ]; then
-        local relative_path="${file_to_corrupt#$damaged_dir/}"
-        echo "CORRUPTED FILE CONTENT - THIS IS NOT THE ORIGINAL DATA" > "$file_to_corrupt"
-        log_info "Corrupted file to simulate damage: $relative_path"
-    fi
-    
-    # Run verify to detect the damage
-    log_info "Running verify to detect damage..."
-    local verify_output
-    invoke_command "Verify damaged database" "$(get_cli_command) verify --db $damaged_dir --yes --full" 0 "verify_output"
-    
-    # Verify should detect issues (asset and/or database file problems)
-    expect_output_string "$verify_output" "verification found issues" "Verify detects damage"
-    
-    # Run repair to fix the issues
-    log_info "Running repair to fix issues..."
-    local repair_output
-    invoke_command "Repair damaged database" "$(get_cli_command) repair --db $damaged_dir --source $replica_dir --yes --full" 0 "repair_output"
-    
-    # Repair should fix the issues
-    expect_output_string "$repair_output" "Database repair completed successfully" "Repair completes successfully"
-    
-    # Should have repaired at least one file
-    local repaired_count=$(parse_numeric "$repair_output" "Repaired:")
-    if [ "$repaired_count" -gt 0 ]; then
-        log_success "Repair fixed $repaired_count files"
-    else
-        log_error "Repair should have fixed at least one file but repaired count is $repaired_count"
-        exit 1
-    fi
-    
-    # Verify the repair was successful
-    log_info "Verifying repair was successful..."
-    local final_verify_output
-    invoke_command "Verify repaired database" "$(get_cli_command) verify --db $damaged_dir --yes" 0 "final_verify_output"
-    
-    expect_output_string "$final_verify_output" "Database verification passed - all files are intact" "Repaired database verifies successfully"
-    
-    # Check merkle tree order for repaired database
-    check_merkle_tree_order "$damaged_dir/.db/files.dat" "repaired database"
-    
-    # Clean up damaged database copy
-    rm -rf "$damaged_dir"
-    log_success "Cleaned up damaged database copy"
-    test_passed
-}
-
-
-
-test_v2_database_readonly_commands() {
-    local test_number="$1"
-    print_test_header "$test_number" "V2 DATABASE READONLY COMMANDS"
-    
-    local v2_db_dir="../../test/dbs/v2"
-    log_info "Database path: $v2_db_dir"
-    
-    # Check that v2 database exists
-    check_exists "$v2_db_dir" "V2 test database directory"
-    check_exists "$v2_db_dir/metadata" "V2 database metadata directory"
-    
-    # Test that summary command rejects v2 database (only upgrade can load old DBs)
-    local summary_output
-    invoke_command "Run summary on v2 database (should fail)" "$(get_cli_command) summary --db $v2_db_dir --yes" 1 "summary_output"
-    expect_output_string "$summary_output" "upgrade" "Summary on v2 suggests running psi upgrade"
-    log_success "Summary correctly rejected v2 database"
-    
-    # Test that verify command rejects v2 database (only upgrade can load old DBs)
-    local verify_output
-    invoke_command "Run verify on v2 database (should fail)" "$(get_cli_command) verify --db $v2_db_dir --yes" 1 "verify_output"
-    expect_output_string "$verify_output" "upgrade" "Verify on v2 suggests running psi upgrade"
-    log_success "Verify correctly rejected v2 database"
-    
-    test_passed
-}
-
-test_v2_database_write_commands_fail() {
-    local test_number="$1"
-    print_test_header "$test_number" "V2 DATABASE WRITE COMMANDS FAIL"
-    
-    local v2_db_dir="../../test/dbs/v2"
-    log_info "Database path: $v2_db_dir"
-    
-    # Check that v2 database exists
-    check_exists "$v2_db_dir" "V2 test database directory"
-    
-    # Test that add command fails on v2 database with version error
-    local add_output
-    invoke_command "Run add on v2 database (should fail)" "$(get_cli_command) add $TEST_FILES_DIR/test.png --db $v2_db_dir --yes" 1 "add_output"
-    
-    # Check that error message mentions upgrade
-    expect_output_string "$add_output" "upgrade" "Add command error message suggests running upgrade command"
-    log_success "Add command correctly rejected v2 database"
-    
-    # Test that remove command fails on v2 database with version error
-    local remove_output
-    invoke_command "Run remove on v2 database (should fail)" "$(get_cli_command) remove 27165d3c-207b-46b6-ab4e-bc92a09aeda3 --db $v2_db_dir --yes" 1 "remove_output"
-    
-    # Check that error message mentions upgrade
-    expect_output_string "$remove_output" "upgrade" "Remove command error message suggests running upgrade command"
-    log_success "Remove command correctly rejected v2 database"
-    
-    test_passed
-}
-
-test_v2_database_upgrade() {
-    local test_number="$1"
-    print_test_header "$test_number" "V2 DATABASE UPGRADE TO V6"
-    
-    local test_dir=$(get_test_dir "$test_number")
-    mkdir -p "$test_dir"
-    local v2_db_dir="../../test/dbs/v2"
-    local temp_v2_dir="$test_dir/test-v2-upgrade"
-    log_info "Source database path: $v2_db_dir"
-    log_info "Temporary upgrade database path: $temp_v2_dir"
-    
-    # Check that v2 database exists
-    check_exists "$v2_db_dir" "V2 test database directory"
-    
-    # Create a copy of v2 database for upgrade testing
-    log_info "Creating copy of v2 database for upgrade testing"
-    rm -rf "$temp_v2_dir"
-    log_info "Copying database: cp -r \"$v2_db_dir\" \"$temp_v2_dir\""
-    cp -r "$v2_db_dir" "$temp_v2_dir"
-    
-    # Test upgrade command on v2 database
-    local upgrade_output
-    invoke_command "Upgrade v2 database to v6" "$(get_cli_command) upgrade --db $temp_v2_dir --yes" 0 "upgrade_output"
-    
-    # Check that upgrade was successful
-    expect_output_string "$upgrade_output" "Database upgraded successfully to version 6" "Upgrade completed successfully"
-    
-    # Verify the upgraded database is now version 6
-    local summary_output
-    invoke_command "Check upgraded database version" "$(get_cli_command) summary --db $temp_v2_dir --yes" 0 "summary_output"
-    
-    expect_output_string "$summary_output" "Database version: 6" "Upgraded database is now version 6"
-    
-    # Test that verify command now works on upgraded database
-    local verify_output
-    invoke_command "Verify upgraded database" "$(get_cli_command) verify --db $temp_v2_dir --yes" 0 "verify_output"
-    
-    expect_output_string "$verify_output" "Database verification passed" "Upgraded database verifies successfully"
-    
-    # Check merkle tree order for upgraded database
-    check_merkle_tree_order "$temp_v2_dir/.db/files.dat" "upgraded v2 database"
-    
-    # Clean up temporary database
-    rm -rf "$temp_v2_dir"
-    log_success "Cleaned up temporary v2 upgrade database"
-    test_passed
-}
-
-test_v3_database_upgrade() {
-    local test_number="$1"
-    print_test_header "$test_number" "V3 DATABASE UPGRADE TO V6"
-    
-    local test_dir=$(get_test_dir "$test_number")
-    mkdir -p "$test_dir"
-    local v3_db_dir="../../test/dbs/v3"
-    local temp_v3_dir="$test_dir/test-v3-upgrade"
-    log_info "Source database path: $v3_db_dir"
-    log_info "Temporary upgrade database path: $temp_v3_dir"
-    
-    # Check that v3 database exists
-    check_exists "$v3_db_dir" "V3 test database directory"
-    
-    # Create a copy of v3 database for upgrade testing
-    log_info "Creating copy of v3 database for upgrade testing"
-    rm -rf "$temp_v3_dir"
-    log_info "Copying database: cp -r \"$v3_db_dir\" \"$temp_v3_dir\""
-    cp -r "$v3_db_dir" "$temp_v3_dir"
-    
-    # Test upgrade command on v3 database
-    local upgrade_output
-    invoke_command "Upgrade v3 database to v6" "$(get_cli_command) upgrade --db $temp_v3_dir --yes" 0 "upgrade_output"
-    
-    # Check that upgrade was successful
-    expect_output_string "$upgrade_output" "Database upgraded successfully to version 6" "Upgrade completed successfully"
-    
-    # Verify the upgraded database is now version 6
-    local summary_output
-    invoke_command "Check upgraded database version" "$(get_cli_command) summary --db $temp_v3_dir --yes" 0 "summary_output"
-    
-    expect_output_string "$summary_output" "Database version: 6" "Upgraded database is now version 6"
-    
-    # Test that verify command now works on upgraded database
-    local verify_output
-    invoke_command "Verify upgraded database" "$(get_cli_command) verify --db $temp_v3_dir --yes" 0 "verify_output"
-    
-    expect_output_string "$verify_output" "Database verification passed" "Upgraded database verifies successfully"
-    
-    # Check merkle tree order for upgraded database
-    check_merkle_tree_order "$temp_v3_dir/.db/files.dat" "upgraded v3 database"
-    
-    # Clean up temporary database
-    rm -rf "$temp_v3_dir"
-    log_success "Cleaned up temporary v3 upgrade database"
-    test_passed
-}
-
-test_v4_database_upgrade() {
-    local test_number="$1"
-    print_test_header "$test_number" "V4 DATABASE UPGRADE TO V6"
-    
-    local test_dir=$(get_test_dir "$test_number")
-    mkdir -p "$test_dir"
-    # Use the existing v4 database directly
-    local v4_db_dir="../../test/dbs/v4"
-    local temp_v4_dir="$test_dir/test-v4-upgrade"
-    log_info "Source database path: $v4_db_dir"
-    log_info "Temporary upgrade database path: $temp_v4_dir"
-    
-    # Check that v4 database exists
-    check_exists "$v4_db_dir" "V4 test database directory"
-    
-    # Create a copy of v4 database for testing
-    log_info "Creating copy of v4 database for upgrade testing"
-    rm -rf "$temp_v4_dir"
-    log_info "Copying database: cp -r \"$v4_db_dir\" \"$temp_v4_dir\""
-    cp -r "$v4_db_dir" "$temp_v4_dir"
-    
-    # Test upgrade command on v4 database
-    local upgrade_output
-    invoke_command "Upgrade v4 database to v6" "$(get_cli_command) upgrade --db $temp_v4_dir --yes" 0 "upgrade_output"
-    
-    # Check that upgrade was successful
-    expect_output_string "$upgrade_output" "Database upgraded successfully to version 6" "Upgrade completed successfully"
-    
-    # Verify the upgraded database is now version 6
-    local summary_output
-    invoke_command "Check upgraded database version" "$(get_cli_command) summary --db $temp_v4_dir --yes" 0 "summary_output"
-    
-    expect_output_string "$summary_output" "Database version: 6" "Upgraded database is now version 6"
-    
-    # Test that verify command still works
-    local verify_output
-    invoke_command "Verify upgraded database" "$(get_cli_command) verify --db $temp_v4_dir --yes" 0 "verify_output"
-    
-    expect_output_string "$verify_output" "Database verification passed" "Upgraded database verifies successfully"
-    
-    # Check merkle tree order for upgraded database
-    check_merkle_tree_order "$temp_v4_dir/.db/files.dat" "upgraded v4 database"
-    
-    # Clean up temporary database
-    rm -rf "$temp_v4_dir"
-    log_success "Cleaned up temporary v4 upgrade database"
-    test_passed
-}
-
-test_v5_database_upgrade() {
-    local test_number="$1"
-    print_test_header "$test_number" "V5 DATABASE UPGRADE TO V6"
-    
-    local test_dir=$(get_test_dir "$test_number")
-    mkdir -p "$test_dir"
-    local v5_db_dir="../../test/dbs/v5"
-    local temp_v5_dir="$test_dir/test-v5-upgrade"
-    log_info "Source database path: $v5_db_dir"
-    log_info "Temporary upgrade database path: $temp_v5_dir"
-    
-    check_exists "$v5_db_dir" "V5 test database directory"
-    
-    log_info "Creating copy of v5 database for upgrade testing"
-    rm -rf "$temp_v5_dir"
-    log_info "Copying database: cp -r \"$v5_db_dir\" \"$temp_v5_dir\""
-    cp -r "$v5_db_dir" "$temp_v5_dir"
-    
-    local upgrade_output
-    invoke_command "Upgrade v5 database to v6" "$(get_cli_command) upgrade --db $temp_v5_dir --yes" 0 "upgrade_output"
-    
-    expect_output_string "$upgrade_output" "Database upgraded successfully to version 6" "Upgrade completed successfully"
-    
-    local summary_output
-    invoke_command "Check database version after upgrade" "$(get_cli_command) summary --db $temp_v5_dir --yes" 0 "summary_output"
-    
-    expect_output_string "$summary_output" "Database version: 6" "Upgraded database is now version 6"
-    
-    local verify_output
-    invoke_command "Verify upgraded database" "$(get_cli_command) verify --db $temp_v5_dir --yes" 0 "verify_output"
-    
-    expect_output_string "$verify_output" "Database verification passed" "Upgraded database verifies successfully"
-    
-    check_merkle_tree_order "$temp_v5_dir/.db/files.dat" "upgraded v5 database"
-    
-    rm -rf "$temp_v5_dir"
-    log_success "Cleaned up temporary v5 upgrade database"
-    test_passed
-}
-
-test_v6_database_upgrade_no_effect() {
-    local test_number="$1"
-    print_test_header "$test_number" "V6 DATABASE UPGRADE HAS NO EFFECT"
-    
-    local test_dir=$(get_test_dir "$test_number")
-    mkdir -p "$test_dir"
-    local v6_db_dir="../../test/dbs/v6"
-    local temp_v6_dir="$test_dir/test-v6-upgrade"
-    log_info "Source database path: $v6_db_dir"
-    log_info "Temporary upgrade database path: $temp_v6_dir"
-    
-    check_exists "$v6_db_dir" "V6 test database directory"
-    
-    log_info "Creating copy of v6 database for upgrade testing"
-    rm -rf "$temp_v6_dir"
-    log_info "Copying database: cp -r \"$v6_db_dir\" \"$temp_v6_dir\""
-    cp -r "$v6_db_dir" "$temp_v6_dir"
-    
-    local upgrade_output
-    invoke_command "Upgrade v6 database (should be no-op)" "$(get_cli_command) upgrade --db $temp_v6_dir --yes" 0 "upgrade_output"
-    
-    expect_output_string "$upgrade_output" "Database is already at the latest version (6)" "Upgrade reports database is already current"
-    
-    local summary_output
-    invoke_command "Check database version after upgrade" "$(get_cli_command) summary --db $temp_v6_dir --yes" 0 "summary_output"
-    
-    expect_output_string "$summary_output" "Database version: 6" "Database is still version 6"
-    
-    local verify_output
-    invoke_command "Verify v6 database after upgrade" "$(get_cli_command) verify --db $temp_v6_dir --yes" 0 "verify_output"
-    
-    expect_output_string "$verify_output" "Database verification passed" "V6 database verifies successfully after upgrade"
-    
-    check_merkle_tree_order "$temp_v6_dir/.db/files.dat" "v6 upgrade test database"
-    
-    rm -rf "$temp_v6_dir"
-    log_success "Cleaned up temporary v6 upgrade database"
-    test_passed
-}
-
-test_v6_database_add_file() {
-    local test_number="$1"
-    print_test_header "$test_number" "V6 DATABASE ADD FILE AND VERIFY INTEGRITY"
-    
-    local test_dir=$(get_test_dir "$test_number")
-    mkdir -p "$test_dir"
-    local v6_db_dir="../../test/dbs/v6"
-    local temp_v6_dir="$test_dir/test-v6-add-file"
-    local test_file="../../test/test.png"
-    log_info "Source database path: $v6_db_dir"
-    log_info "Temporary test database path: $temp_v6_dir"
-    
-    check_exists "$v6_db_dir" "V6 test database directory"
-    check_exists "$test_file" "Test image file"
-    
-    log_info "Creating copy of v6 database for file addition testing"
-    rm -rf "$temp_v6_dir"
-    log_info "Copying database: cp -r \"$v6_db_dir\" \"$temp_v6_dir\""
-    cp -r "$v6_db_dir" "$temp_v6_dir"
-    
-    local initial_summary_output
-    invoke_command "Get initial asset count" "$(get_cli_command) summary --db $temp_v6_dir --yes" 0 "initial_summary_output"
-    
-    local initial_count
-    initial_count=$(echo "$initial_summary_output" | grep -o "Total files:[[:space:]]*[0-9]*" | grep -o "[0-9]*")
-    log_info "Initial asset count: $initial_count"
-    
-    local add_output
-    invoke_command "Add test file to v6 database" "$(get_cli_command) add --db $temp_v6_dir $test_file --yes" 0 "add_output"
-    
-    expect_output_string "$add_output" "Added" "File was added successfully"
-    
-    local final_summary_output
-    invoke_command "Get final asset count" "$(get_cli_command) summary --db $temp_v6_dir --yes" 0 "final_summary_output"
-    
-    local final_count
-    final_count=$(echo "$final_summary_output" | grep -o "Total files:[[:space:]]*[0-9]*" | grep -o "[0-9]*")
-    log_info "Final asset count: $final_count"
-    
-    if [ -z "$final_count" ] || ! [[ "$final_count" =~ ^[0-9]+$ ]]; then
-        log_error "Failed to extract final asset count from summary output"
-        test_failed "failed to extract final asset count"
-        return 1
-    fi
-    
-    local expected_count=$((initial_count + 3))
-    if [ "$final_count" -eq "$expected_count" ]; then
-        log_success "Asset count increased correctly from $initial_count to $final_count"
-    else
-        log_error "Asset count mismatch: expected $expected_count, got $final_count"
-        test_failed
-        return 1
-    fi
-    
-    local verify_output
-    invoke_command "Verify database integrity after adding file" "$(get_cli_command) verify --db $temp_v6_dir --yes" 0 "verify_output"
-    
-    expect_output_string "$verify_output" "Database verification passed" "Database maintains integrity after adding file"
-    
-    expect_output_string "$final_summary_output" "Database version: 6" "Database is still version 6"
-    
-    local list_output
-    invoke_command "List assets to verify new file" "$(get_cli_command) list --db $temp_v6_dir --yes" 0 "list_output"
-    
-    expect_output_string "$list_output" "test.jpg" "Test file appears in asset listing"
-    
-    check_merkle_tree_order "$temp_v6_dir/.db/files.dat" "v6 add-file test database"
-    
-    rm -rf "$temp_v6_dir"
-    log_success "Cleaned up temporary v6 add-file database"
-    test_passed
-}
-
-test_sync_original_to_copy() {
-    local test_number="$1"
-    print_test_header "$test_number" "SYNC DATABASE - ORIGINAL TO COPY"
-    
-    local test_dir=$(get_test_dir "$test_number")
-    mkdir -p "$test_dir"
-    local v6_db_dir="../../test/dbs/v6"
-    local original_dir="$test_dir/test-sync-original"
-    local copy_dir="$test_dir/test-sync-copy"
-    local test_file="../../test/test.png"
-    log_info "Source database path: $v6_db_dir"
-    log_info "Original database path: $original_dir"
-    log_info "Copy database path: $copy_dir"
-    
-    check_exists "$v6_db_dir" "V6 test database directory"
-    check_exists "$test_file" "Test image file"
-    
-    log_info "Creating original database from v6 to $original_dir"
-    rm -rf "$original_dir"
-    log_info "Copying database: cp -r \"$v6_db_dir\" \"$original_dir\""
-    cp -r "$v6_db_dir" "$original_dir"
-    
-    # Create the copy database using replicate command
-    log_info "Creating copy database using replicate command to $copy_dir"
-    rm -rf "$copy_dir"
-    local replicate_output
-    invoke_command "Replicate to create copy" "$(get_cli_command) replicate --db $original_dir --dest $copy_dir --yes --force" 0 "replicate_output"
-    
-    # Verify both databases exist
-    check_exists "$original_dir" "Original database directory"
-    check_exists "$copy_dir" "Copy database directory"
-    
-    # Get root hashes and verify they are the same
-    log_info "Verifying original and copy have the same root hash"
-    local original_hash_output
-    local copy_hash_output
-    invoke_command "Get original database root hash" "$(get_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
-    invoke_command "Get copy database root hash" "$(get_cli_command) root-hash --db $copy_dir --yes" 0 "copy_hash_output"
-    
-    local original_hash=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    local copy_hash=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    
-    if [ "$original_hash" = "$copy_hash" ]; then
-        log_success "Original and copy databases have the same root hash: $original_hash"
-    else
-        log_error "Original and copy databases have different root hashes after replication"
-        log_error "Original hash: $original_hash"
-        log_error "Copy hash: $copy_hash"
-        exit 1
-    fi
-    
-    # Add a new file to the original database
-    log_info "Adding new file to original database"
-    local add_output
-    invoke_command "Add test file to original database" "$(get_cli_command) add --db $original_dir $test_file --yes" 0 "add_output"
-    
-    # Verify file was added
-    expect_output_string "$add_output" "Added" "File was added successfully to original"
-    
-    # Get root hashes and verify they are now different
-    log_info "Verifying original and copy now have different root hashes"
-    invoke_command "Get original database root hash after add" "$(get_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
-    invoke_command "Get copy database root hash (unchanged)" "$(get_cli_command) root-hash --db $copy_dir --yes" 0 "copy_hash_output"
-    
-    local original_hash_after=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    local copy_hash_before_sync=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    
-    if [ "$original_hash_after" != "$copy_hash_before_sync" ]; then
-        log_success "Original and copy databases have different root hashes after adding file"
-        log_info "Original hash: $original_hash_after"
-        log_info "Copy hash: $copy_hash_before_sync"
-    else
-        log_error "Original and copy databases should have different root hashes but they are the same"
-        exit 1
-    fi
-    
-    # Use sync command to update the copy
-    log_info "Using sync command to synchronize databases"
-    local sync_output
-    invoke_command "Sync original to copy" "$(get_cli_command) sync --db $original_dir --dest $copy_dir --yes" 0 "sync_output"
-    
-    # Verify sync completed
-    expect_output_string "$sync_output" "Sync completed successfully" "Sync completed successfully"
-    
-    # Get root hashes and verify they are now the same again
-    log_info "Verifying original and copy have the same root hash after sync"
-    invoke_command "Get original database root hash after sync" "$(get_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
-    invoke_command "Get copy database root hash after sync" "$(get_cli_command) root-hash --db $copy_dir --yes" 0 "copy_hash_output"
-    
-    local original_hash_final=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    local copy_hash_final=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    
-    if [ "$original_hash_final" = "$copy_hash_final" ]; then
-        log_success "Original and copy databases have the same root hash after sync: $original_hash_final"
-    else
-        log_error "Original and copy databases have different root hashes after sync"
-        log_error "Original hash: $original_hash_final"
-        log_error "Copy hash: $copy_hash_final"
-        exit 1
-    fi
-    
-    # Verify both databases pass integrity check
-    local verify_original_output
-    local verify_copy_output
-    invoke_command "Verify original database after sync" "$(get_cli_command) verify --db $original_dir --yes" 0 "verify_original_output"
-    invoke_command "Verify copy database after sync" "$(get_cli_command) verify --db $copy_dir --yes" 0 "verify_copy_output"
-    
-    expect_output_string "$verify_original_output" "Database verification passed" "Original database passes verification"
-    expect_output_string "$verify_copy_output" "Database verification passed" "Copy database passes verification"
-    
-    # Check merkle tree order for both databases
-    check_merkle_tree_order "$original_dir/.db/files.dat" "sync original database"
-    check_merkle_tree_order "$copy_dir/.db/files.dat" "sync copy database"
-    
-    # Clean up temporary databases
-    rm -rf "$original_dir"
-    rm -rf "$copy_dir"
-    log_success "Cleaned up temporary sync test databases"
-    test_passed
-}
-
-test_sync_copy_to_original() {
-    local test_number="$1"
-    print_test_header "$test_number" "SYNC DATABASE - COPY TO ORIGINAL (REVERSE)"
-    
-    local test_dir=$(get_test_dir "$test_number")
-    mkdir -p "$test_dir"
-    # TODO: This test is temporarily disabled in automatic runs until sync bidirectional functionality is working
-    # It can still be run individually with: ./smoke-tests.sh 34 or ./smoke-tests.sh sync-copy-to-original
-    
-    local v6_db_dir="../../test/dbs/v6"
-    local original_dir="$test_dir/test-sync-reverse-original"
-    local copy_dir="$test_dir/test-sync-reverse-copy"
-    local test_file="../../test/test.png"
-    log_info "Source database path: $v6_db_dir"
-    log_info "Original database path: $original_dir"
-    log_info "Copy database path: $copy_dir"
-    
-    check_exists "$v6_db_dir" "V6 test database directory"
-    check_exists "$test_file" "Test image file for reverse sync"
-    
-    log_info "Creating original database from v6 to $original_dir"
-    rm -rf "$original_dir"
-    log_info "Copying database: cp -r \"$v6_db_dir\" \"$original_dir\""
-    cp -r "$v6_db_dir" "$original_dir"
-    
-    # Create the copy database using replicate command
-    log_info "Creating copy database using replicate command to $copy_dir"
-    rm -rf "$copy_dir"
-    local replicate_output
-    invoke_command "Replicate to create copy" "$(get_cli_command) replicate --db $original_dir --dest $copy_dir --yes --force" 0 "replicate_output"
-    
-    # Verify both databases exist
-    check_exists "$original_dir" "Original database directory"
-    check_exists "$copy_dir" "Copy database directory"
-    
-    # Get root hashes and verify they are the same
-    log_info "Verifying original and copy have the same root hash"
-    local original_hash_output
-    local copy_hash_output
-    invoke_command "Get original database root hash" "$(get_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
-    invoke_command "Get copy database root hash" "$(get_cli_command) root-hash --db $copy_dir --yes" 0 "copy_hash_output"
-    
-    local original_hash=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    local copy_hash=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    
-    if [ "$original_hash" = "$copy_hash" ]; then
-        log_success "Original and copy databases have the same root hash: $original_hash"
-    else
-        log_error "Original and copy databases have different root hashes after replication"
-        log_error "Original hash: $original_hash"
-        log_error "Copy hash: $copy_hash"
-        exit 1
-    fi
-    
-    # Add a new file to the COPY database (reverse direction)
-    log_info "Adding new file to copy database (reverse sync test)"
-    local add_output
-    invoke_command "Add test file to copy database" "$(get_cli_command) add --db $copy_dir $test_file --yes" 0 "add_output"
-    
-    # Verify file was added
-    expect_output_string "$add_output" "Added" "File was added successfully to copy"
-    
-    # Get root hashes and verify they are now different
-    log_info "Verifying original and copy now have different root hashes"
-    invoke_command "Get original database root hash (unchanged)" "$(get_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
-    invoke_command "Get copy database root hash after add" "$(get_cli_command) root-hash --db $copy_dir --yes" 0 "copy_hash_output"
-    
-    local original_hash_before_sync=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    local copy_hash_after=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    
-    if [ "$original_hash_before_sync" != "$copy_hash_after" ]; then
-        log_success "Original and copy databases have different root hashes after adding file to copy"
-        log_info "Original hash: $original_hash_before_sync"
-        log_info "Copy hash: $copy_hash_after"
-    else
-        log_error "Original and copy databases should have different root hashes but they are the same"
-        exit 1
-    fi
-    
-    # Use sync command to sync from original (which will pull changes from copy)
-    # The sync command is bidirectional, so it should sync the file from copy to original
-    log_info "Using sync command to synchronize databases (bidirectional)"
-    local sync_output
-    invoke_command "Sync databases (copy changes to original)" "$(get_cli_command) sync --db $original_dir --dest $copy_dir --yes" 0 "sync_output"
-    
-    # Verify sync completed
-    expect_output_string "$sync_output" "Sync completed successfully" "Sync completed successfully"
-    
-    # Get root hashes and verify they are now the same again
-    log_info "Verifying original and copy have the same root hash after reverse sync"
-    invoke_command "Get original database root hash after sync" "$(get_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
-    invoke_command "Get copy database root hash after sync" "$(get_cli_command) root-hash --db $copy_dir --yes" 0 "copy_hash_output"
-    
-    local original_hash_final=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    local copy_hash_final=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    
-    if [ "$original_hash_final" = "$copy_hash_final" ]; then
-        log_success "Original and copy databases have the same root hash after reverse sync: $original_hash_final"
-    else
-        log_error "Original and copy databases have different root hashes after sync"
-        log_error "Original hash: $original_hash_final"
-        log_error "Copy hash: $copy_hash_final"
-        exit 1
-    fi
-    
-    # Verify that the original database now has the file that was added to the copy
-    log_info "Verifying the original database received the file from copy"
-    local original_list_output
-    invoke_command "List assets in original database" "$(get_cli_command) list --db $original_dir --yes" 0 "original_list_output"
-    
-    expect_output_string "$original_list_output" "test.png" "Synced file from copy (test.png) appears in original database"
-    expect_output_string "$original_list_output" "test.jpg" "Fixture file (test.jpg) still in original database"
-    
-    # Verify both databases pass integrity check
-    local verify_original_output
-    local verify_copy_output
-    invoke_command "Verify original database after reverse sync" "$(get_cli_command) verify --db $original_dir --yes" 0 "verify_original_output"
-    invoke_command "Verify copy database after reverse sync" "$(get_cli_command) verify --db $copy_dir --yes" 0 "verify_copy_output"
-    
-    expect_output_string "$verify_original_output" "Database verification passed" "Original database passes verification"
-    expect_output_string "$verify_copy_output" "Database verification passed" "Copy database passes verification"
-    
-    # Check merkle tree order for both databases
-    check_merkle_tree_order "$original_dir/.db/files.dat" "reverse sync original database"
-    check_merkle_tree_order "$copy_dir/.db/files.dat" "reverse sync copy database"
-    
-    # Clean up temporary databases
-    rm -rf "$original_dir"
-    rm -rf "$copy_dir"
-    log_success "Cleaned up temporary reverse sync test databases"
-    test_passed
-}
-
-test_sync_edit_field() {
-    local test_number="$1"
-    print_test_header "$test_number" "SYNC DATABASE - EDIT FIELD WITH BDB-CLI"
-    
-    local test_dir=$(get_test_dir "$test_number")
-    mkdir -p "$test_dir"
-    local v6_db_dir="../../test/dbs/v6"
-    local original_dir="$test_dir/test-sync-edit-original"
-    local copy_dir="$test_dir/test-sync-edit-copy"
-    log_info "Source database path: $v6_db_dir"
-    log_info "Original database path: $original_dir"
-    log_info "Copy database path: $copy_dir"
-    
-    # Hardcoded values from inspecting the v6 database
-    local record_id="89171cd9-a652-4047-b869-1154bf2c95a1"
-    local field_name="description"
-    local field_type="string"
-    local new_field_value="Test description edited by bdb-cli"
-    
-    check_exists "$v6_db_dir" "V6 test database directory"
-    
-    log_info "Creating original database from v6 to $original_dir"
-    rm -rf "$original_dir"
-    log_info "Copying database: cp -r \"$v6_db_dir\" \"$original_dir\""
-    cp -r "$v6_db_dir" "$original_dir"
-    
-    # Create the copy database using replicate command
-    log_info "Creating copy database using replicate command to $copy_dir"
-    rm -rf "$copy_dir"
-    local replicate_output
-    invoke_command "Replicate to create copy" "$(get_cli_command) replicate --db $original_dir --dest $copy_dir --yes --force" 0 "replicate_output"
-    
-    # Verify both databases exist
-    check_exists "$original_dir" "Original database directory"
-    check_exists "$copy_dir" "Copy database directory"
-    
-    # Get root hashes and verify they are the same
-    log_info "Verifying original and copy have the same root hash"
-    local original_hash_output
-    local copy_hash_output
-    invoke_command "Get original database root hash" "$(get_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
-    invoke_command "Get copy database root hash" "$(get_cli_command) root-hash --db $copy_dir --yes" 0 "copy_hash_output"
-    
-    local original_hash=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    local copy_hash=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    
-    if [ "$original_hash" = "$copy_hash" ]; then
-        log_success "Original and copy databases have the same root hash: $original_hash"
-    else
-        log_error "Original and copy databases have different root hashes after replication"
-        log_error "Original hash: $original_hash"
-        log_error "Copy hash: $copy_hash"
-        exit 1
-    fi
-    
-    # Edit a field in the original database using bdb-cli
-    log_info "Editing field '$field_name' in record '$record_id' using bdb-cli"
-    local edit_output
-    invoke_command "Edit field using bdb-cli" "$(get_bdb_command) edit $original_dir/.db/bson metadata $record_id $field_name $field_type \"$new_field_value\"" 0 "edit_output"
-    
-    # Verify the edit was successful
-    expect_output_string "$edit_output" "Successfully updated field" "Field edit was successful"
-    
-    # Verify the field was actually changed by reading it back
-    log_info "Verifying field was changed by reading record back"
-    local verify_record_output
-    verify_record_output=$($(get_bdb_command) record $original_dir/.db/bson metadata $record_id --all 2>&1)
-    local record_exit_code=$?
-    
-    if [ $record_exit_code -ne 0 ]; then
-        log_error "Failed to read record to verify edit"
-        echo "$verify_record_output"
-        exit 1
-    fi
-    
-    if echo "$verify_record_output" | grep -q "$new_field_value"; then
-        log_success "Record contains the new field value"
-    else
-        log_error "Record does not contain the new field value: $new_field_value"
-        echo "Record output:"
-        echo "$verify_record_output"
-        exit 1
-    fi
-    
-    # Get root hashes and verify they are now different
-    log_info "Verifying original and copy now have different root hashes after edit"
-    invoke_command "Get original database root hash after edit" "$(get_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
-    invoke_command "Get copy database root hash (unchanged)" "$(get_cli_command) root-hash --db $copy_dir --yes" 0 "copy_hash_output"
-    
-    local original_hash_after=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    local copy_hash_before_sync=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    
-    # Verify the original database root hash changed after the edit
-    if [ "$original_hash" != "$original_hash_after" ]; then
-        log_success "Original database root hash changed after edit"
-        log_info "Original hash before edit: $original_hash"
-        log_info "Original hash after edit: $original_hash_after"
-    else
-        log_error "Original database root hash should have changed after edit but it did not"
-        log_error "Hash before edit: $original_hash"
-        log_error "Hash after edit: $original_hash_after"
-        exit 1
-    fi
-    
-    if [ "$original_hash_after" != "$copy_hash_before_sync" ]; then
-        log_success "Original and copy databases have different root hashes after editing field"
-        log_info "Original hash: $original_hash_after"
-        log_info "Copy hash: $copy_hash_before_sync"
-    else
-        log_error "Original and copy databases should have different root hashes but they are the same"
-        exit 1
-    fi
-    
-    # Compare databases to detect the difference
-    log_info "Comparing databases to detect differences"
-    local compare_output
-    invoke_command "Compare databases before sync" "$(get_cli_command) compare --db $original_dir --dest $copy_dir --yes" 0 "compare_output"
-    
-    # Check that comparison detects differences (should show at least 1 difference)
-    expect_output_string "$compare_output" "differences" "Comparison detects differences between databases"
-    
-    # Use sync command to update the copy
-    log_info "Using sync command to synchronize databases"
-    local sync_output
-    invoke_command "Sync original to copy" "$(get_cli_command) sync --db $original_dir --dest $copy_dir --yes" 0 "sync_output"
-    
-    # Verify sync completed
-    expect_output_string "$sync_output" "Sync completed successfully" "Sync completed successfully"
-    
-    # Verify the copy database now has the edited field
-    log_info "Verifying copy database now has the edited field"
-    local copy_record_output
-    copy_record_output=$($(get_bdb_command) record $copy_dir/.db/bson metadata $record_id --all 2>&1)
-    local copy_record_exit_code=$?
-    
-    if [ $copy_record_exit_code -ne 0 ]; then
-        log_error "Failed to read record from copy to verify sync"
-        echo "$copy_record_output"
-        exit 1
-    fi
-    
-    if echo "$copy_record_output" | grep -q "$new_field_value"; then
-        log_success "Copy database contains the new field value"
-    else
-        log_error "Copy database does not contain the new field value: $new_field_value"
-        echo "Record output:"
-        echo "$copy_record_output"
-        exit 1
-    fi
-    
-    # Get root hashes and verify they are now the same again
-    log_info "Verifying original and copy have the same root hash after sync"
-    invoke_command "Get original database root hash after sync" "$(get_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
-    invoke_command "Get copy database root hash after sync" "$(get_cli_command) root-hash --db $copy_dir --yes" 0 "copy_hash_output"
-    
-    local original_hash_final=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    local copy_hash_final=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    
-    if [ "$original_hash_final" = "$copy_hash_final" ]; then
-        log_success "Original and copy databases have the same root hash after sync: $original_hash_final"
-    else
-        log_error "Original and copy databases have different root hashes after sync"
-        log_error "Original hash: $original_hash_final"
-        log_error "Copy hash: $copy_hash_final"
-        exit 1
-    fi
-    
-    # Compare databases again to verify no differences
-    log_info "Comparing databases again to verify no differences"
-    local compare_output_final
-    invoke_command "Compare databases after sync" "$(get_cli_command) compare --db $original_dir --dest $copy_dir --yes" 0 "compare_output_final"
-    
-    # Check that comparison shows no differences
-    expect_output_string "$compare_output_final" "No differences detected" "No differences detected after sync"
-    
-    # Verify both databases pass integrity check
-    local verify_original_output
-    local verify_copy_output
-    invoke_command "Verify original database after sync" "$(get_cli_command) verify --db $original_dir --yes" 0 "verify_original_output"
-    invoke_command "Verify copy database after sync" "$(get_cli_command) verify --db $copy_dir --yes" 0 "verify_copy_output"
-    
-    expect_output_string "$verify_original_output" "Database verification passed" "Original database passes verification"
-    expect_output_string "$verify_copy_output" "Database verification passed" "Copy database passes verification"
-    
-    # Check merkle tree order for both databases
-    check_merkle_tree_order "$original_dir/.db/files.dat" "sync edit original database"
-    check_merkle_tree_order "$copy_dir/.db/files.dat" "sync edit copy database"
-    
-    # Clean up temporary databases
-    rm -rf "$original_dir"
-    rm -rf "$copy_dir"
-    log_success "Cleaned up temporary sync edit test databases"
-    test_passed
-}
-
-test_sync_edit_field_reverse() {
-    local test_number="$1"
-    print_test_header "$test_number" "SYNC DATABASE - EDIT FIELD IN COPY WITH BDB-CLI (REVERSE)"
-    
-    local test_dir=$(get_test_dir "$test_number")
-    mkdir -p "$test_dir"
-    local v6_db_dir="../../test/dbs/v6"
-    local original_dir="$test_dir/test-sync-edit-reverse-original"
-    local copy_dir="$test_dir/test-sync-edit-reverse-copy"
-    log_info "Source database path: $v6_db_dir"
-    log_info "Original database path: $original_dir"
-    log_info "Copy database path: $copy_dir"
-    
-    # Hardcoded values from inspecting the v6 database
-    local record_id="89171cd9-a652-4047-b869-1154bf2c95a1"
-    local field_name="description"
-    local field_type="string"
-    local new_field_value="Test description edited in copy by bdb-cli"
-    
-    check_exists "$v6_db_dir" "V6 test database directory"
-    
-    log_info "Creating original database from v6 to $original_dir"
-    rm -rf "$original_dir"
-    log_info "Copying database: cp -r \"$v6_db_dir\" \"$original_dir\""
-    cp -r "$v6_db_dir" "$original_dir"
-    
-    # Create the copy database using replicate command
-    log_info "Creating copy database using replicate command to $copy_dir"
-    rm -rf "$copy_dir"
-    local replicate_output
-    invoke_command "Replicate to create copy" "$(get_cli_command) replicate --db $original_dir --dest $copy_dir --yes --force" 0 "replicate_output"
-    
-    # Verify both databases exist
-    check_exists "$original_dir" "Original database directory"
-    check_exists "$copy_dir" "Copy database directory"
-    
-    # Get root hashes and verify they are the same
-    log_info "Verifying original and copy have the same root hash"
-    local original_hash_output
-    local copy_hash_output
-    invoke_command "Get original database root hash" "$(get_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
-    invoke_command "Get copy database root hash" "$(get_cli_command) root-hash --db $copy_dir --yes" 0 "copy_hash_output"
-    
-    local original_hash=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    local copy_hash=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    
-    if [ "$original_hash" = "$copy_hash" ]; then
-        log_success "Original and copy databases have the same root hash: $original_hash"
-    else
-        log_error "Original and copy databases have different root hashes after replication"
-        log_error "Original hash: $original_hash"
-        log_error "Copy hash: $copy_hash"
-        exit 1
-    fi
-    
-    # Edit a field in the COPY database using bdb-cli (inverse of the original test)
-    log_info "Editing field '$field_name' in record '$record_id' in COPY database using bdb-cli"
-    local edit_output
-    invoke_command "Edit field in copy using bdb-cli" "$(get_bdb_command) edit $copy_dir/.db/bson metadata $record_id $field_name $field_type \"$new_field_value\"" 0 "edit_output"
-    
-    # Verify the edit was successful
-    expect_output_string "$edit_output" "Successfully updated field" "Field edit was successful"
-    
-    # Verify the field was actually changed by reading it back from copy
-    log_info "Verifying field was changed in copy by reading record back"
-    local verify_record_output
-    verify_record_output=$($(get_bdb_command) record $copy_dir/.db/bson metadata $record_id --all 2>&1)
-    local record_exit_code=$?
-    
-    if [ $record_exit_code -ne 0 ]; then
-        log_error "Failed to read record from copy to verify edit"
-        echo "$verify_record_output"
-        exit 1
-    fi
-    
-    if echo "$verify_record_output" | grep -q "$new_field_value"; then
-        log_success "Copy record contains the new field value"
-    else
-        log_error "Copy record does not contain the new field value: $new_field_value"
-        echo "Record output:"
-        echo "$verify_record_output"
-        exit 1
-    fi
-    
-    # Get root hashes and verify they are now different
-    log_info "Verifying original and copy now have different root hashes after edit in copy"
-    invoke_command "Get original database root hash (unchanged)" "$(get_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
-    invoke_command "Get copy database root hash after edit" "$(get_cli_command) root-hash --db $copy_dir --yes" 0 "copy_hash_output"
-    
-    local original_hash_before_sync=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    local copy_hash_after=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    
-    # Verify the copy database root hash changed after the edit
-    if [ "$copy_hash" != "$copy_hash_after" ]; then
-        log_success "Copy database root hash changed after edit"
-        log_info "Copy hash before edit: $copy_hash"
-        log_info "Copy hash after edit: $copy_hash_after"
-    else
-        log_error "Copy database root hash should have changed after edit but it did not"
-        log_error "Hash before edit: $copy_hash"
-        log_error "Hash after edit: $copy_hash_after"
-        exit 1
-    fi
-    
-    if [ "$original_hash_before_sync" != "$copy_hash_after" ]; then
-        log_success "Original and copy databases have different root hashes after editing field in copy"
-        log_info "Original hash: $original_hash_before_sync"
-        log_info "Copy hash: $copy_hash_after"
-    else
-        log_error "Original and copy databases should have different root hashes but they are the same"
-        exit 1
-    fi
-    
-    # Compare databases to detect the difference
-    log_info "Comparing databases to detect differences"
-    local compare_output
-    invoke_command "Compare databases before sync" "$(get_cli_command) compare --db $original_dir --dest $copy_dir --yes" 0 "compare_output"
-    
-    # Check that comparison detects differences (should show at least 1 difference)
-    expect_output_string "$compare_output" "differences" "Comparison detects differences between databases"
-    
-    # Use sync command to synchronize databases (should pull changes from copy to original)
-    log_info "Using sync command to synchronize databases (bidirectional - should pull from copy to original)"
-    local sync_output
-    invoke_command "Sync databases (copy changes to original)" "$(get_cli_command) sync --db $original_dir --dest $copy_dir --yes" 0 "sync_output"
-    
-    # Verify sync completed
-    expect_output_string "$sync_output" "Sync completed successfully" "Sync completed successfully"
-    
-    # Verify the original database now has the edited field
-    log_info "Verifying original database now has the edited field from copy"
-    local original_record_output
-    original_record_output=$($(get_bdb_command) record $original_dir/.db/bson metadata $record_id --all 2>&1)
-    local original_record_exit_code=$?
-    
-    if [ $original_record_exit_code -ne 0 ]; then
-        log_error "Failed to read record from original to verify sync"
-        echo "$original_record_output"
-        exit 1
-    fi
-    
-    if echo "$original_record_output" | grep -q "$new_field_value"; then
-        log_success "Original database contains the new field value from copy"
-    else
-        log_error "Original database does not contain the new field value: $new_field_value"
-        echo "Record output:"
-        echo "$original_record_output"
-        exit 1
-    fi
-    
-    # Get root hashes and verify they are now the same again
-    log_info "Verifying original and copy have the same root hash after sync"
-    invoke_command "Get original database root hash after sync" "$(get_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
-    invoke_command "Get copy database root hash after sync" "$(get_cli_command) root-hash --db $copy_dir --yes" 0 "copy_hash_output"
-    
-    local original_hash_final=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    local copy_hash_final=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    
-    if [ "$original_hash_final" = "$copy_hash_final" ]; then
-        log_success "Original and copy databases have the same root hash after sync: $original_hash_final"
-    else
-        log_error "Original and copy databases have different root hashes after sync"
-        log_error "Original hash: $original_hash_final"
-        log_error "Copy hash: $copy_hash_final"
-        exit 1
-    fi
-    
-    # Compare databases again to verify no differences
-    log_info "Comparing databases again to verify no differences"
-    local compare_output_final
-    invoke_command "Compare databases after sync" "$(get_cli_command) compare --db $original_dir --dest $copy_dir --yes" 0 "compare_output_final"
-    
-    # Check that comparison shows no differences
-    expect_output_string "$compare_output_final" "No differences detected" "No differences detected after sync"
-    
-    # Verify both databases pass integrity check
-    local verify_original_output
-    local verify_copy_output
-    invoke_command "Verify original database after sync" "$(get_cli_command) verify --db $original_dir --yes" 0 "verify_original_output"
-    invoke_command "Verify copy database after sync" "$(get_cli_command) verify --db $copy_dir --yes" 0 "verify_copy_output"
-    
-    expect_output_string "$verify_original_output" "Database verification passed" "Original database passes verification"
-    expect_output_string "$verify_copy_output" "Database verification passed" "Copy database passes verification"
-    
-    # Check merkle tree order for both databases
-    check_merkle_tree_order "$original_dir/.db/files.dat" "sync edit reverse original database"
-    check_merkle_tree_order "$copy_dir/.db/files.dat" "sync edit reverse copy database"
-    
-    # Clean up temporary databases
-    rm -rf "$original_dir"
-    rm -rf "$copy_dir"
-    log_success "Cleaned up temporary sync edit reverse test databases"
-    test_passed
-}
-
-test_sync_delete_asset() {
-    local test_number="$1"
-    print_test_header "$test_number" "SYNC DATABASE - DELETE ASSET AND SYNC BOTH WAYS"
-    
-    local test_dir=$(get_test_dir "$test_number")
-    mkdir -p "$test_dir"
-    local v6_db_dir="../../test/dbs/v6"
-    local original_dir="$test_dir/test-sync-delete-original"
-    local copy_dir="$test_dir/test-sync-delete-copy"
-    log_info "Source database path: $v6_db_dir"
-    log_info "Original database path: $original_dir"
-    log_info "Copy database path: $copy_dir"
-    
-    check_exists "$v6_db_dir" "V6 test database directory"
-    
-    log_info "Creating original database from v6 to $original_dir"
-    rm -rf "$original_dir"
-    log_info "Copying database: cp -r \"$v6_db_dir\" \"$original_dir\""
-    cp -r "$v6_db_dir" "$original_dir"
-    
-    # Create the copy database using replicate command
-    log_info "Creating copy database using replicate command to $copy_dir"
-    rm -rf "$copy_dir"
-    local replicate_output
-    invoke_command "Replicate to create copy" "$(get_cli_command) replicate --db $original_dir --dest $copy_dir --yes --force" 0 "replicate_output"
-    
-    # Verify both databases exist
-    check_exists "$original_dir" "Original database directory"
-    check_exists "$copy_dir" "Copy database directory"
-    
-    # Get root hashes and verify they are the same
-    log_info "Verifying original and copy have the same root hash"
-    local original_hash_output
-    local copy_hash_output
-    invoke_command "Get original database root hash" "$(get_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
-    invoke_command "Get copy database root hash" "$(get_cli_command) root-hash --db $copy_dir --yes" 0 "copy_hash_output"
-    
-    local original_hash=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    local copy_hash=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    
-    if [ "$original_hash" = "$copy_hash" ]; then
-        log_success "Original and copy databases have the same root hash: $original_hash"
-    else
-        log_error "Original and copy databases have different root hashes after replication"
-        log_error "Original hash: $original_hash"
-        log_error "Copy hash: $copy_hash"
-        exit 1
-    fi
-    
-    # Hardcoded asset ID from v5 database
-    local test_asset_id="89171cd9-a652-4047-b869-1154bf2c95a1"
-    log_info "Using asset ID for deletion test: $test_asset_id"
-    
-    # Delete the asset from the original database
-    log_info "Deleting asset '$test_asset_id' from original database"
-    local remove_output
-    invoke_command "Remove asset from original database" "$(get_cli_command) remove --db $original_dir $test_asset_id --verbose --yes" 0 "remove_output"
-    
-    # Check that removal was successful
-    expect_output_string "$remove_output" "Successfully removed asset" "Asset removal success message"
-    
-    # Get root hashes and verify they are now different
-    log_info "Verifying original and copy now have different root hashes after deletion"
-    invoke_command "Get original database root hash after deletion" "$(get_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
-    invoke_command "Get copy database root hash (unchanged)" "$(get_cli_command) root-hash --db $copy_dir --yes" 0 "copy_hash_output"
-    
-    local original_hash_after=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    local copy_hash_before_sync=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    
-    # Verify the original database root hash changed after deletion
-    if [ "$original_hash" != "$original_hash_after" ]; then
-        log_success "Original database root hash changed after deletion"
-        log_info "Original hash before deletion: $original_hash"
-        log_info "Original hash after deletion: $original_hash_after"
-    else
-        log_error "Original database root hash should have changed after deletion but it did not"
-        log_error "Hash before deletion: $original_hash"
-        log_error "Hash after deletion: $original_hash_after"
-        exit 1
-    fi
-    
-    if [ "$original_hash_after" != "$copy_hash_before_sync" ]; then
-        log_success "Original and copy databases have different root hashes after deletion"
-        log_info "Original hash: $original_hash_after"
-        log_info "Copy hash: $copy_hash_before_sync"
-    else
-        log_error "Original and copy databases should have different root hashes but they are the same"
-        exit 1
-    fi
-    
-    # Verify the asset still exists in the copy database
-    log_info "Verifying asset still exists in copy database"
-    local copy_asset_file="$copy_dir/asset/$test_asset_id"
-    if [ ! -f "$copy_asset_file" ]; then
-        log_error "Asset file should still exist in copy database but it doesn't: $copy_asset_file"
-        exit 1
-    else
-        log_success "Asset file still exists in copy database (as expected)"
-    fi
-
-    # Verify the BSON record has been deleted from the original database
-    log_info "Verifying BSON record has been deleted from original database"
-    local original_record_output
-    original_record_output=$($(get_bdb_command) record $original_dir/.db/bson metadata $test_asset_id --all 2>&1)
-    if echo "$original_record_output" | grep -q "Record not found"; then
-        log_success "BSON record has been deleted from original database"
-    else
-        log_error "BSON record should have been deleted from original database but it still exists"
-        echo "$original_record_output"
-        exit 1
-    fi
-
-    # Sync from original to copy (should delete the asset in copy)
-    log_info "Syncing from original to copy (should delete asset in copy)"
-    local sync_output
-    invoke_command "Sync original to copy" "$(get_cli_command) sync --db $original_dir --dest $copy_dir --yes" 0 "sync_output"
-    
-    # Verify sync completed
-    expect_output_string "$sync_output" "Sync completed successfully" "Sync completed successfully"
-    
-    # Verify the BSON record has been deleted from the copy database after sync
-    log_info "Verifying BSON record has been deleted from copy database after sync"
-    local copy_record_output
-    copy_record_output=$($(get_bdb_command) record $copy_dir/.db/bson metadata $test_asset_id --all 2>&1)
-    if echo "$copy_record_output" | grep -q "Record not found"; then
-        log_success "BSON record has been deleted from copy database"
-    else
-        log_error "BSON record should have been deleted from copy database but it still exists"
-        echo "$copy_record_output"
-        exit 1
-    fi
-
-    # Verify the asset has been deleted from the copy database
-    log_info "Verifying asset has been deleted from copy database after sync"
-    if [ -f "$copy_asset_file" ]; then
-        log_error "Asset file should have been deleted from copy database but it still exists: $copy_asset_file"
-        exit 1
-    else
-        log_success "Asset file has been deleted from copy database"
-    fi
-
-    # Verify the BSON record has not been restored in the original database after sync
-    log_info "Verifying BSON record has not been restored in original database after sync"
-    local original_record_after_sync_output
-    original_record_after_sync_output=$($(get_bdb_command) record $original_dir/.db/bson metadata $test_asset_id --all 2>&1)
-    if echo "$original_record_after_sync_output" | grep -q "Record not found"; then
-        log_success "BSON record remains deleted from original database after sync"
-    else
-        log_error "BSON record was restored in original database after sync but should remain deleted"
-        echo "$original_record_after_sync_output"
-        exit 1
-    fi
-
-    # Get root hashes and verify they are now the same again (sync is bidirectional)
-    log_info "Verifying original and copy have the same root hash after bidirectional sync"
-    invoke_command "Get original database root hash after bidirectional sync" "$(get_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
-    invoke_command "Get copy database root hash after bidirectional sync" "$(get_cli_command) root-hash --db $copy_dir --yes" 0 "copy_hash_output"
-    
-    local original_hash_final=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    local copy_hash_final=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    
-    if [ "$original_hash_final" = "$copy_hash_final" ]; then
-        log_success "Original and copy databases have the same root hash after bidirectional sync: $original_hash_final"
-    else
-        log_error "Original and copy databases have different root hashes after bidirectional sync"
-        log_error "Original hash: $original_hash_final"
-        log_error "Copy hash: $copy_hash_final"
-        exit 1
-    fi
-    
-    # Check merkle tree order for both databases
-    check_merkle_tree_order "$original_dir/.db/files.dat" "sync delete original database"
-    check_merkle_tree_order "$copy_dir/.db/files.dat" "sync delete copy database"
-    
-    # Clean up temporary databases
-    rm -rf "$original_dir"
-    rm -rf "$copy_dir"
-    log_success "Cleaned up temporary sync delete test databases"
-    test_passed
-}
-
-test_sync_delete_asset_reverse() {
-    local test_number="$1"
-    print_test_header "$test_number" "SYNC DATABASE - DELETE ASSET FROM COPY AND SYNC (REVERSE)"
-    
-    local test_dir=$(get_test_dir "$test_number")
-    mkdir -p "$test_dir"
-    local v6_db_dir="../../test/dbs/v6"
-    local original_dir="$test_dir/test-sync-delete-reverse-original"
-    local copy_dir="$test_dir/test-sync-delete-reverse-copy"
-    log_info "Source database path: $v6_db_dir"
-    log_info "Original database path: $original_dir"
-    log_info "Copy database path: $copy_dir"
-    
-    check_exists "$v6_db_dir" "V6 test database directory"
-    
-    log_info "Creating original database from v6 to $original_dir"
-    rm -rf "$original_dir"
-    log_info "Copying database: cp -r \"$v6_db_dir\" \"$original_dir\""
-    cp -r "$v6_db_dir" "$original_dir"
-    
-    # Create the copy database using replicate command
-    log_info "Creating copy database using replicate command to $copy_dir"
-    rm -rf "$copy_dir"
-    local replicate_output
-    invoke_command "Replicate to create copy" "$(get_cli_command) replicate --db $original_dir --dest $copy_dir --yes --force" 0 "replicate_output"
-    
-    # Verify both databases exist
-    check_exists "$original_dir" "Original database directory"
-    check_exists "$copy_dir" "Copy database directory"
-    
-    # Get root hashes and verify they are the same
-    log_info "Verifying original and copy have the same root hash"
-    local original_hash_output
-    local copy_hash_output
-    invoke_command "Get original database root hash" "$(get_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
-    invoke_command "Get copy database root hash" "$(get_cli_command) root-hash --db $copy_dir --yes" 0 "copy_hash_output"
-    
-    local original_hash=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    local copy_hash=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    
-    if [ "$original_hash" = "$copy_hash" ]; then
-        log_success "Original and copy databases have the same root hash: $original_hash"
-    else
-        log_error "Original and copy databases have different root hashes after replication"
-        log_error "Original hash: $original_hash"
-        log_error "Copy hash: $copy_hash"
-        exit 1
-    fi
-    
-    # Hardcoded asset ID from v5 database
-    local test_asset_id="89171cd9-a652-4047-b869-1154bf2c95a1"
-    log_info "Using asset ID for deletion test: $test_asset_id"
-    
-    # Delete the asset from the copy database (reverse of test 36)
-    log_info "Deleting asset '$test_asset_id' from copy database"
-    local remove_output
-    invoke_command "Remove asset from copy database" "$(get_cli_command) remove --db $copy_dir $test_asset_id --verbose --yes" 0 "remove_output"
-    
-    # Check that removal was successful
-    expect_output_string "$remove_output" "Successfully removed asset" "Asset removal success message"
-    
-    # Get root hashes and verify they are now different
-    log_info "Verifying original and copy now have different root hashes after deletion"
-    invoke_command "Get copy database root hash after deletion" "$(get_cli_command) root-hash --db $copy_dir --yes" 0 "copy_hash_output"
-    invoke_command "Get original database root hash (unchanged)" "$(get_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
-    
-    local copy_hash_after=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    local original_hash_before_sync=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    
-    # Verify the copy database root hash changed after deletion
-    if [ "$copy_hash" != "$copy_hash_after" ]; then
-        log_success "Copy database root hash changed after deletion"
-        log_info "Copy hash before deletion: $copy_hash"
-        log_info "Copy hash after deletion: $copy_hash_after"
-    else
-        log_error "Copy database root hash should have changed after deletion but it did not"
-        log_error "Hash before deletion: $copy_hash"
-        log_error "Hash after deletion: $copy_hash_after"
-        exit 1
-    fi
-    
-    if [ "$copy_hash_after" != "$original_hash_before_sync" ]; then
-        log_success "Original and copy databases have different root hashes after deletion"
-        log_info "Copy hash: $copy_hash_after"
-        log_info "Original hash: $original_hash_before_sync"
-    else
-        log_error "Original and copy databases should have different root hashes but they are the same"
-        exit 1
-    fi
-    
-    # Verify the asset still exists in the original database
-    log_info "Verifying asset still exists in original database"
-    local original_asset_file="$original_dir/asset/$test_asset_id"
-    if [ ! -f "$original_asset_file" ]; then
-        log_error "Asset file should still exist in original database but it doesn't: $original_asset_file"
-        exit 1
-    else
-        log_success "Asset file still exists in original database (as expected)"
-    fi
-
-    # Verify the BSON record has been deleted from the copy database
-    log_info "Verifying BSON record has been deleted from copy database"
-    local copy_record_output
-    copy_record_output=$($(get_bdb_command) record $copy_dir/.db/bson metadata $test_asset_id --all 2>&1)
-    if echo "$copy_record_output" | grep -q "Record not found"; then
-        log_success "BSON record has been deleted from copy database"
-    else
-        log_error "BSON record should have been deleted from copy database but it still exists"
-        echo "$copy_record_output"
-        exit 1
-    fi
-
-    # Sync from copy to original (should delete the asset in original)
-    log_info "Syncing from copy to original (should delete asset in original)"
-    local sync_output
-    invoke_command "Sync copy to original" "$(get_cli_command) sync --db $copy_dir --dest $original_dir --yes" 0 "sync_output"
-    
-    # Verify sync completed
-    expect_output_string "$sync_output" "Sync completed successfully" "Sync completed successfully"
-    
-    # Verify the BSON record has been deleted from the original database after sync
-    log_info "Verifying BSON record has been deleted from original database after sync"
-    local original_record_output
-    original_record_output=$($(get_bdb_command) record $original_dir/.db/bson metadata $test_asset_id --all 2>&1)
-    if echo "$original_record_output" | grep -q "Record not found"; then
-        log_success "BSON record has been deleted from original database"
-    else
-        log_error "BSON record should have been deleted from original database but it still exists"
-        echo "$original_record_output"
-        exit 1
-    fi
-
-    # Verify the BSON record has not been restored in the copy database after sync
-    log_info "Verifying BSON record has not been restored in copy database after sync"
-    local copy_record_after_sync_output
-    copy_record_after_sync_output=$($(get_bdb_command) record $copy_dir/.db/bson metadata $test_asset_id --all 2>&1)
-    if echo "$copy_record_after_sync_output" | grep -q "Record not found"; then
-        log_success "BSON record remains deleted from copy database after sync"
-    else
-        log_error "BSON record was restored in copy database after sync but should remain deleted"
-        echo "$copy_record_after_sync_output"
-        exit 1
-    fi
-
-    # Verify the asset has been deleted from the original database
-    log_info "Verifying asset has been deleted from original database after sync"
-    if [ -f "$original_asset_file" ]; then
-        log_error "Asset file should have been deleted from original database but it still exists: $original_asset_file"
-        exit 1
-    else
-        log_success "Asset file has been deleted from original database"
-    fi
-    
-    # Get root hashes and verify they are now the same again (sync is bidirectional)
-    log_info "Verifying original and copy have the same root hash after bidirectional sync"
-    invoke_command "Get original database root hash after bidirectional sync" "$(get_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
-    invoke_command "Get copy database root hash after bidirectional sync" "$(get_cli_command) root-hash --db $copy_dir --yes" 0 "copy_hash_output"
-    
-    local original_hash_final=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    local copy_hash_final=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    
-    if [ "$original_hash_final" = "$copy_hash_final" ]; then
-        log_success "Original and copy databases have the same root hash after bidirectional sync: $original_hash_final"
-    else
-        log_error "Original and copy databases have different root hashes after bidirectional sync"
-        log_error "Original hash: $original_hash_final"
-        log_error "Copy hash: $copy_hash_final"
-        exit 1
-    fi
-    
-    # Check merkle tree order for both databases
-    check_merkle_tree_order "$original_dir/.db/files.dat" "sync delete reverse original database"
-    check_merkle_tree_order "$copy_dir/.db/files.dat" "sync delete reverse copy database"
-    
-    # Clean up temporary databases
-    rm -rf "$original_dir"
-    rm -rf "$copy_dir"
-    log_success "Cleaned up temporary sync delete reverse test databases"
-    test_passed
-}
-
-test_replicate_with_deleted_asset() {
-    local test_number="$1"
-    print_test_header "$test_number" "REPLICATE DATABASE WITH DELETED ASSET"
-    
-    local test_dir=$(get_test_dir "$test_number")
-    mkdir -p "$test_dir"
-    local v6_db_dir="../../test/dbs/v6"
-    local source_dir="$test_dir/test-replicate-deleted-source"
-    local replica_dir="$test_dir/test-replicate-deleted-replica"
-    log_info "Source database path: $v6_db_dir"
-    log_info "Source database path: $source_dir"
-    log_info "Replica database path: $replica_dir"
-    
-    check_exists "$v6_db_dir" "V6 test database directory"
-    
-    log_info "Creating source database from v6 to $source_dir"
-    rm -rf "$source_dir"
-    log_info "Copying database: cp -r \"$v6_db_dir\" \"$source_dir\""
-    cp -r "$v6_db_dir" "$source_dir"
-    
-    check_exists "$source_dir" "Source database directory"
-    
-    # Hardcoded asset ID from v6 database
-    local test_asset_id="89171cd9-a652-4047-b869-1154bf2c95a1"
-    log_info "Using asset ID for deletion test: $test_asset_id"
-    
-    # Delete the asset from the source database
-    log_info "Deleting asset '$test_asset_id' from source database"
-    local remove_output
-    invoke_command "Remove asset from source database" "$(get_cli_command) remove --db $source_dir $test_asset_id --verbose --yes" 0 "remove_output"
-    
-    # Check that removal was successful
-    expect_output_string "$remove_output" "Successfully removed asset" "Asset removal success message"
-    
-    # Verify the asset files no longer exist in source storage
-    local source_asset_file="$source_dir/asset/$test_asset_id"
-    local source_display_file="$source_dir/display/$test_asset_id"
-    local source_thumb_file="$source_dir/thumb/$test_asset_id"
-    
-    if [ -f "$source_asset_file" ] || [ -f "$source_display_file" ] || [ -f "$source_thumb_file" ]; then
-        log_error "Asset files should have been deleted from source database"
-        exit 1
-    else
-        log_success "Asset files have been deleted from source database"
-    fi
-    
-    # Replicate the database with the deleted asset
-    log_info "Replicating database with deleted asset to $replica_dir"
-    rm -rf "$replica_dir"
-    local replicate_output
-    invoke_command "Replicate database with deleted asset" "$(get_cli_command) replicate --db $source_dir --dest $replica_dir --yes --force" 0 "replicate_output"
-    
-    # Verify replica database exists
-    check_exists "$replica_dir" "Replica database directory"
-    
-    # Verify the asset files do not exist in replica storage
-    log_info "Verifying asset files do not exist in replica database"
-    local replica_asset_file="$replica_dir/asset/$test_asset_id"
-    local replica_display_file="$replica_dir/display/$test_asset_id"
-    local replica_thumb_file="$replica_dir/thumb/$test_asset_id"
-    
-    if [ -f "$replica_asset_file" ] || [ -f "$replica_display_file" ] || [ -f "$replica_thumb_file" ]; then
-        log_error "Asset files should not exist in replica database (asset was deleted in source)"
-        exit 1
-    else
-        log_success "Asset files do not exist in replica database (as expected)"
-    fi
-    
-    # Verify original and replica have the same aggregate root hash
-    log_info "Verifying original and replica have the same root hash after replication"
-    verify_root_hashes_match "$source_dir" "$replica_dir" "source and replica after replication"
-    
-    # Verify original and replica have the same database ID
-    log_info "Verifying database IDs match for source and replica"
-    local source_id_output
-    local replica_id_output
-    invoke_command "Get source database ID" "$(get_cli_command) database-id --db $source_dir --yes" 0 "source_id_output"
-    invoke_command "Get replica database ID" "$(get_cli_command) database-id --db $replica_dir --yes" 0 "replica_id_output"
-    
-    local source_id=$(echo "$source_id_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    local replica_id=$(echo "$replica_id_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    
-    if [ "$source_id" = "$replica_id" ]; then
-        log_success "Database IDs match: $source_id"
-    else
-        log_error "Database IDs do not match"
-        log_error "Source ID: $source_id"
-        log_error "Replica ID: $replica_id"
-        exit 1
-    fi
-    
-    # Compare databases to verify they are identical
-    log_info "Comparing databases to verify they are identical"
-    local compare_output
-    invoke_command "Compare databases after replication" "$(get_cli_command) compare --db $source_dir --dest $replica_dir --yes" 0 "compare_output"
-    
-    # Check that comparison shows no differences
-    expect_output_string "$compare_output" "No differences detected" "No differences detected after replication"
-    
-    # Verify both databases pass integrity check
-    local verify_source_output
-    local verify_replica_output
-    invoke_command "Verify source database after replication" "$(get_cli_command) verify --db $source_dir --yes" 0 "verify_source_output"
-    invoke_command "Verify replica database after replication" "$(get_cli_command) verify --db $replica_dir --yes" 0 "verify_replica_output"
-    
-    expect_output_string "$verify_source_output" "Database verification passed" "Source database passes verification"
-    expect_output_string "$verify_replica_output" "Database verification passed" "Replica database passes verification"
-    
-    # Check merkle tree order for both databases
-    check_merkle_tree_order "$source_dir/.db/files.dat" "replicate deleted source database"
-    check_merkle_tree_order "$replica_dir/.db/files.dat" "replicate deleted replica database"
-    
-    # Clean up temporary databases
-    rm -rf "$source_dir"
-    rm -rf "$replica_dir"
-    log_success "Cleaned up temporary replicate deleted test databases"
-    test_passed
-}
-
-test_replicate_unrelated_databases_fail() {
-    local test_number="$1"
-    print_test_header "$test_number" "REPLICATE UNRELATED DATABASES FAIL"
-    
-    # Get test-specific directory for this test
-    local test_dir=$(get_test_dir "$test_number")
-    mkdir -p "$test_dir"
-    
-    # Create two independent databases in test-specific directory
-    local first_db_dir="$test_dir/test-unrelated-first"
-    local second_db_dir="$test_dir/test-unrelated-second"
-    log_info "First database path: $first_db_dir"
-    log_info "Second database path: $second_db_dir"
-    
-    # Clean up any existing test databases
-    rm -rf "$first_db_dir"
-    rm -rf "$second_db_dir"
-    
-    # Create first independent database
-    log_info "Creating first independent database"
-    invoke_command "Initialize first database" "$(get_cli_command) init --db $first_db_dir --yes"
-    
-    # Create second independent database
-    log_info "Creating second independent database"
-    invoke_command "Initialize second database" "$(get_cli_command) init --db $second_db_dir --yes"
-    
-    # Verify both databases exist
-    check_exists "$first_db_dir" "First database directory"
-    check_exists "$second_db_dir" "Second database directory"
-    
-    # Get database IDs to confirm they are different
-    log_info "Getting database IDs to confirm they are different"
-    local first_id_output
-    local second_id_output
-    invoke_command "Get first database ID" "$(get_cli_command) database-id --db $first_db_dir --yes" 0 "first_id_output"
-    invoke_command "Get second database ID" "$(get_cli_command) database-id --db $second_db_dir --yes" 0 "second_id_output"
-    
-    local first_id=$(echo "$first_id_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    local second_id=$(echo "$second_id_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    
-    log_info "First database ID: $first_id"
-    log_info "Second database ID: $second_id"
-    
-    # Verify they have different IDs
-    if [ "$first_id" = "$second_id" ]; then
-        log_error "Database IDs should be different but they are the same: $first_id"
-        exit 1
-    else
-        log_success "Database IDs are different (as expected for independent databases)"
-    fi
-    
-    # Try to replicate first database to second database (should fail)
-    log_info "Attempting to replicate first database to second database (should fail)"
-    local replicate_output
-    invoke_command "Replicate unrelated databases (should fail)" "$(get_cli_command) replicate --db $first_db_dir --dest $second_db_dir --yes" 1 "replicate_output"
-    
-    # Check that the error message contains the expected text
-    expect_output_string "$replicate_output" "different ID than the source database" "Error message mentions different database IDs"
-    expect_output_string "$replicate_output" "Source database ID: $first_id" "Error message shows source database ID"
-    expect_output_string "$replicate_output" "Destination database ID: $second_id" "Error message shows destination database ID"
-    expect_output_string "$replicate_output" "not related to the source database" "Error message indicates databases are not related"
-    
-    log_success "Replication correctly failed between unrelated databases"
-    
-    # Preserve temporary databases for inspection
-    log_info "Temporary databases preserved for inspection in test directory: $test_dir"
-    log_info "  First database: $first_db_dir"
-    log_info "  Second database: $second_db_dir"
-    test_passed
-}
-
-test_replicate_partial() {
-    local test_number="$1"
-    print_test_header "$test_number" "PARTIAL REPLICATION (README AND DB FILES ONLY)"
-
-    local replica_dir="$TEST_DB_DIR-partial-replica"
-    log_info "Source database path: $TEST_DB_DIR"
-    log_info "Partial replica database path: $replica_dir"
-    
-    # Clean up any existing partial replica
-    if [ -d "$replica_dir" ]; then
-        log_info "Cleaning up existing partial replica directory"
-        rm -rf "$replica_dir"
-    fi
-
-    # Run partial replicate command
-    local replicate_output
-    invoke_command "Partial replicate database" "$(get_cli_command) replicate --db $TEST_DB_DIR --dest $replica_dir --partial --yes --force" 0 "replicate_output"
-    
-    # Check if replication was successful
-    expect_output_string "$replicate_output" "Replication completed successfully" "Partial replication completed successfully"
-
-    # Check that the core metadata files were copied
-    check_exists "$replica_dir" "Partial replica database directory"
-    check_exists "$replica_dir/.db" "Partial replica metadata directory"
-    check_exists "$replica_dir/.db/files.dat" "Partial replica files merkle tree"
-    check_exists "$replica_dir/.db/config.json" "Partial replica config file"
-    check_exists "$replica_dir/README.md" "Partial replica README"
-
-    # No asset, display, or thumb files should be present
-    local replica_thumb_count=0
-    local replica_asset_count=0
-    local replica_display_count=0
-    
-    if [ -d "$replica_dir/thumb" ]; then
-        replica_thumb_count=$(find "$replica_dir/thumb" -type f | wc -l)
-    fi
-    if [ -d "$replica_dir/asset" ]; then
-        replica_asset_count=$(find "$replica_dir/asset" -type f | wc -l)
-    fi
-    if [ -d "$replica_dir/display" ]; then
-        replica_display_count=$(find "$replica_dir/display" -type f | wc -l)
-    fi
-
-    log_info "Partial replica media file counts (all should be 0):"
-    log_info "  Thumb files: $replica_thumb_count"
-    log_info "  Asset files: $replica_asset_count"
-    log_info "  Display files: $replica_display_count"
-
-    expect_value "$replica_thumb_count" "0" "No thumb files should be copied in partial mode"
-    expect_value "$replica_asset_count" "0" "No asset files should be copied in partial mode"
-    expect_value "$replica_display_count" "0" "No display files should be copied in partial mode"
-
-    # BSON records (asset metadata) should have been replicated
-    local source_summary
-    local replica_summary
-    invoke_command "Get source database summary" "$(get_cli_command) summary --db $TEST_DB_DIR --yes" 0 "source_summary"
-    invoke_command "Get partial replica summary" "$(get_cli_command) summary --db $replica_dir --yes" 0 "replica_summary"
-
-    local source_files_imported=$(parse_numeric "$source_summary" "Files imported:")
-    local replica_files_imported=$(parse_numeric "$replica_summary" "Files imported:")
-    expect_value "$replica_files_imported" "$source_files_imported" "Partial replica files-imported count matches source"
-
-    # Database IDs must match
-    log_info "Verifying database IDs match for original and partial replica"
-    local source_id_output
-    local replica_id_output
-    invoke_command "Get source database ID" "$(get_cli_command) database-id --db $TEST_DB_DIR --yes" 0 "source_id_output"
-    invoke_command "Get partial replica database ID" "$(get_cli_command) database-id --db $replica_dir --yes" 0 "replica_id_output"
-    
-    local source_id=$(echo "$source_id_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    local replica_id=$(echo "$replica_id_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    
-    if [ "$source_id" = "$replica_id" ]; then
-        log_success "Database IDs match: $source_id"
-    else
-        log_error "Database IDs do not match"
-        log_error "Source ID: $source_id"
-        log_error "Partial replica ID: $replica_id"
-        exit 1
-    fi
-
-    # Verify passes for a partial database - missing media files are expected and ignored
-    log_info "Verifying partial replica database - missing media files should be ignored"
-    local verify_output
-    invoke_command "Verify partial replica database" "$(get_cli_command) verify --db $replica_dir --yes" 0 "verify_output"
-    expect_output_string "$verify_output" "Database verification passed - all files are intact" "Partial database verification should pass despite missing media files"
-
-    # Compare source and partial replica - merkle trees should match (isPartial is metadata, not a leaf)
-    local compare_output
-    invoke_command "Compare source and partial replica" "$(get_cli_command) compare --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "compare_output"
-    expect_output_string "$compare_output" "No differences detected" "Source and partial replica have no merkle tree differences"
-
-    test_passed
-}
-
-# -----------------------------------------------------------------------------
-# Helpers for vault/dbs smoke tests
-# -----------------------------------------------------------------------------
-
-# Write a vault secret file directly (bypassing the interactive CLI).
-# Usage: seed_vault_secret "shared:abc123" "s3-credentials" '{"label":"My S3",...}'
-seed_vault_secret() {
-    local secret_name="$1"
-    local secret_type="$2"
-    local secret_value="$3"
-
-    mkdir -p "$PHOTOSPHERE_VAULT_DIR"
-    local encoded_name
-    encoded_name=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$secret_name', safe=''))")
-    local file_path="${PHOTOSPHERE_VAULT_DIR}/${encoded_name}.json"
-
-    cat > "$file_path" <<VAULT_EOF
-{
-  "name": "$secret_name",
-  "type": "$secret_type",
-  "value": $(echo "$secret_value" | python3 -c "import sys,json; print(json.dumps(sys.stdin.read().strip()))")
-}
-VAULT_EOF
-    chmod 600 "$file_path"
-}
-
-# Write a databases.json config file directly.
-# Usage: seed_databases_config '[{"name":"my-photos","description":"","path":"/tmp/db"}]'
-seed_databases_config() {
-    local databases_json="$1"
-
-    mkdir -p "$PHOTOSPHERE_CONFIG_DIR"
-    cat > "${PHOTOSPHERE_CONFIG_DIR}/databases.json" <<CONFIG_EOF
-{
-  "databases": $databases_json,
-  "recentDatabasePaths": []
-}
-CONFIG_EOF
-}
-
-# -----------------------------------------------------------------------------
-# Vault & dbs smoke tests
-# -----------------------------------------------------------------------------
-
-test_vault_list_shared() {
-    local test_number="$1"
-    print_test_header "$test_number" "VAULT LIST SHARED SECRETS"
-
-    # Seed shared secrets directly in the vault.
-    seed_vault_secret "s3test01" "s3-credentials" \
-        '{"label":"Test S3","region":"us-east-1","accessKeyId":"AKIATEST","secretAccessKey":"secret123","endpoint":"http://localhost:9000"}'
-
-    seed_vault_secret "api00001" "api-key" \
-        '{"label":"Test Geocoding","apiKey":"AIzaFakeKey123"}'
-
-    local vault_output
-    invoke_command "List vault secrets" "$(get_cli_command) secrets list" 0 "vault_output"
-
-    expect_output_string "$vault_output" "s3test01" "S3 credential appears in vault list"
-    expect_output_string "$vault_output" "api00001" "API key appears in vault list"
-
-    test_passed
-}
-
-test_dbs_list_empty() {
-    local test_number="$1"
-    print_test_header "$test_number" "DBS LIST EMPTY"
-
-    # Ensure no databases.json exists.
-    rm -f "${PHOTOSPHERE_CONFIG_DIR}/databases.json"
-
-    local dbs_output
-    invoke_command "List databases (empty)" "$(get_cli_command) dbs list" 0 "dbs_output"
-
-    expect_output_string "$dbs_output" "No databases" "Empty list shows 'No databases' message"
-
-    test_passed
-}
-
-test_dbs_add_and_list() {
-    local test_number="$1"
-    print_test_header "$test_number" "DBS ADD AND LIST"
-
-    # Seed a database entry directly.
-    seed_databases_config '[{"name":"smoke-db","description":"Smoke test database","path":"/tmp/smoke-db"}]'
-
-    local dbs_output
-    invoke_command "List databases" "$(get_cli_command) dbs list" 0 "dbs_output"
-
-    expect_output_string "$dbs_output" "smoke-db" "Database entry appears in dbs list"
-    expect_output_string "$dbs_output" "/tmp/smoke-db" "Database path appears in dbs list"
-
-    test_passed
-}
-
-test_dbs_view() {
-    local test_number="$1"
-    print_test_header "$test_number" "DBS VIEW"
-
-    seed_databases_config '[{"name":"view-db","description":"A test database","path":"/tmp/view-db","encryptionKey":"enc00001","s3Key":"s3test01"}]'
-
-    local dbs_output
-    invoke_command "View database entry" "$(get_cli_command) dbs view --name view-db" 0 "dbs_output"
-
-    expect_output_string "$dbs_output" "view-db" "Name appears in view output"
-    expect_output_string "$dbs_output" "/tmp/view-db" "Path appears in view output"
-    expect_output_string "$dbs_output" "enc00001" "Encryption key ID appears in view output"
-    expect_output_string "$dbs_output" "s3test01" "S3 credential ID appears in view output"
-
-    test_passed
-}
-
-test_dbs_remove() {
-    local test_number="$1"
-    print_test_header "$test_number" "DBS REMOVE"
-
-    seed_databases_config '[{"name":"keep-db","description":"","path":"/tmp/keep-db"},{"name":"remove-db","description":"","path":"/tmp/remove-db"}]'
-
-    invoke_command "Remove database entry" "$(get_cli_command) dbs remove --name remove-db --yes" 0
-
-    local dbs_output
-    invoke_command "List databases after remove" "$(get_cli_command) dbs list" 0 "dbs_output"
-
-    expect_output_string "$dbs_output" "remove-db" "remove-db is absent after removal" false
-    expect_output_string "$dbs_output" "keep-db" "keep-db still present after removal"
-
-    test_passed
-}
-
-test_dbs_resolve_by_name() {
-    local test_number="$1"
-    print_test_header "$test_number" "DBS RESOLVE BY NAME"
-
-    local test_dir="$TEST_TMP_DIR/dbs-resolve-name"
-    local db_dir="$test_dir/db"
-    local key_name="dbs-enc-key"
-
-    rm -rf "$test_dir"
-    mkdir -p "$test_dir"
-
-    # Init an encrypted database with a generated key.
-    invoke_command "Init encrypted database" "$(get_cli_command) init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" 0
-
-    # Add a test file.
-    invoke_command "Add PNG to database" "$(get_cli_command) add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" 0
-
-    # Extract the private key PEM from the CLI vault and store it as a shared secret.
-    local cli_key_file="${PHOTOSPHERE_VAULT_DIR}/${key_name}.json"
-    local key_value
-    key_value=$(python3 -c "
-import json
-with open('$cli_key_file') as f:
-    data = json.load(f)
-print(data['value'], end='')
-")
-    seed_vault_secret "enc00001" "encryption-key" "$key_value"
-
-    # Register the database with the shared encryption key.
-    seed_databases_config "[{\"name\":\"resolve-name-db\",\"description\":\"\",\"path\":\"$db_dir\",\"encryptionKey\":\"enc00001\"}]"
-
-    # Summary using database name — secrets should auto-resolve.
-    local summary_output
-    invoke_command "Summary by name" "$(get_cli_command) summary --db resolve-name-db --yes" 0 "summary_output"
-
-    expect_output_string "$summary_output" "1" "Summary shows at least 1 asset"
-
-    test_passed
-}
-
-test_dbs_resolve_by_path() {
-    local test_number="$1"
-    print_test_header "$test_number" "DBS RESOLVE BY PATH"
-
-    # Reuse the database created in resolve-by-name test.
-    local db_dir="$TEST_TMP_DIR/dbs-resolve-name/db"
-
-    if [ ! -d "$db_dir/.db" ]; then
-        log_error "Expected database from resolve-by-name test at $db_dir"
-        exit 1
-    fi
-
-    # Re-seed databases.json with path match.
-    seed_databases_config "[{\"name\":\"resolve-path-db\",\"description\":\"\",\"path\":\"$db_dir\",\"encryptionKey\":\"enc00001\"}]"
-
-    # Summary using the path — should auto-resolve linked encryption key.
-    local summary_output
-    invoke_command "Summary by path (auto-resolve)" "$(get_cli_command) summary --db \"$db_dir\" --yes" 0 "summary_output"
-
-    expect_output_string "$summary_output" "1" "Summary shows at least 1 asset"
-
-    test_passed
-}
-
-test_dbs_no_match_fallback() {
-    local test_number="$1"
-    print_test_header "$test_number" "DBS NO MATCH FALLBACK"
-
-    local test_dir="$TEST_TMP_DIR/dbs-no-match"
-    local db_dir="$test_dir/db"
-
-    rm -rf "$test_dir"
-    mkdir -p "$test_dir"
-
-    # Create a plain (unencrypted) database.
-    invoke_command "Init plain database" "$(get_cli_command) init --db \"$db_dir\" --yes" 0
-
-    invoke_command "Add PNG to plain database" "$(get_cli_command) add --db \"$db_dir\" \"$TEST_FILES_DIR/test.png\" --yes" 0
-
-    # Clear databases.json so there's no match.
-    seed_databases_config '[]'
-
-    # Summary should still work using existing manual config flows.
-    local summary_output
-    invoke_command "Summary with no databases.json match" "$(get_cli_command) summary --db \"$db_dir\" --yes" 0 "summary_output"
-
-    expect_output_string "$summary_output" "1" "Summary shows at least 1 asset"
-
-    test_passed
-}
-
-# -----------------------------------------------------------------------------
-# Secrets & dbs non-interactive CLI smoke tests
-# -----------------------------------------------------------------------------
-
-test_plaintext_vault_list_empty() {
-    local test_number="$1"
-    print_test_header "$test_number" "PLAINTEXT VAULT LIST EMPTY"
-
-    # Use an isolated vault and config for this test.
-    local saved_vault="$PHOTOSPHERE_VAULT_DIR"
-    local saved_config="$PHOTOSPHERE_CONFIG_DIR"
-    local test_dir="$TEST_TMP_DIR/secrets-list-empty"
-    rm -rf "$test_dir"
-    export PHOTOSPHERE_VAULT_DIR="$test_dir/vault"
-    export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
-    mkdir -p "$PHOTOSPHERE_VAULT_DIR" "$PHOTOSPHERE_CONFIG_DIR"
-
-    local list_output
-    invoke_command "List secrets (empty)" "$(get_cli_command) secrets list" 0 "list_output"
-
-    expect_output_string "$list_output" "No secrets" "Empty vault shows 'No secrets' message"
-
-    # Restore shared vault and config.
-    export PHOTOSPHERE_VAULT_DIR="$saved_vault"
-    export PHOTOSPHERE_CONFIG_DIR="$saved_config"
-
-    test_passed
-}
-
-test_plaintext_vault_add() {
-    local test_number="$1"
-    print_test_header "$test_number" "PLAINTEXT VAULT ADD"
-
-    # Use an isolated vault and config for this test.
-    local saved_vault="$PHOTOSPHERE_VAULT_DIR"
-    local saved_config="$PHOTOSPHERE_CONFIG_DIR"
-    local test_dir="$TEST_TMP_DIR/secrets-add"
-    rm -rf "$test_dir"
-    export PHOTOSPHERE_VAULT_DIR="$test_dir/vault"
-    export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
-    mkdir -p "$PHOTOSPHERE_VAULT_DIR" "$PHOTOSPHERE_CONFIG_DIR"
-
-    invoke_command "Add secret via CLI" "$(get_cli_command) secrets add --yes --name test-secret --type plain --value hello123" 0
-
-    local list_output
-    invoke_command "List secrets after add" "$(get_cli_command) secrets list" 0 "list_output"
-
-    expect_output_string "$list_output" "test-secret" "Added secret appears in list"
-
-    # Restore shared vault and config.
-    export PHOTOSPHERE_VAULT_DIR="$saved_vault"
-    export PHOTOSPHERE_CONFIG_DIR="$saved_config"
-
-    test_passed
-}
-
-test_plaintext_vault_view() {
-    local test_number="$1"
-    print_test_header "$test_number" "PLAINTEXT VAULT VIEW"
-
-    # Use an isolated vault and config for this test.
-    local saved_vault="$PHOTOSPHERE_VAULT_DIR"
-    local saved_config="$PHOTOSPHERE_CONFIG_DIR"
-    local test_dir="$TEST_TMP_DIR/secrets-view"
-    rm -rf "$test_dir"
-    export PHOTOSPHERE_VAULT_DIR="$test_dir/vault"
-    export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
-    mkdir -p "$PHOTOSPHERE_VAULT_DIR" "$PHOTOSPHERE_CONFIG_DIR"
-
-    seed_vault_secret "view-secret" "plain" "my-secret-value"
-
-    local view_output
-    invoke_command "View secret" "$(get_cli_command) secrets view --name view-secret --yes" 0 "view_output"
-
-    expect_output_string "$view_output" "view-secret" "Secret name appears in view output"
-    expect_output_string "$view_output" "plain" "Secret type appears in view output"
-    expect_output_string "$view_output" "my-secret-value" "Secret value appears in view output"
-
-    # Restore shared vault and config.
-    export PHOTOSPHERE_VAULT_DIR="$saved_vault"
-    export PHOTOSPHERE_CONFIG_DIR="$saved_config"
-
-    test_passed
-}
-
-test_plaintext_vault_edit() {
-    local test_number="$1"
-    print_test_header "$test_number" "PLAINTEXT VAULT EDIT"
-
-    # Use an isolated vault and config for this test.
-    local saved_vault="$PHOTOSPHERE_VAULT_DIR"
-    local saved_config="$PHOTOSPHERE_CONFIG_DIR"
-    local test_dir="$TEST_TMP_DIR/secrets-edit"
-    rm -rf "$test_dir"
-    export PHOTOSPHERE_VAULT_DIR="$test_dir/vault"
-    export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
-    mkdir -p "$PHOTOSPHERE_VAULT_DIR" "$PHOTOSPHERE_CONFIG_DIR"
-
-    seed_vault_secret "edit-secret" "plain" "original-value"
-
-    invoke_command "Edit secret via CLI" "$(get_cli_command) secrets edit --name edit-secret --yes --value updated-value" 0
-
-    local view_output
-    invoke_command "View secret after edit" "$(get_cli_command) secrets view --name edit-secret --yes" 0 "view_output"
-
-    expect_output_string "$view_output" "updated-value" "Secret value updated after edit"
-
-    invoke_command "Rename secret via CLI" "$(get_cli_command) secrets edit --name edit-secret --yes --new-name renamed-secret" 0
-
-    local list_output
-    invoke_command "List secrets after rename" "$(get_cli_command) secrets list" 0 "list_output"
-
-    expect_output_string "$list_output" "renamed-secret" "Renamed secret appears in list"
-    expect_output_string "$list_output" "edit-secret" "Old secret name gone after rename" "false"
-
-    # Restore shared vault and config.
-    export PHOTOSPHERE_VAULT_DIR="$saved_vault"
-    export PHOTOSPHERE_CONFIG_DIR="$saved_config"
-
-    test_passed
-}
-
-test_plaintext_vault_delete() {
-    local test_number="$1"
-    print_test_header "$test_number" "PLAINTEXT VAULT DELETE"
-
-    # Use an isolated vault and config for this test.
-    local saved_vault="$PHOTOSPHERE_VAULT_DIR"
-    local saved_config="$PHOTOSPHERE_CONFIG_DIR"
-    local test_dir="$TEST_TMP_DIR/secrets-delete"
-    rm -rf "$test_dir"
-    export PHOTOSPHERE_VAULT_DIR="$test_dir/vault"
-    export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
-    mkdir -p "$PHOTOSPHERE_VAULT_DIR" "$PHOTOSPHERE_CONFIG_DIR"
-
-    seed_vault_secret "keep-secret" "plain" "keep-me"
-    seed_vault_secret "delete-secret" "plain" "delete-me"
-
-    invoke_command "Delete secret via CLI" "$(get_cli_command) secrets remove --name delete-secret --yes" 0
-
-    local list_output
-    invoke_command "List secrets after delete" "$(get_cli_command) secrets list" 0 "list_output"
-
-    expect_output_string "$list_output" "keep-secret" "Remaining secret still present"
-    expect_output_string "$list_output" "delete-secret" "Deleted secret is absent" false
-
-    # Restore shared vault and config.
-    export PHOTOSPHERE_VAULT_DIR="$saved_vault"
-    export PHOTOSPHERE_CONFIG_DIR="$saved_config"
-
-    test_passed
-}
-
-test_secrets_import() {
-    local test_number="$1"
-    print_test_header "$test_number" "SECRETS IMPORT"
-
-    # Use an isolated vault and config for this test.
-    local saved_vault="$PHOTOSPHERE_VAULT_DIR"
-    local saved_config="$PHOTOSPHERE_CONFIG_DIR"
-    local test_dir="$TEST_TMP_DIR/secrets-import"
-    rm -rf "$test_dir"
-    export PHOTOSPHERE_VAULT_DIR="$test_dir/vault"
-    export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
-    mkdir -p "$PHOTOSPHERE_VAULT_DIR" "$PHOTOSPHERE_CONFIG_DIR"
-
-    local key_dir="$test_dir/keys"
-    mkdir -p "$key_dir"
-
-    # Generate a PEM private key using openssl.
-    openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$key_dir/test-import.key" 2>/dev/null
-
-    invoke_command "Import key" "$(get_cli_command) secrets import --yes --private-key \"$key_dir/test-import.key\"" 0
-
-    local list_output
-    invoke_command "List secrets after import" "$(get_cli_command) secrets list" 0 "list_output"
-
-    expect_output_string "$list_output" "test-import" "Imported key appears in secrets list"
-
-    # Restore shared vault and config.
-    export PHOTOSPHERE_VAULT_DIR="$saved_vault"
-    export PHOTOSPHERE_CONFIG_DIR="$saved_config"
-
-    test_passed
-}
-
-test_keychain_vault_list_empty() {
-    local test_number="$1"
-    print_test_header "$test_number" "KEYCHAIN VAULT LIST EMPTY"
-
-    local saved_vault_type="$PHOTOSPHERE_VAULT_TYPE"
-    export PHOTOSPHERE_VAULT_TYPE="keychain"
-
-    local test_dir="$TEST_TMP_DIR/keychain-vault-list-empty"
-    rm -rf "$test_dir"
-    local saved_config="$PHOTOSPHERE_CONFIG_DIR"
-    export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
-    mkdir -p "$PHOTOSPHERE_CONFIG_DIR"
-
-    # Clear any leftover test secrets from previous runs (keychain is OS-global).
-    for secret_name in keychain-test-secret view-secret edit-secret renamed-secret keep-secret delete-secret; do
-        eval "$(get_cli_command) secrets remove --name $secret_name --yes" 2>/dev/null || true
-    done
-
-    invoke_command "List secrets (keychain)" "$(get_cli_command) secrets list" 0
-
-    export PHOTOSPHERE_VAULT_TYPE="$saved_vault_type"
-    export PHOTOSPHERE_CONFIG_DIR="$saved_config"
-    test_passed
-}
-
-test_keychain_vault_add() {
-    local test_number="$1"
-    print_test_header "$test_number" "KEYCHAIN VAULT ADD"
-
-    local saved_vault_type="$PHOTOSPHERE_VAULT_TYPE"
-    export PHOTOSPHERE_VAULT_TYPE="keychain"
-
-    local test_dir="$TEST_TMP_DIR/keychain-vault-add"
-    rm -rf "$test_dir"
-    local saved_config="$PHOTOSPHERE_CONFIG_DIR"
-    export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
-    mkdir -p "$PHOTOSPHERE_CONFIG_DIR"
-
-    invoke_command "Add secret via CLI to keychain" "$(get_cli_command) secrets add --yes --name keychain-test-secret --type plain --value hello123" 0
-
-    local list_output
-    invoke_command "List secrets after keychain add" "$(get_cli_command) secrets list" 0 "list_output"
-
-    expect_output_string "$list_output" "keychain-test-secret" "Added keychain secret appears in list"
-
-    eval "$(get_cli_command) secrets remove --name keychain-test-secret --yes" 2>/dev/null || true
-    export PHOTOSPHERE_VAULT_TYPE="$saved_vault_type"
-    export PHOTOSPHERE_CONFIG_DIR="$saved_config"
-    test_passed
-}
-
-test_keychain_vault_view() {
-    local test_number="$1"
-    print_test_header "$test_number" "KEYCHAIN VAULT VIEW"
-
-    local saved_vault_type="$PHOTOSPHERE_VAULT_TYPE"
-    export PHOTOSPHERE_VAULT_TYPE="keychain"
-
-    local test_dir="$TEST_TMP_DIR/keychain-vault-view"
-    rm -rf "$test_dir"
-    local saved_config="$PHOTOSPHERE_CONFIG_DIR"
-    export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
-    mkdir -p "$PHOTOSPHERE_CONFIG_DIR"
-
-    invoke_command "Add view-secret to keychain" "$(get_cli_command) secrets add --yes --name view-secret --type plain --value my-secret-value" 0
-
-    local view_output
-    invoke_command "View keychain secret" "$(get_cli_command) secrets view --name view-secret --yes" 0 "view_output"
-
-    expect_output_string "$view_output" "view-secret" "Secret name appears in view output"
-    expect_output_string "$view_output" "plain" "Secret type appears in view output"
-    expect_output_string "$view_output" "my-secret-value" "Secret value appears in view output"
-
-    eval "$(get_cli_command) secrets remove --name view-secret --yes" 2>/dev/null || true
-    export PHOTOSPHERE_VAULT_TYPE="$saved_vault_type"
-    export PHOTOSPHERE_CONFIG_DIR="$saved_config"
-    test_passed
-}
-
-test_keychain_vault_edit() {
-    local test_number="$1"
-    print_test_header "$test_number" "KEYCHAIN VAULT EDIT"
-
-    local saved_vault_type="$PHOTOSPHERE_VAULT_TYPE"
-    export PHOTOSPHERE_VAULT_TYPE="keychain"
-
-    local test_dir="$TEST_TMP_DIR/keychain-vault-edit"
-    rm -rf "$test_dir"
-    local saved_config="$PHOTOSPHERE_CONFIG_DIR"
-    export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
-    mkdir -p "$PHOTOSPHERE_CONFIG_DIR"
-
-    invoke_command "Add edit-secret to keychain" "$(get_cli_command) secrets add --yes --name edit-secret --type plain --value original-value" 0
-
-    invoke_command "Edit keychain secret value" "$(get_cli_command) secrets edit --name edit-secret --yes --value updated-value" 0
-
-    local view_output
-    invoke_command "View secret after edit" "$(get_cli_command) secrets view --name edit-secret --yes" 0 "view_output"
-
-    expect_output_string "$view_output" "updated-value" "Secret value updated after edit"
-
-    invoke_command "Rename keychain secret" "$(get_cli_command) secrets edit --name edit-secret --yes --new-name renamed-secret" 0
-
-    local list_output
-    invoke_command "List secrets after rename" "$(get_cli_command) secrets list" 0 "list_output"
-
-    expect_output_string "$list_output" "renamed-secret" "Renamed keychain secret appears in list"
-    expect_output_string "$list_output" "edit-secret" "Old keychain secret name gone after rename" "false"
-
-    eval "$(get_cli_command) secrets remove --name renamed-secret --yes" 2>/dev/null || true
-    export PHOTOSPHERE_VAULT_TYPE="$saved_vault_type"
-    export PHOTOSPHERE_CONFIG_DIR="$saved_config"
-    test_passed
-}
-
-test_keychain_vault_delete() {
-    local test_number="$1"
-    print_test_header "$test_number" "KEYCHAIN VAULT DELETE"
-
-    local saved_vault_type="$PHOTOSPHERE_VAULT_TYPE"
-    export PHOTOSPHERE_VAULT_TYPE="keychain"
-
-    local test_dir="$TEST_TMP_DIR/keychain-vault-delete"
-    rm -rf "$test_dir"
-    local saved_config="$PHOTOSPHERE_CONFIG_DIR"
-    export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
-    mkdir -p "$PHOTOSPHERE_CONFIG_DIR"
-
-    invoke_command "Add keep-secret to keychain" "$(get_cli_command) secrets add --yes --name keep-secret --type plain --value keep-me" 0
-    invoke_command "Add delete-secret to keychain" "$(get_cli_command) secrets add --yes --name delete-secret --type plain --value delete-me" 0
-
-    invoke_command "Delete keychain secret" "$(get_cli_command) secrets remove --name delete-secret --yes" 0
-
-    local list_output
-    invoke_command "List secrets after keychain delete" "$(get_cli_command) secrets list" 0 "list_output"
-
-    expect_output_string "$list_output" "keep-secret" "Remaining keychain secret still present"
-    expect_output_string "$list_output" "delete-secret" "Deleted keychain secret is absent" false
-
-    eval "$(get_cli_command) secrets remove --name keep-secret --yes" 2>/dev/null || true
-    export PHOTOSPHERE_VAULT_TYPE="$saved_vault_type"
-    export PHOTOSPHERE_CONFIG_DIR="$saved_config"
-    test_passed
-}
-
-test_keychain_vault_list_multiple() {
-    local test_number="$1"
-    print_test_header "$test_number" "KEYCHAIN VAULT LIST MULTIPLE"
-
-    local saved_vault_type="$PHOTOSPHERE_VAULT_TYPE"
-    export PHOTOSPHERE_VAULT_TYPE="keychain"
-
-    local test_dir="$TEST_TMP_DIR/keychain-vault-list-multiple"
-    rm -rf "$test_dir"
-    local saved_config="$PHOTOSPHERE_CONFIG_DIR"
-    export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
-    mkdir -p "$PHOTOSPHERE_CONFIG_DIR"
-
-    # Clean up any leftover secrets from previous runs.
-    for secret_name in list-multi-secret-a list-multi-secret-b list-multi-secret-c; do
-        eval "$(get_cli_command) secrets remove --name $secret_name --yes" 2>/dev/null || true
-    done
-
-    invoke_command "Add first secret" "$(get_cli_command) secrets add --yes --name list-multi-secret-a --type plain --value value-a" 0
-    invoke_command "Add second secret" "$(get_cli_command) secrets add --yes --name list-multi-secret-b --type api-key --value value-b" 0
-    invoke_command "Add third secret" "$(get_cli_command) secrets add --yes --name list-multi-secret-c --type s3-credentials --value value-c" 0
-
-    local list_output
-    invoke_command "List all secrets" "$(get_cli_command) secrets list" 0 "list_output"
-
-    expect_output_string "$list_output" "list-multi-secret-a" "First secret appears in list"
-    expect_output_string "$list_output" "list-multi-secret-b" "Second secret appears in list"
-    expect_output_string "$list_output" "list-multi-secret-c" "Third secret appears in list"
-
-    for secret_name in list-multi-secret-a list-multi-secret-b list-multi-secret-c; do
-        eval "$(get_cli_command) secrets remove --name $secret_name --yes" 2>/dev/null || true
-    done
-
-    export PHOTOSPHERE_VAULT_TYPE="$saved_vault_type"
-    export PHOTOSPHERE_CONFIG_DIR="$saved_config"
-    test_passed
-}
-
-test_dbs_edit() {
-    local test_number="$1"
-    print_test_header "$test_number" "DBS EDIT"
-
-    # Use an isolated vault and config for this test.
-    local saved_vault="$PHOTOSPHERE_VAULT_DIR"
-    local saved_config="$PHOTOSPHERE_CONFIG_DIR"
-    local test_dir="$TEST_TMP_DIR/dbs-edit"
-    rm -rf "$test_dir"
-    export PHOTOSPHERE_VAULT_DIR="$test_dir/vault"
-    export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
-    mkdir -p "$PHOTOSPHERE_VAULT_DIR" "$PHOTOSPHERE_CONFIG_DIR"
-
-    seed_databases_config '[{"name":"edit-db","description":"","path":"/tmp/edit-db"}]'
-
-    invoke_command "Edit database entry" "$(get_cli_command) dbs edit --name edit-db --yes --new-name renamed-db" 0
-
-    local dbs_output
-    invoke_command "List databases after edit" "$(get_cli_command) dbs list" 0 "dbs_output"
-
-    expect_output_string "$dbs_output" "renamed-db" "Renamed database appears in list"
-
-    # Restore shared vault and config.
-    export PHOTOSPHERE_VAULT_DIR="$saved_vault"
-    export PHOTOSPHERE_CONFIG_DIR="$saved_config"
-
-    test_passed
-}
-
-test_dbs_add_cli() {
-    local test_number="$1"
-    print_test_header "$test_number" "DBS ADD CLI"
-
-    # Use an isolated vault and config for this test.
-    local saved_vault="$PHOTOSPHERE_VAULT_DIR"
-    local saved_config="$PHOTOSPHERE_CONFIG_DIR"
-    local test_dir="$TEST_TMP_DIR/dbs-add-cli"
-    rm -rf "$test_dir"
-    export PHOTOSPHERE_VAULT_DIR="$test_dir/vault"
-    export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
-    mkdir -p "$PHOTOSPHERE_VAULT_DIR" "$PHOTOSPHERE_CONFIG_DIR"
-
-    invoke_command "Add database via CLI" "$(get_cli_command) dbs add --yes --name cli-db --path /tmp/cli-db" 0
-
-    local dbs_output
-    invoke_command "List databases after add" "$(get_cli_command) dbs list" 0 "dbs_output"
-
-    expect_output_string "$dbs_output" "cli-db" "Added database appears in list"
-    expect_output_string "$dbs_output" "/tmp/cli-db" "Database path appears in list"
-
-    # Restore shared vault and config.
-    export PHOTOSPHERE_VAULT_DIR="$saved_vault"
-    export PHOTOSPHERE_CONFIG_DIR="$saved_config"
-
-    test_passed
-}
-
-test_dbs_add_duplicate() {
-    local test_number="$1"
-    print_test_header "$test_number" "DBS ADD DUPLICATE"
-
-    local saved_vault="$PHOTOSPHERE_VAULT_DIR"
-    local saved_config="$PHOTOSPHERE_CONFIG_DIR"
-    local test_dir="$TEST_TMP_DIR/dbs-add-duplicate"
-    rm -rf "$test_dir"
-    export PHOTOSPHERE_VAULT_DIR="$test_dir/vault"
-    export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
-    mkdir -p "$PHOTOSPHERE_VAULT_DIR" "$PHOTOSPHERE_CONFIG_DIR"
-
-    invoke_command "Add database first time" "$(get_cli_command) dbs add --yes --name dup-db --path /tmp/dup-db-1" 0
-
-    local error_output
-    invoke_command "Add database with same name fails" "$(get_cli_command) dbs add --yes --name dup-db --path /tmp/dup-db-2" 1 "error_output"
-
-    expect_output_string "$error_output" "already exists" "Error message mentions already exists"
-
-    local dbs_output
-    invoke_command "List databases" "$(get_cli_command) dbs list" 0 "dbs_output"
-    expect_output_string "$dbs_output" "/tmp/dup-db-1" "Original path still present"
-    expect_output_string "$dbs_output" "/tmp/dup-db-2" "Duplicate path absent" false
-
-    export PHOTOSPHERE_VAULT_DIR="$saved_vault"
-    export PHOTOSPHERE_CONFIG_DIR="$saved_config"
-
-    test_passed
-}
-
-test_secrets_add_duplicate() {
-    local test_number="$1"
-    print_test_header "$test_number" "SECRETS ADD DUPLICATE"
-
-    local saved_vault="$PHOTOSPHERE_VAULT_DIR"
-    local saved_config="$PHOTOSPHERE_CONFIG_DIR"
-    local test_dir="$TEST_TMP_DIR/secrets-add-duplicate"
-    rm -rf "$test_dir"
-    export PHOTOSPHERE_VAULT_DIR="$test_dir/vault"
-    export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
-    mkdir -p "$PHOTOSPHERE_VAULT_DIR" "$PHOTOSPHERE_CONFIG_DIR"
-
-    invoke_command "Add secret first time" "$(get_cli_command) secrets add --yes --name dup-secret --type plain --value first" 0
-
-    local error_output
-    invoke_command "Add secret with same name fails" "$(get_cli_command) secrets add --yes --name dup-secret --type plain --value second" 1 "error_output"
-
-    expect_output_string "$error_output" "already exists" "Error message mentions already exists"
-
-    export PHOTOSPHERE_VAULT_DIR="$saved_vault"
-    export PHOTOSPHERE_CONFIG_DIR="$saved_config"
-
-    test_passed
-}
-
-test_dbs_clear() {
-    local test_number="$1"
-    print_test_header "$test_number" "DBS CLEAR"
-
-    local saved_vault="$PHOTOSPHERE_VAULT_DIR"
-    local saved_config="$PHOTOSPHERE_CONFIG_DIR"
-    local test_dir="$TEST_TMP_DIR/dbs-clear"
-    rm -rf "$test_dir"
-    export PHOTOSPHERE_VAULT_DIR="$test_dir/vault"
-    export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
-    mkdir -p "$PHOTOSPHERE_VAULT_DIR" "$PHOTOSPHERE_CONFIG_DIR"
-
-    seed_databases_config '[{"name":"db-one","description":"","path":"/tmp/db-one"},{"name":"db-two","description":"","path":"/tmp/db-two"}]'
-
-    invoke_command "Clear all databases" "$(get_cli_command) dbs clear --yes" 0
-
-    local dbs_output
-    invoke_command "List databases after clear" "$(get_cli_command) dbs list" 0 "dbs_output"
-
-    expect_output_string "$dbs_output" "db-one" "db-one is absent after clear" false
-    expect_output_string "$dbs_output" "db-two" "db-two is absent after clear" false
-    expect_output_string "$dbs_output" "No databases" "Empty message shown after clear"
-
-    export PHOTOSPHERE_VAULT_DIR="$saved_vault"
-    export PHOTOSPHERE_CONFIG_DIR="$saved_config"
-
-    test_passed
-}
-
-test_secrets_clear() {
-    local test_number="$1"
-    print_test_header "$test_number" "SECRETS CLEAR"
-
-    local saved_vault="$PHOTOSPHERE_VAULT_DIR"
-    local saved_config="$PHOTOSPHERE_CONFIG_DIR"
-    local test_dir="$TEST_TMP_DIR/secrets-clear"
-    rm -rf "$test_dir"
-    export PHOTOSPHERE_VAULT_DIR="$test_dir/vault"
-    export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
-    mkdir -p "$PHOTOSPHERE_VAULT_DIR" "$PHOTOSPHERE_CONFIG_DIR"
-
-    seed_vault_secret "clear-secret-one" "plain" "value-one"
-    seed_vault_secret "clear-secret-two" "plain" "value-two"
-
-    invoke_command "Clear all secrets" "$(get_cli_command) secrets clear --yes" 0
-
-    local list_output
-    invoke_command "List secrets after clear" "$(get_cli_command) secrets list" 0 "list_output"
-
-    expect_output_string "$list_output" "clear-secret-one" "clear-secret-one is absent after clear" false
-    expect_output_string "$list_output" "clear-secret-two" "clear-secret-two is absent after clear" false
-    expect_output_string "$list_output" "No secrets" "Empty message shown after clear"
-
-    export PHOTOSPHERE_VAULT_DIR="$saved_vault"
-    export PHOTOSPHERE_CONFIG_DIR="$saved_config"
-
-    test_passed
 }
 
 # Reset function to clean up test artifacts
@@ -4463,78 +461,236 @@ reset_environment() {
     log_info "  $0 create-database  # Run specific test"
 }
 
-# Function to run all tests
+# Extract the numeric prefix from a test script path (e.g. smoke-tests/27-v2-readonly/test.sh -> 27)
+test_number() {
+    local test_sh="$1"
+    basename "$(dirname "$test_sh")" | grep -oE '^[0-9]+'
+}
+
+# Extract the name portion from a test script path (e.g. smoke-tests/27-v2-readonly/test.sh -> v2-readonly)
+test_name() {
+    local test_sh="$1"
+    basename "$(dirname "$test_sh")" | sed 's/^[0-9]*-//'
+}
+
+# Run a single test script sequentially; redirect all script output to its log file.
+run_one() {
+    local test_sh="$1"
+    local dir num name log_file dir_name
+    dir="$(dirname "$test_sh")"
+    num="$(test_number "$test_sh")"
+    name="$(test_name "$test_sh")"
+    log_file="$dir/tmp/test-run.log"
+    dir_name="$(basename "$dir")"
+    mkdir -p "$dir/tmp"
+    if [ "$dir_name" != "01-core" ]; then
+        export ISOLATED_TEST_TMP_DIR="${TEST_TMP_DIR}/${dir_name}"
+    else
+        unset ISOLATED_TEST_TMP_DIR
+    fi
+    printf "${BLUE}RUN ${NC}  %2s  %s\n" "$num" "$name"
+    if timeout 300 bash "$test_sh" >"$log_file" 2>&1; then
+        printf "${GREEN}PASS${NC}  %2s  %s\n" "$num" "$name"
+        return 0
+    else
+        printf "${RED}FAIL${NC}  %2s  %s  (log: %s)\n" "$num" "$name" "$log_file"
+        return 1
+    fi
+}
+
+# Run each script one at a time with run_one; accumulate counts and call print_summary.
+run_sequential() {
+    local pass=0
+    local fail=0
+    for test_sh in "$@"; do
+        if run_one "$test_sh"; then
+            pass=$((pass + 1))
+        else
+            fail=$((fail + 1))
+        fi
+    done
+    print_summary "$pass" "$fail"
+    return $((fail > 0 ? 1 : 0))
+}
+
+# Run scripts in parallel batches of N; accumulate counts and call print_summary.
+run_parallel() {
+    local parallel_n="$1"
+    shift
+    local tests=("$@")
+    local pass=0
+    local fail=0
+    local total="${#tests[@]}"
+    local i=0
+
+    while ((i < total)); do
+        local batch_tests=()
+        local batch_pids=()
+        local j=0
+        while ((j < parallel_n && i < total)); do
+            batch_tests+=("${tests[i]}")
+            i=$((i + 1))
+            j=$((j + 1))
+        done
+
+        for test_sh in "${batch_tests[@]}"; do
+            local dir log_file num name dir_name
+            dir="$(dirname "$test_sh")"
+            num="$(test_number "$test_sh")"
+            name="$(test_name "$test_sh")"
+            dir_name="$(basename "$dir")"
+            log_file="$dir/tmp/test-run.log"
+            mkdir -p "$dir/tmp"
+            printf "${BLUE}RUN ${NC}  %2s  %s\n" "$num" "$name"
+            ISOLATED_TEST_TMP_DIR="${TEST_TMP_DIR}/${dir_name}" timeout 300 bash "$test_sh" >"$log_file" 2>&1 &
+            batch_pids+=($!)
+        done
+
+        local k=0
+        for pid in "${batch_pids[@]}"; do
+            local test_sh num name
+            test_sh="${batch_tests[$k]}"
+            num="$(test_number "$test_sh")"
+            name="$(test_name "$test_sh")"
+            if wait "$pid"; then
+                printf "${GREEN}PASS${NC}  %2s  %s\n" "$num" "$name"
+                pass=$((pass + 1))
+            else
+                printf "${RED}FAIL${NC}  %2s  %s  (log: %s/tmp/test-run.log)\n" "$num" "$name" "$(dirname "$test_sh")"
+                fail=$((fail + 1))
+            fi
+            k=$((k + 1))
+        done
+    done
+
+    print_summary "$pass" "$fail"
+    return $((fail > 0 ? 1 : 0))
+}
+
+# Print final pass/fail summary banner.
+print_summary() {
+    local pass="$1"
+    local fail="$2"
+    local total=$((pass + fail))
+    echo ""
+    if ((fail == 0)); then
+        printf "${GREEN}All %d tests passed${NC}\n" "$total"
+    else
+        printf "${RED}%d of %d tests failed${NC}\n" "$fail" "$total"
+    fi
+}
+
+# Discover all test scripts under smoke-tests/ in sorted order
+discover_tests() {
+    find smoke-tests -name "test.sh" | sort -V
+}
+
+# Map a test number to the script that contains it.
+# Tests 1-26 -> 01-core, test 43 -> 43-replicate-partial, all others map 1:1.
+get_script_for_test() {
+    local test_number="$1"
+    if [ "$test_number" -ge 1 ] && [ "$test_number" -le 26 ]; then
+        echo "smoke-tests/01-core/test.sh"
+    elif [ "$test_number" -eq 43 ]; then
+        echo "smoke-tests/43-replicate-partial/test.sh"
+    else
+        local script
+        script=$(find smoke-tests -maxdepth 2 -name "test.sh" | sort -V | grep -E "smoke-tests/${test_number}-" | head -1)
+        echo "$script"
+    fi
+}
+
+# Invoke a single test script, export all env vars so subprocesses inherit them.
+# Records pass/fail into the orchestrator's TESTS_PASSED/TESTS_FAILED counters.
+run_script() {
+    local script_path="$1"
+    local test_number="$2"
+
+    export TEST_TMP_DIR TEST_DB_DIR TEST_FILES_DIR MULTIPLE_IMAGES_DIR DUPLICATE_IMAGES_DIR
+    export USE_BINARY IMAGEMAGICK_IDENTIFY_CMD
+
+    # Give non-core scripts an isolated tmp dir so parallel runs don't conflict.
+    local dir_name
+    dir_name=$(basename "$(dirname "$script_path")")
+    if [ "$dir_name" != "01-core" ]; then
+        export ISOLATED_TEST_TMP_DIR="${TEST_TMP_DIR}/${dir_name}"
+    else
+        unset ISOLATED_TEST_TMP_DIR
+    fi
+
+    bash "$script_path" "$test_number"
+    local exit_code=$?
+
+    if [ $exit_code -eq 0 ]; then
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+    else
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+        local test_name
+        test_name=$(get_test_name "$test_number")
+        FAILED_TESTS+=("$test_name")
+        log_error "Script $script_path exited with code $exit_code"
+        exit $exit_code
+    fi
+}
+
 run_all_tests() {
     echo "======================================"
-    echo "Photosphere CLI Smoke Tests - ALL"
+    echo "Photosphere CLI Smoke Tests"
     echo "======================================"
-    
-    log_info "Running all tests (assumes executable is already built and tools are available)"
-    log_info "To build and run all tests with tool installation, use: ./smoke-tests.sh setup,install-tools,all"
-    echo ""
-    
-    # Change to CLI directory for tests
+
     log_info "Changing to CLI directory"
-    if ! cd "$(dirname "$0")"; then
-        log_error "Failed to change to CLI directory"
-        exit 1
-    fi
-    
-    # Clean up previous test run
+    cd "$(dirname "$0")"
+
+    # Reset environment
     log_info "Resetting testing environment"
     if [ -d "$TEST_TMP_DIR" ]; then
         rm -rf "$TEST_TMP_DIR"
         log_success "Removed existing test databases"
-    else
-        log_info "Test tmp directory not found (already clean)"
     fi
-    
-    # Clear local cache before running tests
+
+    # Reset UUID counter
+    local UUID_COUNTER_FILE="$TEST_TMP_DIR/photosphere-test-uuid-counter"
+    if [ -f "$UUID_COUNTER_FILE" ]; then
+        rm -f "$UUID_COUNTER_FILE"
+    fi
+
+    # Clear local cache
     log_info "Clearing local cache before running tests"
     invoke_command "Clear local cache" "$(get_cli_command) clear-cache" || {
         log_warning "Failed to clear cache, continuing anyway..."
     }
-    
-    
+
     # Check tools first
     check_tools
-    
-    # Run all tests in sequence from the test table
-    local total_tests=$(get_test_count)
-    local test_number=1
-    for test_entry in "${TEST_TABLE[@]}"; do
-        local test_name=$(echo "$test_entry" | cut -d: -f1)
-        local test_function=$(echo "$test_entry" | cut -d: -f2)
-        local test_description=$(echo "$test_entry" | cut -d: -f3-)
-        
-        echo ""
-        echo "--- Test $test_number/$total_tests: $test_name ---"
-        log_info "Running: $test_description"
-        
-        # Execute the test function, passing the test number
-        "$test_function" "$test_number"
-        
-        test_number=$((test_number + 1))
-    done
-    
-    # If we get here, all tests passed
+
+    # Collect all scripts (excluding keychain tests)
+    local all_scripts=()
+    while IFS= read -r script_path; do
+        local dir_name
+        dir_name=$(basename "$(dirname "$script_path")")
+        if [[ "$dir_name" == *keychain* ]]; then
+            continue
+        fi
+        all_scripts+=("$script_path")
+    done < <(discover_tests)
+
     echo ""
-    echo "======================================"
-    echo "TEST SUMMARY"
-    echo "======================================"
-    echo -e "Tests Passed: ${GREEN}$TESTS_PASSED${NC}"
-    echo -e "Tests Failed: ${RED}$TESTS_FAILED${NC}"
-    echo ""
-    echo -e "${GREEN}ALL SMOKE TESTS PASSED${NC}"
-    
-    # Preserve test database for further inspection or hash capture
-    echo ""
-    log_info "Preserving test database for inspection"
-    log_info "Test database available at: $TEST_DB_DIR"
+    if [ "${EXECUTION_MODE:-parallel}" = "sequential" ]; then
+        log_info "Running ${#all_scripts[@]} tests sequentially"
+        run_sequential "${all_scripts[@]}"
+    else
+        log_info "Running ${#all_scripts[@]} tests in parallel (batch size ${PARALLEL_N:-5})"
+        run_parallel "${PARALLEL_N:-5}" "${all_scripts[@]}"
+    fi
+    local exit_code=$?
+
+    if [ $exit_code -ne 0 ]; then
+        exit $exit_code
+    fi
     exit 0
 }
 
-# Function to run a specific test
+# Run a specific test by name or number
 run_test() {
     local test_name="$1"
     
@@ -4560,32 +716,35 @@ run_test() {
     esac
     
     # Check if it's a numeric test index
+    local test_number
     if [[ "$test_name" =~ ^[0-9]+$ ]]; then
-        local test_function=$(get_test_function "$test_name")
-        if [ -n "$test_function" ]; then
-            "$test_function" "$test_name"
-            return
-        else
-            log_error "Invalid test number: $test_name (must be 1-$(get_test_count))"
+        test_number="$test_name"
+        if [ "$test_number" -lt 1 ] || [ "$test_number" -gt "$(get_test_count)" ]; then
+            log_error "Invalid test number: $test_number (must be 1-$(get_test_count))"
+            echo ""
+            show_usage
+            exit 1
+        fi
+    else
+        test_number=$(get_test_index_by_name "$test_name")
+        if [ "$test_number" -eq 0 ]; then
+            log_error "Unknown test: $test_name"
             echo ""
             show_usage
             exit 1
         fi
     fi
-    
-    # Look up test by name
-    local test_function=$(get_test_function_by_name "$test_name")
-    if [ -n "$test_function" ]; then
-        local test_number=$(get_test_index_by_name "$test_name")
-        "$test_function" "$test_number"
-        return
+
+    local script_path
+    script_path=$(get_script_for_test "$test_number")
+    if [ -z "$script_path" ] || [ ! -f "$script_path" ]; then
+        log_error "No script found for test $test_number"
+        exit 1
     fi
-    
-    # Test not found
-    log_error "Unknown test: $test_name"
-    echo ""
-    show_usage
-    exit 1
+
+    if ! run_one "$script_path"; then
+        exit 1
+    fi
 }
 
 # Function to run multiple commands in sequence
@@ -4621,9 +780,7 @@ run_multiple_commands() {
         
         echo ""
         echo "--- Command $command_number/$total_commands: $command ---"
-        
-        # Execute command using run_test() which handles all lookups
-        # Keep set -e enabled to fail immediately
+
         run_test "$command"
         
         # If we get here, the command succeeded (otherwise it would have exited)
@@ -4658,9 +815,11 @@ show_usage() {
     echo "Run Photosphere CLI smoke tests"
     echo ""
     echo "Options:"
-    echo "  -b, --binary        - Run tests using the built executable (default: run from code with 'bun run start --')"
-    echo "  -t, --tmp-dir <dir> - Use <dir> for test databases (default: ./test/tmp). Enables parallel runs."
-    echo "  -h, --help          - Show this help message"
+    echo "  -b, --binary          - Run tests using the built executable (default: run from code with 'bun run start --')"
+    echo "  -t, --tmp-dir <dir>   - Use <dir> for test databases (default: ./test/tmp)."
+    echo "  --sequential          - Run independent tests sequentially instead of in parallel"
+    echo "  --parallel [N]        - Run independent tests in parallel with batch size N (default: 5)"
+    echo "  -h, --help            - Show this help message"
     echo ""
     echo "Commands:"
     echo "  all                 - Run all tests (default if no command given)"
@@ -4677,7 +836,6 @@ show_usage() {
     for test_entry in "${TEST_TABLE[@]}"; do
         local test_name=$(echo "$test_entry" | cut -d: -f1)
         local test_description=$(echo "$test_entry" | cut -d: -f3-)
-        # Format: "  name (index) - description"
         printf "  %-25s (%d) - %s\n" "$test_name" "$index" "$test_description"
         index=$((index + 1))
     done
@@ -4686,8 +844,11 @@ show_usage() {
     echo "  Use commas to separate commands (no spaces around commas)"
     echo ""
     echo "Examples:"
-    echo "  $0                           # Run all tests from code (default)"
-    echo "  $0 all                       # Run all tests from code"
+    echo "  $0                            # Run all tests in parallel (default)"
+    echo "  $0 all                        # Run all tests in parallel"
+    echo "  $0 --sequential               # Run all tests sequentially"
+    echo "  $0 --parallel 3              # Run in parallel with batch size 3"
+    echo "  $0 --parallel 10             # Run in parallel with batch size 10"
     echo "  $0 --binary                  # Run all tests using built executable"
     echo "  $0 to 5                      # Run tests 1-5"
     echo "  $0 setup,all                # Build and run all tests (tools must be available)"
@@ -4697,8 +858,7 @@ show_usage() {
     echo "  $0 reset                     # Clean up test artifacts"
     echo "  $0 create-database          # Run only database creation test"
     echo "  $0 3                         # Run test 3 (add single file)"
-    echo "  $0 reset,setup,1,3          # Reset, setup, create DB, then test 3"
-    echo "  $0 --tmp-dir ./test/tmp-$$  # Run in isolated tmp dir (for parallel runs)"
+    echo "  $0 27                        # Run test 27 (v2-readonly) independently"
     echo "  $0 help                      # Show this help"
 }
 
@@ -4724,6 +884,18 @@ main() {
             --tmp-dir=*)
                 TEST_TMP_DIR="${1#*=}"
                 TEST_DB_DIR="$TEST_TMP_DIR/shared/test-db"
+                shift
+                ;;
+            --sequential)
+                EXECUTION_MODE=sequential
+                shift
+                ;;
+            --parallel)
+                EXECUTION_MODE=parallel
+                if [ $# -ge 2 ] && [[ "$2" =~ ^[0-9]+$ ]]; then
+                    PARALLEL_N="$2"
+                    shift
+                fi
                 shift
                 ;;
             -h|--help|help)
@@ -4754,45 +926,59 @@ main() {
         log_info "Using built executable for smoke tests"
     fi
 
-    # Check if "to" command is used (e.g., "./smoke-tests.sh to 5")
+    # Handle "to X" command
     if [ "$1" = "to" ] && [ $# -eq 2 ]; then
         local end_test="$2"
         local max_test=$(get_test_count)
-        # Validate that end_test is a number between 1 and max_test
         if [[ "$end_test" =~ ^[0-9]+$ ]] && [ "$end_test" -ge 1 ] && [ "$end_test" -le "$max_test" ]; then
-            # Build command list from 1 to end_test
-            local commands="1"
-            for ((i=2; i<=end_test; i++)); do
-                commands="$commands,$i"
-            done
+            cd "$(dirname "$0")"
             log_info "Running tests 1 through $end_test"
-            # Reset environment before running tests
             log_info "Resetting testing environment"
             if [ -d "$TEST_TMP_DIR" ]; then
                 rm -rf "$TEST_TMP_DIR"
                 log_success "Removed existing test databases"
-            else
-                log_info "Test tmp directory not found (already clean)"
             fi
-            
-            # Reset UUID counter for deterministic test results
-            log_info "Resetting test UUID counter"
-            UUID_COUNTER_FILE="$TEST_TMP_DIR/photosphere-test-uuid-counter"
+
+            local UUID_COUNTER_FILE="$TEST_TMP_DIR/photosphere-test-uuid-counter"
             if [ -f "$UUID_COUNTER_FILE" ]; then
                 rm -f "$UUID_COUNTER_FILE"
-                log_success "Removed existing UUID counter file"
-            else
-                log_info "UUID counter file not found (already clean)"
             fi
-            
-            # Clear local cache before running tests
+
             log_info "Clearing local cache before running tests"
             invoke_command "Clear local cache" "$(get_cli_command) clear-cache" || {
                 log_warning "Failed to clear cache, continuing anyway..."
             }
-            
-            run_multiple_commands "$commands"
-            return
+
+            check_tools
+
+            # Always run 01-core first (tests 1-26).
+            echo ""
+            echo "--- Running 01-core (tests 1-26) ---"
+            unset ISOLATED_TEST_TMP_DIR
+            if ! run_one "smoke-tests/01-core/test.sh"; then
+                exit 1
+            fi
+
+            # Run individual scripts for tests 27–end_test sequentially.
+            if [ "$end_test" -gt 26 ]; then
+                local indep_scripts=()
+                declare -A seen_indep
+                for ((i=27; i<=end_test; i++)); do
+                    local script
+                    script=$(get_script_for_test "$i")
+                    if [ -n "$script" ] && [ -z "${seen_indep[$script]:-}" ]; then
+                        seen_indep["$script"]=1
+                        indep_scripts+=("$script")
+                    fi
+                done
+                if [ ${#indep_scripts[@]} -gt 0 ]; then
+                    if ! run_sequential "${indep_scripts[@]}"; then
+                        exit 1
+                    fi
+                fi
+            fi
+
+            exit 0
         else
             log_error "Invalid test number: $end_test (must be 1-$max_test)"
             show_usage
