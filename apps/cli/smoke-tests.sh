@@ -42,6 +42,9 @@ EXECUTION_MODE=parallel
 # Batch size for parallel execution (default 5)
 PARALLEL_N=5
 
+# Record start time for total duration reporting
+SMOKE_TESTS_START_TIME=$SECONDS
+
 # ============================================================================
 # Test Table Definition
 # ============================================================================
@@ -473,6 +476,18 @@ test_name() {
     basename "$(dirname "$test_sh")" | sed 's/^[0-9]*-//'
 }
 
+# Format a duration in seconds as Xm Ys or Xs.
+format_duration() {
+    local elapsed="$1"
+    local minutes=$((elapsed / 60))
+    local secs=$((elapsed % 60))
+    if ((minutes > 0)); then
+        printf "%dm %ds" "$minutes" "$secs"
+    else
+        printf "%ds" "$secs"
+    fi
+}
+
 # Run a single test script sequentially; redirect all script output to its log file.
 run_one() {
     local test_sh="$1"
@@ -485,11 +500,16 @@ run_one() {
     mkdir -p "$dir/tmp"
     export ISOLATED_TEST_TMP_DIR="${TEST_TMP_DIR}/${dir_name}"
     printf "${BLUE}RUN ${NC}  %2s  %s\n" "$num" "$name"
+    local test_start=$SECONDS
     if timeout 300 bash "$test_sh" >"$log_file" 2>&1; then
-        printf "${GREEN}PASS${NC}  %2s  %s\n" "$num" "$name"
+        local test_duration
+        test_duration=$(format_duration $((SECONDS - test_start)))
+        printf "${GREEN}PASS${NC}  %2s  %-30s  %s\n" "$num" "$name" "$test_duration"
         return 0
     else
-        printf "${RED}FAIL${NC}  %2s  %s  (log: %s)\n" "$num" "$name" "$log_file"
+        local test_duration
+        test_duration=$(format_duration $((SECONDS - test_start)))
+        printf "${RED}FAIL${NC}  %2s  %-30s  %s  (log: %s)\n" "$num" "$name" "$test_duration" "$log_file"
         return 1
     fi
 }
@@ -538,7 +558,13 @@ run_parallel() {
             log_file="$dir/tmp/test-run.log"
             mkdir -p "$dir/tmp"
             printf "${BLUE}RUN ${NC}  %2s  %s\n" "$num" "$name"
-            ISOLATED_TEST_TMP_DIR="${TEST_TMP_DIR}/${dir_name}" timeout 300 bash "$test_sh" >"$log_file" 2>&1 &
+            (
+                local_start=$SECONDS
+                ISOLATED_TEST_TMP_DIR="${TEST_TMP_DIR}/${dir_name}" timeout 300 bash "$test_sh" >"$log_file" 2>&1
+                local_exit=$?
+                echo $((SECONDS - local_start)) > "$dir/tmp/test-duration.txt"
+                exit $local_exit
+            ) &
             batch_pids+=($!)
         done
 
@@ -548,11 +574,16 @@ run_parallel() {
             test_sh="${batch_tests[$k]}"
             num="$(test_number "$test_sh")"
             name="$(test_name "$test_sh")"
+            local duration_file
+            duration_file="$(dirname "$test_sh")/tmp/test-duration.txt"
+            local test_duration
             if wait "$pid"; then
-                printf "${GREEN}PASS${NC}  %2s  %s\n" "$num" "$name"
+                test_duration=$(format_duration "$(cat "$duration_file" 2>/dev/null || echo 0)")
+                printf "${GREEN}PASS${NC}  %2s  %-30s  %s\n" "$num" "$name" "$test_duration"
                 pass=$((pass + 1))
             else
-                printf "${RED}FAIL${NC}  %2s  %s  (log: %s/tmp/test-run.log)\n" "$num" "$name" "$(dirname "$test_sh")"
+                test_duration=$(format_duration "$(cat "$duration_file" 2>/dev/null || echo 0)")
+                printf "${RED}FAIL${NC}  %2s  %-30s  %s  (log: %s/tmp/test-run.log)\n" "$num" "$name" "$test_duration" "$(dirname "$test_sh")"
                 fail=$((fail + 1))
             fi
             k=$((k + 1))
@@ -568,11 +599,19 @@ print_summary() {
     local pass="$1"
     local fail="$2"
     local total=$((pass + fail))
+    local elapsed=$((SECONDS - SMOKE_TESTS_START_TIME))
+    local minutes=$((elapsed / 60))
+    local secs=$((elapsed % 60))
     echo ""
     if ((fail == 0)); then
         printf "${GREEN}All %d tests passed${NC}\n" "$total"
     else
         printf "${RED}%d of %d tests failed${NC}\n" "$fail" "$total"
+    fi
+    if ((minutes > 0)); then
+        printf "Duration: %dm %ds\n" "$minutes" "$secs"
+    else
+        printf "Duration: %ds\n" "$secs"
     fi
 }
 
