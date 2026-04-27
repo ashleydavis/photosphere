@@ -1,4 +1,5 @@
 #!/bin/bash
+DESCRIPTION="Seed database entry and verify psi dbs list"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"

@@ -1,4 +1,5 @@
 #!/bin/bash
+DESCRIPTION="Test adding file to v6 database"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"

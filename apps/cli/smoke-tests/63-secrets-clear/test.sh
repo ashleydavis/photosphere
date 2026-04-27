@@ -1,4 +1,5 @@
 #!/bin/bash
+DESCRIPTION="psi secrets clear --yes removes all secrets from the vault"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"

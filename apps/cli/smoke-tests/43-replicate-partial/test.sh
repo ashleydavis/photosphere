@@ -1,4 +1,5 @@
 #!/bin/bash
+DESCRIPTION="Test partial replication (README and .db files only, no media)"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"

@@ -45,148 +45,34 @@ PARALLEL_N=5
 # Record start time for total duration reporting
 SMOKE_TESTS_START_TIME=$SECONDS
 
-# ============================================================================
-# Test Table Definition
-# ============================================================================
-# This table defines all tests in order. Tests are automatically numbered
-# by their position in this array (starting from 1).
-# Format: "name:function:description"
-# ============================================================================
-declare -a TEST_TABLE=(
-    "create-database:test_create_database:Create new database"
-    "view-media:test_view_media_files:View local media files"
-    "add-png:test_add_png_file:Add PNG file to database"
-    "add-jpg:test_add_jpg_file:Add JPG file to database"
-    "add-mp4:test_add_mp4_file:Add MP4 file to database"
-    "add-same:test_add_same_file:Add same file again (no duplication)"
-    "add-multiple:test_add_multiple_files:Add multiple files"
-    "add-same-multiple:test_add_same_multiple_files:Add same multiple files again"
-    "add-duplicate-images:test_add_duplicate_images:Import directory with duplicate content (dedupe to 1 asset)"
-    "summary:test_database_summary:Display database summary"
-    "list:test_database_list:List files in database"
-    "export:test_export_assets:Export assets by ID"
-    "verify:test_database_verify:Verify database integrity"
-    "verify-full:test_database_verify_full:Verify database integrity (full mode)"
-    "detect-deleted:test_detect_deleted_file:Detect deleted file with verify"
-    "detect-modified:test_detect_modified_file:Detect modified file with verify"
-    "replicate:test_database_replicate:Replicate database to new location"
-    "verify-replica:test_verify_replica:Verify replica integrity and match with source"
-    "replicate-second:test_database_replicate_second:Second replication (no changes)"
-    "compare:test_database_compare:Compare two databases"
-    "compare-changes:test_compare_with_changes:Compare databases after adding changes"
-    "replicate-changes:test_replicate_after_changes:Replicate changes and verify sync"
-    "no-overwrite:test_cannot_create_over_existing:Cannot create database over existing"
-    "repair-ok:test_repair_ok_database:Repair OK database (no changes)"
-    "remove:test_remove_asset:Remove asset by ID from database"
-    "repair-damaged:test_repair_damaged_database:Repair damaged database from replica"
-    "v2-readonly:test_v2_database_readonly_commands:Test summary and verify reject v2 database (suggest upgrade)"
-    "v2-write-fail:test_v2_database_write_commands_fail:Test write commands fail on v2 database (add, remove)"
-    "v2-upgrade:test_v2_database_upgrade:Upgrade v2 database to v6"
-    "v3-upgrade:test_v3_database_upgrade:Upgrade v3 database to v6"
-    "v4-upgrade:test_v4_database_upgrade:Upgrade v4 database to v6"
-    "v5-upgrade:test_v5_database_upgrade:Upgrade v5 database to v6"
-    "v6-upgrade-no-effect:test_v6_database_upgrade_no_effect:Test v6 upgrade has no effect"
-    "v6-add-file:test_v6_database_add_file:Test adding file to v6 database"
-    "sync-original-to-copy:test_sync_original_to_copy:Test sync from original to copy"
-    "sync-copy-to-original:test_sync_copy_to_original:Test sync from copy to original"
-    "sync-edit-field:test_sync_edit_field:Test sync after editing field with bdb-cli"
-    "sync-edit-field-reverse:test_sync_edit_field_reverse:Test sync after editing field in copy database with bdb-cli"
-    "sync-delete-asset:test_sync_delete_asset:Test sync after deleting asset (both ways)"
-    "sync-delete-asset-reverse:test_sync_delete_asset_reverse:Test sync after deleting asset from copy (reverse)"
-    "replicate-deleted-asset:test_replicate_with_deleted_asset:Test replicate database with deleted asset"
-    "replicate-unrelated-fail:test_replicate_unrelated_databases_fail:Test replicate fails between unrelated databases"
-    "replicate-partial:test_replicate_partial:Test partial replication (README and .db files only, no media)"
-    "vault-list-shared:test_vault_list_shared:Seed shared secrets in vault and verify vault list"
-    "dbs-list-empty:test_dbs_list_empty:psi dbs list with no databases shows empty message"
-    "dbs-add-and-list:test_dbs_add_and_list:Seed database entry and verify psi dbs list"
-    "dbs-view:test_dbs_view:psi dbs view shows name path and secret IDs"
-    "dbs-remove:test_dbs_remove:psi dbs remove --yes removes entry from list"
-    "dbs-resolve-by-name:test_dbs_resolve_by_name:Resolve database by name with auto-resolved encryption key"
-    "dbs-resolve-by-path:test_dbs_resolve_by_path:Resolve database by path with auto-resolved encryption key"
-    "dbs-no-match-fallback:test_dbs_no_match_fallback:No databases.json match falls back to existing flow"
-    "plaintext-vault-list-empty:test_plaintext_vault_list_empty:Empty plaintext vault shows No secrets message"
-    "plaintext-vault-add:test_plaintext_vault_add:Add a secret to plaintext vault and verify with list"
-    "plaintext-vault-view:test_plaintext_vault_view:View a plaintext vault secret with --yes and verify output"
-    "plaintext-vault-edit:test_plaintext_vault_edit:Edit a plaintext vault secret with --yes and verify updated value"
-    "plaintext-vault-delete:test_plaintext_vault_delete:Delete a plaintext vault secret with --yes and verify removal"
-    "secrets-import:test_secrets_import:Import a PEM key pair and verify via list"
-    "keychain-vault-list-empty:test_keychain_vault_list_empty:Keychain vault list command succeeds"
-    "keychain-vault-add:test_keychain_vault_add:Add a secret to OS keychain and verify it appears in list"
-    "keychain-vault-view:test_keychain_vault_view:Add a secret to OS keychain and verify secrets view returns correct value"
-    "keychain-vault-edit:test_keychain_vault_edit:Add a secret to OS keychain, edit its value, verify updated value"
-    "keychain-vault-delete:test_keychain_vault_delete:Add a secret to OS keychain, delete it, verify it is gone from list"
-    "keychain-vault-list-multiple:test_keychain_vault_list_multiple:Add multiple secrets to OS keychain and verify all appear in list"
-    "dbs-edit:test_dbs_edit:Edit a database entry with --yes and verify rename"
-    "dbs-add-cli:test_dbs_add_cli:Add a database via CLI with --yes and verify"
-    "dbs-add-duplicate:test_dbs_add_duplicate:Adding a database with a duplicate name fails with error"
-    "secrets-add-duplicate:test_secrets_add_duplicate:Adding a secret with a duplicate name fails with error"
-    "dbs-clear:test_dbs_clear:psi dbs clear --yes removes all database entries from the list"
-    "secrets-clear:test_secrets_clear:psi secrets clear --yes removes all secrets from the vault"
-)
-
-# Test table helper functions
 # Get test directory path for a given test number
 get_test_dir() {
     local test_number="$1"
     echo "$TEST_TMP_DIR/$test_number"
 }
 
-# Get test name by index (1-based)
-get_test_name() {
-    local index=$1
-    if [ "$index" -ge 1 ] && [ "$index" -le "${#TEST_TABLE[@]}" ]; then
-        echo "${TEST_TABLE[$((index-1))]}" | cut -d: -f1
-    fi
+# Read the DESCRIPTION field from a test script.
+get_test_description_for_script() {
+    local test_sh="$1"
+    grep -m1 '^DESCRIPTION=' "$test_sh" | cut -d= -f2- | tr -d '"'
 }
 
-# Get test function by index (1-based)
-get_test_function() {
-    local index=$1
-    if [ "$index" -ge 1 ] && [ "$index" -le "${#TEST_TABLE[@]}" ]; then
-        echo "${TEST_TABLE[$((index-1))]}" | cut -d: -f2
-    fi
-}
-
-# Get test description by index (1-based)
-get_test_description() {
-    local index=$1
-    if [ "$index" -ge 1 ] && [ "$index" -le "${#TEST_TABLE[@]}" ]; then
-        echo "${TEST_TABLE[$((index-1))]}" | cut -d: -f3-
-    fi
-}
-
-# Get test index by name (returns 1-based index, or 0 if not found)
+# Get test index by name (returns numeric prefix, or 0 if not found).
 get_test_index_by_name() {
-    local name=$1
-    local index=1
-    for test_entry in "${TEST_TABLE[@]}"; do
-        local test_name=$(echo "$test_entry" | cut -d: -f1)
-        if [ "$test_name" = "$name" ]; then
-            echo "$index"
+    local name="$1"
+    while IFS= read -r test_sh; do
+        if [ "$(test_name "$test_sh")" = "$name" ]; then
+            test_number "$test_sh"
             return 0
         fi
-        index=$((index + 1))
-    done
+    done < <(discover_tests)
     echo "0"
     return 1
 }
 
-# Get test function by name
-get_test_function_by_name() {
-    local name=$1
-    for test_entry in "${TEST_TABLE[@]}"; do
-        local test_name=$(echo "$test_entry" | cut -d: -f1)
-        if [ "$test_name" = "$name" ]; then
-            echo "$test_entry" | cut -d: -f2
-            return 0
-        fi
-    done
-    return 1
-}
-
-# Get total number of tests
+# Get total number of tests.
 get_test_count() {
-    echo "${#TEST_TABLE[@]}"
+    discover_tests | wc -l | tr -d ' '
 }
 
 # Track test results
@@ -628,34 +514,6 @@ get_script_for_test() {
     echo "$script"
 }
 
-# Invoke a single test script, export all env vars so subprocesses inherit them.
-# Records pass/fail into the orchestrator's TESTS_PASSED/TESTS_FAILED counters.
-run_script() {
-    local script_path="$1"
-    local test_number="$2"
-
-    export TEST_TMP_DIR TEST_DB_DIR TEST_FILES_DIR MULTIPLE_IMAGES_DIR DUPLICATE_IMAGES_DIR
-    export USE_BINARY IMAGEMAGICK_IDENTIFY_CMD
-
-    # Give each script an isolated tmp dir so parallel runs don't conflict.
-    local dir_name
-    dir_name=$(basename "$(dirname "$script_path")")
-    export ISOLATED_TEST_TMP_DIR="${TEST_TMP_DIR}/${dir_name}"
-
-    bash "$script_path" "$test_number"
-    local exit_code=$?
-
-    if [ $exit_code -eq 0 ]; then
-        TESTS_PASSED=$((TESTS_PASSED + 1))
-    else
-        TESTS_FAILED=$((TESTS_FAILED + 1))
-        local test_name
-        test_name=$(get_test_name "$test_number")
-        FAILED_TESTS+=("$test_name")
-        log_error "Script $script_path exited with code $exit_code"
-        exit $exit_code
-    fi
-}
 
 run_all_tests() {
     echo "======================================"
@@ -855,14 +713,13 @@ show_usage() {
     echo "  help                - Show this help message"
     echo ""
     echo "Individual tests:"
-    # Generate test list from test table
-    local index=1
-    for test_entry in "${TEST_TABLE[@]}"; do
-        local test_name=$(echo "$test_entry" | cut -d: -f1)
-        local test_description=$(echo "$test_entry" | cut -d: -f3-)
-        printf "  %-25s (%d) - %s\n" "$test_name" "$index" "$test_description"
-        index=$((index + 1))
-    done
+    while IFS= read -r test_sh; do
+        local test_name num description
+        test_name=$(test_name "$test_sh")
+        num=$(test_number "$test_sh")
+        description=$(get_test_description_for_script "$test_sh")
+        printf "  %-25s (%d) - %s\n" "$test_name" "$num" "$description"
+    done < <(discover_tests)
     echo ""
     echo "Multiple commands:"
     echo "  Use commas to separate commands (no spaces around commas)"
