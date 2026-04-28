@@ -1256,7 +1256,7 @@ async function dbsReceive(cmdOptions: { yes?: boolean; code?: string }): Promise
     await receiver.start(code);
 
     const spin = spinner();
-    spin.start('Waiting for other device on local network... (Ctrl+C to cancel)');
+    spin.start('Waiting for sender on the local network... (Ctrl+C to cancel)');
 
     const sigintHandler = () => {
         receiver.cancel();
