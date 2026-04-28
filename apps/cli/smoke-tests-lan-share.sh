@@ -247,10 +247,10 @@ test_share_database() {
         return 1
     fi
 
-    if [ -f "${RECEIVER_CONFIG_DIR}/databases.json" ] && grep -q "share-test-db" "${RECEIVER_CONFIG_DIR}/databases.json"; then
+    if [ -f "${RECEIVER_CONFIG_DIR}/databases.toml" ] && grep -q "share-test-db" "${RECEIVER_CONFIG_DIR}/databases.toml"; then
         log_success "Database share: receiver has database entry"
     else
-        log_fail "Database share: receiver databases.json missing expected entry"
+        log_fail "Database share: receiver databases.toml missing expected entry"
         return 1
     fi
 }
@@ -380,10 +380,10 @@ test_share_database_no_secrets() {
         return 1
     fi
 
-    if [ -f "${RECEIVER_CONFIG_DIR}/databases.json" ] && grep -q "plain-db" "${RECEIVER_CONFIG_DIR}/databases.json"; then
+    if [ -f "${RECEIVER_CONFIG_DIR}/databases.toml" ] && grep -q "plain-db" "${RECEIVER_CONFIG_DIR}/databases.toml"; then
         log_success "No-secrets DB share: receiver has database entry"
     else
-        log_fail "No-secrets DB share: receiver databases.json missing expected entry"
+        log_fail "No-secrets DB share: receiver databases.toml missing expected entry"
         return 1
     fi
 }
