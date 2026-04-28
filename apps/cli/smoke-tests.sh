@@ -80,6 +80,9 @@ TESTS_PASSED=0
 TESTS_FAILED=0
 FAILED_TESTS=()
 
+# Track log files for failed tests so we can dump them after the summary
+FAILED_TEST_LOGS=()
+
 # Trap to show summary on exit (including failures)
 cleanup_and_show_summary() {
     local exit_code=$?
@@ -406,6 +409,7 @@ run_one() {
         local test_duration
         test_duration=$(format_duration $((SECONDS - test_start)))
         printf "${RED}FAIL${NC}  %2s  %-30s  %s  (log: %s)\n" "$num" "$name" "$test_duration" "$log_file"
+        FAILED_TEST_LOGS+=("$log_file")
         return 1
     fi
 }
@@ -421,6 +425,7 @@ run_sequential() {
             fail=$((fail + 1))
         fi
     done
+    print_failed_logs
     print_summary "$pass" "$fail"
     return $((fail > 0 ? 1 : 0))
 }
@@ -480,12 +485,14 @@ run_parallel() {
             else
                 test_duration=$(format_duration "$(cat "$duration_file" 2>/dev/null || echo 0)")
                 printf "${RED}FAIL${NC}  %2s  %-30s  %s  (log: %s/tmp/test-run.log)\n" "$num" "$name" "$test_duration" "$(dirname "$test_sh")"
+                FAILED_TEST_LOGS+=("$(dirname "$test_sh")/tmp/test-run.log")
                 fail=$((fail + 1))
             fi
             k=$((k + 1))
         done
     done
 
+    print_failed_logs
     print_summary "$pass" "$fail"
     return $((fail > 0 ? 1 : 0))
 }
@@ -509,6 +516,25 @@ print_summary() {
     else
         printf "Duration: %ds\n" "$secs"
     fi
+}
+
+# Print the log output for every failed test.
+print_failed_logs() {
+    if [ ${#FAILED_TEST_LOGS[@]} -eq 0 ]; then
+        return
+    fi
+    echo ""
+    echo "============================================================================"
+    echo "FAILED TEST OUTPUT"
+    echo "============================================================================"
+    for log_file in "${FAILED_TEST_LOGS[@]}"; do
+        local test_dir_name
+        test_dir_name=$(basename "$(dirname "$(dirname "$log_file")")")
+        echo ""
+        echo "---------- $test_dir_name ($log_file) ----------"
+        cat "$log_file"
+        echo "---------- end $test_dir_name ----------"
+    done
 }
 
 # Discover all test scripts under smoke-tests/ in sorted order
