@@ -17,7 +17,7 @@ test_dbs_clear() {
     export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
     mkdir -p "$PHOTOSPHERE_VAULT_DIR" "$PHOTOSPHERE_CONFIG_DIR"
 
-    seed_databases_config '[{"name":"db-one","description":"","path":"/tmp/db-one"},{"name":"db-two","description":"","path":"/tmp/db-two"}]'
+    seed_databases_config "[{\"name\":\"db-one\",\"description\":\"\",\"path\":\"$test_dir/db-one\"},{\"name\":\"db-two\",\"description\":\"\",\"path\":\"$test_dir/db-two\"}]"
 
     invoke_command "Clear all databases" "$(get_cli_command) dbs clear --yes" 0
 

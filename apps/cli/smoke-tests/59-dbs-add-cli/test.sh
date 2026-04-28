@@ -18,13 +18,15 @@ test_dbs_add_cli() {
     export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
     mkdir -p "$PHOTOSPHERE_VAULT_DIR" "$PHOTOSPHERE_CONFIG_DIR"
 
-    invoke_command "Add database via CLI" "$(get_cli_command) dbs add --yes --name cli-db --path /tmp/cli-db" 0
+    local cli_db_path="$test_dir/cli-db-path"
+
+    invoke_command "Add database via CLI" "$(get_cli_command) dbs add --yes --name cli-db --path $cli_db_path" 0
 
     local dbs_output
     invoke_command "List databases after add" "$(get_cli_command) dbs list" 0 "dbs_output"
 
     expect_output_string "$dbs_output" "cli-db" "Added database appears in list"
-    expect_output_string "$dbs_output" "/tmp/cli-db" "Database path appears in list"
+    expect_output_string "$dbs_output" "$cli_db_path" "Database path appears in list"
 
     # Restore shared vault and config.
     export PHOTOSPHERE_VAULT_DIR="$saved_vault"
