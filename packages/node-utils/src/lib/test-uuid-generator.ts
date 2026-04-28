@@ -18,11 +18,6 @@ export class TestUuidGenerator implements IUuidGenerator {
     }
 
     generate(): string {
-        // Ensure the directory exists before attempting to create the lock file.
-        const dir = path.dirname(this.counterFilePath);
-        if (!fs.existsSync(dir)) {
-            fs.mkdirSync(dir, { recursive: true });
-        }
         this.acquireLock();
         try {
             let counter = 0;
@@ -43,6 +38,7 @@ export class TestUuidGenerator implements IUuidGenerator {
     // at a time. Removes a stale lock after 5 seconds of waiting.
     //
     private acquireLock(): void {
+        fs.mkdirSync(path.dirname(this.lockFilePath), { recursive: true });
         const maxWaitMs = 5000;
         const startTime = Date.now();
         while (true) {
