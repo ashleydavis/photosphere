@@ -18,7 +18,7 @@ test_dbs_edit() {
     export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
     mkdir -p "$PHOTOSPHERE_VAULT_DIR" "$PHOTOSPHERE_CONFIG_DIR"
 
-    seed_databases_config '[{"name":"edit-db","description":"","path":"/tmp/edit-db"}]'
+    seed_databases_config "[{\"name\":\"edit-db\",\"description\":\"\",\"path\":\"$test_dir/edit-db\"}]"
 
     invoke_command "Edit database entry" "$(get_cli_command) dbs edit --name edit-db --yes --new-name renamed-db" 0
 

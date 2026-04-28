@@ -9,7 +9,10 @@ test_dbs_remove() {
     local test_number="$1"
     print_test_header "$test_number" "DBS REMOVE"
 
-    seed_databases_config '[{"name":"keep-db","description":"","path":"/tmp/keep-db"},{"name":"remove-db","description":"","path":"/tmp/remove-db"}]'
+    local keep_db_path="$TEST_TMP_DIR/keep-db"
+    local remove_db_path="$TEST_TMP_DIR/remove-db"
+
+    seed_databases_config "[{\"name\":\"keep-db\",\"description\":\"\",\"path\":\"$keep_db_path\"},{\"name\":\"remove-db\",\"description\":\"\",\"path\":\"$remove_db_path\"}]"
 
     invoke_command "Remove database entry" "$(get_cli_command) dbs remove --name remove-db --yes" 0
 

@@ -9,14 +9,16 @@ test_dbs_add_and_list() {
     local test_number="$1"
     print_test_header "$test_number" "DBS ADD AND LIST"
 
+    local smoke_db_path="$TEST_TMP_DIR/smoke-db"
+
     # Seed a database entry directly.
-    seed_databases_config '[{"name":"smoke-db","description":"Smoke test database","path":"/tmp/smoke-db"}]'
+    seed_databases_config "[{\"name\":\"smoke-db\",\"description\":\"Smoke test database\",\"path\":\"$smoke_db_path\"}]"
 
     local dbs_output
     invoke_command "List databases" "$(get_cli_command) dbs list" 0 "dbs_output"
 
     expect_output_string "$dbs_output" "smoke-db" "Database entry appears in dbs list"
-    expect_output_string "$dbs_output" "/tmp/smoke-db" "Database path appears in dbs list"
+    expect_output_string "$dbs_output" "$smoke_db_path" "Database path appears in dbs list"
 
     test_passed
 }
