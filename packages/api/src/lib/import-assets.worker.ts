@@ -1,6 +1,6 @@
 import * as os from "os";
 import * as path from "path";
-import { ensureDir, remove } from "node-utils";
+import { ensureDir, remove, getProcessTmpDir } from "node-utils";
 import { createStorage, loadEncryptionKeysFromPem } from "storage";
 import { IDatabaseDescriptor } from "./database-descriptor";
 import { resolveStorageCredentials } from "./resolve-storage-credentials";
@@ -66,7 +66,7 @@ interface IPendingDatabaseUpdate {
 export async function importAssetsHandler(data: IImportAssetsData, context: ITaskContext): Promise<void> {
     const { paths, storageDescriptor, googleApiKey, sessionId, dryRun } = data;
     const { uuidGenerator, timestampProvider } = context;
-    const hashCacheDir = path.join(os.tmpdir(), "photosphere");
+    const hashCacheDir = path.join(getProcessTmpDir(), "photosphere");
 
     const { s3Config, encryptionKeyPems } = await resolveStorageCredentials(storageDescriptor.databasePath, storageDescriptor.encryptionKey);
     const { options: storageOptions } = await loadEncryptionKeysFromPem(encryptionKeyPems);
@@ -274,7 +274,7 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
         }
     });
 
-    const sessionTempDir = path.join(os.tmpdir(), "photosphere", uuidGenerator.generate());
+    const sessionTempDir = path.join(getProcessTmpDir(), "photosphere", uuidGenerator.generate());
     await ensureDir(sessionTempDir);
 
     try {

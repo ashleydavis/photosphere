@@ -1,11 +1,10 @@
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 import { MockCollection } from "bdb";
 import type { IAsset } from "../../lib/asset";
 import type { IDatabaseOp } from "../../lib/database-op";
 import { createStorage } from "storage";
-import { TestUuidGenerator } from "node-utils";
+import { TestUuidGenerator, getProcessTmpDir } from "node-utils";
 import { MockTimestampProvider } from "utils";
 import { applyDatabaseOps, applyMetadataDatabaseOps, groupOpsByDatabaseId } from "../../lib/apply-database-ops";
 import { createMediaFileDatabase, createDatabase, loadSortIndexes } from "../../lib/media-file-database";
@@ -219,7 +218,7 @@ describe("applyMetadataDatabaseOps", () => {
 
 describe("applyDatabaseOps", () => {
     test("acquires write lock and persists metadata on a real database directory", async () => {
-        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "apply-database-ops-lock-"));
+        const tmpDir = fs.mkdtempSync(path.join(getProcessTmpDir(), "apply-database-ops-lock-"));
         try {
             const { storage: assetStorage, rawStorage } = createStorage(tmpDir, undefined, undefined);
             const uuidGenerator = new TestUuidGenerator();

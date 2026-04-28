@@ -97,6 +97,16 @@ cleanup_and_show_summary() {
 
 trap cleanup_and_show_summary EXIT
 
+# Handle Ctrl-C: kill all background jobs and exit immediately.
+handle_interrupt() {
+    echo ""
+    echo "Interrupted."
+    jobs -p | xargs -r kill -TERM 2>/dev/null
+    exit 130
+}
+
+trap handle_interrupt INT
+
 # Helper functions shared with check-tools.sh
 log_info() {
     echo -e "${BLUE}[INFO]${NC} $1"

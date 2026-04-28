@@ -1,8 +1,8 @@
 import * as crypto from 'crypto';
 import * as path from 'path';
-import * as os from 'os';
 import * as fs from 'fs/promises';
 import { HashCache } from '../../lib/hash-cache';
+import { getProcessTmpDir } from 'node-utils';
 
 // Mock implementation of IStorage (no longer used, kept for reference)
 class MockStorage {
@@ -119,7 +119,7 @@ describe('HashCache', () => {
     let cacheDir: string;
     
     beforeEach(() => {
-        cacheDir = path.join(os.tmpdir(), `hash-cache-test-${Date.now()}`);
+        cacheDir = path.join(getProcessTmpDir(), `hash-cache-test-${Date.now()}`);
         hashCache = new HashCache(cacheDir);
     });
     

@@ -1,8 +1,7 @@
 import path from "path";
-import os from "os";
 import fs from "fs";
 import pc from "picocolors";
-import { exit } from "node-utils";
+import { exit, getProcessTmpDir } from "node-utils";
 import { log } from "utils";
 
 //
@@ -10,7 +9,7 @@ import { log } from "utils";
 //
 export async function clearCacheCommand(): Promise<void> {
 
-    const localHashCachePath = path.join(os.tmpdir(), "photosphere");
+    const localHashCachePath = path.join(getProcessTmpDir(), "photosphere");
     
     if (fs.existsSync(localHashCachePath)) {
         fs.rmSync(localHashCachePath, { recursive: true, force: true });

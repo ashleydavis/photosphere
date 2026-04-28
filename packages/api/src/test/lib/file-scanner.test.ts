@@ -1,8 +1,7 @@
 import * as path from 'path';
-import * as os from 'os';
 import * as fs from 'fs/promises';
 import { scanPath, scanPaths, FileScannedResult, ScannerOptions, ScannerState, constructLogicalPath } from '../../lib/file-scanner';
-import { ensureDir, remove, outputFile } from 'node-utils';
+import { ensureDir, remove, outputFile, getProcessTmpDir } from 'node-utils';
 import JSZip from 'jszip';
 import { RandomUuidGenerator } from 'utils';
 
@@ -12,7 +11,7 @@ describe('file-scanner', () => {
 
     beforeEach(async () => {
         // Create a unique test directory for each test
-        testDir = path.join(os.tmpdir(), `file-scanner-test-${Date.now()}-${Math.random().toString(36).substring(7)}`);
+        testDir = path.join(getProcessTmpDir(), `file-scanner-test-${Date.now()}-${Math.random().toString(36).substring(7)}`);
         await ensureDir(testDir);
     });
 
@@ -29,7 +28,7 @@ describe('file-scanner', () => {
     const uuidGenerator = new RandomUuidGenerator();
     
     async function createSessionTempDir(): Promise<string> {
-        const sessionTempDir = path.join(os.tmpdir(), 'photosphere', uuidGenerator.generate());
+        const sessionTempDir = path.join(getProcessTmpDir(), 'photosphere', uuidGenerator.generate());
         await fs.mkdir(sessionTempDir, { recursive: true });
         return sessionTempDir;
     }

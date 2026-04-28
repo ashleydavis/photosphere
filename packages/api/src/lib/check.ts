@@ -5,7 +5,7 @@ import { IAddSummary } from "./media-file-database";
 import { TaskStatus, TaskQueue } from "task-queue";
 import { ICheckFileData, ICheckFileResult } from "./check.worker";
 import { IDatabaseDescriptor } from "./database-descriptor";
-import * as os from "os";
+import { getProcessTmpDir } from "node-utils";
 import * as path from "path";
 
 //
@@ -24,7 +24,7 @@ export async function checkPaths(
     sessionTempDir: string
 ): Promise<IAddSummary> {
     // Create hash cache for file hashing optimization
-    const hashCacheDir = path.join(os.tmpdir(), "photosphere");
+    const hashCacheDir = path.join(getProcessTmpDir(), "photosphere");
     const localHashCache = new HashCache(hashCacheDir);
     await localHashCache.load();
 
