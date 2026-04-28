@@ -50,6 +50,11 @@ export async function upgradeCommand(context: ICommandContext, options: IUpgrade
     }
 
     let keyPems = await resolveKeyPemsWithPrompt(options.key, nonInteractive, false);
+    if (options.key && keyPems.length === 0) {
+        outro(pc.red(`✗ Encryption key "${options.key}" not found.\n  Use "psi secrets list" to see available keys.`));
+        await exit(1);
+        return;
+    }
     let { options: storageOptions } = await loadEncryptionKeysFromPem(keyPems);
     let { storage: assetStorage, rawStorage } = await createStorageForPath(databaseDir, storageOptions);
 
