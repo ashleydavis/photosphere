@@ -15,6 +15,7 @@ jest.mock('../../lib/file-scanner', () => ({
 jest.mock('node-utils', () => ({
     ensureDir: jest.fn().mockResolvedValue(undefined),
     remove: jest.fn().mockResolvedValue(undefined),
+    getProcessTmpDir: jest.fn().mockReturnValue('/tmp'),
 }));
 
 jest.mock('storage', () => ({

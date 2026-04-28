@@ -29,6 +29,7 @@ jest.mock('../../lib/video', () => ({
 jest.mock('node-utils', () => ({
     ensureDir: jest.fn().mockResolvedValue(undefined),
     remove: jest.fn().mockResolvedValue(undefined),
+    getProcessTmpDir: jest.fn().mockReturnValue('/tmp'),
 }));
 
 jest.mock('../../lib/resolve-storage-credentials', () => ({
