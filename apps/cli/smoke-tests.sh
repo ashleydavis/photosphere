@@ -7,29 +7,29 @@
 # Absolute path to this script's directory, resolved before any cd takes place.
 SMOKE_TESTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# macOS doesn't have GNU timeout; use gtimeout from coreutils
+# macOS and Windows lack GNU timeout; provide a compatible implementation
+_timeout_fallback() {
+    local duration="$1"
+    shift
+    "$@" &
+    local child_pid=$!
+    ( sleep "$duration" && kill "$child_pid" 2>/dev/null ) &
+    local killer_pid=$!
+    wait "$child_pid"
+    local exit_status=$?
+    kill "$killer_pid" 2>/dev/null
+    wait "$killer_pid" 2>/dev/null
+    return $exit_status
+}
+
 if [[ "$OSTYPE" == "darwin"* ]]; then
     if command -v gtimeout &>/dev/null; then
         timeout() { gtimeout "$@"; }
     else
-        echo "[ERROR] 'timeout' not available. Run: brew install coreutils" >&2
-        exit 1
+        timeout() { _timeout_fallback "$@"; }
     fi
-# Windows (Git Bash/MSYS/Cygwin) timeout.exe has a different interface; use a pure-shell fallback
 elif [[ "$OSTYPE" == "msys"* ]] || [[ "$OSTYPE" == "cygwin"* ]]; then
-    timeout() {
-        local duration="$1"
-        shift
-        "$@" &
-        local child_pid=$!
-        ( sleep "$duration" && kill "$child_pid" 2>/dev/null ) &
-        local killer_pid=$!
-        wait "$child_pid"
-        local exit_status=$?
-        kill "$killer_pid" 2>/dev/null
-        wait "$killer_pid" 2>/dev/null
-        return $exit_status
-    }
+    timeout() { _timeout_fallback "$@"; }
 fi
 
 # Set NODE_ENV to testing for deterministic UUID generation
