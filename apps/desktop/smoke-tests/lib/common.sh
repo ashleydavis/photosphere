@@ -117,6 +117,7 @@ start_app() {
     PHOTOSPHERE_VAULT_DIR="$tmp_dir/vault" \
     PHOTOSPHERE_VAULT_TYPE=plaintext \
     PHOTOSPHERE_LOG_DIR="$tmp_dir" \
+    TEST_TMP_DIR="$tmp_dir" \
     NODE_ENV=testing \
     "${launch_args[@]}" --no-sandbox --disable-gpu -geometry "960x800+${x_pos}+0" > "$tmp_dir/app.log" 2>&1 &
     echo $! > "$tmp_dir/app.pid"

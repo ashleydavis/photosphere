@@ -2,7 +2,6 @@ import { getVideoTransformation, ILocation, log } from "utils";
 import * as fs from "fs/promises";
 import { pathExists } from "node-utils";
 import dayjs from "dayjs";
-import { tmpdir } from "os";
 import { join } from "path";
 import { IUuidGenerator } from "utils";
 import { IAssetDetails, MICRO_MIN_SIZE, MICRO_QUALITY, THUMBNAIL_MIN_SIZE } from "./media-file-database";
@@ -23,7 +22,7 @@ export async function getVideoDetails(filePath: string, tempDir: string, content
     
     // Extract screenshot at 1 second or middle of video
     const video = new Video(videoPath);
-    const screenshotPath = join(tmpdir(), `thumb_${uuidGenerator.generate()}.jpg`);
+    const screenshotPath = join(tempDir, `thumb_${uuidGenerator.generate()}.jpg`);
     const screenshotTime = Math.min(assetInfo.duration ? assetInfo.duration / 2 : 1, 300); // Max 5 minutes
     await video.extractScreenshot(screenshotPath, screenshotTime);
     

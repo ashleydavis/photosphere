@@ -1,8 +1,7 @@
 import { IStorage, FileStorage, createStorage } from "storage";
 import { HashCache } from "api";
-import { exit } from "node-utils";
+import { exit, getProcessTmpDir } from "node-utils";
 import path from "path";
-import os from "os";
 import pc from "picocolors";
 import { log } from "utils";
 import { formatBytes } from "../lib/format";
@@ -21,7 +20,7 @@ export async function hashCacheCommand(options: IHashCacheCommandOptions): Promi
     
     try {
         log.info(pc.blue("\n=== Local Hash Cache ==="));
-        const localHashCachePath = path.join(os.tmpdir(), "photosphere");
+        const localHashCachePath = path.join(getProcessTmpDir(), "photosphere");
         const localHashCache = new HashCache(localHashCachePath);
         
         const loaded = await localHashCache.load();

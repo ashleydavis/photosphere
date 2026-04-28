@@ -5,8 +5,6 @@
 # the OS keychain is global system state and cannot be safely parallelised.
 # Intended for use in the release workflow on each target platform.
 
-KEYCHAIN_TESTS_DIR="$(cd "$(dirname "$0")" && pwd)/smoke-tests-key-chain"
-
 export NODE_ENV=testing
 export NO_COLOR=1
 
@@ -18,14 +16,18 @@ NC='\033[0m'
 TEST_TMP_DIR="${TEST_TMP_DIR:-./test/tmp-keychain}"
 USE_BINARY=false
 
-KEYCHAIN_SCRIPTS=(
-    "$KEYCHAIN_TESTS_DIR/58-keychain-vault-list-empty/test.sh"
-    "$KEYCHAIN_TESTS_DIR/59-keychain-vault-add/test.sh"
-    "$KEYCHAIN_TESTS_DIR/60-keychain-vault-view/test.sh"
-    "$KEYCHAIN_TESTS_DIR/61-keychain-vault-edit/test.sh"
-    "$KEYCHAIN_TESTS_DIR/62-keychain-vault-delete/test.sh"
-    "$KEYCHAIN_TESTS_DIR/63-keychain-vault-list-multiple/test.sh"
-)
+# Handle Ctrl-C: exit immediately.
+handle_interrupt() {
+    echo ""
+    echo "Interrupted."
+    exit 130
+}
+
+trap handle_interrupt INT
+
+discover_tests() {
+    find smoke-tests-key-chain -maxdepth 2 -name "test.sh" | sort -V
+}
 
 test_number() {
     basename "$(dirname "$1")" | grep -oE '^[0-9]+'
@@ -65,13 +67,13 @@ main() {
     local pass=0
     local fail=0
 
-    for test_sh in "${KEYCHAIN_SCRIPTS[@]}"; do
+    while IFS= read -r test_sh; do
         if run_one "$test_sh"; then
             pass=$((pass + 1))
         else
             fail=$((fail + 1))
         fi
-    done
+    done < <(discover_tests)
 
     local total=$((pass + fail))
     echo ""

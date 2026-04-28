@@ -10,6 +10,16 @@ NC='\033[0m'
 
 USE_BINARY=false
 
+# Handle Ctrl-C: kill all background jobs and exit immediately.
+handle_interrupt() {
+    echo ""
+    echo "Interrupted."
+    jobs -p | xargs -r kill -TERM 2>/dev/null
+    exit 130
+}
+
+trap handle_interrupt INT
+
 discover_tests() {
     if [[ ! -d "$SCRIPT_DIR/smoke-tests" ]]; then
         return 0

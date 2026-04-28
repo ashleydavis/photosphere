@@ -8,7 +8,7 @@ import type { IQueueBackend } from "task-queue";
 import { setQueueBackend } from "task-queue";
 import { WorkerPoolBun } from "./worker-pool-bun";
 import { configureLog } from "./log";
-import { exit, TestUuidGenerator, TestTimestampProvider, registerTerminationCallback, pathExists } from "node-utils";
+import { exit, TestUuidGenerator, TestTimestampProvider, registerTerminationCallback, pathExists, getProcessTmpDir } from "node-utils";
 import { getDatabases } from "api";
 import { log, RandomUuidGenerator, TimestampProvider } from "utils";
 import type { IDatabaseEntry } from 'electron-defs';
@@ -678,7 +678,7 @@ export function initContext<TArgs extends any[], TReturn>(
         const sessionId = options.sessionId || uuidGenerator.generate();
         
         // Create a session temporary directory for this command execution
-        const sessionTempDir = path.join(os.tmpdir(), 'photosphere', sessionId);
+        const sessionTempDir = path.join(getProcessTmpDir(), 'photosphere', sessionId);
         await fs.mkdir(sessionTempDir, { recursive: true });
         log.verbose(`Created temporary directory for command session: "${sessionTempDir}"`);
         

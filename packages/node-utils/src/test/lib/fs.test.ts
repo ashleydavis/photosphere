@@ -1,13 +1,12 @@
-import * as os from 'os';
 import * as path from 'path';
 import * as fsNative from 'fs/promises';
-import { readToml, writeToml } from '../../lib/fs';
+import { readToml, writeToml, getProcessTmpDir } from '../../lib/fs';
 
 //
 // Creates a unique temp file path in the OS temp directory.
 //
 function tempFilePath(suffix: string): string {
-    return path.join(os.tmpdir(), `photosphere-fs-test-${Date.now()}-${suffix}`);
+    return path.join(getProcessTmpDir(), `photosphere-fs-test-${Date.now()}-${suffix}`);
 }
 
 describe('readToml / writeToml', () => {

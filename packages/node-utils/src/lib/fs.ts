@@ -1,5 +1,6 @@
 import * as fs from 'fs/promises';
 import * as fsSync from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { parse as tomlParse, stringify as tomlStringify } from 'smol-toml';
 
@@ -205,5 +206,18 @@ export function copySync(src: string, dest: string): void {
         ensureDirSync(destDir);
         fsSync.copyFileSync(src, dest);
     }
+}
+
+//
+// Returns the temp directory to use for this process.
+// When TEST_TMP_DIR env var is set (test isolation mode), uses a subdirectory of the
+// test's isolated dir so temp files are scoped per-test and cleaned up between runs.
+// Otherwise returns the system temp dir.
+//
+export function getProcessTmpDir(): string {
+    if (process.env.TEST_TMP_DIR) {
+        return path.resolve(process.env.TEST_TMP_DIR, 'tmp');
+    }
+    return os.tmpdir();
 }
 

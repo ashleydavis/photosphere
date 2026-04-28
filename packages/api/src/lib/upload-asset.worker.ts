@@ -5,7 +5,7 @@
 
 import * as fs from "fs/promises";
 import { createReadStream } from "fs";
-import { ensureDir, remove } from "node-utils";
+import { ensureDir, remove, getProcessTmpDir } from "node-utils";
 import os from "os";
 import path from "path";
 import { createStorage, loadEncryptionKeysFromPem } from "storage";
@@ -143,7 +143,7 @@ export async function uploadAssetHandler(data: IUploadAssetData, context: ITaskC
     const { options: storageOptions } = await loadEncryptionKeysFromPem(encryptionKeyPems);
     const { storage } = createStorage(storageDescriptor.databasePath, s3Config, storageOptions);
 
-    const assetTempDir = path.join(os.tmpdir(), `photosphere`, `assets`, uuidGenerator.generate());
+    const assetTempDir = path.join(getProcessTmpDir(), `photosphere`, `assets`, uuidGenerator.generate());
     await ensureDir(assetTempDir);
 
     const fileDisplayPath = data.logicalPath;

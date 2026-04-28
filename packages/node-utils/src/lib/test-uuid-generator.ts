@@ -3,59 +3,75 @@ import path from 'path';
 import { IUuidGenerator } from 'utils';
 
 //
-// Test UUID generator that creates deterministic UUIDs with good shard distribution
+// Test UUID generator that creates deterministic UUIDs with good shard distribution.
+// Uses a file-backed counter with an exclusive-create lock so concurrent processes
+// each receive a unique counter value without collisions.
 //
 export class TestUuidGenerator implements IUuidGenerator {
-    private counter: number = 0;
     private counterFilePath: string;
-    private initialized: boolean = false;
+    private lockFilePath: string;
 
     constructor() {
         const testTmpDir = process.env.TEST_TMP_DIR || './test/tmp';
         this.counterFilePath = path.join(testTmpDir, 'photosphere-test-uuid-counter');
+        this.lockFilePath = this.counterFilePath + '.lock';
     }
 
     generate(): string {
-        this.initializeCounter();
-        this.counter++;
-        this.saveCounter();
-        
-        return this.generateDeterministicUuid(this.counter);
-    }
-
-    private initializeCounter(): void {
-        if (this.initialized) {
-            return;
-        }
-        
-        if (fs.existsSync(this.counterFilePath)) {
-            const fileStats = fs.statSync(this.counterFilePath);
-            const counterData = fs.readFileSync(this.counterFilePath, 'utf8');
-           
-            const trimmedData = counterData.trim();
-            this.counter = parseInt(trimmedData, 10) || 0;
-            
-        } else {
-            this.counter = 0;
-        }
-        
-        this.initialized = true;
-    }
-
-    private saveCounter(): void {
-        // Ensure the directory exists before writing the file
+        // Ensure the directory exists before attempting to create the lock file.
         const dir = path.dirname(this.counterFilePath);
         if (!fs.existsSync(dir)) {
             fs.mkdirSync(dir, { recursive: true });
         }
-        
-        const counterValue = this.counter.toString();
-        fs.writeFileSync(this.counterFilePath, counterValue, 'utf8');
+        this.acquireLock();
+        try {
+            let counter = 0;
+            if (fs.existsSync(this.counterFilePath)) {
+                const data = fs.readFileSync(this.counterFilePath, 'utf8');
+                counter = parseInt(data.trim(), 10) || 0;
+            }
+            counter++;
+            fs.writeFileSync(this.counterFilePath, counter.toString(), 'utf8');
+            return this.generateDeterministicUuid(counter);
+        } finally {
+            this.releaseLock();
+        }
+    }
+
+    //
+    // Acquires a spinlock via O_CREAT|O_EXCL so only one process increments the counter
+    // at a time. Removes a stale lock after 5 seconds of waiting.
+    //
+    private acquireLock(): void {
+        const maxWaitMs = 5000;
+        const startTime = Date.now();
+        while (true) {
+            try {
+                const fd = fs.openSync(this.lockFilePath, fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_WRONLY);
+                fs.closeSync(fd);
+                return;
+            } catch {
+                if (Date.now() - startTime > maxWaitMs) {
+                    // Stale lock — remove and take ownership.
+                    try { fs.unlinkSync(this.lockFilePath); } catch {}
+                    const fd = fs.openSync(this.lockFilePath, fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_WRONLY);
+                    fs.closeSync(fd);
+                    return;
+                }
+                // Short busy-spin before retrying.
+                const spinEnd = Date.now() + 5;
+                while (Date.now() < spinEnd) {}
+            }
+        }
+    }
+
+    private releaseLock(): void {
+        try { fs.unlinkSync(this.lockFilePath); } catch {}
     }
 
     reset(): void {
-        this.counter = 0;
-        this.initialized = false;
+        try { fs.unlinkSync(this.counterFilePath); } catch {}
+        try { fs.unlinkSync(this.lockFilePath); } catch {}
     }
 
     private generateDeterministicUuid(counter: number): string {

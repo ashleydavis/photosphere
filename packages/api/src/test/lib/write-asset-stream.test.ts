@@ -1,9 +1,8 @@
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 import { Readable } from "stream";
 import { createStorage } from "storage";
-import { TestUuidGenerator } from "node-utils";
+import { TestUuidGenerator, getProcessTmpDir } from "node-utils";
 import { MockTimestampProvider } from "utils";
 import {
     createDatabase,
@@ -13,7 +12,7 @@ import {
 
 describe("writeAssetStream", () => {
     test("persists bytes from the stream", async () => {
-        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "write-asset-stream-"));
+        const tmpDir = fs.mkdtempSync(path.join(getProcessTmpDir(), "write-asset-stream-"));
         try {
             const { storage: assetStorage, rawStorage } = createStorage(tmpDir, undefined, undefined);
             const uuidGenerator = new TestUuidGenerator();
@@ -44,7 +43,7 @@ describe("writeAssetStream", () => {
     });
 
     test("rejects announced zero length before writing", async () => {
-        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "write-asset-stream-cl0-"));
+        const tmpDir = fs.mkdtempSync(path.join(getProcessTmpDir(), "write-asset-stream-cl0-"));
         try {
             const { storage: assetStorage, rawStorage } = createStorage(tmpDir, undefined, undefined);
             const uuidGenerator = new TestUuidGenerator();
@@ -73,7 +72,7 @@ describe("writeAssetStream", () => {
     });
 
     test("rejects an empty stream when length is not announced", async () => {
-        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "write-asset-stream-empty-"));
+        const tmpDir = fs.mkdtempSync(path.join(getProcessTmpDir(), "write-asset-stream-empty-"));
         try {
             const { storage: assetStorage, rawStorage } = createStorage(tmpDir, undefined, undefined);
             const uuidGenerator = new TestUuidGenerator();
