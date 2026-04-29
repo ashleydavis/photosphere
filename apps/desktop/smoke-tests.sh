@@ -10,6 +10,12 @@ NC='\033[0m'
 
 USE_BINARY=false
 
+# Record start time for total duration reporting
+SMOKE_TESTS_START_TIME=$SECONDS
+
+# Track log files for failed tests so we can dump them after the summary
+FAILED_TEST_LOGS=()
+
 # Handle Ctrl-C: kill all background jobs and exit immediately.
 handle_interrupt() {
     echo ""
@@ -62,6 +68,17 @@ list_tests() {
     done < <(discover_tests)
 }
 
+format_duration() {
+    local elapsed="$1"
+    local minutes=$((elapsed / 60))
+    local secs=$((elapsed % 60))
+    if ((minutes > 0)); then
+        printf "%dm %ds" "$minutes" "$secs"
+    else
+        printf "%ds" "$secs"
+    fi
+}
+
 run_one() {
     local test_sh="$1"
     local dir num name log_file
@@ -70,12 +87,18 @@ run_one() {
     name="$(test_name "$test_sh")"
     log_file="$dir/tmp/test-run.log"
     mkdir -p "$dir/tmp"
-    printf "${BLUE}RUN ${NC}   %s  %s\n" "$num" "$name"
+    printf "${BLUE}RUN ${NC}  %2s  %s\n" "$num" "$name"
+    local test_start=$SECONDS
     if timeout 300 bash "$test_sh" >"$log_file" 2>&1; then
-        printf "${GREEN}PASS${NC}  %s  %s\n" "$num" "$name"
+        local test_duration
+        test_duration=$(format_duration $((SECONDS - test_start)))
+        printf "${GREEN}PASS${NC}  %2s  %-30s  %s\n" "$num" "$name" "$test_duration"
         return 0
     else
-        printf "${RED}FAIL${NC}  %s  %s  (log: %s)\n" "$num" "$name" "$log_file"
+        local test_duration
+        test_duration=$(format_duration $((SECONDS - test_start)))
+        printf "${RED}FAIL${NC}  %2s  %-30s  %s  (log: %s)\n" "$num" "$name" "$test_duration" "$log_file"
+        FAILED_TEST_LOGS+=("$log_file")
         return 1
     fi
 }
@@ -90,6 +113,7 @@ run_sequential() {
             fail=$((fail + 1))
         fi
     done
+    print_failed_logs
     print_summary "$pass" "$fail"
     return $((fail > 0 ? 1 : 0))
 }
@@ -122,8 +146,14 @@ run_parallel_batch() {
             name="$(test_name "$t")"
             log_file="$dir/tmp/test-run.log"
             mkdir -p "$dir/tmp"
-            printf "${BLUE}RUN ${NC}   %s  %s\n" "$num" "$name"
-            timeout 300 bash "$t" >"$log_file" 2>&1 &
+            printf "${BLUE}RUN ${NC}  %2s  %s\n" "$num" "$name"
+            (
+                local_start=$SECONDS
+                timeout 300 bash "$t" >"$log_file" 2>&1
+                local_exit=$?
+                echo $((SECONDS - local_start)) > "$dir/tmp/test-duration.txt"
+                exit $local_exit
+            ) &
             batch_pids+=($!)
         done
 
@@ -133,11 +163,17 @@ run_parallel_batch() {
             t="${batch_tests[$k]}"
             num="$(test_number "$t")"
             name="$(test_name "$t")"
+            local duration_file
+            duration_file="$(dirname "$t")/tmp/test-duration.txt"
+            local test_duration
             if wait "$pid"; then
-                printf "${GREEN}PASS${NC}  %s  %s\n" "$num" "$name"
+                test_duration=$(format_duration "$(cat "$duration_file" 2>/dev/null || echo 0)")
+                printf "${GREEN}PASS${NC}  %2s  %-30s  %s\n" "$num" "$name" "$test_duration"
                 eval "$pass_var=$(( ${!pass_var} + 1 ))"
             else
-                printf "${RED}FAIL${NC}  %s  %s  (log: %s/tmp/test-run.log)\n" "$num" "$name" "$(dirname "$t")"
+                test_duration=$(format_duration "$(cat "$duration_file" 2>/dev/null || echo 0)")
+                printf "${RED}FAIL${NC}  %2s  %-30s  %s  (log: %s/tmp/test-run.log)\n" "$num" "$name" "$test_duration" "$(dirname "$t")"
+                FAILED_TEST_LOGS+=("$(dirname "$t")/tmp/test-run.log")
                 eval "$fail_var=$(( ${!fail_var} + 1 ))"
             fi
             k=$((k + 1))
@@ -174,19 +210,46 @@ run_mixed() {
         fi
     done
 
+    print_failed_logs
     print_summary "$pass" "$fail"
     return $((fail > 0 ? 1 : 0))
+}
+
+print_failed_logs() {
+    if [ ${#FAILED_TEST_LOGS[@]} -eq 0 ]; then
+        return
+    fi
+    echo ""
+    echo "============================================================================"
+    echo "FAILED TEST OUTPUT"
+    echo "============================================================================"
+    for log_file in "${FAILED_TEST_LOGS[@]}"; do
+        local test_dir_name
+        test_dir_name=$(basename "$(dirname "$(dirname "$log_file")")")
+        echo ""
+        echo "---------- $test_dir_name ($log_file) ----------"
+        cat "$log_file"
+        echo "---------- end $test_dir_name ----------"
+    done
 }
 
 print_summary() {
     local pass="$1"
     local fail="$2"
     local total=$((pass + fail))
+    local elapsed=$((SECONDS - SMOKE_TESTS_START_TIME))
+    local minutes=$((elapsed / 60))
+    local secs=$((elapsed % 60))
     echo ""
     if ((fail == 0)); then
         printf "${GREEN}All %d tests passed${NC}\n" "$total"
     else
         printf "${RED}%d of %d tests failed${NC}\n" "$fail" "$total"
+    fi
+    if ((minutes > 0)); then
+        printf "Duration: %dm %ds\n" "$minutes" "$secs"
+    else
+        printf "Duration: %ds\n" "$secs"
     fi
 }
 
