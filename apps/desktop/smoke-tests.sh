@@ -16,6 +16,31 @@ SMOKE_TESTS_START_TIME=$SECONDS
 # Track log files for failed tests so we can dump them after the summary
 FAILED_TEST_LOGS=()
 
+# macOS and Windows lack GNU timeout; provide a compatible implementation
+_timeout_fallback() {
+    local duration="$1"
+    shift
+    "$@" &
+    local child_pid=$!
+    ( sleep "$duration" && kill "$child_pid" 2>/dev/null ) &
+    local killer_pid=$!
+    wait "$child_pid"
+    local exit_status=$?
+    kill "$killer_pid" 2>/dev/null
+    wait "$killer_pid" 2>/dev/null
+    return $exit_status
+}
+
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    if command -v gtimeout &>/dev/null; then
+        timeout() { gtimeout "$@"; }
+    else
+        timeout() { _timeout_fallback "$@"; }
+    fi
+elif [[ "$OSTYPE" == "msys"* ]] || [[ "$OSTYPE" == "cygwin"* ]]; then
+    timeout() { _timeout_fallback "$@"; }
+fi
+
 # Handle Ctrl-C: kill all background jobs and exit immediately.
 handle_interrupt() {
     echo ""
