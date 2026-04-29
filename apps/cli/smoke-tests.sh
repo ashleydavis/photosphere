@@ -7,6 +7,14 @@
 # Absolute path to this script's directory, resolved before any cd takes place.
 SMOKE_TESTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+# On Windows (msys/cygwin), pwd returns a POSIX path (/d/a/...) that native .exe binaries
+# cannot resolve. pwd -W returns a Windows-style path (D:/a/...) that both bash and .exe understand.
+if [[ "$OSTYPE" == "msys"* ]] || [[ "$OSTYPE" == "cygwin"* ]]; then
+    _CLI_ABS_DIR="$(cd "$(dirname "$0")" && pwd -W)"
+else
+    _CLI_ABS_DIR="$SMOKE_TESTS_DIR"
+fi
+
 # macOS and Windows lack GNU timeout; provide a compatible implementation
 _timeout_fallback() {
     local duration="$1"
@@ -47,7 +55,7 @@ NC='\033[0m' # No Color
 
 # Test configuration
 # Override TEST_TMP_DIR to run tests in parallel (e.g. TEST_TMP_DIR=./test/tmp-$$ ./smoke-tests.sh)
-TEST_TMP_DIR="${TEST_TMP_DIR:-./test/tmp}"
+TEST_TMP_DIR="${TEST_TMP_DIR:-$_CLI_ABS_DIR/test/tmp}"
 TEST_DB_DIR="$TEST_TMP_DIR/shared/test-db"
 TEST_FILES_DIR="../../test"
 MULTIPLE_IMAGES_DIR="../../test/multiple-images"
