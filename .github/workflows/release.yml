@@ -830,6 +830,7 @@ jobs:
 
       - name: Run Electron smoke tests
         working-directory: ./apps/desktop
+        # --sequential: prevents multiple Electron instances competing on the same xvfb virtual display
         run: xvfb-run -a ./smoke-tests.sh --sequential
 
   build-desktop:
