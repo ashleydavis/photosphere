@@ -423,6 +423,7 @@ run_one() {
     dir_name="$(basename "$dir")"
     mkdir -p "$dir/tmp"
     export ISOLATED_TEST_TMP_DIR="${TEST_TMP_DIR}/${dir_name}"
+    mkdir -p "$ISOLATED_TEST_TMP_DIR"
     printf "${BLUE}RUN ${NC}  %2s  %s\n" "$num" "$name"
     local test_start=$SECONDS
     if timeout 300 bash "$test_sh" >"$log_file" 2>&1; then
@@ -483,6 +484,7 @@ run_parallel() {
             dir_name="$(basename "$dir")"
             log_file="$dir/tmp/test-run.log"
             mkdir -p "$dir/tmp"
+            mkdir -p "${TEST_TMP_DIR}/${dir_name}"
             printf "${BLUE}RUN ${NC}  %2s  %s\n" "$num" "$name"
             (
                 local_start=$SECONDS
