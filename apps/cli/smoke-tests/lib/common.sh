@@ -755,14 +755,22 @@ seed_vault_secret() {
 
     mkdir -p "$PHOTOSPHERE_VAULT_DIR"
     local encoded_name
-    encoded_name=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$secret_name', safe=''))")
+    encoded_name=$(bun -e "process.stdout.write(encodeURIComponent('$secret_name'))")
     local file_path="${PHOTOSPHERE_VAULT_DIR}/${encoded_name}.json"
+
+    local escaped_value
+    escaped_value=$(printf '%s' "$secret_value" | bun -e "
+        const chunks = [];
+        for await (const chunk of Bun.stdin.stream()) { chunks.push(chunk); }
+        const text = Buffer.concat(chunks).toString().trim();
+        process.stdout.write(JSON.stringify(text));
+    ")
 
     cat > "$file_path" <<VAULT_EOF
 {
   "name": "$secret_name",
   "type": "$secret_type",
-  "value": $(echo "$secret_value" | python3 -c "import sys,json; print(json.dumps(sys.stdin.read().strip()))")
+  "value": $escaped_value
 }
 VAULT_EOF
     chmod 600 "$file_path"
