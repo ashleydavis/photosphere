@@ -29,7 +29,6 @@ cleanup() {
 }
 trap cleanup EXIT
 
-rm -rf "$TMP_DIR"
 mkdir -p "$TMP_DIR/sender/vault" "$TMP_DIR/sender/config" "$TMP_DIR/receiver/vault" "$TMP_DIR/receiver/config"
 
 # Seed sender vault with a test secret
