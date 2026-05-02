@@ -1,7 +1,7 @@
 #!/bin/bash
 
-TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
-DESKTOP_DIR="$(cd "$TEST_DIR/../.." && pwd)"
+TEST_DIR="$(cd "$(dirname "$0")" && native_pwd)"
+DESKTOP_DIR="$(cd "$TEST_DIR/../.." && native_pwd)"
 
 source "$TEST_DIR/../lib/common.sh"
 

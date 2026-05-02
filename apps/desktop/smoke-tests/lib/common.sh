@@ -48,6 +48,20 @@ print(port)
 }
 
 #
+# Returns the current directory as a native OS path.
+# On Windows (Git Bash), pwd returns POSIX paths (/d/a/...) which native
+# Windows processes like Electron cannot resolve correctly. pwd -W returns
+# the Windows form (D:/a/...) that both bash and native processes understand.
+#
+native_pwd() {
+    if [ "$(detect_platform)" = "win" ]; then
+        pwd -W
+    else
+        pwd
+    fi
+}
+
+#
 # Detects the current OS: linux, mac, or win.
 #
 detect_platform() {
