@@ -111,6 +111,7 @@ run_one() {
     num="$(test_number "$test_sh")"
     name="$(test_name "$test_sh")"
     log_file="$dir/tmp/test-run.log"
+    rm -rf "$dir/tmp"
     mkdir -p "$dir/tmp"
     printf "${BLUE}RUN ${NC}  %2s  %s\n" "$num" "$name"
     local test_start=$SECONDS
@@ -170,6 +171,7 @@ run_parallel_batch() {
             num="$(test_number "$t")"
             name="$(test_name "$t")"
             log_file="$dir/tmp/test-run.log"
+            rm -rf "$dir/tmp"
             mkdir -p "$dir/tmp"
             printf "${BLUE}RUN ${NC}  %2s  %s\n" "$num" "$name"
             (

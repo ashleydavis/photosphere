@@ -14,9 +14,6 @@ APP_PORT=$(find_free_port)
 
 trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 
-rm -rf "$TMP_DIR"
-mkdir -p "$TMP_DIR"
-
 log_info "Pre-creating database with CLI..."
 cd "$CLI_DIR" && bun run start -- init --db "$TMP_DIR/test-db" --yes
 cd "$DESKTOP_DIR"

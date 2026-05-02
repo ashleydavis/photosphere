@@ -21,9 +21,6 @@ cleanup() {
 }
 trap cleanup EXIT
 
-rm -rf "$TMP_DIR"
-mkdir -p "$TMP_DIR"
-
 start_app "$APP_PORT" "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
