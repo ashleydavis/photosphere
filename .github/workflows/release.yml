@@ -940,6 +940,7 @@ jobs:
       - name: Run Electron smoke tests against binary (Not Linux)
         if: runner.os != 'Linux'
         working-directory: ./apps/desktop
+        shell: bash
         run: ./smoke-tests.sh --binary --sequential
 
       - name: Upload artifacts
