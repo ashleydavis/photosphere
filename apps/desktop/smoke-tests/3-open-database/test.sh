@@ -1,8 +1,8 @@
 #!/bin/bash
 
-TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
-DESKTOP_DIR="$(cd "$TEST_DIR/../.." && pwd)"
-REPO_DIR="$(cd "$DESKTOP_DIR/../.." && pwd)"
+TEST_DIR="$(cd "$(dirname "$0")" && native_pwd)"
+DESKTOP_DIR="$(cd "$TEST_DIR/../.." && native_pwd)"
+REPO_DIR="$(cd "$DESKTOP_DIR/../.." && native_pwd)"
 CLI_DIR="$REPO_DIR/apps/cli"
 
 source "$TEST_DIR/../lib/common.sh"
