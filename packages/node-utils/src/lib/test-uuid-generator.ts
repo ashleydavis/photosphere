@@ -43,15 +43,19 @@ export class TestUuidGenerator implements IUuidGenerator {
         const startTime = Date.now();
         while (true) {
             try {
-                const fd = fs.openSync(this.lockFilePath, fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_WRONLY);
-                fs.closeSync(fd);
+                // Use writeFileSync with 'wx' flag (exclusive create) instead of
+                // openSync with O_CREAT|O_EXCL flags, because Bun on Windows
+                // returns ENOENT for openSync with O_CREAT even when the parent
+                // directory exists.
+                fs.writeFileSync(this.lockFilePath, '', { flag: 'wx' });
                 return;
-            } catch {
+            }
+            catch {
                 if (Date.now() - startTime > maxWaitMs) {
                     // Stale lock — remove and take ownership.
-                    try { fs.unlinkSync(this.lockFilePath); } catch {}
-                    const fd = fs.openSync(this.lockFilePath, fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_WRONLY);
-                    fs.closeSync(fd);
+                    try { fs.unlinkSync(this.lockFilePath); }
+                    catch {}
+                    fs.writeFileSync(this.lockFilePath, '', { flag: 'wx' });
                     return;
                 }
                 // Short busy-spin before retrying.
