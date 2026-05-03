@@ -348,9 +348,13 @@ export class LanShareReceiver {
             const message = Buffer.from(`PSIE_RECV:${port}:${selfSigned.fingerprint}`);
             this.broadcastTimer = setInterval(() => {
                 this.udpSocket!.send(message, 0, message.length, DISCOVERY_PORT, "255.255.255.255");
+                // Also send to loopback so same-machine discovery works on macOS, where
+                // 255.255.255.255 broadcasts are not reliably looped back between processes.
+                this.udpSocket!.send(message, 0, message.length, DISCOVERY_PORT, "127.0.0.1");
             }, BROADCAST_INTERVAL_MS);
             // Send first broadcast immediately
             this.udpSocket!.send(message, 0, message.length, DISCOVERY_PORT, "255.255.255.255");
+            this.udpSocket!.send(message, 0, message.length, DISCOVERY_PORT, "127.0.0.1");
         });
     }
 
