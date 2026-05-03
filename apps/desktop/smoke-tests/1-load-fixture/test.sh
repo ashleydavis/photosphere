@@ -1,10 +1,10 @@
 #!/bin/bash
 
+TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$TEST_DIR/../lib/common.sh"
 TEST_DIR="$(cd "$(dirname "$0")" && native_pwd)"
 DESKTOP_DIR="$(cd "$TEST_DIR/../.." && native_pwd)"
 REPO_DIR="$(cd "$DESKTOP_DIR/../.." && native_pwd)"
-
-source "$TEST_DIR/../lib/common.sh"
 
 print_test_header 1 "load-fixture"
 
