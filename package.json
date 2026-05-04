@@ -29,6 +29,7 @@
     "bundle:main": "bun run --filter=photosphere bundle",
     "bundle:renderer": "bun run --filter=desktop-frontend bundle",
     "bundle": "bun run bundle:main && bun run bundle:renderer",
+    "smoke": "bun run test:cli && bun run test:electron",
     "test:electron": "bun run build && ./apps/desktop/smoke-tests.sh",
     "test:electron:seq": "bun run build && ./apps/desktop/smoke-tests.sh --sequential",
     "test:electron:run": "./apps/desktop/smoke-tests.sh",
