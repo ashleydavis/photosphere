@@ -22,6 +22,7 @@ import {
     removeDatabaseEntry,
     getRecentDatabases,
     markDatabaseOpenedByPath,
+    removeRecentDatabasePath,
 } from '../../lib/databases-config';
 import type { IDatabaseEntry } from 'electron-defs';
 
@@ -299,5 +300,51 @@ describe('markDatabaseOpenedByPath', () => {
         await markDatabaseOpenedByPath('/unknown');
 
         expect(mockWriteToml).not.toHaveBeenCalled();
+    });
+});
+
+describe('removeRecentDatabasePath', () => {
+    beforeEach(() => jest.clearAllMocks());
+
+    test('removes a path that exists in recent_database_paths', async () => {
+        mockPathExists.mockImplementation((filePath: string) => filePath.endsWith('.toml'));
+        mockReadToml.mockResolvedValue({
+            databases: [makeTomlEntry('/a'), makeTomlEntry('/b')],
+            recent_database_paths: ['/a', '/b'],
+        });
+
+        await removeRecentDatabasePath('/a');
+
+        expect(mockWriteToml).toHaveBeenCalledTimes(1);
+        const tomlArg = mockWriteToml.mock.calls[0][1];
+        expect(tomlArg.recent_database_paths).toEqual(['/b']);
+        expect(tomlArg.databases).toHaveLength(2);
+    });
+
+    test('no-op when the path is not in the recent list', async () => {
+        mockPathExists.mockImplementation((filePath: string) => filePath.endsWith('.toml'));
+        mockReadToml.mockResolvedValue({
+            databases: [makeTomlEntry('/a')],
+            recent_database_paths: [],
+        });
+
+        await removeRecentDatabasePath('/a');
+
+        expect(mockWriteToml).not.toHaveBeenCalled();
+    });
+
+    test('leaves the entry in databases untouched', async () => {
+        mockPathExists.mockImplementation((filePath: string) => filePath.endsWith('.toml'));
+        mockReadToml.mockResolvedValue({
+            databases: [makeTomlEntry('/a')],
+            recent_database_paths: ['/a'],
+        });
+
+        await removeRecentDatabasePath('/a');
+
+        expect(mockWriteToml).toHaveBeenCalledTimes(1);
+        const tomlArg = mockWriteToml.mock.calls[0][1];
+        expect(tomlArg.databases).toHaveLength(1);
+        expect(tomlArg.databases[0].path).toBe('/a');
     });
 });

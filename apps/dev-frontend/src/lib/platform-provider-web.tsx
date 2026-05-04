@@ -263,6 +263,9 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         return [];
     }, []);
 
+    const removeRecentDatabasePath = useCallback(async (_databasePath: string): Promise<void> => {
+    }, []);
+
     const listS3Dirs = useCallback(async (_credentialId: string, _bucket: string, _prefix: string): Promise<string[]> => {
         return [];
     }, []);
@@ -335,6 +338,7 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         deleteSecret,
         getSecretValue,
         getRecentDatabases,
+        removeRecentDatabasePath,
         listS3Dirs,
         startShareReceive,
         waitShareReceive,

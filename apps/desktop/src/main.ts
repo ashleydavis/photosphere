@@ -10,7 +10,7 @@ import { TaskQueue, TaskStatus, setQueueBackend } from 'task-queue';
 import { WorkerPoolElectronMain } from './lib/worker-pool-electron-main';
 import { RandomUuidGenerator, TimestampProvider, logExceptions, log } from 'utils';
 import { findAvailablePort } from 'node-utils';
-import { loadDesktopConfig, saveDesktopConfig, updateLastFolder, getTheme, setTheme, updateLastDownloadFolder, getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry, getRecentDatabases, markDatabaseOpenedByPath } from 'api';
+import { loadDesktopConfig, saveDesktopConfig, updateLastFolder, getTheme, setTheme, updateLastDownloadFolder, getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry, getRecentDatabases, markDatabaseOpenedByPath, removeRecentDatabasePath } from 'api';
 import type { IWorkerPoolOptions } from './lib/worker-pool-electron-main';
 import type { IRestApiWorkerStopMessage, IRestApiWorkerStartMessage } from './rest-api-worker';
 import { FileLoggerElectron } from './lib/file-logger-electron';
@@ -479,6 +479,12 @@ ipcMain.handle('notify-database-opened', logExceptions(async (_event, databasePa
 ipcMain.handle('get-recent-databases', logExceptions(async () => {
     return await getRecentDatabases();
 }, 'Error getting recent databases'));
+
+// IPC handler for removing a path from the recently opened database list (does NOT remove the database entry itself).
+ipcMain.handle('remove-recent-database-path', logExceptions(async (_event, databasePath: string) => {
+    await removeRecentDatabasePath(databasePath);
+    log.event(`Recent database removed: ${databasePath}`);
+}, 'Error removing recent database path'));
 
 // IPC handler for listing directory names under an S3 bucket and prefix
 ipcMain.handle('list-s3-dirs', logExceptions(async (_event, credentialId: string, bucket: string, prefix: string) => {

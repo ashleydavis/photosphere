@@ -219,6 +219,20 @@ export async function getRecentDatabases(): Promise<IDatabaseEntry[]> {
 }
 
 //
+// Removes the given path from recentDatabasePaths only. Leaves the matching entry
+// in `databases` untouched. No-op if the path is not in the recent list.
+//
+export async function removeRecentDatabasePath(databasePath: string): Promise<void> {
+    const config = await loadDatabasesConfig();
+    const filtered = config.recentDatabasePaths.filter(recentPath => recentPath !== databasePath);
+    if (filtered.length === config.recentDatabasePaths.length) {
+        return;
+    }
+    config.recentDatabasePaths = filtered;
+    await saveDatabasesConfig(config);
+}
+
+//
 // Moves the database entry matching the given path to the front of recentDatabasePaths,
 // trimming the list to a maximum of 5 entries, then saves.
 //

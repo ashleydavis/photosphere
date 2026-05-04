@@ -82,6 +82,7 @@ export function Navbar({
             <div className="flex flex-col">
                 <div className="flex flex-row items-center pl-4 pt-3 pb-2">
                     <button
+                        data-id="sidebar-toggle-button"
                         title="Toggle sidebar"
                         onClick={() => setSidebarOpen(!sidebarOpen)}
                     >

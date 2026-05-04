@@ -393,6 +393,11 @@ export interface IPlatformContext {
     getRecentDatabases: () => Promise<IDatabaseEntry[]>;
 
     //
+    // Removes the given path from the recently opened list only; the underlying database entry is preserved.
+    //
+    removeRecentDatabasePath: (path: string) => Promise<void>;
+
+    //
     // Lists directory names under the given S3 bucket and prefix using the credentials
     // identified by credentialId (a shared secret id).
     //

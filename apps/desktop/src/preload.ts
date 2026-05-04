@@ -104,6 +104,9 @@ const electronAPI: IElectronAPI = {
     getRecentDatabases: (): Promise<IDatabaseEntry[]> => {
         return ipcRenderer.invoke('get-recent-databases');
     },
+    removeRecentDatabasePath: (databasePath: string): Promise<void> => {
+        return ipcRenderer.invoke('remove-recent-database-path', databasePath);
+    },
     startShareReceive: (code: string): Promise<void> => {
         return ipcRenderer.invoke('start-share-receive', code);
     },

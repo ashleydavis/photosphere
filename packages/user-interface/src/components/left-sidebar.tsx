@@ -7,10 +7,11 @@ import { useTheme } from '@mui/joy/styles/ThemeProvider';
 import List from '@mui/joy/List/List';
 import ListItem from '@mui/joy/ListItem/ListItem';
 import ListItemDecorator from '@mui/joy/ListItemDecorator/ListItemDecorator';
-import { PhotoLibrary, Folder, FolderOpen, Info, Map, Search, Settings, CreateNewFolder, FileUpload, ManageSearch, Key } from '@mui/icons-material';
+import { PhotoLibrary, Folder, FolderOpen, Info, Map, Search, Settings, CreateNewFolder, FileUpload, ManageSearch, Key, Delete } from '@mui/icons-material';
 import { CollapsibleSection } from './collapsible-section';
 import ListItemContent from '@mui/joy/ListItemContent/ListItemContent';
 import ListItemButton from '@mui/joy/ListItemButton/ListItemButton';
+import IconButton from '@mui/joy/IconButton/IconButton';
 import Divider from '@mui/joy/Divider/Divider';
 import { useSearch } from '../context/search-context';
 
@@ -190,8 +191,27 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                     <Divider />
                     <CollapsibleSection configKey="sidebar-collapsed-databases" label="Databases" style={{ paddingLeft: "15px" }}>
                         <List>
-                            {recentDatabases.map(dbEntry => (
-                                <ListItem key={dbEntry.path}>
+                            {recentDatabases.map((dbEntry, dbIndex) => (
+                                <ListItem
+                                    key={dbEntry.path}
+                                    endAction={
+                                        <IconButton
+                                            data-id={`remove-recent-database-button-${dbIndex}`}
+                                            size="sm"
+                                            variant="plain"
+                                            color="neutral"
+                                            title="Remove from recent databases"
+                                            onClick={async (clickEvent) => {
+                                                clickEvent.stopPropagation();
+                                                await platform.removeRecentDatabasePath(dbEntry.path);
+                                                loadRecentDatabases();
+                                            }}
+                                            sx={{ minHeight: '32px', minWidth: '32px' }}
+                                            >
+                                            <Delete fontSize="small" />
+                                        </IconButton>
+                                    }
+                                    >
                                     <ListItemButton
                                         onClick={async () => {
                                             setSidebarOpen(false);
