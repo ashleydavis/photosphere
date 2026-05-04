@@ -362,42 +362,30 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
     const listSecrets = useCallback(async (): Promise<ISharedSecretEntry[]> => {
         const vault = new ProxyVault(electronAPI);
         const allSecrets = await vault.list();
-        return allSecrets.map(secret => {
-            try {
-                const parsed = JSON.parse(secret.value);
-                return { id: secret.name, name: parsed.label ?? secret.name, type: secret.type };
-            }
-            catch {
-                return { id: secret.name, name: secret.name, type: secret.type };
-            }
-        });
+        return allSecrets.map(secret => ({ id: secret.name, name: secret.name, type: secret.type }));
     }, [electronAPI]);
 
     const addSecret = useCallback(async (entry: Omit<ISharedSecretEntry, 'id'>, value: string): Promise<ISharedSecretEntry> => {
         const vault = new ProxyVault(electronAPI);
-        const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-        let id = '';
-        for (let index = 0; index < 8; index++) {
-            id += chars[Math.floor(Math.random() * chars.length)];
+        const existing = await vault.get(entry.name);
+        if (existing) {
+            throw new Error(`A secret named '${entry.name}' already exists.`);
         }
-        const valueWithLabel = JSON.stringify({ label: entry.name, ...JSON.parse(value) });
-        await vault.set({ name: id, type: entry.type, value: valueWithLabel });
-        return { id, name: entry.name, type: entry.type };
+        await vault.set({ name: entry.name, type: entry.type, value });
+        return { id: entry.name, name: entry.name, type: entry.type };
     }, [electronAPI]);
 
     const updateSecret = useCallback(async (entry: ISharedSecretEntry, value?: string): Promise<void> => {
         const vault = new ProxyVault(electronAPI);
-        if (value !== undefined) {
-            const valueWithLabel = JSON.stringify({ label: entry.name, ...JSON.parse(value) });
-            await vault.set({ name: entry.id, type: entry.type, value: valueWithLabel });
+        if (value === undefined) {
+            return;
         }
-        else {
-            const existing = await vault.get(entry.id);
-            if (existing) {
-                const parsed = JSON.parse(existing.value);
-                parsed.label = entry.name;
-                await vault.set({ name: entry.id, type: entry.type, value: JSON.stringify(parsed) });
-            }
+
+        // Set the new entry first, then delete the old one if the name changed.
+        // Order matters: a crash between the two leaves data rather than losing it.
+        await vault.set({ name: entry.name, type: entry.type, value });
+        if (entry.id !== entry.name) {
+            await vault.delete(entry.id);
         }
     }, [electronAPI]);
 

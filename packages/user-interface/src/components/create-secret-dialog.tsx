@@ -11,6 +11,7 @@ import Textarea from '@mui/joy/Textarea';
 import FormControl from '@mui/joy/FormControl';
 import FormLabel from '@mui/joy/FormLabel';
 import { usePlatform, type ISharedSecretEntry } from '../context/platform-context';
+import { buildValueJson, emptyFormState, type ISecretFormState } from '../lib/secrets-form';
 
 export interface ICreateSecretDialogProps {
     // Whether the dialog is open.
@@ -36,48 +37,18 @@ export interface ICreateSecretDialogProps {
 export function CreateSecretDialog({ open, secretType, defaultName, onClose, onSave }: ICreateSecretDialogProps) {
     const platform = usePlatform();
 
-    const [name, setName] = useState(defaultName);
-
-    // S3 credentials fields.
-    const [s3Endpoint, setS3Endpoint] = useState('');
-    const [s3Region, setS3Region] = useState('');
-    const [s3AccessKeyId, setS3AccessKeyId] = useState('');
-    const [s3SecretAccessKey, setS3SecretAccessKey] = useState('');
-
-    // Encryption key fields.
-    const [privateKeyPem, setPrivateKeyPem] = useState('');
-    const [publicKeyPem, setPublicKeyPem] = useState('');
-
-    // API key field.
-    const [apiKey, setApiKey] = useState('');
-
-    //
-    // Builds the JSON value string from the current type-specific fields.
-    //
-    function buildValueJson(): string {
-        if (secretType === 's3-credentials') {
-            const obj: Record<string, string> = {
-                region: s3Region,
-                accessKeyId: s3AccessKeyId,
-                secretAccessKey: s3SecretAccessKey,
-            };
-            if (s3Endpoint) {
-                obj.endpoint = s3Endpoint;
-            }
-            return JSON.stringify(obj);
-        }
-        if (secretType === 'encryption-key') {
-            return JSON.stringify({ privateKeyPem, publicKeyPem });
-        }
-        return JSON.stringify({ apiKey });
-    }
+    const [form, setForm] = useState<ISecretFormState>(() => ({
+        ...emptyFormState(),
+        name: defaultName,
+        type: secretType,
+    }));
 
     //
     // Creates the secret and notifies the parent.
     //
     async function handleSave(): Promise<void> {
-        const valueJson = buildValueJson();
-        const newSecret = await platform.addSecret({ name, type: secretType }, valueJson);
+        const valueJson = buildValueJson(form);
+        const newSecret = await platform.addSecret({ name: form.name, type: secretType }, valueJson);
         onSave(newSecret);
     }
 
@@ -90,19 +61,32 @@ export function CreateSecretDialog({ open, secretType, defaultName, onClose, onS
                 <>
                     <FormControl sx={{ mb: 1 }}>
                         <FormLabel>Endpoint (optional)</FormLabel>
-                        <Input value={s3Endpoint} onChange={event => setS3Endpoint(event.target.value)} />
+                        <Input
+                            value={form.s3Endpoint}
+                            onChange={event => setForm(prev => ({ ...prev, s3Endpoint: event.target.value }))}
+                        />
                     </FormControl>
                     <FormControl sx={{ mb: 1 }}>
                         <FormLabel>Region</FormLabel>
-                        <Input value={s3Region} onChange={event => setS3Region(event.target.value)} />
+                        <Input
+                            value={form.s3Region}
+                            onChange={event => setForm(prev => ({ ...prev, s3Region: event.target.value }))}
+                        />
                     </FormControl>
                     <FormControl sx={{ mb: 1 }}>
                         <FormLabel>Access Key ID</FormLabel>
-                        <Input value={s3AccessKeyId} onChange={event => setS3AccessKeyId(event.target.value)} />
+                        <Input
+                            value={form.s3AccessKeyId}
+                            onChange={event => setForm(prev => ({ ...prev, s3AccessKeyId: event.target.value }))}
+                        />
                     </FormControl>
                     <FormControl sx={{ mb: 1 }}>
                         <FormLabel>Secret Access Key</FormLabel>
-                        <Input type="password" value={s3SecretAccessKey} onChange={event => setS3SecretAccessKey(event.target.value)} />
+                        <Input
+                            type="password"
+                            value={form.s3SecretAccessKey}
+                            onChange={event => setForm(prev => ({ ...prev, s3SecretAccessKey: event.target.value }))}
+                        />
                     </FormControl>
                 </>
             );
@@ -112,11 +96,20 @@ export function CreateSecretDialog({ open, secretType, defaultName, onClose, onS
                 <>
                     <FormControl sx={{ mb: 1 }}>
                         <FormLabel>Private Key PEM</FormLabel>
-                        <Textarea minRows={4} value={privateKeyPem} onChange={event => setPrivateKeyPem(event.target.value)} />
+                        <Textarea
+                            minRows={4}
+                            value={form.privateKeyPem}
+                            onChange={event => setForm(prev => ({ ...prev, privateKeyPem: event.target.value }))}
+                            slotProps={{ textarea: { sx: { WebkitTextSecurity: 'disc' } } }}
+                        />
                     </FormControl>
                     <FormControl sx={{ mb: 1 }}>
                         <FormLabel>Public Key PEM</FormLabel>
-                        <Textarea minRows={4} value={publicKeyPem} onChange={event => setPublicKeyPem(event.target.value)} />
+                        <Textarea
+                            minRows={4}
+                            value={form.publicKeyPem}
+                            onChange={event => setForm(prev => ({ ...prev, publicKeyPem: event.target.value }))}
+                        />
                     </FormControl>
                 </>
             );
@@ -124,7 +117,11 @@ export function CreateSecretDialog({ open, secretType, defaultName, onClose, onS
         return (
             <FormControl sx={{ mb: 1 }}>
                 <FormLabel>API Key</FormLabel>
-                <Input value={apiKey} onChange={event => setApiKey(event.target.value)} />
+                <Input
+                    type="password"
+                    value={form.apiKey}
+                    onChange={event => setForm(prev => ({ ...prev, apiKey: event.target.value }))}
+                />
             </FormControl>
         );
     }
@@ -136,7 +133,10 @@ export function CreateSecretDialog({ open, secretType, defaultName, onClose, onS
                 <DialogContent>
                     <FormControl sx={{ mb: 2 }}>
                         <FormLabel>Name</FormLabel>
-                        <Input value={name} onChange={event => setName(event.target.value)} />
+                        <Input
+                            value={form.name}
+                            onChange={event => setForm(prev => ({ ...prev, name: event.target.value }))}
+                        />
                     </FormControl>
                     {renderTypeFields()}
                 </DialogContent>

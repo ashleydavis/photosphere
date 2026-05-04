@@ -22,97 +22,12 @@ import { usePlatform, type ISharedSecretEntry, type IDatabaseEntry } from '../..
 import { ShareSecretDialog } from '../../components/share-secret-dialog';
 import { ReceiveSecretDialog } from '../../components/receive-secret-dialog';
 import { ViewSecretDialog } from '../../components/view-secret-dialog';
+import { applyValueJson, buildValueJson, emptyFormState, type ISecretFormState } from '../../lib/secrets-form';
 
 //
 // The supported secret type identifiers.
 //
 const SECRET_TYPES = ['s3-credentials', 'encryption-key', 'api-key'] as const;
-
-//
-// Form state for the add/edit secret dialog.
-//
-interface ISecretFormState {
-    // Human-readable label for the secret.
-    name: string;
-
-    // The category of secret.
-    type: string;
-
-    // S3 credentials fields.
-    s3Endpoint: string;
-    s3Region: string;
-    s3AccessKeyId: string;
-    s3SecretAccessKey: string;
-
-    // Encryption key fields.
-    privateKeyPem: string;
-    publicKeyPem: string;
-
-    // API key field.
-    apiKey: string;
-}
-
-//
-// Returns an empty form state.
-//
-function emptyFormState(): ISecretFormState {
-    return {
-        name: '',
-        type: 's3-credentials',
-        s3Endpoint: '',
-        s3Region: '',
-        s3AccessKeyId: '',
-        s3SecretAccessKey: '',
-        privateKeyPem: '',
-        publicKeyPem: '',
-        apiKey: '',
-    };
-}
-
-//
-// Serialises the type-specific fields from form state to a JSON value string.
-//
-function buildValueJson(form: ISecretFormState): string {
-    if (form.type === 's3-credentials') {
-        const obj: Record<string, string> = {
-            region: form.s3Region,
-            accessKeyId: form.s3AccessKeyId,
-            secretAccessKey: form.s3SecretAccessKey,
-        };
-        if (form.s3Endpoint) {
-            obj.endpoint = form.s3Endpoint;
-        }
-        return JSON.stringify(obj);
-    }
-    if (form.type === 'encryption-key') {
-        return JSON.stringify({ privateKeyPem: form.privateKeyPem, publicKeyPem: form.publicKeyPem });
-    }
-    return JSON.stringify({ apiKey: form.apiKey });
-}
-
-//
-// Populates type-specific form fields from a raw vault value string.
-//
-function applyValueJson(form: ISecretFormState, valueJson: string): ISecretFormState {
-    const parsed = JSON.parse(valueJson);
-    if (form.type === 's3-credentials') {
-        return {
-            ...form,
-            s3Endpoint: parsed.endpoint ?? '',
-            s3Region: parsed.region ?? '',
-            s3AccessKeyId: parsed.accessKeyId ?? '',
-            s3SecretAccessKey: parsed.secretAccessKey ?? '',
-        };
-    }
-    if (form.type === 'encryption-key') {
-        return {
-            ...form,
-            privateKeyPem: parsed.privateKeyPem ?? '',
-            publicKeyPem: parsed.publicKeyPem ?? '',
-        };
-    }
-    return { ...form, apiKey: parsed.apiKey ?? '' };
-}
 
 //
 // Full CRUD management page for shared secrets stored in the vault.
@@ -205,6 +120,7 @@ export function SecretsPage() {
         const populated = valueJson ? applyValueJson(baseForm, valueJson) : baseForm;
         setForm(populated);
         setDialogOpen(true);
+        log.info('Edit secret dialog opened');
     }
 
     //
@@ -214,6 +130,7 @@ export function SecretsPage() {
         const valueJson = buildValueJson(form);
         if (editingSecret) {
             await platform.updateSecret({ ...editingSecret, name: form.name }, valueJson);
+            log.info('Secret updated');
         }
         else {
             await platform.addSecret({ name: form.name, type: form.type }, valueJson);
@@ -285,6 +202,7 @@ export function SecretsPage() {
                     <FormControl sx={{ mb: 1 }}>
                         <FormLabel>Region</FormLabel>
                         <Input
+                            data-id="secret-s3-region-input"
                             value={form.s3Region}
                             onChange={event => setForm(prev => ({ ...prev, s3Region: event.target.value }))}
                         />
@@ -316,6 +234,7 @@ export function SecretsPage() {
                             minRows={4}
                             value={form.privateKeyPem}
                             onChange={event => setForm(prev => ({ ...prev, privateKeyPem: event.target.value }))}
+                            slotProps={{ textarea: { sx: { WebkitTextSecurity: 'disc' } } }}
                         />
                     </FormControl>
                     <FormControl sx={{ mb: 1 }}>
@@ -334,6 +253,7 @@ export function SecretsPage() {
                 <FormLabel>API Key</FormLabel>
                 <Input
                     data-id="secret-value-input"
+                    type="password"
                     value={form.apiKey}
                     onChange={event => setForm(prev => ({ ...prev, apiKey: event.target.value }))}
                 />
@@ -413,6 +333,7 @@ export function SecretsPage() {
                                     <IosShare fontSize="small" />
                                 </IconButton>
                                 <IconButton
+                                    data-id="edit-secret-button"
                                     size="sm"
                                     variant="plain"
                                     title="Edit secret"
