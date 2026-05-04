@@ -17,10 +17,11 @@ import FormControl from '@mui/joy/FormControl';
 import FormLabel from '@mui/joy/FormLabel';
 import Select from '@mui/joy/Select';
 import Option from '@mui/joy/Option';
-import { Edit, Delete, Add, Refresh, IosShare } from '@mui/icons-material';
+import { Edit, Delete, Add, Refresh, IosShare, Visibility } from '@mui/icons-material';
 import { usePlatform, type ISharedSecretEntry, type IDatabaseEntry } from '../../context/platform-context';
 import { ShareSecretDialog } from '../../components/share-secret-dialog';
 import { ReceiveSecretDialog } from '../../components/receive-secret-dialog';
+import { ViewSecretDialog } from '../../components/view-secret-dialog';
 
 //
 // The supported secret type identifiers.
@@ -151,6 +152,9 @@ export function SecretsPage() {
 
     // Whether the receive-secret dialog is open.
     const [receiveDialogOpen, setReceiveDialogOpen] = useState(false);
+
+    // The secret currently being viewed (undefined when dialog is closed).
+    const [viewingSecret, setViewingSecret] = useState<ISharedSecretEntry | undefined>(undefined);
 
     //
     // Loads all shared secrets from the platform.
@@ -381,7 +385,7 @@ export function SecretsPage() {
                     <tr>
                         <th>Name</th>
                         <th>Type</th>
-                        <th style={{ width: '112px', whiteSpace: 'nowrap' }}>Actions</th>
+                        <th style={{ width: '140px', whiteSpace: 'nowrap' }}>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -390,6 +394,15 @@ export function SecretsPage() {
                             <td>{secret.name}</td>
                             <td>{secret.type}</td>
                             <td style={{ whiteSpace: 'nowrap' }}>
+                                <IconButton
+                                    data-id="view-secret-button"
+                                    size="sm"
+                                    variant="plain"
+                                    title="View secret"
+                                    onClick={() => { log.info('View secret dialog opened'); setViewingSecret(secret); }}
+                                >
+                                    <Visibility fontSize="small" />
+                                </IconButton>
                                 <IconButton
                                     data-id="share-secret-button"
                                     size="sm"
@@ -529,6 +542,15 @@ export function SecretsPage() {
                     loadSecrets().catch(err => log.exception('Failed to reload secrets:', err as Error));
                 }}
             />
+
+            {viewingSecret !== undefined && (
+                <ViewSecretDialog
+                    open={viewingSecret !== undefined}
+                    secret={viewingSecret!}
+                    onClose={() => setViewingSecret(undefined)}
+                    getSecretValue={platform.getSecretValue}
+                />
+            )}
         </Box>
     );
 }

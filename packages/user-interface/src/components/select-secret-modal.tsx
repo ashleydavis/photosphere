@@ -103,6 +103,7 @@ export function SelectSecretModal({ open, secretType, onClose, onSelect }: ISele
                                                 <td>{secret.name}</td>
                                                 <td>
                                                     <Button
+                                                        data-id="secret-select-button"
                                                         size="sm"
                                                         variant="plain"
                                                         onClick={() => {

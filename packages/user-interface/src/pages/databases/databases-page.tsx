@@ -16,7 +16,7 @@ import FormControl from '@mui/joy/FormControl';
 import FormLabel from '@mui/joy/FormLabel';
 import Select from '@mui/joy/Select';
 import Option from '@mui/joy/Option';
-import { Edit, Delete, Refresh, FolderOpen, IosShare } from '@mui/icons-material';
+import { Edit, Delete, Refresh, FolderOpen, IosShare, Visibility } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { usePlatform, type IDatabaseEntry, type ISharedSecretEntry } from '../../context/platform-context';
 import { useAssetDatabase } from '../../context/asset-database-source';
@@ -25,6 +25,7 @@ import { CreateDatabaseModal } from '../../components/create-database-modal';
 import { AddDatabaseModal } from '../../components/add-database-modal';
 import { ShareDatabaseDialog } from '../../components/share-database-dialog';
 import { ReceiveDatabaseDialog } from '../../components/receive-database-dialog';
+import { ViewDatabaseDialog } from '../../components/view-database-dialog';
 
 //
 // Form state for the add/edit dialog.
@@ -103,6 +104,9 @@ export function DatabasesPage() {
 
     // Whether the receive-database dialog is open.
     const [receiveDbDialogOpen, setReceiveDbDialogOpen] = useState(false);
+
+    // The database entry currently being viewed (undefined when dialog is closed).
+    const [viewingEntry, setViewingEntry] = useState<IDatabaseEntry | undefined>(undefined);
 
     //
     // Loads database entries and secrets from the platform.
@@ -329,7 +333,7 @@ export function DatabasesPage() {
                         <th>Description</th>
                         <th>Path</th>
                         <th>Origin</th>
-                        <th style={{ width: '112px', whiteSpace: 'nowrap' }}>Actions</th>
+                        <th style={{ width: '140px', whiteSpace: 'nowrap' }}>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -340,6 +344,15 @@ export function DatabasesPage() {
                             <td>{entry.path}</td>
                             <td>{entry.origin ?? ''}</td>
                             <td style={{ whiteSpace: 'nowrap' }}>
+                                <IconButton
+                                    data-id="view-database-button"
+                                    size="sm"
+                                    variant="plain"
+                                    title="View database"
+                                    onClick={() => { log.info('View database dialog opened'); setViewingEntry(entry); }}
+                                >
+                                    <Visibility fontSize="small" />
+                                </IconButton>
                                 <IconButton
                                     size="sm"
                                     variant="plain"
@@ -514,6 +527,16 @@ export function DatabasesPage() {
                     loadData().catch(err => log.exception('Failed to reload data:', err as Error));
                 }}
             />
+
+            {viewingEntry !== undefined && (
+                <ViewDatabaseDialog
+                    open={viewingEntry !== undefined}
+                    entry={viewingEntry!}
+                    allSecrets={[...s3Secrets, ...encryptionSecrets, ...geocodingSecrets]}
+                    onClose={() => setViewingEntry(undefined)}
+                    getSecretValue={platform.getSecretValue}
+                />
+            )}
         </Box>
     );
 }

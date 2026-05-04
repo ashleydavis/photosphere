@@ -163,7 +163,8 @@ export function AddDatabaseModal({ open, onClose }: IAddDatabaseModalProps) {
     function renderSecretButton(
         label: string,
         secretType: string,
-        chosenName: string | undefined
+        chosenName: string | undefined,
+        buttonDataId: string
     ): React.ReactNode {
         return (
             <FormControl sx={{ mb: 1 }}>
@@ -173,6 +174,7 @@ export function AddDatabaseModal({ open, onClose }: IAddDatabaseModalProps) {
                         {chosenName ?? 'None selected'}
                     </Typography>
                     <Button
+                        data-id={buttonDataId}
                         variant="outlined"
                         size="sm"
                         onClick={() => setSelectSecretType(secretType)}
@@ -220,7 +222,7 @@ export function AddDatabaseModal({ open, onClose }: IAddDatabaseModalProps) {
                             </Select>
                         </FormControl>
 
-                        {form.storageType === 's3' && renderSecretButton('S3 Credentials', 's3-credentials', s3SecretName)}
+                        {form.storageType === 's3' && renderSecretButton('S3 Credentials', 's3-credentials', s3SecretName, 'select-s3-button')}
 
                         <FormControl sx={{ mb: 2 }}>
                             <FormLabel>Path</FormLabel>
@@ -251,9 +253,9 @@ export function AddDatabaseModal({ open, onClose }: IAddDatabaseModalProps) {
                             </Box>
                         </FormControl>
 
-                        {form.encrypted && renderSecretButton('Encryption Key', 'encryption-key', encryptionSecretName)}
+                        {form.encrypted && renderSecretButton('Encryption Key', 'encryption-key', encryptionSecretName, 'select-encryption-button')}
 
-                        {renderSecretButton('Geocoding API Key (optional)', 'api-key', geocodingSecretName)}
+                        {renderSecretButton('Geocoding API Key (optional)', 'api-key', geocodingSecretName, 'select-geocoding-button')}
                     </DialogContent>
                     <DialogActions>
                         <Button variant="plain" onClick={onClose}>Cancel</Button>
