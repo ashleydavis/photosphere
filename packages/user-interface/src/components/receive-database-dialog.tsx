@@ -30,7 +30,13 @@ export interface IReceiveDatabaseDialogProps {
 //
 // Steps in the receive database flow.
 //
-type ReceiveStep = "enter-code" | "waiting" | "review" | "conflict" | "success" | "error";
+type ReceiveStep = "enter-code" | "waiting" | "review" | "conflict" | "db-name-conflict" | "success" | "error";
+
+//
+// What to do when the imported database name collides with an existing entry.
+// "replace" deletes the existing entry then imports; "rename" imports under a new name.
+//
+type DbNameConflictAction = "replace" | "rename";
 
 //
 // A single secret included in a received payload.
@@ -100,6 +106,14 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
     const [conflicts, setConflicts] = useState<ISecretConflict[]>([]);
     const [errorMessage, setErrorMessage] = useState("");
 
+    // Database-name conflict resolution: which action and (when renaming) what new name.
+    const [dbNameConflictAction, setDbNameConflictAction] = useState<DbNameConflictAction>("replace");
+    const [dbNameConflictRename, setDbNameConflictRename] = useState("");
+    // Inline error shown beneath the rename input when the user types a still-colliding name.
+    const [dbNameConflictRenameError, setDbNameConflictRenameError] = useState<string | undefined>(undefined);
+    // The existing entry that the new database collides with (used for the Replace path).
+    const [existingDbName, setExistingDbName] = useState<string | undefined>(undefined);
+
     // Reset state when dialog opens
     useEffect(() => {
         if (!open) {
@@ -168,7 +182,9 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
     }
 
     //
-    // Attempts to save the received database, checking for conflicts first.
+    // Attempts to save the received database. First checks for secret conflicts (vault),
+    // then for database-name conflicts. Each conflict shows its own step before the actual
+    // import runs.
     //
     const handleSave = useCallback(async () => {
         if (!payload) {
@@ -182,31 +198,83 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
             return;
         }
 
-        await doImport({});
-    }, [payload, importS3, importEncryption, importGeocoding]);
+        await proceedAfterSecretConflicts({});
+    }, [payload, importS3, importEncryption, importGeocoding, editedName]);
 
     //
-    // Proceeds with the import after conflicts have been resolved.
+    // Called after secret conflicts are resolved (or skipped when none exist).
+    // Detects a database-name collision and routes to the db-name-conflict step if needed.
+    //
+    async function proceedAfterSecretConflicts(secretResolutions: Record<string, IConflictResolution>): Promise<void> {
+        const trimmedName = editedName.trim();
+        const existing = await platform.findDatabase(trimmedName);
+        if (existing) {
+            setExistingDbName(existing.name);
+            setDbNameConflictAction("replace");
+            setDbNameConflictRename(trimmedName);
+            setDbNameConflictRenameError(undefined);
+            setPendingSecretResolutions(secretResolutions);
+            setStep("db-name-conflict");
+            return;
+        }
+        await doImport(secretResolutions, trimmedName);
+    }
+
+    //
+    // Holds the resolved secret conflict map between the secret-conflict step and the
+    // database-name-conflict step, so doImport can be called once at the end.
+    //
+    const [pendingSecretResolutions, setPendingSecretResolutions] = useState<Record<string, IConflictResolution>>({});
+
+    //
+    // Proceeds with the import after secret conflicts have been resolved.
     //
     const handleConflictsResolved = useCallback(async () => {
         const resolutions: Record<string, IConflictResolution> = {};
         for (const conflict of conflicts) {
             resolutions[conflict.secretName] = conflict.resolution;
         }
-        await doImport(resolutions);
-    }, [conflicts]);
+        await proceedAfterSecretConflicts(resolutions);
+    }, [conflicts, editedName]);
 
     //
-    // Performs the actual import with the given conflict resolutions map.
+    // Proceeds with the import after a database-name conflict has been resolved.
+    // For Replace: removes the existing entry first then imports under the original name.
+    // For Rename: imports under the user's chosen unique name.
     //
-    async function doImport(conflictResolutions: Record<string, IConflictResolution>): Promise<void> {
+    const handleDbNameConflictResolved = useCallback(async () => {
+        if (dbNameConflictAction === "replace") {
+            if (existingDbName !== undefined) {
+                await platform.removeDatabaseEntry(existingDbName);
+            }
+            await doImport(pendingSecretResolutions, editedName.trim());
+            return;
+        }
+
+        const trimmedRename = dbNameConflictRename.trim();
+        if (trimmedRename.length === 0) {
+            setDbNameConflictRenameError('Name is required');
+            return;
+        }
+        const stillCollides = await platform.findDatabase(trimmedRename);
+        if (stillCollides) {
+            setDbNameConflictRenameError(`A database named "${trimmedRename}" already exists.`);
+            return;
+        }
+        await doImport(pendingSecretResolutions, trimmedRename);
+    }, [dbNameConflictAction, dbNameConflictRename, existingDbName, pendingSecretResolutions, editedName, platform]);
+
+    //
+    // Performs the actual import with the given secret-conflict resolutions and final name.
+    //
+    async function doImport(conflictResolutions: Record<string, IConflictResolution>, finalName: string): Promise<void> {
         if (!payload) {
             return;
         }
 
         const importPayload = {
             ...payload,
-            name: editedName,
+            name: finalName,
             description: editedDescription,
             path: editedPath,
             s3Credentials: importS3 ? payload.s3Credentials : undefined,
@@ -381,6 +449,44 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
                         </>
                     )}
 
+                    {step === "db-name-conflict" && (
+                        <>
+                            <Alert color="warning" sx={{ mb: 2 }}>
+                                A database named "{editedName.trim()}" already exists. Choose what to do.
+                            </Alert>
+
+                            <Select
+                                value={dbNameConflictAction}
+                                onChange={(_event, value) => {
+                                    setDbNameConflictAction(value as DbNameConflictAction);
+                                    setDbNameConflictRenameError(undefined);
+                                }}
+                                sx={{ mb: 2 }}
+                            >
+                                <Option value="replace">Replace existing — removes the existing entry then imports the new one</Option>
+                                <Option value="rename">Save with a different name</Option>
+                            </Select>
+
+                            {dbNameConflictAction === "rename" && (
+                                <FormControl error={dbNameConflictRenameError !== undefined}>
+                                    <FormLabel>New database name</FormLabel>
+                                    <Input
+                                        value={dbNameConflictRename}
+                                        onChange={event => {
+                                            setDbNameConflictRename(event.target.value);
+                                            setDbNameConflictRenameError(undefined);
+                                        }}
+                                    />
+                                    {dbNameConflictRenameError && (
+                                        <Typography level="body-sm" color="danger" sx={{ mt: 0.5 }}>
+                                            {dbNameConflictRenameError}
+                                        </Typography>
+                                    )}
+                                </FormControl>
+                            )}
+                        </>
+                    )}
+
                     {step === "success" && (
                         <Alert color="success">
                             Database imported successfully!
@@ -430,6 +536,18 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
                             <Button
                                 disabled={conflictResolutionInvalid}
                                 onClick={() => { handleConflictsResolved().catch(err => log.exception("Import error:", err as Error)); }}
+                            >
+                                Continue
+                            </Button>
+                        </>
+                    )}
+
+                    {step === "db-name-conflict" && (
+                        <>
+                            <Button variant="plain" onClick={() => setStep("review")}>Cancel</Button>
+                            <Button
+                                data-id="receive-database-name-conflict-continue"
+                                onClick={() => { handleDbNameConflictResolved().catch(err => log.exception("Import error:", err as Error)); }}
                             >
                                 Continue
                             </Button>

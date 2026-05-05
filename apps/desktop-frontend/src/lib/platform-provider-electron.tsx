@@ -343,12 +343,16 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         return await electronAPI.addDatabase(entry);
     }, [electronAPI]);
 
-    const updateDatabase = useCallback(async (entry: IDatabaseEntry): Promise<void> => {
-        await electronAPI.updateDatabase(entry);
+    const updateDatabase = useCallback(async (originalName: string, entry: IDatabaseEntry): Promise<void> => {
+        await electronAPI.updateDatabase(originalName, entry);
     }, [electronAPI]);
 
-    const removeDatabaseEntry = useCallback(async (databasePath: string): Promise<void> => {
-        await electronAPI.removeDatabaseEntry(databasePath);
+    const removeDatabaseEntry = useCallback(async (name: string): Promise<void> => {
+        await electronAPI.removeDatabaseEntry(name);
+    }, [electronAPI]);
+
+    const findDatabase = useCallback(async (name: string): Promise<IDatabaseEntry | undefined> => {
+        return await electronAPI.findDatabase(name);
     }, [electronAPI]);
 
     const pickFolder = useCallback(async (): Promise<string | undefined> => {
@@ -404,8 +408,8 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         return await electronAPI.getRecentDatabases();
     }, [electronAPI]);
 
-    const removeRecentDatabasePath = useCallback(async (databasePath: string): Promise<void> => {
-        await electronAPI.removeRecentDatabasePath(databasePath);
+    const removeRecentDatabaseName = useCallback(async (name: string): Promise<void> => {
+        await electronAPI.removeRecentDatabaseName(name);
     }, [electronAPI]);
 
     const listS3Dirs = useCallback(async (credentialId: string, bucket: string, prefix: string): Promise<string[]> => {
@@ -487,6 +491,7 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         addDatabase,
         updateDatabase,
         removeDatabaseEntry,
+        findDatabase,
         pickFolder,
         createDatabaseAtPath,
         listSecrets,
@@ -495,7 +500,7 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         deleteSecret,
         getSecretValue,
         getRecentDatabases,
-        removeRecentDatabasePath,
+        removeRecentDatabaseName,
         listS3Dirs,
         startShareReceive,
         waitShareReceive,

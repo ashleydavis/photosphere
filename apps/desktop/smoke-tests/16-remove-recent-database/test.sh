@@ -28,10 +28,10 @@ cd "$CLI_DIR" && bun run start -- init --db "$TMP_DIR/test-db-a" --yes
 cd "$CLI_DIR" && bun run start -- init --db "$TMP_DIR/test-db-b" --yes
 cd "$DESKTOP_DIR"
 
-log_info "Writing databases.toml seeded with two entries and both in recent_database_paths..."
+log_info "Writing databases.toml seeded with two entries and both in recent_database_names..."
 mkdir -p "$TMP_DIR/config"
 cat > "$TMP_DIR/config/databases.toml" <<EOF
-recent_database_paths = ["$TMP_DIR/test-db-a", "$TMP_DIR/test-db-b"]
+recent_database_names = ["test-db-a", "test-db-b"]
 
 [[databases]]
 name = "test-db-a"
@@ -56,19 +56,19 @@ sleep 1
 log_info "Clicking the trash icon for the first recent database..."
 send_command "$APP_PORT" click '{"dataId":"remove-recent-database-button-0"}'
 
-wait_for_log "$TMP_DIR" "Recent database removed: $TMP_DIR/test-db-a"
+wait_for_log "$TMP_DIR" "Recent database removed: test-db-a"
 
-log_info "Verifying databases.toml: recent path removed but [[databases]] entry intact..."
+log_info "Verifying databases.toml: recent name removed but [[databases]] entry intact..."
 TOML_FILE="$TMP_DIR/config/databases.toml"
 
-if grep -q "test-db-a" <(grep -A0 "^recent_database_paths" "$TOML_FILE"); then
-    log_error "test-db-a still present in recent_database_paths"
+if grep -q "test-db-a" <(grep -A0 "^recent_database_names" "$TOML_FILE"); then
+    log_error "test-db-a still present in recent_database_names"
     cat "$TOML_FILE"
     exit 1
 fi
 
-if ! grep -q "test-db-b" <(grep -A0 "^recent_database_paths" "$TOML_FILE"); then
-    log_error "test-db-b unexpectedly missing from recent_database_paths"
+if ! grep -q "test-db-b" <(grep -A0 "^recent_database_names" "$TOML_FILE"); then
+    log_error "test-db-b unexpectedly missing from recent_database_names"
     cat "$TOML_FILE"
     exit 1
 fi

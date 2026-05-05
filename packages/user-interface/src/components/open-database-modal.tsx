@@ -95,7 +95,7 @@ export function OpenDatabaseModal({ open, onClose }: IOpenDatabaseModalProps) {
                                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                                     {databases.map((dbEntry, index) => (
                                         <Button
-                                            key={dbEntry.path}
+                                            key={dbEntry.name}
                                             data-id={`database-list-item-${index}`}
                                             variant={dbEntry.path === databasePath ? 'soft' : 'outlined'}
                                             color="neutral"

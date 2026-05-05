@@ -28,6 +28,8 @@ send_command "$APP_PORT" menu '{"itemId":"new-database"}'
 
 wait_for_log "$TMP_DIR" "Create database dialog opened"
 
+send_command "$APP_PORT" type '{"dataId":"database-name-input","text":"test-db"}'
+
 send_command "$APP_PORT" type "{\"dataId\":\"database-path-input\",\"text\":\"$TMP_DIR/test-db\"}"
 
 send_command "$APP_PORT" click '{"dataId":"create-database-confirm"}'

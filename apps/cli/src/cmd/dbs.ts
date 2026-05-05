@@ -3,7 +3,7 @@ import { readFile } from 'fs/promises';
 import pc from 'picocolors';
 import { getVault, getDefaultVaultType, IVault } from 'vault';
 import { log } from 'utils';
-import { getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry } from 'api';
+import { getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry, findDatabase } from 'api';
 import { confirm, intro, outro, text, select, isCancel, spinner, note } from '../lib/clack/prompts';
 import { exit } from 'node-utils';
 import { generateKeyPair } from 'storage';
@@ -113,37 +113,12 @@ async function findDatabaseByPath(dbPath: string): Promise<IDatabaseEntry | unde
 //
 async function findDatabaseByIdentifier(name: string | undefined, dbPath: string | undefined): Promise<IDatabaseEntry | undefined> {
     if (name) {
-        return findDatabaseByName(name);
+        return findDatabase(name);
     }
     if (dbPath) {
         return findDatabaseByPath(dbPath);
     }
     return undefined;
-}
-
-//
-// Finds a database entry by name using case-insensitive matching.
-// Errors if multiple entries match the same name.
-//
-async function findDatabaseByName(name: string): Promise<IDatabaseEntry | undefined> {
-    const databases = await getDatabases();
-    const matches = databases.filter(
-        dbEntry => dbEntry.name.toLowerCase() === name.toLowerCase()
-    );
-
-    if (matches.length === 0) {
-        return undefined;
-    }
-
-    if (matches.length > 1) {
-        log.error(pc.red(`✗ Ambiguous name "${name}" — matches ${matches.length} entries:`));
-        for (const match of matches) {
-            log.error(`  • ${match.name} → ${match.path}`);
-        }
-        await exit(1);
-    }
-
-    return matches[0];
 }
 
 //
@@ -498,7 +473,7 @@ export async function dbsAdd(cmdOptions: IDbsAddOptions): Promise<void> {
             geocodingKey: cmdOptions.geocodingKey,
         };
 
-        const existing = await findDatabaseByName(entry.name);
+        const existing = await findDatabase(entry.name);
         if (existing) {
             log.error(pc.red(`✗ A database named "${entry.name}" already exists (${existing.path}). Use a different name or remove the existing entry first.`));
             await exit(1);
@@ -558,7 +533,7 @@ export async function dbsAdd(cmdOptions: IDbsAddOptions): Promise<void> {
     const description = await promptOptional('Description (optional):') || '';
     const dbPath = await promptRequired('Database path (filesystem or S3):');
 
-    const existing = await findDatabaseByName(name);
+    const existing = await findDatabase(name);
     if (existing) {
         outro(pc.red(`✗ A database named "${name}" already exists (${existing.path}). Use a different name or remove the existing entry first.`));
         await exit(1);
@@ -703,7 +678,7 @@ export async function dbsEdit(cmdOptions: IDbsEditOptions): Promise<void> {
         entry = databases.find(database => database.path === selected as string);
     }
     else {
-        entry = await findDatabaseByName(cmdOptions.name);
+        entry = await findDatabase(cmdOptions.name);
     }
 
     if (!entry) {
@@ -769,12 +744,7 @@ export async function dbsEdit(cmdOptions: IDbsEditOptions): Promise<void> {
             geocodingKey: cmdOptions.geocodingKey ?? entry.geocodingKey,
         };
 
-        await updateDatabaseEntry({ ...updated, path: entry.path });
-
-        if (updated.path !== entry.path) {
-            await removeDatabaseEntry(entry.path);
-            await addDatabaseEntry(updated);
-        }
+        await updateDatabaseEntry(entry.name, updated);
 
         log.info(pc.green(`✓ Database "${updated.name}" updated.`));
         return;
@@ -840,14 +810,9 @@ export async function dbsEdit(cmdOptions: IDbsEditOptions): Promise<void> {
         geocodingKey,
     };
 
-    // Update uses the original path as the match key.
-    await updateDatabaseEntry({ ...updated, path: entry.path });
-
-    // If the path changed, update it by removing old and adding new.
-    if (updated.path !== entry.path) {
-        await removeDatabaseEntry(entry.path);
-        await addDatabaseEntry(updated);
-    }
+    // updateDatabaseEntry handles both renames (rewrites the recents slot) and field
+    // changes; the original name is the lookup key.
+    await updateDatabaseEntry(entry.name, updated);
 
     outro(pc.green(`✓ Database "${updated.name}" updated.`));
 }
@@ -914,7 +879,7 @@ export async function dbsRemove(cmdOptions: IDbsRemoveOptions): Promise<void> {
         }
     }
 
-    await removeDatabaseEntry(entry.path);
+    await removeDatabaseEntry(entry.name);
     outro(pc.green(`✓ Database "${entry.name}" removed from list.`));
 }
 
@@ -966,7 +931,7 @@ async function dbsClear(cmdOptions: IDbsClearOptions): Promise<void> {
     }
 
     for (const dbEntry of databases) {
-        await removeDatabaseEntry(dbEntry.path);
+        await removeDatabaseEntry(dbEntry.name);
     }
 
     outro(pc.green(`✓ Removed ${databases.length} database(s) from the list.`));
@@ -1414,9 +1379,92 @@ async function dbsReceive(cmdOptions: { yes?: boolean; code?: string }): Promise
         }
     }
 
+    // Resolve any database-name collision before importing.
+    const resolution = await resolveDatabaseNameConflict(payload.name, skipPrompts);
+    if (resolution === undefined) {
+        return;
+    }
+    payload.name = resolution.finalName;
+    if (resolution.replaceExisting) {
+        await removeDatabaseEntry(resolution.replaceExisting);
+    }
+
     // Import the payload
     const dbEntry = await importDatabasePayload(payload, buildConflictResolver(skipPrompts));
     await addDatabaseEntry(dbEntry);
 
     outro(pc.green(`✓ Database "${dbEntry.name}" imported successfully!`));
+}
+
+//
+// Outcome of resolving a database-name conflict during dbs receive.
+//
+interface IDatabaseNameResolution {
+    // The name to use for the imported database (may differ from the original on rename).
+    finalName: string;
+
+    // The existing entry name to remove first, if Replace was chosen.
+    replaceExisting: string | undefined;
+}
+
+//
+// Checks whether the proposed database name collides with an existing entry. When it does,
+// prompts the user to Replace, Rename, or Cancel. Returns undefined when the user cancels
+// (caller should print its own outro and return). In --skip-prompts mode, errors out on
+// any collision rather than silently overwriting.
+//
+async function resolveDatabaseNameConflict(proposedName: string, skipPrompts: boolean): Promise<IDatabaseNameResolution | undefined> {
+    const collision = await findDatabase(proposedName);
+    if (!collision) {
+        return { finalName: proposedName, replaceExisting: undefined };
+    }
+
+    if (skipPrompts) {
+        log.error(pc.red(`✗ A database named "${proposedName}" already exists (${collision.path}). Use a different name or remove the existing entry first.`));
+        await exit(1);
+        return undefined;
+    }
+
+    log.info('');
+    const choice = await select({
+        message: `A database named "${proposedName}" already exists (${collision.path}). What would you like to do?`,
+        options: [
+            { value: 'replace', label: 'Replace existing — removes the existing entry then imports the new one' },
+            { value: 'rename', label: 'Save with a different name' },
+            { value: 'cancel', label: 'Cancel' },
+        ],
+    });
+
+    if (isCancel(choice) || choice === 'cancel') {
+        outro(pc.yellow('Cancelled.'));
+        return undefined;
+    }
+
+    if (choice === 'replace') {
+        return { finalName: proposedName, replaceExisting: collision.name };
+    }
+
+    // Rename — loop until the user provides a unique name or cancels.
+    while (true) {
+        const renamed = await text({
+            message: 'New database name:',
+            initialValue: proposedName,
+            validate: (val) => {
+                if (!val || val.trim().length === 0) {
+                    return 'Name is required';
+                }
+                return undefined;
+            },
+        });
+        if (isCancel(renamed)) {
+            outro(pc.yellow('Cancelled.'));
+            return undefined;
+        }
+        const trimmed = (renamed as string).trim();
+        const stillCollides = await findDatabase(trimmed);
+        if (!stillCollides) {
+            return { finalName: trimmed, replaceExisting: undefined };
+        }
+        log.error(pc.red(`✗ A database named "${trimmed}" already exists. Choose a different name.`));
+    }
 }

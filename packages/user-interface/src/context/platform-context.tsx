@@ -60,8 +60,8 @@ export interface ISharedSecretEntry {
 }
 
 //
-// A database entry stored in databases.json.
-// The path field is the unique identifier for each entry.
+// A database entry stored in databases.toml.
+// The name field is the unique (case-insensitive) identifier for each entry.
 //
 export interface IDatabaseEntry {
     // Human-readable display name.
@@ -340,14 +340,21 @@ export interface IPlatformContext {
     addDatabase: (entry: IDatabaseEntry) => Promise<IDatabaseEntry>;
 
     //
-    // Updates an existing database entry matched by path.
+    // Updates an existing database entry. The entry is identified by `originalName`
+    // (the entry's name before any rename). If the renamed name collides with another
+    // existing entry the call rejects.
     //
-    updateDatabase: (entry: IDatabaseEntry) => Promise<void>;
+    updateDatabase: (originalName: string, entry: IDatabaseEntry) => Promise<void>;
 
     //
-    // Removes a database entry by path.
+    // Removes a database entry by name (case-insensitive).
     //
-    removeDatabaseEntry: (path: string) => Promise<void>;
+    removeDatabaseEntry: (name: string) => Promise<void>;
+
+    //
+    // Returns the database entry whose name matches case-insensitively, or undefined.
+    //
+    findDatabase: (name: string) => Promise<IDatabaseEntry | undefined>;
 
     //
     // Opens a directory picker and returns the chosen path, or undefined if cancelled.
@@ -391,9 +398,9 @@ export interface IPlatformContext {
     getRecentDatabases: () => Promise<IDatabaseEntry[]>;
 
     //
-    // Removes the given path from the recently opened list only; the underlying database entry is preserved.
+    // Removes the given name from the recently opened list only; the underlying database entry is preserved.
     //
-    removeRecentDatabasePath: (path: string) => Promise<void>;
+    removeRecentDatabaseName: (name: string) => Promise<void>;
 
     //
     // Lists directory names under the given S3 bucket and prefix using the credentials

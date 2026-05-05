@@ -193,7 +193,7 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                         <List>
                             {recentDatabases.map((dbEntry, dbIndex) => (
                                 <ListItem
-                                    key={dbEntry.path}
+                                    key={dbEntry.name}
                                     endAction={
                                         <IconButton
                                             data-id={`remove-recent-database-button-${dbIndex}`}
@@ -203,7 +203,7 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                                             title="Remove from recent databases"
                                             onClick={async (clickEvent) => {
                                                 clickEvent.stopPropagation();
-                                                await platform.removeRecentDatabasePath(dbEntry.path);
+                                                await platform.removeRecentDatabaseName(dbEntry.name);
                                                 loadRecentDatabases();
                                             }}
                                             sx={{ minHeight: '32px', minWidth: '32px' }}

@@ -145,6 +145,7 @@ export function DatabasesPage() {
     function openAddDialog(): void {
         setEditingEntry(undefined);
         setForm(emptyFormState());
+        setNameError(undefined);
         setDialogOpen(true);
     }
 
@@ -161,15 +162,28 @@ export function DatabasesPage() {
             encryptionKey: entry.encryptionKey,
             geocodingKey: entry.geocodingKey,
         });
+        setNameError(undefined);
         setDialogOpen(true);
     }
 
+    // Inline name-conflict error shown under the Name field in the add/edit dialog.
+    const [nameError, setNameError] = useState<string | undefined>(undefined);
+
     //
-    // Saves the form (add or update entry).
+    // Saves the form (add or update entry). Sets `nameError` and aborts when the chosen
+    // name conflicts with another existing entry (case-insensitive).
     //
     async function handleSave(): Promise<void> {
+        setNameError(undefined);
+
+        const trimmedName = form.name.trim();
+        if (trimmedName.length === 0) {
+            setNameError('Name is required');
+            return;
+        }
+
         const entryData: Omit<IDatabaseEntry, 'id'> = {
-            name: form.name,
+            name: trimmedName,
             description: form.description,
             path: form.path,
             s3Key: form.s3Key,
@@ -177,8 +191,19 @@ export function DatabasesPage() {
             geocodingKey: form.geocodingKey,
         };
 
+        // Detect name collisions before submit so the user gets inline feedback rather
+        // than an unhandled rejection from the storage-layer invariant.
+        const isRenameToSelf = editingEntry && editingEntry.name.toLowerCase() === trimmedName.toLowerCase();
+        if (!isRenameToSelf) {
+            const collision = databases.find(existing => existing.name.toLowerCase() === trimmedName.toLowerCase());
+            if (collision && (!editingEntry || collision.name.toLowerCase() !== editingEntry.name.toLowerCase())) {
+                setNameError(`A database named "${trimmedName}" already exists.`);
+                return;
+            }
+        }
+
         if (editingEntry) {
-            await platform.updateDatabase({ ...editingEntry, ...entryData });
+            await platform.updateDatabase(editingEntry.name, { ...editingEntry, ...entryData });
         }
         else {
             await platform.addDatabase(entryData);
@@ -201,7 +226,7 @@ export function DatabasesPage() {
     //
     async function handleConfirmRemove(): Promise<void> {
         if (removingEntry) {
-            await platform.removeDatabaseEntry(removingEntry.path);
+            await platform.removeDatabaseEntry(removingEntry.name);
             setRemovingEntry(undefined);
         }
         setConfirmRemoveOpen(false);
@@ -338,7 +363,7 @@ export function DatabasesPage() {
                 </thead>
                 <tbody>
                     {databases.map(entry => (
-                        <tr key={entry.path}>
+                        <tr key={entry.name}>
                             <td>{entry.name}</td>
                             <td>{entry.description}</td>
                             <td>{entry.path}</td>
@@ -399,12 +424,20 @@ export function DatabasesPage() {
                     <ModalClose />
                     <DialogTitle>{editingEntry ? 'Edit Database' : 'Add Database'}</DialogTitle>
                     <DialogContent>
-                        <FormControl sx={{ mb: 1 }}>
+                        <FormControl sx={{ mb: 1 }} error={nameError !== undefined}>
                             <FormLabel>Name</FormLabel>
                             <Input
                                 value={form.name}
-                                onChange={event => setForm(prev => ({ ...prev, name: event.target.value }))}
+                                onChange={event => {
+                                    setForm(prev => ({ ...prev, name: event.target.value }));
+                                    setNameError(undefined);
+                                }}
                             />
+                            {nameError && (
+                                <Typography level="body-sm" color="danger" sx={{ mt: 0.5 }}>
+                                    {nameError}
+                                </Typography>
+                            )}
                         </FormControl>
 
                         <FormControl sx={{ mb: 1 }}>

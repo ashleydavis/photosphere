@@ -76,7 +76,7 @@ export function NoDatabaseLoaded() {
                             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, maxWidth: 400, mx: 'auto' }}>
                                 {recentDatabases.map(dbEntry => (
                                     <Button
-                                        key={dbEntry.path}
+                                        key={dbEntry.name}
                                         variant="outlined"
                                         color="neutral"
                                         startDecorator={<FolderOpenIcon />}

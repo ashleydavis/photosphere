@@ -8,7 +8,7 @@ import { createAssetServer } from "rest-api";
 import { exec } from "child_process";
 import { promisify } from "util";
 import * as path from "path";
-import { createDatabase, createMediaFileDatabase, loadDesktopConfig, saveDesktopConfig, getDatabases, addDatabaseEntry, removeDatabaseEntry, updateLastFolder, markDatabaseOpenedByPath } from "api";
+import { createDatabase, createMediaFileDatabase, loadDesktopConfig, saveDesktopConfig, getDatabases, addDatabaseEntry, removeDatabaseEntry, updateLastFolder, markDatabaseOpened } from "api";
 import { createStorage } from "storage";
 
 const execAsync = promisify(exec);
@@ -346,7 +346,7 @@ async function handleRemoveDatabase(ws: WebSocket, databasePath: string): Promis
         const existingDbs = await getDatabases();
         const entry = existingDbs.find(dbEntry => dbEntry.path === databasePath);
         if (entry) {
-            await removeDatabaseEntry(entry.path);
+            await removeDatabaseEntry(entry.name);
         }
         ws.send(JSON.stringify({
             type: "database-removed",
@@ -388,10 +388,16 @@ async function handleGetRecentDatabases(ws: WebSocket): Promise<void> {
 async function handleNotifyDatabaseOpened(ws: WebSocket, databasePath: string, requestId: unknown): Promise<void> {
     try {
         const existingDbs = await getDatabases();
-        if (!existingDbs.some(entry => entry.path === databasePath)) {
-            await addDatabaseEntry({ name: path.basename(databasePath), description: "", path: databasePath });
+        const existing = existingDbs.find(entry => entry.path === databasePath);
+        let name: string;
+        if (existing) {
+            name = existing.name;
         }
-        await markDatabaseOpenedByPath(databasePath);
+        else {
+            name = path.basename(databasePath);
+            await addDatabaseEntry({ name, description: "", path: databasePath });
+        }
+        await markDatabaseOpened(name);
         ws.send(JSON.stringify({ type: "notify-database-opened-ack", requestId }));
     }
     catch (error: any) {

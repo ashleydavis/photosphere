@@ -253,9 +253,9 @@ export interface IGalleryContext {
     sorting(): ISortBy;
 
     //
-    // Moves selected items to the specified database.
+    // Moves selected items to the specified database (identified by path).
     //
-    moveSelectedToDatabase(databaseid: string): Promise<void>;
+    moveSelectedToDatabase(databasePath: string): Promise<void>;
 }
 
 const GalleryContext = createContext<IGalleryContext | undefined>(undefined);
@@ -846,10 +846,10 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     }
 
     //
-    // Moves selected items to the specified database.
+    // Moves selected items to the specified database (identified by path).
     //
-    async function moveSelectedToDatabase(databaseid: string): Promise<void> {
-        await moveToDatabase(Array.from(selectedItems), databaseid);
+    async function moveSelectedToDatabase(databasePath: string): Promise<void> {
+        await moveToDatabase(Array.from(selectedItems), databasePath);
     }
 
     const value: IGalleryContext = {

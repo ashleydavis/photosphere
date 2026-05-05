@@ -44,7 +44,10 @@ export function SelectSecretModal({ open, secretType, onClose, onSelect }: ISele
         if (open) {
             setSelectedName(undefined);
             platform.listSecrets()
-                .then(allSecrets => setSecrets(allSecrets.filter(secret => secret.type === secretType)))
+                .then(allSecrets => {
+                    setSecrets(allSecrets.filter(secret => secret.type === secretType));
+                    log.info('Select secret modal ready');
+                })
                 .catch(err => log.exception('Failed to load secrets:', err as Error));
         }
     }, [open, platform, secretType]);

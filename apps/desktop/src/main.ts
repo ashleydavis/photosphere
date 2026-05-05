@@ -10,7 +10,7 @@ import { TaskQueue, TaskStatus, setQueueBackend } from 'task-queue';
 import { WorkerPoolElectronMain } from './lib/worker-pool-electron-main';
 import { RandomUuidGenerator, TimestampProvider, logExceptions, log } from 'utils';
 import { findAvailablePort } from 'node-utils';
-import { loadDesktopConfig, saveDesktopConfig, updateLastFolder, getTheme, setTheme, updateLastDownloadFolder, getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry, getRecentDatabases, markDatabaseOpenedByPath, removeRecentDatabasePath } from 'api';
+import { loadDesktopConfig, saveDesktopConfig, updateLastFolder, getTheme, setTheme, updateLastDownloadFolder, getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry, getRecentDatabases, markDatabaseOpened, removeRecentDatabaseName, findDatabase } from 'api';
 import type { IWorkerPoolOptions } from './lib/worker-pool-electron-main';
 import type { IRestApiWorkerStopMessage, IRestApiWorkerStartMessage } from './rest-api-worker';
 import { FileLoggerElectron } from './lib/file-logger-electron';
@@ -284,10 +284,15 @@ ipcMain.on('cancel-tasks', (_event, source: string) => {
 ipcMain.handle('open-file', logExceptions(openDatabase, 'Error opening database'));
 ipcMain.handle('create-database', logExceptions(createNewDatabase, 'Error creating database'));
 
-// IPC handler for removing a database entry by path (secrets are independent and managed via the secrets page)
-ipcMain.handle('remove-database-entry', logExceptions(async (_event, databasePath: string) => {
-    await removeDatabaseEntry(databasePath);
+// IPC handler for removing a database entry by name (secrets are independent and managed via the secrets page)
+ipcMain.handle('remove-database-entry', logExceptions(async (_event, name: string) => {
+    await removeDatabaseEntry(name);
 }, 'Error removing database entry'));
+
+// IPC handler for finding a database entry by name (case-insensitive)
+ipcMain.handle('find-database', logExceptions(async (_event, name: string) => {
+    return await findDatabase(name);
+}, 'Error finding database'));
 
 // IPC handler for retrieving a vault secret by name
 ipcMain.handle('vault-get', logExceptions(async (_event, name: string) => {
@@ -377,8 +382,8 @@ ipcMain.handle('add-database', logExceptions(async (_event, entry: IDatabaseEntr
 }, 'Error adding database'));
 
 // IPC handler for updating an existing database entry
-ipcMain.handle('update-database', logExceptions(async (_event, entry: IDatabaseEntry) => {
-    await updateDatabaseEntry(entry);
+ipcMain.handle('update-database', logExceptions(async (_event, originalName: string, entry: IDatabaseEntry) => {
+    await updateDatabaseEntry(originalName, entry);
 }, 'Error updating database'));
 
 // IPC handler for reading vault secrets for a database (resolved via shared secret reference IDs)
@@ -460,11 +465,14 @@ ipcMain.handle('notify-database-opened', logExceptions(async (_event, databasePa
             origin,
         };
         await addDatabaseEntry(newEntry);
+        await markDatabaseOpened(newEntry.name);
     }
-    else if (existing.origin !== origin) {
-        await updateDatabaseEntry({ ...existing, origin });
+    else {
+        if (existing.origin !== origin) {
+            await updateDatabaseEntry(existing.name, { ...existing, origin });
+        }
+        await markDatabaseOpened(existing.name);
     }
-    await markDatabaseOpenedByPath(databasePath);
     const desktopConfig = await loadDesktopConfig();
     desktopConfig.lastDatabase = databasePath;
     await saveDesktopConfig(desktopConfig);
@@ -480,11 +488,11 @@ ipcMain.handle('get-recent-databases', logExceptions(async () => {
     return await getRecentDatabases();
 }, 'Error getting recent databases'));
 
-// IPC handler for removing a path from the recently opened database list (does NOT remove the database entry itself).
-ipcMain.handle('remove-recent-database-path', logExceptions(async (_event, databasePath: string) => {
-    await removeRecentDatabasePath(databasePath);
-    log.event(`Recent database removed: ${databasePath}`);
-}, 'Error removing recent database path'));
+// IPC handler for removing a name from the recently opened database list (does NOT remove the database entry itself).
+ipcMain.handle('remove-recent-database-name', logExceptions(async (_event, name: string) => {
+    await removeRecentDatabaseName(name);
+    log.event(`Recent database removed: ${name}`);
+}, 'Error removing recent database name'));
 
 // IPC handler for listing directory names under an S3 bucket and prefix
 ipcMain.handle('list-s3-dirs', logExceptions(async (_event, credentialId: string, bucket: string, prefix: string) => {

@@ -13,9 +13,9 @@ interface IDatabasesConfig {
     databases: IDatabaseEntry[];
 
     //
-    // Ordered list of recently opened database paths (most recent first, max 5).
+    // Ordered list of recently opened database names (most recent first, max 5).
     //
-    recentDatabasePaths: string[];
+    recentDatabaseNames: string[];
 }
 
 //
@@ -51,7 +51,10 @@ interface ITomlDatabasesConfig {
     // Array of database entries.
     databases?: ITomlDatabaseEntry[];
 
-    // Recently opened database paths.
+    // Recently opened database names.
+    recent_database_names?: string[];
+
+    // Legacy field — recently opened database paths. Migrated on load.
     recent_database_paths?: string[];
 }
 
@@ -109,15 +112,17 @@ function databaseEntryToToml(entry: IDatabaseEntry): ITomlDatabaseEntry {
 
 //
 // Converts a TOML-shaped config object to the TypeScript IDatabasesConfig type.
+// Recognises only the new `recent_database_names` field; legacy `recent_database_paths`
+// migration is handled separately in `loadDatabasesConfig`.
 //
 function tomlToDatabasesConfig(toml: ITomlDatabasesConfig): IDatabasesConfig {
     const databases = Array.isArray(toml.databases)
         ? toml.databases.map(tomlEntryToDatabaseEntry)
         : [];
-    const recentDatabasePaths = Array.isArray(toml.recent_database_paths)
-        ? toml.recent_database_paths
+    const recentDatabaseNames = Array.isArray(toml.recent_database_names)
+        ? toml.recent_database_names
         : [];
-    return { databases, recentDatabasePaths };
+    return { databases, recentDatabaseNames };
 }
 
 //
@@ -126,32 +131,79 @@ function tomlToDatabasesConfig(toml: ITomlDatabasesConfig): IDatabasesConfig {
 function databasesConfigToToml(config: IDatabasesConfig): ITomlDatabasesConfig {
     return {
         databases: config.databases.map(databaseEntryToToml),
-        recent_database_paths: config.recentDatabasePaths,
+        recent_database_names: config.recentDatabaseNames,
     };
+}
+
+//
+// Returns true if the two names match case-insensitively.
+//
+function namesMatch(left: string, right: string): boolean {
+    return left.toLowerCase() === right.toLowerCase();
 }
 
 //
 // Loads the databases configuration from disk.
 // If the TOML file does not exist but an old JSON file does, migrates automatically.
+// If the loaded TOML still uses the legacy `recent_database_paths` field, converts it
+// to `recent_database_names` (resolving each path to its current entry's name; dropping
+// paths that no longer match any entry) and rewrites the file.
 // Returns a default config with an empty list if neither file exists.
 //
 export async function loadDatabasesConfig(): Promise<IDatabasesConfig> {
     if (!await pathExists(DATABASES_FILE)) {
         if (await pathExists(OLD_DATABASES_FILE)) {
-            const jsonConfig = await readJson<{ databases?: IDatabaseEntry[]; recentDatabasePaths?: string[] }>(OLD_DATABASES_FILE);
-            const migrated: IDatabasesConfig = {
-                databases: Array.isArray(jsonConfig.databases) ? jsonConfig.databases : [],
-                recentDatabasePaths: Array.isArray(jsonConfig.recentDatabasePaths) ? jsonConfig.recentDatabasePaths : [],
-            };
+            const jsonConfig = await readJson<{ databases?: IDatabaseEntry[]; recentDatabasePaths?: string[]; recentDatabaseNames?: string[] }>(OLD_DATABASES_FILE);
+            const databases = Array.isArray(jsonConfig.databases) ? jsonConfig.databases : [];
+            let recentDatabaseNames: string[];
+            if (Array.isArray(jsonConfig.recentDatabaseNames)) {
+                recentDatabaseNames = jsonConfig.recentDatabaseNames;
+            }
+            else if (Array.isArray(jsonConfig.recentDatabasePaths)) {
+                recentDatabaseNames = recentPathsToNames(jsonConfig.recentDatabasePaths, databases);
+            }
+            else {
+                recentDatabaseNames = [];
+            }
+            const migrated: IDatabasesConfig = { databases, recentDatabaseNames };
             await saveDatabasesConfig(migrated);
             await remove(OLD_DATABASES_FILE);
             return migrated;
         }
-        return { databases: [], recentDatabasePaths: [] };
+        return { databases: [], recentDatabaseNames: [] };
     }
 
     const toml = await readToml<ITomlDatabasesConfig>(DATABASES_FILE);
+
+    // Legacy migration: convert recent_database_paths to recent_database_names and rewrite the file once.
+    if (!Array.isArray(toml.recent_database_names) && Array.isArray(toml.recent_database_paths)) {
+        const databases = Array.isArray(toml.databases)
+            ? toml.databases.map(tomlEntryToDatabaseEntry)
+            : [];
+        const migrated: IDatabasesConfig = {
+            databases,
+            recentDatabaseNames: recentPathsToNames(toml.recent_database_paths, databases),
+        };
+        await saveDatabasesConfig(migrated);
+        return migrated;
+    }
+
     return tomlToDatabasesConfig(toml);
+}
+
+//
+// Resolves the legacy recent-paths array into the new recent-names array by looking up
+// each path in the current databases list. Paths that don't match any entry are dropped.
+//
+function recentPathsToNames(recentPaths: string[], databases: IDatabaseEntry[]): string[] {
+    const result: string[] = [];
+    for (const recentPath of recentPaths) {
+        const match = databases.find(dbEntry => dbEntry.path === recentPath);
+        if (match) {
+            result.push(match.name);
+        }
+    }
+    return result;
 }
 
 //
@@ -161,8 +213,8 @@ export async function saveDatabasesConfig(config: IDatabasesConfig): Promise<voi
     if (!Array.isArray(config.databases)) {
         config.databases = [];
     }
-    if (!Array.isArray(config.recentDatabasePaths)) {
-        config.recentDatabasePaths = [];
+    if (!Array.isArray(config.recentDatabaseNames)) {
+        config.recentDatabaseNames = [];
     }
     await writeToml(DATABASES_FILE, databasesConfigToToml(config));
 }
@@ -176,41 +228,92 @@ export async function getDatabases(): Promise<IDatabaseEntry[]> {
 }
 
 //
+// Finds a database entry by name using case-insensitive matching.
+// Returns the first match if any. Returns undefined if no entry matches.
+//
+export async function findDatabase(name: string): Promise<IDatabaseEntry | undefined> {
+    const config = await loadDatabasesConfig();
+    return config.databases.find(dbEntry => namesMatch(dbEntry.name, name));
+}
+
+//
 // Adds a new database entry to the list.
+// Throws if an entry with the same name (case-insensitive) already exists; this acts as
+// a storage-layer invariant in addition to any UX checks.
 //
 export async function addDatabaseEntry(entry: IDatabaseEntry): Promise<void> {
     const config = await loadDatabasesConfig();
+    const existing = config.databases.find(dbEntry => namesMatch(dbEntry.name, entry.name));
+    if (existing) {
+        throw new Error(`A database named "${entry.name}" already exists.`);
+    }
     config.databases = [...config.databases, entry];
     await saveDatabasesConfig(config);
 }
 
 //
-// Updates an existing database entry matched by path.
+// Updates the entry currently identified by `originalName` with the new fields in `entry`.
+// If the new entry's name differs from `originalName`, the matching slot in
+// `recentDatabaseNames` is rewritten to keep the recents list pointing at the same entry.
+// Throws if the rename would collide with another existing entry, or if no entry with
+// `originalName` is found.
 //
-export async function updateDatabaseEntry(entry: IDatabaseEntry): Promise<void> {
+export async function updateDatabaseEntry(originalName: string, entry: IDatabaseEntry): Promise<void> {
     const config = await loadDatabasesConfig();
-    config.databases = config.databases.map(existing => existing.path === entry.path ? entry : existing);
+    const matchIndex = config.databases.findIndex(dbEntry => namesMatch(dbEntry.name, originalName));
+    if (matchIndex === -1) {
+        throw new Error(`No database named "${originalName}" found.`);
+    }
+    const renamed = !namesMatch(entry.name, originalName);
+    if (renamed) {
+        const collision = config.databases.find((dbEntry, dbIndex) => dbIndex !== matchIndex && namesMatch(dbEntry.name, entry.name));
+        if (collision) {
+            throw new Error(`A database named "${entry.name}" already exists.`);
+        }
+    }
+    const updatedDatabases = config.databases.slice();
+    updatedDatabases[matchIndex] = entry;
+    config.databases = updatedDatabases;
+    if (renamed) {
+        config.recentDatabaseNames = config.recentDatabaseNames.map(recentName => namesMatch(recentName, originalName) ? entry.name : recentName);
+    }
     await saveDatabasesConfig(config);
 }
 
 //
-// Removes a database entry by path.
+// Removes a database entry by name (case-insensitive).
+// Removes only the first matching entry from `databases` (defensive against legacy state
+// where two entries share a name). Also removes the same name from `recentDatabaseNames`.
+// No-op if no entry matches.
 //
-export async function removeDatabaseEntry(databasePath: string): Promise<void> {
+export async function removeDatabaseEntry(name: string): Promise<void> {
     const config = await loadDatabasesConfig();
-    config.databases = config.databases.filter(existing => existing.path !== databasePath);
+    const matchIndex = config.databases.findIndex(dbEntry => namesMatch(dbEntry.name, name));
+    if (matchIndex === -1) {
+        // Still clean recents in case of stale state.
+        const filteredRecents = config.recentDatabaseNames.filter(recentName => !namesMatch(recentName, name));
+        if (filteredRecents.length !== config.recentDatabaseNames.length) {
+            config.recentDatabaseNames = filteredRecents;
+            await saveDatabasesConfig(config);
+        }
+        return;
+    }
+    const updatedDatabases = config.databases.slice();
+    updatedDatabases.splice(matchIndex, 1);
+    config.databases = updatedDatabases;
+    config.recentDatabaseNames = config.recentDatabaseNames.filter(recentName => !namesMatch(recentName, name));
     await saveDatabasesConfig(config);
 }
 
 //
 // Returns the top-5 most recently opened databases, ordered most-recent first.
-// IDs that no longer exist in the databases list are silently dropped.
+// Names that no longer resolve to an entry in the databases list are silently dropped.
 //
 export async function getRecentDatabases(): Promise<IDatabaseEntry[]> {
     const config = await loadDatabasesConfig();
     const result: IDatabaseEntry[] = [];
-    for (const recentPath of config.recentDatabasePaths) {
-        const found = config.databases.find(dbEntry => dbEntry.path === recentPath);
+    for (const recentName of config.recentDatabaseNames) {
+        const found = config.databases.find(dbEntry => namesMatch(dbEntry.name, recentName));
         if (found) {
             result.push(found);
         }
@@ -219,32 +322,33 @@ export async function getRecentDatabases(): Promise<IDatabaseEntry[]> {
 }
 
 //
-// Removes the given path from recentDatabasePaths only. Leaves the matching entry
-// in `databases` untouched. No-op if the path is not in the recent list.
+// Removes the given name from recentDatabaseNames only. Leaves the matching entry
+// in `databases` untouched. No-op if the name is not in the recent list.
 //
-export async function removeRecentDatabasePath(databasePath: string): Promise<void> {
+export async function removeRecentDatabaseName(name: string): Promise<void> {
     const config = await loadDatabasesConfig();
-    const filtered = config.recentDatabasePaths.filter(recentPath => recentPath !== databasePath);
-    if (filtered.length === config.recentDatabasePaths.length) {
+    const filtered = config.recentDatabaseNames.filter(recentName => !namesMatch(recentName, name));
+    if (filtered.length === config.recentDatabaseNames.length) {
         return;
     }
-    config.recentDatabasePaths = filtered;
+    config.recentDatabaseNames = filtered;
     await saveDatabasesConfig(config);
 }
 
 //
-// Moves the database entry matching the given path to the front of recentDatabasePaths,
-// trimming the list to a maximum of 5 entries, then saves.
+// Moves the database entry matching the given name (case-insensitive) to the front of
+// recentDatabaseNames, trimming the list to a maximum of 5 entries, then saves.
+// No-op if no entry matches.
 //
-export async function markDatabaseOpenedByPath(databasePath: string): Promise<void> {
+export async function markDatabaseOpened(name: string): Promise<void> {
     const config = await loadDatabasesConfig();
-    const found = config.databases.find(dbEntry => dbEntry.path === databasePath);
+    const found = config.databases.find(dbEntry => namesMatch(dbEntry.name, name));
     if (!found) {
         return;
     }
-    config.recentDatabasePaths = [
-        found.path,
-        ...config.recentDatabasePaths.filter(recentPath => recentPath !== found.path),
+    config.recentDatabaseNames = [
+        found.name,
+        ...config.recentDatabaseNames.filter(recentName => !namesMatch(recentName, found.name)),
     ].slice(0, 5);
     await saveDatabasesConfig(config);
 }

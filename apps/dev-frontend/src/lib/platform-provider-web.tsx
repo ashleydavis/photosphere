@@ -228,10 +228,14 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         return entry;
     }, []);
 
-    const updateDatabase = useCallback(async (_entry: IDatabaseEntry): Promise<void> => {
+    const updateDatabase = useCallback(async (_originalName: string, _entry: IDatabaseEntry): Promise<void> => {
     }, []);
 
-    const removeDatabaseEntry = useCallback(async (_path: string): Promise<void> => {
+    const removeDatabaseEntry = useCallback(async (_name: string): Promise<void> => {
+    }, []);
+
+    const findDatabase = useCallback(async (_name: string): Promise<IDatabaseEntry | undefined> => {
+        return undefined;
     }, []);
 
     const pickFolder = useCallback(async () => {
@@ -263,7 +267,7 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         return [];
     }, []);
 
-    const removeRecentDatabasePath = useCallback(async (_databasePath: string): Promise<void> => {
+    const removeRecentDatabaseName = useCallback(async (_name: string): Promise<void> => {
     }, []);
 
     const listS3Dirs = useCallback(async (_credentialId: string, _bucket: string, _prefix: string): Promise<string[]> => {
@@ -330,6 +334,7 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         addDatabase,
         updateDatabase,
         removeDatabaseEntry,
+        findDatabase,
         pickFolder,
         createDatabaseAtPath,
         listSecrets,
@@ -338,7 +343,7 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         deleteSecret,
         getSecretValue,
         getRecentDatabases,
-        removeRecentDatabasePath,
+        removeRecentDatabaseName,
         listS3Dirs,
         startShareReceive,
         waitShareReceive,

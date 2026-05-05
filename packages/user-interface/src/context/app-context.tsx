@@ -9,9 +9,9 @@ export interface IAppContext {
     dbs: IDatabaseEntry[];
 
     //
-    // Removes a database entry by id.
+    // Removes a database entry by name.
     //
-    removeDatabase: (id: string) => Promise<void>;
+    removeDatabase: (name: string) => Promise<void>;
 }
 
 const AppContext = createContext<IAppContext | undefined>(undefined);
@@ -43,10 +43,10 @@ export function AppContextProvider({ children }: IProps) {
     }
 
     //
-    // Removes a database entry by path.
+    // Removes a database entry by name.
     //
-    async function removeDatabase(databasePath: string): Promise<void> {
-        await platform.removeDatabaseEntry(databasePath);
+    async function removeDatabase(name: string): Promise<void> {
+        await platform.removeDatabaseEntry(name);
         await load();
     }
 

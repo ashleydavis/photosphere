@@ -25,24 +25,16 @@ trap cleanup EXIT
 
 log_info "Pre-creating database with CLI..."
 cd "$CLI_DIR" && bun run start -- init --db "$TMP_DIR/test-db" --yes
+
+log_info "Pre-creating api-key secret with CLI (using the same vault as the app)..."
+PHOTOSPHERE_CONFIG_DIR="$TMP_DIR/config" \
+PHOTOSPHERE_VAULT_DIR="$TMP_DIR/vault" \
+PHOTOSPHERE_VAULT_TYPE=plaintext \
+bun run start -- secrets add --yes --type api-key --name smoke-geocoding --value "fake-geocoding-key"
 cd "$DESKTOP_DIR"
 
 start_app "$APP_PORT" "$TMP_DIR"
 wait_for_ready "$APP_PORT"
-
-send_command "$APP_PORT" navigate '{"page":"secrets"}'
-
-wait_for_log "$TMP_DIR" "Secrets page loaded"
-
-send_command "$APP_PORT" click '{"dataId":"add-secret-button"}'
-
-wait_for_log "$TMP_DIR" "Add secret dialog opened"
-
-send_command "$APP_PORT" type '{"dataId":"secret-name-input","text":"smoke-geocoding"}'
-
-send_command "$APP_PORT" click '{"dataId":"add-secret-confirm"}'
-
-wait_for_log "$TMP_DIR" "Secret added"
 
 send_command "$APP_PORT" navigate '{"page":"databases"}'
 
@@ -57,6 +49,8 @@ send_command "$APP_PORT" type '{"dataId":"database-name-input","text":"My Test D
 send_command "$APP_PORT" type "{\"dataId\":\"database-path-input\",\"text\":\"$TMP_DIR/test-db\"}"
 
 send_command "$APP_PORT" click '{"dataId":"select-geocoding-button"}'
+
+wait_for_log "$TMP_DIR" "Select secret modal ready"
 
 send_command "$APP_PORT" click '{"dataId":"secret-select-button"}'
 

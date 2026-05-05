@@ -97,12 +97,16 @@ export function CreateDatabaseModal({ open, onClose }: ICreateDatabaseModalProps
     // Whether the S3 browser modal is open.
     const [s3BrowserOpen, setS3BrowserOpen] = useState(false);
 
+    // Inline name-conflict error shown under the Name field.
+    const [nameError, setNameError] = useState<string | undefined>(undefined);
+
     React.useEffect(() => {
         if (open) {
             setForm(emptyFormState());
             setS3SecretName(undefined);
             setEncryptionSecretName(undefined);
             setGeocodingSecretName(undefined);
+            setNameError(undefined);
             log.info('Create database dialog opened');
         }
     }, [open]);
@@ -124,10 +128,22 @@ export function CreateDatabaseModal({ open, onClose }: ICreateDatabaseModalProps
 
     //
     // Creates the database entry, initialises the database on disk, and opens it.
+    // Validates that the chosen name does not collide with an existing entry first;
+    // any collision is shown as inline error text under the Name field.
     //
     async function handleCreate(): Promise<void> {
+        const trimmedName = form.name.trim();
+        if (trimmedName.length === 0) {
+            setNameError('Name is required');
+            return;
+        }
+        const existing = await platform.findDatabase(trimmedName);
+        if (existing) {
+            setNameError(`A database named "${trimmedName}" already exists.`);
+            return;
+        }
         await platform.addDatabase({
-            name: form.name,
+            name: trimmedName,
             description: form.description,
             path: form.path,
             s3Key: form.s3Key,
@@ -194,12 +210,21 @@ export function CreateDatabaseModal({ open, onClose }: ICreateDatabaseModalProps
                 <ModalDialog sx={{ minWidth: 520, maxWidth: 700, overflowY: 'auto' }}>
                     <DialogTitle>New Database</DialogTitle>
                     <DialogContent>
-                        <FormControl sx={{ mb: 1 }}>
+                        <FormControl sx={{ mb: 1 }} error={nameError !== undefined}>
                             <FormLabel>Name</FormLabel>
                             <Input
+                                data-id="database-name-input"
                                 value={form.name}
-                                onChange={event => setForm(prev => ({ ...prev, name: event.target.value }))}
+                                onChange={event => {
+                                    setForm(prev => ({ ...prev, name: event.target.value }));
+                                    setNameError(undefined);
+                                }}
                             />
+                            {nameError && (
+                                <Typography level="body-sm" color="danger" sx={{ mt: 0.5 }}>
+                                    {nameError}
+                                </Typography>
+                            )}
                         </FormControl>
 
                         <FormControl sx={{ mb: 1 }}>
@@ -260,7 +285,7 @@ export function CreateDatabaseModal({ open, onClose }: ICreateDatabaseModalProps
                         <Button variant="plain" onClick={onClose}>Cancel</Button>
                         <Button
                             data-id="create-database-confirm"
-                            disabled={!form.path}
+                            disabled={!form.path || nameError !== undefined}
                             onClick={() => handleCreate().catch(err => log.exception('Create database error:', err as Error))}
                         >
                             Create

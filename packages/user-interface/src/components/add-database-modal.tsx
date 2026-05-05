@@ -97,12 +97,16 @@ export function AddDatabaseModal({ open, onClose }: IAddDatabaseModalProps) {
     // Whether the S3 browser modal is open.
     const [s3BrowserOpen, setS3BrowserOpen] = useState(false);
 
+    // Inline name-conflict error shown under the Name field.
+    const [nameError, setNameError] = useState<string | undefined>(undefined);
+
     React.useEffect(() => {
         if (open) {
             setForm(emptyFormState());
             setS3SecretName(undefined);
             setEncryptionSecretName(undefined);
             setGeocodingSecretName(undefined);
+            setNameError(undefined);
             log.info('Add database dialog opened');
         }
     }, [open]);
@@ -124,10 +128,22 @@ export function AddDatabaseModal({ open, onClose }: IAddDatabaseModalProps) {
 
     //
     // Registers the database entry and opens it.
+    // Validates that the chosen name does not collide with an existing entry first;
+    // any collision is shown as inline error text under the Name field.
     //
     async function handleAdd(): Promise<void> {
+        const trimmedName = form.name.trim();
+        if (trimmedName.length === 0) {
+            setNameError('Name is required');
+            return;
+        }
+        const existing = await platform.findDatabase(trimmedName);
+        if (existing) {
+            setNameError(`A database named "${trimmedName}" already exists.`);
+            return;
+        }
         await platform.addDatabase({
-            name: form.name,
+            name: trimmedName,
             description: form.description,
             path: form.path,
             s3Key: form.s3Key,

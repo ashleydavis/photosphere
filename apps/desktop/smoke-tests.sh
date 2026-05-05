@@ -115,7 +115,7 @@ run_one() {
     mkdir -p "$dir/tmp"
     printf "${BLUE}RUN ${NC}  %2s  %s\n" "$num" "$name"
     local test_start=$SECONDS
-    if timeout 300 bash "$test_sh" >"$log_file" 2>&1; then
+    if timeout 120 bash "$test_sh" >"$log_file" 2>&1; then
         local test_duration
         test_duration=$(format_duration $((SECONDS - test_start)))
         printf "${GREEN}PASS${NC}  %2s  %-30s  %s\n" "$num" "$name" "$test_duration"
@@ -176,7 +176,7 @@ run_parallel_batch() {
             printf "${BLUE}RUN ${NC}  %2s  %s\n" "$num" "$name"
             (
                 local_start=$SECONDS
-                timeout 300 bash "$t" >"$log_file" 2>&1
+                timeout 120 bash "$t" >"$log_file" 2>&1
                 local_exit=$?
                 echo $((SECONDS - local_start)) > "$dir/tmp/test-duration.txt"
                 exit $local_exit

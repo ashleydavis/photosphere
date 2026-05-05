@@ -11,6 +11,7 @@ jest.mock('api', () => ({
     addDatabaseEntry: jest.fn().mockResolvedValue(undefined),
     updateDatabaseEntry: jest.fn().mockResolvedValue(undefined),
     removeDatabaseEntry: jest.fn().mockResolvedValue(undefined),
+    findDatabase: jest.fn().mockResolvedValue(undefined),
 }));
 jest.mock('vault', () => ({
     getVault: jest.fn(),
@@ -35,7 +36,7 @@ jest.mock('../../lib/init-cmd', () => ({
 
 import { dbsView, dbsAdd, dbsEdit, dbsRemove, dbsSend } from '../../cmd/dbs';
 import { exit } from 'node-utils';
-import { getDatabases, addDatabaseEntry } from 'api';
+import { getDatabases, addDatabaseEntry, findDatabase } from 'api';
 import { log } from 'utils';
 import { getVault } from 'vault';
 import { findSimilarDatabaseNames, findSimilarKeyNames, findSimilarSecretNames } from '../../lib/init-cmd';
@@ -43,6 +44,7 @@ import { findSimilarDatabaseNames, findSimilarKeyNames, findSimilarSecretNames }
 const mockGetDatabases = getDatabases as jest.Mock;
 const mockExit = exit as jest.Mock;
 const mockAddDatabaseEntry = addDatabaseEntry as jest.Mock;
+const mockFindDatabase = findDatabase as jest.Mock;
 const mockGetVault = getVault as jest.Mock;
 const mockFindSimilarDatabaseNames = findSimilarDatabaseNames as jest.Mock;
 const mockFindSimilarKeyNames = findSimilarKeyNames as jest.Mock;
@@ -68,6 +70,7 @@ beforeEach(() => {
     mockGetDatabases.mockResolvedValue([]);
     mockExit.mockResolvedValue(undefined);
     mockAddDatabaseEntry.mockResolvedValue(undefined);
+    mockFindDatabase.mockResolvedValue(undefined);
 });
 
 describe('dbsView', () => {
@@ -167,7 +170,9 @@ describe('dbsAdd --yes with unknown s3-cred', () => {
 
 describe('dbsEdit --yes with unknown encryption-key', () => {
     test('calls findSimilarKeyNames and logs hint when encryption key is not in vault', async () => {
-        mockGetDatabases.mockResolvedValue([{ name: 'mydb', path: '/some/path', description: '' }]);
+        const entry = { name: 'mydb', path: '/some/path', description: '' };
+        mockGetDatabases.mockResolvedValue([entry]);
+        mockFindDatabase.mockResolvedValue(entry);
         const mockVault = makeMockVault(undefined);
         mockGetVault.mockReturnValue(mockVault);
         mockFindSimilarKeyNames.mockResolvedValue(['my-key']);
