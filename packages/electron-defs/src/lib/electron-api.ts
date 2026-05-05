@@ -58,10 +58,7 @@ export interface IDatabaseSecrets {
 // A shared secret entry stored in the vault.
 //
 export interface ISharedSecretEntry {
-    // The vault key name for this secret.
-    id: string;
-
-    // Human-readable display name chosen by the user (the "label" field in the vault value JSON).
+    // The user-typed secret name; this is also the vault key.
     name: string;
 
     // The category of secret stored (e.g. 's3-credentials', 'encryption-key', 'api-key').

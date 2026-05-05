@@ -28,21 +28,9 @@ export interface IResolvedStorageCredentials {
 
 //
 // Resolves an encryption key PEM pair from a vault secret value.
-// Handles two vault secret formats:
-//   - JSON: { label, privateKeyPem, publicKeyPem } (stored by "dbs add" / LAN share)
-//   - Raw PEM: the value is the private key PEM directly (stored by smoke tests / legacy)
+// The vault stores the private key PEM directly; the public key is derived from it.
 //
 function parseEncryptionKeyFromVaultValue(value: string): IEncryptionKeyPem {
-    try {
-        const parsed = JSON.parse(value);
-        if (parsed.privateKeyPem) {
-            return { privateKeyPem: parsed.privateKeyPem, publicKeyPem: parsed.publicKeyPem };
-        }
-    }
-    catch {
-        // Not JSON — fall through to raw PEM handling.
-    }
-
     const privateKeyObj = createPrivateKey(value);
     const publicKeyPem = exportPublicKeyToPem(createPublicKey(privateKeyObj));
     return { privateKeyPem: value, publicKeyPem };
@@ -144,8 +132,7 @@ export async function resolveStorageCredentials(
         if (entry?.geocodingKey) {
             const secret = await vault.get(entry.geocodingKey);
             if (secret) {
-                const parsed = JSON.parse(secret.value);
-                googleApiKey = parsed.apiKey;
+                googleApiKey = secret.value;
                 log.verbose(`Geocoding key: loaded from vault (key "${entry.geocodingKey}")`);
             }
             else {

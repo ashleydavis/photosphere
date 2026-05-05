@@ -233,13 +233,13 @@ export function DatabasesPage() {
         setQuickCreateType(undefined);
         await loadData();
         if (newSecret.type === 's3-credentials') {
-            setForm(prev => ({ ...prev, s3Key: newSecret.id }));
+            setForm(prev => ({ ...prev, s3Key: newSecret.name }));
         }
         else if (newSecret.type === 'encryption-key') {
-            setForm(prev => ({ ...prev, encryptionKey: newSecret.id }));
+            setForm(prev => ({ ...prev, encryptionKey: newSecret.name }));
         }
         else {
-            setForm(prev => ({ ...prev, geocodingKey: newSecret.id }));
+            setForm(prev => ({ ...prev, geocodingKey: newSecret.name }));
         }
     }
 
@@ -249,8 +249,8 @@ export function DatabasesPage() {
     function renderSecretSelector(
         label: string,
         options: ISharedSecretEntry[],
-        selectedId: string | undefined,
-        onChange: (id: string | undefined) => void,
+        selectedName: string | undefined,
+        onChange: (name: string | undefined) => void,
         secretType: string
     ): React.ReactNode {
         return (
@@ -259,13 +259,13 @@ export function DatabasesPage() {
                 <Box sx={{ display: 'flex', gap: 1 }}>
                     <Select
                         sx={{ flexGrow: 1 }}
-                        value={selectedId ?? ''}
+                        value={selectedName ?? ''}
                         onChange={(_event, value) => onChange(value as string || undefined)}
                         placeholder="None"
                     >
                         <Option value="">None</Option>
                         {options.map(secret => (
-                            <Option key={secret.id} value={secret.id}>{secret.name}</Option>
+                            <Option key={secret.name} value={secret.name}>{secret.name}</Option>
                         ))}
                     </Select>
                     <Button

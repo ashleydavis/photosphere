@@ -11,10 +11,10 @@ test_vault_list_shared() {
 
     # Seed shared secrets directly in the vault.
     seed_vault_secret "s3test01" "s3-credentials" \
-        '{"label":"Test S3","region":"us-east-1","accessKeyId":"AKIATEST","secretAccessKey":"secret123","endpoint":"http://localhost:9000"}'
+        '{"region":"us-east-1","accessKeyId":"AKIATEST","secretAccessKey":"secret123","endpoint":"http://localhost:9000"}'
 
     seed_vault_secret "api00001" "api-key" \
-        '{"label":"Test Geocoding","apiKey":"AIzaFakeKey123"}'
+        'AIzaFakeKey123'
 
     local vault_output
     invoke_command "List vault secrets" "$(get_cli_command) secrets list" 0 "vault_output"

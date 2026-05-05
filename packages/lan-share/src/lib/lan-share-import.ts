@@ -50,7 +50,6 @@ export async function importDatabasePayload(payload: IDatabaseSharePayload, onCo
                 name: s3Key,
                 type: "s3-credentials",
                 value: JSON.stringify({
-                    label: payload.s3Credentials.label,
                     region: payload.s3Credentials.region,
                     accessKeyId: payload.s3Credentials.accessKeyId,
                     secretAccessKey: payload.s3Credentials.secretAccessKey,
@@ -68,11 +67,7 @@ export async function importDatabasePayload(payload: IDatabaseSharePayload, onCo
             await vault.set({
                 name: encryptionKey,
                 type: "encryption-key",
-                value: JSON.stringify({
-                    label: payload.encryptionKey.label,
-                    privateKeyPem: payload.encryptionKey.privateKeyPem,
-                    publicKeyPem: payload.encryptionKey.publicKeyPem,
-                }),
+                value: payload.encryptionKey.privateKeyPem,
             });
         }
     }
@@ -85,10 +80,7 @@ export async function importDatabasePayload(payload: IDatabaseSharePayload, onCo
             await vault.set({
                 name: geocodingKey,
                 type: "api-key",
-                value: JSON.stringify({
-                    label: payload.geocodingKey.label,
-                    apiKey: payload.geocodingKey.apiKey,
-                }),
+                value: payload.geocodingKey.apiKey,
             });
         }
     }

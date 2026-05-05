@@ -53,8 +53,7 @@ export async function resolveGeocodingApiKey(geocodingKeyName: string | undefine
         const vault = getVault(getDefaultVaultType());
         const geocodingSecret = await vault.get(geocodingKeyName);
         if (geocodingSecret) {
-            const parsed = JSON.parse(geocodingSecret.value);
-            return parsed.apiKey as string;
+            return geocodingSecret.value;
         }
         return undefined;
     }

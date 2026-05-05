@@ -55,7 +55,7 @@ export function ShareSecretDialog({ open, entry, onClose }: IShareSecretDialogPr
         setStep("showing-code");
 
         // Get the secret value and build the payload
-        const value = await platform.getSecretValue(entry.id);
+        const value = await platform.getSecretValue(entry.name);
         if (!value) {
             setErrorMessage("Could not read secret value.");
             setStep("error");

@@ -33,13 +33,20 @@ mkdir -p "$TMP_DIR/sender/vault" "$TMP_DIR/sender/config" "$TMP_DIR/receiver/vau
 
 # Seed sender vault with S3 credentials
 cat > "$TMP_DIR/sender/vault/test-s3-key.json" << 'EOF'
-{"name":"test-s3-key","type":"s3-credentials","value":"{\"label\":\"test-s3-key\",\"region\":\"us-east-1\",\"accessKeyId\":\"AKIATEST\",\"secretAccessKey\":\"testsecret\"}"}
+{"name":"test-s3-key","type":"s3-credentials","value":"{\"region\":\"us-east-1\",\"accessKeyId\":\"AKIATEST\",\"secretAccessKey\":\"testsecret\"}"}
 EOF
 
-# Seed sender vault with encryption key
-cat > "$TMP_DIR/sender/vault/test-enc-key.json" << 'EOF'
-{"name":"test-enc-key","type":"encryption-key","value":"{\"label\":\"test-enc-key\",\"privateKeyPem\":\"test-private\",\"publicKeyPem\":\"test-public\"}"}
-EOF
+# Seed sender vault with encryption key (raw PEM — receiver derives the public key)
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$TMP_DIR/sender/test-enc-key.pem" 2>/dev/null
+export TEST_ENC_PEM_PATH="$TMP_DIR/sender/test-enc-key.pem"
+python3 -c "
+import json, os
+with open(os.environ['TEST_ENC_PEM_PATH']) as f:
+    pem = f.read()
+secret = {'name': 'test-enc-key', 'type': 'encryption-key', 'value': pem}
+with open('$TMP_DIR/sender/vault/test-enc-key.json', 'w') as f:
+    json.dump(secret, f)
+"
 
 # Seed sender databases config (TOML format)
 cat > "$TMP_DIR/sender/config/databases.toml" << 'EOF'

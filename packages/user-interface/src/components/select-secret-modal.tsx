@@ -34,15 +34,15 @@ export function SelectSecretModal({ open, secretType, onClose, onSelect }: ISele
     // Secrets matching the requested type.
     const [secrets, setSecrets] = useState<ISharedSecretEntry[]>([]);
 
-    // Id of the currently highlighted row.
-    const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
+    // Name of the currently highlighted row.
+    const [selectedName, setSelectedName] = useState<string | undefined>(undefined);
 
     // Whether the inline create dialog is open.
     const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
     useEffect(() => {
         if (open) {
-            setSelectedId(undefined);
+            setSelectedName(undefined);
             platform.listSecrets()
                 .then(allSecrets => setSecrets(allSecrets.filter(secret => secret.type === secretType)))
                 .catch(err => log.exception('Failed to load secrets:', err as Error));
@@ -53,7 +53,7 @@ export function SelectSecretModal({ open, secretType, onClose, onSelect }: ISele
     // Calls onSelect with the chosen entry and closes the modal.
     //
     function handleSelect(): void {
-        const chosen = secrets.find(secret => secret.id === selectedId);
+        const chosen = secrets.find(secret => secret.name === selectedName);
         if (chosen) {
             onSelect(chosen);
         }
@@ -66,7 +66,7 @@ export function SelectSecretModal({ open, secretType, onClose, onSelect }: ISele
         setCreateDialogOpen(false);
         const allSecrets = await platform.listSecrets();
         setSecrets(allSecrets.filter(secret => secret.type === secretType));
-        setSelectedId(newSecret.id);
+        setSelectedName(newSecret.name);
         onSelect(newSecret);
     }
 
@@ -93,11 +93,11 @@ export function SelectSecretModal({ open, secretType, onClose, onSelect }: ISele
                                     <tbody>
                                         {secrets.map(secret => (
                                             <tr
-                                                key={secret.id}
-                                                onClick={() => setSelectedId(secret.id)}
+                                                key={secret.name}
+                                                onClick={() => setSelectedName(secret.name)}
                                                 style={{
                                                     cursor: 'pointer',
-                                                    backgroundColor: secret.id === selectedId ? 'rgba(0,0,0,0.08)' : undefined,
+                                                    backgroundColor: secret.name === selectedName ? 'rgba(0,0,0,0.08)' : undefined,
                                                 }}
                                             >
                                                 <td>{secret.name}</td>
@@ -107,7 +107,7 @@ export function SelectSecretModal({ open, secretType, onClose, onSelect }: ISele
                                                         size="sm"
                                                         variant="plain"
                                                         onClick={() => {
-                                                            setSelectedId(secret.id);
+                                                            setSelectedName(secret.name);
                                                             onSelect(secret);
                                                         }}
                                                     >
@@ -130,7 +130,7 @@ export function SelectSecretModal({ open, secretType, onClose, onSelect }: ISele
                             Create new
                         </Button>
                         <Button
-                            disabled={selectedId === undefined}
+                            disabled={selectedName === undefined}
                             onClick={handleSelect}
                         >
                             Select

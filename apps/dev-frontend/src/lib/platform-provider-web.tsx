@@ -245,17 +245,17 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         return [];
     }, []);
 
-    const addSecret = useCallback(async (entry: Omit<ISharedSecretEntry, 'id'>, _value: string): Promise<ISharedSecretEntry> => {
-        return { ...entry, id: Math.random().toString(36).slice(2, 10) };
+    const addSecret = useCallback(async (entry: ISharedSecretEntry, _value: string): Promise<ISharedSecretEntry> => {
+        return entry;
     }, []);
 
-    const updateSecret = useCallback(async (_entry: ISharedSecretEntry, _value?: string): Promise<void> => {
+    const updateSecret = useCallback(async (_originalName: string, _entry: ISharedSecretEntry, _value?: string): Promise<void> => {
     }, []);
 
-    const deleteSecret = useCallback(async (_id: string): Promise<void> => {
+    const deleteSecret = useCallback(async (_name: string): Promise<void> => {
     }, []);
 
-    const getSecretValue = useCallback(async (_id: string): Promise<string | undefined> => {
+    const getSecretValue = useCallback(async (_name: string): Promise<string | undefined> => {
         return undefined;
     }, []);
 

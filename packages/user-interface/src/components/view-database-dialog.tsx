@@ -53,8 +53,8 @@ export function ViewDatabaseDialog({ open, entry, allSecrets, onClose, getSecret
     //
     // Renders one linked-secret row: a label, the secret name (or "None"), and optionally a View button.
     //
-    function renderLinkedSecret(label: string, secretId: string | undefined, buttonDataId: string): React.ReactNode {
-        const found = secretId !== undefined ? allSecrets.find(secret => secret.id === secretId) : undefined;
+    function renderLinkedSecret(label: string, secretName: string | undefined, buttonDataId: string): React.ReactNode {
+        const found = secretName !== undefined ? allSecrets.find(secret => secret.name === secretName) : undefined;
         return (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                 <Typography level="body-md" sx={{ minWidth: 160 }}>

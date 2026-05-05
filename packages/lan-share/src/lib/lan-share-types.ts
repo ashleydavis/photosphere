@@ -6,9 +6,6 @@ export interface IShareS3Credentials {
     // The vault key name used by the sender.
     name: string;
 
-    // Human-readable label for this credential set.
-    label: string;
-
     // AWS region (e.g. "us-east-1").
     region: string;
 
@@ -29,14 +26,11 @@ export interface IShareEncryptionKey {
     // The vault key name used by the sender.
     name: string;
 
-    // Human-readable label for this key pair.
-    label: string;
-
     // PEM-encoded PKCS#8 private key.
     privateKeyPem: string;
 
-    // PEM-encoded SPKI public key.
-    publicKeyPem: string;
+    // PEM-encoded SPKI public key. Optional — receivers derive it from the private key when omitted.
+    publicKeyPem?: string;
 }
 
 //
@@ -45,9 +39,6 @@ export interface IShareEncryptionKey {
 export interface IShareGeocodingKey {
     // The vault key name used by the sender.
     name: string;
-
-    // Human-readable label for this API key.
-    label: string;
 
     // The API key value.
     apiKey: string;

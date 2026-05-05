@@ -145,15 +145,15 @@ export function CreateDatabaseModal({ open, onClose }: ICreateDatabaseModalProps
     //
     function handleSecretSelected(secret: ISharedSecretEntry): void {
         if (selectSecretType === 's3-credentials') {
-            setForm(prev => ({ ...prev, s3Key: secret.id }));
+            setForm(prev => ({ ...prev, s3Key: secret.name }));
             setS3SecretName(secret.name);
         }
         else if (selectSecretType === 'encryption-key') {
-            setForm(prev => ({ ...prev, encryptionKey: secret.id }));
+            setForm(prev => ({ ...prev, encryptionKey: secret.name }));
             setEncryptionSecretName(secret.name);
         }
         else if (selectSecretType === 'api-key') {
-            setForm(prev => ({ ...prev, geocodingKey: secret.id }));
+            setForm(prev => ({ ...prev, geocodingKey: secret.name }));
             setGeocodingSecretName(secret.name);
         }
         setSelectSecretType(undefined);

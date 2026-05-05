@@ -105,7 +105,6 @@ export function ShareDatabaseDialog({ open, entry, onClose }: IShareDatabaseDial
                 const parsed = JSON.parse(valueJson);
                 s3Credentials = {
                     name: entry.s3Key,
-                    label: parsed.label,
                     region: parsed.region,
                     accessKeyId: parsed.accessKeyId,
                     secretAccessKey: parsed.secretAccessKey,
@@ -118,12 +117,10 @@ export function ShareDatabaseDialog({ open, entry, onClose }: IShareDatabaseDial
         if (form.includeEncryption && entry.encryptionKey) {
             const valueJson = await platform.getSecretValue(entry.encryptionKey);
             if (valueJson) {
-                const parsed = JSON.parse(valueJson);
                 encryptionKey = {
                     name: entry.encryptionKey,
-                    label: parsed.label,
-                    privateKeyPem: parsed.privateKeyPem,
-                    publicKeyPem: parsed.publicKeyPem,
+                    privateKeyPem: valueJson,
+                    publicKeyPem: "",
                 };
             }
         }
@@ -132,11 +129,9 @@ export function ShareDatabaseDialog({ open, entry, onClose }: IShareDatabaseDial
         if (form.includeGeocoding && entry.geocodingKey) {
             const valueJson = await platform.getSecretValue(entry.geocodingKey);
             if (valueJson) {
-                const parsed = JSON.parse(valueJson);
                 geocodingKey = {
                     name: entry.geocodingKey,
-                    label: parsed.label,
-                    apiKey: parsed.apiKey,
+                    apiKey: valueJson,
                 };
             }
         }

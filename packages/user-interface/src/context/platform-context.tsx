@@ -52,10 +52,7 @@ export interface IDatabaseSecrets {
 // A shared secret entry stored in the vault.
 //
 export interface ISharedSecretEntry {
-    // The vault key name for this secret.
-    id: string;
-
-    // Human-readable display name chosen by the user (the "label" field in the vault value JSON).
+    // The user-typed secret name; this is also the vault key.
     name: string;
 
     // The category of secret stored (e.g. 's3-credentials', 'encryption-key', 'api-key').
@@ -368,24 +365,25 @@ export interface IPlatformContext {
     listSecrets: () => Promise<ISharedSecretEntry[]>;
 
     //
-    // Adds a new shared secret to the vault. Generates an id client-side.
+    // Adds a new shared secret to the vault.
     //
-    addSecret: (entry: Omit<ISharedSecretEntry, 'id'>, value: string) => Promise<ISharedSecretEntry>;
+    addSecret: (entry: ISharedSecretEntry, value: string) => Promise<ISharedSecretEntry>;
 
     //
     // Updates an existing shared secret in the vault.
+    // originalName is the prior vault key, used to delete the old entry when the secret is renamed.
     //
-    updateSecret: (entry: ISharedSecretEntry, value?: string) => Promise<void>;
+    updateSecret: (originalName: string, entry: ISharedSecretEntry, value?: string) => Promise<void>;
 
     //
-    // Deletes a shared secret by id.
+    // Deletes a shared secret by name.
     //
-    deleteSecret: (id: string) => Promise<void>;
+    deleteSecret: (name: string) => Promise<void>;
 
     //
-    // Retrieves the raw value string for a shared secret by id.
+    // Retrieves the raw value string for a shared secret by name.
     //
-    getSecretValue: (id: string) => Promise<string | undefined>;
+    getSecretValue: (name: string) => Promise<string | undefined>;
 
     //
     // Returns the top-5 most recently opened database entries, most recent first.

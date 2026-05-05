@@ -747,7 +747,7 @@ show_tree() {
     fi
 }
 
-# Usage: seed_vault_secret "shared:abc123" "s3-credentials" '{"label":"My S3",...}'
+# Usage: seed_vault_secret "shared:abc123" "s3-credentials" '{"region":"us-east-1",...}'
 seed_vault_secret() {
     local secret_name="$1"
     local secret_type="$2"

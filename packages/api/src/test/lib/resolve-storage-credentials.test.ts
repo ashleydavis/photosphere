@@ -17,11 +17,13 @@ jest.mock('fs/promises', () => ({
 }));
 
 jest.mock('node:crypto', () => ({
+    ...jest.requireActual('node:crypto'),
     createPrivateKey: jest.fn().mockReturnValue({}),
     createPublicKey: jest.fn().mockReturnValue({}),
 }));
 
 jest.mock('storage', () => ({
+    ...jest.requireActual('storage'),
     exportPublicKeyToPem: jest.fn().mockReturnValue('-----PUBLIC-----'),
 }));
 
@@ -141,18 +143,14 @@ describe('resolveStorageCredentials', () => {
         expect(result.s3Config!.accessKeyId).toBe('VAULT_AKID');
     });
 
-    test('loads encryption key from vault when database entry has encryptionKey (JSON format)', async () => {
+    test('loads encryption key from vault when database entry has encryptionKey (raw PEM format)', async () => {
         mockGetDatabases.mockResolvedValue([
             { name: 'db', description: '', path: '/local/db', encryptionKey: 'enc-secret' } as any,
         ]);
         mockVaultGet.mockResolvedValue({
             name: 'enc-secret',
             type: 'encryption-key',
-            value: JSON.stringify({
-                label: 'My Key',
-                privateKeyPem: '-----PRIVATE-----',
-                publicKeyPem: '-----PUBLIC-----',
-            }),
+            value: '-----PRIVATE-----',
         });
 
         const result = await resolveStorageCredentials('/local/db');
@@ -178,11 +176,7 @@ describe('resolveStorageCredentials', () => {
         mockVaultGet.mockResolvedValue({
             name: 'my-enc-secret',
             type: 'encryption-key',
-            value: JSON.stringify({
-                label: 'Key',
-                privateKeyPem: '-----PRIV-----',
-                publicKeyPem: '-----PUB-----',
-            }),
+            value: '-----PRIV-----',
         });
 
         const result = await resolveStorageCredentials('/local/db', 'my-enc-secret');
@@ -212,7 +206,7 @@ describe('resolveStorageCredentials', () => {
                 return {
                     name: 'param-enc',
                     type: 'encryption-key',
-                    value: JSON.stringify({ label: 'Param', privateKeyPem: '-----PARAM-----', publicKeyPem: '-----PUB-----' }),
+                    value: '-----PARAM-----',
                 };
             }
             return undefined;
@@ -229,7 +223,7 @@ describe('resolveStorageCredentials', () => {
         mockVaultGet.mockResolvedValue({
             name: 'env-enc-secret',
             type: 'encryption-key',
-            value: JSON.stringify({ label: 'Env Key', privateKeyPem: '-----ENV-----', publicKeyPem: '-----PUB-----' }),
+            value: '-----ENV-----',
         });
 
         const result = await resolveStorageCredentials('/local/db');
@@ -245,7 +239,7 @@ describe('resolveStorageCredentials', () => {
         mockVaultGet.mockResolvedValue({
             name: 'geo-secret',
             type: 'api-key',
-            value: JSON.stringify({ label: 'Geocoding', apiKey: 'geo-api-key-123' }),
+            value: 'geo-api-key-123',
         });
 
         const result = await resolveStorageCredentials('/local/db');
@@ -269,7 +263,7 @@ describe('resolveStorageCredentials', () => {
         mockVaultGet.mockResolvedValue({
             name: 'geo-secret',
             type: 'api-key',
-            value: JSON.stringify({ label: 'Geocoding', apiKey: 'vault-geo-key' }),
+            value: 'vault-geo-key',
         });
         process.env.GOOGLE_API_KEY = 'env-geo-key';
 
@@ -309,14 +303,14 @@ describe('resolveStorageCredentials', () => {
                 return {
                     name: 'key1',
                     type: 'encryption-key',
-                    value: JSON.stringify({ label: 'Key1', privateKeyPem: '-----PRIV1-----', publicKeyPem: '-----PUB1-----' }),
+                    value: '-----PRIV1-----',
                 };
             }
             if (name === 'key2') {
                 return {
                     name: 'key2',
                     type: 'encryption-key',
-                    value: JSON.stringify({ label: 'Key2', privateKeyPem: '-----PRIV2-----', publicKeyPem: '-----PUB2-----' }),
+                    value: '-----PRIV2-----',
                 };
             }
             return undefined;
@@ -336,14 +330,14 @@ describe('resolveStorageCredentials', () => {
                 return {
                     name: 'key-a',
                     type: 'encryption-key',
-                    value: JSON.stringify({ label: 'KeyA', privateKeyPem: '-----PRIVA-----', publicKeyPem: '-----PUBA-----' }),
+                    value: '-----PRIVA-----',
                 };
             }
             if (name === 'key-b') {
                 return {
                     name: 'key-b',
                     type: 'encryption-key',
-                    value: JSON.stringify({ label: 'KeyB', privateKeyPem: '-----PRIVB-----', publicKeyPem: '-----PUBB-----' }),
+                    value: '-----PRIVB-----',
                 };
             }
             return undefined;
@@ -354,5 +348,20 @@ describe('resolveStorageCredentials', () => {
         expect(result.encryptionKeyPems).toHaveLength(2);
         expect(mockVaultGet).toHaveBeenCalledWith('key-a');
         expect(mockVaultGet).toHaveBeenCalledWith('key-b');
+    });
+
+    test('geocoding vault entry stored as raw string', async () => {
+        mockGetDatabases.mockResolvedValue([
+            { name: 'db', description: '', path: '/local/db', geocodingKey: 'geo-secret' } as any,
+        ]);
+        mockVaultGet.mockResolvedValue({
+            name: 'geo-secret',
+            type: 'api-key',
+            value: 'geo-key-456',
+        });
+
+        const result = await resolveStorageCredentials('/local/db');
+
+        expect(result.googleApiKey).toBe('geo-key-456');
     });
 });

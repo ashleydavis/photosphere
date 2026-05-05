@@ -113,7 +113,7 @@ export function ViewSecretDialog({ open, secret, onClose, getSecretValue }: IVie
     //
     async function handleReveal(): Promise<void> {
         setLoading(true);
-        const value = await getSecretValue(secret.id);
+        const value = await getSecretValue(secret.name);
         setSecretValue(value);
         setRevealed(true);
         setLoading(false);

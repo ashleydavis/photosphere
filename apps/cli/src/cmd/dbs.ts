@@ -1,11 +1,12 @@
 import { Command } from 'commander';
+import { readFile } from 'fs/promises';
 import pc from 'picocolors';
-import { getVault, getDefaultVaultType } from 'vault';
+import { getVault, getDefaultVaultType, IVault } from 'vault';
 import { log } from 'utils';
 import { getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry } from 'api';
 import { confirm, intro, outro, text, select, isCancel, spinner, note } from '../lib/clack/prompts';
 import { exit } from 'node-utils';
-import { generateKeyPair, exportPublicKeyToPem } from 'storage';
+import { generateKeyPair } from 'storage';
 import type { IDatabaseEntry } from 'electron-defs';
 import { LanShareSender, LanShareReceiver, resolveDatabaseSharePayload, importDatabasePayload } from 'lan-share';
 import type { IDatabaseSharePayload, ConflictResolver, IConflictResolution } from 'lan-share';
@@ -100,18 +101,6 @@ function isLocalPath(dbPath: string): boolean {
 }
 
 //
-// Generates an 8-character random alphanumeric ID for shared vault secrets.
-//
-function generateSharedSecretId(): string {
-    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-    let result = '';
-    for (let index = 0; index < 8; index++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return result;
-}
-
-//
 // Finds a database entry by its exact path.
 //
 async function findDatabaseByPath(dbPath: string): Promise<IDatabaseEntry | undefined> {
@@ -158,50 +147,47 @@ async function findDatabaseByName(name: string): Promise<IDatabaseEntry | undefi
 }
 
 //
-// Presents a select prompt to pick or create a shared secret of the given type.
-// Returns the secret ID to store on the database entry, or undefined for "None".
+// Returns the prompt shown when picking a secret of the given type.
 //
-async function pickOrCreateSecret(secretType: string, label: string, currentId?: string): Promise<string | undefined> {
+function promptForSecretType(secretType: string): string {
+    if (secretType === 's3-credentials') {
+        return 'S3 credentials:';
+    }
+    if (secretType === 'encryption-key') {
+        return 'Encryption key:';
+    }
+    if (secretType === 'api-key') {
+        return 'Geocoding API key:';
+    }
+    return `${secretType}:`;
+}
+
+//
+// Presents a select prompt to pick or create a shared secret of the given type.
+// Returns the secret name to store on the database entry, or undefined for "None".
+//
+async function pickOrCreateSecret(secretType: string, dbName: string, currentName?: string): Promise<string | undefined> {
     const vault = getVault(getDefaultVaultType());
     const secrets = await vault.list();
 
-    // Find existing secrets of the matching type.
-    const matchingSecrets = secrets
-        .filter(secret => secret.type === secretType)
-        .map(secret => {
-            const secretId = secret.name;
-            let displayLabel = secretId;
-            try {
-                const parsed = JSON.parse(secret.value);
-                if (parsed.label) {
-                    displayLabel = parsed.label;
-                }
-            }
-            catch {
-                // Ignore parse errors, use ID as display.
-            }
-            return { secretId, displayLabel };
-        });
-
-    // Build the select options.
+    // Build the select options: None, every existing secret of the matching type, then "Create new".
     const options: { value: string; label: string }[] = [
         { value: '__none__', label: 'None' },
     ];
 
-    for (const matchingSecret of matchingSecrets) {
-        options.push({
-            value: matchingSecret.secretId,
-            label: matchingSecret.displayLabel,
-        });
+    for (const secret of secrets) {
+        if (secret.type === secretType) {
+            options.push({ value: secret.name, label: secret.name });
+        }
     }
 
     options.push({ value: '__create__', label: '+ Create new' });
 
     // Determine the initial value (highlight current selection when editing).
-    const initialValue = currentId || '__none__';
+    const initialValue = currentName || '__none__';
 
     const selected = await select({
-        message: label,
+        message: promptForSecretType(secretType),
         options,
         initialValue,
     });
@@ -219,7 +205,7 @@ async function pickOrCreateSecret(secretType: string, label: string, currentId?:
     }
 
     if (selectedValue === '__create__') {
-        return await createSharedSecret(secretType);
+        return await createSharedSecret(secretType, dbName);
     }
 
     return selectedValue;
@@ -227,35 +213,39 @@ async function pickOrCreateSecret(secretType: string, label: string, currentId?:
 
 //
 // Inline creation flow for a new shared secret of the given type.
-// Returns the generated secret ID.
+// Returns the secret name (which is also the vault key).
 //
-async function createSharedSecret(secretType: string): Promise<string> {
+// The name is inferred from the database name and secret type
+// (e.g. "mydb:s3" for s3-credentials on database "mydb"). If that
+// inferred name is already taken in the vault, the user is prompted
+// for a different one.
+//
+async function createSharedSecret(secretType: string, dbName: string): Promise<string> {
     const vault = getVault(getDefaultVaultType());
-    const secretId = generateSharedSecretId();
+
+    const inferredName = inferSecretName(dbName, secretType);
+    const secretName = await resolveUniqueSecretName(vault, inferredName, secretType);
 
     if (secretType === 's3-credentials') {
-        const label = await promptRequired('Label for this S3 credential:');
         const endpoint = await promptOptional('Endpoint URL (leave blank for AWS):');
         const region = await promptRequired('Region (e.g. us-east-1):');
         const accessKeyId = await promptRequired('Access Key ID:');
         const secretAccessKey = await promptRequired('Secret Access Key:');
 
-        const value: Record<string, string> = { label, region, accessKeyId, secretAccessKey };
+        const value: Record<string, string> = { region, accessKeyId, secretAccessKey };
         if (endpoint) {
             value.endpoint = endpoint;
         }
 
         await vault.set({
-            name: secretId,
+            name: secretName,
             type: 's3-credentials',
             value: JSON.stringify(value),
         });
 
-        log.info(pc.green(`  ✓ S3 credential "${label}" created (${secretId})`));
+        log.info(pc.green(`  ✓ S3 credential "${secretName}" created`));
     }
     else if (secretType === 'encryption-key') {
-        const label = await promptRequired('Label for this encryption key:');
-
         const keyChoice = await select({
             message: 'How would you like to provide the key?',
             options: [
@@ -270,43 +260,80 @@ async function createSharedSecret(secretType: string): Promise<string> {
         }
 
         let privateKeyPem: string;
-        let publicKeyPem: string;
 
         if (keyChoice === 'generate') {
             const keyPair = generateKeyPair();
             privateKeyPem = keyPair.privateKey.export({ type: 'pkcs8', format: 'pem' }) as string;
-            publicKeyPem = exportPublicKeyToPem(keyPair.publicKey);
         }
         else {
-            const { readFile } = await import('fs/promises');
             const privatePath = await promptRequired('Path to private key (.key):');
-            const publicPath = await promptRequired('Path to public key (.key.pub):');
             privateKeyPem = await readFile(privatePath, 'utf-8');
-            publicKeyPem = await readFile(publicPath, 'utf-8');
         }
 
         await vault.set({
-            name: secretId,
+            name: secretName,
             type: 'encryption-key',
-            value: JSON.stringify({ label, privateKeyPem, publicKeyPem }),
+            value: privateKeyPem,
         });
 
-        log.info(pc.green(`  ✓ Encryption key "${label}" created (${secretId})`));
+        log.info(pc.green(`  ✓ Encryption key "${secretName}" created`));
     }
     else if (secretType === 'api-key') {
-        const label = await promptRequired('Label for this API key:');
         const apiKey = await promptRequired('API key value:');
 
         await vault.set({
-            name: secretId,
+            name: secretName,
             type: 'api-key',
-            value: JSON.stringify({ label, apiKey }),
+            value: apiKey,
         });
 
-        log.info(pc.green(`  ✓ API key "${label}" created (${secretId})`));
+        log.info(pc.green(`  ✓ API key "${secretName}" created`));
     }
 
-    return secretId;
+    return secretName;
+}
+
+//
+// Maps a secret type to a short suffix used in inferred vault key names.
+//
+function suffixForSecretType(secretType: string): string {
+    if (secretType === 's3-credentials') {
+        return 's3';
+    }
+    if (secretType === 'encryption-key') {
+        return 'encryption';
+    }
+    if (secretType === 'api-key') {
+        return 'geocoding';
+    }
+    return secretType;
+}
+
+//
+// Builds the default vault key name for a secret of the given type linked to the given database.
+//
+function inferSecretName(dbName: string, secretType: string): string {
+    return `${dbName}:${suffixForSecretType(secretType)}`;
+}
+
+//
+// Returns the inferred name when it is free in the vault, otherwise prompts the user
+// for a different name and rejects any that are already taken.
+//
+async function resolveUniqueSecretName(vault: IVault, inferredName: string, secretType: string): Promise<string> {
+    const existing = await vault.get(inferredName);
+    if (!existing) {
+        return inferredName;
+    }
+    log.info(pc.yellow(`  ⚠ A secret named "${inferredName}" already exists. Choose a different name.`));
+    while (true) {
+        const candidate = await promptRequired(`Name for this ${secretType}:`);
+        const conflict = await vault.get(candidate);
+        if (!conflict) {
+            return candidate;
+        }
+        log.error(pc.red(`✗ A secret named "${candidate}" already exists in the vault. Choose a different name.`));
+    }
 }
 
 //
@@ -539,9 +566,9 @@ export async function dbsAdd(cmdOptions: IDbsAddOptions): Promise<void> {
     }
 
     // Secret linking
-    const s3Key = await pickOrCreateSecret('s3-credentials', 'S3 credentials:');
-    const encryptionKey = await pickOrCreateSecret('encryption-key', 'Encryption key:');
-    const geocodingKey = await pickOrCreateSecret('api-key', 'Geocoding API key:');
+    const s3Key = await pickOrCreateSecret('s3-credentials', name);
+    const encryptionKey = await pickOrCreateSecret('encryption-key', name);
+    const geocodingKey = await pickOrCreateSecret('api-key', name);
 
     const entry: IDatabaseEntry = {
         name,
@@ -798,12 +825,13 @@ export async function dbsEdit(cmdOptions: IDbsEditOptions): Promise<void> {
     }
 
     // Secret linking (with current selections highlighted).
-    const s3Key = await pickOrCreateSecret('s3-credentials', 'S3 credentials:', entry.s3Key);
-    const encryptionKey = await pickOrCreateSecret('encryption-key', 'Encryption key:', entry.encryptionKey);
-    const geocodingKey = await pickOrCreateSecret('api-key', 'Geocoding API key:', entry.geocodingKey);
+    const updatedName = (newName as string).trim();
+    const s3Key = await pickOrCreateSecret('s3-credentials', updatedName, entry.s3Key);
+    const encryptionKey = await pickOrCreateSecret('encryption-key', updatedName, entry.encryptionKey);
+    const geocodingKey = await pickOrCreateSecret('api-key', updatedName, entry.geocodingKey);
 
     const updated: IDatabaseEntry = {
-        name: (newName as string).trim(),
+        name: updatedName,
         description: (newDescription as string).trim(),
         path: (newPath as string).trim(),
         origin: entry.origin,
@@ -1012,13 +1040,13 @@ export async function dbsSend(cmdOptions: IDbsSendOptions): Promise<void> {
     log.info(pc.cyan('  Description: ') + (payload.description || pc.dim('(none)')));
     log.info(pc.cyan('  Path:        ') + payload.path);
     if (payload.s3Credentials) {
-        log.info(pc.cyan('  S3 Creds:    ') + payload.s3Credentials.label);
+        log.info(pc.cyan('  S3 Creds:    ') + payload.s3Credentials.name);
     }
     if (payload.encryptionKey) {
-        log.info(pc.cyan('  Encryption:  ') + payload.encryptionKey.label);
+        log.info(pc.cyan('  Encryption:  ') + payload.encryptionKey.name);
     }
     if (payload.geocodingKey) {
-        log.info(pc.cyan('  Geocoding:   ') + payload.geocodingKey.label);
+        log.info(pc.cyan('  Geocoding:   ') + payload.geocodingKey.name);
     }
     log.info('');
 
@@ -1076,7 +1104,7 @@ export async function dbsSend(cmdOptions: IDbsSendOptions): Promise<void> {
         // Confirm which secrets to include
         if (payload.s3Credentials) {
             const includeS3 = await confirm({
-                message: `Include S3 credentials (${payload.s3Credentials.label})?`,
+                message: `Include S3 credentials (${payload.s3Credentials.name})?`,
                 initialValue: true,
             });
             if (isCancel(includeS3)) {
@@ -1090,7 +1118,7 @@ export async function dbsSend(cmdOptions: IDbsSendOptions): Promise<void> {
 
         if (payload.encryptionKey) {
             const includeEnc = await confirm({
-                message: `Include encryption key (${payload.encryptionKey.label})?`,
+                message: `Include encryption key (${payload.encryptionKey.name})?`,
                 initialValue: true,
             });
             if (isCancel(includeEnc)) {
@@ -1104,7 +1132,7 @@ export async function dbsSend(cmdOptions: IDbsSendOptions): Promise<void> {
 
         if (payload.geocodingKey) {
             const includeGeo = await confirm({
-                message: `Include geocoding key (${payload.geocodingKey.label})?`,
+                message: `Include geocoding key (${payload.geocodingKey.name})?`,
                 initialValue: true,
             });
             if (isCancel(includeGeo)) {
@@ -1281,13 +1309,13 @@ async function dbsReceive(cmdOptions: { yes?: boolean; code?: string }): Promise
     log.info(pc.cyan('  Description: ') + (payload.description || pc.dim('(none)')));
     log.info(pc.cyan('  Path:        ') + payload.path);
     if (payload.s3Credentials) {
-        log.info(pc.cyan('  S3 Creds:    ') + payload.s3Credentials.label);
+        log.info(pc.cyan('  S3 Creds:    ') + payload.s3Credentials.name);
     }
     if (payload.encryptionKey) {
-        log.info(pc.cyan('  Encryption:  ') + payload.encryptionKey.label);
+        log.info(pc.cyan('  Encryption:  ') + payload.encryptionKey.name);
     }
     if (payload.geocodingKey) {
-        log.info(pc.cyan('  Geocoding:   ') + payload.geocodingKey.label);
+        log.info(pc.cyan('  Geocoding:   ') + payload.geocodingKey.name);
     }
     log.info('');
 
@@ -1345,7 +1373,7 @@ async function dbsReceive(cmdOptions: { yes?: boolean; code?: string }): Promise
         // Confirm which secrets to import
         if (payload.s3Credentials) {
             const importS3 = await confirm({
-                message: `Import S3 credentials (${payload.s3Credentials.label})?`,
+                message: `Import S3 credentials (${payload.s3Credentials.name})?`,
                 initialValue: true,
             });
             if (isCancel(importS3)) {
@@ -1359,7 +1387,7 @@ async function dbsReceive(cmdOptions: { yes?: boolean; code?: string }): Promise
 
         if (payload.encryptionKey) {
             const importEnc = await confirm({
-                message: `Import encryption key (${payload.encryptionKey.label})?`,
+                message: `Import encryption key (${payload.encryptionKey.name})?`,
                 initialValue: true,
             });
             if (isCancel(importEnc)) {
@@ -1373,7 +1401,7 @@ async function dbsReceive(cmdOptions: { yes?: boolean; code?: string }): Promise
 
         if (payload.geocodingKey) {
             const importGeo = await confirm({
-                message: `Import geocoding key (${payload.geocodingKey.label})?`,
+                message: `Import geocoding key (${payload.geocodingKey.name})?`,
                 initialValue: true,
             });
             if (isCancel(importGeo)) {

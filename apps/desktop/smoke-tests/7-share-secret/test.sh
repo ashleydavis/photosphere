@@ -33,7 +33,7 @@ mkdir -p "$TMP_DIR/sender/vault" "$TMP_DIR/sender/config" "$TMP_DIR/receiver/vau
 
 # Seed sender vault with a test secret
 cat > "$TMP_DIR/sender/vault/test-secret.json" << 'EOF'
-{"name":"test-secret","type":"api-key","value":"{\"label\":\"test-secret\",\"apiKey\":\"TESTAPIKEY123\"}"}
+{"name":"test-secret","type":"api-key","value":"TESTAPIKEY123"}
 EOF
 
 # Start sender app

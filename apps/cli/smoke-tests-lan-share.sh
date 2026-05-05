@@ -203,10 +203,22 @@ test_share_database() {
     reset_dirs
 
     seed_vault_secret "$SENDER_VAULT_DIR" "s3sender" "s3-credentials" \
-        '{"label":"Test S3","region":"us-east-1","accessKeyId":"AKIATEST","secretAccessKey":"secret123","endpoint":"http://localhost:9000"}'
+        '{"region":"us-east-1","accessKeyId":"AKIATEST","secretAccessKey":"secret123","endpoint":"http://localhost:9000"}'
 
-    seed_vault_secret "$SENDER_VAULT_DIR" "encsndr1" "encryption-key" \
-        '{"label":"Test Encryption","privateKeyPem":"-----BEGIN PRIVATE KEY-----\nMIItest\n-----END PRIVATE KEY-----","publicKeyPem":"-----BEGIN PUBLIC KEY-----\nMIItest\n-----END PUBLIC KEY-----"}'
+    # Generate a real RSA-2048 PEM so resolveDatabaseSharePayload can derive the public key.
+    # The vault file is JSON, so we let python build the file directly to handle PEM newlines.
+    local pem_file="${TEST_TMP_DIR}/encsndr1.pem"
+    mkdir -p "$TEST_TMP_DIR" "$SENDER_VAULT_DIR"
+    openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$pem_file" 2>/dev/null
+    PEM_FILE="$pem_file" VAULT_FILE="${SENDER_VAULT_DIR}/encsndr1.json" python3 -c "
+import json, os
+with open(os.environ['PEM_FILE']) as keyFile:
+    pem = keyFile.read()
+secret = {'name': 'encsndr1', 'type': 'encryption-key', 'value': pem}
+with open(os.environ['VAULT_FILE'], 'w') as outFile:
+    json.dump(secret, outFile)
+"
+    chmod 600 "${SENDER_VAULT_DIR}/encsndr1.json"
 
     seed_databases_config "$SENDER_CONFIG_DIR" \
         '[{"name":"share-test-db","description":"A database for LAN share testing","path":"s3:test-bucket:/photos","s3Key":"s3sender","encryptionKey":"encsndr1"}]'
@@ -263,7 +275,7 @@ test_share_secret() {
     reset_dirs
 
     seed_vault_secret "$SENDER_VAULT_DIR" "apikey01" "api-key" \
-        '{"label":"Test Geocoding","apiKey":"AIzaFakeKey123"}'
+        'AIzaFakeKey123'
 
     local test_code="2345"
     local receiver_log="${TEST_TMP_DIR}/receiver-secret.log"
@@ -309,7 +321,7 @@ test_wrong_pairing_code() {
     reset_dirs
 
     seed_vault_secret "$SENDER_VAULT_DIR" "apikey01" "api-key" \
-        '{"label":"Test Geocoding","apiKey":"AIzaFakeKey123"}'
+        'AIzaFakeKey123'
 
     local receiver_code="3456"
     local wrong_code="7890"
@@ -423,7 +435,7 @@ test_rogue_receiver_rejected() {
     reset_dirs
 
     seed_vault_secret "$SENDER_VAULT_DIR" "roguekey" "api-key" \
-        '{"label":"Rogue Test Key","apiKey":"ROGUE_SECRET_VALUE_12345"}'
+        'ROGUE_SECRET_VALUE_12345'
 
     local receiver_log="${TEST_TMP_DIR}/receiver-rogue.log"
     start_receiver_with_code "secrets" "$receiver_log" "6789" || return 1

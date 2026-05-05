@@ -116,7 +116,7 @@ export function SecretsPage() {
             name: secret.name,
             type: secret.type,
         };
-        const valueJson = await platform.getSecretValue(secret.id);
+        const valueJson = await platform.getSecretValue(secret.name);
         const populated = valueJson ? applyValueJson(baseForm, valueJson) : baseForm;
         setForm(populated);
         setDialogOpen(true);
@@ -129,7 +129,7 @@ export function SecretsPage() {
     async function handleSave(): Promise<void> {
         const valueJson = buildValueJson(form);
         if (editingSecret) {
-            await platform.updateSecret({ ...editingSecret, name: form.name }, valueJson);
+            await platform.updateSecret(editingSecret.name, { name: form.name, type: editingSecret.type }, valueJson);
             log.info('Secret updated');
         }
         else {
@@ -159,9 +159,9 @@ export function SecretsPage() {
         const allDatabases = await platform.getDatabases();
         const referencing = allDatabases.filter(
             dbEntry =>
-                dbEntry.s3Key === deletingSecret.id ||
-                dbEntry.encryptionKey === deletingSecret.id ||
-                dbEntry.geocodingKey === deletingSecret.id
+                dbEntry.s3Key === deletingSecret.name ||
+                dbEntry.encryptionKey === deletingSecret.name ||
+                dbEntry.geocodingKey === deletingSecret.name
         );
         if (referencing.length > 0) {
             setReferencingDatabases(referencing);
@@ -177,7 +177,7 @@ export function SecretsPage() {
     //
     async function executeDelete(): Promise<void> {
         if (deletingSecret) {
-            await platform.deleteSecret(deletingSecret.id);
+            await platform.deleteSecret(deletingSecret.name);
             setDeletingSecret(undefined);
         }
         setConfirmDeleteSecondOpen(false);
@@ -310,7 +310,7 @@ export function SecretsPage() {
                 </thead>
                 <tbody>
                     {secrets.map(secret => (
-                        <tr key={secret.id}>
+                        <tr key={secret.name}>
                             <td>{secret.name}</td>
                             <td>{secret.type}</td>
                             <td style={{ whiteSpace: 'nowrap' }}>

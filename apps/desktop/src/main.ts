@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, utilityProcess, type UtilityProcess, dialog, Menu, shell } from 'electron';
 import { appendFileSync } from 'fs';
 import { join, dirname, basename } from 'path';
-import { randomUUID } from 'crypto';
+import { randomUUID, createPrivateKey, createPublicKey } from 'crypto';
 import { cpus, platform, arch, release } from 'os';
 import { version } from 'config';
 import { existsSync, readdirSync, statSync, readFileSync } from 'fs';
@@ -17,7 +17,7 @@ import { FileLoggerElectron } from './lib/file-logger-electron';
 import type { IImportSession, IRendererLogMessage, ISaveAssetItem, IDatabaseEntry, IDatabaseSecrets } from 'electron-defs';
 import { verifyTools } from 'tools';
 import type { IDatabaseDescriptor, IDesktopConfig } from 'api';
-import { createStorage, CloudStorage } from 'storage';
+import { createStorage, CloudStorage, exportPublicKeyToPem } from 'storage';
 import { checkConnectivity, loadDatabaseConfig } from 'api';
 import { getVault, getDefaultVaultType } from 'vault';
 import { LanShareSender, LanShareReceiver, importDatabasePayload, importSecretPayload } from 'lan-share';
@@ -404,18 +404,18 @@ ipcMain.handle('get-database-secrets', logExceptions(async (_event, databasePath
         if (dbEntry.encryptionKey) {
             const encryptionSecret = await vault.get(dbEntry.encryptionKey);
             if (encryptionSecret) {
-                const parsed = JSON.parse(encryptionSecret.value);
+                const privateKeyPem = encryptionSecret.value;
+                const publicKeyPem = exportPublicKeyToPem(createPublicKey(createPrivateKey(privateKeyPem)));
                 secrets.encryptionKeyPair = {
-                    privateKeyPem: parsed.privateKeyPem,
-                    publicKeyPem: parsed.publicKeyPem,
+                    privateKeyPem,
+                    publicKeyPem,
                 };
             }
         }
         if (dbEntry.geocodingKey) {
             const geocodingSecret = await vault.get(dbEntry.geocodingKey);
             if (geocodingSecret) {
-                const parsed = JSON.parse(geocodingSecret.value);
-                secrets.geocodingApiKey = parsed.apiKey;
+                secrets.geocodingApiKey = geocodingSecret.value;
             }
         }
     }

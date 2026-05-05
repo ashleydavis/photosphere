@@ -33,14 +33,11 @@ export interface IReceiveDatabaseDialogProps {
 type ReceiveStep = "enter-code" | "waiting" | "review" | "conflict" | "success" | "error";
 
 //
-// A single secret included in a received payload (name + label only).
+// A single secret included in a received payload.
 //
 interface IReceivedSecret {
     // Vault key name from the sender.
     name: string;
-
-    // Human-readable label.
-    label: string;
 }
 
 //
@@ -320,7 +317,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
 
                             {payload.s3Credentials && (
                                 <Checkbox
-                                    label={`Import S3 credentials (${payload.s3Credentials.label})`}
+                                    label={`Import S3 credentials (${payload.s3Credentials.name})`}
                                     checked={importS3}
                                     onChange={event => setImportS3(event.target.checked)}
                                     sx={{ mb: 1 }}
@@ -329,7 +326,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
 
                             {payload.encryptionKey && (
                                 <Checkbox
-                                    label={`Import encryption key (${payload.encryptionKey.label})`}
+                                    label={`Import encryption key (${payload.encryptionKey.name})`}
                                     checked={importEncryption}
                                     onChange={event => setImportEncryption(event.target.checked)}
                                     sx={{ mb: 1 }}
@@ -338,7 +335,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
 
                             {payload.geocodingKey && (
                                 <Checkbox
-                                    label={`Import geocoding key (${payload.geocodingKey.label})`}
+                                    label={`Import geocoding key (${payload.geocodingKey.name})`}
                                     checked={importGeocoding}
                                     onChange={event => setImportGeocoding(event.target.checked)}
                                     sx={{ mb: 1 }}

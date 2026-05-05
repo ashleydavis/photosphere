@@ -30,7 +30,6 @@ test("imports database payload with all secrets", async () => {
         origin: "https://example.com",
         s3Credentials: {
             name: "default:s3",
-            label: "My S3",
             region: "us-east-1",
             accessKeyId: "AKID",
             secretAccessKey: "SECRET",
@@ -38,13 +37,11 @@ test("imports database payload with all secrets", async () => {
         },
         encryptionKey: {
             name: "digital-ocean",
-            label: "My Key",
             privateKeyPem: "-----PRIVATE-----",
             publicKeyPem: "-----PUBLIC-----",
         },
         geocodingKey: {
             name: "geocoding-key",
-            label: "Geocoding",
             apiKey: "geo-key-123",
         },
     };
@@ -68,24 +65,22 @@ test("imports database payload with all secrets", async () => {
     );
     expect(s3Call).toBeDefined();
     const s3Value = JSON.parse(s3Call[0].value);
-    expect(s3Value.label).toBe("My S3");
+    expect(s3Value.label).toBeUndefined();
     expect(s3Value.region).toBe("us-east-1");
 
-    // Verify encryption key was stored
+    // Verify encryption key was stored as raw PEM
     const encCall = mockVaultSet.mock.calls.find(
         (call: unknown[]) => (call[0] as { type: string }).type === "encryption-key"
     );
     expect(encCall).toBeDefined();
-    const encValue = JSON.parse(encCall[0].value);
-    expect(encValue.privateKeyPem).toBe("-----PRIVATE-----");
+    expect(encCall[0].value).toBe("-----PRIVATE-----");
 
-    // Verify geocoding key was stored
+    // Verify geocoding key was stored as raw string
     const geoCall = mockVaultSet.mock.calls.find(
         (call: unknown[]) => (call[0] as { type: string }).type === "api-key"
     );
     expect(geoCall).toBeDefined();
-    const geoValue = JSON.parse(geoCall[0].value);
-    expect(geoValue.apiKey).toBe("geo-key-123");
+    expect(geoCall[0].value).toBe("geo-key-123");
 });
 
 test("imports database payload with no secrets", async () => {
@@ -110,7 +105,7 @@ test("imports secret payload", async () => {
         type: "secret",
         name: "s3:my-s3",
         secretType: "s3-credentials",
-        value: JSON.stringify({ label: "My S3", region: "us-east-1", accessKeyId: "AKID", secretAccessKey: "SECRET" }),
+        value: JSON.stringify({ region: "us-east-1", accessKeyId: "AKID", secretAccessKey: "SECRET" }),
     };
 
     await importSecretPayload(payload, "imported1");
@@ -131,14 +126,12 @@ test("imported database entry uses secret names from payload", async () => {
         path: "/data/test",
         s3Credentials: {
             name: "default:s3",
-            label: "S3",
             region: "us-east-1",
             accessKeyId: "AK",
             secretAccessKey: "SK",
         },
         encryptionKey: {
             name: "digital-ocean",
-            label: "Key",
             privateKeyPem: "priv",
             publicKeyPem: "pub",
         },
@@ -163,7 +156,6 @@ test("conflict resolver reuse: skips vault.set and keeps original name", async (
         path: "/data/test",
         s3Credentials: {
             name: "default:s3",
-            label: "S3",
             region: "us-east-1",
             accessKeyId: "AK",
             secretAccessKey: "SK",
@@ -189,7 +181,6 @@ test("conflict resolver replace: calls vault.set with original name", async () =
         path: "/data/test",
         s3Credentials: {
             name: "default:s3",
-            label: "S3",
             region: "us-east-1",
             accessKeyId: "AK",
             secretAccessKey: "SK",
@@ -216,7 +207,6 @@ test("conflict resolver rename: calls vault.set with new name and updates entry"
         path: "/data/test",
         s3Credentials: {
             name: "default:s3",
-            label: "S3",
             region: "us-east-1",
             accessKeyId: "AK",
             secretAccessKey: "SK",
@@ -243,7 +233,6 @@ test("conflict resolver not called when no existing secret", async () => {
         path: "/data/test",
         s3Credentials: {
             name: "default:s3",
-            label: "S3",
             region: "us-east-1",
             accessKeyId: "AK",
             secretAccessKey: "SK",
@@ -254,4 +243,41 @@ test("conflict resolver not called when no existing secret", async () => {
 
     expect(resolver).not.toHaveBeenCalled();
     expect(mockVaultSet).toHaveBeenCalledTimes(1);
+});
+
+test("stores encryption-key as raw PEM, not JSON-wrapped", async () => {
+    const payload: IDatabaseSharePayload = {
+        type: "database",
+        name: "test-db",
+        description: "",
+        path: "/data/test",
+        encryptionKey: {
+            name: "enc-secret",
+            privateKeyPem: "-----RAW PRIVATE-----",
+            publicKeyPem: "-----RAW PUBLIC-----",
+        },
+    };
+
+    await importDatabasePayload(payload, noConflictResolver);
+
+    expect(mockVaultSet).toHaveBeenCalledTimes(1);
+    expect(mockVaultSet.mock.calls[0][0].value).toBe("-----RAW PRIVATE-----");
+});
+
+test("stores api-key as raw string, not JSON-wrapped", async () => {
+    const payload: IDatabaseSharePayload = {
+        type: "database",
+        name: "test-db",
+        description: "",
+        path: "/data/test",
+        geocodingKey: {
+            name: "geo-secret",
+            apiKey: "raw-api-key-value",
+        },
+    };
+
+    await importDatabasePayload(payload, noConflictResolver);
+
+    expect(mockVaultSet).toHaveBeenCalledTimes(1);
+    expect(mockVaultSet.mock.calls[0][0].value).toBe("raw-api-key-value");
 });

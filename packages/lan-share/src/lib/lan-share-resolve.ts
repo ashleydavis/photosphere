@@ -18,7 +18,6 @@ export async function resolveDatabaseSharePayload(entry: IDatabaseEntry): Promis
             const parsed = JSON.parse(secret.value);
             s3Credentials = {
                 name: entry.s3Key,
-                label: parsed.label || entry.s3Key,
                 region: parsed.region,
                 accessKeyId: parsed.accessKeyId,
                 secretAccessKey: parsed.secretAccessKey,
@@ -31,22 +30,13 @@ export async function resolveDatabaseSharePayload(entry: IDatabaseEntry): Promis
     if (entry.encryptionKey) {
         const secret = await vault.get(entry.encryptionKey);
         if (secret) {
-            let label: string;
-            let privateKeyPem: string;
-            let publicKeyPem: string;
-            try {
-                const parsed = JSON.parse(secret.value);
-                label = parsed.label || entry.encryptionKey;
-                privateKeyPem = parsed.privateKeyPem;
-                publicKeyPem = parsed.publicKeyPem;
-            }
-            catch {
-                // Raw PEM key — derive the public key from it.
-                label = entry.encryptionKey;
-                privateKeyPem = secret.value;
-                publicKeyPem = exportPublicKeyToPem(createPublicKey(createPrivateKey(secret.value)));
-            }
-            encryptionKey = { name: entry.encryptionKey, label, privateKeyPem, publicKeyPem };
+            const privateKeyPem = secret.value;
+            const publicKeyPem = exportPublicKeyToPem(createPublicKey(createPrivateKey(secret.value)));
+            encryptionKey = {
+                name: entry.encryptionKey,
+                privateKeyPem,
+                publicKeyPem,
+            };
         }
     }
 
@@ -54,11 +44,9 @@ export async function resolveDatabaseSharePayload(entry: IDatabaseEntry): Promis
     if (entry.geocodingKey) {
         const secret = await vault.get(entry.geocodingKey);
         if (secret) {
-            const parsed = JSON.parse(secret.value);
             geocodingKey = {
                 name: entry.geocodingKey,
-                label: parsed.label || entry.geocodingKey,
-                apiKey: parsed.apiKey,
+                apiKey: secret.value,
             };
         }
     }

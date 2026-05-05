@@ -15,6 +15,13 @@ jest.mock("storage", () => ({
     exportPublicKeyToPem: jest.fn(() => "-----MOCKED PUBLIC-----"),
 }));
 
+// Mock node:crypto so test fixtures with non-real PEM strings do not crash inside createPrivateKey.
+jest.mock("node:crypto", () => ({
+    ...jest.requireActual("node:crypto"),
+    createPrivateKey: jest.fn(() => ({})),
+    createPublicKey: jest.fn(() => ({})),
+}));
+
 beforeEach(() => {
     mockVaultGet.mockReset();
 });
@@ -36,7 +43,6 @@ test("resolves database payload with all secrets", async () => {
                 name: "abc12345",
                 type: "s3-credentials",
                 value: JSON.stringify({
-                    label: "My S3",
                     region: "us-east-1",
                     accessKeyId: "AKID",
                     secretAccessKey: "SECRET",
@@ -48,21 +54,14 @@ test("resolves database payload with all secrets", async () => {
             return {
                 name: "def67890",
                 type: "encryption-key",
-                value: JSON.stringify({
-                    label: "My Key",
-                    privateKeyPem: "-----PRIVATE-----",
-                    publicKeyPem: "-----PUBLIC-----",
-                }),
+                value: "-----PRIVATE-----",
             };
         }
         if (name === "ghi11111") {
             return {
                 name: "ghi11111",
                 type: "api-key",
-                value: JSON.stringify({
-                    label: "Geocoding",
-                    apiKey: "geo-key-123",
-                }),
+                value: "geo-key-123",
             };
         }
         return undefined;
@@ -78,7 +77,6 @@ test("resolves database payload with all secrets", async () => {
 
     expect(payload.s3Credentials).toBeDefined();
     expect(payload.s3Credentials!.name).toBe("abc12345");
-    expect(payload.s3Credentials!.label).toBe("My S3");
     expect(payload.s3Credentials!.region).toBe("us-east-1");
     expect(payload.s3Credentials!.accessKeyId).toBe("AKID");
     expect(payload.s3Credentials!.secretAccessKey).toBe("SECRET");
@@ -86,13 +84,11 @@ test("resolves database payload with all secrets", async () => {
 
     expect(payload.encryptionKey).toBeDefined();
     expect(payload.encryptionKey!.name).toBe("def67890");
-    expect(payload.encryptionKey!.label).toBe("My Key");
     expect(payload.encryptionKey!.privateKeyPem).toBe("-----PRIVATE-----");
-    expect(payload.encryptionKey!.publicKeyPem).toBe("-----PUBLIC-----");
+    expect(payload.encryptionKey!.publicKeyPem).toBe("-----MOCKED PUBLIC-----");
 
     expect(payload.geocodingKey).toBeDefined();
     expect(payload.geocodingKey!.name).toBe("ghi11111");
-    expect(payload.geocodingKey!.label).toBe("Geocoding");
     expect(payload.geocodingKey!.apiKey).toBe("geo-key-123");
 });
 
@@ -131,7 +127,7 @@ test("resolves secret share payload", async () => {
     mockVaultGet.mockResolvedValue({
         name: "abc12345",
         type: "s3-credentials",
-        value: JSON.stringify({ label: "My S3", region: "us-east-1", accessKeyId: "AKID", secretAccessKey: "SECRET" }),
+        value: JSON.stringify({ region: "us-east-1", accessKeyId: "AKID", secretAccessKey: "SECRET" }),
     });
 
     const payload = await resolveSecretSharePayload("abc12345");
@@ -147,4 +143,25 @@ test("resolves secret share payload throws when secret not found", async () => {
     await expect(resolveSecretSharePayload("nonexistent")).rejects.toThrow(
         'Secret "nonexistent" not found in vault.'
     );
+});
+
+test("derives publicKeyPem from raw-PEM encryption-key value", async () => {
+    const entry: IDatabaseEntry = {
+        name: "enc-only-db",
+        description: "",
+        path: "/data/enc",
+        encryptionKey: "raw-pem-key",
+    };
+
+    mockVaultGet.mockResolvedValue({
+        name: "raw-pem-key",
+        type: "encryption-key",
+        value: "-----RAW PRIVATE-----",
+    });
+
+    const payload = await resolveDatabaseSharePayload(entry);
+
+    expect(payload.encryptionKey).toBeDefined();
+    expect(payload.encryptionKey!.privateKeyPem).toBe("-----RAW PRIVATE-----");
+    expect(payload.encryptionKey!.publicKeyPem).toBe("-----MOCKED PUBLIC-----");
 });
