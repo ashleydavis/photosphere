@@ -119,9 +119,9 @@ export async function syncDatabaseHandler(
     // Flush any remaining changes that didn't fill a full batch.
     flushBatch();
 
-    await updateDatabaseConfig(localRawStorage, {
-        lastSyncedAt: new Date().toISOString(),
-    });
+    const lastSyncedAt = new Date().toISOString();
+    await updateDatabaseConfig(localRawStorage, { lastSyncedAt });
+    await updateDatabaseConfig(originRawStorage, { lastSyncedAt });
 
     log.info(`Sync completed.`);
 

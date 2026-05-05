@@ -6,6 +6,7 @@ import { IMerkleTree, SortNode, traverseTreeAsync } from "merkle-tree";
 import { loadMerkleTree } from "./tree";
 import type { IBsonCollection, IBsonDatabase } from "bdb";
 import type { IAsset } from "./asset";
+import { updateDatabaseConfig } from "./database-config";
 
 //
 // Options for repairing the media file database.
@@ -99,6 +100,7 @@ export interface IRepairResult {
 //
 export async function repair(
     assetStorage: IStorage,
+    rawStorage: IStorage,
     sourceAssetStorage: IStorage,
     bsonDatabase: IBsonDatabase,
     metadataCollection: IBsonCollection<IAsset>,
@@ -309,6 +311,10 @@ export async function repair(
     });
 
     await bsonDatabase.commit();
+
+    if (result.recordsRepaired.length > 0 || result.repaired.length > 0) {
+        await updateDatabaseConfig(rawStorage, { lastModifiedAt: new Date().toISOString() });
+    }
 
     return result;
 }

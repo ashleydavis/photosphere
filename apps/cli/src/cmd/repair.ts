@@ -56,7 +56,7 @@ export async function repairCommand(context: ICommandContext, options: IRepairCo
 
     writeProgress(`🔧 Repairing database...`);
 
-    const result = await repair(assetStorage, sourceAssetStorage, bsonDatabase, metadataCollection, {
+    const result = await repair(assetStorage, rawAssetStorage, sourceAssetStorage, bsonDatabase, metadataCollection, {
         source: sourcePath,
         sourceKey: options.sourceKey,
         full: options.full,

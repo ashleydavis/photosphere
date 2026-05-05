@@ -8,6 +8,7 @@ import { TestUuidGenerator, getProcessTmpDir } from "node-utils";
 import { MockTimestampProvider } from "utils";
 import { applyDatabaseOps, applyMetadataDatabaseOps, groupOpsByDatabaseId } from "../../lib/apply-database-ops";
 import { createMediaFileDatabase, createDatabase, loadSortIndexes } from "../../lib/media-file-database";
+import { loadDatabaseConfig } from "../../lib/database-config";
 
 //
 // Valid BSON document id (16-byte hex) for tests that hit the real collection implementation.
@@ -250,6 +251,96 @@ describe("applyDatabaseOps", () => {
         }
         finally {
             fs.rmSync(tmpDir, { recursive: true, force: true });
+        }
+    });
+
+    test("stamps lastModifiedAt on the database config after applying ops", async () => {
+        const tmpDir = fs.mkdtempSync(path.join(getProcessTmpDir(), "apply-database-ops-stamp-"));
+        try {
+            const { storage: assetStorage, rawStorage } = createStorage(tmpDir, undefined, undefined);
+            const uuidGenerator = new TestUuidGenerator();
+            const timestampProvider = new MockTimestampProvider();
+            const { metadataCollection } = createMediaFileDatabase(assetStorage, uuidGenerator, timestampProvider);
+            await createDatabase(assetStorage, rawStorage, uuidGenerator, metadataCollection);
+
+            const sessionId = uuidGenerator.generate();
+            const asset = minimalAsset({ _id: BSON_RECORD_ID });
+            const ops: IDatabaseOp[] = [
+                {
+                    databaseId: tmpDir,
+                    collectionName: "metadata",
+                    recordId: BSON_RECORD_ID,
+                    op: {
+                        type: "set",
+                        fields: asset,
+                    },
+                },
+            ];
+
+            const before = new Date().toISOString();
+            await applyDatabaseOps(uuidGenerator, timestampProvider, sessionId, ops);
+            const after = new Date().toISOString();
+
+            const config = await loadDatabaseConfig(rawStorage);
+            expect(config?.lastModifiedAt).toBeDefined();
+            expect(typeof config?.lastModifiedAt).toBe("string");
+            expect(Date.parse(config!.lastModifiedAt!)).not.toBeNaN();
+            expect(before <= config!.lastModifiedAt!).toBe(true);
+            expect(config!.lastModifiedAt! <= after).toBe(true);
+        }
+        finally {
+            fs.rmSync(tmpDir, { recursive: true, force: true });
+        }
+    });
+
+    test("writes config separately for each database group", async () => {
+        const tmpDirA = fs.mkdtempSync(path.join(getProcessTmpDir(), "apply-database-ops-stamp-a-"));
+        const tmpDirB = fs.mkdtempSync(path.join(getProcessTmpDir(), "apply-database-ops-stamp-b-"));
+        try {
+            const uuidGenerator = new TestUuidGenerator();
+            const timestampProvider = new MockTimestampProvider();
+            const sessionId = uuidGenerator.generate();
+
+            const { storage: assetStorageA, rawStorage: rawStorageA } = createStorage(tmpDirA, undefined, undefined);
+            const { metadataCollection: metadataCollectionA } = createMediaFileDatabase(assetStorageA, uuidGenerator, timestampProvider);
+            await createDatabase(assetStorageA, rawStorageA, uuidGenerator, metadataCollectionA);
+
+            const { storage: assetStorageB, rawStorage: rawStorageB } = createStorage(tmpDirB, undefined, undefined);
+            const { metadataCollection: metadataCollectionB } = createMediaFileDatabase(assetStorageB, uuidGenerator, timestampProvider);
+            await createDatabase(assetStorageB, rawStorageB, uuidGenerator, metadataCollectionB);
+
+            const recordIdB = "b1c2d3e4-f506-7890-abcd-ef1234567890";
+            const ops: IDatabaseOp[] = [
+                {
+                    databaseId: tmpDirA,
+                    collectionName: "metadata",
+                    recordId: BSON_RECORD_ID,
+                    op: {
+                        type: "set",
+                        fields: minimalAsset({ _id: BSON_RECORD_ID }),
+                    },
+                },
+                {
+                    databaseId: tmpDirB,
+                    collectionName: "metadata",
+                    recordId: recordIdB,
+                    op: {
+                        type: "set",
+                        fields: minimalAsset({ _id: recordIdB }),
+                    },
+                },
+            ];
+
+            await applyDatabaseOps(uuidGenerator, timestampProvider, sessionId, ops);
+
+            const configA = await loadDatabaseConfig(rawStorageA);
+            const configB = await loadDatabaseConfig(rawStorageB);
+            expect(configA?.lastModifiedAt).toBeDefined();
+            expect(configB?.lastModifiedAt).toBeDefined();
+        }
+        finally {
+            fs.rmSync(tmpDirA, { recursive: true, force: true });
+            fs.rmSync(tmpDirB, { recursive: true, force: true });
         }
     });
 });
