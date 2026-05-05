@@ -1,34 +1,5 @@
 {
   "permissions": {
-    "deny": [
-      "Bash(git stash*)"
-    ],
-    "allow": [
-      "Read",
-      "Glob",
-      "Grep",
-      "Bash(bun install *)",
-      "Bash(bun run *)",
-      "Bash(git -C */.claude/worktrees/*)",
-      "Bash(git log *)",
-      "Bash(git status *)",
-      "Bash(git diff *)",
-      "Bash(git show *)",
-      "Bash(git worktree *)",
-      "Bash(git branch --show-current)",
-      "Bash(git branch -a)",
-      "Bash(git branch -r)",
-      "Bash(git branch -v)",
-      "Bash(git branch -vv)",
-      "Bash(ls *)",
-      "Bash(cat *)",
-      "Bash(find *)",
-      "Bash(echo *)",
-      "Bash(grep *)",
-      "Edit(./*)",
-      "Write(./*)",
-      "MultiEdit(./*)"
-    ],
     "additionalDirectories": [
       "../photosphere.wiki"
     ]
