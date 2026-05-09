@@ -503,26 +503,15 @@ export class WorkerPoolElectronMain implements IQueueBackend {
     // Creates a new utility process worker and sets up message handlers
     //
     private createWorker(): IWorkerState {
-        const workerEnv: Record<string, string> = {};
-
-        // Pass through temp directory environment variables
-        if (process.env.TEMP) {
-            workerEnv.TEMP = process.env.TEMP;
-        }
-        if (process.env.TMP) {
-            workerEnv.TMP = process.env.TMP;
-        }
-        if (process.env.TMPDIR) {
-            workerEnv.TMPDIR = process.env.TMPDIR;
-        }
-
-        // Pass through D-Bus and XDG session variables needed for Linux keychain (secret-tool).
-        if (process.env.DBUS_SESSION_BUS_ADDRESS) {
-            workerEnv.DBUS_SESSION_BUS_ADDRESS = process.env.DBUS_SESSION_BUS_ADDRESS;
-        }
-        if (process.env.XDG_RUNTIME_DIR) {
-            workerEnv.XDG_RUNTIME_DIR = process.env.XDG_RUNTIME_DIR;
-        }
+        // Inherit the full parent environment. utilityProcess.fork does not inherit
+        // process.env automatically. The vault helpers spawn platform tools that
+        // depend on env vars not all known up-front:
+        //   Windows: PATH/PATHEXT/SystemRoot to locate powershell.exe
+        //   macOS:   PATH to locate /usr/bin/security
+        //   Linux:   DBUS_SESSION_BUS_ADDRESS and XDG_RUNTIME_DIR for secret-tool
+        // Forwarding the full parent environment is the same pattern used by the
+        // REST API worker and avoids further "works in main, fails in worker" bugs.
+        const workerEnv: Record<string, string> = { ...process.env } as Record<string, string>;
 
         const workerId = this.workers.length + 1;
         const workerOptions: IWorkerOptions = {
@@ -778,27 +767,9 @@ export class WorkerPoolElectronMain implements IQueueBackend {
             this.workers.splice(index, 1);
         }
 
-        // Create replacement worker
-        const workerEnv: Record<string, string> = {};
-
-        // Pass through temp directory environment variables
-        if (process.env.TEMP) {
-            workerEnv.TEMP = process.env.TEMP;
-        }
-        if (process.env.TMP) {
-            workerEnv.TMP = process.env.TMP;
-        }
-        if (process.env.TMPDIR) {
-            workerEnv.TMPDIR = process.env.TMPDIR;
-        }
-
-        // Pass through D-Bus and XDG session variables needed for Linux keychain (secret-tool).
-        if (process.env.DBUS_SESSION_BUS_ADDRESS) {
-            workerEnv.DBUS_SESSION_BUS_ADDRESS = process.env.DBUS_SESSION_BUS_ADDRESS;
-        }
-        if (process.env.XDG_RUNTIME_DIR) {
-            workerEnv.XDG_RUNTIME_DIR = process.env.XDG_RUNTIME_DIR;
-        }
+        // Create replacement worker. See createWorker for why we forward the full
+        // parent environment rather than an allowlist.
+        const workerEnv: Record<string, string> = { ...process.env } as Record<string, string>;
 
         const workerOptions: IWorkerOptions = {
             ...this.backendOptions,

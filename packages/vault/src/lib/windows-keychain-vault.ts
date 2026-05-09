@@ -45,10 +45,17 @@ async function checkTool(): Promise<void> {
 }
 
 //
+// Preamble that forces Windows PowerShell to load the WinRT projections for
+// the Windows.Security.Credentials namespace. Without this, New-Object fails
+// with "Cannot find type [Windows.Security.Credentials.PasswordVault]".
+//
+const WINRT_PREAMBLE = "[void][Windows.Security.Credentials.PasswordVault,Windows.Security.Credentials,ContentType=WindowsRuntime];[void][Windows.Security.Credentials.PasswordCredential,Windows.Security.Credentials,ContentType=WindowsRuntime];";
+
+//
 // Runs a PowerShell script and returns its trimmed stdout.
 //
 function runPowerShell(script: string): Promise<string> {
-    return runCommand(["powershell", "-NoProfile", "-Command", script]);
+    return runCommand(["powershell", "-NoProfile", "-Command", WINRT_PREAMBLE + script]);
 }
 
 //
