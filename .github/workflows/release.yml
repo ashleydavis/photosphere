@@ -926,11 +926,19 @@ jobs:
           echo "Release directory structure:"
           ls apps/desktop/release
 
-      - name: Install Xvfb (Linux only)
+      - name: Install smoke-test dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb
+          sudo apt-get install -y xvfb imagemagick ffmpeg
+
+      - name: Install smoke-test dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install imagemagick ffmpeg
+
+      - name: Install smoke-test dependencies (Windows)
+        if: runner.os == 'Windows'
+        run: choco install -y imagemagick ffmpeg
 
       - name: Run Electron smoke tests against binary (Linux)
         if: runner.os == 'Linux'
