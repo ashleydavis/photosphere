@@ -19,8 +19,10 @@
     "clean": "bun --filter '*' clean",
     "test": "bun --filter '*' test",
     "test:watch": "bun --filter '*' test:watch",
+    "test:all": "bun run test && bun run test:cli && bun run test:cli:encrypted && bun run test:cli:lan-share && bun run test:electron",
     "t": "bun run test",
     "tw": "bun run test:watch",
+    "ta": "bun run test:all",
     "dev": "bun run bundle:renderer && bun run --elide-lines=0 --filter=photosphere dev",
     "dev:fps": "bun run bundle:renderer && bun run --filter=photosphere dev:fps",
     "dev:web": "concurrently --kill-others --names \"server,frontend\" \"bun run --filter=dev-server dev\" \"bun run --filter=photosphere-frontend dev\"",
@@ -36,7 +38,9 @@
     "test:cli": "./apps/cli/smoke-tests.sh",
     "tc": "bun run test:cli",
     "test:cli:encrypted": "./apps/cli/smoke-tests-encrypted.sh",
-    "tce": "bun run test:cli:encrypted"
+    "tce": "bun run test:cli:encrypted",
+    "test:cli:lan-share": "./apps/cli/smoke-tests-lan-share.sh",
+    "tcl": "bun run test:cli:lan-share"
   },
   "workspaces": [
     "apps/*",
