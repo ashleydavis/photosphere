@@ -120,10 +120,10 @@ export function DatabasesPage() {
         setS3Secrets(allSecrets.filter(secret => secret.type === 's3-credentials'));
         setEncryptionSecrets(allSecrets.filter(secret => secret.type === 'encryption-key'));
         setGeocodingSecrets(allSecrets.filter(secret => secret.type === 'api-key'));
+        log.event('Databases page loaded');
     }
 
     useEffect(() => {
-        log.info('Databases page loaded');
         loadData().catch(err => log.exception('Failed to load data:', err as Error));
     }, []);
 

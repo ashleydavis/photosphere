@@ -42,7 +42,7 @@ wait_for_log "$TMP_DIR" "Import page ready"
 
 send_command "$APP_PORT" drop "{\"dataId\":\"import-drop-zone\",\"paths\":[\"$IMAGES_DIR/test-1.jpeg\",\"$IMAGES_DIR/test-2.png\"]}"
 
-wait_for_log "$TMP_DIR" "Import task completed" 60
+wait_for_log "$TMP_DIR" "2 assets imported" 60
 
 send_command "$APP_PORT" navigate '{"page":"/"}'
 wait_for_log "$TMP_DIR" "Gallery loaded: 2 assets" 30

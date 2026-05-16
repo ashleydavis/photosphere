@@ -141,7 +141,7 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
                 }
 
                 log.verbose(`Added file "${logicalPath}" to the database with ID "${assetData.assetId}".`);
-                context.sendMessage({ type: "import-success", assetId: assetData.assetId, logicalPath, micro: assetData.assetRecord.micro });
+                context.sendMessage({ type: "import-success", assetId: assetData.assetId, logicalPath, micro: assetData.assetRecord.micro, asset: assetData.assetRecord });
             }
 
             if (!merkleTree.databaseMetadata) {

@@ -101,6 +101,7 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
     useEffect(() => {
         if (importStatus === 'completed') {
             const successCount = importItems.filter(item => item.status === 'success').length;
+            log.event(`${successCount} assets imported`);
             addToast({
                 message: `Import complete: ${successCount} asset${successCount !== 1 ? 's' : ''} added`,
                 color: 'success',

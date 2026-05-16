@@ -161,6 +161,10 @@ wait_for_ready() {
 
 #
 # Polls app.log until pattern matches or the timeout is reached.
+# Tracks a per-log cursor (in $tmp_dir/.log-cursor) so each call only sees lines
+# logged after the previous successful match. This avoids races where a repeated
+# pattern (e.g. "Databases page loaded" on a re-navigation) matches a stale
+# occurrence and returns before the new event has actually fired.
 # Usage: wait_for_log <tmp_dir> <pattern> [timeout_secs]
 #
 wait_for_log() {
@@ -168,11 +172,23 @@ wait_for_log() {
     local pattern="$2"
     local timeout="${3:-60}"
     local elapsed=0
-    log_info "Waiting for log pattern: $pattern"
+    local cursor_file="$tmp_dir/.log-cursor"
+    local start_line=0
+    if [ -f "$cursor_file" ]; then
+        start_line=$(cat "$cursor_file")
+    fi
+    log_info "Waiting for log pattern: $pattern (after line $start_line)"
     while [ "$elapsed" -lt "$timeout" ]; do
-        if grep -q "$pattern" "$tmp_dir/app.log" 2>/dev/null; then
-            log_info "Found: $pattern"
-            return 0
+        if [ -f "$tmp_dir/app.log" ]; then
+            local matched_line
+            matched_line=$(awk -v start="$start_line" -v pat="$pattern" '
+                NR > start && index($0, pat) > 0 { print NR; exit }
+            ' "$tmp_dir/app.log" 2>/dev/null)
+            if [ -n "$matched_line" ]; then
+                echo "$matched_line" > "$cursor_file"
+                log_info "Found: $pattern (line $matched_line)"
+                return 0
+            fi
         fi
         sleep 1
         elapsed=$((elapsed + 1))
@@ -182,7 +198,10 @@ wait_for_log() {
     tail -30 "$tmp_dir/app.log" 2>/dev/null | while IFS= read -r line; do
         echo "  $line"
     done
-    return 1
+    # Exit the test with non-zero so the runner reports FAIL. Without this the
+    # test would keep running on stale state and eventually reach log_success,
+    # producing a false-pass.
+    exit 1
 }
 
 #

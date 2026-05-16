@@ -6,6 +6,10 @@
 
 set -euo pipefail
 
+# Always run from the script's own directory so relative paths (test/, ./bin/...) resolve
+# regardless of the caller's CWD (e.g. `bun run test:cli:lan-share` from the repo root).
+cd "$(dirname "$0")"
+
 # Disable colors for consistent output parsing.
 export NO_COLOR=1
 
