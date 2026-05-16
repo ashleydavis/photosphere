@@ -15,9 +15,9 @@
   "license": "MIT",
   "scripts": {
     "c": "bun run compile",
-    "compile": "bun --filter '*' compile && touch /tmp/photosphere-compile-last-run",
+    "compile": "bun --filter '*' compile",
     "clean": "bun --filter '*' clean",
-    "test": "bun --filter '*' test && touch /tmp/photosphere-test-unit-last-run",
+    "test": "bun --filter '*' test",
     "test:watch": "bun --filter '*' test:watch",
     "t": "bun run test",
     "tw": "bun run test:watch",
@@ -33,7 +33,7 @@
     "test:electron": "./apps/desktop/smoke-tests.sh",
     "test:electron:seq": "./apps/desktop/smoke-tests.sh --sequential",
     "te": "bun run test:electron",
-    "test:cli": "./apps/cli/smoke-tests.sh && touch /tmp/photosphere-test-cli-last-run",
+    "test:cli": "./apps/cli/smoke-tests.sh",
     "tc": "bun run test:cli",
     "test:cli:encrypted": "./apps/cli/smoke-tests-encrypted.sh",
     "tce": "bun run test:cli:encrypted"

@@ -1,0 +1,7 @@
+triggers:
+  - paths:
+      - "**/*.ts"
+    commands:
+      - run: bun run test
+        cooldown: 30s
+        timeout: 5m
