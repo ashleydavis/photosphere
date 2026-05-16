@@ -36,6 +36,7 @@ wait_for_log "$TMP_DIR" "Open database dialog opened"
 
 send_command "$APP_PORT" click '{"dataId":"database-list-item-0"}'
 wait_for_log "$TMP_DIR" "Database opened"
+wait_for_log "$TMP_DIR" "Load assets task completed: 0 assets loaded"
 
 send_command "$APP_PORT" click '{"dataId":"import-button"}'
 wait_for_log "$TMP_DIR" "Import page ready"
