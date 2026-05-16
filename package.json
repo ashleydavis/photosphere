@@ -40,7 +40,9 @@
     "test:cli:encrypted": "./apps/cli/smoke-tests-encrypted.sh",
     "tce": "bun run test:cli:encrypted",
     "test:cli:lan-share": "./apps/cli/smoke-tests-lan-share.sh",
-    "tcl": "bun run test:cli:lan-share"
+    "tcl": "bun run test:cli:lan-share",
+    "test:lan-share:cli-desktop": "./cli-desktop-lan-share-smoke-tests.sh",
+    "tlcd": "bun run test:lan-share:cli-desktop"
   },
   "workspaces": [
     "apps/*",

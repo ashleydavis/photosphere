@@ -833,6 +833,37 @@ jobs:
         # --sequential: prevents multiple Electron instances competing on the same xvfb virtual display
         run: xvfb-run -a ./smoke-tests.sh --sequential
 
+  cli-desktop-lan-share-smoke-tests:
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+
+      - name: Run CLI<->Desktop LAN share smoke tests
+        run: xvfb-run -a ./cli-desktop-lan-share-smoke-tests.sh
+
   build-desktop:
     timeout-minutes: 60
     runs-on: ${{ matrix.os }}
@@ -961,7 +992,7 @@ jobs:
 
   create-release:
     timeout-minutes: 20
-    needs: [compile, unit-tests, build-linux, build-windows, build-windows-baseline, build-macos-x64, build-macos-arm64, build-desktop, smoke-test, smoke-test-encrypted, write-lock-tests, sync-tests, lan-share-smoke-test, electron-smoke-tests]
+    needs: [compile, unit-tests, build-linux, build-windows, build-windows-baseline, build-macos-x64, build-macos-arm64, build-desktop, smoke-test, smoke-test-encrypted, write-lock-tests, sync-tests, lan-share-smoke-test, electron-smoke-tests, cli-desktop-lan-share-smoke-tests]
     runs-on: ubuntu-latest
     permissions:
       contents: write
