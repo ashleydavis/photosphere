@@ -80,6 +80,10 @@ export const COMMAND_EXAMPLES: ICommandExamples = {
     version: [
         { command: "psi version", description: "Shows version information for psi and its dependencies." }
     ],
+
+    news: [
+        { command: "psi news", description: "Shows the latest update notification and all news items, including ones you have already seen." }
+    ],
     
     export: [
         { command: "psi export --db ./photos a1b2c3d4-e5f6-7890-abcd-ef1234567890 ./exported-photo.jpg", description: "Exports original asset with ID to a specific file." },

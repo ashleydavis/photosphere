@@ -10,7 +10,7 @@ import { TaskQueue, TaskStatus, setQueueBackend } from 'task-queue';
 import { WorkerPoolElectronMain } from './lib/worker-pool-electron-main';
 import { RandomUuidGenerator, TimestampProvider, logExceptions, log } from 'utils';
 import { findAvailablePort } from 'node-utils';
-import { loadDesktopConfig, saveDesktopConfig, updateLastFolder, getTheme, setTheme, updateLastDownloadFolder, getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry, getRecentDatabases, markDatabaseOpened, removeRecentDatabaseName, findDatabase } from 'api';
+import { loadDesktopConfig, saveDesktopConfig, updateLastFolder, getTheme, setTheme, updateLastDownloadFolder, getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry, getRecentDatabases, markDatabaseOpened, removeRecentDatabaseName, findDatabase, fetchNews, getShownNewsIds, addShownNewsIds, getLastShownUpdateVersion, setLastShownUpdateVersion } from 'api';
 import type { IWorkerPoolOptions } from './lib/worker-pool-electron-main';
 import type { IRestApiWorkerStopMessage, IRestApiWorkerStartMessage } from './rest-api-worker';
 import { FileLoggerElectron } from './lib/file-logger-electron';
@@ -66,6 +66,11 @@ let activeReceiver: LanShareReceiver | null = null;
 
 // Test control server instance, only created when PHOTOSPHERE_TEST_MODE=1.
 let testControlServer: ITestControlServer | null = null;
+
+// URL of the news feed published in the Photosphere GitHub repo. Overridable via
+// PHOTOSPHERE_NEWS_URL for the local demo script (apps/desktop/demo-news.sh) and
+// for Electron smoke test 17, both of which point at a checked-in test yaml file.
+const NEWS_URL = process.env.PHOTOSPHERE_NEWS_URL || 'https://raw.githubusercontent.com/ashleydavis/photosphere/main/news.yaml';
 
 
 //
@@ -132,7 +137,119 @@ async function createMainWindow() {
         if (testControlServer) {
             testControlServer.notifyReady();
         }
+        void checkForUpdate();
+        void checkForNews();
     });
+}
+
+//
+// URL of the GitHub API endpoint that returns the latest non-prerelease release.
+//
+const LATEST_RELEASE_URL = 'https://api.github.com/repos/ashleydavis/photosphere/releases/latest';
+
+//
+// Shape of the response object returned by the GitHub releases/latest endpoint.
+//
+interface IGitHubReleaseResponse {
+    //
+    // The git tag for the release (e.g. "v1.2.3").
+    //
+    tag_name: string;
+}
+
+//
+// Compares the running build version against the latest GitHub release and, when a
+// newer version is available that the user has not yet been notified about, sends
+// an `update-available` IPC to the renderer (which renders the navbar pill and a
+// neutral sticky toast). Records the version in news.yaml's
+// `last_shown_update_version` so the same version is not announced twice.
+//
+// Skipped for `dev` and `nightly` builds (no real release to compare against) and
+// in test mode unless explicitly opted in. Network and parse failures are caught
+// so update failures never block app startup.
+//
+async function checkForUpdate(): Promise<void> {
+    if (mainWindow === null) {
+        return;
+    }
+    const runningVersion: string = version;
+    if (runningVersion === 'dev' || runningVersion.includes('nightly')) {
+        return;
+    }
+    if (process.env.PHOTOSPHERE_TEST_MODE === '1' && !process.env.PHOTOSPHERE_FORCE_UPDATE_CHECK) {
+        return;
+    }
+    try {
+        const response = await fetch(LATEST_RELEASE_URL);
+        if (!response.ok) {
+            return;
+        }
+        const data = await response.json() as IGitHubReleaseResponse;
+        if (!data.tag_name || typeof data.tag_name !== 'string') {
+            return;
+        }
+        const latestVersion = data.tag_name.startsWith('v')
+            ? data.tag_name.slice(1)
+            : data.tag_name;
+        if (latestVersion === runningVersion) {
+            return;
+        }
+        const lastShown = await getLastShownUpdateVersion();
+        if (lastShown === latestVersion) {
+            return;
+        }
+        if (mainWindow) {
+            mainWindow.webContents.send('update-available', { latestVersion });
+        }
+        await setLastShownUpdateVersion(latestVersion);
+        log.info(`Showed update notification: v${latestVersion}`);
+    }
+    catch (error) {
+        log.info(`Update check skipped: ${error instanceof Error ? error.message : String(error)}`);
+    }
+}
+
+//
+// Fetches the published news feed and, if there is an unseen item, sends the oldest one
+// to the renderer as a toast notification. Records the shown ID so it is not shown again.
+// Network errors and malformed feeds are swallowed via the try/catch so news failures
+// never block app startup.
+//
+async function checkForNews(): Promise<void> {
+    if (mainWindow === null) {
+        return;
+    }
+    if (process.env.PHOTOSPHERE_TEST_MODE === '1' && !process.env.PHOTOSPHERE_NEWS_URL) {
+        return;
+    }
+    try {
+        const items = await fetchNews(NEWS_URL);
+        const shownIds = new Set<string>(await getShownNewsIds());
+        let nextItem: typeof items[number] | undefined = undefined;
+        for (const item of items) {
+            if (!shownIds.has(item.id)) {
+                nextItem = item;
+                break;
+            }
+        }
+        if (nextItem === undefined) {
+            return;
+        }
+        if (mainWindow) {
+            mainWindow.webContents.send('show-notification', {
+                message: nextItem.message,
+                color: nextItem.color || 'neutral',
+                duration: nextItem.duration ?? 0,
+                link: nextItem.link,
+                action: nextItem.action,
+            });
+        }
+        await addShownNewsIds([nextItem.id]);
+        log.info(`Showed news notification: ${nextItem.id}`);
+    }
+    catch (error) {
+        log.info(`News check skipped: ${error instanceof Error ? error.message : String(error)}`);
+    }
 }
 
 // Enforce single instance: if another instance is already running, focus its window and quit.
@@ -1297,6 +1414,14 @@ async function createMenu(): Promise<void> {
             click: () => {
                 if (mainWindow) {
                     mainWindow.webContents.send('navigate', '/import');
+                }
+            },
+        },
+        {
+            label: 'News',
+            click: () => {
+                if (mainWindow) {
+                    mainWindow.webContents.send('navigate', '/news');
                 }
             },
         },

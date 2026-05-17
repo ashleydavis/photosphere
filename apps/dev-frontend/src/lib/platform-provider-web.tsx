@@ -1,5 +1,5 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
-import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext, type IImportSession, type IToolsStatus, type IDownloadAssetItem, type IShowNotificationData, type IDatabaseEntry, type ISharedSecretEntry, convertToPng } from "user-interface";
+import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext, type IImportSession, type IToolsStatus, type IDownloadAssetItem, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, convertToPng } from "user-interface";
 
 const restApiUrl = "http://localhost:3001";
 
@@ -166,6 +166,11 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         return () => {};
     }, []);
 
+    const onUpdateAvailable = useCallback((_callback: (data: IUpdateAvailableData) => void): (() => void) => {
+        // No-op for web platform. Host app store handles updates.
+        return () => {};
+    }, []);
+
     const openFolder = useCallback(async (_folderPath: string): Promise<void> => {
         // Not applicable on web platform.
     }, []);
@@ -320,6 +325,7 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         downloadAssets,
         copyToClipboard,
         onShowNotification,
+        onUpdateAvailable,
         openFolder,
         onMenuAction,
         onNavigate,

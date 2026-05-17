@@ -1,0 +1,37 @@
+items:
+  - id: demo-001-welcome
+    message: "Welcome to Photosphere. Thanks for trying it out!"
+    link:
+      label: "Read the docs"
+      url: "https://github.com/ashleydavis/photosphere/wiki"
+    action:
+      label: "What's new"
+      url: "https://github.com/ashleydavis/photosphere/releases/latest"
+
+  - id: demo-002-survey
+    message: "We'd love your feedback. Take our 2-minute user survey!"
+    color: neutral
+    link:
+      label: "Open the survey"
+      url: "https://example.com/photosphere/survey"
+
+  - id: demo-003-blog
+    message: "New blog post: how Photosphere stores your photos end-to-end encrypted."
+    color: neutral
+    action:
+      label: "Read the post"
+      url: "https://example.com/photosphere/blog/e2ee"
+
+  - id: demo-004-release
+    message: "Photosphere v1.5 is out: much faster sync and a redesigned navbar."
+    color: success
+    link:
+      label: "Release notes"
+      url: "https://example.com/photosphere/releases/v1.5"
+    action:
+      label: "Upgrade now"
+      url: "https://example.com/photosphere/download"
+
+  - id: demo-005-bare
+    message: "Heads up: scheduled maintenance window this weekend (no link, no button)."
+    color: warning

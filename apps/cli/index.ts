@@ -31,7 +31,9 @@ import { encryptCommand } from './src/cmd/encrypt';
 import { decryptCommand } from './src/cmd/decrypt';
 import { secretsCommand } from './src/cmd/secrets';
 import { dbsCommand } from './src/cmd/dbs';
+import { newsCommand } from './src/cmd/news';
 import { initContext } from './src/lib/init-cmd';
+import { printNotifications } from './src/lib/print-notifications';
 import { MAIN_EXAMPLES, getCommandExamplesHelp } from './src/examples';
 import pc from "picocolors";
 import { exit } from 'node-utils';
@@ -84,6 +86,18 @@ Resources:
   ➕ New Issue: https://github.com/ashleydavis/photosphere/issues/new`)
         .exitOverride()  // Prevent commander from calling process.exit
         .addHelpCommand(false);  // Disable default help command so we can add it in alphabetical order
+
+    // Print update + news notifications before every command. Skipped for the `news`
+    // command itself (which renders its own full-feed listing) and for the `bug` command
+    // (which captures clean output for the bug report). Network/parse errors are swallowed
+    // inside printNotifications(), so the hook never blocks the user.
+    program.hook('preAction', async (_thisCommand, actionCommand) => {
+        const skipForCommands = new Set(['news', 'bug']);
+        if (skipForCommands.has(actionCommand.name())) {
+            return;
+        }
+        await printNotifications();
+    });
 
     program
         .command("add")
@@ -351,6 +365,12 @@ Resources:
         .option("--page-size <size>", "Number of files to display per page (default: 20)", "20")
         .addHelpText('after', getCommandExamplesHelp('list'))
         .action(initContext(listCommand));
+
+    program
+        .command("news")
+        .description("Displays the latest update notification and all news items from the Photosphere feed.")
+        .addHelpText('after', getCommandExamplesHelp('news'))
+        .action(newsCommand);
 
     program
         .command("remove")

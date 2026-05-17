@@ -16,6 +16,7 @@ import { RightSidebar } from "./components/right-sidebar";
 import { Navbar } from "./components/navbar";
 import { Fps } from "./components/fps";
 import { AboutPage } from "./pages/about";
+import { NewsPage } from "./pages/news";
 import { MapPage } from "./pages/map/map-page";
 import { ConfigurationDialog } from "./components/configuration-dialog";
 import { useToast } from "./context/toast-context";
@@ -120,13 +121,24 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
     //
     useEffect(() => {
         const unsubscribe = platform.onShowNotification((data) => {
+            let action;
+            if (data.action) {
+                const urlAction = data.action;
+                action = { label: urlAction.label, onClick: () => window.open(urlAction.url, '_blank', 'noopener') };
+            }
+            else if (data.folderPath) {
+                const folderPath = data.folderPath;
+                action = { label: 'Open Folder', onClick: () => platform.openFolder(folderPath) };
+            }
+            else {
+                action = undefined;
+            }
             addToast({
                 message: data.message,
                 color: data.color,
                 duration: data.duration,
-                action: data.folderPath
-                    ? { label: 'Open Folder', onClick: () => platform.openFolder(data.folderPath!) }
-                    : undefined,
+                link: data.link,
+                action,
             });
         });
         return unsubscribe;
@@ -284,6 +296,11 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
                         <Route
                             path="/about"
                             element={<AboutPage />}
+                            />
+
+                        <Route
+                            path="/news"
+                            element={<NewsPage />}
                             />
 
                         <Route

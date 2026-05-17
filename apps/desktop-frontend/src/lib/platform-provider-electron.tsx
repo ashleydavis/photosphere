@@ -1,5 +1,5 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
-import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext, type IImportSession, type IToolsStatus, type IDownloadAssetItem, type IShowNotificationData, convertToPng, type IDatabaseEntry, type ISharedSecretEntry } from "user-interface";
+import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext, type IImportSession, type IToolsStatus, type IDownloadAssetItem, type IShowNotificationData, type IUpdateAvailableData, convertToPng, type IDatabaseEntry, type ISharedSecretEntry } from "user-interface";
 import type { IElectronAPI, ISaveAssetItem } from "electron-defs";
 import type { IConflictResolution } from "lan-share";
 import { ProxyVault } from "./proxy-vault";
@@ -49,6 +49,9 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
 
     // Store callbacks for show-notification events
     const showNotificationCallbacksRef = useRef<Set<(data: IShowNotificationData) => void>>(new Set());
+
+    // Store callbacks for update-available events
+    const updateAvailableCallbacksRef = useRef<Set<(data: IUpdateAvailableData) => void>>(new Set());
 
     // Store callbacks for task-message events
     const taskMessageCallbacksRef = useRef<Set<(taskId: string, message: Record<string, unknown>) => void>>(new Set());
@@ -140,6 +143,19 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
 
         return () => {
             electronAPI.removeAllListeners('show-notification');
+        };
+    }, [electronAPI]);
+
+    // Set up message listener for update-available events
+    useEffect(() => {
+        const handleUpdateAvailable = (data: IUpdateAvailableData) => {
+            updateAvailableCallbacksRef.current.forEach(cb => cb(data));
+        };
+
+        electronAPI.onMessage('update-available', handleUpdateAvailable);
+
+        return () => {
+            electronAPI.removeAllListeners('update-available');
         };
     }, [electronAPI]);
 
@@ -271,6 +287,13 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         showNotificationCallbacksRef.current.add(callback);
         return () => {
             showNotificationCallbacksRef.current.delete(callback);
+        };
+    }, []);
+
+    const onUpdateAvailable = useCallback((callback: (data: IUpdateAvailableData) => void): (() => void) => {
+        updateAvailableCallbacksRef.current.add(callback);
+        return () => {
+            updateAvailableCallbacksRef.current.delete(callback);
         };
     }, []);
 
@@ -477,6 +500,7 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         downloadAssets,
         copyToClipboard,
         onShowNotification,
+        onUpdateAvailable,
         openFolder,
         onMenuAction,
         onNavigate,

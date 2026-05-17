@@ -28,6 +28,8 @@ export * from "./lib/database-descriptor";
 export * from "./lib/resolve-storage-credentials";
 export * from "./lib/databases-config";
 export * from "./lib/desktop-config";
+export * from "./lib/news-fetcher";
+export * from "./lib/news-state";
 export * from "./lib/asset";
 export * from "./lib/op";
 export * from "./lib/database-op";

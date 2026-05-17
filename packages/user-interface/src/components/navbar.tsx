@@ -13,6 +13,8 @@ import { useSearch } from "../context/search-context";
 import { useDebounce } from "../lib/use-debounce";
 import { useGallery } from "../context/gallery-context";
 import { useAssetDatabase } from "../context/asset-database-source";
+import { useToast } from "../context/toast-context";
+import { usePlatform } from "../context/platform-context";
 
 export interface INavbarProps {
     //
@@ -64,6 +66,39 @@ export function Navbar({
     useEffect(() => {
         setLocalInput(searchInput);
     }, [searchInput]);
+
+    //
+    // The latest available release version, when newer than the running build.
+    //
+    const [updateVersion, setUpdateVersion] = useState<string | undefined>(undefined);
+
+    const { addToast } = useToast();
+    const platform = usePlatform();
+
+    //
+    // Subscribe to update-available IPC events fired by the desktop main process.
+    // The main process handles the GitHub fetch, the comparison against the running
+    // build, and persistence in news.yaml's `last_shown_update_version`, so the
+    // renderer only sees this callback when there is a genuinely new version to
+    // announce. We (a) show the persistent pill rendered further down, and (b)
+    // fire a one-off neutral toast so the user notices on startup. On web/mobile
+    // this never fires (no main process); update flow there is via the host store.
+    //
+    useEffect(() => {
+        const unsubscribe = platform.onUpdateAvailable(({ latestVersion }) => {
+            setUpdateVersion(latestVersion);
+            addToast({
+                message: `A new version of Photosphere is available: v${latestVersion}`,
+                color: 'neutral',
+                duration: 0,
+                action: {
+                    label: 'Download',
+                    onClick: () => window.open('https://github.com/ashleydavis/photosphere/releases/latest', '_blank', 'noopener'),
+                },
+            });
+        });
+        return unsubscribe;
+    }, [platform, addToast]);
     const { sortedItems, selectedItems, clearMultiSelection } = useGallery();
     const { isLoading, isSyncing, databasePath } = useAssetDatabase();
 
@@ -174,6 +209,29 @@ export function Navbar({
                                 || <div>{sortedItemsCount} photos</div>
                             }                        
                         </div>
+                    )}
+
+                    {updateVersion && (
+                        <a
+                            data-id="update-available-badge"
+                            className="mr-2"
+                            href="https://github.com/ashleydavis/photosphere/releases/latest"
+                            target="_blank"
+                            rel="noreferrer"
+                            title="A new version of Photosphere is available"
+                            style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                padding: '2px 8px',
+                                borderRadius: '999px',
+                                fontSize: '0.75rem',
+                                backgroundColor: theme.palette.success.softBg,
+                                color: theme.palette.success.softColor,
+                                textDecoration: 'none',
+                            }}
+                        >
+                            v{updateVersion} available
+                        </a>
                     )}
 
                     <IconButton

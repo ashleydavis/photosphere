@@ -12,6 +12,7 @@ addToast({
     color: "success",                          // success | warning | danger | neutral
     duration: 5000,                            // ms; 0 = never auto-dismiss (default: 5000)
     action: { label: "Open", onClick: fn },    // optional button
+    link: { label: "Read more", url: "..." },  // optional inline anchor below the message
 });
 ```
 
@@ -67,6 +68,7 @@ No wiring needed — `ToastContextProvider` is already in the tree inside `Main`
 | `color`    | `'success' \| 'warning' \| 'danger' \| 'neutral'` | yes      | —       | Controls background colour   |
 | `duration` | `number` (ms)                                     | no       | `5000`  | `0` = never auto-dismiss     |
 | `action`   | `{ label: string; onClick: () => void }`          | no       | —       | Button shown in the toast    |
+| `link`     | `{ label: string; url: string }`                  | no       | (none)  | Inline anchor rendered below the message; opens in a new tab |
 
 ## Sending a notification from the main process
 
@@ -77,11 +79,19 @@ mainWindow.webContents.send('show-notification', {
     message: 'Sync complete',
     color: 'success',       // success | warning | danger | neutral
     duration: 5000,         // optional, defaults to 5000
-    folderPath: '/some/dir' // optional — adds an "Open Folder" button
+    folderPath: '/some/dir',                                // optional, adds an "Open Folder" button
+    link: { label: 'Read more', url: 'https://...' },       // optional inline anchor in the body
+    action: { label: 'What\'s new', url: 'https://...' }    // optional CTA button (URL form)
 });
 ```
 
-The payload is typed as `IShowNotificationData` in [platform-context.tsx](../packages/user-interface/src/context/platform-context.tsx). When `folderPath` is present, `main.tsx` automatically adds an "Open Folder" action button that opens the folder in the system file manager.
+The payload is typed as `IShowNotificationData` in [platform-context.tsx](../packages/user-interface/src/context/platform-context.tsx). The renderer translates the payload as follows:
+
+- `link` is passed straight through as an inline anchor inside the toast body.
+- `action` (URL form) becomes a CTA button that opens the URL via `window.open(..., '_blank', 'noopener')`. External URLs are routed through `shell.openExternal` by the existing `setWindowOpenHandler` in [main.ts](../apps/desktop/src/main.ts).
+- `folderPath` (when `action` is absent) becomes an "Open Folder" button that opens the folder in the system file manager.
+
+`action` wins over `folderPath` when both are set.
 
 ## Sending a notification from a worker
 
@@ -115,3 +125,4 @@ Remember to register the handler in [task-handlers.ts](../packages/api/src/lib/t
 |-------------------------|-------------------------|-------------------------------------------------------|
 | `onTaskComplete`        | `save-asset`            | Green on success with Open Folder; red on failure     |
 | `onTaskComplete`        | `save-assets-batch`     | Green/yellow/red summary with Open Folder on success  |
+| `checkForNews()` on startup | `did-finish-load`   | Oldest unseen item from `news.yaml`; optional inline link and URL CTA |

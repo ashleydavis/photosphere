@@ -88,6 +88,21 @@ export interface IDatabaseEntry {
 
 
 //
+// A labelled URL used for toast links and CTA actions.
+//
+export interface IShowNotificationLink {
+    //
+    // Visible label.
+    //
+    label: string;
+
+    //
+    // External URL opened when the link or action is clicked.
+    //
+    url: string;
+}
+
+//
 // Payload for the show-notification IPC event sent from the main process.
 //
 export interface IShowNotificationData {
@@ -97,7 +112,8 @@ export interface IShowNotificationData {
     message: string;
 
     //
-    // Color variant of the toast.
+    // Color variant of the toast. News items pick their own color via the publisher's
+    // `news.yaml`; update notifications default to `'neutral'`.
     //
     color: 'success' | 'warning' | 'danger' | 'neutral';
 
@@ -110,6 +126,29 @@ export interface IShowNotificationData {
     // Optional folder path. When present the toast displays an "Open Folder" action button.
     //
     folderPath?: string;
+
+    //
+    // Optional inline link rendered in the toast body.
+    //
+    link?: IShowNotificationLink;
+
+    //
+    // Optional CTA action button (URL form). Mutually exclusive with folderPath; if both are
+    // present action wins.
+    //
+    action?: IShowNotificationLink;
+}
+
+//
+// Payload for the update-available IPC event sent from the desktop main process
+// when a newer GitHub release is detected. The renderer uses this to render the
+// navbar pill and fire a one-off neutral toast.
+//
+export interface IUpdateAvailableData {
+    //
+    // The latest available release version (e.g. "1.2.3"), without leading "v".
+    //
+    latestVersion: string;
 }
 
 //
@@ -280,6 +319,16 @@ export interface IPlatformContext {
     // Returns an unsubscribe function.
     //
     onShowNotification: (callback: (data: IShowNotificationData) => void) => Unsubscribe;
+
+    //
+    // Subscribes to update-available events fired from the desktop main process when a
+    // newer GitHub release is detected and has not already been recorded in news.yaml's
+    // `last_shown_update_version`. The renderer uses this to render the navbar pill
+    // and fire a one-off neutral toast. No-op on web/mobile (which have no main process
+    // and rely on the update check baked into the host app store update flow).
+    // Returns an unsubscribe function.
+    //
+    onUpdateAvailable: (callback: (data: IUpdateAvailableData) => void) => Unsubscribe;
 
     //
     // Opens the given folder path in the system's file manager.

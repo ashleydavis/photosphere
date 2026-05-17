@@ -49,7 +49,19 @@ function ToastItem({ toast }: { toast: IToast }) {
                 </div>
             }
         >
-            {toast.message}
+            <div>
+                <div>{toast.message}</div>
+                {toast.link && (
+                    <a
+                        href={toast.link.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ display: 'inline-block', marginTop: 4, color: 'inherit', textDecoration: 'underline' }}
+                    >
+                        {toast.link.label}
+                    </a>
+                )}
+            </div>
         </Alert>
     );
 }

@@ -259,3 +259,4 @@ describe('removeRecentSearch', () => {
         expect(tomlArg.recent_searches).toEqual(['cats', 'birds']);
     });
 });
+

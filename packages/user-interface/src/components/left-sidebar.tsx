@@ -7,7 +7,7 @@ import { useTheme } from '@mui/joy/styles/ThemeProvider';
 import List from '@mui/joy/List/List';
 import ListItem from '@mui/joy/ListItem/ListItem';
 import ListItemDecorator from '@mui/joy/ListItemDecorator/ListItemDecorator';
-import { PhotoLibrary, Folder, FolderOpen, Info, Map, Search, Settings, CreateNewFolder, FileUpload, ManageSearch, Key, Delete } from '@mui/icons-material';
+import { PhotoLibrary, Folder, FolderOpen, Map, Search, Settings, CreateNewFolder, FileUpload, ManageSearch, Key, Delete } from '@mui/icons-material';
 import { CollapsibleSection } from './collapsible-section';
 import ListItemContent from '@mui/joy/ListItemContent/ListItemContent';
 import ListItemButton from '@mui/joy/ListItemButton/ListItemButton';
@@ -170,19 +170,6 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                         )}
                     </NavLink>
 
-                    <NavLink
-                        to="/about"
-                        onClick={() => setSidebarOpen(false)}
-                        >
-                        {({ isActive }) => (
-                            <ListItem className={isActive ? "" : "opacity-40"}>
-                                <ListItemButton>
-                                    <ListItemDecorator><Info /></ListItemDecorator>
-                                    <ListItemContent>About</ListItemContent>
-                                </ListItemButton>
-                            </ListItem>
-                        )}
-                    </NavLink>
                 </List>
             </div>
 

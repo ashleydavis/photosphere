@@ -198,3 +198,4 @@ export async function removeRecentSearch(searchText: string): Promise<void> {
     config.recentSearches = (config.recentSearches || []).filter(item => item !== searchText);
     await saveDesktopConfig(config);
 }
+

@@ -16,6 +16,21 @@ export interface IToastAction {
 }
 
 //
+// An optional inline link rendered in the body of a toast.
+//
+export interface IToastLink {
+    //
+    // Visible label for the link.
+    //
+    label: string;
+
+    //
+    // External URL opened when the link is clicked.
+    //
+    url: string;
+}
+
+//
 // Represents a single toast notification.
 //
 export interface IToast {
@@ -30,7 +45,8 @@ export interface IToast {
     message: string;
 
     //
-    // Color variant of the toast.
+    // Color variant of the toast. News items pick their own color via the publisher's
+    // `news.yaml`; update notifications default to `'neutral'`.
     //
     color: 'success' | 'warning' | 'danger' | 'neutral';
 
@@ -43,6 +59,11 @@ export interface IToast {
     // Optional action button shown alongside the message.
     //
     action?: IToastAction;
+
+    //
+    // Optional inline link rendered below the message body.
+    //
+    link?: IToastLink;
 }
 
 //
