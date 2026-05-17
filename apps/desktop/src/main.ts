@@ -16,7 +16,7 @@ import type { IRestApiWorkerStopMessage, IRestApiWorkerStartMessage } from './re
 import { FileLoggerElectron } from './lib/file-logger-electron';
 import type { IImportSession, IRendererLogMessage, ISaveAssetItem, IDatabaseEntry, IDatabaseSecrets } from 'electron-defs';
 import { verifyTools } from 'tools';
-import type { IDatabaseDescriptor, IDesktopConfig } from 'api';
+import type { IDatabaseDescriptor, IDesktopConfig, IReplicateDatabaseData } from 'api';
 import { createStorage, CloudStorage, exportPublicKeyToPem } from 'storage';
 import { checkConnectivity, loadDatabaseConfig } from 'api';
 import { getVault, getDefaultVaultType } from 'vault';
@@ -620,9 +620,9 @@ ipcMain.handle('remove-recent-database-name', logExceptions(async (_event, name:
 }, 'Error removing recent database name'));
 
 // IPC handler for listing directory names under an S3 bucket and prefix
-ipcMain.handle('list-s3-dirs', logExceptions(async (_event, credentialId: string, bucket: string, prefix: string) => {
+ipcMain.handle('list-s3-dirs', logExceptions(async (_event, s3Key: string, bucket: string, prefix: string) => {
     const vault = getVault(getDefaultVaultType());
-    const secret = await vault.get(credentialId);
+    const secret = await vault.get(s3Key);
     if (!secret) {
         return [];
     }
@@ -904,6 +904,19 @@ function initWorkers() {
                 });
             }
         }
+        if (result.type === "replicate-database") {
+            const inputs = result.inputs as IReplicateDatabaseData;
+            if (result.status === TaskStatus.Succeeded) {
+                handleReplicateSucceeded(inputs).catch(error => log.exception('Error finalising replicate-database', error as Error));
+            }
+            else if (mainWindow) {
+                mainWindow.webContents.send('show-notification', {
+                    message: `Replication failed: ${result.errorMessage || 'Unknown error'}`,
+                    color: 'danger',
+                    duration: 8000,
+                });
+            }
+        }
         if (result.type === "add-paths" && result.status === TaskStatus.Succeeded) {
             log.info('Import task completed');
         }
@@ -973,6 +986,32 @@ function enqueueSyncTask(): void {
 //
 function syncStopped(): void {
     isSyncRunning = false;
+}
+
+//
+// Registers the destination of a successful replicate-database task in databases.json
+// (so it shows up on the Manage Databases page) and notifies the user.
+//
+async function handleReplicateSucceeded(inputs: IReplicateDatabaseData): Promise<void> {
+    const existingDatabases = await getDatabases();
+    const alreadyRegistered = existingDatabases.find(entry => entry.path === inputs.destPath);
+    if (!alreadyRegistered) {
+        await addDatabaseEntry({
+            name: basename(inputs.destPath),
+            description: '',
+            path: inputs.destPath,
+            origin: inputs.sourcePath,
+            encryptionKey: inputs.destEncryptionKey,
+            s3Key: inputs.destS3Key,
+        });
+    }
+    log.event(`Replication completed for "${basename(inputs.destPath)}"`);
+    if (mainWindow) {
+        mainWindow.webContents.send('show-notification', {
+            message: `Replication completed for "${basename(inputs.destPath)}"`,
+            color: 'success',
+        });
+    }
 }
 
 //

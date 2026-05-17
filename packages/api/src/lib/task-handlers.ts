@@ -5,6 +5,7 @@ import { loadAssetsHandler } from "./load-assets.worker";
 import { uploadAssetHandler } from "./upload-asset.worker";
 import { prefetchDatabaseHandler } from "./prefetch-database.worker";
 import { syncDatabaseHandler } from "./sync-database.worker";
+import { replicateDatabaseHandler } from "./replicate-database.worker";
 import { saveAssetHandler } from "./save-asset.worker";
 import { saveAssetsBatchHandler } from "./save-assets-batch.worker";
 import { createDatabaseHandler } from "./create-database.worker";
@@ -22,6 +23,7 @@ export function initTaskHandlers(): void {
     registerHandler("prefetch-database", prefetchDatabaseHandler);
     registerHandler("upload-asset", uploadAssetHandler);
     registerHandler("sync-database", syncDatabaseHandler);
+    registerHandler("replicate-database", replicateDatabaseHandler);
     registerHandler("save-asset", saveAssetHandler);
     registerHandler("save-assets-batch", saveAssetsBatchHandler);
     registerHandler("create-database", createDatabaseHandler);

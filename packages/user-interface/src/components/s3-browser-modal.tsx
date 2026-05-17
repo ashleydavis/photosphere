@@ -19,8 +19,8 @@ export interface IS3BrowserModalProps {
     // Whether the modal is visible.
     open: boolean;
 
-    // Id of the shared secret entry holding S3 credentials.
-    credentialId: string;
+    // Vault secret name of the entry holding S3 credentials.
+    s3Key: string;
 
     // Called when the modal should close without a selection.
     onClose: () => void;
@@ -32,7 +32,7 @@ export interface IS3BrowserModalProps {
 //
 // Modal for browsing an S3 bucket and selecting a directory path.
 //
-export function S3BrowserModal({ open, credentialId, onClose, onSelect }: IS3BrowserModalProps) {
+export function S3BrowserModal({ open, s3Key, onClose, onSelect }: IS3BrowserModalProps) {
     const platform = usePlatform();
 
     // Current bucket name entered by the user.
@@ -53,7 +53,7 @@ export function S3BrowserModal({ open, credentialId, onClose, onSelect }: IS3Bro
     async function loadListing(targetBucket: string, targetPrefix: string): Promise<void> {
         setListError(undefined);
         setEntries([]);
-        const dirs = await platform.listS3Dirs(credentialId, targetBucket, targetPrefix);
+        const dirs = await platform.listS3Dirs(s3Key, targetBucket, targetPrefix);
         setEntries(dirs);
     }
 

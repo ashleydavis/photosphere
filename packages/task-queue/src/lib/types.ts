@@ -148,8 +148,9 @@ export type WorkerTaskCompletionCallback = (result: ITaskResult) => void | Promi
 
 //
 // Task message data structure passed to message callbacks.
+// TMessage gives compile-time typing for the message payload.
 //
-export interface ITaskMessageData {
+export interface ITaskMessageData<TMessage = any> {
     //
     // The ID of the task that sent this message.
     //
@@ -158,13 +159,14 @@ export interface ITaskMessageData {
     //
     // The message payload.
     //
-    message: any;
+    message: TMessage;
 }
 
 //
 // Callback invoked when a task sends an arbitrary message to the client.
+// TMessage gives compile-time typing for the message payload.
 //
-export type TaskMessageCallback = (data: ITaskMessageData) => void | Promise<void>;
+export type TaskMessageCallback<TMessage = any> = (data: ITaskMessageData<TMessage>) => void | Promise<void>;
 
 //
 // Unsubscribe function returned by event listener registrations.

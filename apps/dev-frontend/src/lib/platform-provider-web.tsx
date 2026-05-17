@@ -275,7 +275,7 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
     const removeRecentDatabaseName = useCallback(async (_name: string): Promise<void> => {
     }, []);
 
-    const listS3Dirs = useCallback(async (_credentialId: string, _bucket: string, _prefix: string): Promise<string[]> => {
+    const listS3Dirs = useCallback(async (_s3Key: string, _bucket: string, _prefix: string): Promise<string[]> => {
         return [];
     }, []);
 

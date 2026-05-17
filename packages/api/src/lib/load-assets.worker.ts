@@ -5,8 +5,7 @@
 import type { ITaskContext } from "task-queue";
 import { TaskQueue } from "task-queue";
 import { createLazyDatabaseStorage, createMediaFileDatabase, isDatabasePartial } from "./media-file-database";
-import { createStorage, loadEncryptionKeysFromPem } from "storage";
-import { resolveStorageCredentials } from "./resolve-storage-credentials";
+import { openStorage } from "./open-storage";
 import type { ILoadAssetsData, ILoadAssetsResult } from "./load-assets.types";
 import { log } from "utils";
 
@@ -27,15 +26,13 @@ export async function loadAssetsHandler(
 
     log.info(`Loading assets from database ${data.databasePath}`);
 
-    const { s3Config, encryptionKeyPems } = await resolveStorageCredentials(data.databasePath);
-    const { options: storageOptions } = await loadEncryptionKeysFromPem(encryptionKeyPems);
-
+    const { storage: plainStorage, s3Config, storageOptions } = await openStorage(data.databasePath);
     const isPartial = await isDatabasePartial(data.databasePath, s3Config, storageOptions);
 
     // Only wrap in lazy storage for partial databases; plain storage otherwise.
     const storage = isPartial
         ? await createLazyDatabaseStorage(data.databasePath, s3Config, storageOptions)
-        : createStorage(data.databasePath, s3Config, storageOptions).storage;
+        : plainStorage;
 
     // Create database instance
     const database = createMediaFileDatabase(storage, uuidGenerator, timestampProvider);

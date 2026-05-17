@@ -126,6 +126,48 @@ describe('resolveStorageCredentials', () => {
         expect(result.s3Config!.region).toBe('eu-central-1');
     });
 
+    test('uses explicit s3Key argument to look up S3 credentials when the path is not registered', async () => {
+        mockGetDatabases.mockResolvedValue([]);
+        mockVaultGet.mockResolvedValue({
+            name: 'explicit-s3',
+            type: 's3-credentials',
+            value: JSON.stringify({ region: 'ap-southeast-2', accessKeyId: 'EXPLICIT_AKID', secretAccessKey: 'EXPLICIT_SECRET' }),
+        });
+
+        const result = await resolveStorageCredentials('s3:other-bucket:/photos', undefined, 'explicit-s3');
+
+        expect(mockVaultGet).toHaveBeenCalledWith('explicit-s3');
+        expect(result.s3Config).toBeDefined();
+        expect(result.s3Config!.accessKeyId).toBe('EXPLICIT_AKID');
+        expect(result.s3Config!.region).toBe('ap-southeast-2');
+    });
+
+    test('explicit s3Key argument takes priority over the databases.json entry s3Key', async () => {
+        mockGetDatabases.mockResolvedValue([
+            { name: 'db', description: '', path: 's3:my-bucket:/photos', s3Key: 'registered-s3' } as any,
+        ]);
+        mockVaultGet.mockResolvedValue({
+            name: 'explicit-s3',
+            type: 's3-credentials',
+            value: JSON.stringify({ region: 'us-east-2', accessKeyId: 'EXPLICIT_AKID', secretAccessKey: 'EXPLICIT_SECRET' }),
+        });
+
+        const result = await resolveStorageCredentials('s3:my-bucket:/photos', undefined, 'explicit-s3');
+
+        expect(mockVaultGet).toHaveBeenCalledWith('explicit-s3');
+        expect(mockVaultGet).not.toHaveBeenCalledWith('registered-s3');
+        expect(result.s3Config!.accessKeyId).toBe('EXPLICIT_AKID');
+    });
+
+    test('explicit s3Key argument is ignored for non-s3: paths', async () => {
+        mockGetDatabases.mockResolvedValue([]);
+
+        const result = await resolveStorageCredentials('/local/db', undefined, 'explicit-s3');
+
+        expect(mockVaultGet).not.toHaveBeenCalled();
+        expect(result.s3Config).toBeUndefined();
+    });
+
     test('vault entry takes priority over AWS env vars for S3 credentials', async () => {
         mockGetDatabases.mockResolvedValue([
             { name: 'db', description: '', path: 's3:my-bucket:/photos', s3Key: 's3secret' } as any,

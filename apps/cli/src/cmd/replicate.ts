@@ -1,5 +1,5 @@
 import { log } from "utils";
-import { loadEncryptionKeysFromPem, pathJoin, generateKeyPair, exportPublicKeyToPem } from "storage";
+import { loadEncryptionKeysFromPem, pathJoin, generateKeyPair } from "storage";
 import pc from "picocolors";
 import { exit } from "node-utils";
 import { loadDatabase, IBaseCommandOptions, resolveKeyPemsWithPrompt, promptForEncryption, selectEncryptionKey, ICommandContext, configureS3IfNeeded, findSimilarKeyNames } from "../lib/init-cmd";
@@ -7,7 +7,7 @@ import { createStorageForPath } from "../lib/storage-helper";
 import { getVault, getDefaultVaultType } from "vault";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import { getDirectoryForCommand } from "../lib/directory-picker";
-import { replicate, merkleTreeExists, loadDatabaseConfig, updateDatabaseConfig } from "api";
+import { replicateDatabase, merkleTreeExists, loadDatabaseConfig } from "api";
 import { confirm, select, isCancel } from '../lib/clack/prompts';
 
 export interface IReplicateCommandOptions extends IBaseCommandOptions { 
@@ -61,7 +61,9 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
         return;
     }
 
-    const { assetStorage: sourceAssetStorage, rawAssetStorage: sourceRawAssetStorage, bsonDatabase: sourceBsonDatabase, databaseDir: srcDir } = await loadDatabase(options.db, {
+    // Load the source database for pre-flight validation (path resolution, encryption key check).
+    // The worker re-resolves credentials internally; we only need srcDir and sourceRawAssetStorage here.
+    const { rawAssetStorage: sourceRawAssetStorage, databaseDir: srcDir } = await loadDatabase(options.db, {
         db: options.db,
         key: options.key,
         verbose: options.verbose,
@@ -202,17 +204,20 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
         }
     }
 
-    const destKeyPems = await resolveKeyPemsWithPrompt(options.destKey, nonInteractive, true);
-    if (destKeyPems.length === 0 && options.destKey) {
-        log.error(pc.red(`✗ Encryption key "${options.destKey}" not found. Use "psi secrets list" to see available keys.`));
-        const similarKeyNames = await findSimilarKeyNames(options.destKey);
-        if (similarKeyNames.length > 0) {
-            log.info(`Did you mean:\n${similarKeyNames.map(similarName => `  • ${pc.cyan(similarName)}`).join('\n')}`);
+    // Pre-flight: verify the dest key resolves to a real PEM (file path or vault entry) so we fail
+    // early before queueing the task. The worker re-resolves the key internally via the same helper.
+    if (options.destKey) {
+        const destKeyPems = await resolveKeyPemsWithPrompt(options.destKey, nonInteractive, true);
+        if (destKeyPems.length === 0) {
+            log.error(pc.red(`✗ Encryption key "${options.destKey}" not found. Use "psi secrets list" to see available keys.`));
+            const similarKeyNames = await findSimilarKeyNames(options.destKey);
+            if (similarKeyNames.length > 0) {
+                log.info(`Did you mean:\n${similarKeyNames.map(similarName => `  • ${pc.cyan(similarName)}`).join('\n')}`);
+            }
+            await exit(1);
         }
-        await exit(1);
+        await loadEncryptionKeysFromPem(destKeyPems);
     }
-    const { options: destStorageOptions, isEncrypted: destIsEncrypted } = await loadEncryptionKeysFromPem(destKeyPems);
-    const { storage: destAssetStorage, rawStorage: destRawStorage } = await createStorageForPath(destDir, destStorageOptions);
 
     // If destination database exists, warn user and ask for confirmation (unless --ues is used)
     if (destDbExists && !options.yes) {
@@ -254,13 +259,20 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
         ? `Copying files matching: ${options.path}...` 
         : `Copying files...`);
 
-    const result = await replicate(sourceAssetStorage, sourceBsonDatabase, uuidGenerator, timestampProvider, destAssetStorage, destRawStorage, {
+    // Delegate the actual replication to the shared queueing wrapper. The worker handler resolves
+    // credentials, runs replicate(), writes the destination public key (when encrypted) and updates
+    // the destination's database config — the CLI no longer does any of those itself.
+    const result = await replicateDatabase(uuidGenerator, {
+        sourcePath: srcDir,
+        destPath: destDir,
+        sourceEncryptionKey: options.key,
+        destEncryptionKey: options.destKey,
+        destS3Key: undefined,
+        partial: !!options.partial,
+        force: !!options.force,
         pathFilter: options.path,
-        force: options.force,
-        partial: options.partial
-    }, (progress) => {
-        const progressMessage = `🔄 ${progress}`;
-        writeProgress(progressMessage);
+    }, progress => {
+        writeProgress(`🔄 ${progress}`);
     });
 
     clearProgressMessage(); // Flush the progress message.
@@ -284,22 +296,6 @@ export async function replicateCommand(context: ICommandContext, options: IRepli
         }
     }
     
-    // If destination is encrypted, write the public key PEM to the destination .db directory
-    if (destIsEncrypted && destKeyPems.length > 0) {
-        try {
-            await destRawStorage.write('.db/encryption.pub', undefined, Buffer.from(destKeyPems[0].publicKeyPem, 'utf-8'));
-            log.info(pc.green(`✓ Wrote public key to destination database directory`));
-        } catch (error) {
-            log.warn(pc.yellow(`⚠️ Warning: Could not write public key to destination database directory: ${error instanceof Error ? error.message : 'Unknown error'}`));
-        }
-    }
-
-    // Set replica config: origin = source path, lastReplicatedAt = now
-    await updateDatabaseConfig(destRawStorage, {
-        origin: srcDir,
-        lastReplicatedAt: new Date().toISOString(),
-    });
-
     log.info('');
     log.info(pc.green(`✅ Replication completed successfully`));
 

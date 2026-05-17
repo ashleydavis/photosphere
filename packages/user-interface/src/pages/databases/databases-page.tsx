@@ -16,16 +16,17 @@ import FormControl from '@mui/joy/FormControl';
 import FormLabel from '@mui/joy/FormLabel';
 import Select from '@mui/joy/Select';
 import Option from '@mui/joy/Option';
-import { Edit, Delete, Refresh, FolderOpen, IosShare, Visibility } from '@mui/icons-material';
+import { Edit, Delete, Refresh, FolderOpen, IosShare, Visibility, FileCopy } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { usePlatform, type IDatabaseEntry, type ISharedSecretEntry } from '../../context/platform-context';
 import { useAssetDatabase } from '../../context/asset-database-source';
-import { CreateSecretDialog } from '../../components/create-secret-dialog';
+import { ConfigureSecretsModal, type IDatabaseSecretsSelection } from '../../components/configure-secrets-modal';
 import { CreateDatabaseModal } from '../../components/create-database-modal';
 import { AddDatabaseModal } from '../../components/add-database-modal';
 import { ShareDatabaseDialog } from '../../components/share-database-dialog';
 import { ReceiveDatabaseDialog } from '../../components/receive-database-dialog';
 import { ViewDatabaseDialog } from '../../components/view-database-dialog';
+import { ReplicateDatabaseDialog } from '../../components/replicate-database-dialog';
 
 //
 // Form state for the add/edit dialog.
@@ -93,9 +94,6 @@ export function DatabasesPage() {
     // Entry pending removal.
     const [removingEntry, setRemovingEntry] = useState<IDatabaseEntry | undefined>(undefined);
 
-    // Whether a quick-create secret dialog is open and which type it is for.
-    const [quickCreateType, setQuickCreateType] = useState<string | undefined>(undefined);
-
     // Whether a refresh is in progress (drives the spin animation).
     const [refreshing, setRefreshing] = useState(false);
 
@@ -107,6 +105,9 @@ export function DatabasesPage() {
 
     // The database entry currently being viewed (undefined when dialog is closed).
     const [viewingEntry, setViewingEntry] = useState<IDatabaseEntry | undefined>(undefined);
+
+    // The database entry currently being replicated (undefined when the dialog is closed).
+    const [replicatingEntry, setReplicatingEntry] = useState<IDatabaseEntry | undefined>(undefined);
 
     //
     // Loads database entries and secrets from the platform.
@@ -252,57 +253,27 @@ export function DatabasesPage() {
     }
 
     //
-    // Handles a newly created secret from the quick-create dialog and auto-selects it.
+    // Whether the Configure Secrets modal is open over the Add/Edit dialog.
     //
-    async function handleQuickCreateSave(newSecret: ISharedSecretEntry): Promise<void> {
-        setQuickCreateType(undefined);
-        await loadData();
-        if (newSecret.type === 's3-credentials') {
-            setForm(prev => ({ ...prev, s3Key: newSecret.name }));
-        }
-        else if (newSecret.type === 'encryption-key') {
-            setForm(prev => ({ ...prev, encryptionKey: newSecret.name }));
-        }
-        else {
-            setForm(prev => ({ ...prev, geocodingKey: newSecret.name }));
-        }
+    const [secretsModalOpen, setSecretsModalOpen] = useState(false);
+
+    //
+    // Saves the secret selections chosen in the Configure Secrets modal back into the form state.
+    //
+    function handleSecretsSave(next: IDatabaseSecretsSelection): void {
+        setForm(prev => ({ ...prev, s3Key: next.s3Key, encryptionKey: next.encryptionKey, geocodingKey: next.geocodingKey }));
+        setSecretsModalOpen(false);
     }
 
     //
-    // Renders a secret selector row with a dropdown and a "+ New" button.
+    // Returns a short summary of the selected secrets for display next to the Configure button.
     //
-    function renderSecretSelector(
-        label: string,
-        options: ISharedSecretEntry[],
-        selectedName: string | undefined,
-        onChange: (name: string | undefined) => void,
-        secretType: string
-    ): React.ReactNode {
-        return (
-            <FormControl sx={{ mb: 1 }}>
-                <FormLabel>{label}</FormLabel>
-                <Box sx={{ display: 'flex', gap: 1 }}>
-                    <Select
-                        sx={{ flexGrow: 1 }}
-                        value={selectedName ?? ''}
-                        onChange={(_event, value) => onChange(value as string || undefined)}
-                        placeholder="None"
-                    >
-                        <Option value="">None</Option>
-                        {options.map(secret => (
-                            <Option key={secret.name} value={secret.name}>{secret.name}</Option>
-                        ))}
-                    </Select>
-                    <Button
-                        variant="outlined"
-                        size="sm"
-                        onClick={() => setQuickCreateType(secretType)}
-                    >
-                        + New
-                    </Button>
-                </Box>
-            </FormControl>
-        );
+    function summariseSecrets(): string {
+        const parts: string[] = [];
+        if (form.s3Key) parts.push(`S3: ${form.s3Key}`);
+        if (form.encryptionKey) parts.push(`Encryption: ${form.encryptionKey}`);
+        if (form.geocodingKey) parts.push(`Geocoding: ${form.geocodingKey}`);
+        return parts.length === 0 ? 'No secrets configured' : parts.join(' · ');
     }
 
     return (
@@ -358,7 +329,7 @@ export function DatabasesPage() {
                         <th>Description</th>
                         <th>Path</th>
                         <th>Origin</th>
-                        <th style={{ width: '140px', whiteSpace: 'nowrap' }}>Actions</th>
+                        <th style={{ width: '170px', whiteSpace: 'nowrap' }}>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -379,6 +350,7 @@ export function DatabasesPage() {
                                     <Visibility fontSize="small" />
                                 </IconButton>
                                 <IconButton
+                                    data-id="open-database-button"
                                     size="sm"
                                     variant="plain"
                                     title="Open database"
@@ -394,6 +366,15 @@ export function DatabasesPage() {
                                     onClick={() => setSharingEntry(entry)}
                                 >
                                     <IosShare fontSize="small" />
+                                </IconButton>
+                                <IconButton
+                                    data-id="replicate-database-button"
+                                    size="sm"
+                                    variant="plain"
+                                    title="Replicate database"
+                                    onClick={() => { log.info('Replicate database dialog opened'); setReplicatingEntry(entry); }}
+                                >
+                                    <FileCopy fontSize="small" />
                                 </IconButton>
                                 <IconButton
                                     size="sm"
@@ -462,29 +443,17 @@ export function DatabasesPage() {
                             </Box>
                         </FormControl>
 
-                        {renderSecretSelector(
-                            'S3 Credentials',
-                            s3Secrets,
-                            form.s3Key,
-                            id => setForm(prev => ({ ...prev, s3Key: id })),
-                            's3-credentials'
-                        )}
-
-                        {renderSecretSelector(
-                            'Encryption Key',
-                            encryptionSecrets,
-                            form.encryptionKey,
-                            id => setForm(prev => ({ ...prev, encryptionKey: id })),
-                            'encryption-key'
-                        )}
-
-                        {renderSecretSelector(
-                            'Geocoding API Key',
-                            geocodingSecrets,
-                            form.geocodingKey,
-                            id => setForm(prev => ({ ...prev, geocodingKey: id })),
-                            'api-key'
-                        )}
+                        <FormControl sx={{ mb: 1 }}>
+                            <FormLabel>Secrets</FormLabel>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Typography level="body-sm" sx={{ flexGrow: 1 }} color="neutral">
+                                    {summariseSecrets()}
+                                </Typography>
+                                <Button variant="outlined" size="sm" onClick={() => setSecretsModalOpen(true)}>
+                                    Configure secrets…
+                                </Button>
+                            </Box>
+                        </FormControl>
                     </DialogContent>
                     <DialogActions>
                         <Button variant="plain" onClick={() => setDialogOpen(false)}>Cancel</Button>
@@ -518,16 +487,17 @@ export function DatabasesPage() {
                 </ModalDialog>
             </Modal>
 
-            {/* Quick-create secret dialog */}
-            {quickCreateType !== undefined && (
-                <CreateSecretDialog
-                    open={true}
-                    secretType={quickCreateType}
-                    defaultName={form.name || form.path}
-                    onClose={() => setQuickCreateType(undefined)}
-                    onSave={newSecret => handleQuickCreateSave(newSecret).catch(err => log.exception('Quick-create error:', err as Error))}
-                />
-            )}
+            <ConfigureSecretsModal
+                open={secretsModalOpen}
+                initialValue={{ s3Key: form.s3Key, encryptionKey: form.encryptionKey, geocodingKey: form.geocodingKey }}
+                s3Secrets={s3Secrets}
+                encryptionSecrets={encryptionSecrets}
+                geocodingSecrets={geocodingSecrets}
+                onSave={handleSecretsSave}
+                onClose={() => setSecretsModalOpen(false)}
+                onSecretCreated={() => loadData()}
+                quickCreateDefaultName={form.name || form.path}
+            />
 
             <CreateDatabaseModal
                 open={createModalOpen}
@@ -568,6 +538,21 @@ export function DatabasesPage() {
                     allSecrets={[...s3Secrets, ...encryptionSecrets, ...geocodingSecrets]}
                     onClose={() => setViewingEntry(undefined)}
                     getSecretValue={platform.getSecretValue}
+                />
+            )}
+
+            {replicatingEntry !== undefined && (
+                <ReplicateDatabaseDialog
+                    open={replicatingEntry !== undefined}
+                    sourceEntry={replicatingEntry!}
+                    encryptionSecrets={encryptionSecrets}
+                    s3Secrets={s3Secrets}
+                    geocodingSecrets={geocodingSecrets}
+                    onSecretCreated={() => loadData()}
+                    onClose={() => {
+                        setReplicatingEntry(undefined);
+                        loadData().catch(err => log.exception('Failed to reload data:', err as Error));
+                    }}
                 />
             )}
         </Box>

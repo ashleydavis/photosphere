@@ -479,6 +479,7 @@ async function copyBsonMerkleTrees(sourceStorage: IStorage, destStorage: IStorag
 // Replicates the media file database to another storage.
 //
 export async function replicate(
+    sourcePath: string,
     sourceAssetStorage: IStorage,
     sourceBsonDatabase: BsonDatabase,
     sourceUuidGenerator: IUuidGenerator,
@@ -609,7 +610,7 @@ export async function replicate(
     // Generate or update config.json in the destination database.
     //
     await updateDatabaseConfig(destRawAssetStorage, {
-        origin: sourceAssetStorage.location,
+        origin: sourcePath,
         lastReplicatedAt: sourceTimestampProvider.dateNow().toISOString(),
     });
 

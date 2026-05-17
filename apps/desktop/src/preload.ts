@@ -101,8 +101,8 @@ const electronAPI: IElectronAPI = {
     createDatabaseAtPath: (path: string): Promise<void> => {
         return ipcRenderer.invoke('create-database-at-path', path);
     },
-    listS3Dirs: (credentialId: string, bucket: string, prefix: string): Promise<string[]> => {
-        return ipcRenderer.invoke('list-s3-dirs', credentialId, bucket, prefix);
+    listS3Dirs: (s3Key: string, bucket: string, prefix: string): Promise<string[]> => {
+        return ipcRenderer.invoke('list-s3-dirs', s3Key, bucket, prefix);
     },
     getRecentDatabases: (): Promise<IDatabaseEntry[]> => {
         return ipcRenderer.invoke('get-recent-databases');

@@ -1,7 +1,6 @@
 import type { ITaskContext } from "task-queue";
-import { createStorage, loadEncryptionKeysFromPem } from "storage";
 import { createMediaFileDatabase, checkConnectivity } from "./media-file-database";
-import { resolveStorageCredentials } from "./resolve-storage-credentials";
+import { openStorage } from "./open-storage";
 import { loadDatabaseConfig, updateDatabaseConfig } from "./database-config";
 import { syncDatabases } from "./sync";
 import type { ISyncDatabaseData, ISyncChange, ISyncBatchMessage } from "./sync-database.types";
@@ -29,10 +28,7 @@ export async function syncDatabaseHandler(
         throw new Error("databasePath is required");
     }
 
-    const { s3Config: localS3Config, encryptionKeyPems: localEncryptionKeyPems } = await resolveStorageCredentials(data.databasePath);
-    const { options: localStorageOptions } = await loadEncryptionKeysFromPem(localEncryptionKeyPems);
-    const { storage: localStorage, rawStorage: localRawStorage } =
-        createStorage(data.databasePath, localS3Config, localStorageOptions);
+    const { storage: localStorage, rawStorage: localRawStorage } = await openStorage(data.databasePath);
 
     const config = await loadDatabaseConfig(localRawStorage);
     if (!config?.origin) {
@@ -50,10 +46,7 @@ export async function syncDatabaseHandler(
 
     context.sendMessage({ type: "sync-started", databasePath: data.databasePath });
 
-    const { s3Config: originS3Config, encryptionKeyPems: originEncryptionKeyPems } = await resolveStorageCredentials(config.origin);
-    const { options: originStorageOptions } = await loadEncryptionKeysFromPem(originEncryptionKeyPems);
-    const { storage: originStorage, rawStorage: originRawStorage } =
-        createStorage(config.origin, originS3Config, originStorageOptions);
+    const { storage: originStorage, rawStorage: originRawStorage } = await openStorage(config.origin);
 
     const localDb = createMediaFileDatabase(localStorage, uuidGenerator, timestampProvider);
     const originDb = createMediaFileDatabase(originStorage, uuidGenerator, timestampProvider);

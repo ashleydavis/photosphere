@@ -3,13 +3,12 @@
 //
 
 import { SortNode } from "merkle-tree";
-import { createStorage, loadEncryptionKeysFromPem } from "storage";
+import { openStorage } from "./open-storage";
 import type { ITaskContext } from "task-queue";
 import { computeAssetHash } from "./hash";
 import { formatFileSize, log, retry } from "utils";
 import { LARGE_FILE_TIMEOUT } from "./constants";
 import { IDatabaseDescriptor } from "./database-descriptor";
-import { resolveStorageCredentials } from "./resolve-storage-credentials";
 
 export interface IVerifyFileData {
     node: SortNode;
@@ -32,9 +31,7 @@ export async function verifyFileHandler(data: IVerifyFileData, context: ITaskCon
     const { node, storageDescriptor, options } = data;
     const fileName = node.name!;
 
-    const { s3Config, encryptionKeyPems } = await resolveStorageCredentials(storageDescriptor.databasePath, storageDescriptor.encryptionKey);
-    const { options: storageOptions } = await loadEncryptionKeysFromPem(encryptionKeyPems);
-    const { storage } = createStorage(storageDescriptor.databasePath, s3Config, storageOptions);
+    const { storage } = await openStorage(storageDescriptor.databasePath, storageDescriptor.encryptionKey);
 
     const fileInfo = await retry(() => storage.info(fileName));
     if (!fileInfo) {

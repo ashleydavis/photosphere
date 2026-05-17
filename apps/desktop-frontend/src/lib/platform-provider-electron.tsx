@@ -435,8 +435,8 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         await electronAPI.removeRecentDatabaseName(name);
     }, [electronAPI]);
 
-    const listS3Dirs = useCallback(async (credentialId: string, bucket: string, prefix: string): Promise<string[]> => {
-        return await electronAPI.listS3Dirs(credentialId, bucket, prefix);
+    const listS3Dirs = useCallback(async (s3Key: string, bucket: string, prefix: string): Promise<string[]> => {
+        return await electronAPI.listS3Dirs(s3Key, bucket, prefix);
     }, [electronAPI]);
 
     const startShareReceive = useCallback(async (code: string): Promise<void> => {

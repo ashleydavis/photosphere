@@ -298,9 +298,9 @@ export interface IElectronAPI {
 
     //
     // Lists directory names under the given S3 bucket and prefix using the credentials
-    // identified by credentialId (a shared secret id).
+    // identified by s3Key (a vault secret name).
     //
-    listS3Dirs: (credentialId: string, bucket: string, prefix: string) => Promise<string[]>;
+    listS3Dirs: (s3Key: string, bucket: string, prefix: string) => Promise<string[]>;
 
     //
     // Returns the top-5 most recently opened database entries, most recent first.

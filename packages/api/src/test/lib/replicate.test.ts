@@ -305,6 +305,7 @@ describe('replicate', () => {
         const sourceBdb = new BsonDatabase(new MockStorage(), "", uuidGenerator, timestampProvider);
         await expect(
             replicate(
+                'mock://source',
                 sourceAsset,
                 sourceBdb,
                 uuidGenerator,
@@ -334,6 +335,7 @@ describe('replicate', () => {
         await saveTree('.db/files.dat', destTree, destAsset);
         await expect(
             replicate(
+                'mock://source',
                 sourceAsset,
                 sourceBdb,
                 uuidGenerator,
@@ -363,6 +365,7 @@ describe('replicate', () => {
         destTree.dirty = false;
         await saveTree('.db/files.dat', destTree, destAsset);
         const result = await replicate(
+            'mock://source',
             sourceAsset,
             sourceBdb,
             uuidGenerator,
@@ -390,6 +393,7 @@ describe('replicate', () => {
         sourceTree.dirty = false;
         await saveTree('.db/files.dat', sourceTree, sourceAsset);
         const result = await replicate(
+            'mock://source',
             sourceAsset,
             sourceBdb,
             uuidGenerator,

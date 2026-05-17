@@ -6,14 +6,14 @@ import * as fs from "fs/promises";
 import { ensureDir } from "node-utils";
 import os from "os";
 import path from "path";
-import { FileStorage, createStorage, loadEncryptionKeysFromPem } from "storage";
+import { FileStorage } from "storage";
 import type { ITaskContext } from "task-queue";
 import { validateAndHash, getHashFromCache } from "./hash";
 import { HashCache } from "./hash-cache";
 import { IFileStat } from "./file-scanner";
 import { createMediaFileDatabase } from "./media-file-database";
 import { IDatabaseDescriptor } from "./database-descriptor";
-import { resolveStorageCredentials } from "./resolve-storage-credentials";
+import { openStorage } from "./open-storage";
 
 export interface ICheckFileData {
     filePath: string; // Actual file path (always a valid file, possibly temp file from zip)
@@ -60,9 +60,7 @@ export async function checkFileHandler(data: ICheckFileData, context: ITaskConte
     }
     
     // Recreate storage and metadata collection in the worker
-    const { s3Config, encryptionKeyPems } = await resolveStorageCredentials(storageDescriptor.databasePath, storageDescriptor.encryptionKey);
-    const { options: storageOptions } = await loadEncryptionKeysFromPem(encryptionKeyPems);
-    const { storage } = createStorage(storageDescriptor.databasePath, s3Config, storageOptions);
+    const { storage } = await openStorage(storageDescriptor.databasePath, storageDescriptor.encryptionKey);
     const database = createMediaFileDatabase(storage, uuidGenerator, timestampProvider);
     const metadataCollection = database.metadataCollection;
 

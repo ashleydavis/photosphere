@@ -8,9 +8,8 @@ import { createReadStream } from "fs";
 import { ensureDir, remove, getProcessTmpDir } from "node-utils";
 import os from "os";
 import path from "path";
-import { createStorage, loadEncryptionKeysFromPem } from "storage";
 import { IDatabaseDescriptor } from "./database-descriptor";
-import { resolveStorageCredentials } from "./resolve-storage-credentials";
+import { openStorage } from "./open-storage";
 import type { ITaskContext } from "task-queue";
 import { computeAssetHash } from "./hash";
 import { IFileStat } from "./file-scanner";
@@ -139,9 +138,7 @@ export async function uploadAssetHandler(data: IUploadAssetData, context: ITaskC
 
     const expectedHashBuffer = Buffer.from(data.expectedHash);
 
-    const { s3Config, encryptionKeyPems } = await resolveStorageCredentials(storageDescriptor.databasePath, storageDescriptor.encryptionKey);
-    const { options: storageOptions } = await loadEncryptionKeysFromPem(encryptionKeyPems);
-    const { storage } = createStorage(storageDescriptor.databasePath, s3Config, storageOptions);
+    const { storage } = await openStorage(storageDescriptor.databasePath, storageDescriptor.encryptionKey);
 
     const assetTempDir = path.join(getProcessTmpDir(), `photosphere`, `assets`, uuidGenerator.generate());
     await ensureDir(assetTempDir);

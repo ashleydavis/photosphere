@@ -19,9 +19,11 @@ export interface ITaskQueue {
     awaitAllTasks(): Promise<void>;
 
     //
-    // Resolves when the task with the given ID completes.
+    // Resolves with the task's result when the task with the given ID completes.
+    // Resolves with undefined when the task ID is not tracked by this queue,
+    // or when the queue is shut down / its tasks are cancelled before completion.
     //
-    awaitTask(taskId: string): Promise<void>;
+    awaitTask(taskId: string): Promise<ITaskResult | undefined>;
 
     //
     // Registers a callback that will be called when any task completes (success or failure).
@@ -33,16 +35,18 @@ export interface ITaskQueue {
     // Registers a callback that will be called when a task sends messages to the client.
     // The callback receives the task ID and the message data.
     // Only messages with the specified messageType will be passed to the callback.
+    // TMessage gives compile-time typing for the message payload.
     // Returns an unsubscribe function to remove the callback.
     //
-    onTaskMessage(messageType: string, callback: TaskMessageCallback): UnsubscribeFn;
+    onTaskMessage<TMessage = any>(messageType: string, callback: TaskMessageCallback<TMessage>): UnsubscribeFn;
 
     //
     // Registers a callback that will be called for any task message, regardless of type.
     // The callback receives the task ID and the message data.
+    // TMessage gives compile-time typing for the message payload.
     // Returns an unsubscribe function to remove the callback.
     //
-    onAnyTaskMessage(callback: TaskMessageCallback): UnsubscribeFn;
+    onAnyTaskMessage<TMessage = any>(callback: TaskMessageCallback<TMessage>): UnsubscribeFn;
 
     //
     // Shuts down the task queue and its worker pool, terminating any running tasks.
@@ -103,8 +107,10 @@ export class TaskQueue implements ITaskQueue {
 
     //
     // Resolve functions for awaitTask(taskId) callers, keyed by task ID.
+    // The resolver receives the task's ITaskResult on normal completion, or undefined
+    // when the queue is shut down before the task completes.
     //
-    private awaitTaskResolvers: Map<string, (() => void)[]> = new Map();
+    private awaitTaskResolvers: Map<string, ((result: ITaskResult | undefined) => void)[]> = new Map();
 
     //
     // Unsubscribe functions returned by backend subscriptions, called on shutdown.
@@ -155,7 +161,7 @@ export class TaskQueue implements ITaskQueue {
 
         for (const resolvers of this.awaitTaskResolvers.values()) {
             for (const resolve of resolvers) {
-                resolve();
+                resolve(undefined);
             }
         }
         this.awaitTaskResolvers.clear();
@@ -189,10 +195,11 @@ export class TaskQueue implements ITaskQueue {
     //
     // Registers a callback that will be called when a task sends messages to the client.
     // If messageType is provided, only messages with that type will be passed to the callback.
+    // TMessage gives compile-time typing for the message payload.
     // Returns an unsubscribe function to remove the callback.
     //
-    onTaskMessage(messageType: string, callback: TaskMessageCallback): UnsubscribeFn {
-        const entry = { messageType, callback };
+    onTaskMessage<TMessage = any>(messageType: string, callback: TaskMessageCallback<TMessage>): UnsubscribeFn {
+        const entry = { messageType, callback: callback as TaskMessageCallback };
         this.messageCallbacks.push(entry);
         return () => {
             const index = this.messageCallbacks.indexOf(entry);
@@ -204,12 +211,14 @@ export class TaskQueue implements ITaskQueue {
 
     //
     // Registers a callback that will be called for any task message, regardless of type.
+    // TMessage gives compile-time typing for the message payload.
     // Returns an unsubscribe function to remove the callback.
     //
-    onAnyTaskMessage(callback: TaskMessageCallback): UnsubscribeFn {
-        this.anyMessageCallbacks.push(callback);
+    onAnyTaskMessage<TMessage = any>(callback: TaskMessageCallback<TMessage>): UnsubscribeFn {
+        const cb = callback as TaskMessageCallback;
+        this.anyMessageCallbacks.push(cb);
         return () => {
-            const index = this.anyMessageCallbacks.indexOf(callback);
+            const index = this.anyMessageCallbacks.indexOf(cb);
             if (index !== -1) {
                 this.anyMessageCallbacks.splice(index, 1);
             }
@@ -230,13 +239,15 @@ export class TaskQueue implements ITaskQueue {
     }
 
     //
-    // Resolves when the task with the given ID completes.
+    // Resolves with the task's result when the task with the given ID completes.
+    // Resolves with undefined when the task ID is not tracked by this queue,
+    // or when the queue is shut down / its tasks are cancelled before completion.
     //
-    awaitTask(taskId: string): Promise<void> {
+    awaitTask(taskId: string): Promise<ITaskResult | undefined> {
         if (!this.trackedTaskIds.has(taskId)) {
-            return Promise.resolve();
+            return Promise.resolve(undefined);
         }
-        return new Promise<void>(resolve => {
+        return new Promise<ITaskResult | undefined>(resolve => {
             const existing = this.awaitTaskResolvers.get(taskId);
             if (existing) {
                 existing.push(resolve);
@@ -269,7 +280,7 @@ export class TaskQueue implements ITaskQueue {
         const taskResolvers = this.awaitTaskResolvers.get(result.taskId);
         if (taskResolvers) {
             for (const resolve of taskResolvers) {
-                resolve();
+                resolve(result);
             }
             this.awaitTaskResolvers.delete(result.taskId);
         }

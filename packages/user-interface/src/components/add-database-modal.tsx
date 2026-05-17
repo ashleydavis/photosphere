@@ -298,7 +298,7 @@ export function AddDatabaseModal({ open, onClose }: IAddDatabaseModalProps) {
             {s3BrowserOpen && form.s3Key && (
                 <S3BrowserModal
                     open={true}
-                    credentialId={form.s3Key}
+                    s3Key={form.s3Key}
                     onClose={() => setS3BrowserOpen(false)}
                     onSelect={path => {
                         setForm(prev => ({ ...prev, path }));

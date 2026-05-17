@@ -30,7 +30,7 @@ export interface IResolvedStorageCredentials {
 // Resolves an encryption key PEM pair from a vault secret value.
 // The vault stores the private key PEM directly; the public key is derived from it.
 //
-function parseEncryptionKeyFromVaultValue(value: string): IEncryptionKeyPem {
+export function parseEncryptionKeyFromVaultValue(value: string): IEncryptionKeyPem {
     const privateKeyObj = createPrivateKey(value);
     const publicKeyPem = exportPublicKeyToPem(createPublicKey(privateKeyObj));
     return { privateKeyPem: value, publicKeyPem };
@@ -40,16 +40,20 @@ function parseEncryptionKeyFromVaultValue(value: string): IEncryptionKeyPem {
 // Resolves all storage credentials needed to open a database at the given path.
 //
 // Priority order:
-//   S3:            databases.json entry (s3Key) → AWS_* env vars
-//   Encryption:    -k flag (encryptionKey param) → databases.json entry → PSI_ENCRYPTION_KEY env var
+//   S3:            explicit s3Key param → databases.json entry (s3Key) → AWS_* env vars
+//   Encryption:    explicit encryptionKey param → databases.json entry → PSI_ENCRYPTION_KEY env var
 //   Geocoding:     databases.json entry (geocodingKey) → GOOGLE_API_KEY env var
 //
 // The vault is only accessed when a credential source actually requires it.
 // S3 lookup is skipped entirely for non-s3: paths.
 //
+// Callers pass explicit `encryptionKey` and/or `s3Key` when the path is not in databases.json
+// (for example the destination of a replicate task) or to override the registered values.
+//
 export async function resolveStorageCredentials(
     databasePath: string,
-    encryptionKey?: string
+    encryptionKey?: string,
+    s3Key?: string
 ): Promise<IResolvedStorageCredentials> {
     const vault = getVault(getDefaultVaultType());
 
@@ -61,8 +65,9 @@ export async function resolveStorageCredentials(
     let s3Config: IS3Credentials | undefined;
 
     if (databasePath.startsWith('s3:')) {
-        if (entry?.s3Key) {
-            const secret = await vault.get(entry.s3Key);
+        const s3KeyToUse = s3Key ?? entry?.s3Key;
+        if (s3KeyToUse) {
+            const secret = await vault.get(s3KeyToUse);
             if (secret) {
                 const parsed = JSON.parse(secret.value);
                 s3Config = {
@@ -71,10 +76,10 @@ export async function resolveStorageCredentials(
                     secretAccessKey: parsed.secretAccessKey,
                     endpoint: parsed.endpoint,
                 };
-                log.verbose(`S3 credentials: loaded from vault (key "${entry.s3Key}")`);
+                log.verbose(`S3 credentials: loaded from vault (key "${s3KeyToUse}")`);
             }
             else {
-                log.verbose(`S3 credentials: vault key "${entry.s3Key}" not found`);
+                log.verbose(`S3 credentials: vault key "${s3KeyToUse}" not found`);
             }
         }
 
@@ -156,7 +161,7 @@ export async function resolveStorageCredentials(
 // Resolves an encryption key from a value that is either a filesystem path to a PEM file
 // or a vault secret name. Throws if the value is neither.
 //
-async function resolveEncryptionKeyValue(
+export async function resolveEncryptionKeyValue(
     vault: IVault,
     value: string,
     source: string
