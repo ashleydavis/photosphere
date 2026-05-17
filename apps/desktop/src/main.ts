@@ -257,12 +257,16 @@ async function checkForNews(): Promise<void> {
 
 // Enforce single instance: if another instance is already running, focus its window and quit.
 // In test mode each test runs its own instance, so skip the lock.
-const gotSingleInstanceLock = process.env.PHOTOSPHERE_TEST_MODE === '1' || app.requestSingleInstanceLock();
+// In dev builds (unpackaged) allow multiple instances so several can run side by side.
+const gotSingleInstanceLock = process.env.PHOTOSPHERE_TEST_MODE === '1' || !app.isPackaged || app.requestSingleInstanceLock();
 if (!gotSingleInstanceLock) {
+    log.event(`Single instance lock denied (pid=${process.pid}, packaged=${app.isPackaged}); quitting`);
     app.quit();
 }
 else {
+    log.event(`Single instance lock acquired (pid=${process.pid}, packaged=${app.isPackaged})`);
     app.on('second-instance', () => {
+        log.event(`Second-instance signal received by pid=${process.pid}`);
         if (mainWindow) {
             if (mainWindow.isMinimized()) {
                 mainWindow.restore();
@@ -276,6 +280,7 @@ app.whenReady().then(async () => {
     // Initialize file logger first so we can log everything
     fileLogger = await FileLoggerElectron.create(app.getPath('userData'));
     fileLogger.info('Photosphere Desktop starting...', 'Main');
+    log.event(`Instance started (pid=${process.pid}, packaged=${app.isPackaged})`);
     
     // Initialize REST API before creating main window
     await initRestApi();
