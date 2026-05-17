@@ -113,9 +113,10 @@ export interface IShowNotificationData {
 
     //
     // Color variant of the toast. News items pick their own color via the publisher's
-    // `news.yaml`; update notifications default to `'neutral'`.
+    // `news.yaml` (defaulting to `'primary'` when none is specified); update notifications
+    // use `'primary'`.
     //
-    color: 'success' | 'warning' | 'danger' | 'neutral';
+    color: 'primary' | 'success' | 'warning' | 'danger' | 'neutral';
 
     //
     // Duration in milliseconds before auto-dismiss. 0 means no auto-dismiss.
@@ -142,7 +143,7 @@ export interface IShowNotificationData {
 //
 // Payload for the update-available IPC event sent from the desktop main process
 // when a newer GitHub release is detected. The renderer uses this to render the
-// navbar pill and fire a one-off neutral toast.
+// navbar pill and fire a one-off primary-coloured toast.
 //
 export interface IUpdateAvailableData {
     //
@@ -324,7 +325,7 @@ export interface IPlatformContext {
     // Subscribes to update-available events fired from the desktop main process when a
     // newer GitHub release is detected and has not already been recorded in news.yaml's
     // `last_shown_update_version`. The renderer uses this to render the navbar pill
-    // and fire a one-off neutral toast. No-op on web/mobile (which have no main process
+    // and fire a one-off primary-coloured toast. No-op on web/mobile (which have no main process
     // and rely on the update check baked into the host app store update flow).
     // Returns an unsubscribe function.
     //

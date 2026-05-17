@@ -178,7 +178,7 @@ export interface IWorkerShowNotificationMessage {
     //
     // Color variant of the toast.
     //
-    color: 'success' | 'warning' | 'danger' | 'neutral';
+    color: 'primary' | 'success' | 'warning' | 'danger' | 'neutral';
 
     //
     // Duration in milliseconds before auto-dismiss. 0 means no auto-dismiss.

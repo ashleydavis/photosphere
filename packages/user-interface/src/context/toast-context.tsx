@@ -46,9 +46,10 @@ export interface IToast {
 
     //
     // Color variant of the toast. News items pick their own color via the publisher's
-    // `news.yaml`; update notifications default to `'neutral'`.
+    // `news.yaml` (defaulting to `'primary'` when none is specified); update notifications
+    // use `'primary'`.
     //
-    color: 'success' | 'warning' | 'danger' | 'neutral';
+    color: 'primary' | 'success' | 'warning' | 'danger' | 'neutral';
 
     //
     // Duration in milliseconds before auto-dismiss. 0 means no auto-dismiss.

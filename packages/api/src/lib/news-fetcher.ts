@@ -32,9 +32,9 @@ export interface INewsItem {
     message: string;
 
     //
-    // Optional color variant for the toast.
+    // Optional color variant for the toast. Defaults to 'primary' when omitted.
     //
-    color?: 'success' | 'warning' | 'danger' | 'neutral';
+    color?: 'primary' | 'success' | 'warning' | 'danger' | 'neutral';
 
     //
     // Optional auto-dismiss duration in milliseconds. 0 (or omitted) means no auto-dismiss.

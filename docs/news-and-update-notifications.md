@@ -28,9 +28,9 @@ Behaviour:
 - Returns the latest version string when it differs from the running version; `undefined` otherwise.
 - Any network or parse error is swallowed and returns `undefined`, so the check never blocks startup.
 
-UI: the desktop main process (`apps/desktop/src/main.ts` → `checkForUpdate()`) runs the check on `did-finish-load`. When a newer version is available *and* the version is not already recorded in `news.yaml`'s `last_shown_update_version`, it sends an `update-available` IPC to the renderer. `navbar.tsx` subscribes via `platform.onUpdateAvailable()` and (a) renders a small pill in the top bar linking to the GitHub releases page as a persistent reminder, and (b) fires a one-off **neutral-coloured toast** (`color: 'neutral'`) with a "Download" action button. The toast is sticky (duration `0`) so the user has to dismiss it. After sending the IPC the main process records the version so it does not announce the same version again. In the CLI, the `preAction` hook prints a "📦 A new version is available" line before every command runs (and `psi news` prints it as the first line of its output); both then call `markUpdateAsShown()` to record the version in `news.yaml`. Subsequent runs do not re-announce the same version. Only a newer GitHub release re-triggers the notification.
+UI: the desktop main process (`apps/desktop/src/main.ts` → `checkForUpdate()`) runs the check on `did-finish-load`. When a newer version is available *and* the version is not already recorded in `news.yaml`'s `last_shown_update_version`, it sends an `update-available` IPC to the renderer. `navbar.tsx` subscribes via `platform.onUpdateAvailable()` and (a) renders a small pill in the top bar linking to the GitHub releases page as a persistent reminder, and (b) fires a one-off **primary-coloured toast** (`color: 'primary'`) with a "Download" action button. The toast is sticky (duration `0`) so the user has to dismiss it. After sending the IPC the main process records the version so it does not announce the same version again. In the CLI, the `preAction` hook prints a "📦 A new version is available" line before every command runs (and `psi news` prints it as the first line of its output); both then call `markUpdateAsShown()` to record the version in `news.yaml`. Subsequent runs do not re-announce the same version. Only a newer GitHub release re-triggers the notification.
 
-The toast color union is `'success' | 'warning' | 'danger' | 'neutral'`. Update notifications default to `'neutral'`; news items pick their own color per-item via the publisher's `news.yaml` so a release can be `success`, a maintenance window can be `warning`, etc.
+The toast color union is `'primary' | 'success' | 'warning' | 'danger' | 'neutral'`. Update notifications use `'primary'`; news items pick their own color per-item via the publisher's `news.yaml` (defaulting to `'primary'` when none is specified) so a release can be `success`, a maintenance window can be `warning`, etc.
 
 Update notifications are persisted via `last_shown_update_version` in `news.yaml`. The CLI silences repeat notifications for the same version, and the desktop main process suppresses sending the `update-available` IPC when the version has already been recorded.
 
@@ -42,7 +42,7 @@ The news feed is a YAML file with the following shape:
 items:
   - id: welcome-2026-05-05               # stable per-item key; must be unique forever
     message: "Welcome to Photosphere!"
-    color: success                       # success | warning | danger | neutral
+    color: success                       # primary (default) | success | warning | danger | neutral
     duration: 0                          # ms; 0 = never auto-dismiss
     link:                                # optional inline anchor below the body
       label: "Read the docs"

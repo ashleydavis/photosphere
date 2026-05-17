@@ -81,7 +81,7 @@ export function Navbar({
     // build, and persistence in news.yaml's `last_shown_update_version`, so the
     // renderer only sees this callback when there is a genuinely new version to
     // announce. We (a) show the persistent pill rendered further down, and (b)
-    // fire a one-off neutral toast so the user notices on startup. On web/mobile
+    // fire a one-off primary-coloured toast so the user notices on startup. On web/mobile
     // this never fires (no main process); update flow there is via the host store.
     //
     useEffect(() => {
@@ -89,7 +89,7 @@ export function Navbar({
             setUpdateVersion(latestVersion);
             addToast({
                 message: `A new version of Photosphere is available: v${latestVersion}`,
-                color: 'neutral',
+                color: 'primary',
                 duration: 0,
                 action: {
                     label: 'Download',

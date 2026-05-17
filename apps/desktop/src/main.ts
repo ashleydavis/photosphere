@@ -161,7 +161,7 @@ interface IGitHubReleaseResponse {
 // Compares the running build version against the latest GitHub release and, when a
 // newer version is available that the user has not yet been notified about, sends
 // an `update-available` IPC to the renderer (which renders the navbar pill and a
-// neutral sticky toast). Records the version in news.yaml's
+// primary-coloured sticky toast). Records the version in news.yaml's
 // `last_shown_update_version` so the same version is not announced twice.
 //
 // Skipped for `dev` and `nightly` builds (no real release to compare against) and
@@ -238,7 +238,7 @@ async function checkForNews(): Promise<void> {
         if (mainWindow) {
             mainWindow.webContents.send('show-notification', {
                 message: nextItem.message,
-                color: nextItem.color || 'neutral',
+                color: nextItem.color || 'primary',
                 duration: nextItem.duration ?? 0,
                 link: nextItem.link,
                 action: nextItem.action,

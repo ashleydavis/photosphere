@@ -9,7 +9,7 @@ const { addToast } = useToast();
 
 addToast({
     message: "Something happened",
-    color: "success",                          // success | warning | danger | neutral
+    color: "success",                          // primary | success | warning | danger | neutral
     duration: 5000,                            // ms; 0 = never auto-dismiss (default: 5000)
     action: { label: "Open", onClick: fn },    // optional button
     link: { label: "Read more", url: "..." },  // optional inline anchor below the message
@@ -65,7 +65,7 @@ No wiring needed — `ToastContextProvider` is already in the tree inside `Main`
 | Field    | Type                                              | Required | Default | Notes                        |
 |----------|---------------------------------------------------|----------|---------|------------------------------|
 | `message`  | `string`                                          | yes      | —       | Text shown in the toast      |
-| `color`    | `'success' \| 'warning' \| 'danger' \| 'neutral'` | yes      | —       | Controls background colour   |
+| `color`    | `'primary' \| 'success' \| 'warning' \| 'danger' \| 'neutral'` | yes      | —       | Controls background colour   |
 | `duration` | `number` (ms)                                     | no       | `5000`  | `0` = never auto-dismiss     |
 | `action`   | `{ label: string; onClick: () => void }`          | no       | —       | Button shown in the toast    |
 | `link`     | `{ label: string; url: string }`                  | no       | (none)  | Inline anchor rendered below the message; opens in a new tab |
@@ -77,7 +77,7 @@ Send `show-notification` from any `ipcMain` handler or menu click in [main.ts](.
 ```ts
 mainWindow.webContents.send('show-notification', {
     message: 'Sync complete',
-    color: 'success',       // success | warning | danger | neutral
+    color: 'success',       // primary | success | warning | danger | neutral
     duration: 5000,         // optional, defaults to 5000
     folderPath: '/some/dir',                                // optional, adds an "Open Folder" button
     link: { label: 'Read more', url: 'https://...' },       // optional inline anchor in the body
