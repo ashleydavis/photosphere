@@ -1,7 +1,6 @@
 items:
   - id: welcome-2026-05-17
     message: "Welcome to Photosphere. Thanks for trying it out!"
-    color: success
     link:
       label: "Read the docs"
       url: "https://github.com/ashleydavis/photosphere/wiki"
