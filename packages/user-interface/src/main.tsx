@@ -133,12 +133,26 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
             else {
                 action = undefined;
             }
+
+            // News toasts carry a newsId so we can persist "seen" state in news.yaml
+            // only when the user clicks the close button (via markNewsAsShown). Other
+            // toasts (sync results, generic notifications) have no newsId and need no
+            // dismissal callback.
+            let onDismiss: (() => void) | undefined = undefined;
+            if (data.newsId) {
+                const newsId = data.newsId;
+                onDismiss = () => {
+                    platform.markNewsAsShown(newsId);
+                };
+            }
+
             addToast({
                 message: data.message,
                 color: data.color,
                 duration: data.duration,
                 link: data.link,
                 action,
+                onDismiss,
             });
         });
         return unsubscribe;

@@ -42,7 +42,13 @@ function ToastItem({ toast }: { toast: IToast }) {
                         variant="plain"
                         color={toast.color}
                         title="Dismiss"
-                        onClick={() => removeToast(toast.id)}
+                        data-id="toast-dismiss"
+                        onClick={() => {
+                            if (toast.onDismiss) {
+                                toast.onDismiss();
+                            }
+                            removeToast(toast.id);
+                        }}
                     >
                         <Close />
                     </IconButton>

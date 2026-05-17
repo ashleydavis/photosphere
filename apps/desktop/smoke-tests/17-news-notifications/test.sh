@@ -42,7 +42,7 @@ EOF
 export PHOTOSPHERE_NEWS_URL="file://$TMP_DIR/news.yaml"
 
 # ============================================================================
-# First startup: should show smoke-test-001 only
+# First startup: should show smoke-test-001 only, and NOT persist until dismissed
 # ============================================================================
 log_info "First startup..."
 start_app "$APP_PORT" "$TMP_DIR"
@@ -56,8 +56,20 @@ if grep -q "smoke-test-002" "$TMP_DIR/app.log"; then
 fi
 
 STATE_FILE="$TMP_DIR/config/news.yaml"
+# Before dismissal the news state file should not record smoke-test-001 — the toast
+# is sticky and persistence is deferred until the user clicks close.
+if [ -f "$STATE_FILE" ] && grep -q 'smoke-test-001' "$STATE_FILE"; then
+    log_error "news.yaml unexpectedly persisted smoke-test-001 before user dismissed the toast"
+    cat "$STATE_FILE"
+    exit 1
+fi
+
+log_info "Dismissing the news toast..."
+send_command "$APP_PORT" click '{"dataId":"toast-dismiss"}'
+wait_for_log "$TMP_DIR" "Marked news notification as shown: smoke-test-001"
+
 if ! grep -q 'smoke-test-001' "$STATE_FILE"; then
-    log_error "news.yaml does not contain smoke-test-001 after first startup"
+    log_error "news.yaml does not contain smoke-test-001 after dismissal"
     cat "$STATE_FILE"
     exit 1
 fi
@@ -70,7 +82,7 @@ fi
 stop_app "$APP_PORT" "$TMP_DIR"
 
 # ============================================================================
-# Second startup: should show smoke-test-002 only
+# Second startup: should show smoke-test-002 only after dismissal
 # ============================================================================
 log_info "Second startup..."
 # start_app truncates app.log, so reset the wait_for_log cursor.
@@ -90,8 +102,18 @@ if ! grep -q 'smoke-test-001' "$STATE_FILE"; then
     cat "$STATE_FILE"
     exit 1
 fi
+if grep -q 'smoke-test-002' "$STATE_FILE"; then
+    log_error "news.yaml unexpectedly persisted smoke-test-002 before user dismissed the toast"
+    cat "$STATE_FILE"
+    exit 1
+fi
+
+log_info "Dismissing the news toast..."
+send_command "$APP_PORT" click '{"dataId":"toast-dismiss"}'
+wait_for_log "$TMP_DIR" "Marked news notification as shown: smoke-test-002"
+
 if ! grep -q 'smoke-test-002' "$STATE_FILE"; then
-    log_error "news.yaml does not contain smoke-test-002 after second startup"
+    log_error "news.yaml does not contain smoke-test-002 after dismissal"
     cat "$STATE_FILE"
     exit 1
 fi
@@ -99,7 +121,7 @@ fi
 stop_app "$APP_PORT" "$TMP_DIR"
 
 # ============================================================================
-# Third startup: should show nothing
+# Third startup: should show nothing (both items already marked seen)
 # ============================================================================
 log_info "Third startup..."
 rm -f "$TMP_DIR/.log-cursor"

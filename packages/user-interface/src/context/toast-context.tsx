@@ -65,6 +65,14 @@ export interface IToast {
     // Optional inline link rendered below the message body.
     //
     link?: IToastLink;
+
+    //
+    // Optional callback invoked when the user explicitly dismisses the toast by clicking
+    // its close button. NOT invoked when the toast auto-dismisses on its duration timer
+    // — auto-dismiss is not treated as a user-acknowledgement. Used by news and update
+    // toasts to persist their "seen" state only when the user actually closes them.
+    //
+    onDismiss?: () => void;
 }
 
 //

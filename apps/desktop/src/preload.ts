@@ -131,6 +131,12 @@ const electronAPI: IElectronAPI = {
     importSharePayload: (payload: unknown, conflictResolutions: unknown): Promise<void> => {
         return ipcRenderer.invoke('import-share-payload', payload, conflictResolutions);
     },
+    markUpdateShown: (version: string): Promise<void> => {
+        return ipcRenderer.invoke('mark-update-shown', version);
+    },
+    markNewsShown: (newsId: string): Promise<void> => {
+        return ipcRenderer.invoke('mark-news-shown', newsId);
+    },
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);

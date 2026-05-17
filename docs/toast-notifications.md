@@ -69,6 +69,7 @@ No wiring needed — `ToastContextProvider` is already in the tree inside `Main`
 | `duration` | `number` (ms)                                     | no       | `5000`  | `0` = never auto-dismiss     |
 | `action`   | `{ label: string; onClick: () => void }`          | no       | —       | Button shown in the toast    |
 | `link`     | `{ label: string; url: string }`                  | no       | (none)  | Inline anchor rendered below the message; opens in a new tab |
+| `onDismiss` | `() => void`                                     | no       | —       | Called when the user clicks the close button. Not fired on auto-dismiss timer. Used by news/update toasts to persist their "seen" state only on explicit close. |
 
 ## Sending a notification from the main process
 

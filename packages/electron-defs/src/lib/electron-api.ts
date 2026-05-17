@@ -351,5 +351,20 @@ export interface IElectronAPI {
     // name already exists in the vault on this device.
     //
     importSharePayload: (payload: unknown, conflictResolutions: unknown) => Promise<void>;
+
+    //
+    // Records that the user has dismissed the update-available toast for the given
+    // version. Persists the version in news.yaml's `last_shown_update_version` so the
+    // notification is not re-fired on subsequent startups until a newer version is
+    // released. Called only when the user clicks the close button on the toast.
+    //
+    markUpdateShown: (version: string) => Promise<void>;
+
+    //
+    // Records that the user has dismissed the news toast for the given news item id.
+    // Persists the id in news.yaml's `shown_news_ids` so the item is not re-shown on
+    // subsequent startups. Called only when the user clicks the close button.
+    //
+    markNewsShown: (newsId: string) => Promise<void>;
 }
 

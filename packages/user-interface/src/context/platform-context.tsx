@@ -138,6 +138,13 @@ export interface IShowNotificationData {
     // present action wins.
     //
     action?: IShowNotificationLink;
+
+    //
+    // When present, identifies this toast as a news item. The renderer wires the close
+    // button to call `markNewsAsShown(newsId)` so the id is only persisted in
+    // `shown_news_ids` after the user actually dismisses the toast.
+    //
+    newsId?: string;
 }
 
 //
@@ -497,6 +504,20 @@ export interface IPlatformContext {
     // name already exists in the vault on this device.
     //
     importSharePayload: (payload: unknown, conflictResolutions: Record<string, IConflictResolution>) => Promise<void>;
+
+    //
+    // Records that the user has dismissed the update-available toast for the given
+    // version. Invoked from the toast's onDismiss callback so the version is only
+    // persisted after the user clicks the close button. No-op on web/mobile.
+    //
+    markUpdateAsShown: (version: string) => Promise<void>;
+
+    //
+    // Records that the user has dismissed the news toast for the given news item id.
+    // Invoked from the toast's onDismiss callback so the id is only persisted after
+    // the user clicks the close button. No-op on web/mobile.
+    //
+    markNewsAsShown: (newsId: string) => Promise<void>;
 }
 
 const PlatformContext = createContext<IPlatformContext | undefined>(undefined);

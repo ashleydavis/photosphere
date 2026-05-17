@@ -77,12 +77,14 @@ export function Navbar({
 
     //
     // Subscribe to update-available IPC events fired by the desktop main process.
-    // The main process handles the GitHub fetch, the comparison against the running
-    // build, and persistence in news.yaml's `last_shown_update_version`, so the
-    // renderer only sees this callback when there is a genuinely new version to
-    // announce. We (a) show the persistent pill rendered further down, and (b)
-    // fire a one-off primary-coloured toast so the user notices on startup. On web/mobile
-    // this never fires (no main process); update flow there is via the host store.
+    // The main process handles the GitHub fetch and the comparison against the running
+    // build, so the renderer only sees this callback when there is a genuinely new
+    // version to announce. We (a) show the persistent pill rendered further down, and
+    // (b) fire a one-off primary-coloured toast so the user notices on startup. The
+    // version is persisted in `last_shown_update_version` only when the user clicks
+    // the toast's close button (via `markUpdateAsShown`); closing the app without
+    // dismissing causes the notification to re-fire next startup. On web/mobile this
+    // never fires (no main process); update flow there is via the host store.
     //
     useEffect(() => {
         const unsubscribe = platform.onUpdateAvailable(({ latestVersion }) => {
@@ -94,6 +96,9 @@ export function Navbar({
                 action: {
                     label: 'Download',
                     onClick: () => window.open('https://github.com/ashleydavis/photosphere/releases/latest', '_blank', 'noopener'),
+                },
+                onDismiss: () => {
+                    platform.markUpdateAsShown(latestVersion);
                 },
             });
         });

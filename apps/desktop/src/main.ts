@@ -161,8 +161,10 @@ interface IGitHubReleaseResponse {
 // Compares the running build version against the latest GitHub release and, when a
 // newer version is available that the user has not yet been notified about, sends
 // an `update-available` IPC to the renderer (which renders the navbar pill and a
-// primary-coloured sticky toast). Records the version in news.yaml's
-// `last_shown_update_version` so the same version is not announced twice.
+// primary-coloured sticky toast). The version is recorded in news.yaml's
+// `last_shown_update_version` only when the user dismisses the toast (via
+// `mark-update-shown` IPC), so closing the app without dismissing causes the
+// notification to re-fire on the next startup.
 //
 // Skipped for `dev` and `nightly` builds (no real release to compare against) and
 // in test mode unless explicitly opted in. Network and parse failures are caught
@@ -201,7 +203,6 @@ async function checkForUpdate(): Promise<void> {
         if (mainWindow) {
             mainWindow.webContents.send('update-available', { latestVersion });
         }
-        await setLastShownUpdateVersion(latestVersion);
         log.info(`Showed update notification: v${latestVersion}`);
     }
     catch (error) {
@@ -211,7 +212,9 @@ async function checkForUpdate(): Promise<void> {
 
 //
 // Fetches the published news feed and, if there is an unseen item, sends the oldest one
-// to the renderer as a toast notification. Records the shown ID so it is not shown again.
+// to the renderer as a toast notification. The item id is recorded in news.yaml's
+// `shown_news_ids` only when the user dismisses the toast (via `mark-news-shown` IPC),
+// so closing the app without dismissing causes the same item to re-fire next startup.
 // Network errors and malformed feeds are swallowed via the try/catch so news failures
 // never block app startup.
 //
@@ -242,9 +245,9 @@ async function checkForNews(): Promise<void> {
                 duration: nextItem.duration ?? 0,
                 link: nextItem.link,
                 action: nextItem.action,
+                newsId: nextItem.id,
             });
         }
-        await addShownNewsIds([nextItem.id]);
         log.info(`Showed news notification: ${nextItem.id}`);
     }
     catch (error) {
@@ -795,6 +798,20 @@ ipcMain.handle('import-share-payload', logExceptions(async (_event, payload: IDa
 ipcMain.handle('check-tools', logExceptions(async () => {
     return await verifyTools();
 }, 'Error checking tools'));
+
+// IPC handler invoked when the user dismisses the update-available toast. Records the
+// version in news.yaml so the same update is not re-announced on the next startup.
+ipcMain.handle('mark-update-shown', logExceptions(async (_event, version: string) => {
+    await setLastShownUpdateVersion(version);
+    log.info(`Marked update notification as shown: v${version}`);
+}, 'Error marking update notification as shown'));
+
+// IPC handler invoked when the user dismisses a news toast. Records the news item id in
+// news.yaml so it is not re-shown on the next startup.
+ipcMain.handle('mark-news-shown', logExceptions(async (_event, newsId: string) => {
+    await addShownNewsIds([newsId]);
+    log.info(`Marked news notification as shown: ${newsId}`);
+}, 'Error marking news notification as shown'));
 
 // IPC handler for renderer log messages
 ipcMain.on('renderer-log', (event, message: IRendererLogMessage) => {

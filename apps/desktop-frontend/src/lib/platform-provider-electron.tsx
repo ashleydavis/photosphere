@@ -467,6 +467,14 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         await electronAPI.importSharePayload(payload, conflictResolutions);
     }, [electronAPI]);
 
+    const markUpdateAsShown = useCallback(async (version: string): Promise<void> => {
+        await electronAPI.markUpdateShown(version);
+    }, [electronAPI]);
+
+    const markNewsAsShown = useCallback(async (newsId: string): Promise<void> => {
+        await electronAPI.markNewsShown(newsId);
+    }, [electronAPI]);
+
     const downloadAsset = useCallback(async (assetId: string, assetType: string, filename: string, _contentType: string, databasePath: string): Promise<void> => {
         await electronAPI.saveAsset(assetId, assetType, filename, databasePath);
     }, [electronAPI]);
@@ -533,6 +541,8 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         sendToReceiver,
         cancelShareSend,
         importSharePayload,
+        markUpdateAsShown,
+        markNewsAsShown,
     };
 
     const config = createConfig(

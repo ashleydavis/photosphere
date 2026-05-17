@@ -310,6 +310,14 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         // Not supported on web platform.
     }, []);
 
+    const markUpdateAsShown = useCallback(async (_version: string): Promise<void> => {
+        // No-op for web platform; update notifications are handled by the host app store.
+    }, []);
+
+    const markNewsAsShown = useCallback(async (_newsId: string): Promise<void> => {
+        // No-op for web platform; news notifications are not surfaced as toasts here.
+    }, []);
+
     const platformContext: IPlatformContext = {
         openDatabase,
         createDatabase,
@@ -358,6 +366,8 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         sendToReceiver,
         cancelShareSend,
         importSharePayload,
+        markUpdateAsShown,
+        markNewsAsShown,
     };
 
     //
