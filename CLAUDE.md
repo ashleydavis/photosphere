@@ -9,6 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Never use memory.
 - All Claude configuration goes in this repository only, not in the home directory.
 - Never stash code unless asked.
+- Never use `cd` in shell commands. Always use absolute paths instead. The working directory persists across Bash tool calls and `cd` will cause subsequent commands to run from the wrong directory.
 - Never invoke shell scripts directly (e.g. `./apps/desktop/smoke-tests.sh`). Use the `bun run` equivalent from `package.json` (e.g. `bun run test:electron`, `bun run test:cli`).
 - When running smoke tests, do not manually `rm -rf` the test's `tmp/` directory — the runner already cleans it before each test.
 - When creating a new worktree, never use `EnterWorktree` with a `name` parameter. Instead: (1) run `git branch --show-current` to get the current branch, (2) run `git worktree add -b <new-branch> .claude/worktrees/<name> <current-branch>` to create the worktree explicitly branching from the current branch, (3) then use `EnterWorktree` with the `path` parameter to enter it.
@@ -25,18 +26,14 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 ### Root (run from repo root):
 - `bun run compile` - Compile all TypeScript
 - `bun run test` - Run all tests
+- `bun run test -- <test-name-or-pattern>` - Run a single test by name or pattern.
 - `bun run clean` - Clean all build artifacts
 - `bun run dev` - Start Electron desktop app in dev mode
 - `bun run dev:web` - Start dev-server and frontend concurrently (no Electron)
 - `bun run test:cli` - Run CLI smoke tests
+- `bun run test:cli -- <number|name>` - Run a single CLI smoke test by number or name
 - `bun run test:electron` - Build and run Electron smoke tests
-
-### CLI (in apps/cli/):
-- `bun run start -- <command> [db-path]` - Run CLI commands locally
-- `bun run test` (alias: `t`) - Run tests
-
-### Running a single test:
-- Jest: `cd apps/cli && bun run test -- path/to/test.test.ts`
+- `bun run start -- <command> [db-path]` - Run CLI commands locally (from `apps/cli`)
 
 ## Architecture
 

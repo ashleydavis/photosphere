@@ -1,12 +1,10 @@
-# CLI Manual Test: Replicate Full Copy
+# CLI Manual Test: Replicate Partial Copy
 
-Test that a database can be created, populated, verified, and fully replicated to a new directory using the CLI source.
+Test that a database can be created, populated, verified, and partially replicated to a new directory using the CLI source.
 
 ## Prerequisites
 
-- Run all commands from `apps/cli/` (the `cd` at the start puts you there).
-
-Start by navigating to the CLI source directory:
+Navigate to the CLI source directory:
 
 ```bash
 cd apps/cli/
@@ -68,11 +66,11 @@ Expected:
 
 ---
 
-### 6. Replicate a full copy to a new directory
+### 6. Replicate a partial copy to a new directory
 
 ```bash
 mkdir -p /tmp/psi-test/replica
-bun run start -- replicate --db /tmp/psi-test/source --dest /tmp/psi-test/replica --full --yes
+bun run start -- replicate --db /tmp/psi-test/source --dest /tmp/psi-test/replica --partial --yes
 ```
 
 Expected:
@@ -89,6 +87,8 @@ bun run start -- list --db /tmp/psi-test/replica
 
 Expected:
 - `test.jpg` is listed.
+
+> **Note:** This is not currently working.
 
 ---
 
@@ -112,4 +112,3 @@ bun run start -- origin --db /tmp/psi-test/replica
 
 Expected:
 - The origin is shown as `/tmp/psi-test/source`.
-

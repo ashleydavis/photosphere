@@ -581,6 +581,12 @@ test_database_replicate() {
     # Check merkle tree order for both original and replica
     check_merkle_tree_order "$replica_dir/.db/files.dat" "replica database"
 
+    # Verify the replica's origin points back to the source
+    local origin_output
+    invoke_command "Get replica origin" "$(get_cli_command) origin --db $replica_dir --yes" 0 "origin_output"
+    local origin_value=$(echo "$origin_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    expect_value "$origin_value" "$TEST_DB_DIR" "Replica origin matches source path"
+
     test_passed
 }
 
@@ -618,6 +624,13 @@ test_verify_replica() {
 
     # Verify the replica verify command also shows the expected counts
     expect_output_value "$replica_verify_output" "Total files:" "$source_files" "Replica verify shows correct file count"
+
+    # Verify the replica's origin points back to the source
+    local origin_output
+    invoke_command "Get replica origin" "$(get_cli_command) origin --db $replica_dir --yes" 0 "origin_output"
+    local origin_value=$(echo "$origin_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    expect_value "$origin_value" "$TEST_DB_DIR" "Replica origin matches source path"
+
     test_passed
 }
 

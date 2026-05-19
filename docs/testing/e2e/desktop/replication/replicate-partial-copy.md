@@ -1,6 +1,6 @@
-# Desktop Manual Test: Replicate Full Copy
+# Desktop Manual Test: Replicate Partial Copy
 
-Test that a database can be created, populated, verified, and fully replicated to a new directory using the Photosphere desktop app.
+Test that a database can be created, populated, verified, and partially replicated to a new directory using the Photosphere desktop app.
 
 ## Prerequisites
 
@@ -73,12 +73,12 @@ Expected:
 
 ---
 
-### 6. Replicate a full copy to a new directory
+### 6. Replicate a partial copy to a new directory
 
 1. Navigate to the **Databases** page.
 2. Click the **Replicate database** button on the source database entry.
 3. When prompted for the destination, choose `/tmp/psi-desktop-test/replica`.
-4. When prompted for replication mode, select **Full**.
+4. When prompted for replication mode, select **Partial**.
 5. Confirm and wait for replication to complete.
 
 Expected:
@@ -95,6 +95,8 @@ bun run start -- list --db /tmp/psi-desktop-test/replica
 
 Expected:
 - The same file from the source is listed.
+
+> **Note:** This is not currently working.
 
 ---
 

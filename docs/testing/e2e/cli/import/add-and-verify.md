@@ -24,7 +24,7 @@ rm -rf /tmp/psi-test
 
 ```bash
 mkdir -p /tmp/psi-test/source
-bun run start -- init --db /tmp/psi-test/source
+bun run start -- init --db /tmp/psi-test/source --yes
 ```
 
 Expected: Output confirms a new media file database was created in `/tmp/psi-test/source`.

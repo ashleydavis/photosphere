@@ -99,6 +99,12 @@ test_replicate_partial() {
     invoke_command "Compare source and partial replica" "$(get_cli_command) compare --db $source_db_dir --dest $replica_dir --yes" 0 "compare_output"
     expect_output_string "$compare_output" "No differences detected" "Source and partial replica have no merkle tree differences"
 
+    # Verify the partial replica's origin points back to the source
+    local origin_output
+    invoke_command "Get partial replica origin" "$(get_cli_command) origin --db $replica_dir --yes" 0 "origin_output"
+    local origin_value=$(echo "$origin_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    expect_value "$origin_value" "$source_db_dir" "Partial replica origin matches source path"
+
     rm -rf "$test_dir"
     test_passed
 }

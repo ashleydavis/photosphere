@@ -121,12 +121,24 @@ bun run te
 
 This will build the Electron app and run Playwright smoke tests.
 
+**Run a single unit test by name or pattern**
+
+```bash
+bun run test -- <test-name-or-pattern>
+```
+
 **Run CLI smoke tests**
 
 ```bash
 bun run test:cli
 # or
 bun run tc
+```
+
+**Run a single CLI smoke test by number or name**
+
+```bash
+bun run test:cli -- <number-or-name>
 ```
 
 **Run encrypted CLI smoke tests**
