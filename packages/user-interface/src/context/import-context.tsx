@@ -40,10 +40,15 @@ export interface IImportContext {
     // Ordered list of all items seen in the current import session, in arrival order.
     importItems: IImportItem[];
 
-    // Calls platform.importAssets() and sets status to 'running'.
-    // When paths are supplied they are used directly; when omitted a folder picker is shown.
+    // Calls platform.importDirectories() and sets status to 'running'.
+    // When paths are supplied they are used directly; when omitted a directory picker is shown.
     // Returns false if no database is open or the user cancelled the picker.
-    startImport: (paths?: string[]) => Promise<boolean>;
+    startImportDirectories: (paths?: string[]) => Promise<boolean>;
+
+    // Calls platform.importFiles() and sets status to 'running'.
+    // When paths are supplied they are used directly; when omitted a file picker is shown.
+    // Returns false if no database is open or the user cancelled the picker.
+    startImportFiles: (paths?: string[]) => Promise<boolean>;
 
     // Cancels the running import.
     cancelImport: () => Promise<void>;
@@ -188,13 +193,11 @@ export function ImportContextProvider({ children }: IImportContextProviderProps)
     }, [platform, checkCompletionWithItems]);
 
     //
-    // Starts an import by calling platform.importAssets(). When paths are supplied they are
-    // used directly; when omitted a folder picker is shown. Records the session so progress
-    // events can be correlated, and transitions status to 'running'.
-    // Returns false if no database is open or the user cancelled the picker.
+    // Starts a session using the given session promise, records it, and transitions to 'running'.
+    // Returns false if the session is undefined (no database open or user cancelled).
     //
-    const startImport = useCallback(async (paths?: string[]): Promise<boolean> => {
-        const session = await platform.importAssets(paths);
+    async function beginImportSession(sessionPromise: Promise<IImportSession | undefined>): Promise<boolean> {
+        const session = await sessionPromise;
         if (!session) {
             return false;
         }
@@ -205,6 +208,22 @@ export function ImportContextProvider({ children }: IImportContextProviderProps)
         setStatus('running');
         statusRef.current = 'running';
         return true;
+    }
+
+    //
+    // Opens a directory picker (or uses the given paths) and starts an import.
+    // Returns false if no database is open or the user cancelled the picker.
+    //
+    const startImportDirectories = useCallback(async (paths?: string[]): Promise<boolean> => {
+        return beginImportSession(platform.importDirectories(paths));
+    }, [platform]);
+
+    //
+    // Opens a file picker (or uses the given paths) and starts an import.
+    // Returns false if no database is open or the user cancelled the picker.
+    //
+    const startImportFiles = useCallback(async (paths?: string[]): Promise<boolean> => {
+        return beginImportSession(platform.importFiles(paths));
     }, [platform]);
 
     //
@@ -233,7 +252,8 @@ export function ImportContextProvider({ children }: IImportContextProviderProps)
     const contextValue: IImportContext = {
         status,
         importItems,
-        startImport,
+        startImportDirectories,
+        startImportFiles,
         cancelImport,
         clearImport,
     };

@@ -344,11 +344,18 @@ export interface IPlatformContext {
     openFolder: (folderPath: string) => Promise<void>;
 
     //
-    // Imports assets from the given paths (files or directories), or shows a folder picker when paths is omitted.
+    // Imports from the given directory paths, or shows a directory picker when paths is omitted.
     // Returns session info so the caller can track progress and cancel, or undefined if no database is open
     // or the user cancelled the picker. Desktop (Electron) only; returns undefined on web.
     //
-    importAssets: (paths?: string[]) => Promise<IImportSession | undefined>;
+    importDirectories: (paths?: string[]) => Promise<IImportSession | undefined>;
+
+    //
+    // Imports the given files, or shows a multi-file picker when paths is omitted.
+    // Returns session info so the caller can track progress and cancel, or undefined if no database is open
+    // or the user cancelled the picker. Desktop (Electron) only; returns undefined on web.
+    //
+    importFiles: (paths?: string[]) => Promise<IImportSession | undefined>;
 
     //
     // Returns the absolute file system path for a File object from a drag-and-drop event.

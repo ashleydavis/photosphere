@@ -318,8 +318,12 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         await electronAPI.openPath(folderPath);
     }, [electronAPI]);
 
-    const importAssets = useCallback(async (paths?: string[]): Promise<IImportSession | undefined> => {
-        return await electronAPI.importAssets(paths);
+    const importDirectories = useCallback(async (paths?: string[]): Promise<IImportSession | undefined> => {
+        return await electronAPI.importDirectories(paths);
+    }, [electronAPI]);
+
+    const importFiles = useCallback(async (paths?: string[]): Promise<IImportSession | undefined> => {
+        return await electronAPI.importFiles(paths);
     }, [electronAPI]);
 
     const getPathForFile = useCallback((file: File): string | undefined => {
@@ -512,7 +516,8 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         openFolder,
         onMenuAction,
         onNavigate,
-        importAssets,
+        importDirectories,
+        importFiles,
         getPathForFile,
         checkTools,
         checkDatabaseExists,

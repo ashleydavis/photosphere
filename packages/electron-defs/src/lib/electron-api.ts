@@ -217,11 +217,18 @@ export interface IElectronAPI {
 
     //
     // Imports the given paths (files or directories) into the current database.
-    // When paths is provided they are used directly; when omitted a folder picker dialog is shown.
+    // When paths is provided they are used directly; when omitted a directory picker dialog is shown.
     // Returns session info so the renderer can track progress and cancel, or undefined if
     // no database is open or the user cancelled the picker.
     //
-    importAssets: (paths?: string[]) => Promise<IImportSession | undefined>;
+    importDirectories: (paths?: string[]) => Promise<IImportSession | undefined>;
+
+    //
+    // When paths is provided they are used directly; when omitted a multi-file picker dialog is shown.
+    // Returns session info so the renderer can track progress and cancel, or undefined if
+    // no database is open or the user cancelled the picker.
+    //
+    importFiles: (paths?: string[]) => Promise<IImportSession | undefined>;
 
     //
     // Checks whether ImageMagick and FFmpeg are available on PATH.

@@ -175,7 +175,7 @@ function ImportItemRow({ item }: { item: IImportItem }) {
 export function ImportPage() {
     const { databasePath } = useAssetDatabase();
     const platform = usePlatform();
-    const { status, importItems, startImport, cancelImport, clearImport } = useImport();
+    const { status, importItems, startImportDirectories, startImportFiles, cancelImport, clearImport } = useImport();
 
     // Tool check state: undefined = checking, null = check not run yet (but we auto-run on mount)
     const [toolsStatus, setToolsStatus] = useState<IToolsStatus | null>(null);
@@ -223,10 +223,17 @@ export function ImportPage() {
     }
 
     //
-    // Starts an import and handles the case where the user cancelled the folder picker.
+    // Opens a directory picker and starts an import.
     //
-    async function handleStartImport() {
-        await startImport();
+    async function handleImportDirectories() {
+        await startImportDirectories();
+    }
+
+    //
+    // Opens a file picker and starts an import.
+    //
+    async function handleImportFiles() {
+        await startImportFiles();
     }
 
     //
@@ -260,7 +267,7 @@ export function ImportPage() {
                 .filter(filePath => filePath !== undefined && filePath.length > 0) as string[];
 
         if (droppedPaths.length > 0) {
-            await startImport(droppedPaths);
+            await startImportDirectories(droppedPaths);
         }
     }
 
@@ -341,17 +348,28 @@ export function ImportPage() {
                                 <FileUpload sx={{ fontSize: 64, color: "text.secondary", mb: 2 }} />
                                 <Typography level="h4" sx={{ mb: 1 }}>Import photos</Typography>
                                 <Typography level="body-md" sx={{ mb: 4, color: "text.secondary" }}>
-                                    Drop files or folders here, or click the button below.
+                                    Drop files or directories here, or use the buttons below.
                                 </Typography>
-                                <Button
-                                    variant="soft"
-                                    color="neutral"
-                                    size="lg"
-                                    startDecorator={<FileUpload />}
-                                    onClick={handleStartImport}
-                                >
-                                    Import photos
-                                </Button>
+                                <Box className="flex flex-row gap-3 justify-center">
+                                    <Button
+                                        variant="soft"
+                                        color="neutral"
+                                        size="lg"
+                                        startDecorator={<FileUpload />}
+                                        onClick={handleImportFiles}
+                                    >
+                                        Import files
+                                    </Button>
+                                    <Button
+                                        variant="soft"
+                                        color="neutral"
+                                        size="lg"
+                                        startDecorator={<FileUpload />}
+                                        onClick={handleImportDirectories}
+                                    >
+                                        Import directory
+                                    </Button>
+                                </Box>
                             </Box>
                         )}
 

@@ -56,8 +56,11 @@ const electronAPI: IElectronAPI = {
     openPath: (path: string): Promise<void> => {
         return ipcRenderer.invoke('open-path', path);
     },
-    importAssets: (paths?: string[]): Promise<IImportSession | undefined> => {
-        return ipcRenderer.invoke('import-assets', paths);
+    importDirectories: (paths?: string[]): Promise<IImportSession | undefined> => {
+        return ipcRenderer.invoke('import-directories', paths);
+    },
+    importFiles: (paths?: string[]): Promise<IImportSession | undefined> => {
+        return ipcRenderer.invoke('import-files', paths);
     },
     checkTools: (): Promise<IToolsStatus> => {
         return ipcRenderer.invoke('check-tools');
