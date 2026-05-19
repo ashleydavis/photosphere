@@ -75,10 +75,11 @@ Expected:
 
 ### 6. Replicate a full copy to a new directory
 
-1. Open the app menu and navigate to **Database > Replicate** (or equivalent).
-2. When prompted for the destination, choose `/tmp/psi-desktop-test/replica`.
-3. When prompted for replication mode, select **Full**.
-4. Confirm and wait for replication to complete.
+1. Navigate to the **Databases** page.
+2. Click the **Replicate database** button on the source database entry.
+3. When prompted for the destination, choose `/tmp/psi-desktop-test/replica`.
+4. When prompted for replication mode, select **Full**.
+5. Confirm and wait for replication to complete.
 
 Expected:
 - A progress indicator is shown during replication.
