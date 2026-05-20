@@ -196,6 +196,8 @@ async function secretsAdd(cmdOptions: ISecretsAddOptions): Promise<void> {
             return;
         }
 
+        cmdOptions.name = cmdOptions.name.trim();
+
         if (!SECRET_TYPES.includes(cmdOptions.type)) {
             log.error(pc.red(`✗ Invalid secret type "${cmdOptions.type}". Must be one of: ${SECRET_TYPES.join(', ')}`));
             await exit(1);
@@ -452,6 +454,13 @@ export async function secretsEdit(cmdOptions: ISecretsEditOptions): Promise<void
     }
 
     if (cmdOptions.yes) {
+        if (cmdOptions.newName) {
+            cmdOptions.newName = cmdOptions.newName.trim();
+        }
+        if (cmdOptions.valueFile) {
+            cmdOptions.valueFile = cmdOptions.valueFile.trim();
+        }
+
         if (!cmdOptions.newName && !cmdOptions.value && !cmdOptions.valueFile) {
             log.error(pc.red('✗ --new-name, --value, or --value-file is required with --yes'));
             await exit(1);

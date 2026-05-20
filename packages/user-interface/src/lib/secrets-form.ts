@@ -57,19 +57,19 @@ export function emptyFormState(): ISecretFormState {
 export function buildValueJson(form: ISecretFormState): string {
     if (form.type === 's3-credentials') {
         const obj: Record<string, string> = {
-            region: form.s3Region,
-            accessKeyId: form.s3AccessKeyId,
-            secretAccessKey: form.s3SecretAccessKey,
+            region: form.s3Region.trim(),
+            accessKeyId: form.s3AccessKeyId.trim(),
+            secretAccessKey: form.s3SecretAccessKey.trim(),
         };
         if (form.s3Endpoint) {
-            obj.endpoint = form.s3Endpoint;
+            obj.endpoint = form.s3Endpoint.trim();
         }
         return JSON.stringify(obj);
     }
     if (form.type === 'encryption-key') {
         return form.privateKeyPem;
     }
-    return form.apiKey;
+    return form.apiKey.trim();
 }
 
 //

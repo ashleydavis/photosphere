@@ -276,7 +276,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
             ...payload,
             name: finalName,
             description: editedDescription,
-            path: editedPath,
+            path: editedPath.trim(),
             s3Credentials: importS3 ? payload.s3Credentials : undefined,
             encryptionKey: importEncryption ? payload.encryptionKey : undefined,
             geocodingKey: importGeocoding ? payload.geocodingKey : undefined,

@@ -130,8 +130,8 @@ export async function pickDirectory(
                 return null;
             }
             
-            const subdirPath = join(currentPath, String(subdirName));
-            const relativePath = `./${String(subdirName)}`;
+            const subdirPath = join(currentPath, String(subdirName).trim());
+            const relativePath = `./${String(subdirName).trim()}`;
             try {
                 await fs.mkdir(subdirPath, { recursive: true });
                 
@@ -166,7 +166,7 @@ export async function pickDirectory(
                 return null;
             }
             
-            const resolvedPath = resolve(String(fullPath));
+            const resolvedPath = resolve(String(fullPath).trim());
             
             // Create directory if it doesn't exist
             if (!await pathExists(resolvedPath)) {

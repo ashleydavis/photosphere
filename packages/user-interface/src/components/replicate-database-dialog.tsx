@@ -123,7 +123,7 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
     const isS3Dest = form.storageType === 's3';
     const browseDisabled = isS3Dest && !form.secrets.s3Key;
     const startDisabled = form.destPath.trim().length === 0
-        || form.destPath === sourceEntry.path
+        || form.destPath.trim() === sourceEntry.path
         || (isS3Dest && !form.secrets.s3Key);
 
     //
@@ -165,7 +165,7 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
 
         const taskData: IReplicateDatabaseData = {
             sourcePath: sourceEntry.path,
-            destPath: form.destPath,
+            destPath: form.destPath.trim(),
             destEncryptionKey: form.secrets.encryptionKey,
             destS3Key: form.secrets.s3Key,
             partial: form.mode === "partial",

@@ -145,12 +145,12 @@ export function AddDatabaseModal({ open, onClose }: IAddDatabaseModalProps) {
         await platform.addDatabase({
             name: trimmedName,
             description: form.description,
-            path: form.path,
+            path: form.path.trim(),
             s3Key: form.s3Key,
             encryptionKey: form.encryptionKey,
             geocodingKey: form.geocodingKey,
         });
-        await openDatabase(form.path);
+        await openDatabase(form.path.trim());
         onClose();
     }
 

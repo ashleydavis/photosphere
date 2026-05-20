@@ -145,14 +145,14 @@ export function CreateDatabaseModal({ open, onClose }: ICreateDatabaseModalProps
         await platform.addDatabase({
             name: trimmedName,
             description: form.description,
-            path: form.path,
+            path: form.path.trim(),
             s3Key: form.s3Key,
             encryptionKey: form.encryptionKey,
             geocodingKey: form.geocodingKey,
         });
-        await platform.createDatabaseAtPath(form.path);
-        log.info(`Database created: ${form.path}`);
-        await openDatabase(form.path);
+        await platform.createDatabaseAtPath(form.path.trim());
+        log.info(`Database created: ${form.path.trim()}`);
+        await openDatabase(form.path.trim());
         onClose();
     }
 

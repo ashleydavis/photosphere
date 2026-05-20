@@ -48,7 +48,7 @@ export function CreateSecretDialog({ open, secretType, defaultName, onClose, onS
     //
     async function handleSave(): Promise<void> {
         const valueJson = buildValueJson(form);
-        const newSecret = await platform.addSecret({ name: form.name, type: secretType }, valueJson);
+        const newSecret = await platform.addSecret({ name: form.name.trim(), type: secretType }, valueJson);
         onSave(newSecret);
     }
 

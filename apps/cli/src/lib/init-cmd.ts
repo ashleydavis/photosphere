@@ -382,7 +382,7 @@ export async function promptToAddKey(keyName: string, nonInteractive: boolean): 
         if (isCancel(filePath)) {
             return undefined;
         }
-        const pem = await fs.readFile(filePath as string, 'utf-8');
+        const pem = await fs.readFile((filePath as string).trim(), 'utf-8');
         return buildAndStoreKeyPem(keyName, pem);
     }
 
@@ -431,7 +431,7 @@ export async function promptToGenerateOrAddKey(keyName: string, nonInteractive: 
         if (isCancel(filePath)) {
             return undefined;
         }
-        const pem = await fs.readFile(filePath as string, 'utf-8');
+        const pem = await fs.readFile((filePath as string).trim(), 'utf-8');
         return buildAndStoreKeyPem(keyName, pem);
     }
 

@@ -464,6 +464,18 @@ export async function dbsAdd(cmdOptions: IDbsAddOptions): Promise<void> {
             return;
         }
 
+        cmdOptions.name = cmdOptions.name.trim();
+        cmdOptions.path = cmdOptions.path.trim();
+        if (cmdOptions.encryptionKey) {
+            cmdOptions.encryptionKey = cmdOptions.encryptionKey.trim();
+        }
+        if (cmdOptions.s3Cred) {
+            cmdOptions.s3Cred = cmdOptions.s3Cred.trim();
+        }
+        if (cmdOptions.geocodingKey) {
+            cmdOptions.geocodingKey = cmdOptions.geocodingKey.trim();
+        }
+
         const entry: IDatabaseEntry = {
             name: cmdOptions.name,
             description: cmdOptions.description || '',
@@ -692,6 +704,25 @@ export async function dbsEdit(cmdOptions: IDbsEditOptions): Promise<void> {
     }
 
     if (cmdOptions.yes) {
+        if (cmdOptions.name) {
+            cmdOptions.name = cmdOptions.name.trim();
+        }
+        if (cmdOptions.newName) {
+            cmdOptions.newName = cmdOptions.newName.trim();
+        }
+        if (cmdOptions.path) {
+            cmdOptions.path = cmdOptions.path.trim();
+        }
+        if (cmdOptions.encryptionKey) {
+            cmdOptions.encryptionKey = cmdOptions.encryptionKey.trim();
+        }
+        if (cmdOptions.s3Cred) {
+            cmdOptions.s3Cred = cmdOptions.s3Cred.trim();
+        }
+        if (cmdOptions.geocodingKey) {
+            cmdOptions.geocodingKey = cmdOptions.geocodingKey.trim();
+        }
+
         if (cmdOptions.encryptionKey) {
             const vault = getVault(getDefaultVaultType());
             const encryptionKeySecret = await vault.get(cmdOptions.encryptionKey);

@@ -101,7 +101,7 @@ export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps
 
         await platform.importSharePayload({
             ...payload,
-            saveName,
+            saveName: saveName.trim(),
         }, {});
         setStep("success");
         log.event('Secret saved');

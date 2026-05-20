@@ -138,9 +138,9 @@ export function ShareDatabaseDialog({ open, entry, onClose }: IShareDatabaseDial
 
         const payload: IDatabaseSharePayload = {
             type: "database",
-            name: form.name,
+            name: form.name.trim(),
             description: form.description,
-            path: form.path,
+            path: form.path.trim(),
             origin: entry.origin,
             s3Credentials,
             encryptionKey,
