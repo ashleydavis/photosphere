@@ -1533,6 +1533,14 @@ async function createMenu(): Promise<void> {
             },
         },
         {
+            label: 'Summary',
+            click: () => {
+                if (mainWindow) {
+                    mainWindow.webContents.send('navigate', '/database-summary');
+                }
+            },
+        },
+        {
             label: 'News',
             click: () => {
                 if (mainWindow) {

@@ -42,6 +42,10 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 - **Mobile**: Capacitor wraps the frontend for iOS/Android.
 - **Desktop**: Electron embeds the frontend via `apps/desktop`.
 
+## Guides
+
+- [Background tasks](docs/background-tasks.md) - How to add a new background task type (worker handler, registration, frontend consumption)
+
 ## Code Style
 - **Types**: Use interfaces with PascalCase (`IStorage`) for types, explicit return types
 - **Naming**: camelCase for variables/methods, PascalCase for classes/interfaces

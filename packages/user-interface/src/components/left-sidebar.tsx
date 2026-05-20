@@ -128,6 +128,7 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                         </NavLink>
                     )}
 
+
                     <ListItem
                         onClick={() => {
                             setSidebarOpen(false);

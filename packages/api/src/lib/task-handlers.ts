@@ -11,6 +11,7 @@ import { saveAssetsBatchHandler } from "./save-assets-batch.worker";
 import { createDatabaseHandler } from "./create-database.worker";
 import { importAssetsHandler } from "./import-assets.worker";
 import { hashFileHandler } from "./hash-file.worker";
+import { getDatabaseSummaryHandler } from "./get-database-summary.worker";
 
 //
 // Register all task handlers
@@ -29,4 +30,5 @@ export function initTaskHandlers(): void {
     registerHandler("create-database", createDatabaseHandler);
     registerHandler("import-assets", importAssetsHandler);
     registerHandler("hash-file", hashFileHandler);
+    registerHandler("get-database-summary", getDatabaseSummaryHandler);
 }

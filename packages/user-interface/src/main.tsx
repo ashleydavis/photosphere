@@ -24,6 +24,7 @@ import { ToastContainer } from "./components/toast-container";
 import { useImport } from "./context/import-context";
 import { ImportPage } from "./pages/import/import-page";
 import { DatabasesPage } from "./pages/databases/databases-page";
+import { DatabaseSummaryPage } from "./pages/database-summary";
 import { SecretsPage } from "./pages/secrets/secrets-page";
 import { OpenDatabaseModal } from "./components/open-database-modal";
 import { CreateDatabaseModal } from "./components/create-database-modal";
@@ -320,6 +321,11 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
                         <Route
                             path="/import"
                             element={<ImportPage />}
+                            />
+
+                        <Route
+                            path="/database-summary"
+                            element={<DatabaseSummaryPage />}
                             />
 
                         <Route
