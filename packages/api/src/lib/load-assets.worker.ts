@@ -24,7 +24,7 @@ export async function loadAssetsHandler(
         throw new Error("databasePath is required");
     }
 
-    log.info(`Loading assets from database ${data.databasePath}`);
+    log.info(`Loading assets from database "${data.databasePath}"`);
 
     const { storage: plainStorage, s3Config, storageOptions } = await openStorage(data.databasePath);
     const isPartial = await isDatabasePartial(data.databasePath, s3Config, storageOptions);

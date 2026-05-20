@@ -32,13 +32,13 @@ export async function syncDatabaseHandler(
 
     const config = await loadDatabaseConfig(localRawStorage);
     if (!config?.origin) {
-        log.info(`Sync skipped for ${data.databasePath}: no origin configured`);
+        log.info(`Sync skipped for "${data.databasePath}": no origin configured`);
         return;
     }
 
     const connected = await checkConnectivity(config.origin);
     if (!connected) {
-        log.info(`Sync skipped for ${data.databasePath}: origin not accessible (${config.origin})`);
+        log.info(`Sync skipped for "${data.databasePath}": origin not accessible (${config.origin})`);
         return;
     }
 

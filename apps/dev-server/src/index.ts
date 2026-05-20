@@ -85,7 +85,7 @@ function enqueueSyncTask(state: IConnectionSyncState): void {
         return;
     }
     state.isSyncRunning = true;
-    log.info(`Queuing sync task for ${state.currentDatabasePath}`);
+    log.info(`Queuing sync task for "${state.currentDatabasePath}"`);
     workerPool.addTask("sync-database", { databasePath: state.currentDatabasePath }, state.currentDatabasePath);
 }
 

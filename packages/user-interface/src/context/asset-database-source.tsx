@@ -498,7 +498,7 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
             cancelDatabaseLoad(loadingDatabasePath.current);
         }
     
-        log.info(`[loadAssets] Starting load for database: ${dbPath}`);
+        log.info(`[loadAssets] Starting load for database: "${dbPath}"`);
         loadingDatabasePath.current = dbPath;
         setIsLoading(true);
 

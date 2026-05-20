@@ -981,7 +981,7 @@ function enqueueSyncTask(): void {
         return;
     }
     isSyncRunning = true;
-    log.info(`Queuing sync task for ${currentDatabasePath}`);
+    log.info(`Queuing sync task for "${currentDatabasePath}"`);
     workerPool.addTask("sync-database", { databasePath: currentDatabasePath }, currentDatabasePath);
 }
 
