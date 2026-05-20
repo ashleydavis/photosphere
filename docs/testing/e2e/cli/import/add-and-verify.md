@@ -23,7 +23,6 @@ rm -rf /tmp/psi-test
 ### 2. Create a new database
 
 ```bash
-mkdir -p /tmp/psi-test/source
 bun run start -- init --db /tmp/psi-test/source --yes
 ```
 

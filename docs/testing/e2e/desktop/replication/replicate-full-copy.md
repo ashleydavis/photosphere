@@ -30,7 +30,10 @@ rm -rf /tmp/psi-desktop-test
 
 1. Open the Photosphere desktop app.
 2. Click **Create database** from the File menu or the left side menu.
-3. Choose `/tmp/psi-desktop-test/source` as the database directory.
+3. Choose the following as the database directory:
+   ```
+   /tmp/psi-desktop-test/source
+   ```
 4. Confirm creation.
 
 Expected: The app opens the new empty database with no assets shown.
@@ -77,7 +80,10 @@ Expected:
 
 1. Navigate to the **Databases** page.
 2. Click the **Replicate database** button on the source database entry.
-3. When prompted for the destination, choose `/tmp/psi-desktop-test/replica`.
+3. When prompted for the destination, enter:
+   ```
+   /tmp/psi-desktop-test/replica
+   ```
 4. When prompted for replication mode, select **Full**.
 5. Confirm and wait for replication to complete.
 
@@ -117,4 +123,7 @@ bun run start -- origin --db /tmp/psi-desktop-test/replica
 ```
 
 Expected:
-- The origin is shown as `/tmp/psi-desktop-test/source`.
+- The origin is shown as:
+  ```
+  /tmp/psi-desktop-test/source
+  ```

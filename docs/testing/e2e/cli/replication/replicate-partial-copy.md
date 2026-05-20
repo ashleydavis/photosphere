@@ -23,7 +23,6 @@ rm -rf /tmp/psi-test
 ### 2. Create a new database
 
 ```bash
-mkdir -p /tmp/psi-test/source
 bun run start -- init --db /tmp/psi-test/source --yes
 ```
 
@@ -69,7 +68,6 @@ Expected:
 ### 6. Replicate a partial copy to a new directory
 
 ```bash
-mkdir -p /tmp/psi-test/replica
 bun run start -- replicate --db /tmp/psi-test/source --dest /tmp/psi-test/replica --partial --yes
 ```
 

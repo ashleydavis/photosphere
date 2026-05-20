@@ -30,7 +30,10 @@ rm -rf /tmp/psi-desktop-test
 
 1. Open the Photosphere desktop app.
 2. Click **Create database** from the File menu or the left side menu.
-3. Choose `/tmp/psi-desktop-test/source` as the database directory.
+3. Choose the following as the database directory:
+   ```
+   /tmp/psi-desktop-test/source
+   ```
 4. Confirm creation.
 
 Expected: The app opens the new empty database with no assets shown.
