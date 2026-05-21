@@ -14,7 +14,8 @@ import { loadDesktopConfig, saveDesktopConfig, updateLastFolder, getTheme, setTh
 import type { IWorkerPoolOptions } from './lib/worker-pool-electron-main';
 import type { IRestApiWorkerStopMessage, IRestApiWorkerStartMessage } from './rest-api-worker';
 import { FileLoggerElectron } from './lib/file-logger-electron';
-import type { IImportSession, IRendererLogMessage, ISaveAssetItem, IDatabaseEntry, IDatabaseSecrets } from 'electron-defs';
+import type { IImportSession, IRendererLogMessage, ISaveAssetItem, IDatabaseSecrets } from 'electron-defs';
+import type { IDatabaseEntry } from 'api';
 import { verifyTools } from 'tools';
 import type { IDatabaseDescriptor, IDesktopConfig, IReplicateDatabaseData } from 'api';
 import { createStorage, CloudStorage, exportPublicKeyToPem } from 'storage';

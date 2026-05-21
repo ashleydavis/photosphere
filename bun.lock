@@ -192,7 +192,6 @@
         "axios": "^0.27.2",
         "bdb": "workspace:*",
         "dayjs": "^1.11.7",
-        "electron-defs": "workspace:*",
         "exif-parser": "^0.1.12",
         "js-yaml": "^4.1.0",
         "json-stable-stringify": "^1.3.0",
@@ -253,6 +252,7 @@
       "name": "electron-defs",
       "version": "1.0.0",
       "dependencies": {
+        "api": "workspace:*",
         "vault": "workspace:*",
       },
       "devDependencies": {
@@ -290,7 +290,7 @@
       "name": "lan-share",
       "version": "1.0.0",
       "dependencies": {
-        "electron-defs": "workspace:*",
+        "api": "workspace:*",
         "node-utils": "workspace:*",
         "storage": "workspace:*",
         "vault": "workspace:*",

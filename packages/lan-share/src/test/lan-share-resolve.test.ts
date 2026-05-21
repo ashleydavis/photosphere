@@ -1,5 +1,5 @@
 import { resolveDatabaseSharePayload, resolveSecretSharePayload } from "../lib/lan-share-resolve";
-import type { IDatabaseEntry } from "electron-defs";
+import type { IDatabaseEntry } from "api";
 
 // Mock the vault module
 const mockVaultGet = jest.fn();

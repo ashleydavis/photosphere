@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
-import type { IElectronAPI, IImportSession, IRendererLogMessage, ISaveAssetItem, IToolsStatus, IDatabaseEntry } from 'electron-defs';
+import type { IElectronAPI, IImportSession, IRendererLogMessage, ISaveAssetItem, IToolsStatus } from 'electron-defs';
+import type { IDatabaseEntry } from 'api';
 import type { ISecret } from 'vault';
 
 // Expose generic task queue API

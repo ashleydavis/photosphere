@@ -25,7 +25,7 @@ import {
     removeRecentDatabaseName,
     findDatabase,
 } from '../../lib/databases-config';
-import type { IDatabaseEntry } from 'electron-defs';
+import type { IDatabaseEntry } from '../../lib/databases-config';
 
 //
 // Helper to build a minimal database entry.

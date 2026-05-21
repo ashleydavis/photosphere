@@ -1,4 +1,6 @@
 import type { ISecret } from 'vault';
+import type { IDatabaseEntry } from 'api';
+export type { IDatabaseEntry };
 
 //
 // S3 credentials for accessing an S3-compatible object store.
@@ -53,32 +55,6 @@ export interface ISharedSecretEntry {
     type: string;
 }
 
-//
-// A database entry stored in databases.toml.
-// The name field is the unique (case-insensitive) identifier for each entry.
-//
-export interface IDatabaseEntry {
-    // Human-readable display name.
-    name: string;
-
-    // Optional description of this database.
-    description: string;
-
-    // Absolute filesystem path (or S3 path) to the database directory.
-    path: string;
-
-    // Optional origin string read from .db/config.json; refreshed each time the database is opened.
-    origin?: string;
-
-    // Vault secret name for S3 credentials.
-    s3Key?: string;
-
-    // Vault secret name for the encryption key pair.
-    encryptionKey?: string;
-
-    // Vault secret name for the geocoding API key.
-    geocodingKey?: string;
-}
 
 //
 // Log levels supported by the logging system

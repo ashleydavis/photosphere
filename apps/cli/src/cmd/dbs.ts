@@ -7,7 +7,7 @@ import { getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntr
 import { confirm, intro, outro, text, select, isCancel, spinner, note } from '../lib/clack/prompts';
 import { exit } from 'node-utils';
 import { generateKeyPair } from 'storage';
-import type { IDatabaseEntry } from 'electron-defs';
+import type { IDatabaseEntry } from 'api';
 import { LanShareSender, LanShareReceiver, resolveDatabaseSharePayload, importDatabasePayload } from 'lan-share';
 import type { IDatabaseSharePayload, ConflictResolver, IConflictResolution } from 'lan-share';
 import { findSimilarDatabaseNames, findSimilarKeyNames, findSimilarSecretNames } from '../lib/init-cmd';

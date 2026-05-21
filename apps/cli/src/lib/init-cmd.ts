@@ -11,7 +11,7 @@ import { configureLog } from "./log";
 import { exit, TestUuidGenerator, TestTimestampProvider, registerTerminationCallback, pathExists, getProcessTmpDir } from "node-utils";
 import { getDatabases } from "api";
 import { log, RandomUuidGenerator, TimestampProvider } from "utils";
-import type { IDatabaseEntry } from 'electron-defs';
+import type { IDatabaseEntry } from 'api';
 import type { IS3Credentials } from 'storage';
 import { getDirectoryForCommand } from './directory-picker';
 import { ensureMediaProcessingTools } from './ensure-tools';

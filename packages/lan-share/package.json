@@ -27,9 +27,9 @@
     "typescript": "^5.6.3"
   },
   "dependencies": {
+    "api": "workspace:*",
     "vault": "workspace:*",
     "node-utils": "workspace:*",
-    "electron-defs": "workspace:*",
     "storage": "workspace:*"
   }
 }
