@@ -2,7 +2,6 @@ import React, { ReactNode, useCallback, useEffect, useRef } from "react";
 import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext, type IImportSession, type IToolsStatus, type IDownloadAssetItem, type IShowNotificationData, type IUpdateAvailableData, convertToPng, type IDatabaseEntry, type ISharedSecretEntry } from "user-interface";
 import type { IElectronAPI, ISaveAssetItem } from "electron-defs";
 import type { IConflictResolution } from "lan-share";
-import { ProxyVault } from "./proxy-vault";
 
 const isTestMode = typeof window !== 'undefined'
     && new URLSearchParams(window.location.search).get('testMode') === '1';
@@ -391,43 +390,38 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
     }, [electronAPI]);
 
     const listSecrets = useCallback(async (): Promise<ISharedSecretEntry[]> => {
-        const vault = new ProxyVault(electronAPI);
-        const allSecrets = await vault.list();
+        const allSecrets = await electronAPI.vaultList();
         return allSecrets.map(secret => ({ name: secret.name, type: secret.type }));
     }, [electronAPI]);
 
     const addSecret = useCallback(async (entry: ISharedSecretEntry, value: string): Promise<ISharedSecretEntry> => {
-        const vault = new ProxyVault(electronAPI);
-        const existing = await vault.get(entry.name);
+        const existing = await electronAPI.vaultGet(entry.name);
         if (existing) {
             throw new Error(`A secret named '${entry.name}' already exists.`);
         }
-        await vault.set({ name: entry.name, type: entry.type, value });
+        await electronAPI.vaultSet({ name: entry.name, type: entry.type, value });
         return { name: entry.name, type: entry.type };
     }, [electronAPI]);
 
     const updateSecret = useCallback(async (originalName: string, entry: ISharedSecretEntry, value?: string): Promise<void> => {
-        const vault = new ProxyVault(electronAPI);
         if (value === undefined) {
             return;
         }
 
         // Set the new entry first, then delete the old one if the name changed.
         // Order matters: a crash between the two leaves data rather than losing it.
-        await vault.set({ name: entry.name, type: entry.type, value });
+        await electronAPI.vaultSet({ name: entry.name, type: entry.type, value });
         if (originalName !== entry.name) {
-            await vault.delete(originalName);
+            await electronAPI.vaultDelete(originalName);
         }
     }, [electronAPI]);
 
     const deleteSecret = useCallback(async (name: string): Promise<void> => {
-        const vault = new ProxyVault(electronAPI);
-        await vault.delete(name);
+        await electronAPI.vaultDelete(name);
     }, [electronAPI]);
 
     const getSecretValue = useCallback(async (name: string): Promise<string | undefined> => {
-        const vault = new ProxyVault(electronAPI);
-        const secret = await vault.get(name);
+        const secret = await electronAPI.vaultGet(name);
         return secret?.value;
     }, [electronAPI]);
 

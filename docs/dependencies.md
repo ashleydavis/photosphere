@@ -6,11 +6,11 @@ flowchart LR
     edefs["electron-defs<br/>Electron IPC type definitions"]
     nodeutils["node-utils<br/>Node-only utilities"]
     lanshare["lan-share<br/>LAN credential sharing"]
-    api["api<br/>Photosphere database API"]
-    restapi["rest-api<br/>HTTP REST API"]
-    ui["user-interface<br/>React frontend UI"]
-    cli["cli<br/>CLI tool (psi)"]
-    desktop["desktop<br/>Electron main process"]
+    api["api<br/>Photosphere API"]
+    restapi["rest-api<br/>REST API"]
+    ui["user-interface<br/>Frontend UI"]
+    cli["cli<br/>CLI"]
+    desktop["desktop<br/>Electron main"]
     desktopfe["desktop-frontend<br/>Electron renderer"]
 
     nodeutils --> utils & edefs
