@@ -1,5 +1,5 @@
 import { IStorage, FileStorage, createStorage } from "storage";
-import { HashCache } from "api";
+import { HashCache } from "node-api";
 import { exit, getProcessTmpDir } from "node-utils";
 import path from "path";
 import pc from "picocolors";

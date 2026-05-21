@@ -4,7 +4,8 @@ import { exit } from "node-utils";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import { loadDatabase, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
 import { getFileLogger } from "../lib/log";
-import { checkPaths, IDatabaseDescriptor } from "api";
+import type { IDatabaseDescriptor } from "api";
+import { checkPaths } from "node-api";
 
 export interface ICheckCommandOptions extends IBaseCommandOptions {
 }

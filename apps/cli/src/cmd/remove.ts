@@ -2,7 +2,7 @@ import pc from "picocolors";
 import { exit } from "node-utils";
 import { log } from "utils";
 import { loadDatabase, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
-import { removeAsset } from "api";
+import { removeAsset } from "node-api";
 
 export interface IRemoveCommandOptions extends IBaseCommandOptions {
     // No additional options needed beyond base options

@@ -41,6 +41,7 @@
     "@tanstack/react-virtual": "^3.11.2",
     "@types/leaflet": "^1.9.21",
     "api": "workspace:*",
+    "node-api": "workspace:*",
     "axios": "^0.27.2",
     "blob-util": "^2.0.2",
     "classnames": "^2.5.1",

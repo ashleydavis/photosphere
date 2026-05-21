@@ -8,12 +8,12 @@ import { ensureMediaProcessingTools } from "../lib/ensure-tools";
 import { intro, confirm, outro } from "../lib/clack/prompts";
 import { loadEncryptionKeysFromPem } from "storage";
 import { addItem, CURRENT_DATABASE_VERSION, loadTree, rebuildTree, saveTree, SortNode, traverseTreeAsync } from "merkle-tree";
-import { IDatabaseMetadata, acquireWriteLock, releaseWriteLock, createReadme, ensureSortIndex, loadDatabaseConfig, saveDatabaseConfig } from "api";
+import { acquireWriteLock, releaseWriteLock, loadDatabaseConfig, saveDatabaseConfig } from "api";
+import { IDatabaseMetadata, createReadme, ensureSortIndex, computeHash } from "node-api";
 import { BsonDatabase, buildDatabaseMerkleTree, deleteDatabaseMerkleTree, saveDatabaseMerkleTree } from "bdb";
 import type { IAsset } from "api";
 import type { IStorage } from "storage";
 import { pathJoin, walkDirectory } from "storage";
-import { computeHash } from "api";
 
 export interface IUpgradeCommandOptions extends IBaseCommandOptions {
     yes?: boolean;

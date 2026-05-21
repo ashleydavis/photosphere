@@ -8,7 +8,7 @@ import { createAssetServer } from "rest-api";
 import { exec } from "child_process";
 import { promisify } from "util";
 import * as path from "path";
-import { createDatabase, createMediaFileDatabase, loadDesktopConfig, saveDesktopConfig, getDatabases, addDatabaseEntry, removeDatabaseEntry, updateLastFolder, markDatabaseOpened } from "api";
+import { createDatabase, createMediaFileDatabase, loadDesktopConfig, saveDesktopConfig, getDatabases, addDatabaseEntry, removeDatabaseEntry, updateLastFolder, markDatabaseOpened } from "node-api";
 import { createStorage } from "storage";
 
 const execAsync = promisify(exec);

@@ -27,6 +27,7 @@
   "dependencies": {
     "@types/express": "^5.0.6",
     "api": "workspace:*",
+    "node-api": "workspace:*",
     "config": "workspace:*",
     "electron-defs": "workspace:*",
     "express": "^5.2.1",

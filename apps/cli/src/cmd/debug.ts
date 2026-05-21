@@ -10,7 +10,7 @@ import {
     listShards,
     hashRecord
 } from "bdb";
-import { loadMerkleTree, getDatabaseSummary, removeAsset, ensureSortIndex, buildFilesTree } from "api";
+import { loadMerkleTree, getDatabaseSummary, removeAsset, ensureSortIndex, buildFilesTree } from "node-api";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import { getDirectoryForCommand } from '../lib/directory-picker';
 import * as fs from 'fs/promises';

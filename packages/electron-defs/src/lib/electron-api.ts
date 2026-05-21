@@ -1,5 +1,5 @@
 import type { ISecret } from 'vault';
-import type { IDatabaseEntry } from 'api';
+import type { IDatabaseEntry } from 'node-api';
 export type { IDatabaseEntry };
 
 //

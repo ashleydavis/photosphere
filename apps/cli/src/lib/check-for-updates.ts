@@ -1,5 +1,5 @@
 import { version } from "config";
-import { getLastShownUpdateVersion, setLastShownUpdateVersion } from "api";
+import { getLastShownUpdateVersion, setLastShownUpdateVersion } from "node-api";
 
 //
 // URL of the GitHub API endpoint that returns the latest non-prerelease release.

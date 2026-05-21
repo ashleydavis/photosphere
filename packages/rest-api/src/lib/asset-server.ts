@@ -9,7 +9,7 @@ import {
     streamAsset,
     writeAssetStream,
     resolveStorageCredentials,
-} from "api";
+} from "node-api";
 import type { IDatabaseOp } from "api";
 import { type IUuidGenerator, type ITimestampProvider, log } from "utils";
 

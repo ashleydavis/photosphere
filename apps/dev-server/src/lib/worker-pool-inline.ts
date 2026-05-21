@@ -4,7 +4,7 @@ import { executeTaskHandler } from "task-queue";
 import type { ITaskContext } from "task-queue";
 import type { IUuidGenerator, ITimestampProvider } from "utils";
 import { randomUUID } from "node:crypto";
-import { initTaskHandlers } from "api";
+import { initTaskHandlers } from "node-api";
 
 interface IBaseTaskContext {
     uuidGenerator: IUuidGenerator;

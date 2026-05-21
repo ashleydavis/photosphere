@@ -1,4 +1,4 @@
-import { scanPaths, IFileStat } from "api";
+import { scanPaths, IFileStat, computeHash } from "node-api";
 import { ICommandContext, IBaseCommandOptions, loadDatabase } from "../lib/init-cmd";
 import { configureLog } from "../lib/log";
 import pc from "picocolors";
@@ -7,7 +7,6 @@ import { getFileInfo, AssetInfo } from "tools";
 import path from "path";
 import { ensureMediaProcessingTools } from '../lib/ensure-tools';
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
-import { computeHash } from "api";
 import { createReadStream } from "fs";
 import { formatBytes } from "../lib/format";
 import { log } from "utils";

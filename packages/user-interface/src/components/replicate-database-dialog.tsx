@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { log, RandomUuidGenerator } from 'utils';
-import { replicateDatabase } from 'api/src/lib/replicate-database';
+import { replicateDatabase } from 'node-api/src/lib/replicate-database';
 import type { IReplicateDatabaseData } from 'api/src/lib/replicate-database.types';
 import Modal from '@mui/joy/Modal';
 import ModalDialog from '@mui/joy/ModalDialog';

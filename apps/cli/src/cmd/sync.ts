@@ -3,7 +3,8 @@ import { getDirectoryForCommand } from "../lib/directory-picker";
 import { log } from "utils";
 import pc from "picocolors";
 import { exit } from "node-utils";
-import { syncDatabases, merkleTreeExists, isDatabaseEncrypted, loadDatabaseConfig, updateDatabaseConfig } from "api";
+import { loadDatabaseConfig, updateDatabaseConfig } from "api";
+import { syncDatabases, merkleTreeExists, isDatabaseEncrypted } from "node-api";
 import { loadEncryptionKeysFromPem } from "storage";
 import { createStorageForPath } from "../lib/storage-helper";
 

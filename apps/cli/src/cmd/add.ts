@@ -6,7 +6,8 @@ import { loadDatabase, IBaseCommandOptions, ICommandContext, resolveGeocodingApi
 import { getFileLogger } from "../lib/log";
 import { pathExists } from 'node-utils';
 import { formatBytes } from "../lib/format";
-import { addPaths, IDatabaseDescriptor } from "api";
+import type { IDatabaseDescriptor } from "api";
+import { addPaths } from "node-api";
 
 export interface IAddCommandOptions extends IBaseCommandOptions {
     dryRun?: boolean;

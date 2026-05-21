@@ -2,8 +2,8 @@ import React, { useEffect, useRef, useState } from "react";
 import { TaskQueue, TaskStatus } from "task-queue";
 import { RandomUuidGenerator } from "utils";
 import { useAssetDatabase } from "../context/asset-database-source";
-import type { IDatabaseSummary } from "api";
-import type { IGetDatabaseSummaryData } from "api";
+import type { IDatabaseSummary } from "node-api";
+import type { IGetDatabaseSummaryData } from "node-api";
 
 //
 // Formats a byte count into a human-readable string (e.g. "1.5 GiB").

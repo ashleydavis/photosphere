@@ -1,7 +1,7 @@
 import { createPrivateKey, createPublicKey } from "node:crypto";
 import { exportPublicKeyToPem } from "storage";
 import { getVault, getDefaultVaultType } from "vault";
-import type { IDatabaseEntry } from "api";
+import type { IDatabaseEntry } from "node-api";
 import type { IDatabaseSharePayload, ISecretSharePayload, IShareS3Credentials, IShareEncryptionKey, IShareGeocodingKey } from "./lan-share-types";
 
 //

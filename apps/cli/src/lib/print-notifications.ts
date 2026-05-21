@@ -1,6 +1,6 @@
 import pc from "picocolors";
 import { log } from "utils";
-import { type INewsItem } from "api";
+import { type INewsItem } from "node-api";
 import { checkForUpdates, markUpdateAsShown } from "./check-for-updates";
 import { checkForNews } from "./check-for-news";
 

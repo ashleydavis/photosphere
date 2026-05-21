@@ -1,5 +1,5 @@
 import { loadEncryptionKeysFromPem } from "storage";
-import { computeHash } from "api";
+import { computeHash } from "node-api";
 import { exit } from "node-utils";
 import pc from "picocolors";
 import { log } from "utils";

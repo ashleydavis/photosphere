@@ -2,7 +2,7 @@ const mockFetchNews = jest.fn();
 const mockGetShownNewsIds = jest.fn();
 const mockAddShownNewsIds = jest.fn();
 
-jest.mock('api', () => ({
+jest.mock('node-api', () => ({
     fetchNews: mockFetchNews,
     getShownNewsIds: mockGetShownNewsIds,
     addShownNewsIds: mockAddShownNewsIds,

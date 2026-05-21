@@ -6,7 +6,8 @@ flowchart LR
     edefs["electron-defs<br/>Electron IPC type definitions"]
     nodeutils["node-utils<br/>Node-only utilities"]
     lanshare["lan-share<br/>LAN credential sharing"]
-    api["api<br/>Photosphere API"]
+    api["api<br/>Platform-agnostic API types"]
+    nodeapi["node-api<br/>Node.js API implementations"]
     restapi["rest-api<br/>REST API"]
     ui["user-interface<br/>Frontend UI"]
     cli["cli<br/>CLI"]
@@ -14,12 +15,13 @@ flowchart LR
     desktopfe["desktop-frontend<br/>Electron renderer"]
 
     nodeutils --> utils
-    lanshare --> api
     api --> nodeutils & utils
-    edefs --> api
-    restapi --> api & utils
-    ui --> api & lanshare & utils
-    cli --> api & lanshare & nodeutils & utils
-    desktop --> api & edefs & lanshare & nodeutils & restapi & utils
+    nodeapi --> api & nodeutils & utils
+    lanshare --> api & nodeapi
+    edefs --> api & nodeapi
+    restapi --> api & nodeapi & utils
+    ui --> api & nodeapi & lanshare & utils
+    cli --> api & nodeapi & lanshare & nodeutils & utils
+    desktop --> api & nodeapi & edefs & lanshare & nodeutils & restapi & utils
     desktopfe --> ui & edefs
 ```

@@ -1,5 +1,5 @@
 import { getVault, getDefaultVaultType } from "vault";
-import type { IDatabaseEntry } from "api";
+import type { IDatabaseEntry } from "node-api";
 import type { ConflictResolver, IDatabaseSharePayload, ISecretSharePayload } from "./lan-share-types";
 
 //

@@ -1,7 +1,8 @@
 import React, { ReactNode, createContext, useContext, useEffect, useRef, useState } from "react";
 import { IGalleryItem } from "../lib/gallery-item";
 import { GallerySourceContext, IItemsUpdate, IGalleryItemMap, IGallerySource } from "./gallery-source";
-import { IAsset, IDatabaseOp, IMoveAssetsData } from "api";
+import { IAsset, IDatabaseOp } from "api";
+import type { IMoveAssetsData } from "node-api";
 import { RandomUuidGenerator, log } from "utils";
 import { IObservable, Observable } from "../lib/subscription";
 import { loadAssets as loadAssetsApi } from "api/src/lib/load-assets";
