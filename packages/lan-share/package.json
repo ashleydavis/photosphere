@@ -29,7 +29,6 @@
   "dependencies": {
     "api": "workspace:*",
     "vault": "workspace:*",
-    "node-utils": "workspace:*",
     "storage": "workspace:*"
   }
 }

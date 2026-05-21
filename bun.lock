@@ -291,7 +291,6 @@
       "version": "1.0.0",
       "dependencies": {
         "api": "workspace:*",
-        "node-utils": "workspace:*",
         "storage": "workspace:*",
         "vault": "workspace:*",
       },
