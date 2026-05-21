@@ -100,7 +100,7 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
     //
     // Show a completion toast when an import finishes, with a "View Import" action button.
     //
-    useEffect(() => {
+    useEffect(() => { //todo: This seems bad. Feel like there must be a better way to route notifications to the frontend.
         if (importStatus === 'completed') {
             const successCount = importItems.filter(item => item.status === 'success').length;
             log.event(`${successCount} assets imported`);
@@ -170,6 +170,9 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
 
         return unsubscribe;
     }, [platform, setMode]);
+
+
+    //TODO: It's bad to have a useEffect for every menu item.
 
     //
     // Listen for open-configuration menu action from the main process.
