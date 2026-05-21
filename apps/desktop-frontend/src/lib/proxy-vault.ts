@@ -1,4 +1,5 @@
-import type { IElectronAPI, IVaultSecret } from 'electron-defs';
+import type { IElectronAPI } from 'electron-defs';
+import type { ISecret } from 'vault';
 
 //
 // Implements vault operations in the renderer process by forwarding each call to
@@ -11,14 +12,14 @@ export class ProxyVault {
     //
     // Retrieves a secret by name; returns undefined if it does not exist.
     //
-    async get(name: string): Promise<IVaultSecret | undefined> {
+    async get(name: string): Promise<ISecret | undefined> {
         return await this.electronAPI.vaultGet(name);
     }
 
     //
     // Creates or overwrites a secret.
     //
-    async set(secret: IVaultSecret): Promise<void> {
+    async set(secret: ISecret): Promise<void> {
         await this.electronAPI.vaultSet(secret);
     }
 
@@ -32,7 +33,7 @@ export class ProxyVault {
     //
     // Returns all secrets stored in the vault.
     //
-    async list(): Promise<IVaultSecret[]> {
+    async list(): Promise<ISecret[]> {
         return await this.electronAPI.vaultList();
     }
 }

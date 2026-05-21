@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
-import type { IElectronAPI, IImportSession, IRendererLogMessage, ISaveAssetItem, IToolsStatus, IDatabaseEntry, IVaultSecret } from 'electron-defs';
+import type { IElectronAPI, IImportSession, IRendererLogMessage, ISaveAssetItem, IToolsStatus, IDatabaseEntry } from 'electron-defs';
+import type { ISecret } from 'vault';
 
 // Expose generic task queue API
 const electronAPI: IElectronAPI = {
@@ -89,16 +90,16 @@ const electronAPI: IElectronAPI = {
     pickFolder: (): Promise<string | undefined> => {
         return ipcRenderer.invoke('pick-folder');
     },
-    vaultGet: (name: string): Promise<IVaultSecret | undefined> => {
+    vaultGet: (name: string): Promise<ISecret | undefined> => {
         return ipcRenderer.invoke('vault-get', name);
     },
-    vaultSet: (secret: IVaultSecret): Promise<void> => {
+    vaultSet: (secret: ISecret): Promise<void> => {
         return ipcRenderer.invoke('vault-set', secret);
     },
     vaultDelete: (name: string): Promise<void> => {
         return ipcRenderer.invoke('vault-delete', name);
     },
-    vaultList: (): Promise<IVaultSecret[]> => {
+    vaultList: (): Promise<ISecret[]> => {
         return ipcRenderer.invoke('vault-list');
     },
     createDatabaseAtPath: (path: string): Promise<void> => {

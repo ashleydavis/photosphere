@@ -1,16 +1,4 @@
-//
-// A secret stored in the vault, passed over IPC between renderer and main process.
-//
-export interface IVaultSecret {
-    // Unique name that identifies the secret within the vault.
-    name: string;
-
-    // Caller-defined category string for the secret (e.g. "api-key", "s3-credentials").
-    type: string;
-
-    // The secret value as a plain string; callers serialise structured values as JSON.
-    value: string;
-}
+import type { ISecret } from 'vault';
 
 //
 // S3 credentials for accessing an S3-compatible object store.
@@ -281,12 +269,12 @@ export interface IElectronAPI {
     //
     // Retrieves a vault secret by name; returns undefined if not found.
     //
-    vaultGet: (name: string) => Promise<IVaultSecret | undefined>;
+    vaultGet: (name: string) => Promise<ISecret | undefined>;
 
     //
     // Creates or overwrites a vault secret.
     //
-    vaultSet: (secret: IVaultSecret) => Promise<void>;
+    vaultSet: (secret: ISecret) => Promise<void>;
 
     //
     // Deletes a vault secret by name; does nothing if it does not exist.
@@ -296,7 +284,7 @@ export interface IElectronAPI {
     //
     // Returns all secrets stored in the vault.
     //
-    vaultList: () => Promise<IVaultSecret[]>;
+    vaultList: () => Promise<ISecret[]>;
 
     //
     // Creates a database at the given path (no file picker) and sends database-opened to renderer.
