@@ -29,7 +29,6 @@
     "commander": "^13.1.0",
     "merkle-tree": "workspace:*",
     "picocolors": "^1.1.1",
-    "serialization": "workspace:*",
     "storage": "workspace:*"
   }
 }

@@ -14,7 +14,6 @@
     "task-queue": "workspace:*",
     "user-interface": "workspace:*",
     "electron-defs": "workspace:*",
-    "vault": "workspace:*",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.4.1",
