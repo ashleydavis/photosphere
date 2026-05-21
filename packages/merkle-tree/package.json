@@ -14,7 +14,8 @@
     "cw": "bun run compile:watch",
     "compile": "tsc",
     "compile:watch": "tsc --watch --preserveWatchOutput",
-    "clean": "rm -rf build dist coverage tsconfig.tsbuildinfo"
+    "clean": "rm -rf build dist coverage tsconfig.tsbuildinfo",
+    "perf": "bun run perf-tests/run.ts"
   },
   "keywords": [],
   "author": "ashley@codecapers.com.au",

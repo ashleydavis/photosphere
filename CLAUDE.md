@@ -34,6 +34,7 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 - `bun run test:cli -- <number|name>` - Run a single CLI smoke test by number or name
 - `bun run test:electron` - Build and run Electron smoke tests
 - `bun run start -- <command> [db-path]` - Run CLI commands locally (from `apps/cli`)
+- `bun run perf` - Run performance benchmarks for all packages
 
 ## Architecture
 

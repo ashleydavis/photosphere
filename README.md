@@ -135,6 +135,12 @@ bun run test:cli
 bun run tc
 ```
 
+**Run performance benchmarks**
+
+```bash
+bun run perf
+```
+
 **Run a single CLI smoke test by number or name**
 
 ```bash

@@ -29,6 +29,12 @@ Run a single unit test by name or pattern:
 bun run test -- <test-name-or-pattern>
 ```
 
+Run performance benchmarks:
+
+```bash
+bun run perf
+```
+
 ## Structure
 
 - [e2e/](e2e/) - End-to-end manual test scripts covering full user workflows
