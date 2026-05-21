@@ -240,6 +240,7 @@ export function Navbar({
                     )}
 
                     <IconButton
+                        data-id="right-sidebar-button"
                         sx={{ mr: 1 }}
                         variant="soft"
                         color="neutral"

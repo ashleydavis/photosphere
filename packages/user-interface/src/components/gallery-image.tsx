@@ -188,6 +188,7 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
             {/* Selection tick mark. */}
 
             <div
+                data-id="gallery-item-checkbox"
                 className="selection-tick"
                 style={{
                     position: "absolute",

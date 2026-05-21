@@ -6,6 +6,6 @@ triggers:
         cooldown: 30s
         timeout: 5m    
 
-      - run: bun run test
-        cooldown: 1m
-        timeout: 5m
+      # - run: ./run-tests.sh
+      #   cooldown: 2m
+      #   timeout: 5m

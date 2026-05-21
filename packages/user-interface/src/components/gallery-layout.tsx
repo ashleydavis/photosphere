@@ -6,6 +6,7 @@ import { useGalleryLayout } from "../context/gallery-layout-context";
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { GalleryPreview } from "./gallery-preview";
 import { Theme, useTheme } from "@mui/joy";
+import { log } from "utils";
 
 export type ItemClickFn = ((item: IGalleryItem) => void);
 
@@ -298,6 +299,12 @@ export function GalleryLayout({ onItemClick }: IGalleryLayoutProps) {
     // Rows that are currently visible in the viewport.
     //
     const virtualRows = rowVirtualizer.getVirtualItems();
+
+    useEffect(() => {
+        if (virtualRows.length > 0) {
+            log.event(`Gallery items rendered`);
+        }
+    }, [virtualRows.length]);
 
     //
     // Find the previous heading row.

@@ -1,7 +1,7 @@
 import React, { ReactNode, createContext, useContext, useEffect, useRef, useState } from "react";
 import { IGalleryItem } from "../lib/gallery-item";
 import { GallerySourceContext, IItemsUpdate, IGalleryItemMap, IGallerySource } from "./gallery-source";
-import { IAsset, IDatabaseOp } from "api";
+import { IAsset, IDatabaseOp, IMoveAssetsData } from "api";
 import { RandomUuidGenerator, log } from "utils";
 import { IObservable, Observable } from "../lib/subscription";
 import { loadAssets as loadAssetsApi } from "api/src/lib/load-assets";
@@ -161,27 +161,6 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
     // Subscribes to gallery item deletions.
     //
     const onItemsDeleted = useRef<IObservable<IItemsUpdate>>(new Observable<IItemsUpdate>());
-
-    //
-    // Adds an asset to a particular database.
-    //
-    async function addAssetToDatabase(asset: IGalleryItem, databasePath: string): Promise<void> {
-        const ops: IDatabaseOp[] = [
-            {
-                collectionName: "metadata",
-                recordId: asset._id,
-                databaseId: databasePath,
-                op: {
-                    type: "set",
-                    fields: {
-                        ...asset,
-                    },
-                },
-            }
-        ];
-
-        await persistDatabaseOps(ops);
-    }
 
     //
     // Updates an existing asset.
@@ -381,38 +360,25 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
     }
    
     //
-    // Moves assets to another database.
+    // Moves assets to another database using a background task that operates
+    // directly on storage -- no REST API involved. Hard-deletes from the source.
     //
     async function moveToDatabase(assetIds: string[], destDatabasePath: string): Promise<void> {
-
         try {
             setIsWorking(true);
 
-            //
-            // Saves asset data to other database.
-            //
-            for (const assetId of assetIds) {
-                const asset = loadedAssets.current[assetId];        
-                const uuidGenerator = new RandomUuidGenerator();
-                const newAssetId = uuidGenerator.generate();                
-                const assetTypes = ["thumb", "display", "asset"];    
-                for (const assetType of assetTypes) {
-                    const assetData = await loadAsset(assetId, assetType);
-                    if (assetData) {
-                        await storeAssetToDatabase(newAssetId, assetType, assetData, destDatabasePath);
-                    }
-                }
-    
-                //
-                // Adds new asset to the database.
-                //
-                await addAssetToDatabase({ ...asset, _id: newAssetId }, destDatabasePath);
+            const queue = new TaskQueue(new RandomUuidGenerator(), databasePath!);
+            const taskId = queue.addTask("move-assets", { sourceDatabasePath: databasePath!, destDatabasePath, assetIds } satisfies IMoveAssetsData);
+            const result = await queue.awaitTask(taskId);
+            queue.shutdown();
+
+            if (!result || result.status !== TaskStatus.Succeeded) {
+                throw new Error(`Move-assets task did not succeed: ${result?.errorMessage ?? "unknown error"}`);
             }
-    
-            //
-            // Deletes the old assets.
-            //
-            await deleteAssets(assetIds);
+
+            onItemsDeleted.current.invoke({ assetIds });
+
+            log.event(`Move to database completed: ${assetIds.length} asset${assetIds.length === 1 ? '' : 's'} moved`);
         }
         finally {
             setIsWorking(false);
@@ -421,20 +387,13 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
 
 
     //
-    // Loads data for an asset from the current database.
+    // Loads data for an asset from the current database via the local REST API.
     //
     async function loadAsset(assetId: string, assetType: string): Promise<Blob | undefined> {
         if (!databasePath) {
             throw new Error("No database path provided.");
         }
 
-        return await loadAssetFromDatabase(assetId, assetType, databasePath);
-    }
-
-    //
-    // Loads data for an asset from a particular database.
-    //
-    async function loadAssetFromDatabase(assetId: string, assetType: string, databasePath: string): Promise<Blob> {
         const response = await axios.get(
             `${restApiUrl}/asset?id=${encodeURIComponent(assetId)}&type=${encodeURIComponent(assetType)}&db=${encodeURIComponent(databasePath)}`,
             {
@@ -442,19 +401,6 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
             }
         );
         return response.data;
-    }
-
-    //
-    // Stores binary asset data (thumb / display / original) into a database via the local REST API.
-    // Used by moveToDatabase and by storeAsset for the current database.
-    //
-    async function storeAssetToDatabase(assetId: string, assetType: string, assetData: Blob, databasePath: string): Promise<void> {
-        const params = new URLSearchParams({
-            id: assetId,
-            type: assetType,
-            db: databasePath,
-        });
-        await axios.post(`${restApiUrl}/asset?${params.toString()}`, assetData);
     }
 
     //

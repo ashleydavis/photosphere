@@ -484,6 +484,46 @@ export async function writeAssetStream(
 }
 
 //
+// Writes an asset stream to the destination storage and then verifies the written file is
+// byte-for-byte identical to the source file before resolving. Hashes both source and dest
+// and throws if they do not match, ensuring the source is never deleted until the copy is confirmed intact.
+//
+export async function writeAssetStreamVerified(
+    sourceStorage: IStorage,
+    destStorage: IStorage,
+    destRawStorage: IStorage,
+    sessionId: string,
+    sourceAssetId: string,
+    destAssetId: string,
+    assetType: string,
+    contentType: string | undefined,
+    inputStream: NodeJS.ReadableStream,
+    contentLength: number | undefined,
+): Promise<void> {
+    await writeAssetStream(destStorage, destRawStorage, sessionId, destAssetId, assetType, contentType, inputStream, contentLength);
+
+    const sourceAssetPath = `${assetType}/${sourceAssetId}`;
+    const destAssetPath = `${assetType}/${destAssetId}`;
+
+    const sourceInfo = await retry(() => sourceStorage.info(sourceAssetPath));
+    if (!sourceInfo) {
+        throw new Error(`Verification failed: source file "${sourceAssetPath}" is no longer accessible after write.`);
+    }
+
+    const destInfo = await retry(() => destStorage.info(destAssetPath));
+    if (!destInfo) {
+        throw new Error(`Verification failed: destination file "${destAssetPath}" not found after write.`);
+    }
+
+    const sourceHash = await retry(async () => computeAssetHash(await sourceStorage.readStream(sourceAssetPath), sourceInfo));
+    const destHash = await retry(async () => computeAssetHash(await destStorage.readStream(destAssetPath), destInfo));
+
+    if (!sourceHash.hash.equals(destHash.hash)) {
+        throw new Error(`Verification failed: hash mismatch for "${assetType}" of asset "${sourceAssetId}" -- destination copy is corrupt.`);
+    }
+}
+
+//
 // Removes an asset by ID, including all associated files and metadata.
 // This is the comprehensive removal method that handles storage cleanup.
 //

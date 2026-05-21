@@ -39,3 +39,4 @@ export * from "./lib/op";
 export * from "./lib/database-op";
 export * from "./lib/database-op-record";
 export * from "./lib/get-database-summary.worker";
+export * from "./lib/move-assets.worker";

@@ -12,6 +12,7 @@ import { createDatabaseHandler } from "./create-database.worker";
 import { importAssetsHandler } from "./import-assets.worker";
 import { hashFileHandler } from "./hash-file.worker";
 import { getDatabaseSummaryHandler } from "./get-database-summary.worker";
+import { moveAssetsHandler } from "./move-assets.worker";
 
 //
 // Register all task handlers
@@ -31,4 +32,5 @@ export function initTaskHandlers(): void {
     registerHandler("import-assets", importAssetsHandler);
     registerHandler("hash-file", hashFileHandler);
     registerHandler("get-database-summary", getDatabaseSummaryHandler);
+    registerHandler("move-assets", moveAssetsHandler);
 }
