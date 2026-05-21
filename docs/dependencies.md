@@ -13,7 +13,7 @@ flowchart LR
     desktop["desktop<br/>Electron main"]
     desktopfe["desktop-frontend<br/>Electron renderer"]
 
-    nodeutils --> utils & edefs
+    nodeutils --> utils
     lanshare --> nodeutils & edefs
     api --> nodeutils & utils
     restapi --> api & utils
