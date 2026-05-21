@@ -11,6 +11,9 @@ import type { IElectronAPI } from "electron-defs";
 const electronAPI = typeof window !== 'undefined'
     ? (window as unknown as { electronAPI: IElectronAPI }).electronAPI
     : undefined;
+if (!electronAPI) {
+    throw new Error('electronAPI not available. desktop-frontend requires Electron.');
+}
 
 //
 // Whether the app is running in test mode (set via ?testMode=1 query param by main process).
@@ -132,5 +135,5 @@ if (!container) {
 }
 
 const root = createRoot(container);
-root.render(<App />);
+root.render(<App electronAPI={electronAPI} />);
 

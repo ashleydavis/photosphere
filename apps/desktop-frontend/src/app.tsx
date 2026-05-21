@@ -17,12 +17,15 @@ import type { IElectronAPI } from "electron-defs";
 import { setLog } from "utils";
 import { createRendererLog } from "./lib/renderer-log";
 
-export function App() {
-    const electronAPI = typeof window !== 'undefined' ? (window as unknown as { electronAPI: IElectronAPI }).electronAPI : undefined;
-    if (!electronAPI) {
-        throw new Error('electronAPI not available. desktop-frontend requires Electron.');
-    }
+//
+// Props for the App component.
+//
+interface IAppProps {
+    // The Electron API object injected by the preload script.
+    electronAPI: IElectronAPI;
+}
 
+export function App({ electronAPI }: IAppProps) {
     // Initialize renderer logging to forward logs to main process
     const rendererLog = createRendererLog(electronAPI);
     setLog(rendererLog);
