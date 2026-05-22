@@ -1,5 +1,5 @@
 import React, { ReactNode, createContext, useContext } from "react";
-import type { IConflictResolution } from "lan-share";
+import type { IConflictResolution } from "api";
 
 //
 // Unsubscribe function type for event listeners.

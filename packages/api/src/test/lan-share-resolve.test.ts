@@ -1,5 +1,5 @@
-import { resolveDatabaseSharePayload, resolveSecretSharePayload } from "../lib/lan-share-resolve";
-import type { IDatabaseEntry } from "node-api";
+import { resolveDatabaseSharePayload, resolveSecretSharePayload } from "../lan-share/lan-share-resolve";
+import type { IShareDatabaseConfig } from "../lan-share/index";
 
 // Mock the vault module
 const mockVaultGet = jest.fn();
@@ -27,7 +27,7 @@ beforeEach(() => {
 });
 
 test("resolves database payload with all secrets", async () => {
-    const entry: IDatabaseEntry = {
+    const entry: IShareDatabaseConfig = {
         name: "my-photos",
         description: "Family photos",
         path: "/data/photos",
@@ -93,7 +93,7 @@ test("resolves database payload with all secrets", async () => {
 });
 
 test("resolves database payload with no secrets", async () => {
-    const entry: IDatabaseEntry = {
+    const entry: IShareDatabaseConfig = {
         name: "simple-db",
         description: "",
         path: "/data/simple",
@@ -109,7 +109,7 @@ test("resolves database payload with no secrets", async () => {
 });
 
 test("resolves database payload when secret ID exists but vault entry is missing", async () => {
-    const entry: IDatabaseEntry = {
+    const entry: IShareDatabaseConfig = {
         name: "orphaned-db",
         description: "",
         path: "/data/orphaned",
@@ -146,7 +146,7 @@ test("resolves secret share payload throws when secret not found", async () => {
 });
 
 test("derives publicKeyPem from raw-PEM encryption-key value", async () => {
-    const entry: IDatabaseEntry = {
+    const entry: IShareDatabaseConfig = {
         name: "enc-only-db",
         description: "",
         path: "/data/enc",

@@ -13,10 +13,9 @@ flowchart LR
     desktopfe["desktop-frontend<br/>Electron renderer"]
 
     nodeapi --> api
-    lanshare --> api & nodeapi
     edefs --> api & nodeapi
     restapi --> api & nodeapi
-    ui --> api & nodeapi & lanshare
+    ui --> api & nodeapi
     cli --> api & nodeapi & lanshare
     desktop --> api & nodeapi & edefs & lanshare & restapi
     desktopfe --> ui & edefs

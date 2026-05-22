@@ -1,14 +1,13 @@
 import { createPrivateKey, createPublicKey } from "node:crypto";
 import { exportPublicKeyToPem } from "storage";
 import { getVault, getDefaultVaultType } from "vault";
-import type { IDatabaseEntry } from "node-api";
-import type { IDatabaseSharePayload, ISecretSharePayload, IShareS3Credentials, IShareEncryptionKey, IShareGeocodingKey } from "./lan-share-types";
+import type { IShareDatabaseConfig, IDatabaseSharePayload, ISecretSharePayload, IShareS3Credentials, IShareEncryptionKey, IShareGeocodingKey } from "./index";
 
 //
 // Builds a database share payload by reading the vault to resolve all
-// secret references on the given database entry into full credential objects.
+// secret references on the given database config into full credential objects.
 //
-export async function resolveDatabaseSharePayload(entry: IDatabaseEntry): Promise<IDatabaseSharePayload> {
+export async function resolveDatabaseSharePayload(entry: IShareDatabaseConfig): Promise<IDatabaseSharePayload> {
     const vault = getVault(getDefaultVaultType());
 
     let s3Credentials: IShareS3Credentials | undefined;

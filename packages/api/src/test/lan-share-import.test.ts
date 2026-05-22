@@ -1,5 +1,5 @@
-import { importDatabasePayload, importSecretPayload } from "../lib/lan-share-import";
-import type { ConflictResolver, IDatabaseSharePayload, ISecretSharePayload } from "../lib/lan-share-types";
+import { importDatabasePayload, importSecretPayload } from "../lan-share/lan-share-import";
+import type { ConflictResolver, IDatabaseSharePayload, ISecretSharePayload } from "../lan-share/index";
 
 // Mock the vault module
 const mockVaultSet = jest.fn();

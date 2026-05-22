@@ -1,6 +1,5 @@
 import { getVault, getDefaultVaultType } from "vault";
-import type { IDatabaseEntry } from "node-api";
-import type { ConflictResolver, IDatabaseSharePayload, ISecretSharePayload } from "./lan-share-types";
+import type { IShareDatabaseConfig, ConflictResolver, IDatabaseSharePayload, ISecretSharePayload } from "./index";
 
 //
 // Checks whether the given name is already in the vault and, if so, calls
@@ -33,12 +32,12 @@ async function resolveConflict(
 
 //
 // Imports a database share payload by creating vault entries for each
-// included secret and returning a database entry ready to be saved.
+// included secret and returning a database config ready to be saved.
 // The caller is responsible for calling addDatabaseEntry with the result.
 // onConflict is called whenever an incoming secret name already exists in
 // the vault, allowing the caller to choose how to resolve it.
 //
-export async function importDatabasePayload(payload: IDatabaseSharePayload, onConflict: ConflictResolver): Promise<IDatabaseEntry> {
+export async function importDatabasePayload(payload: IDatabaseSharePayload, onConflict: ConflictResolver): Promise<IShareDatabaseConfig> {
     const vault = getVault(getDefaultVaultType());
 
     let s3Key: string | undefined;

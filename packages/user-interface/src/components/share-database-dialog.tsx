@@ -15,7 +15,7 @@ import CircularProgress from '@mui/joy/CircularProgress';
 import Checkbox from '@mui/joy/Checkbox';
 import Box from '@mui/joy/Box';
 import { usePlatform, type IDatabaseEntry } from '../context/platform-context';
-import type { IDatabaseSharePayload, IShareS3Credentials, IShareEncryptionKey, IShareGeocodingKey } from 'lan-share';
+import type { IDatabaseSharePayload, IShareS3Credentials, IShareEncryptionKey, IShareGeocodingKey } from 'api';
 
 export interface IShareDatabaseDialogProps {
     // Whether the dialog is visible.

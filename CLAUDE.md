@@ -25,7 +25,8 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 
 ### Root (run from repo root):
 - `bun run compile` - Compile all TypeScript
-- `bun run test` - Run all tests
+- `bun run test:all` - Run ALL tests (unit tests + all smoke tests). Use this when asked to run "all tests".
+- `bun run test` - Run unit tests only
 - `bun run test -- <test-name-or-pattern>` - Run a single test by name or pattern.
 - `bun run clean` - Clean all build artifacts
 - `bun run dev` - Start Electron desktop app in dev mode

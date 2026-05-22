@@ -21,8 +21,10 @@ import type { IImportSession, IRendererLogMessage, ISaveAssetItem, IDatabaseSecr
 import { verifyTools } from 'tools';
 import { createStorage, CloudStorage, exportPublicKeyToPem } from 'storage';
 import { getVault, getDefaultVaultType } from 'vault';
-import { LanShareSender, LanShareReceiver, importDatabasePayload, importSecretPayload } from 'lan-share';
-import type { IDatabaseSharePayload, ISecretSharePayload, IReceiverEndpoint, IConflictResolution } from 'lan-share';
+import { LanShareSender, LanShareReceiver } from 'lan-share';
+import type { IReceiverEndpoint } from 'lan-share';
+import { importDatabasePayload, importSecretPayload } from 'api';
+import type { IDatabaseSharePayload, ISecretSharePayload, IConflictResolution } from 'api';
 import { TestControlServer } from './lib/test-control-server';
 import type { ITestControlServer } from './lib/test-control-server';
 

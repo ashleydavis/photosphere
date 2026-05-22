@@ -11,3 +11,6 @@ export * from "./lib/database-op";
 export * from "./lib/database-op-record";
 export * from "./lib/replicate-database.types";
 export * from "./lib/sync-database.types";
+export * from "./lan-share/index";
+export * from "./lan-share/lan-share-resolve";
+export * from "./lan-share/lan-share-import";

@@ -16,7 +16,7 @@ import Checkbox from '@mui/joy/Checkbox';
 import Box from '@mui/joy/Box';
 import Select from '@mui/joy/Select';
 import Option from '@mui/joy/Option';
-import type { IConflictResolution } from 'lan-share';
+import type { IConflictResolution } from 'api';
 import { usePlatform } from '../context/platform-context';
 
 export interface IReceiveDatabaseDialogProps {
