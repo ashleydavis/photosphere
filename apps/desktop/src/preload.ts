@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
-import type { IElectronAPI } from 'electron-defs';
+import type { IElectronAPI } from 'desktop-frontend/src/lib/electron-ipc';
 
 const electronAPI: IElectronAPI = {
     invoke: (channel: string, data?: any): Promise<any> => {

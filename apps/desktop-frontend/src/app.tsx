@@ -13,7 +13,7 @@ import {
 import { ElectronRendererQueueBackend } from "./lib/electron-renderer-queue-backend";
 import { setQueueBackend } from "task-queue";
 import { PlatformProviderElectron } from "./lib/platform-provider-electron";
-import type { IElectronAPI } from "electron-defs";
+import type { IElectronAPI } from "./lib/electron-ipc";
 import { setLog } from "utils";
 import { createRendererLog } from "./lib/renderer-log";
 

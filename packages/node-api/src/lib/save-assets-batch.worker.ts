@@ -4,6 +4,7 @@ import { pipeline } from "stream/promises";
 import type { IStorage } from "storage";
 import { createLazyDatabaseStorage, streamAsset } from "./media-file-database";
 import type { ITaskContext } from "task-queue";
+import type { ISaveAssetItem } from "api";
 
 //
 // Cache of lazy database storage instances keyed by database path.
@@ -25,33 +26,13 @@ async function getAssetStorage(databasePath: string): Promise<IStorage> {
 }
 
 //
-// Describes a single asset to be saved as part of a batch download.
-//
-export interface ISaveAssetsBatchItem {
-    //
-    // The ID of the asset to save.
-    //
-    assetId: string;
-
-    //
-    // The asset type to fetch (e.g. "asset", "display", "thumb").
-    //
-    assetType: string;
-
-    //
-    // The filename to save as inside the chosen folder.
-    //
-    filename: string;
-}
-
-//
 // Data payload for the save-assets-batch task.
 //
 export interface ISaveAssetsBatchData {
     //
     // The assets to download.
     //
-    assets: ISaveAssetsBatchItem[];
+    assets: ISaveAssetItem[];
 
     //
     // The destination folder chosen by the user.

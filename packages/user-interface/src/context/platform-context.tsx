@@ -35,20 +35,6 @@ export interface IEncryptionKeyPair {
 }
 
 //
-// All secrets associated with a database entry (all fields optional).
-//
-export interface IDatabaseSecrets {
-    // S3 credentials for this database.
-    s3Credentials?: IS3Credentials;
-
-    // RSA key pair used to encrypt/decrypt assets.
-    encryptionKeyPair?: IEncryptionKeyPair;
-
-    // Google geocoding API key.
-    geocodingApiKey?: string;
-}
-
-//
 // A shared secret entry stored in the vault.
 //
 export interface ISharedSecretEntry {

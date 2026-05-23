@@ -11,13 +11,14 @@ import { WorkerPoolElectronMain } from './lib/worker-pool-electron-main';
 import { RandomUuidGenerator, TimestampProvider, logExceptions, log } from 'utils';
 import { findAvailablePort } from 'node-utils';
 import { loadDatabaseConfig } from 'api';
-import type { IDatabaseDescriptor, IReplicateDatabaseData } from 'api';
+import type { IDatabaseDescriptor, IReplicateDatabaseData, ISaveAssetItem } from 'api';
 import { loadDesktopConfig, saveDesktopConfig, updateLastFolder, getTheme, setTheme, updateLastDownloadFolder, getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry, getRecentDatabases, markDatabaseOpened, removeRecentDatabaseName, findDatabase, fetchNews, getShownNewsIds, addShownNewsIds, getLastShownUpdateVersion, setLastShownUpdateVersion, checkConnectivity } from 'node-api';
 import type { IDatabaseEntry, IDesktopConfig } from 'node-api';
 import type { IWorkerPoolOptions } from './lib/worker-pool-electron-main';
 import type { IRestApiWorkerStopMessage, IRestApiWorkerStartMessage } from './rest-api-worker';
 import { FileLoggerElectron } from './lib/file-logger-electron';
-import type { IImportSession, IRendererLogMessage, ISaveAssetItem, IDatabaseSecrets } from 'electron-defs';
+import type { IRendererLogMessage } from 'desktop-frontend/src/lib/electron-ipc';
+import type { IImportSession } from 'user-interface';
 import { verifyTools } from 'tools';
 import { createStorage, CloudStorage, exportPublicKeyToPem } from 'storage';
 import { getVault, getDefaultVaultType } from 'vault';
@@ -541,48 +542,6 @@ interface IUpdateDatabaseRequest {
 ipcMain.handle('update-database', logExceptions(async (_event, { originalName, entry }: IUpdateDatabaseRequest) => {
     await updateDatabaseEntry(originalName, entry);
 }, 'Error updating database'));
-
-// IPC handler for reading vault secrets for a database (resolved via shared secret reference IDs)
-ipcMain.handle('get-database-secrets', logExceptions(async (_event, databasePath: string) => {
-    const vault = getVault(getDefaultVaultType());
-    const databases = await getDatabases();
-    const dbEntry = databases.find(entry => entry.path === databasePath);
-    const secrets: IDatabaseSecrets = {};
-
-    if (dbEntry) {
-        if (dbEntry.s3Key) {
-            const s3Secret = await vault.get(dbEntry.s3Key);
-            if (s3Secret) {
-                const parsed = JSON.parse(s3Secret.value);
-                secrets.s3Credentials = {
-                    region: parsed.region,
-                    accessKeyId: parsed.accessKeyId,
-                    secretAccessKey: parsed.secretAccessKey,
-                    endpoint: parsed.endpoint,
-                };
-            }
-        }
-        if (dbEntry.encryptionKey) {
-            const encryptionSecret = await vault.get(dbEntry.encryptionKey);
-            if (encryptionSecret) {
-                const privateKeyPem = encryptionSecret.value;
-                const publicKeyPem = exportPublicKeyToPem(createPublicKey(createPrivateKey(privateKeyPem)));
-                secrets.encryptionKeyPair = {
-                    privateKeyPem,
-                    publicKeyPem,
-                };
-            }
-        }
-        if (dbEntry.geocodingKey) {
-            const geocodingSecret = await vault.get(dbEntry.geocodingKey);
-            if (geocodingSecret) {
-                secrets.geocodingApiKey = geocodingSecret.value;
-            }
-        }
-    }
-
-    return secrets;
-}, 'Error getting database secrets'));
 
 // IPC handler for opening a directory picker and returning the chosen path
 ipcMain.handle('pick-folder', logExceptions(async () => {

@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { App } from './app';
 import '@fortawesome/fontawesome-free/css/all.css';
 import './tailwind.css';
-import type { IElectronAPI } from "electron-defs";
+import type { IElectronAPI } from "./lib/electron-ipc";
 
 //
 // Get the Electron API for forwarding errors to main process

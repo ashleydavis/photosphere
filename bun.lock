@@ -67,7 +67,7 @@
         "@types/express": "^5.0.6",
         "api": "workspace:*",
         "config": "workspace:*",
-        "electron-defs": "workspace:*",
+        "desktop-frontend": "workspace:*",
         "express": "^5.2.1",
         "lan-share": "workspace:*",
         "node-api": "workspace:*",
@@ -77,6 +77,7 @@
         "storage": "workspace:*",
         "task-queue": "workspace:*",
         "tools": "workspace:*",
+        "user-interface": "workspace:*",
         "utils": "workspace:*",
         "vault": "workspace:*",
       },
@@ -92,7 +93,6 @@
       "name": "desktop-frontend",
       "version": "1.0.0",
       "dependencies": {
-        "electron-defs": "workspace:*",
         "react": "^18.2.0",
         "react-dom": "^18.2.0",
         "react-router-dom": "^6.4.1",
@@ -249,19 +249,6 @@
         "typescript": "^5.6.3",
       },
     },
-    "packages/electron-defs": {
-      "name": "electron-defs",
-      "version": "1.0.0",
-      "dependencies": {
-        "api": "workspace:*",
-        "node-api": "workspace:*",
-        "vault": "workspace:*",
-      },
-      "devDependencies": {
-        "@types/node": "^22.9.1",
-        "typescript": "^5.6.3",
-      },
-    },
     "packages/encryption": {
       "name": "encryption",
       "version": "1.0.0",
@@ -292,8 +279,6 @@
       "name": "lan-share",
       "version": "1.0.0",
       "dependencies": {
-        "api": "workspace:*",
-        "node-api": "workspace:*",
         "storage": "workspace:*",
         "vault": "workspace:*",
       },
@@ -487,7 +472,6 @@
         "config": "workspace:*",
         "dayjs": "^1.11.7",
         "jszip": "^3.10.1",
-        "lan-share": "workspace:*",
         "leaflet": "^1.9.4",
         "lodash": "^4.17.21",
         "mime-types": "^2.1.35",
@@ -1604,8 +1588,6 @@
     "electron-builder": ["electron-builder@26.4.0", "", { "dependencies": { "app-builder-lib": "26.4.0", "builder-util": "26.3.4", "builder-util-runtime": "9.5.1", "chalk": "^4.1.2", "ci-info": "^4.2.0", "dmg-builder": "26.4.0", "fs-extra": "^10.1.0", "lazy-val": "^1.0.5", "simple-update-notifier": "2.0.0", "yargs": "^17.6.2" }, "bin": { "electron-builder": "cli.js", "install-app-deps": "install-app-deps.js" } }, "sha512-FCUqvdq2AULL+Db2SUGgjOYTbrgkPxZtCjqIZGnjH9p29pTWyesQqBIfvQBKa6ewqde87aWl49n/WyI/NyUBog=="],
 
     "electron-builder-squirrel-windows": ["electron-builder-squirrel-windows@24.13.3", "", { "dependencies": { "app-builder-lib": "24.13.3", "archiver": "^5.3.1", "builder-util": "24.13.1", "fs-extra": "^10.1.0" } }, "sha512-oHkV0iogWfyK+ah9ZIvMDpei1m9ZRpdXcvde1wTpra2U8AFDNNpqJdnin5z+PM1GbQ5BoaKCWas2HSjtR0HwMg=="],
-
-    "electron-defs": ["electron-defs@workspace:packages/electron-defs"],
 
     "electron-publish": ["electron-publish@26.3.4", "", { "dependencies": { "@types/fs-extra": "^9.0.11", "builder-util": "26.3.4", "builder-util-runtime": "9.5.1", "chalk": "^4.1.2", "form-data": "^4.0.0", "fs-extra": "^10.1.0", "lazy-val": "^1.0.5", "mime": "^2.5.2" } }, "sha512-5/ouDPb73SkKuay2EXisPG60LTFTMNHWo2WLrK5GDphnWK9UC+yzYrzVeydj078Yk4WUXi0+TaaZsNd6Zt5k/A=="],
 

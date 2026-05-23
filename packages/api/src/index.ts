@@ -3,6 +3,7 @@ export * from "./lib/write-lock";
 export * from "./lib/database-update";
 export * from "./lib/load-assets";
 export * from "./lib/load-assets.types";
+export * from "./lib/save-assets.types";
 export * from "./lib/database-config";
 export * from "./lib/database-descriptor";
 export * from "./lib/asset";

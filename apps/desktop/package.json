@@ -29,7 +29,7 @@
     "api": "workspace:*",
     "node-api": "workspace:*",
     "config": "workspace:*",
-    "electron-defs": "workspace:*",
+    "desktop-frontend": "workspace:*",
     "express": "^5.2.1",
     "lan-share": "workspace:*",
     "node-utils": "workspace:*",
@@ -38,6 +38,7 @@
     "storage": "workspace:*",
     "task-queue": "workspace:*",
     "tools": "workspace:*",
+    "user-interface": "workspace:*",
     "utils": "workspace:*",
     "vault": "workspace:*"
   },

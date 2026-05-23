@@ -52,7 +52,6 @@ To move assets from Google Photos:
         - api - Core API for database operations
         - bdb - BSON database implementation
         - defs - Type definitions
-        - electron-defs - Electron-specific type definitions
         - merkle-tree - Merkle tree data structure
         - node-utils - Node.js utility functions
         - rest-api - REST API server (used by the desktop app to serve local photos)

@@ -1,5 +1,5 @@
 import type { ITaskResult, IQueueBackend, WorkerTaskCompletionCallback, TaskMessageCallback, IMessageCallbackEntry, UnsubscribeFn } from "task-queue";
-import type { IElectronAPI } from "electron-defs";
+import type { IElectronAPI } from "./electron-ipc";
 
 //
 // Task completion response from Electron main process

@@ -1,7 +1,7 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
 import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext, type IImportSession, type IToolsStatus, type IDownloadAssetItem, type IShowNotificationData, type IUpdateAvailableData, convertToPng, type IDatabaseEntry, type ISharedSecretEntry } from "user-interface";
-import type { IElectronAPI, ISaveAssetItem } from "electron-defs";
-import type { IConflictResolution } from "api";
+import type { IElectronAPI } from "./electron-ipc";
+import type { IConflictResolution, ISaveAssetItem } from "api";
 import type { ISecret } from "vault";
 
 const isTestMode = typeof window !== 'undefined'
