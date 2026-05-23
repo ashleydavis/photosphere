@@ -386,8 +386,25 @@ if (process.env.FPS_LOGGING === '1') {
     });
 }
 
+//
+// Request payload for the add-task IPC channel.
+//
+interface IAddTaskRequest {
+    // The task type identifier.
+    taskType: string;
+
+    // Task-specific input data.
+    data: any;
+
+    // Source tag used for bulk cancellation.
+    source: string;
+
+    // Optional explicit task ID; a UUID is generated when absent.
+    taskId?: string;
+}
+
 // IPC handler for adding tasks
-ipcMain.on('add-task', (_event, taskType: string, data: any, source: string, taskId?: string) => {
+ipcMain.on('add-task', (_event, { taskType, data, source, taskId }: IAddTaskRequest) => {
     if (!workerPool) {
         console.error('Worker pool not initialized');
         return;
@@ -409,7 +426,7 @@ ipcMain.on('cancel-tasks', (_event, source: string) => {
 // Note: ipcMain.handle automatically catches errors from async functions and sends them to the renderer.
 // If the handler throws or returns a rejected promise, Electron serializes the error and sends it to the renderer.
 // The renderer can catch it when calling ipcRenderer.invoke().
-ipcMain.handle('open-file', logExceptions(openDatabase, 'Error opening database'));
+ipcMain.handle('open-database', logExceptions(openDatabase, 'Error opening database'));
 ipcMain.handle('create-database', logExceptions(createNewDatabase, 'Error creating database'));
 
 // IPC handler for removing a database entry by name (secrets are independent and managed via the secrets page)
@@ -509,8 +526,19 @@ ipcMain.handle('add-database', logExceptions(async (_event, entry: IDatabaseEntr
     return entry;
 }, 'Error adding database'));
 
+//
+// Request payload for the update-database IPC channel.
+//
+interface IUpdateDatabaseRequest {
+    // The entry's current name, used to locate the record before renaming.
+    originalName: string;
+
+    // The updated database entry fields.
+    entry: IDatabaseEntry;
+}
+
 // IPC handler for updating an existing database entry
-ipcMain.handle('update-database', logExceptions(async (_event, originalName: string, entry: IDatabaseEntry) => {
+ipcMain.handle('update-database', logExceptions(async (_event, { originalName, entry }: IUpdateDatabaseRequest) => {
     await updateDatabaseEntry(originalName, entry);
 }, 'Error updating database'));
 
@@ -622,8 +650,22 @@ ipcMain.handle('remove-recent-database-name', logExceptions(async (_event, name:
     log.event(`Recent database removed: ${name}`);
 }, 'Error removing recent database name'));
 
+//
+// Request payload for the list-s3-dirs IPC channel.
+//
+interface IListS3DirsRequest {
+    // Vault secret name holding the S3 credentials.
+    s3Key: string;
+
+    // S3 bucket name.
+    bucket: string;
+
+    // Key prefix to list under.
+    prefix: string;
+}
+
 // IPC handler for listing directory names under an S3 bucket and prefix
-ipcMain.handle('list-s3-dirs', logExceptions(async (_event, s3Key: string, bucket: string, prefix: string) => {
+ipcMain.handle('list-s3-dirs', logExceptions(async (_event, { s3Key, bucket, prefix }: IListS3DirsRequest) => {
     const vault = getVault(getDefaultVaultType());
     const secret = await vault.get(s3Key);
     if (!secret) {
@@ -662,8 +704,19 @@ ipcMain.handle('get-config', logExceptions(async (_event, key: string) => {
     return config[key as keyof IDesktopConfig];
 }, 'Error getting config value'));
 
+//
+// Request payload for the set-config IPC channel.
+//
+interface ISetConfigRequest {
+    // The config key to write.
+    key: string;
+
+    // The new value to store.
+    value: IDesktopConfig[keyof IDesktopConfig];
+}
+
 // IPC handler for writing a value to the desktop config file
-ipcMain.handle('set-config', logExceptions(async (_event, key: string, value: IDesktopConfig[keyof IDesktopConfig]) => {
+ipcMain.handle('set-config', logExceptions(async (_event, { key, value }: ISetConfigRequest) => {
     const config = await loadDesktopConfig();
     (config as Record<string, IDesktopConfig[keyof IDesktopConfig]>)[key] = value;
     await saveDesktopConfig(config);
@@ -673,9 +726,25 @@ ipcMain.handle('set-config', logExceptions(async (_event, key: string, value: ID
     }
 }, 'Error setting config value'));
 
-// IPC handler for saving an asset to a user-chosen file path via save dialog.
+//
+// Request payload for the save-asset IPC channel.
+//
+interface ISaveAssetRequest {
+    // The asset ID to stream.
+    assetId: string;
+
+    // The asset type (e.g. "asset").
+    assetType: string;
+
+    // The suggested filename for the save dialog.
+    filename: string;
+
+    // Path to the open database.
+    databasePath: string;
+}
+
 // IPC handler for showing a save dialog and enqueuing a background task to stream the asset to the chosen file.
-ipcMain.handle('save-asset', logExceptions(async (_event, assetId: string, assetType: string, filename: string, databasePath: string): Promise<void> => {
+ipcMain.handle('save-asset', logExceptions(async (_event, { assetId, assetType, filename, databasePath }: ISaveAssetRequest): Promise<void> => {
     const config = await loadDesktopConfig();
     const defaultPath = config.lastDownloadFolder
         ? join(config.lastDownloadFolder, filename)
@@ -698,8 +767,19 @@ ipcMain.handle('save-asset', logExceptions(async (_event, assetId: string, asset
     workerPool.addTask("save-asset", { assetId, assetType, destPath, databasePath }, databasePath);
 }, 'Error saving asset'));
 
+//
+// Request payload for the save-assets IPC channel.
+//
+interface ISaveAssetsRequest {
+    // Assets to save.
+    assets: ISaveAssetItem[];
+
+    // Path to the open database.
+    databasePath: string;
+}
+
 // IPC handler for showing a folder picker and enqueuing background tasks to save multiple assets.
-ipcMain.handle('save-assets', logExceptions(async (_event, assets: ISaveAssetItem[], databasePath: string): Promise<void> => {
+ipcMain.handle('save-assets', logExceptions(async (_event, { assets, databasePath }: ISaveAssetsRequest): Promise<void> => {
     const config = await loadDesktopConfig();
 
     const result = await dialog.showOpenDialog(mainWindow!, {
@@ -761,9 +841,20 @@ ipcMain.handle('cancel-share-receive', logExceptions(async () => {
     }
 }, 'Error cancelling share receiver'));
 
+//
+// Request payload for the wait-for-receiver IPC channel.
+//
+interface IWaitForReceiverRequest {
+    // The share payload to transmit once a receiver is found.
+    payload: IDatabaseSharePayload | ISecretSharePayload;
+
+    // The 4-digit pairing code entered by the receiver.
+    code: string;
+}
+
 // IPC handler for creating a sender and waiting for a receiver on the LAN.
 // Returns the receiver endpoint, or null on timeout or cancellation.
-ipcMain.handle('wait-for-receiver', logExceptions(async (_event, payload: IDatabaseSharePayload | ISecretSharePayload, code: string) => {
+ipcMain.handle('wait-for-receiver', logExceptions(async (_event, { payload, code }: IWaitForReceiverRequest) => {
     activeSender = new LanShareSender(payload, code);
     return await activeSender.waitForReceiver(60000);
 }, 'Error waiting for receiver'));
@@ -794,8 +885,19 @@ interface ISecretShareImportPayload extends ISecretSharePayload {
     saveName: string;
 }
 
+//
+// Request payload for the import-share-payload IPC channel.
+//
+interface IImportSharePayloadRequest {
+    // The share payload to import (database or secret).
+    payload: IDatabaseSharePayload | ISecretShareImportPayload;
+
+    // Per-secret conflict resolution decisions keyed by secret name.
+    conflictResolutions: Record<string, IConflictResolution>;
+}
+
 // IPC handler for importing a share payload (database or secret)
-ipcMain.handle('import-share-payload', logExceptions(async (_event, payload: IDatabaseSharePayload | ISecretShareImportPayload, conflictResolutions: Record<string, IConflictResolution>) => {
+ipcMain.handle('import-share-payload', logExceptions(async (_event, { payload, conflictResolutions }: IImportSharePayloadRequest) => {
     if (payload.type === 'database') {
         const resolver = async (secretName: string) => conflictResolutions[secretName] ?? { action: 'replace' as const };
         const dbEntry = await importDatabasePayload(payload, resolver);

@@ -8,14 +8,16 @@ import { TaskStatus } from 'task-queue';
 function makeElectronAPI() {
     const listeners: Map<string, ((data: any) => void)[]> = new Map();
     return {
-        addTask: jest.fn(),
-        cancelTasks: jest.fn(),
+        invoke: jest.fn(),
+        send: jest.fn(),
         onMessage: jest.fn().mockImplementation((type: string, cb: (data: any) => void) => {
             const existing = listeners.get(type) ?? [];
             existing.push(cb);
             listeners.set(type, existing);
         }),
         removeAllListeners: jest.fn(),
+        log: jest.fn(),
+        getPathForFile: jest.fn(),
         // Helper: simulate an incoming IPC message
         _emit(type: string, data: any) {
             const cbs = listeners.get(type) ?? [];
@@ -33,7 +35,7 @@ describe('ElectronRendererQueueBackend', () => {
 
         backend.addTask('my-type', { foo: 1 }, 'my-source', 'my-task-id');
 
-        expect(api.addTask).toHaveBeenCalledWith('my-type', { foo: 1 }, 'my-source', 'my-task-id');
+        expect(api.send).toHaveBeenCalledWith('add-task', { taskType: 'my-type', data: { foo: 1 }, source: 'my-source', taskId: 'my-task-id' });
     });
 
     test('incoming task-completed IPC message triggers onTaskComplete callbacks', async () => {
@@ -79,7 +81,7 @@ describe('ElectronRendererQueueBackend', () => {
 
         backend.cancelTasks('my-source');
 
-        expect(api.cancelTasks).toHaveBeenCalledWith('my-source');
+        expect(api.send).toHaveBeenCalledWith('cancel-tasks', 'my-source');
     });
 
     test('unsubscribe functions remove only their registered callback', async () => {

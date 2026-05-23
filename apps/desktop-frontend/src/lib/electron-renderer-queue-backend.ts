@@ -148,7 +148,7 @@ export class ElectronRendererQueueBackend implements IQueueBackend {
     //
     addTask(type: string, data: any, source: string, taskId?: string): string {
         const id = taskId ?? crypto.randomUUID();
-        this.electronAPI.addTask(type, data, source, id);
+        this.electronAPI.send('add-task', { taskType: type, data, source, taskId: id });
         const callbacks = this.taskAddedCallbacks.get(source);
         if (callbacks) {
             for (const cb of callbacks) {
@@ -162,7 +162,7 @@ export class ElectronRendererQueueBackend implements IQueueBackend {
     // Forwards the cancel signal to the main process via IPC and fires local cancellation callbacks.
     //
     cancelTasks(source: string): void {
-        this.electronAPI.cancelTasks(source);
+        this.electronAPI.send('cancel-tasks', source);
         const callbacks = this.tasksCancelledCallbacks.get(source);
         if (callbacks) {
             for (const cb of callbacks) {
