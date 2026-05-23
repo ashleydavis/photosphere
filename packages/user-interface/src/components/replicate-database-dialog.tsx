@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { log, RandomUuidGenerator } from 'utils';
+import { log } from 'utils';
+import { useUuidGenerator } from '../context/uuid-generator-context';
 import { replicateDatabase } from 'node-api/src/lib/replicate-database';
 import type { IReplicateDatabaseData } from 'api/src/lib/replicate-database.types';
 import Modal from '@mui/joy/Modal';
@@ -103,6 +104,7 @@ function emptyFormState(): IReplicateFormState {
 //
 export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, s3Secrets, geocodingSecrets, onSecretCreated, onClose }: IReplicateDatabaseDialogProps) {
     const platform = usePlatform();
+    const uuidGenerator = useUuidGenerator();
 
     const [step, setStep] = useState<ReplicateStep>("configure");
     const [form, setForm] = useState<IReplicateFormState>(emptyFormState());
@@ -173,7 +175,7 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
         };
 
         try {
-            await replicateDatabase(new RandomUuidGenerator(), taskData, setProgress);
+            await replicateDatabase(uuidGenerator, taskData, setProgress);
             setStep("success");
         }
         catch (err) {
@@ -181,7 +183,7 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
             setErrorMessage(err instanceof Error ? err.message : String(err));
             setStep("error");
         }
-    }, [sourceEntry, form]);
+    }, [sourceEntry, form, uuidGenerator]);
 
     return (
         <>

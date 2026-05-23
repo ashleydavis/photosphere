@@ -1,4 +1,6 @@
-import type { ITaskResult, IQueueBackend, WorkerTaskCompletionCallback, TaskMessageCallback, IMessageCallbackEntry, UnsubscribeFn } from "task-queue";
+import type { ITaskResult, IQueueBackend, WorkerTaskCompletionCallback, TaskMessageCallback, IMessageCallbackEntry, UnsubscribeFn, ITaskContext } from "task-queue";
+import { TaskStatus, getHandler, executeTaskHandler } from "task-queue";
+import { RandomUuidGenerator, TimestampProvider } from "utils";
 
 //
 // WebSocket-based queue backend.
@@ -137,16 +139,28 @@ export class WebSocketQueueBackend implements IQueueBackend {
 
     //
     // Sends a task to the server via WebSocket and fires onTaskAdded callbacks.
+    // If a handler for this task type has been registered locally (via task-queue's
+    // registerHandler), the task is executed in the renderer instead of being forwarded
+    // to the server. The web frontend currently registers no local handlers — all tasks
+    // forward to the dev-server, which runs the same node-api handlers Electron uses.
     //
     addTask(type: string, data: any, source: string, taskId?: string): string {
         const id = taskId ?? crypto.randomUUID();
-        this.ws.send(JSON.stringify({
-            type: "add-task",
-            taskId: id,
-            taskType: type,
-            data,
-            source,
-        }));
+        const localHandler = getHandler(type);
+        if (localHandler) {
+            this.executeLocalTask(id, type, data).catch((error: unknown) => {
+                console.error(`Error executing local task ${id}:`, error);
+            });
+        }
+        else {
+            this.ws.send(JSON.stringify({
+                type: "add-task",
+                taskId: id,
+                taskType: type,
+                data,
+                source,
+            }));
+        }
         const callbacks = this.taskAddedCallbacks.get(source);
         if (callbacks) {
             for (const cb of callbacks) {
@@ -154,6 +168,51 @@ export class WebSocketQueueBackend implements IQueueBackend {
             }
         }
         return id;
+    }
+
+    //
+    // Runs a task whose handler is registered in the renderer process and emits a
+    // task-completed result through the normal completion callback path. Errors thrown
+    // by the handler are reported as Failed task results, matching the server flow.
+    //
+    private async executeLocalTask(taskId: string, type: string, data: any): Promise<void> {
+        const context: ITaskContext = {
+            uuidGenerator: new RandomUuidGenerator(),
+            timestampProvider: new TimestampProvider(),
+            sessionId: "web-renderer",
+            taskId,
+            sendMessage: (message: any): void => {
+                this.notifyMessageCallbacks(taskId, message).catch((error: unknown) => {
+                    console.error("Error notifying message callbacks:", error);
+                });
+            },
+            isCancelled: (): boolean => false,
+        };
+
+        let result: ITaskResult;
+        try {
+            const outputs = await executeTaskHandler(type, data, context);
+            result = {
+                taskId,
+                status: TaskStatus.Succeeded,
+                outputs,
+                type,
+                inputs: data,
+            };
+        }
+        catch (error: any) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            result = {
+                taskId,
+                status: TaskStatus.Failed,
+                error: err,
+                errorMessage: err.message || "Unknown error",
+                type,
+                inputs: data,
+            };
+        }
+
+        this.notifyCompletionCallbacks(result);
     }
 
     //

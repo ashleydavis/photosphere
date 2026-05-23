@@ -85,15 +85,33 @@ if (isTestMode && electronAPI) {
 // can drive UI elements by their data-id attribute.
 //
 if (isTestMode && electronAPI) {
-    electronAPI.onMessage('test-click', (data: { dataId: string }) => {
-        const element = document.querySelector(`[data-id="${data.dataId}"]`) as HTMLElement | null;
+    electronAPI.onMessage('test-click', (data: { dataId: string; nth?: number }) => {
+        const elements = document.querySelectorAll(`[data-id="${data.dataId}"]`);
+        const index = data.nth ?? 0;
+        const element = elements[index] as HTMLElement | undefined;
         if (element) {
-            console.log(`test-click: clicking element data-id="${data.dataId}"`);
+            console.log(`test-click: clicking element data-id="${data.dataId}" nth=${index}`);
             element.click();
         }
         else {
-            console.warn(`test-click: element not found data-id="${data.dataId}"`);
+            console.warn(`test-click: element not found data-id="${data.dataId}" nth=${index}`);
         }
+    });
+    electronAPI.onMessage('test-long-press-click', (data: { dataId: string; nth?: number }) => {
+        const elements = document.querySelectorAll(`[data-id="${data.dataId}"]`);
+        const index = data.nth ?? 0;
+        const element = elements[index] as HTMLElement | undefined;
+        if (!element) {
+            console.warn(`test-long-press-click: element not found data-id="${data.dataId}" nth=${index}`);
+            return;
+        }
+        console.log(`test-long-press-click: clicking element data-id="${data.dataId}" nth=${index}`);
+        const rect = element.getBoundingClientRect();
+        const clientX = rect.left + rect.width / 2;
+        const clientY = rect.top + rect.height / 2;
+        // Dispatch mousedown then mouseup so useLongPress treats this as a real short click.
+        element.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0, clientX, clientY }));
+        element.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, button: 0, clientX, clientY }));
     });
     electronAPI.onMessage('test-drop', (data: { dataId: string; paths: string[] }) => {
         const element = document.querySelector(`[data-id="${data.dataId}"]`) as HTMLElement | null;

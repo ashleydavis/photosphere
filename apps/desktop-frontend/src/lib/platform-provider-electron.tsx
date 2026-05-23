@@ -1,7 +1,7 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
-import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext, type IImportSession, type IToolsStatus, type IDownloadAssetItem, type IShowNotificationData, type IUpdateAvailableData, convertToPng, type IDatabaseEntry, type ISharedSecretEntry } from "user-interface";
+import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, convertToPng, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions } from "user-interface";
 import type { IElectronAPI } from "./electron-ipc";
-import type { IConflictResolution, ISaveAssetItem } from "api";
+import type { IConflictResolution } from "api";
 import type { ISecret } from "vault";
 
 const isTestMode = typeof window !== 'undefined'
@@ -219,10 +219,6 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         await electronAPI.invoke('open-database');
     }, [electronAPI]);
 
-    const createDatabase = useCallback(async (): Promise<void> => {
-        await electronAPI.invoke('create-database');
-    }, [electronAPI]);
-
     const onDatabaseOpened = useCallback((callback: (databasePath: string) => void): (() => void) => {
         // Add callback to set
         openedCallbacksRef.current.add(callback);
@@ -318,14 +314,6 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         await electronAPI.invoke('open-path', folderPath);
     }, [electronAPI]);
 
-    const importDirectories = useCallback(async (paths?: string[]): Promise<IImportSession | undefined> => {
-        return await electronAPI.invoke('import-directories', paths);
-    }, [electronAPI]);
-
-    const importFiles = useCallback(async (paths?: string[]): Promise<IImportSession | undefined> => {
-        return await electronAPI.invoke('import-files', paths);
-    }, [electronAPI]);
-
     const getPathForFile = useCallback((file: File): string | undefined => {
         if (isTestMode) {
             const testPath = (file as IDroppedFile).__testPath;
@@ -382,12 +370,16 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         return await electronAPI.invoke('find-database', name);
     }, [electronAPI]);
 
-    const pickFolder = useCallback(async (): Promise<string | undefined> => {
-        return await electronAPI.invoke('pick-folder');
+    const pickFolder = useCallback(async (options?: IPickFolderOptions): Promise<string | undefined> => {
+        return await electronAPI.invoke('pick-folder', options);
     }, [electronAPI]);
 
-    const createDatabaseAtPath = useCallback(async (path: string): Promise<void> => {
-        await electronAPI.invoke('create-database-at-path', path);
+    const pickFile = useCallback(async (defaultFilename: string): Promise<string | undefined> => {
+        return await electronAPI.invoke('pick-file', defaultFilename);
+    }, [electronAPI]);
+
+    const pickFiles = useCallback(async (title: string): Promise<string[] | undefined> => {
+        return await electronAPI.invoke('pick-files', title);
     }, [electronAPI]);
 
     const listSecrets = useCallback(async (): Promise<ISharedSecretEntry[]> => {
@@ -474,19 +466,6 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         await electronAPI.invoke('mark-news-shown', newsId);
     }, [electronAPI]);
 
-    const downloadAsset = useCallback(async (assetId: string, assetType: string, filename: string, _contentType: string, databasePath: string): Promise<void> => {
-        await electronAPI.invoke('save-asset', { assetId, assetType, filename, databasePath });
-    }, [electronAPI]);
-
-    const downloadAssets = useCallback(async (assets: IDownloadAssetItem[], databasePath: string): Promise<void> => {
-        const saveItems: ISaveAssetItem[] = assets.map(asset => ({
-            assetId: asset.assetId,
-            assetType: asset.assetType,
-            filename: asset.filename,
-        }));
-        await electronAPI.invoke('save-assets', { assets: saveItems, databasePath });
-    }, [electronAPI]);
-
     const copyToClipboard = useCallback(async (blob: Blob, _contentType: string): Promise<void> => {
         const pngBlob = await convertToPng(blob);
         await navigator.clipboard.write([new ClipboardItem({ "image/png": pngBlob })]);
@@ -494,7 +473,6 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
 
     const platformContext: IPlatformContext = {
         openDatabase,
-        createDatabase,
         onDatabaseOpened,
         onDatabaseClosed,
         notifyDatabaseOpened,
@@ -503,16 +481,12 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         notifyDatabaseEdited,
         onSyncStarted,
         onSyncCompleted,
-        downloadAsset,
-        downloadAssets,
         copyToClipboard,
         onShowNotification,
         onUpdateAvailable,
         openFolder,
         onMenuAction,
         onNavigate,
-        importDirectories,
-        importFiles,
         getPathForFile,
         checkTools,
         checkDatabaseExists,
@@ -525,7 +499,8 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         removeDatabaseEntry,
         findDatabase,
         pickFolder,
-        createDatabaseAtPath,
+        pickFile,
+        pickFiles,
         listSecrets,
         addSecret,
         updateSecret,

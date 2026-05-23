@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { TaskQueue, TaskStatus } from "task-queue";
-import { RandomUuidGenerator } from "utils";
 import { useAssetDatabase } from "../context/asset-database-source";
+import { useUuidGenerator } from "../context/uuid-generator-context";
 import type { IDatabaseSummary } from "node-api";
 import type { IGetDatabaseSummaryData } from "node-api";
 
@@ -59,6 +59,7 @@ function SummaryRow({ label, value }: ISummaryRowProps) {
 //
 export function DatabaseSummaryPage() {
     const { databasePath } = useAssetDatabase();
+    const uuidGenerator = useUuidGenerator();
 
     //
     // The loaded summary data, or undefined while loading.
@@ -92,7 +93,9 @@ export function DatabaseSummaryPage() {
         setError(undefined);
         setIsLoading(true);
 
-        queue.current = new TaskQueue(new RandomUuidGenerator(), `database-summary-${databasePath}`);
+        //todo: Queue mgmt should go in a context probably.
+
+        queue.current = new TaskQueue(uuidGenerator, `database-summary-${databasePath}`);
 
         const taskData: IGetDatabaseSummaryData = { databasePath };
         const taskId = queue.current.addTask("get-database-summary", taskData);
@@ -114,7 +117,7 @@ export function DatabaseSummaryPage() {
             queue.current?.shutdown();
             queue.current = undefined;
         };
-    }, [databasePath]);
+    }, [databasePath, uuidGenerator]);
 
     return (
         <div className="w-full h-full p-4 overflow-y-auto pb-32">

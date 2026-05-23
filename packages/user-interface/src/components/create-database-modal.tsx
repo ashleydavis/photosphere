@@ -82,7 +82,7 @@ function emptyFormState(): ICreateDatabaseFormState {
 //
 export function CreateDatabaseModal({ open, onClose }: ICreateDatabaseModalProps) {
     const platform = usePlatform();
-    const { openDatabase } = useAssetDatabase();
+    const { createDatabaseAtPath } = useAssetDatabase();
 
     const [form, setForm] = useState<ICreateDatabaseFormState>(emptyFormState());
 
@@ -150,9 +150,8 @@ export function CreateDatabaseModal({ open, onClose }: ICreateDatabaseModalProps
             encryptionKey: form.encryptionKey,
             geocodingKey: form.geocodingKey,
         });
-        await platform.createDatabaseAtPath(form.path.trim());
+        await createDatabaseAtPath(form.path.trim());
         log.info(`Database created: ${form.path.trim()}`);
-        await openDatabase(form.path.trim());
         onClose();
     }
 

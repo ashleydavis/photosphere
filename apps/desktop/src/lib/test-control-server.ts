@@ -3,18 +3,9 @@ import type { Express } from 'express';
 import http from 'http';
 import { app, BrowserWindow, ipcMain } from 'electron';
 import { log } from 'utils';
-
-//
-// Callbacks for test control server operations that require main-process logic.
-//
-export interface ITestControlServerCallbacks {
-    // Creates a database at the given path and notifies the renderer.
-    createDatabaseAtPath(databasePath: string): Promise<void>;
-    // Notifies the renderer that a database was opened at the given path.
-    openDatabase(databasePath: string): void;
-    // Queues an import task for the given asset paths.
-    importAssets(paths: string[]): void;
-}
+import { TestUuidGenerator } from 'node-utils';
+import { TaskQueue, TaskStatus } from 'task-queue';
+import type { IQueueBackend } from 'task-queue';
 
 //
 // Interface for the HTTP test control server started in test mode.
@@ -42,18 +33,25 @@ export class TestControlServer implements ITestControlServer {
     private mainWindow: BrowserWindow;
 
     //
-    // Callbacks to main-process operations.
+    // Worker pool used to queue tasks (create-database, add-paths) on behalf of tests.
     //
-    private callbacks: ITestControlServerCallbacks;
+    private workerPool: IQueueBackend;
+
+    //
+    // Returns the path of the currently open database, or null when none. Used by the
+    // import-assets endpoint so it can target the active database without holding stale state.
+    //
+    private getCurrentDatabasePath: () => string | null;
 
     //
     // The underlying HTTP server instance.
     //
     private server: http.Server;
 
-    constructor(mainWindow: BrowserWindow, callbacks: ITestControlServerCallbacks) {
+    constructor(mainWindow: BrowserWindow, workerPool: IQueueBackend, getCurrentDatabasePath: () => string | null) {
         this.mainWindow = mainWindow;
-        this.callbacks = callbacks;
+        this.workerPool = workerPool;
+        this.getCurrentDatabasePath = getCurrentDatabasePath;
 
         const expressApp: Express = express();
         expressApp.use(express.json());
@@ -80,7 +78,12 @@ export class TestControlServer implements ITestControlServer {
         });
 
         expressApp.post('/click', (req, res) => {
-            this.mainWindow.webContents.send('test-click', { dataId: req.body.dataId });
+            this.mainWindow.webContents.send('test-click', { dataId: req.body.dataId, nth: req.body.nth });
+            res.json({ ok: true });
+        });
+
+        expressApp.post('/long-press-click', (req, res) => {
+            this.mainWindow.webContents.send('test-long-press-click', { dataId: req.body.dataId, nth: req.body.nth });
             res.json({ ok: true });
         });
 
@@ -90,12 +93,25 @@ export class TestControlServer implements ITestControlServer {
         });
 
         expressApp.post('/create-database', async (req, res) => {
-            await this.callbacks.createDatabaseAtPath(req.body.path);
+            const databasePath: string = req.body.path;
+            const queue = new TaskQueue(new TestUuidGenerator(), databasePath);
+            try {
+                const taskId = queue.addTask('create-database', { databasePath });
+                const result = await queue.awaitTask(taskId);
+                if (!result || result.status !== TaskStatus.Succeeded) {
+                    throw new Error(`create-database task failed: ${result?.errorMessage || 'unknown error'}`);
+                }
+            }
+            finally {
+                queue.shutdown();
+            }
+            log.event(`Database created: ${databasePath}`);
+            this.mainWindow.webContents.send('database-opened', databasePath);
             res.json({ ok: true });
         });
 
         expressApp.post('/open-database', (req, res) => {
-            this.callbacks.openDatabase(req.body.path);
+            this.mainWindow.webContents.send('database-opened', req.body.path);
             res.json({ ok: true });
         });
 
@@ -116,7 +132,16 @@ export class TestControlServer implements ITestControlServer {
         });
 
         expressApp.post('/import-assets', (req, res) => {
-            this.callbacks.importAssets(req.body.paths);
+            const databasePath = this.getCurrentDatabasePath();
+            if (databasePath) {
+                const sessionId = new TestUuidGenerator().generate();
+                this.workerPool.addTask('add-paths', {
+                    paths: req.body.paths,
+                    storageDescriptor: { databasePath },
+                    sessionId,
+                    dryRun: false,
+                }, sessionId);
+            }
             res.json({ ok: true });
         });
 

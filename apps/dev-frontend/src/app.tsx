@@ -9,11 +9,21 @@ import {
     DeleteConfirmationContextProvider,
     ImportContextProvider,
     ToastContextProvider,
+    UuidGeneratorProvider,
 } from "user-interface";
 import { useWebSocket } from "./lib/use-web-socket";
 import { WebSocketQueueBackend } from "./lib/websocket-queue-backend";
 import { setQueueBackend } from "task-queue";
+import { RandomUuidGenerator, TestUuidGenerator } from "utils";
 import { PlatformProviderWeb } from "./lib/platform-provider-web";
+
+//
+// In test mode a deterministic TestUuidGenerator is used so smoke tests
+// get reproducible task ids; otherwise the real RandomUuidGenerator is used.
+//
+const isTestMode = typeof window !== 'undefined'
+    && new URLSearchParams(window.location.search).get('testMode') === '1';
+const uuidGenerator = isTestMode ? new TestUuidGenerator() : new RandomUuidGenerator();
 
 
 export function App() {
@@ -37,25 +47,27 @@ export function App() {
                 v7_relativeSplatPath: true,
             }}
         >
-            <PlatformProviderWeb ws={ws}>
-                <ImportContextProvider>
+            <UuidGeneratorProvider value={uuidGenerator}>
+                <PlatformProviderWeb ws={ws}>
                     <AppContextProvider>
                         <ToastContextProvider>
                             <AssetDatabaseProvider queueBackend={queueBackend} restApiUrl="http://localhost:3001">
-                                <GalleryContextProvider>
-                                    <DeleteConfirmationContextProvider>
-                                        <SearchContextProvider>
-                                            <GalleryLayoutContextProvider>
-                                                <Main isMobile={false} initialTheme={initialTheme} />
-                                            </GalleryLayoutContextProvider>
-                                        </SearchContextProvider>
-                                    </DeleteConfirmationContextProvider>
-                                </GalleryContextProvider>
+                                <ImportContextProvider>
+                                    <GalleryContextProvider>
+                                        <DeleteConfirmationContextProvider>
+                                            <SearchContextProvider>
+                                                <GalleryLayoutContextProvider>
+                                                    <Main isMobile={false} initialTheme={initialTheme} />
+                                                </GalleryLayoutContextProvider>
+                                            </SearchContextProvider>
+                                        </DeleteConfirmationContextProvider>
+                                    </GalleryContextProvider>
+                                </ImportContextProvider>
                             </AssetDatabaseProvider>
                         </ToastContextProvider>
                     </AppContextProvider>
-                </ImportContextProvider>
-            </PlatformProviderWeb>
+                </PlatformProviderWeb>
+            </UuidGeneratorProvider>
         </HashRouter>
     );
 }

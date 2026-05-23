@@ -95,7 +95,7 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
 
     const { addToast } = useToast();
     const navigate = useNavigate();
-    const { status: importStatus, importItems } = useImport();
+    const { status: importStatus, importItems, startImportDirectories } = useImport();
 
     //
     // Show a completion toast when an import finishes, with a "View Import" action button.
@@ -206,6 +206,19 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
 
         return unsubscribe;
     }, [platform]);
+
+    //
+    // Listen for import-assets menu action from the main process. Triggers the directory picker.
+    //
+    useEffect(() => {
+        const unsubscribe = platform.onMenuAction('import-assets', () => {
+            startImportDirectories().catch(error => {
+                log.exception('Error starting import from menu', error as Error);
+            });
+        });
+
+        return unsubscribe;
+    }, [platform, startImportDirectories]);
 
     //
     // Listen for navigate events from the main process.

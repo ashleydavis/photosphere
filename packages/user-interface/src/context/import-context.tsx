@@ -1,6 +1,88 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { TaskQueue } from "task-queue";
+import type { IUuidGenerator } from "utils";
 import { usePlatform } from "./platform-context";
-import type { IImportSession } from "./platform-context";
+import type { IImportSession, IPlatformContext } from "./platform-context";
+import { useAssetDatabase } from "./asset-database-source";
+import { useUuidGenerator } from "./uuid-generator-context";
+
+//
+// Dependencies required by the standalone import-orchestration helpers below.
+// Decoupled from React context so the helpers can be exercised by unit tests
+// with a mocked platform and queue backend.
+//
+export interface IImportOrchestrationDeps {
+    // Platform context, used for the open-folder and open-files pickers.
+    platform: Pick<IPlatformContext, "pickFolder" | "pickFiles">;
+
+    // Path of the currently open database; when undefined all helpers return undefined.
+    databasePath: string | undefined;
+
+    // Uuid generator used to mint session ids and task ids.
+    uuidGenerator: IUuidGenerator;
+}
+
+//
+// Queues an import-assets task for the given paths and returns the resulting session info.
+// Returns undefined if no database is open.
+//
+export function startImportWithPaths(deps: IImportOrchestrationDeps, paths: string[]): IImportSession | undefined {
+    if (!deps.databasePath) {
+        return undefined;
+    }
+
+    const sessionId = deps.uuidGenerator.generate();
+    const queue = new TaskQueue(deps.uuidGenerator, sessionId);
+    queue.onTaskComplete(() => queue.shutdown());
+    const importAssetsTaskId = queue.addTask("import-assets", {
+        paths,
+        storageDescriptor: { databasePath: deps.databasePath },
+        sessionId,
+        dryRun: false,
+    }, sessionId);
+    return { importAssetsTaskId, sessionId };
+}
+
+//
+// Imports from the given directory paths, or shows a directory picker when paths is omitted.
+// Returns undefined if no database is open or the user cancelled the picker.
+//
+export async function importDirectories(deps: IImportOrchestrationDeps, paths?: string[]): Promise<IImportSession | undefined> {
+    if (!deps.databasePath) {
+        return undefined;
+    }
+
+    let resolvedPaths = paths;
+    if (!resolvedPaths || resolvedPaths.length === 0) {
+        const folder = await deps.platform.pickFolder({ title: "Import Directory" });
+        if (!folder) {
+            return undefined;
+        }
+        resolvedPaths = [folder];
+    }
+
+    return startImportWithPaths(deps, resolvedPaths);
+}
+
+//
+// Imports the given files, or shows a multi-file picker when paths is omitted.
+// Returns undefined if no database is open or the user cancelled the picker.
+//
+export async function importFiles(deps: IImportOrchestrationDeps, paths?: string[]): Promise<IImportSession | undefined> {
+    if (!deps.databasePath) {
+        return undefined;
+    }
+
+    let resolvedPaths = paths;
+    if (!resolvedPaths || resolvedPaths.length === 0) {
+        resolvedPaths = await deps.platform.pickFiles("Import Files");
+        if (!resolvedPaths || resolvedPaths.length === 0) {
+            return undefined;
+        }
+    }
+
+    return startImportWithPaths(deps, resolvedPaths);
+}
 
 //
 // Import status lifecycle for the current import session.
@@ -40,12 +122,12 @@ export interface IImportContext {
     // Ordered list of all items seen in the current import session, in arrival order.
     importItems: IImportItem[];
 
-    // Calls platform.importDirectories() and sets status to 'running'.
+    // Imports the given directories and sets status to 'running'.
     // When paths are supplied they are used directly; when omitted a directory picker is shown.
     // Returns false if no database is open or the user cancelled the picker.
     startImportDirectories: (paths?: string[]) => Promise<boolean>;
 
-    // Calls platform.importFiles() and sets status to 'running'.
+    // Imports the given files and sets status to 'running'.
     // When paths are supplied they are used directly; when omitted a file picker is shown.
     // Returns false if no database is open or the user cancelled the picker.
     startImportFiles: (paths?: string[]) => Promise<boolean>;
@@ -70,6 +152,8 @@ export interface IImportContextProviderProps {
 //
 export function ImportContextProvider({ children }: IImportContextProviderProps) {
     const platform = usePlatform();
+    const { databasePath } = useAssetDatabase();
+    const uuidGenerator = useUuidGenerator();
 
     // Current lifecycle status of the import session.
     const [status, setStatus] = useState<ImportStatus>('idle');
@@ -215,16 +299,16 @@ export function ImportContextProvider({ children }: IImportContextProviderProps)
     // Returns false if no database is open or the user cancelled the picker.
     //
     const startImportDirectories = useCallback(async (paths?: string[]): Promise<boolean> => {
-        return beginImportSession(platform.importDirectories(paths));
-    }, [platform]);
+        return beginImportSession(importDirectories({ platform, databasePath, uuidGenerator }, paths));
+    }, [platform, databasePath, uuidGenerator]);
 
     //
     // Opens a file picker (or uses the given paths) and starts an import.
     // Returns false if no database is open or the user cancelled the picker.
     //
     const startImportFiles = useCallback(async (paths?: string[]): Promise<boolean> => {
-        return beginImportSession(platform.importFiles(paths));
-    }, [platform]);
+        return beginImportSession(importFiles({ platform, databasePath, uuidGenerator }, paths));
+    }, [platform, databasePath, uuidGenerator]);
 
     //
     // Cancels the running import by notifying the platform to stop all tasks in the session.

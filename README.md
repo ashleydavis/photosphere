@@ -1,6 +1,6 @@
 # Photosphere
 
-Photosphere is a cross-platform application for managing your database of digital media files (photos and videos). I like to think of it as the spiritual successor to [Picasa](https://en.wikipedia.org/wiki/Picasa) but with a UI more like modern Google Photos and backed by a Git-style database for immutable binary files like photos and videos that have editable metadata.
+Photosphere is a cross-platform application for managing your database of digital media files (photos and videos). I like to think of it as the spiritual successor to [Picasa](https://en.wikipedia.org/wiki/Picasa) but with a UI more like modern Google Photos and backed by a Git-style database for immutable binary files, like photos and videos, that have editable metadata.
 
 Important features:
 - Local first so you own it and you control it.
@@ -114,8 +114,6 @@ bun run test:watch
 
 ```bash
 bun run test:electron
-# or
-bun run te
 ```
 
 This will build the Electron app and run Playwright smoke tests.
@@ -130,14 +128,6 @@ bun run test -- <test-name-or-pattern>
 
 ```bash
 bun run test:cli
-# or
-bun run tc
-```
-
-**Run performance benchmarks**
-
-```bash
-bun run perf
 ```
 
 **Run a single CLI smoke test by number or name**
@@ -150,8 +140,6 @@ bun run test:cli -- <number-or-name>
 
 ```bash
 bun run test:cli:encrypted
-# or
-bun run tce
 ```
 
 **Run tests using the shell script**
@@ -164,6 +152,12 @@ Using the shell script doesn't run the tests in parallel and that makes it easie
 ```
 
 This script runs all tests across the monorepo and provides a summary of results.
+
+**Run performance benchmarks**
+
+```bash
+bun run perf
+```
 
 ### Building and running the Electron app
 
@@ -190,7 +184,4 @@ To run the CLI tool, follow the instructions in [./apps/cli/README.md](./apps/cl
 To start the dev-server, follow the instructions in [./apps/dev-server/README.md](./apps/dev-server/README.md).
 
 To start the dev-frontend, follow the instructions in [./apps/dev-frontend/README.md](./apps/dev-frontend/README.md).
-
-Encrypted CLI database workflows are covered by `apps/cli/smoke-tests-encrypted.sh`, which runs end-to-end smoke tests for encrypted init, replication, encrypt/decrypt, and basic CRUD operations.
-
 

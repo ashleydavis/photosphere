@@ -1,5 +1,5 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
-import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext, type IImportSession, type IToolsStatus, type IDownloadAssetItem, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, convertToPng } from "user-interface";
+import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions, convertToPng } from "user-interface";
 
 const restApiUrl = "http://localhost:3001";
 
@@ -73,13 +73,6 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         }));
     }, [ws]);
 
-    const createDatabase = useCallback(async (): Promise<void> => {
-        // Send create-database request to server
-        ws.send(JSON.stringify({
-            type: "create-database",
-        }));
-    }, [ws]);
-
     const onDatabaseOpened = useCallback((callback: (databasePath: string) => void): (() => void) => {
         // Add callback to set
         openedCallbacksRef.current.add(callback);
@@ -136,25 +129,6 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         };
     }, []);
 
-    const downloadAsset = useCallback(async (assetId: string, assetType: string, filename: string, contentType: string, databasePath: string): Promise<void> => {
-        const url = `${restApiUrl}/asset?id=${encodeURIComponent(assetId)}&type=${encodeURIComponent(assetType)}&db=${encodeURIComponent(databasePath)}`;
-        const response = await fetch(url);
-        const blob = await response.blob();
-        const typedBlob = new Blob([blob], { type: contentType });
-        const downloadUrl = URL.createObjectURL(typedBlob);
-        const a = document.createElement("a");
-        a.href = downloadUrl;
-        a.download = filename;
-        a.click();
-        URL.revokeObjectURL(downloadUrl);
-    }, []);
-
-    const downloadAssets = useCallback(async (assets: IDownloadAssetItem[], databasePath: string): Promise<void> => {
-        for (const asset of assets) {
-            await downloadAsset(asset.assetId, asset.assetType, asset.filename, asset.contentType, databasePath);
-        }
-    }, [downloadAsset]);
-
     const copyToClipboard = useCallback(async (blob: Blob, _contentType: string): Promise<void> => {
         const pngBlob = await convertToPng(blob);
         await navigator.clipboard.write([new ClipboardItem({ "image/png": pngBlob })]);
@@ -183,16 +157,6 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
     const onNavigate = useCallback((_callback: (page: string) => void): (() => void) => {
         // No-op for web platform.
         return () => {};
-    }, []);
-
-    const importDirectories = useCallback(async (_paths?: string[]): Promise<IImportSession | undefined> => {
-        // Not supported on web platform.
-        return undefined;
-    }, []);
-
-    const importFiles = useCallback(async (_paths?: string[]): Promise<IImportSession | undefined> => {
-        // Not supported on web platform.
-        return undefined;
     }, []);
 
     const getPathForFile = useCallback((_file: File): string | undefined => {
@@ -248,12 +212,20 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         return undefined;
     }, []);
 
-    const pickFolder = useCallback(async () => {
-        return undefined;
+    const pickFolder = useCallback(async (options?: IPickFolderOptions): Promise<string | undefined> => {
+        return await sendAndWait<string | undefined>({ type: "pick-folder", options }, "pick-folder-result");
+    }, [ws]);
+
+    const pickFile = useCallback(async (defaultFilename: string): Promise<string | undefined> => {
+        // The web browser has no native save dialog that returns a filesystem path. The web
+        // save-asset task handler consumes the returned string as the download filename, so
+        // pass the suggested filename straight through. Returning undefined would cancel the flow.
+        return defaultFilename;
     }, []);
 
-    const createDatabaseAtPath = useCallback(async (_path: string): Promise<void> => {
-    }, []);
+    const pickFiles = useCallback(async (title: string): Promise<string[] | undefined> => {
+        return await sendAndWait<string[] | undefined>({ type: "pick-files", title }, "pick-files-result");
+    }, [ws]);
 
     const listSecrets = useCallback(async (): Promise<ISharedSecretEntry[]> => {
         return [];
@@ -325,7 +297,6 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
 
     const platformContext: IPlatformContext = {
         openDatabase,
-        createDatabase,
         onDatabaseOpened,
         onDatabaseClosed,
         notifyDatabaseOpened,
@@ -334,16 +305,12 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         notifyDatabaseEdited,
         onSyncStarted,
         onSyncCompleted,
-        downloadAsset,
-        downloadAssets,
         copyToClipboard,
         onShowNotification,
         onUpdateAvailable,
         openFolder,
         onMenuAction,
         onNavigate,
-        importDirectories,
-        importFiles,
         getPathForFile,
         checkTools,
         checkDatabaseExists,
@@ -356,7 +323,8 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         removeDatabaseEntry,
         findDatabase,
         pickFolder,
-        createDatabaseAtPath,
+        pickFile,
+        pickFiles,
         listSecrets,
         addSecret,
         updateSecret,

@@ -20,7 +20,6 @@ import { useGallery } from '../context/gallery-context';
 import { useSearch } from '../context/search-context';
 import dayjs from 'dayjs';
 import { useDeleteConfirmation } from '../context/delete-confirmation-context';
-import { usePlatform } from '../context/platform-context';
 import type { IDownloadAssetItem } from '../context/platform-context';
 import { useGallerySource } from '../context/gallery-source';
 import { SetPhotoDateDialog } from './set-photo-date-dialog';
@@ -217,11 +216,10 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
     const { setOpenSearch, recentSearches, removeRecentSearch, savedSearches, saveSearch, unsaveSearch } = useSearch();
     const { dbs } = useApp();
     const theme = useTheme();
-    const { databasePath, closeDatabase } = useAssetDatabase();
+    const { databasePath, closeDatabase, downloadAssets } = useAssetDatabase();
     const { search, setSortBy, isLoading, onReset, onNewItems, selectedItems, clearMultiSelection, moveSelectedToDatabase, getItemById } = useGallery();
     const { scrollTo, layout } = useGalleryLayout();
     const { setDeleteConfirmationOpen } = useDeleteConfirmation();
-    const { downloadAssets } = usePlatform();
     const { updateAssets } = useGallerySource();
 
     const [menuPath, setMenuPath] = useState<string[]>([]);
@@ -330,7 +328,7 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
             }
             assets.push({ assetId, assetType: "asset", filename: item.origFileName || assetId, contentType: item.contentType });
         }
-        await downloadAssets(assets, databasePath!);
+        await downloadAssets(assets);
     }
 
     //
@@ -396,6 +394,7 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
                                     </ListItemButton>
                                 </ListItem>
                                 <ListItem
+                                    data-id="download-selected-button"
                                     onClick={async () => {
                                         setSidebarOpen(false);
                                         await onDownloadSelected();

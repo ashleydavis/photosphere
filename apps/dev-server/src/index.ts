@@ -240,6 +240,12 @@ wss.on("connection", (ws: WebSocket) => {
             else if (messageData.type === "set-config") {
                 await handleSetConfig(ws, messageData.key, messageData.value, messageData.requestId);
             }
+            else if (messageData.type === "pick-files") {
+                await handlePickFiles(ws, messageData.title, messageData.requestId);
+            }
+            else if (messageData.type === "pick-folder") {
+                await handlePickFolder(ws, messageData.options, messageData.requestId);
+            }
         }
         catch (error) {
             console.error("Error handling WebSocket message:", error);
@@ -467,16 +473,195 @@ async function handleSetConfig(ws: WebSocket, key: string, value: unknown, reque
 
 
 //
+// Options accepted by the pick-folder WebSocket message.
+// Mirrors IPickFolderOptions on the renderer side.
+//
+interface IPickFolderRequestOptions {
+    //
+    // Window title shown in the native dialog.
+    //
+    title?: string;
+
+    //
+    // Config key to read the default path from and persist the chosen path back to.
+    //
+    folderKey?: string;
+
+    //
+    // Whether to show the "New Folder" button (or its platform-specific equivalent).
+    //
+    createDirectory?: boolean;
+}
+
+//
+// Handles a request to show a directory picker and respond with the chosen path.
+// Reads the default path from desktop config under options.folderKey (defaults to "lastFolder"),
+// persists the chosen path under the same key, and sends pick-folder-result with value=undefined when cancelled.
+//
+async function handlePickFolder(ws: WebSocket, options: IPickFolderRequestOptions | undefined, requestId: unknown): Promise<void> {
+    const title = options?.title || "Select Folder";
+    const folderKey = options?.folderKey || "lastFolder";
+    const createDirectory = options?.createDirectory === true;
+
+    try {
+        const config = await loadDesktopConfig();
+        const configRecord = config as Record<string, unknown>;
+        const defaultPath = typeof configRecord[folderKey] === "string" ? configRecord[folderKey] as string : undefined;
+
+        const chosen = await showDirectoryDialog(defaultPath, title, createDirectory);
+        if (!chosen) {
+            ws.send(JSON.stringify({ type: "pick-folder-result", requestId, value: undefined }));
+            return;
+        }
+
+        configRecord[folderKey] = chosen;
+        await saveDesktopConfig(config);
+
+        ws.send(JSON.stringify({ type: "pick-folder-result", requestId, value: chosen }));
+    }
+    catch (error: any) {
+        if (error.code === 1 || error.userCancelled) {
+            ws.send(JSON.stringify({ type: "pick-folder-result", requestId, value: undefined }));
+            return;
+        }
+        ws.send(JSON.stringify({
+            type: "error",
+            requestId,
+            message: error instanceof Error ? error.message : "Unknown error picking folder",
+        }));
+    }
+}
+
+//
+// Handles a request to show a multi-file open dialog and respond with the chosen paths.
+// Sends pick-files-result with value=undefined when the user cancels.
+//
+async function handlePickFiles(ws: WebSocket, title: string, requestId: unknown): Promise<void> {
+    try {
+        const paths = await showFileDialog(title);
+        ws.send(JSON.stringify({
+            type: "pick-files-result",
+            requestId,
+            value: paths ?? undefined,
+        }));
+    }
+    catch (error: any) {
+        if (error.code === 1 || error.userCancelled) {
+            ws.send(JSON.stringify({
+                type: "pick-files-result",
+                requestId,
+                value: undefined,
+            }));
+            return;
+        }
+        ws.send(JSON.stringify({
+            type: "error",
+            requestId,
+            message: error instanceof Error ? error.message : "Unknown error picking files",
+        }));
+    }
+}
+
+//
+// Shows a multi-file open dialog using platform-specific shell commands.
+// Returns the selected file paths, or null when the user cancels.
+//
+async function showFileDialog(title: string): Promise<string[] | null> {
+    const platform = process.platform;
+
+    if (platform === "linux") {
+        try {
+            const command = `zenity --file-selection --multiple --separator='\n' --title='${title.replace(/'/g, "'\\''")}'`;
+            const { stdout } = await execAsync(command);
+            const paths = stdout.split("\n").map(line => line.trim()).filter(line => line.length > 0);
+            return paths.length > 0 ? paths : null;
+        }
+        catch (error: any) {
+            if (error.code === 1) {
+                throw { code: 1, userCancelled: true };
+            }
+            try {
+                const command = `kdialog --getopenfilename --multiple --separate-output --title '${title.replace(/'/g, "'\\''")}'`;
+                const { stdout } = await execAsync(command);
+                const paths = stdout.split("\n").map(line => line.trim()).filter(line => line.length > 0);
+                return paths.length > 0 ? paths : null;
+            }
+            catch (kdialogError: any) {
+                if (kdialogError.code === 1) {
+                    throw { code: 1, userCancelled: true };
+                }
+                throw new Error("Neither zenity nor kdialog is available. Please install one of them.");
+            }
+        }
+    }
+    else if (platform === "darwin") {
+        const script = `
+            tell application "System Events"
+                activate
+                set theFiles to choose file with prompt "${title.replace(/"/g, '\\"')}" with multiple selections allowed
+                set thePaths to ""
+                repeat with aFile in theFiles
+                    set thePaths to thePaths & POSIX path of aFile & linefeed
+                end repeat
+                return thePaths
+            end tell
+        `;
+        try {
+            const { stdout } = await execAsync(`osascript -e '${script.replace(/'/g, "'\\''")}'`);
+            const paths = stdout.split("\n").map(line => line.trim()).filter(line => line.length > 0);
+            return paths.length > 0 ? paths : null;
+        }
+        catch (error: any) {
+            if (error.code === 1 || error.stderr?.includes("User cancelled")) {
+                throw { code: 1, userCancelled: true };
+            }
+            throw error;
+        }
+    }
+    else if (platform === "win32") {
+        const script = `
+            Add-Type -AssemblyName System.Windows.Forms
+            $openFileDialog = New-Object System.Windows.Forms.OpenFileDialog
+            $openFileDialog.Title = "${title.replace(/"/g, '`"')}"
+            $openFileDialog.Multiselect = $true
+            if ($openFileDialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+                $openFileDialog.FileNames | ForEach-Object { Write-Output $_ }
+            }
+        `;
+        try {
+            const { stdout } = await execAsync(`powershell -Command "${script.replace(/\n/g, "; ")}"`);
+            const paths = stdout.split("\n").map(line => line.trim()).filter(line => line.length > 0);
+            return paths.length > 0 ? paths : null;
+        }
+        catch (error: any) {
+            if (error.code === 1) {
+                throw { code: 1, userCancelled: true };
+            }
+            throw error;
+        }
+    }
+    else {
+        throw new Error(`Unsupported platform: ${platform}`);
+    }
+}
+
+//
 // Shows a directory picker dialog using platform-specific tools.
 // Uses lastFolder if provided to set the initial directory.
+// title controls the dialog caption (default "Open Database" for backwards compat).
+// createDirectory controls whether the dialog offers a "New Folder" button (Windows) or
+// uses zenity's create-folder semantics (Linux) / falls back to creating the missing dir (macOS).
 //
-async function showDirectoryDialog(lastFolder?: string): Promise<string | null> {
+async function showDirectoryDialog(lastFolder?: string, title: string = "Open Database", createDirectory: boolean = false): Promise<string | null> {
     const platform = process.platform;
-    
+    const escapedTitle = title.replace(/'/g, "'\\''");
+
     if (platform === "linux") {
-        // Try zenity first (GNOME), then kdialog (KDE)
+        // Try zenity first (GNOME), then kdialog (KDE).
+        // zenity's --file-selection --directory dialog allows the user to navigate into folders
+        // they have just created, so no special createDirectory flag is needed at the dialog level.
         try {
-            let command = "zenity --file-selection --directory --title='Open Database'";
+            let command = `zenity --file-selection --directory --title='${escapedTitle}'`;
             if (lastFolder) {
                 command += ` --filename="${lastFolder}"`;
             }
@@ -490,7 +675,7 @@ async function showDirectoryDialog(lastFolder?: string): Promise<string | null> 
             }
             // zenity not available, try kdialog
             try {
-                let command = "kdialog --getexistingdirectory --title 'Open Database'";
+                let command = `kdialog --getexistingdirectory --title '${escapedTitle}'`;
                 if (lastFolder) {
                     command += ` "${lastFolder}"`;
                 }
@@ -507,19 +692,20 @@ async function showDirectoryDialog(lastFolder?: string): Promise<string | null> 
         }
     }
     else if (platform === "darwin") {
-        // macOS - use osascript (AppleScript)
-        let script = `
+        // macOS - use osascript (AppleScript). The choose folder dialog does not natively
+        // support "create new folder", so when createDirectory is true the user must enter
+        // (or pre-create) the folder via Finder; the chosen path is then mkdir -p'd below.
+        const script = `
             tell application "System Events"
                 activate
-                set folderPath to choose folder with prompt "Open Database"
+                set folderPath to choose folder with prompt "${title.replace(/"/g, '\\"')}"
                 return POSIX path of folderPath
             end tell
         `;
-        // Note: osascript's choose folder doesn't support setting initial directory directly
-        // We'd need to use a different approach, but for now just use the default
         try {
-            const { stdout } = await execAsync(`osascript -e '${script}'`);
-            return stdout.trim() || null;
+            const { stdout } = await execAsync(`osascript -e '${script.replace(/'/g, "'\\''")}'`);
+            const chosen = stdout.trim() || null;
+            return chosen;
         }
         catch (error: any) {
             if (error.code === 1 || error.stderr?.includes("User cancelled")) {
@@ -531,11 +717,12 @@ async function showDirectoryDialog(lastFolder?: string): Promise<string | null> 
     else if (platform === "win32") {
         // Windows - use PowerShell
         const initialDir = lastFolder ? `$folderBrowser.SelectedPath = "${lastFolder.replace(/\\/g, "\\\\")}"` : "";
+        const showNewFolder = createDirectory ? "$true" : "$false";
         const script = `
             Add-Type -AssemblyName System.Windows.Forms
             $folderBrowser = New-Object System.Windows.Forms.FolderBrowserDialog
-            $folderBrowser.Description = "Open Database"
-            $folderBrowser.ShowNewFolderButton = $false
+            $folderBrowser.Description = "${title.replace(/"/g, '`"')}"
+            $folderBrowser.ShowNewFolderButton = ${showNewFolder}
             ${initialDir}
             if ($folderBrowser.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                 Write-Output $folderBrowser.SelectedPath

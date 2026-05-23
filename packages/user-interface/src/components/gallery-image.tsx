@@ -121,6 +121,7 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
 
     return (
         <div
+            data-id="gallery-thumb"
             className="gallery-thumb-container"
             style={{
                 position: "absolute",

@@ -9,13 +9,22 @@ import {
     DeleteConfirmationContextProvider,
     ImportContextProvider,
     ToastContextProvider,
+    UuidGeneratorProvider,
 } from "user-interface";
 import { ElectronRendererQueueBackend } from "./lib/electron-renderer-queue-backend";
 import { setQueueBackend } from "task-queue";
 import { PlatformProviderElectron } from "./lib/platform-provider-electron";
 import type { IElectronAPI } from "./lib/electron-ipc";
-import { setLog } from "utils";
+import { setLog, RandomUuidGenerator, TestUuidGenerator } from "utils";
 import { createRendererLog } from "./lib/renderer-log";
+
+//
+// In test mode a deterministic TestUuidGenerator is used so smoke tests
+// get reproducible task ids; otherwise the real RandomUuidGenerator is used.
+//
+const isTestMode = typeof window !== 'undefined'
+    && new URLSearchParams(window.location.search).get('testMode') === '1';
+const uuidGenerator = isTestMode ? new TestUuidGenerator() : new RandomUuidGenerator();
 
 //
 // Props for the App component.
@@ -48,25 +57,27 @@ export function App({ electronAPI }: IAppProps) {
                 v7_relativeSplatPath: true,
             }}
         >
-            <PlatformProviderElectron electronAPI={electronAPI}>
-                <ImportContextProvider>
+            <UuidGeneratorProvider value={uuidGenerator}>
+                <PlatformProviderElectron electronAPI={electronAPI}>
                     <AppContextProvider>
                         <ToastContextProvider>
                             <AssetDatabaseProvider queueBackend={queueBackend} restApiUrl={restApiUrl}>
-                                <GalleryContextProvider>
-                                    <DeleteConfirmationContextProvider>
-                                        <SearchContextProvider>
-                                            <GalleryLayoutContextProvider>
-                                                <Main isMobile={false} initialTheme={initialTheme} />
-                                            </GalleryLayoutContextProvider>
-                                        </SearchContextProvider>
-                                    </DeleteConfirmationContextProvider>
-                                </GalleryContextProvider>
+                                <ImportContextProvider>
+                                    <GalleryContextProvider>
+                                        <DeleteConfirmationContextProvider>
+                                            <SearchContextProvider>
+                                                <GalleryLayoutContextProvider>
+                                                    <Main isMobile={false} initialTheme={initialTheme} />
+                                                </GalleryLayoutContextProvider>
+                                            </SearchContextProvider>
+                                        </DeleteConfirmationContextProvider>
+                                    </GalleryContextProvider>
+                                </ImportContextProvider>
                             </AssetDatabaseProvider>
                         </ToastContextProvider>
                     </AppContextProvider>
-                </ImportContextProvider>
-            </PlatformProviderElectron>
+                </PlatformProviderElectron>
+            </UuidGeneratorProvider>
         </HashRouter>
     );
 }
