@@ -27,12 +27,12 @@ ipcMain.handle('pick-file', logExceptions(async (_event, defaultFilename: string
 
 `updateLastDownloadFolder` moves from inside `save-asset` into the picker -- it belongs here.
 
-### 1b. Preload, electron-defs, platform context
+### 1b. Platform context and providers
 
-- [apps/desktop/src/preload.ts](apps/desktop/src/preload.ts): `pickFile: (defaultFilename) => ipcRenderer.invoke('pick-file', defaultFilename)`
-- [packages/electron-defs/src/lib/electron-api.ts](packages/electron-defs/src/lib/electron-api.ts): add `pickFile: (defaultFilename: string) => Promise<string | undefined>` to `IElectronAPI`
-- [packages/user-interface/src/context/platform-context.tsx](packages/user-interface/src/context/platform-context.tsx): add `pickFile: (defaultFilename: string) => Promise<string | undefined>`
-- [apps/desktop-frontend/src/lib/platform-provider-electron.tsx](apps/desktop-frontend/src/lib/platform-provider-electron.tsx): wrap `electronAPI.pickFile`
+The IPC bridge (`IElectronAPI`) is already generic (`invoke`/`send`), so no changes to `preload.ts` or `electron-api.ts` are needed.
+
+- [packages/user-interface/src/context/platform-context.tsx](packages/user-interface/src/context/platform-context.tsx): add `pickFile: (defaultFilename: string) => Promise<string | undefined>` to `IPlatformContext`
+- [apps/desktop-frontend/src/lib/platform-provider-electron.tsx](apps/desktop-frontend/src/lib/platform-provider-electron.tsx): implement as `electronAPI.invoke('pick-file', defaultFilename)`
 - [apps/dev-frontend/src/lib/platform-provider-web.tsx](apps/dev-frontend/src/lib/platform-provider-web.tsx): stub returning `undefined`
 
 ## Step 2 -- Extend `pickFolder` with options
@@ -56,11 +56,9 @@ export interface IPickFolderOptions {
 Update `IPlatformContext.pickFolder` to accept `options?: IPickFolderOptions`. Calling with no args keeps existing behaviour.
 
 Wire through:
-- [packages/electron-defs/src/lib/electron-api.ts](packages/electron-defs/src/lib/electron-api.ts): import `IPickFolderOptions` from `user-interface` and update `IElectronAPI.pickFolder` to accept it.
-- [apps/desktop/src/main.ts](apps/desktop/src/main.ts): update `pick-folder` handler to read `folderKey`/`createDirectory` from the options arg.
-- [apps/desktop/src/preload.ts](apps/desktop/src/preload.ts): forward `options` to `ipcRenderer.invoke`.
-- [apps/desktop-frontend/src/lib/platform-provider-electron.tsx](apps/desktop-frontend/src/lib/platform-provider-electron.tsx): forward `options`.
-- [apps/dev-frontend/src/lib/platform-provider-web.tsx](apps/dev-frontend/src/lib/platform-provider-web.tsx): ignore options, return `undefined` as before.
+- [apps/desktop/src/main.ts](apps/desktop/src/main.ts): update `pick-folder` handler to accept `options` and extract `title`, `folderKey`, and `createDirectory` from it; use `folderKey` to read the default path from and persist the chosen path to the correct config field.
+- [apps/desktop-frontend/src/lib/platform-provider-electron.tsx](apps/desktop-frontend/src/lib/platform-provider-electron.tsx): update `pickFolder` to pass `options` via `electronAPI.invoke('pick-folder', options)`.
+- [apps/dev-frontend/src/lib/platform-provider-web.tsx](apps/dev-frontend/src/lib/platform-provider-web.tsx): update signature to accept `options?`, ignore it, return `undefined` as before.
 
 ## Unit Tests
 

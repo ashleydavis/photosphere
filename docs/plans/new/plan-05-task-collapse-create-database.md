@@ -2,13 +2,13 @@
 
 **Requires:** [plan-01-task-pickers.md](plan-01-task-pickers.md) to be complete first.
 
-Collapses both `create-database` and `create-database-at-path` handlers. Both currently create a throwaway `TaskQueue` in main just to `await` completion -- the renderer-side `queue.awaitTask` makes this redundant. The renderer queues the task, awaits it, then calls `platform.notifyDatabaseOpened` directly. The test control server switches to `workerPool` directly. A `CLAUDE.md` rule is added to prevent new dedicated handlers from creeping back in.
+Collapses both `create-database` and `create-database-at-path` handlers. Both currently dispatch work to main and wait for a response -- the renderer-side `queue.awaitTask` makes this redundant. The renderer queues the task, awaits it, then calls `notifyDatabaseOpened` directly. The test control server switches to `workerPool` directly. A `CLAUDE.md` rule is added to prevent new dedicated handlers from creeping back in.
 
 ## Step 1 -- Update the renderer: "create at known path"
 
 File: [apps/desktop-frontend/src/lib/platform-provider-electron.tsx](apps/desktop-frontend/src/lib/platform-provider-electron.tsx)
 
-Replace the `createDatabaseAtPath` implementation:
+Replace the `createDatabaseAtPath` implementation (currently at line ~389):
 
 ```ts
 const createDatabaseAtPath = useCallback(async (databasePath: string) => {
@@ -20,19 +20,19 @@ const createDatabaseAtPath = useCallback(async (databasePath: string) => {
     finally {
         queue.shutdown();
     }
-    await platform.notifyDatabaseOpened(databasePath);
-}, []);
+    await notifyDatabaseOpened(databasePath);
+}, [notifyDatabaseOpened]);
 ```
 
-The previous main-side `mainWindow.webContents.send('database-opened', databasePath)` becomes the renderer's own `platform.notifyDatabaseOpened` call -- same downstream effect, no extra IPC.
+Note: use the local `notifyDatabaseOpened` `useCallback` variable directly -- `platform` does not exist at construction time.
 
 ## Step 2 -- Update the renderer: "create with picker"
 
-Replace the `createDatabase` implementation:
+Replace the `createDatabase` implementation (currently at line ~222):
 
 ```ts
 const createDatabase = useCallback(async () => {
-    const databasePath = await electronAPI.pickFolder({
+    const databasePath = await pickFolder({
         title: 'Create Database',
         createDirectory: true,
     });
@@ -40,7 +40,7 @@ const createDatabase = useCallback(async () => {
         return;
     }
     await createDatabaseAtPath(databasePath);
-}, [electronAPI, createDatabaseAtPath]);
+}, [pickFolder, createDatabaseAtPath]);
 ```
 
 ## Step 3 -- Update the test control server
@@ -51,10 +51,9 @@ The `createDatabaseAtPath` callback currently calls `createDatabaseAtPathDirect`
 
 ## Step 4 -- Delete the handlers and helpers
 
-- Delete `ipcMain.handle('create-database', ...)` and `createNewDatabase()` from [apps/desktop/src/main.ts](apps/desktop/src/main.ts) (line ~285, ~1151).
-- Delete `ipcMain.handle('create-database-at-path', ...)` and `createDatabaseAtPathDirect()` from main (line ~345, ~331).
-- Delete `createDatabase` and `createDatabaseAtPath` from [apps/desktop/src/preload.ts](apps/desktop/src/preload.ts).
-- Delete `createDatabase` and `createDatabaseAtPath` from `IElectronAPI` in [packages/electron-defs/src/lib/electron-api.ts](packages/electron-defs/src/lib/electron-api.ts).
+- Delete `ipcMain.handle('create-database', ...)` and `createNewDatabase()` from [apps/desktop/src/main.ts](apps/desktop/src/main.ts) (line ~430, ~1440).
+- Delete `ipcMain.handle('create-database-at-path', ...)` and `createDatabaseAtPathDirect()` from main (line ~490, ~305).
+- The `preload.ts` and `IElectronAPI` already use a generic `invoke`/`send` bridge -- no changes needed there.
 - `platform.createDatabase` and `platform.createDatabaseAtPath` remain on `IPlatformContext` -- they are the cross-platform abstraction, just no longer backed by dedicated IPCs.
 
 ## Step 5 -- Document the pattern in CLAUDE.md

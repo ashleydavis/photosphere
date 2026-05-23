@@ -2,17 +2,17 @@
 
 **Requires:** [plan-01-task-pickers.md](plan-01-task-pickers.md) to be complete first.
 
-Moves single-asset download into the renderer: `downloadAsset` calls `pickFile`, then queues the `save-asset` task via a renderer-side `TaskQueue`. The old IPC handler, preload bridge, and `IElectronAPI.saveAsset` are deleted. The `onTaskComplete` notification branch in main is untouched.
+Moves single-asset download into the renderer: `downloadAsset` calls `pickFile`, then queues the `save-asset` task via a renderer-side `TaskQueue`. The old IPC handler is deleted. The `onTaskComplete` notification branch in main is untouched.
 
 ## Step 1 -- Update the renderer
 
 File: [apps/desktop-frontend/src/lib/platform-provider-electron.tsx](apps/desktop-frontend/src/lib/platform-provider-electron.tsx)
 
-Replace the `downloadAsset` implementation (currently at line ~451):
+Replace the `downloadAsset` implementation (currently at line ~477):
 
 ```ts
 const downloadAsset = useCallback(async (assetId, assetType, filename, _contentType, databasePath) => {
-    const destPath = await electronAPI.pickFile(filename);
+    const destPath = await pickFile(filename);
     if (!destPath) {
         return;
     }
@@ -20,16 +20,15 @@ const downloadAsset = useCallback(async (assetId, assetType, filename, _contentT
     const queue = new TaskQueue(new RandomUuidGenerator(), databasePath);
     queue.onTaskComplete(() => queue.shutdown());
     queue.addTask("save-asset", { assetId, assetType, destPath, databasePath });
-}, [electronAPI]);
+}, [pickFile]);
 ```
 
-The "Downloaded" notification is fired by the existing `onTaskComplete` branch in [main.ts](apps/desktop/src/main.ts) (line ~754). The renderer does not need to subscribe to it.
+The "Downloaded" notification is fired by the existing `onTaskComplete` branch in [main.ts](apps/desktop/src/main.ts). The renderer does not need to subscribe to it.
 
-## Step 2 -- Delete the obsolete handler and exports
+## Step 2 -- Delete the obsolete handler
 
-- Delete `ipcMain.handle('save-asset', ...)` in [apps/desktop/src/main.ts](apps/desktop/src/main.ts) (line ~550).
-- Delete `saveAsset` from [apps/desktop/src/preload.ts](apps/desktop/src/preload.ts).
-- Delete `saveAsset` from `IElectronAPI` in [packages/electron-defs/src/lib/electron-api.ts](packages/electron-defs/src/lib/electron-api.ts).
+- Delete `ipcMain.handle('save-asset', ...)` in [apps/desktop/src/main.ts](apps/desktop/src/main.ts) (line ~747).
+- The `preload.ts` and `IElectronAPI` already use a generic `invoke`/`send` bridge -- no changes needed there.
 - Keep the `save-asset` branch in `onTaskComplete` -- it shows the notification regardless of who queued the task.
 
 ## Unit Tests

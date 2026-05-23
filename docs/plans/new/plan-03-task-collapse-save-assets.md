@@ -2,17 +2,17 @@
 
 **Requires:** [plan-01-task-pickers.md](plan-01-task-pickers.md) to be complete first.
 
-Moves batch asset download into the renderer: `downloadAssets` calls `pickFolder` with `folderKey: 'lastDownloadFolder'`, then queues the `save-assets-batch` task via a renderer-side `TaskQueue`. The old IPC handler, preload bridge, and `IElectronAPI.saveAssets` are deleted. The `onTaskComplete` notification branch in main is untouched.
+Moves batch asset download into the renderer: `downloadAssets` calls `pickFolder` with `folderKey: 'lastDownloadFolder'`, then queues the `save-assets-batch` task via a renderer-side `TaskQueue`. The old IPC handler is deleted. The `onTaskComplete` notification branch in main is untouched.
 
 ## Step 1 -- Update the renderer
 
 File: [apps/desktop-frontend/src/lib/platform-provider-electron.tsx](apps/desktop-frontend/src/lib/platform-provider-electron.tsx)
 
-Replace the `downloadAssets` implementation (currently at line ~455):
+Replace the `downloadAssets` implementation (currently at line ~481):
 
 ```ts
 const downloadAssets = useCallback(async (assets, databasePath) => {
-    const folderPath = await electronAPI.pickFolder({
+    const folderPath = await pickFolder({
         title: 'Choose folder to save assets',
         folderKey: 'lastDownloadFolder',
         createDirectory: true,
@@ -30,16 +30,15 @@ const downloadAssets = useCallback(async (assets, databasePath) => {
     const queue = new TaskQueue(new RandomUuidGenerator(), databasePath);
     queue.onTaskComplete(() => queue.shutdown());
     queue.addTask("save-assets-batch", { assets: saveItems, folderPath, databasePath });
-}, [electronAPI]);
+}, [pickFolder]);
 ```
 
 The success/partial/failure notification is fired by the existing `onTaskComplete` branch in [main.ts](apps/desktop/src/main.ts). The renderer does not need to subscribe to it.
 
-## Step 2 -- Delete the obsolete handler and exports
+## Step 2 -- Delete the obsolete handler
 
-- Delete `ipcMain.handle('save-assets', ...)` in [apps/desktop/src/main.ts](apps/desktop/src/main.ts) (line ~574).
-- Delete `saveAssets` from [apps/desktop/src/preload.ts](apps/desktop/src/preload.ts).
-- Delete `saveAssets` from `IElectronAPI` in [packages/electron-defs/src/lib/electron-api.ts](packages/electron-defs/src/lib/electron-api.ts).
+- Delete `ipcMain.handle('save-assets', ...)` in [apps/desktop/src/main.ts](apps/desktop/src/main.ts) (line ~782).
+- The `preload.ts` and `IElectronAPI` already use a generic `invoke`/`send` bridge -- no changes needed there.
 - Keep the `save-assets-batch` branch in `onTaskComplete`.
 
 ## Unit Tests
