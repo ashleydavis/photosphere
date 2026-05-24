@@ -2,6 +2,8 @@
 
 A survey of possible AI features for Photosphere across the Electron desktop app, CLI tool, and future mobile app. This document only catalogs **options and ideas**, not architecture or implementation. Sourced from current industry practice (Immich, PhotoPrism, Google Photos, Apple Photos), academic work, and open-source projects.
 
+> **Note**: This doc was audited 2026-05-24. The Sources section at the end of the doc lists URLs but they were not cited per-line when the doc was first written. Each major section below now ends with an "**Audit & sources**" block listing claims directly verified with URLs versus claims that rely on the (un-mapped) footer or remain unverified. Specific numeric claims (dates, percentages, "X+ species") should be treated as unverified unless explicitly linked.
+
 ---
 
 ## 1. People, Places and Animals (Recognition)
@@ -16,11 +18,23 @@ Detect faces in photos, cluster them into groups of the same person, and let the
 - **Clustering**: HDBSCAN, DBSCAN, or simple thresholded cosine similarity on the recognition embeddings.
 - **Capabilities worth offering**: rename / merge / split clusters; "this is not me" negative feedback; hidden persons; co-occurrence ("photos of Alice AND Bob"); age progression view of a person over time; "me" pinning.
 
+**Audit & sources**:
+- "SCRFD (used by PhotoPrism since April 2026)" — [PARTIALLY VERIFIED]. PhotoPrism using ONNX SCRFD as its face detector (with the legacy Pigo removed) is documented at [PhotoPrism face recognition docs](https://docs.photoprism.app/developer-guide/vision/face-recognition/) and [PhotoPrism's face README](https://github.com/photoprism/photoprism/blob/develop/internal/ai/face/README.md). The specific date "April 2026" appears in search snippets quoting PhotoPrism release notes but I did not open the release notes directly.
+- "InsightFace's ArcFace / buffalo_l (what Immich uses)" — [VERIFIED]: [immich-app/buffalo_l on Hugging Face](https://huggingface.co/immich-app/buffalo_l).
+- "RetinaFace, MTCNN, MediaPipe Face Detection, YOLOv8-face, FaceNet, DeepFace" — name-dropped model list, all are real models but not individually re-verified in this audit pass.
+- "HDBSCAN, DBSCAN" — standard clustering algorithms.
+
 ### 1.2 Animal / Pet Recognition
 Two distinct problems, often conflated:
 
 - **Species identification** ("this is a Border Collie", "this is a Magpie"). Best models come from the iNaturalist / Pl@ntNet ecosystem. iNaturalist's CV model identifies 10,000+ species and adds new ones every ~1.7 hours. Models are downloadable for offline use.
 - **Individual pet recognition** ("this is *my* dog Rex", not just "a dog"). Treat the same as face recognition but on animals; PetFace, dog-face embedding models, or fine-tuned ArcFace on user-provided crops. Photosphere could let the user mark "this is Rex" and cluster from there.
+
+**Audit & sources**:
+- "iNaturalist's CV model identifies 10,000+ species and adds new ones every ~1.7 hours" — [UNVERIFIED specific numbers]. The "iNaturalist Computer Vision Demo" link in the Sources footer ([inaturalist.org/pages/computer_vision_demo](https://www.inaturalist.org/pages/computer_vision_demo)) plausibly backs the species-count claim but I did not chase the URL to confirm "10,000+" or the "~1.7 hours" cadence. Treat both numbers as not-yet-verified.
+- "Models are downloadable for offline use" (iNaturalist) — [UNVERIFIED]. Common claim about iNaturalist but I did not confirm offline-model availability and licensing.
+- "PetFace, dog-face embedding models" — name-dropped. Existence not verified in this pass.
+- "Pl@ntNet" — well-known plant-identification project; not specifically verified here.
 
 ### 1.3 Plant, Bird, Insect Identification
 Extensions of the above using specialist models: Pl@ntNet, Merlin Bird ID, BugID. Useful for users with nature-heavy libraries (gardening, birdwatching, travel).
@@ -31,6 +45,12 @@ Extensions of the above using specialist models: Pl@ntNet, Merlin Bird ID, BugID
 - **Geo-clustering**: group photos by trip / outing using DBSCAN on (timestamp, lat, lon).
 - **Map view**: pin photos to a map, browse by region, draw a polygon to query.
 - **"Where was this?"** for photos without GPS: ask a vision LLM (it is often surprisingly accurate from visual cues, as shown in the GEO-Detective research).
+
+**Audit & sources**:
+- "Nominatim, Photon, Mapbox, MapTiler" — all real reverse-geocoding services. Not individually verified in this audit.
+- "Google Landmarks v2 dataset has ~5M images of 200K landmarks" — [UNVERIFIED specific numbers]. I did not chase a Google Landmarks v2 dataset URL.
+- "GEO-Detective research" — [VERIFIED that the paper exists]: linked in the Sources footer as [arxiv.org/html/2511.22441](https://arxiv.org/html/2511.22441). The specific claim about vision LLMs being "surprisingly accurate from visual cues" relies on the paper; I did not read the paper to confirm the framing.
+- "DBSCAN on (timestamp, lat, lon)" for geo-clustering — standard technique.
 
 ### 1.5 Named-Entity Recognition in Captions
 Once captions or OCR text exist, run a small NER model to extract people, places, organizations and dates from the *text*, not the image. Useful for old scanned photos with handwritten captions on the back.
@@ -47,6 +67,11 @@ The single biggest user-visible AI win. Embed every photo with a vision-language
 - Multilingual variants exist (mCLIP, multilingual SigLIP) for non-English queries.
 - Index storage: pgvector (Postgres), Qdrant, ChromaDB, sqlite-vec, LanceDB, FAISS. sqlite-vec is interesting for Photosphere because its data model is already file-based / per-collection.
 
+**Audit & sources**:
+- "OpenAI CLIP, OpenCLIP, SigLIP / SigLIP 2 (Google, stronger), MetaCLIP, EVA-CLIP" — model families exist. The "stronger" qualifier on SigLIP 2 is an editorial claim; [SigLIP 2 HF blog](https://huggingface.co/blog/siglip2) discusses improvements over SigLIP 1 but I did not benchmark against OpenAI CLIP here.
+- "mCLIP, multilingual SigLIP" — multilingual SigLIP variants are documented in the [SigLIP 2 HF blog](https://huggingface.co/blog/siglip2).
+- Vector stores list — all real products; not individually verified here. The Sources footer has comparison links ([4xxi vector DB comparison](https://4xxi.com/articles/vector-database-comparison/), etc.).
+
 ### 2.2 Image-to-Image Search
 "Find more photos like this one" using the same CLIP embeddings. Variants:
 
@@ -59,6 +84,10 @@ The single biggest user-visible AI win. Embed every photo with a vision-language
 Beyond keyword and semantic search, plug a chat LLM in front of the index so users can ask: "what did we do on our 2024 Japan trip?", "show me all photos with both kids and a beach", "did I take any photos at Alice's wedding?". Google calls this "Ask Photos"; it combines metadata, embeddings and an LLM.
 
 Photosphere is already heading here via the in-progress **MCP server** (`packages/mcp-tools`, `apps/cli/src/cmd/mcp.ts`). With MCP, any LLM client (Claude Desktop, Claude Code, ChatGPT desktop, Cursor) becomes a chat interface to the photo library. This is arguably the *most leveraged* AI feature: instead of building a chat UI, you get every MCP-aware AI app for free.
+
+**Audit & sources**:
+- "Google calls this 'Ask Photos'; it combines metadata, embeddings and an LLM" — [VERIFIED that "Ask Photos" is a Google product]. The Sources footer links [TechCrunch on Google Photos AI features](https://techcrunch.com/2025/11/11/google-photos-adds-new-ai-features-for-editing-expands-ai-powered-search-to-over-100-countries/). The metadata-plus-embeddings-plus-LLM characterisation is my paraphrase, not a direct citation.
+- "Photosphere ... in-progress MCP server (`packages/mcp-tools`, `apps/cli/src/cmd/mcp.ts`)" — [VERIFIED]: both paths exist in this repository.
 
 ### 2.4 Advanced Filters Powered by AI
 - Filter by detected object class ("photos containing a dog and a bicycle").
@@ -81,6 +110,11 @@ Generate a free-form sentence describing each photo. Used for accessibility, alt
 - **Vision LLMs**: LLaVA, Llama 3.2 Vision (11B / 90B), Qwen2-VL, InternVL, MiniCPM-V, Pixtral, Moondream (very small, ~2B). PhotoPrism added Ollama integration for exactly this.
 - Captions can be stored alongside metadata and re-indexed for keyword search, or fed to an embedder for richer semantic search than CLIP alone.
 
+**Audit & sources**:
+- "BLIP-2, GIT, OFA, CoCa, Florence-2 (small and fast, very good quality)" — all real captioning models. The "small and fast, very good quality" qualifier on Florence-2 is my characterisation; Florence-2 base ONNX is published at [onnx-community/Florence-2-base](https://huggingface.co/onnx-community/Florence-2-base) with 0.23 B parameters but I did not benchmark "very good quality" against alternatives.
+- "LLaVA, Llama 3.2 Vision (11B / 90B), Qwen2-VL, InternVL, MiniCPM-V, Pixtral, Moondream (very small, ~2B)" — all real vision LLMs. Specific parameter counts (e.g. Moondream ~2B) are widely cited but not re-verified here.
+- "PhotoPrism added Ollama integration for exactly this" — [VERIFIED]: [PhotoPrism Caption Generation docs](https://docs.photoprism.app/developer-guide/vision/caption-generation/) document the integration.
+
 ### 3.3 Auto-Albums and Smart Folders
 Unsupervised clustering of embeddings into "albums" like "Vacations", "Birthdays", "Family Dinners", with auto-generated titles. K-Means / HDBSCAN on CLIP embeddings; LLM names each cluster from sampled captions.
 
@@ -90,6 +124,10 @@ Detect text *in* photos (street signs, menus, screenshots, receipts, whiteboards
 - Engines: Tesseract (classic), PaddleOCR, EasyOCR, Apple Vision (mobile), Google ML Kit (mobile), Microsoft TrOCR (handwriting), Mistral OCR (very strong, self-hostable), Surya.
 - Side-feature: detect that a photo *is* a document (receipt, ID, whiteboard) and offer to perspective-correct + binarize it, like Apple's "Scan Document".
 - Receipt parsing: layer Donut or LayoutLM on top for structured extraction.
+
+**Audit & sources**:
+- All OCR engines listed are real products. The "very strong, self-hostable" qualifier on Mistral OCR is editorial; Mistral OCR is referenced in the Sources footer ([mistral.ai/news/mistral-ocr](https://mistral.ai/news/mistral-ocr)).
+- "Donut or LayoutLM" for receipt parsing — both are real models in the document-AI space; not individually verified.
 
 ---
 
@@ -123,6 +161,12 @@ Optional safety filter for shared libraries, kid accounts, or family browsing mo
 ### 4.6 Privacy / Sensitive-Content Detection
 Detect things the user might not want shown in slideshows or shared: faces of children, screenshots of bank statements, photos of IDs / passports / credit cards, photos of medical conditions. Hide from random "Memories" surfaces by default.
 
+**Audit & sources for section 4**:
+- "aHash, dHash, pHash, wHash, BlockHash" — standard perceptual-hash families; Sources footer references [Ben Hoyt's article on perceptual hashing](https://benhoyt.com/writings/duplicate-image-detection/) and [MDPI comparison paper](https://www.mdpi.com/2079-9292/15/7/1493).
+- "NIMA, MUSIQ, MANIQA, CLIP-IQA, Q-Align" — real aesthetic-quality model families; individual citations not in this doc.
+- "Laplacian variance" for sharpness — standard technique (Pech-Pacheco et al. 2000); not specifically cited.
+- "NudeNet, Falconsai/nsfw_image_detection, GantMan/nsfw_model" — real NSFW models; [Falconsai/nsfw_image_detection on HF](https://huggingface.co/Falconsai/nsfw_image_detection) is in the Sources footer.
+
 ---
 
 ## 5. Editing and Enhancement
@@ -149,6 +193,9 @@ Black-and-white photo colourization. Models: DeOldify (classic), ColorMNet, BigC
 ### 5.6 Auto-Enhance
 One-click white-balance, exposure, contrast, and saturation correction driven by a learned model rather than fixed heuristics. Compose with NIMA to validate the result is actually better.
 
+**Audit & sources for section 5**:
+- All model names (Real-ESRGAN, SwinIR, HAT, BSRGAN, GFPGAN, CodeFormer, NAFNet, Restormer, MPRNet, Bringing-Old-Photos-Back-to-Life, rembg/U²-Net, BiRefNet, SAM/SAM 2, LaMa, MAT, PowerPaint, SDXL-inpainting, Flux-fill, Stable Diffusion, ControlNet, SDXL, Flux Kontext, Qwen-Image-Edit, DeOldify, ColorMNet, BigColor) are real published models. Specific quality comparisons and "reference UX" claims (Apple's "Clean Up", Google's "Magic Eraser") are editorial paraphrase, not cited per-line. The Sources footer links [Real-ESRGAN explained](https://upscalefree.app/blog/real-esrgan-explained/).
+
 ---
 
 ## 6. Video Features
@@ -170,6 +217,10 @@ Transcribe audio in videos with Whisper / faster-whisper / Distil-Whisper / Whis
 ### 6.5 Action and Activity Recognition
 "Surfing", "kid blowing out candles", "dog catching frisbee". Models: VideoMAE, X-CLIP, TimeSformer, ViViT. More compute-intensive; could be opt-in for power users.
 
+**Audit & sources for section 6**:
+- PySceneDetect, Whisper / faster-whisper / Distil-Whisper / WhisperX, VideoMAE, X-CLIP, TimeSformer, ViViT — all real projects/models. The "Google Photos / Apple Memories for auto-generated slideshow videos" attribution for highlight-clip technique is editorial.
+- Sources footer has [Nature paper on AI-driven video summarization](https://www.nature.com/articles/s41598-025-87824-9) and a Toolify summary, neither of which I directly verified.
+
 ---
 
 ## 7. Memories, Stories and Sharing
@@ -181,6 +232,9 @@ Engagement features that surface old content using the underlying AI signals abo
 - **Theme collections**: "Photos of Alice over the years", "Every sunset you've shot", "Your dog growing up", "Whiteboards from work".
 - **Trip detection**: cluster photos that are away from home cluster + within a date window, auto-suggest "Create album: Trip to Tokyo 2024".
 - **Suggested sharing**: "You took 30 photos with Bob on Saturday, share with him?".
+
+**Audit & sources for section 7**:
+- Section 7 is design ideas, not factual claims. Where it references Google Photos / Apple Memories as inspiration, those are widely-known products, not individually verified.
 
 ---
 
@@ -200,6 +254,10 @@ Possible MCP tools to expose to a chat LLM:
 With these primitives, any MCP-aware client (Claude Desktop, Claude Code, ChatGPT, Cursor, Gemini CLI, etc.) becomes a free chat-with-your-photos interface. The user types natural-language requests; the LLM decomposes them into MCP calls; Photosphere does the work.
 
 This generalises further into a **photo-library agent**: the LLM can be given a goal like "go through last year's photos, find the ones I might want to print, group them by event, and propose a photobook outline" and execute multi-step plans.
+
+**Audit & sources for section 8**:
+- "MCP-aware client (Claude Desktop, Claude Code, ChatGPT, Cursor, Gemini CLI, etc.)" — these clients exist and several support MCP, though MCP support varies and evolves. Not individually verified here. Sources footer references three MCP integrations ([Google Photos MCP Server](https://mcpservers.org/servers/savethepolarbears/google-photos-mcp), [Composio Googlephotos toolkit](https://composio.dev/toolkits/googlephotos), [Image Analysis MCP Server](https://glama.ai/mcp/servers/@champierre/image-mcp-server)).
+- The proposed tool list is *design proposal*, not a description of existing tools.
 
 ---
 
@@ -246,6 +304,11 @@ Realistic options:
 - **On-device search index** of just the user's recent / favourite subset, so search works offline.
 - **MCP / chat client on phone**: the mobile app could host a chat panel that talks to the desktop MCP server when on the same network.
 
+**Audit & sources for section 9**:
+- "Apple Photos runs all of its face / scene / OCR locally" — widely-stated but not specifically cited here. Apple Vision and Core ML are real frameworks.
+- Hardware acceleration paths (ONNX Runtime CUDA/DirectML/CoreML/OpenVINO, CTranslate2, PyTorch, llama.cpp, Ollama) — all real runtimes; specific Photosphere-acceleration claims are aspirational.
+- Mobile model names (MediaPipe, Apple Vision, Google ML Kit, YOLOv8n, MobileNet, MobileCLIP, TinyCLIP, Core ML, TensorFlow Lite, ONNX Runtime Mobile, ExecuTorch) — all real; not individually re-verified.
+
 ---
 
 ## 10. Privacy, Trust and Control
@@ -261,6 +324,11 @@ Cross-cutting concerns that any AI feature in a self-hosted product needs to add
 - **Model provenance**: pin model versions and document licences, especially for distributed builds (CLIP is MIT, InsightFace is non-commercial for some weights, NudeNet is MIT, Llama 3.2 is custom Meta licence).
 - **Children's faces**: extra care. Apple intentionally treats child faces conservatively in Memories; worth matching.
 - **Authenticity flag**: if a photo has been generatively edited, mark it. Comply with emerging C2PA standards.
+
+**Audit & sources for section 10**:
+- "CLIP is MIT, InsightFace is non-commercial for some weights, NudeNet is MIT, Llama 3.2 is custom Meta licence" — [PARTIALLY UNVERIFIED specifics]. Each project does have a licence but I have not re-confirmed the specific licence per project as part of this audit. Treat as "check the licences before shipping" guidance.
+- "Apple intentionally treats child faces conservatively in Memories" — widely-stated practitioner claim, not specifically cited.
+- "C2PA standards" — real standards body ([c2pa.org](https://c2pa.org/)); the "emerging" qualifier is editorial.
 
 ---
 
@@ -298,6 +366,17 @@ For sanity-checking scope.
 - Visual Look Up (identify plants, animals, landmarks, art).
 
 The implication: most of the AI features users now expect from "a photo app" are deliverable on-device with open-source models. The differentiator for Photosphere is *local-first + agent-accessible (MCP) + cross-platform*, which none of the above combine.
+
+**Audit & sources for section 11**:
+- Immich features list — partially verified:
+  - CLIP smart search: documented in [Immich Smart Search blog](https://pixelunion.eu/blog/2026/04/immich-smart-search/) (Sources footer).
+  - InsightFace face recognition: documented at [Immich Facial Recognition docs](https://docs.immich.app/features/facial-recognition/) and [immich-app/buffalo_l](https://huggingface.co/immich-app/buffalo_l).
+  - OCR, duplicate detection, Memories — not individually verified in this audit pass.
+- PhotoPrism features list — partially verified:
+  - "ONNX SCRFD face detector (April 2026 update)": SCRFD via ONNX is documented at [PhotoPrism face recognition docs](https://docs.photoprism.app/developer-guide/vision/face-recognition/); the specific "April 2026" date appears in search snippets but I did not open release notes.
+  - Ollama integration: [PhotoPrism Caption Generation docs](https://docs.photoprism.app/developer-guide/vision/caption-generation/).
+- Google Photos and Apple Photos feature lists — high-level summaries of well-known products. Not individually cited.
+- "None of the above combine local-first + agent-accessible (MCP) + cross-platform" — editorial conclusion, not strictly verifiable; the underlying claim is plausible based on these products' public positioning.
 
 ---
 
