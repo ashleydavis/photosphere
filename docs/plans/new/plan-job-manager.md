@@ -1,8 +1,18 @@
 # Job Manager
 
+## Managed Background Jobs
+
+The following background activities will be surfaced through the Job Manager:
+
+- **Import Assets** — registered from the import context when a new import session starts; cancellable. Progress is reported as *"N of M files"* as the worker processes each asset.
+- **Load Assets** — registered from `AssetDatabaseSource` when a database starts loading; cancellable. Progress is reported as *"N assets loaded"* (indeterminate unless the merkle tree provides a total).
+- **Replicate Database** — registered from the Replicate dialog when replication starts; cancellable. Progress is reported as the per-file status string emitted by the replicate worker. The dialog becomes dismissable mid-task via a *Run in background* button.
+- **Sync Database** — registered when `platform.onSyncStarted()` fires; not cancellable in v1. Progress is indeterminate.
+- **Verify Database** (future) — to be registered when the Verify flow is implemented, following the same pattern (see Step 9 and the Notes section).
+
 ## Overview
 
-Today the app surfaces background work in scattered, ad-hoc ways: the Import context owns the import session, `AssetDatabaseSource` owns the load-assets queue, the Replicate dialog locks itself open until completion, and sync runs silently. There is no app-level concept of "a piece of background work the user can see and cancel". This plan introduces a centralised **Job Manager** that models each user-visible background activity as an `IJob`, exposes it through a React context, and renders it in two UI surfaces: a compact indicator in the right of the navbar (single job name + spinner, or *"N jobs running"* when multiple) and a list in the left sidebar (per-job progress + Cancel). The existing flows (Import Assets, Load Assets, Replicate Database) are converted to register jobs through this manager; a future Verify Database flow can adopt the same pattern with no further plumbing.
+Today the app surfaces background work in scattered, ad-hoc ways: the Import context owns the import session, `AssetDatabaseSource` owns the load-assets queue, the Replicate dialog locks itself open until completion, and sync runs silently. There is no app-level concept of "a piece of background work the user can see and cancel". This plan introduces a centralised **Job Manager** that models each user-visible background activity as an `IJob`, exposes it through a React context, and renders it in two UI surfaces: a compact indicator in the right of the navbar (single job name + spinner, or *"N jobs running"* when multiple) and a list in the right sidebar (per-job progress + Cancel). The existing flows (Import Assets, Load Assets, Replicate Database) are converted to register jobs through this manager; a future Verify Database flow can adopt the same pattern with no further plumbing.
 
 ## Issues
 <!-- populated later by plan:check -->
@@ -62,7 +72,7 @@ Define and export:
 
 - Import `NavbarJobsIndicator` and render it in the right-hand region of the navbar, immediately before any existing right-side controls (e.g. the update-available pill, upload button). Use the same `Box` flex layout the navbar uses for its right cluster.
 
-### 4. Sidebar jobs list
+### 4. Right sidebar jobs list
 
 **4a. New file `packages/user-interface/src/components/sidebar-jobs-list.tsx`.**
 
@@ -77,17 +87,17 @@ Define and export:
     - a `<Button size="sm" variant="plain" color="danger">Cancel</Button>` calling `cancelJob(job.id)` when `job.cancellable` is true.
   - `data-id` attributes: `sidebar-jobs-list`, `sidebar-job-row-{job.id}`, `sidebar-job-cancel-{job.id}`.
 
-**4b. Mount in the left sidebar.**
+**4b. Mount in the right sidebar.**
 
-**File:** `packages/user-interface/src/components/left-sidebar.tsx`.
+**File:** `packages/user-interface/src/components/right-sidebar.tsx`.
 
-- Import `SidebarJobsList` and render it as the first section above existing content (recent databases, nav links), with appropriate `Divider` spacing.
+- Import `SidebarJobsList` and render it as the first section above existing content, with appropriate `Divider` spacing.
 
-**4c. (Optional but recommended) Auto-open the sidebar when the navbar indicator is clicked.**
+**4c. (Optional but recommended) Auto-open the right sidebar when the navbar indicator is clicked.**
 
-**File:** `packages/user-interface/src/main.tsx` (the layout component holding `sidebarOpen` state).
+**File:** `packages/user-interface/src/main.tsx` (the layout component holding the right-sidebar open state).
 
-- Add a `useEffect` that subscribes to the `photosphere:show-jobs` window event and sets `sidebarOpen` to `true`. Clean up the listener on unmount.
+- Add a `useEffect` that subscribes to the `photosphere:show-jobs` window event and opens the right sidebar. Clean up the listener on unmount.
 
 ### 5. Refactor Import flow to register a job
 
@@ -184,7 +194,7 @@ Add a new desktop smoke test directory: `apps/desktop/smoke-tests/18-job-manager
 2. Start the desktop app, open the source database (so the Load Assets job fires briefly), wait for `Databases page loaded`.
 3. Open the Replicate dialog, fill `replicate-dest-path-input`, click `replicate-start-button`.
 4. Assert the `data-id="navbar-jobs-indicator"` element is visible and its text contains `Replicating to`.
-5. Open the left sidebar, click `data-id="sidebar-job-row-${sourcePath}"`, assert the Cancel button is present.
+5. Open the right sidebar, click `data-id="sidebar-job-row-${sourcePath}"`, assert the Cancel button is present.
 6. Click `data-id="replicate-run-in-background-button"` — the dialog closes and the navbar indicator stays.
 7. Wait for `Replication completed for` log line, assert the navbar indicator disappears within 2s.
 8. Extend the smoke test runner index if it does not auto-discover the new directory.
@@ -203,7 +213,7 @@ Also update the existing **17-replicate-database** smoke test to click the new *
 ## Human Verification
 
 1. Start the desktop app (`bun run dev`).
-2. Open a registered database — verify a "Loading database" row briefly appears in the left sidebar with an indeterminate progress bar, and a matching navbar indicator. Both disappear when load completes.
+2. Open a registered database — verify a "Loading database" row briefly appears in the right sidebar with an indeterminate progress bar, and a matching navbar indicator. Both disappear when load completes.
 3. Trigger an import (drag-drop or File → Import Assets). Confirm a "Importing assets" job appears in both surfaces, progress text counts up, and Cancel terminates the import and removes the row.
 4. Open the Replicate dialog from the Manage Databases page, configure a destination, click *Start replication*. Click *Run in background* — the dialog closes, the navbar shows the replicate job, the sidebar shows progress.
 5. With the replicate job running, trigger a second job (e.g. open a different database to fire Load Assets). The navbar should switch from showing the single job name to *"2 background jobs running"*; the sidebar should list both rows.
