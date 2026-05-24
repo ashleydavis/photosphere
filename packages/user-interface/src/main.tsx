@@ -200,9 +200,13 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
                         });
                     });
                     break;
+
+                case 'open-stories':
+                    navigate('/stories');
+                    break;
             }
         });
-    }, [platform, startImportDirectories, addToast]);
+    }, [platform, startImportDirectories, addToast, navigate]);
 
     //
     // Listen for navigate events from the main process.

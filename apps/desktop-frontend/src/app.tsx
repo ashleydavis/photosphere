@@ -1,5 +1,5 @@
 import React from "react";
-import { HashRouter } from "react-router-dom";
+import { HashRouter, Route, Routes } from "react-router-dom";
 import {
     AppContextProvider, Main,
     GalleryContextProvider,
@@ -10,6 +10,7 @@ import {
     ImportContextProvider,
     ToastContextProvider,
     UuidGeneratorProvider,
+    StoriesPage,
 } from "user-interface";
 import { ElectronRendererQueueBackend } from "./lib/electron-renderer-queue-backend";
 import { setQueueBackend } from "task-queue";
@@ -57,27 +58,32 @@ export function App({ electronAPI }: IAppProps) {
                 v7_relativeSplatPath: true,
             }}
         >
-            <UuidGeneratorProvider value={uuidGenerator}>
-                <PlatformProviderElectron electronAPI={electronAPI}>
-                    <AppContextProvider>
-                        <ToastContextProvider>
-                            <AssetDatabaseProvider queueBackend={queueBackend} restApiUrl={restApiUrl}>
-                                <ImportContextProvider>
-                                    <GalleryContextProvider>
-                                        <DeleteConfirmationContextProvider>
-                                            <SearchContextProvider>
-                                                <GalleryLayoutContextProvider>
-                                                    <Main isMobile={false} initialTheme={initialTheme} />
-                                                </GalleryLayoutContextProvider>
-                                            </SearchContextProvider>
-                                        </DeleteConfirmationContextProvider>
-                                    </GalleryContextProvider>
-                                </ImportContextProvider>
-                            </AssetDatabaseProvider>
-                        </ToastContextProvider>
-                    </AppContextProvider>
-                </PlatformProviderElectron>
-            </UuidGeneratorProvider>
+            <Routes>
+                <Route path="/stories" element={<StoriesPage />} />
+                <Route path="*" element={
+                    <UuidGeneratorProvider value={uuidGenerator}>
+                        <PlatformProviderElectron electronAPI={electronAPI}>
+                            <AppContextProvider>
+                                <ToastContextProvider>
+                                    <AssetDatabaseProvider queueBackend={queueBackend} restApiUrl={restApiUrl}>
+                                        <ImportContextProvider>
+                                            <GalleryContextProvider>
+                                                <DeleteConfirmationContextProvider>
+                                                    <SearchContextProvider>
+                                                        <GalleryLayoutContextProvider>
+                                                            <Main isMobile={false} initialTheme={initialTheme} />
+                                                        </GalleryLayoutContextProvider>
+                                                    </SearchContextProvider>
+                                                </DeleteConfirmationContextProvider>
+                                            </GalleryContextProvider>
+                                        </ImportContextProvider>
+                                    </AssetDatabaseProvider>
+                                </ToastContextProvider>
+                            </AppContextProvider>
+                        </PlatformProviderElectron>
+                    </UuidGeneratorProvider>
+                } />
+            </Routes>
         </HashRouter>
     );
 }

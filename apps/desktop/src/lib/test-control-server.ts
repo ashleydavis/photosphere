@@ -1,6 +1,8 @@
 import express from 'express';
 import type { Express } from 'express';
 import http from 'http';
+import fs from 'fs';
+import path from 'path';
 import { app, BrowserWindow, ipcMain } from 'electron';
 import { log } from 'utils';
 import { TestUuidGenerator } from 'node-utils';
@@ -89,6 +91,26 @@ export class TestControlServer implements ITestControlServer {
 
         expressApp.post('/type', (req, res) => {
             this.mainWindow.webContents.send('test-type', { dataId: req.body.dataId, text: req.body.text });
+            res.json({ ok: true });
+        });
+
+        expressApp.post('/screenshot', async (req, res) => {
+            const outputPath: string = req.body.outputPath;
+            try {
+                const image = await this.mainWindow.webContents.capturePage();
+                const buffer = image.toPNG();
+                await fs.promises.mkdir(path.dirname(outputPath), { recursive: true });
+                await fs.promises.writeFile(outputPath, buffer);
+                res.json({ ok: true, outputPath });
+            }
+            catch (err) {
+                log.exception('Failed to capture screenshot', err as Error);
+                res.status(500).json({ ok: false, error: (err as Error).message });
+            }
+        });
+
+        expressApp.post('/cycle-advance', async (_req, res) => {
+            await this.mainWindow.webContents.executeJavaScript(`window.dispatchEvent(new Event('cycle-advance'))`);
             res.json({ ok: true });
         });
 

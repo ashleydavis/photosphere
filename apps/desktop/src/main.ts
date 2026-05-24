@@ -1513,6 +1513,14 @@ async function createMenu(): Promise<void> {
         { role: 'reload', label: 'Reload' },
         { role: 'forceReload', label: 'Force Reload' },
         { role: 'toggleDevTools', label: 'Toggle Developer Tools' },
+        {
+            label: 'Stories',
+            click: () => {
+                if (mainWindow) {
+                    mainWindow.webContents.send('menu-action', 'open-stories');
+                }
+            },
+        },
     ];
 
     template.push({
