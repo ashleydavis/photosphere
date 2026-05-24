@@ -49,7 +49,7 @@ export async function syncDatabaseHandler(
         return;
     }
 
-    log.info(`Sync started`);
+    log.info(`Sync started for "${data.databasePath}" (origin: ${config.origin})`);
 
     context.sendMessage({ type: "sync-started", databasePath: data.databasePath });
 
@@ -121,7 +121,7 @@ export async function syncDatabaseHandler(
     await updateDatabaseConfig(localRawStorage, { lastSyncedAt });
     await updateDatabaseConfig(originRawStorage, { lastSyncedAt });
 
-    log.info(`Sync completed.`);
+    log.info(`Sync completed for "${data.databasePath}"`);
 
     context.sendMessage({ type: "sync-completed", databasePath: data.databasePath });
 
