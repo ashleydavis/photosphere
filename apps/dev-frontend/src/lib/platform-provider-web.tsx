@@ -205,6 +205,9 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
     const updateDatabase = useCallback(async (_originalName: string, _entry: IDatabaseEntry): Promise<void> => {
     }, []);
 
+    const setDatabaseOrigin = useCallback(async (_databasePath: string, _origin: string | undefined): Promise<void> => {
+    }, []);
+
     const removeDatabaseEntry = useCallback(async (_name: string): Promise<void> => {
     }, []);
 
@@ -320,6 +323,7 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         getDatabases,
         addDatabase,
         updateDatabase,
+        setDatabaseOrigin,
         removeDatabaseEntry,
         findDatabase,
         pickFolder,

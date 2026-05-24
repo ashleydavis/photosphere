@@ -359,6 +359,10 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         await electronAPI.invoke('update-database', { originalName, entry });
     }, [electronAPI]);
 
+    const setDatabaseOrigin = useCallback(async (databasePath: string, origin: string | undefined): Promise<void> => {
+        await electronAPI.invoke('set-database-origin', { databasePath, origin });
+    }, [electronAPI]);
+
     const removeDatabaseEntry = useCallback(async (name: string): Promise<void> => {
         await electronAPI.invoke('remove-database-entry', name);
     }, [electronAPI]);
@@ -493,6 +497,7 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         getDatabases,
         addDatabase,
         updateDatabase,
+        setDatabaseOrigin,
         removeDatabaseEntry,
         findDatabase,
         pickFolder,

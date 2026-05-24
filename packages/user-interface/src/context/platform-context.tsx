@@ -385,6 +385,13 @@ export interface IPlatformContext {
     updateDatabase: (originalName: string, entry: IDatabaseEntry) => Promise<void>;
 
     //
+    // Writes the database's origin into its .db/config.json. Pass undefined to clear.
+    // This is the canonical source of truth; the entry's cached `origin` is refreshed
+    // from here on each open.
+    //
+    setDatabaseOrigin: (databasePath: string, origin: string | undefined) => Promise<void>;
+
+    //
     // Removes a database entry by name (case-insensitive).
     //
     removeDatabaseEntry: (name: string) => Promise<void>;

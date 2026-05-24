@@ -10,7 +10,7 @@ import { TaskStatus, setQueueBackend } from 'task-queue';
 import { WorkerPoolElectronMain } from './lib/worker-pool-electron-main';
 import { RandomUuidGenerator, TimestampProvider, logExceptions, log } from 'utils';
 import { findAvailablePort } from 'node-utils';
-import { loadDatabaseConfig } from 'api';
+import { loadDatabaseConfig, updateDatabaseConfig } from 'api';
 import type { IReplicateDatabaseData } from 'api';
 import { loadDesktopConfig, saveDesktopConfig, updateLastFolder, getTheme, setTheme, getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry, getRecentDatabases, markDatabaseOpened, removeRecentDatabaseName, findDatabase, fetchNews, getShownNewsIds, addShownNewsIds, getLastShownUpdateVersion, setLastShownUpdateVersion, checkConnectivity } from 'node-api';
 import type { IDatabaseEntry, IDesktopConfig } from 'node-api';
@@ -500,6 +500,43 @@ interface IUpdateDatabaseRequest {
 ipcMain.handle('update-database', logExceptions(async (_event, { originalName, entry }: IUpdateDatabaseRequest) => {
     await updateDatabaseEntry(originalName, entry);
 }, 'Error updating database'));
+
+//
+// Request payload for the set-database-origin IPC channel.
+//
+interface ISetDatabaseOriginRequest {
+    // Path of the database whose .db/config.json should be updated.
+    databasePath: string;
+
+    // New origin string. Pass undefined to clear the origin.
+    origin: string | undefined;
+}
+
+// IPC handler for writing the database's origin to its .db/config.json
+ipcMain.handle('set-database-origin', logExceptions(async (_event, { databasePath, origin }: ISetDatabaseOriginRequest) => {
+    const vault = getVault(getDefaultVaultType());
+    const databases = await getDatabases();
+    const dbEntry = databases.find(existingEntry => existingEntry.path === databasePath);
+    let s3Credentials = undefined;
+    if (dbEntry?.s3Key) {
+        const s3Secret = await vault.get(dbEntry.s3Key);
+        if (s3Secret) {
+            const parsed = JSON.parse(s3Secret.value);
+            s3Credentials = {
+                region: parsed.region,
+                accessKeyId: parsed.accessKeyId,
+                secretAccessKey: parsed.secretAccessKey,
+                endpoint: parsed.endpoint,
+            };
+        }
+    }
+    const { rawStorage } = createStorage(databasePath, s3Credentials);
+    await updateDatabaseConfig(rawStorage, { origin });
+    if (dbEntry && dbEntry.origin !== origin) {
+        await updateDatabaseEntry(dbEntry.name, { ...dbEntry, origin });
+    }
+    log.event(`Database origin updated for ${basename(databasePath)}`);
+}, 'Error setting database origin'));
 
 // IPC handler for opening a directory picker and returning the chosen path.
 // Accepts optional IPickFolderOptions to control title, default-folder config key, and the "New Folder" button.

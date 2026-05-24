@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { log } from 'utils';
+import { log, logExceptions } from 'utils';
 import Box from '@mui/joy/Box';
 import Typography from '@mui/joy/Typography';
 import Button from '@mui/joy/Button';
@@ -36,6 +36,7 @@ interface IDatabaseFormState {
     name: string;
     description: string;
     path: string;
+    origin: string;
 
     // References to shared secrets by id.
     s3Key: string | undefined;
@@ -51,6 +52,7 @@ function emptyFormState(): IDatabaseFormState {
         name: '',
         description: '',
         path: '',
+        origin: '',
         s3Key: undefined,
         encryptionKey: undefined,
         geocodingKey: undefined,
@@ -159,12 +161,14 @@ export function DatabasesPage() {
             name: entry.name,
             description: entry.description,
             path: entry.path,
+            origin: entry.origin ?? '',
             s3Key: entry.s3Key,
             encryptionKey: entry.encryptionKey,
             geocodingKey: entry.geocodingKey,
         });
         setNameError(undefined);
         setDialogOpen(true);
+        log.info('Edit database dialog opened');
     }
 
     // Inline name-conflict error shown under the Name field in the add/edit dialog.
@@ -183,10 +187,12 @@ export function DatabasesPage() {
             return;
         }
 
+        const trimmedOrigin = form.origin.trim();
         const entryData: Omit<IDatabaseEntry, 'id'> = {
             name: trimmedName,
             description: form.description,
             path: form.path,
+            origin: trimmedOrigin.length === 0 ? undefined : trimmedOrigin,
             s3Key: form.s3Key,
             encryptionKey: form.encryptionKey,
             geocodingKey: form.geocodingKey,
@@ -204,7 +210,12 @@ export function DatabasesPage() {
         }
 
         if (editingEntry) {
+            const originChanged = (editingEntry.origin ?? '') !== (entryData.origin ?? '');
+            if (originChanged) {
+                await platform.setDatabaseOrigin(entryData.path, entryData.origin);
+            }
             await platform.updateDatabase(editingEntry.name, { ...editingEntry, ...entryData });
+            log.event('Database entry updated');
         }
         else {
             await platform.addDatabase(entryData);
@@ -377,6 +388,7 @@ export function DatabasesPage() {
                                     <FileCopy fontSize="small" />
                                 </IconButton>
                                 <IconButton
+                                    data-id="edit-database-button"
                                     size="sm"
                                     variant="plain"
                                     title="Edit database"
@@ -429,7 +441,7 @@ export function DatabasesPage() {
                             />
                         </FormControl>
 
-                        <FormControl sx={{ mb: 2 }}>
+                        <FormControl sx={{ mb: 1 }}>
                             <FormLabel>Path</FormLabel>
                             <Box sx={{ display: 'flex', gap: 1 }}>
                                 <Input
@@ -441,6 +453,15 @@ export function DatabasesPage() {
                                     Browse
                                 </Button>
                             </Box>
+                        </FormControl>
+
+                        <FormControl sx={{ mb: 2 }}>
+                            <FormLabel>Origin</FormLabel>
+                            <Input
+                                data-id="database-origin-input"
+                                value={form.origin}
+                                onChange={event => setForm(prev => ({ ...prev, origin: event.target.value }))}
+                            />
                         </FormControl>
 
                         <FormControl sx={{ mb: 1 }}>
@@ -457,7 +478,12 @@ export function DatabasesPage() {
                     </DialogContent>
                     <DialogActions>
                         <Button variant="plain" onClick={() => setDialogOpen(false)}>Cancel</Button>
-                        <Button onClick={() => handleSave().catch(err => log.exception('Save error:', err as Error))}>Save</Button>
+                        <Button
+                            data-id="save-database-button"
+                            onClick={logExceptions(handleSave, 'Save error')}
+                            >
+                            Save
+                        </Button>
                     </DialogActions>
                 </ModalDialog>
             </Modal>
