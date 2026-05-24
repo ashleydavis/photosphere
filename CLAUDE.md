@@ -12,7 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Never use memory.
 - All Claude configuration goes in this repository only, not in the home directory.
 - Never stash code unless asked.
-- Never use `cd` in shell commands. Always use absolute paths instead. The working directory persists across Bash tool calls and `cd` will cause subsequent commands to run from the wrong directory.
+- Never use `cd` to permanently change directories within the repo. Use it on case-by-case and temporary basis as part of a command to run the command from a particular directory. Use of `cd` by itself will leave you in the wrong directory meaning other commands won't work.
 - Never invoke shell scripts directly (e.g. `./apps/desktop/smoke-tests.sh`). Use the `bun run` equivalent from `package.json` (e.g. `bun run test:electron`, `bun run test:cli`).
 - When running smoke tests, do not manually `rm -rf` the test's `tmp/` directory — the runner already cleans it before each test.
 - When creating a new worktree, never use `EnterWorktree` with a `name` parameter. Instead: (1) run `git branch --show-current` to get the current branch, (2) run `git worktree add -b <new-branch> .claude/worktrees/<name> <current-branch>` to create the worktree explicitly branching from the current branch, (3) then use `EnterWorktree` with the `path` parameter to enter it.
