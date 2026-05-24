@@ -84,7 +84,7 @@ Define and export:
     - the `name`,
     - `progressMessage` underneath in small grey text when present,
     - a determinate `<LinearProgress determinate value={progress*100} />` when `progress` is defined, otherwise an indeterminate `<LinearProgress />`,
-    - a `<Button size="sm" variant="plain" color="danger">Cancel</Button>` calling `cancelJob(job.id)` when `job.cancellable` is true.
+    - an icon-only `<IconButton size="sm" variant="plain" color="danger" aria-label="Cancel job" title="Cancel">` containing a cancel icon (e.g. a Font Awesome `fa-xmark` or `fa-circle-xmark` via the same icon mechanism used elsewhere in the app — match the existing pattern, do not introduce a new icon library) and calling `cancelJob(job.id)` when `job.cancellable` is true. No text label; the icon plus `aria-label`/`title` carries the meaning.
   - `data-id` attributes: `sidebar-jobs-list`, `sidebar-job-row-{job.id}`, `sidebar-job-cancel-{job.id}`.
 
 **4b. Mount in the right sidebar.**
@@ -181,45 +181,26 @@ No code change. Document the pattern at the top of `jobs-context.tsx`:
 - **`sidebar-jobs-list.test.tsx`** (new): render with stubbed jobs; assert
   - empty state renders nothing,
   - one row per job,
-  - Cancel button calls `cancelJob(job.id)` and is hidden when `cancellable === false`,
+  - the cancel icon button calls `cancelJob(job.id)` and is not rendered when `cancellable === false`,
   - determinate vs. indeterminate `<LinearProgress />` based on `progress`.
 - Extend existing import-context / asset-database-source tests (if any) so they don't regress when the new `useJobs()` call is added; if no existing test covers the new call paths, add one in `packages/user-interface/src/test/context/`.
 - Extend `replicate-database-dialog` tests (if any sibling tests exist; check `packages/user-interface/src/test/components/`) to assert the running-step now exposes the *Run in background* button.
 
 ## Smoke Tests
 
-Add a new desktop smoke test directory: `apps/desktop/smoke-tests/18-job-manager/test.sh`. Model on `17-replicate-database/test.sh`. The test:
+No new smoke-test directory is added for the Job Manager itself. The Job Manager is plumbing for existing flows; the way to know it has not regressed any flow is that each flow's existing smoke test still passes end-to-end after the refactor. Confirm coverage of each managed job below and update tests only where a behaviour they previously relied on has actually changed:
 
-1. Pre-create a source database via CLI with a small fixture.
-2. Start the desktop app, open the source database (so the Load Assets job fires briefly), wait for `Databases page loaded`.
-3. Open the Replicate dialog, fill `replicate-dest-path-input`, click `replicate-start-button`.
-4. Assert the `data-id="navbar-jobs-indicator"` element is visible and its text contains `Replicating to`.
-5. Open the right sidebar, click `data-id="sidebar-job-row-${sourcePath}"`, assert the Cancel button is present.
-6. Click `data-id="replicate-run-in-background-button"` — the dialog closes and the navbar indicator stays.
-7. Wait for `Replication completed for` log line, assert the navbar indicator disappears within 2s.
-8. Extend the smoke test runner index if it does not auto-discover the new directory.
+- **Load Assets** — covered by [3-open-database](apps/desktop/smoke-tests/3-open-database/) and any test that opens a pre-existing database (e.g. [10-view-database](apps/desktop/smoke-tests/10-view-database/)). No test edits required; the flow's observable outcome (database content loads) is unchanged.
+- **Import Assets** — covered by [4-import-photos](apps/desktop/smoke-tests/4-import-photos/). No test edits required; the import still completes the same way and the cancel path is exercised by the existing test if present.
+- **Replicate Database** — covered by [17-replicate-database](apps/desktop/smoke-tests/17-replicate-database/). One required edit: the *Running* `DialogActions` now expose a `data-id="replicate-run-in-background-button"` instead of being blocked-open. Update the test so that whatever it currently does to wait for replication to finish still works (the `Replication completed for` log line still fires). If the test previously asserted that the dialog *cannot* be closed mid-task, remove that assertion.
+- **Sync Database** — there is no dedicated sync smoke test in the suite today, and this plan does not add one (sync is non-cancellable and has no user-driven trigger). Existing tests that incidentally trigger a sync will continue to do so without observable change.
 
-Also update the existing **17-replicate-database** smoke test to click the new *Run in background* button mid-task and verify completion still fires correctly.
+Verification rule: after the refactor, `bun run test:electron` must pass with no edits beyond the single `17-replicate-database` update above.
 
 ## Verify
 
 1. `bun run compile` from repo root — clean.
-2. `bun run test` from repo root — full unit-test suite green, including the new jobs-context and indicator tests.
-3. `bun run test:cli` — no regression in CLI tests.
-4. `bun run test:electron` — full smoke suite green, including the new `18-job-manager` and the updated `17-replicate-database`.
-5. `grep -c "useJobs" packages/user-interface/src` should be at least 4 (jobs-context, navbar indicator, sidebar list, plus the four flows that register jobs).
-6. `grep -c "registerJob\|completeJob\|updateJob" packages/user-interface/src` should match the number of expected call sites (≥ 4 register, ≥ 4 complete, plus update calls).
-
-## Human Verification
-
-1. Start the desktop app (`bun run dev`).
-2. Open a registered database — verify a "Loading database" row briefly appears in the right sidebar with an indeterminate progress bar, and a matching navbar indicator. Both disappear when load completes.
-3. Trigger an import (drag-drop or File → Import Assets). Confirm a "Importing assets" job appears in both surfaces, progress text counts up, and Cancel terminates the import and removes the row.
-4. Open the Replicate dialog from the Manage Databases page, configure a destination, click *Start replication*. Click *Run in background* — the dialog closes, the navbar shows the replicate job, the sidebar shows progress.
-5. With the replicate job running, trigger a second job (e.g. open a different database to fire Load Assets). The navbar should switch from showing the single job name to *"2 background jobs running"*; the sidebar should list both rows.
-6. Click Cancel on the replicate row — the row disappears and the worker terminates (no more `replicate-progress` log lines arrive).
-7. Wait for any remaining job to complete — sidebar empties, navbar indicator disappears.
-8. Confirm the toast notifications still fire on replicate completion/failure (they live in main and are independent of the Job Manager).
+2. `bun run test:all` from repo root — full unit and smoke suites green, including the new jobs-context/indicator/sidebar unit tests and the updated `17-replicate-database` smoke test.
 
 ## Notes
 
