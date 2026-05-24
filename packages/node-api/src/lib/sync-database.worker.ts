@@ -29,100 +29,105 @@ export async function syncDatabaseHandler(
         throw new Error("databasePath is required");
     }
 
-    const { storage: localStorage, rawStorage: localRawStorage } = await openStorage(data.databasePath);
+    try {
+        const { storage: localStorage, rawStorage: localRawStorage } = await openStorage(data.databasePath);
 
-    const config = await loadDatabaseConfig(localRawStorage);
-    if (!config?.origin) {
-        log.info(`Sync skipped for "${data.databasePath}": no origin configured`);
-        return;
-    }
-
-    // Open the origin storage up-front so credentials, encryption keys, etc. are resolved via
-    // the standard openStorage path. The connectivity check then runs against that storage,
-    // which avoids false-negative skips when the origin needs credentials the worker would not
-    // otherwise have (e.g. S3 origins registered in databases.toml with an s3_key).
-    const { storage: originStorage, rawStorage: originRawStorage } = await openStorage(config.origin);
-
-    const connected = await merkleTreeExists(originStorage);
-    if (!connected) {
-        log.info(`Sync skipped for "${data.databasePath}": origin not accessible (${config.origin})`);
-        return;
-    }
-
-    log.info(`Sync started for "${data.databasePath}" (origin: ${config.origin})`);
-
-    context.sendMessage({ type: "sync-started", databasePath: data.databasePath });
-
-    const localDb = createMediaFileDatabase(localStorage, uuidGenerator, timestampProvider);
-    const originDb = createMediaFileDatabase(originStorage, uuidGenerator, timestampProvider);
-
-    //
-    // Accumulates changes and flushes them as sync-batch task messages in groups of SYNC_BATCH_SIZE.
-    //
-    let pendingBatch: ISyncChange[] = [];
-
-    function flushBatch(): void {
-        if (pendingBatch.length === 0) {
+        const config = await loadDatabaseConfig(localRawStorage);
+        if (!config?.origin) {
+            log.info(`Sync skipped for "${data.databasePath}": no origin configured`);
             return;
         }
 
-        const added: IAsset[] = [];
-        const updated: IAsset[] = [];
-        const deletedIds: string[] = [];
+        // Open the origin storage up-front so credentials, encryption keys, etc. are resolved via
+        // the standard openStorage path. The connectivity check then runs against that storage,
+        // which avoids false-negative skips when the origin needs credentials the worker would not
+        // otherwise have (e.g. S3 origins registered in databases.toml with an s3_key).
+        const { storage: originStorage, rawStorage: originRawStorage } = await openStorage(config.origin);
 
-        for (const change of pendingBatch) {
-            if (change.type === "added" && change.asset) {
-                added.push(change.asset);
+        const connected = await merkleTreeExists(originStorage);
+        if (!connected) {
+            log.info(`Sync skipped for "${data.databasePath}": origin not accessible (${config.origin})`);
+            return;
+        }
+
+        log.info(`Sync started for "${data.databasePath}" (origin: ${config.origin})`);
+
+        context.sendMessage({ type: "sync-started", databasePath: data.databasePath });
+
+        const localDb = createMediaFileDatabase(localStorage, uuidGenerator, timestampProvider);
+        const originDb = createMediaFileDatabase(originStorage, uuidGenerator, timestampProvider);
+
+        //
+        // Accumulates changes and flushes them as sync-batch task messages in groups of SYNC_BATCH_SIZE.
+        //
+        let pendingBatch: ISyncChange[] = [];
+
+        function flushBatch(): void {
+            if (pendingBatch.length === 0) {
+                return;
             }
-            else if (change.type === "updated" && change.asset) {
-                updated.push(change.asset);
+
+            const added: IAsset[] = [];
+            const updated: IAsset[] = [];
+            const deletedIds: string[] = [];
+
+            for (const change of pendingBatch) {
+                if (change.type === "added" && change.asset) {
+                    added.push(change.asset);
+                }
+                else if (change.type === "updated" && change.asset) {
+                    updated.push(change.asset);
+                }
+                else if (change.type === "deleted" && change.assetId) {
+                    deletedIds.push(change.assetId);
+                }
             }
-            else if (change.type === "deleted" && change.assetId) {
-                deletedIds.push(change.assetId);
+
+            const batchMessage: ISyncBatchMessage = {
+                type: "sync-batch",
+                databasePath: data.databasePath,
+                added,
+                updated,
+                deletedIds,
+            };
+            context.sendMessage(batchMessage);
+            pendingBatch = [];
+        }
+
+        function onLocalChange(change: ISyncChange): void {
+            pendingBatch.push(change);
+            if (pendingBatch.length >= SYNC_BATCH_SIZE) {
+                flushBatch();
             }
         }
 
-        const batchMessage: ISyncBatchMessage = {
-            type: "sync-batch",
-            databasePath: data.databasePath,
-            added,
-            updated,
-            deletedIds,
-        };
-        context.sendMessage(batchMessage);
-        pendingBatch = [];
+        // source = local, target = origin.
+        // syncDatabases pulls target → source then pushes source → target.
+        // So local receives origin changes, then origin receives local changes.
+        await syncDatabases(
+            localStorage,
+            localRawStorage,
+            localDb.bsonDatabase,
+            originStorage,
+            originRawStorage,
+            originDb.bsonDatabase,
+            sessionId,
+            onLocalChange
+        );
+
+        // Flush any remaining changes that didn't fill a full batch.
+        flushBatch();
+
+        const lastSyncedAt = new Date().toISOString();
+        await updateDatabaseConfig(localRawStorage, { lastSyncedAt });
+        await updateDatabaseConfig(originRawStorage, { lastSyncedAt });
+
+        log.info(`Sync completed for "${data.databasePath}"`);
+
+        context.sendMessage({ type: "sync-completed", databasePath: data.databasePath });
     }
-
-    function onLocalChange(change: ISyncChange): void {
-        pendingBatch.push(change);
-        if (pendingBatch.length >= SYNC_BATCH_SIZE) {
-            flushBatch();
-        }
+    catch (error) {
+        log.exception(`Sync failed for "${data.databasePath}"`, error as Error);
+        throw error;
     }
-
-    // source = local, target = origin.
-    // syncDatabases pulls target → source then pushes source → target.
-    // So local receives origin changes, then origin receives local changes.
-    await syncDatabases(
-        localStorage,
-        localRawStorage,
-        localDb.bsonDatabase,
-        originStorage,
-        originRawStorage,
-        originDb.bsonDatabase,
-        sessionId,
-        onLocalChange
-    );
-
-    // Flush any remaining changes that didn't fill a full batch.
-    flushBatch();
-
-    const lastSyncedAt = new Date().toISOString();
-    await updateDatabaseConfig(localRawStorage, { lastSyncedAt });
-    await updateDatabaseConfig(originRawStorage, { lastSyncedAt });
-
-    log.info(`Sync completed for "${data.databasePath}"`);
-
-    context.sendMessage({ type: "sync-completed", databasePath: data.databasePath });
-
 }
