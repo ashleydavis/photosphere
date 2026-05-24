@@ -149,7 +149,7 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         // Not applicable on web platform.
     }, []);
 
-    const onMenuAction = useCallback((_action: string, _callback: () => void): (() => void) => {
+    const onMenuAction = useCallback((_callback: (action: string) => void): (() => void) => {
         // No-op for web platform.
         return () => {};
     }, []);

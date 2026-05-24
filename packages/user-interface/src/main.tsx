@@ -172,53 +172,37 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
     }, [platform, setMode]);
 
 
-    //TODO: It's bad to have a useEffect for every menu item.
-
     //
-    // Listen for open-configuration menu action from the main process.
+    // Listen for menu actions from the main process and dispatch by action name.
     //
     useEffect(() => {
-        const unsubscribe = platform.onMenuAction('open-configuration', () => {
-            setConfigurationOpen(true);
+        return platform.onMenuAction((action) => {
+            switch (action) {
+                case 'open-configuration':
+                    setConfigurationOpen(true);
+                    break;
+
+                case 'new-database':
+                    setCreateDatabaseModalOpen(true);
+                    break;
+
+                case 'open-database':
+                    setOpenDatabaseModalOpen(true);
+                    break;
+
+                case 'import-assets':
+                    startImportDirectories().catch(error => {
+                        log.exception('Error starting import from menu', error as Error);
+                        addToast({
+                            message: `Failed to start import: ${(error as Error).message}`,
+                            color: 'danger',
+                            duration: 8000,
+                        });
+                    });
+                    break;
+            }
         });
-
-        return unsubscribe;
-    }, [platform]);
-
-    //
-    // Listen for new-database menu action from the main process.
-    //
-    useEffect(() => {
-        const unsubscribe = platform.onMenuAction('new-database', () => {
-            setCreateDatabaseModalOpen(true);
-        });
-
-        return unsubscribe;
-    }, [platform]);
-
-    //
-    // Listen for open-database menu action from the main process.
-    //
-    useEffect(() => {
-        const unsubscribe = platform.onMenuAction('open-database', () => {
-            setOpenDatabaseModalOpen(true);
-        });
-
-        return unsubscribe;
-    }, [platform]);
-
-    //
-    // Listen for import-assets menu action from the main process. Triggers the directory picker.
-    //
-    useEffect(() => {
-        const unsubscribe = platform.onMenuAction('import-assets', () => {
-            startImportDirectories().catch(error => {
-                log.exception('Error starting import from menu', error as Error);
-            });
-        });
-
-        return unsubscribe;
-    }, [platform, startImportDirectories]);
+    }, [platform, startImportDirectories, addToast]);
 
     //
     // Listen for navigate events from the main process.

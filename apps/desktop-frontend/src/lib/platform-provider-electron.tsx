@@ -34,8 +34,8 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
     // Store callbacks for theme-changed events
     const themeCallbacksRef = useRef<Set<(theme: 'light' | 'dark' | 'system') => void>>(new Set());
 
-    // Store callbacks for menu actions, keyed by action name
-    const menuActionCallbacksRef = useRef<Map<string, Set<() => void>>>(new Map());
+    // Store callbacks for menu actions
+    const menuActionCallbacksRef = useRef<Set<(action: string) => void>>(new Set());
 
     // Store callbacks for navigate events
     const navigateCallbacksRef = useRef<Set<(page: string) => void>>(new Set());
@@ -162,7 +162,7 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
     // Set up message listener for menu-action events
     useEffect(() => {
         const handleMenuAction = (action: string) => {
-            menuActionCallbacksRef.current.get(action)?.forEach(cb => cb());
+            menuActionCallbacksRef.current.forEach(callback => callback(action));
         };
 
         electronAPI.onMessage('menu-action', handleMenuAction);
@@ -293,13 +293,10 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         };
     }, []);
 
-    const onMenuAction = useCallback((action: string, callback: () => void): (() => void) => {
-        if (!menuActionCallbacksRef.current.has(action)) {
-            menuActionCallbacksRef.current.set(action, new Set());
-        }
-        menuActionCallbacksRef.current.get(action)!.add(callback);
+    const onMenuAction = useCallback((callback: (action: string) => void): (() => void) => {
+        menuActionCallbacksRef.current.add(callback);
         return () => {
-            menuActionCallbacksRef.current.get(action)?.delete(callback);
+            menuActionCallbacksRef.current.delete(callback);
         };
     }, []);
 

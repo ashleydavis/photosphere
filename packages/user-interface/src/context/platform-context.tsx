@@ -275,10 +275,11 @@ export interface IPlatformContext {
     onThemeChanged: (callback: (theme: 'light' | 'dark' | 'system') => void) => Unsubscribe;
 
     //
-    // Subscribes to a named menu action sent from the main process (excluding theme changes).
+    // Subscribes to menu actions sent from the main process (excluding theme changes).
+    // The callback receives the action name and should switch on it.
     // Returns an unsubscribe function.
     //
-    onMenuAction: (action: string, callback: () => void) => Unsubscribe;
+    onMenuAction: (callback: (action: string) => void) => Unsubscribe;
 
     //
     // Subscribes to navigate events sent from the main process.
