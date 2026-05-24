@@ -130,11 +130,17 @@ A suite of end-to-end shell smoke tests lives in `smoke-tests/`. Each test is a 
 ./smoke-tests.sh ls
 ```
 
-On Linux, Electron requires a display server. Prefix with `xvfb-run -a` in headless environments:
+**Headless mode (Linux):**
+
+On Linux the smoke tests run headlessly by default — the Electron window is rendered into a virtual display via `xvfb-run`. This requires `xvfb` to be installed (`apt install xvfb` on Debian/Ubuntu). If `xvfb-run` is not on the PATH the tests fall back to showing the window and print a notice.
+
+To watch the UI while a test runs (useful for debugging), set `SHOW_UI=1`:
 
 ```bash
-xvfb-run -a ./smoke-tests.sh --binary --sequential
+SHOW_UI=1 ./smoke-tests.sh 3
 ```
+
+On macOS and Windows the UI is always shown — there is no equivalent virtual display.
 
 #### Adding a new test
 
