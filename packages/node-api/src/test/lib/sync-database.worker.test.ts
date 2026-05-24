@@ -21,7 +21,10 @@ jest.mock("../../lib/media-file-database", () => ({
         bsonDatabase: {},
         metadataCollection: {},
     }),
-    checkConnectivity: jest.fn().mockResolvedValue(true),
+}));
+
+jest.mock("../../lib/tree", () => ({
+    merkleTreeExists: jest.fn().mockResolvedValue(true),
 }));
 
 jest.mock("api", () => ({
@@ -40,10 +43,14 @@ jest.mock("utils", () => ({
 
 import { createStorage } from "storage";
 import { updateDatabaseConfig } from "api";
+import { merkleTreeExists } from "../../lib/tree";
+import { syncDatabases } from "../../lib/sync";
 import { syncDatabaseHandler } from "../../lib/sync-database.worker";
 
 const mockCreateStorage = createStorage as jest.MockedFunction<typeof createStorage>;
 const mockUpdateDatabaseConfig = updateDatabaseConfig as jest.MockedFunction<typeof updateDatabaseConfig>;
+const mockMerkleTreeExists = merkleTreeExists as jest.MockedFunction<typeof merkleTreeExists>;
+const mockSyncDatabases = syncDatabases as jest.MockedFunction<typeof syncDatabases>;
 
 //
 // Builds a minimal ITaskContext for testing.
@@ -110,5 +117,14 @@ describe("syncDatabaseHandler", () => {
         expect(firstPartial.lastSyncedAt).toBeDefined();
         expect(typeof firstPartial.lastSyncedAt).toBe("string");
         expect(firstPartial.lastSyncedAt).toBe(secondPartial.lastSyncedAt);
+    });
+
+    test("skips sync when the origin storage has no merkle tree", async () => {
+        mockMerkleTreeExists.mockResolvedValueOnce(false);
+
+        await syncDatabaseHandler(makeData(), makeContext());
+
+        expect(mockSyncDatabases).not.toHaveBeenCalled();
+        expect(mockUpdateDatabaseConfig).not.toHaveBeenCalled();
     });
 });

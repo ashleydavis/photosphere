@@ -1,6 +1,7 @@
 import type { ITaskContext } from "task-queue";
-import { createMediaFileDatabase, checkConnectivity } from "./media-file-database";
+import { createMediaFileDatabase } from "./media-file-database";
 import { openStorage } from "./open-storage";
+import { merkleTreeExists } from "./tree";
 import { loadDatabaseConfig, updateDatabaseConfig } from "api";
 import { syncDatabases } from "./sync";
 import type { ISyncDatabaseData, ISyncChange, ISyncBatchMessage } from "api";
@@ -36,7 +37,13 @@ export async function syncDatabaseHandler(
         return;
     }
 
-    const connected = await checkConnectivity(config.origin);
+    // Open the origin storage up-front so credentials, encryption keys, etc. are resolved via
+    // the standard openStorage path. The connectivity check then runs against that storage,
+    // which avoids false-negative skips when the origin needs credentials the worker would not
+    // otherwise have (e.g. S3 origins registered in databases.toml with an s3_key).
+    const { storage: originStorage, rawStorage: originRawStorage } = await openStorage(config.origin);
+
+    const connected = await merkleTreeExists(originStorage);
     if (!connected) {
         log.info(`Sync skipped for "${data.databasePath}": origin not accessible (${config.origin})`);
         return;
@@ -45,8 +52,6 @@ export async function syncDatabaseHandler(
     log.info(`Sync started`);
 
     context.sendMessage({ type: "sync-started", databasePath: data.databasePath });
-
-    const { storage: originStorage, rawStorage: originRawStorage } = await openStorage(config.origin);
 
     const localDb = createMediaFileDatabase(localStorage, uuidGenerator, timestampProvider);
     const originDb = createMediaFileDatabase(originStorage, uuidGenerator, timestampProvider);
