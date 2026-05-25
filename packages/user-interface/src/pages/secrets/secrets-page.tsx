@@ -284,19 +284,19 @@ export function SecretsPage() {
                     />
                 </IconButton>
                 <Button
-                    data-id="receive-secret-button"
-                    variant="outlined"
-                    sx={{ mr: 1 }}
-                    onClick={() => setReceiveDialogOpen(true)}
-                >
-                    Receive Secret
-                </Button>
-                <Button
                     data-id="add-secret-button"
                     startDecorator={<Add />}
+                    sx={{ mr: 1 }}
                     onClick={openAddDialog}
                 >
-                    Add Secret
+                    Add secret
+                </Button>
+                <Button
+                    data-id="receive-secret-button"
+                    variant="outlined"
+                    onClick={() => setReceiveDialogOpen(true)}
+                >
+                    Receive secret
                 </Button>
             </Box>
 

@@ -5,7 +5,7 @@ import Typography from '@mui/joy/Typography';
 import Button from '@mui/joy/Button';
 import Table from '@mui/joy/Table';
 import IconButton from '@mui/joy/IconButton';
-import { Edit, Delete, Refresh, FolderOpen, IosShare, Visibility, FileCopy } from '@mui/icons-material';
+import { Edit, Delete, Refresh, FolderOpen, IosShare, Visibility, FileCopy, Add } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { usePlatform, type IDatabaseEntry, type ISharedSecretEntry } from '../../context/platform-context';
 import { useAssetDatabase } from '../../context/asset-database-source';
@@ -145,7 +145,7 @@ export function DatabasesPage() {
                     />
                 </IconButton>
                 <Button
-                    variant="outlined"
+                    startDecorator={<Add />}
                     sx={{ mr: 1 }}
                     onClick={() => setCreateModalOpen(true)}
                 >
