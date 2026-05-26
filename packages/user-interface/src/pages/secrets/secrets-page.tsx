@@ -19,6 +19,7 @@ import Select from '@mui/joy/Select';
 import Option from '@mui/joy/Option';
 import { Edit, Delete, Add, Refresh, IosShare, Visibility } from '@mui/icons-material';
 import { usePlatform, type ISharedSecretEntry, type IDatabaseEntry } from '../../context/platform-context';
+import { useApp } from '../../context/app-context';
 import { ShareSecretDialog } from '../../components/share-secret-dialog';
 import { ReceiveSecretDialog } from '../../components/receive-secret-dialog';
 import { ViewSecretDialog } from '../../components/view-secret-dialog';
@@ -34,9 +35,7 @@ const SECRET_TYPES = ['s3-credentials', 'encryption-key', 'api-key'] as const;
 //
 export function SecretsPage() {
     const platform = usePlatform();
-
-    // All known shared secret entries.
-    const [secrets, setSecrets] = useState<ISharedSecretEntry[]>([]);
+    const { secrets, dbs, refresh, addSecret, updateSecret, deleteSecret } = useApp();
 
     // Whether the add/edit dialog is open.
     const [dialogOpen, setDialogOpen] = useState(false);
@@ -71,26 +70,17 @@ export function SecretsPage() {
     // The secret currently being viewed (undefined when dialog is closed).
     const [viewingSecret, setViewingSecret] = useState<ISharedSecretEntry | undefined>(undefined);
 
-    //
-    // Loads all shared secrets from the platform.
-    //
-    async function loadSecrets(): Promise<void> {
-        const entries = await platform.listSecrets();
-        setSecrets(entries);
-    }
-
     useEffect(() => {
         log.info('Secrets page loaded');
-        loadSecrets().catch(err => log.exception('Failed to load secrets:', err as Error));
-    }, []);
+    }, [secrets]);
 
     //
-    // Reloads secrets with a minimum delay so the spin animation is visible.
+    // Reloads secrets via the context with a minimum delay so the spin animation is visible.
     //
     async function handleRefresh(): Promise<void> {
         setRefreshing(true);
         await Promise.all([
-            loadSecrets(),
+            refresh(),
             new Promise(resolve => setTimeout(resolve, 500)),
         ]);
         setRefreshing(false);
@@ -129,15 +119,14 @@ export function SecretsPage() {
     async function handleSave(): Promise<void> {
         const valueJson = buildValueJson(form);
         if (editingSecret) {
-            await platform.updateSecret(editingSecret.name, { name: form.name, type: editingSecret.type }, valueJson);
+            await updateSecret(editingSecret.name, { name: form.name, type: editingSecret.type }, valueJson);
             log.info('Secret updated');
         }
         else {
-            await platform.addSecret({ name: form.name, type: form.type }, valueJson);
+            await addSecret({ name: form.name, type: form.type }, valueJson);
             log.info('Secret added');
         }
         setDialogOpen(false);
-        await loadSecrets();
     }
 
     //
@@ -156,8 +145,7 @@ export function SecretsPage() {
             return;
         }
         setConfirmDeleteOpen(false);
-        const allDatabases = await platform.getDatabases();
-        const referencing = allDatabases.filter(
+        const referencing = dbs.filter(
             dbEntry =>
                 dbEntry.s3Key === deletingSecret.name ||
                 dbEntry.encryptionKey === deletingSecret.name ||
@@ -177,12 +165,11 @@ export function SecretsPage() {
     //
     async function executeDelete(): Promise<void> {
         if (deletingSecret) {
-            await platform.deleteSecret(deletingSecret.name);
+            await deleteSecret(deletingSecret.name);
             setDeletingSecret(undefined);
         }
         setConfirmDeleteSecondOpen(false);
         setReferencingDatabases([]);
-        await loadSecrets();
     }
 
     //
@@ -311,7 +298,7 @@ export function SecretsPage() {
                 <tbody>
                     {secrets.map(secret => (
                         <tr key={secret.name}>
-                            <td>{secret.name}</td>
+                            <td data-id={`secret-row-name-${secret.name}`}>{secret.name}</td>
                             <td>{secret.type}</td>
                             <td style={{ whiteSpace: 'nowrap' }}>
                                 <IconButton
@@ -458,10 +445,7 @@ export function SecretsPage() {
 
             <ReceiveSecretDialog
                 open={receiveDialogOpen}
-                onClose={() => {
-                    setReceiveDialogOpen(false);
-                    loadSecrets().catch(err => log.exception('Failed to reload secrets:', err as Error));
-                }}
+                onClose={() => setReceiveDialogOpen(false)}
             />
 
             {viewingSecret !== undefined && (

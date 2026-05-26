@@ -14,6 +14,7 @@ import Alert from '@mui/joy/Alert';
 import CircularProgress from '@mui/joy/CircularProgress';
 import Box from '@mui/joy/Box';
 import { usePlatform } from '../context/platform-context';
+import { useApp } from '../context/app-context';
 
 export interface IReceiveSecretDialogProps {
     // Whether the dialog is visible.
@@ -50,6 +51,7 @@ interface IReceivedSecretPayload {
 //
 export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps) {
     const platform = usePlatform();
+    const { importSharePayload } = useApp();
     const [step, setStep] = useState<ReceiveStep>("enter-code");
     const [enteredCode, setEnteredCode] = useState("");
     const [payload, setPayload] = useState<IReceivedSecretPayload | null>(null);
@@ -99,13 +101,13 @@ export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps
             return;
         }
 
-        await platform.importSharePayload({
+        await importSharePayload({
             ...payload,
             saveName: saveName.trim(),
         }, {});
         setStep("success");
         log.event('Secret saved');
-    }, [payload, saveName, platform]);
+    }, [payload, saveName, importSharePayload]);
 
     //
     // Cancels the receiver and closes the dialog.
@@ -207,7 +209,7 @@ export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps
                     )}
 
                     {(step === "success" || step === "error") && (
-                        <Button onClick={onClose}>Close</Button>
+                        <Button data-id="receive-secret-close-button" onClick={onClose}>Close</Button>
                     )}
                 </DialogActions>
             </ModalDialog>

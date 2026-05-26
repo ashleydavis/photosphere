@@ -13,6 +13,7 @@ import Input from '@mui/joy/Input';
 import FormControl from '@mui/joy/FormControl';
 import FormLabel from '@mui/joy/FormLabel';
 import { usePlatform, type IDatabaseEntry, type ISharedSecretEntry } from '../context/platform-context';
+import { useApp } from '../context/app-context';
 import { ConfigureSecretsModal, type IDatabaseSecretsSelection } from './configure-secrets-modal';
 
 //
@@ -65,10 +66,6 @@ export interface IEditDatabaseModalProps {
 
     // Called when the modal should close (after save, cancel, or backdrop click).
     onClose: () => void;
-
-    // Called after a secret is created from the nested Configure Secrets modal so the
-    // caller can refresh its secrets lists.
-    onSecretCreated: () => Promise<void>;
 }
 
 //
@@ -108,9 +105,9 @@ export function EditDatabaseModal({
     encryptionSecrets,
     geocodingSecrets,
     onClose,
-    onSecretCreated,
 }: IEditDatabaseModalProps) {
     const platform = usePlatform();
+    const { addDatabase, updateDatabase } = useApp();
 
     // Current form values.
     const [form, setForm] = useState<IEditDatabaseFormState>(formStateFor(entry));
@@ -201,11 +198,11 @@ export function EditDatabaseModal({
             if (originChanged) {
                 await platform.setDatabaseOrigin(entryData.path, entryData.origin);
             }
-            await platform.updateDatabase(entry.name, { ...entry, ...entryData });
+            await updateDatabase(entry.name, { ...entry, ...entryData });
             log.event('Database entry updated');
         }
         else {
-            await platform.addDatabase(entryData);
+            await addDatabase(entryData);
         }
 
         onClose();
@@ -297,7 +294,6 @@ export function EditDatabaseModal({
                 geocodingSecrets={geocodingSecrets}
                 onSave={handleSecretsSave}
                 onClose={() => setSecretsModalOpen(false)}
-                onSecretCreated={onSecretCreated}
                 quickCreateDefaultName={form.name || form.path}
             />
         </>

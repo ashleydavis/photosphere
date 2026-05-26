@@ -7,7 +7,8 @@ import Table from '@mui/joy/Table';
 import IconButton from '@mui/joy/IconButton';
 import { Edit, Delete, Refresh, FolderOpen, IosShare, Visibility, FileCopy, Add } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { usePlatform, type IDatabaseEntry, type ISharedSecretEntry } from '../../context/platform-context';
+import { usePlatform, type IDatabaseEntry } from '../../context/platform-context';
+import { useApp } from '../../context/app-context';
 import { useAssetDatabase } from '../../context/asset-database-source';
 import { CreateDatabaseModal } from '../../components/create-database-modal';
 import { AddDatabaseModal } from '../../components/add-database-modal';
@@ -23,16 +24,14 @@ import { ReplicateDatabaseDialog } from '../../components/replicate-database-dia
 //
 export function DatabasesPage() {
     const platform = usePlatform();
+    const { dbs: databases, secrets, refresh } = useApp();
     const { openDatabase } = useAssetDatabase();
     const navigate = useNavigate();
 
-    // All known database entries.
-    const [databases, setDatabases] = useState<IDatabaseEntry[]>([]);
-
-    // Shared secrets grouped by type.
-    const [s3Secrets, setS3Secrets] = useState<ISharedSecretEntry[]>([]);
-    const [encryptionSecrets, setEncryptionSecrets] = useState<ISharedSecretEntry[]>([]);
-    const [geocodingSecrets, setGeocodingSecrets] = useState<ISharedSecretEntry[]>([]);
+    // Shared secrets grouped by type, derived from the context's combined list.
+    const s3Secrets = secrets.filter(secret => secret.type === 's3-credentials');
+    const encryptionSecrets = secrets.filter(secret => secret.type === 'encryption-key');
+    const geocodingSecrets = secrets.filter(secret => secret.type === 'api-key');
 
     // Whether the create-database modal is open.
     const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -67,24 +66,9 @@ export function DatabasesPage() {
     // The database entry currently being replicated (undefined when the dialog is closed).
     const [replicatingEntry, setReplicatingEntry] = useState<IDatabaseEntry | undefined>(undefined);
 
-    //
-    // Loads database entries and secrets from the platform.
-    //
-    async function loadData(): Promise<void> {
-        const [entries, allSecrets] = await Promise.all([
-            platform.getDatabases(),
-            platform.listSecrets(),
-        ]);
-        setDatabases(entries);
-        setS3Secrets(allSecrets.filter(secret => secret.type === 's3-credentials'));
-        setEncryptionSecrets(allSecrets.filter(secret => secret.type === 'encryption-key'));
-        setGeocodingSecrets(allSecrets.filter(secret => secret.type === 'api-key'));
-        log.event('Databases page loaded');
-    }
-
     useEffect(() => {
-        loadData().catch(err => log.exception('Failed to load data:', err as Error));
-    }, []);
+        log.event('Databases page loaded');
+    }, [databases, secrets]);
 
     //
     // Reloads data with a minimum delay so the spin animation is visible.
@@ -92,7 +76,7 @@ export function DatabasesPage() {
     async function handleRefresh(): Promise<void> {
         setRefreshing(true);
         await Promise.all([
-            loadData(),
+            refresh(),
             new Promise(resolve => setTimeout(resolve, 500)),
         ]);
         setRefreshing(false);
@@ -181,7 +165,7 @@ export function DatabasesPage() {
                 <tbody>
                     {databases.map(entry => (
                         <tr key={entry.name}>
-                            <td>{entry.name}</td>
+                            <td data-id={`database-row-name-${entry.name}`}>{entry.name}</td>
                             <td>{entry.description}</td>
                             <td>{entry.path}</td>
                             <td>{entry.origin ?? ''}</td>
@@ -256,9 +240,7 @@ export function DatabasesPage() {
                 onClose={() => {
                     setDialogOpen(false);
                     setEditingEntry(undefined);
-                    loadData().catch(err => log.exception('Failed to reload data:', err as Error));
                 }}
-                onSecretCreated={() => loadData().catch(err => log.exception('Failed to reload data:', err as Error))}
             />
 
             <RemoveDatabaseDialog
@@ -267,24 +249,17 @@ export function DatabasesPage() {
                 onClose={() => {
                     setConfirmRemoveOpen(false);
                     setRemovingEntry(undefined);
-                    loadData().catch(err => log.exception('Failed to reload data:', err as Error));
                 }}
             />
 
             <CreateDatabaseModal
                 open={createModalOpen}
-                onClose={() => {
-                    setCreateModalOpen(false);
-                    loadData().catch(err => log.exception('Failed to reload data:', err as Error));
-                }}
+                onClose={() => setCreateModalOpen(false)}
             />
 
             <AddDatabaseModal
                 open={addModalOpen}
-                onClose={() => {
-                    setAddModalOpen(false);
-                    loadData().catch(err => log.exception('Failed to reload data:', err as Error));
-                }}
+                onClose={() => setAddModalOpen(false)}
             />
 
             {sharingEntry && (
@@ -297,10 +272,7 @@ export function DatabasesPage() {
 
             <ReceiveDatabaseDialog
                 open={receiveDbDialogOpen}
-                onClose={() => {
-                    setReceiveDbDialogOpen(false);
-                    loadData().catch(err => log.exception('Failed to reload data:', err as Error));
-                }}
+                onClose={() => setReceiveDbDialogOpen(false)}
             />
 
             {viewingEntry !== undefined && (
@@ -320,11 +292,7 @@ export function DatabasesPage() {
                     encryptionSecrets={encryptionSecrets}
                     s3Secrets={s3Secrets}
                     geocodingSecrets={geocodingSecrets}
-                    onSecretCreated={() => loadData()}
-                    onClose={() => {
-                        setReplicatingEntry(undefined);
-                        loadData().catch(err => log.exception('Failed to reload data:', err as Error));
-                    }}
+                    onClose={() => setReplicatingEntry(undefined)}
                 />
             )}
         </Box>

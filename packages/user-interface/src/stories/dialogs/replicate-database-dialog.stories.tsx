@@ -1,6 +1,6 @@
 import React from "react";
 import { ReplicateDatabaseDialog } from "../../components/replicate-database-dialog";
-import { MockProviders, noOp, noOpAsync } from "../mocks";
+import { MockProviders, noOp } from "../mocks";
 import type { IStory } from "../types";
 import type { IDatabaseEntry } from "../../context/platform-context";
 
@@ -29,7 +29,6 @@ export const stories: IStory[] = [
                     encryptionSecrets={[]}
                     s3Secrets={[]}
                     geocodingSecrets={[]}
-                    onSecretCreated={noOpAsync}
                     onClose={noOp}
                     />
             </MockProviders>

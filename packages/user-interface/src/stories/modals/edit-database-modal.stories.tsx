@@ -1,6 +1,6 @@
 import React from "react";
 import { EditDatabaseModal } from "../../components/edit-database-modal";
-import { MockProviders, noOp, noOpAsync } from "../mocks";
+import { MockProviders, noOp } from "../mocks";
 import type { IStory } from "../types";
 import type { IDatabaseEntry } from "../../context/platform-context";
 
@@ -31,7 +31,6 @@ export const stories: IStory[] = [
                     encryptionSecrets={[]}
                     geocodingSecrets={[]}
                     onClose={noOp}
-                    onSecretCreated={noOpAsync}
                     />
             </MockProviders>
         ),

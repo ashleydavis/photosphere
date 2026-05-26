@@ -43,10 +43,6 @@ export interface IReplicateDatabaseDialogProps {
     // All available geocoding-api-key shared secrets the user can pick for the destination.
     geocodingSecrets: ISharedSecretEntry[];
 
-    // Optional callback fired after a new secret has been quick-created inside the Configure
-    // Secrets modal. The parent should reload its secret lists.
-    onSecretCreated?: () => Promise<void>;
-
     // Called when the dialog should close.
     onClose: () => void;
 }
@@ -102,7 +98,7 @@ function emptyFormState(): IReplicateFormState {
 // Cancellation while running is intentionally out of scope for v1; the dialog only
 // shows a progress view once the task starts.
 //
-export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, s3Secrets, geocodingSecrets, onSecretCreated, onClose }: IReplicateDatabaseDialogProps) {
+export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, s3Secrets, geocodingSecrets, onClose }: IReplicateDatabaseDialogProps) {
     const platform = usePlatform();
     const uuidGenerator = useUuidGenerator();
 
@@ -352,7 +348,6 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
                 setSecretsModalOpen(false);
             }}
             onClose={() => setSecretsModalOpen(false)}
-            onSecretCreated={onSecretCreated}
             quickCreateDefaultName={sourceEntry.name}
         />
         </>

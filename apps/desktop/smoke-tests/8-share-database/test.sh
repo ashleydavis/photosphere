@@ -107,6 +107,26 @@ wait_for_log "$TMP_DIR/receiver" "Database review step" 120
 send_command "$RECEIVER_PORT" click '{"dataId":"receive-database-save-button"}'
 wait_for_log "$TMP_DIR/receiver" "Database imported"
 
+# After import completes the list on the page behind the success dialog must already reflect the
+# new database — the user should not need to dismiss the dialog or hit Refresh for the row to appear.
+log_info "Waiting for receiver row to appear after import (before closing dialog)..."
+row_text=""
+elapsed=0
+while [ "$elapsed" -lt 10 ]; do
+    response=$(curl -sf "http://localhost:$RECEIVER_PORT/get-value?dataId=database-row-name-test-db" 2>/dev/null || true)
+    row_text=$(echo "$response" | sed 's/.*"value":"\([^"]*\)".*/\1/')
+    if [ "$row_text" = "test-db" ]; then
+        break
+    fi
+    sleep 1
+    elapsed=$((elapsed + 1))
+done
+
+if [ "$row_text" != "test-db" ]; then
+    log_error "Expected receiver Manage Databases row 'test-db' to appear in the DOM after import, but it did not (still empty after 10s with the success dialog still open)"
+    exit 1
+fi
+
 # Assert receiver databases config contains the database entry
 if [ ! -f "$TMP_DIR/receiver/config/databases.toml" ]; then
     log_error "Expected $TMP_DIR/receiver/config/databases.toml to exist"

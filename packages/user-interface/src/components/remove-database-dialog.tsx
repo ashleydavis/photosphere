@@ -7,7 +7,8 @@ import DialogTitle from '@mui/joy/DialogTitle';
 import DialogContent from '@mui/joy/DialogContent';
 import DialogActions from '@mui/joy/DialogActions';
 import Typography from '@mui/joy/Typography';
-import { usePlatform, type IDatabaseEntry } from '../context/platform-context';
+import { type IDatabaseEntry } from '../context/platform-context';
+import { useApp } from '../context/app-context';
 
 //
 // Props for RemoveDatabaseDialog.
@@ -28,14 +29,14 @@ export interface IRemoveDatabaseDialogProps {
 // Only removes the entry from configuration; files on disk are not deleted.
 //
 export function RemoveDatabaseDialog({ open, entry, onClose }: IRemoveDatabaseDialogProps) {
-    const platform = usePlatform();
+    const { removeDatabase } = useApp();
 
     //
-    // Removes the entry from the platform's database list, then closes the dialog.
+    // Removes the entry from the database list, then closes the dialog.
     //
     async function handleConfirm(): Promise<void> {
         if (entry) {
-            await platform.removeDatabaseEntry(entry.name);
+            await removeDatabase(entry.name);
         }
         onClose();
     }

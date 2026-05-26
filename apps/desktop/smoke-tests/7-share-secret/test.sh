@@ -83,6 +83,26 @@ wait_for_log "$TMP_DIR/receiver" "Secret review step" 120
 send_command "$RECEIVER_PORT" click '{"dataId":"receive-secret-save-button"}'
 wait_for_log "$TMP_DIR/receiver" "Secret saved"
 
+# After import completes the list on the page behind the success dialog must already reflect the
+# new secret — the user should not need to dismiss the dialog or hit Refresh for the row to appear.
+log_info "Waiting for receiver row to appear after import (before closing dialog)..."
+row_text=""
+elapsed=0
+while [ "$elapsed" -lt 10 ]; do
+    response=$(curl -sf "http://localhost:$RECEIVER_PORT/get-value?dataId=secret-row-name-test-secret" 2>/dev/null || true)
+    row_text=$(echo "$response" | sed 's/.*"value":"\([^"]*\)".*/\1/')
+    if [ "$row_text" = "test-secret" ]; then
+        break
+    fi
+    sleep 1
+    elapsed=$((elapsed + 1))
+done
+
+if [ "$row_text" != "test-secret" ]; then
+    log_error "Expected receiver Manage Secrets row 'test-secret' to appear in the DOM after import, but it did not (still empty after 10s with the success dialog still open)"
+    exit 1
+fi
+
 # Assert receiver vault contains the secret
 if [ ! -f "$TMP_DIR/receiver/vault/test-secret.json" ]; then
     log_error "Expected $TMP_DIR/receiver/vault/test-secret.json to exist"

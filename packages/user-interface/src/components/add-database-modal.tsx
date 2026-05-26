@@ -15,6 +15,7 @@ import Option from '@mui/joy/Option';
 import Switch from '@mui/joy/Switch';
 import Typography from '@mui/joy/Typography';
 import { usePlatform, type ISharedSecretEntry } from '../context/platform-context';
+import { useApp } from '../context/app-context';
 import { useAssetDatabase } from '../context/asset-database-source';
 import { SelectSecretModal } from './select-secret-modal';
 import { S3BrowserModal } from './s3-browser-modal';
@@ -82,6 +83,7 @@ function emptyFormState(): IAddDatabaseFormState {
 //
 export function AddDatabaseModal({ open, onClose }: IAddDatabaseModalProps) {
     const platform = usePlatform();
+    const { addDatabase } = useApp();
     const { openDatabase } = useAssetDatabase();
 
     const [form, setForm] = useState<IAddDatabaseFormState>(emptyFormState());
@@ -142,7 +144,7 @@ export function AddDatabaseModal({ open, onClose }: IAddDatabaseModalProps) {
             setNameError(`A database named "${trimmedName}" already exists.`);
             return;
         }
-        await platform.addDatabase({
+        await addDatabase({
             name: trimmedName,
             description: form.description,
             path: form.path.trim(),

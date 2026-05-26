@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { log } from 'utils';
 import Box from '@mui/joy/Box';
 import Button from '@mui/joy/Button';
 import DialogActions from '@mui/joy/DialogActions';
@@ -74,13 +73,6 @@ export interface IConfigureSecretsModalProps {
     onClose: () => void;
 
     //
-    // Optional callback fired after a new secret has been quick-created. The parent should reload
-    // its secret lists so the new entry is included in the dropdowns. The newly created secret is
-    // selected automatically before this callback fires.
-    //
-    onSecretCreated?: () => Promise<void>;
-
-    //
     // Default name suggested by the quick-create dialog (e.g. the database name or path).
     //
     quickCreateDefaultName?: string;
@@ -105,7 +97,6 @@ export function ConfigureSecretsModal({
     geocodingSecrets,
     onSave,
     onClose,
-    onSecretCreated,
     quickCreateDefaultName,
     fields = ['s3', 'encryption', 'geocoding'],
 }: IConfigureSecretsModalProps) {
@@ -127,10 +118,10 @@ export function ConfigureSecretsModal({
     }, [open, initialValue]);
 
     //
-    // Handles the user picking a newly created secret. Auto-selects it for the matching field,
-    // then notifies the parent so it can refresh its secret lists.
+    // Handles the user picking a newly created secret. Auto-selects it for the matching field.
+    // The shared-secrets list refreshes through AppContext, so parents do not need notification.
     //
-    async function handleQuickCreateSave(newSecret: ISharedSecretEntry): Promise<void> {
+    function handleQuickCreateSave(newSecret: ISharedSecretEntry): void {
         setQuickCreateType(undefined);
         if (newSecret.type === 's3-credentials') {
             setWorking(prev => ({ ...prev, s3Key: newSecret.name }));
@@ -140,9 +131,6 @@ export function ConfigureSecretsModal({
         }
         else if (newSecret.type === 'api-key') {
             setWorking(prev => ({ ...prev, geocodingKey: newSecret.name }));
-        }
-        if (onSecretCreated) {
-            await onSecretCreated();
         }
     }
 
@@ -225,7 +213,7 @@ export function ConfigureSecretsModal({
                 secretType={quickCreateType}
                 defaultName={quickCreateDefaultName ?? ''}
                 onClose={() => setQuickCreateType(undefined)}
-                onSave={newSecret => handleQuickCreateSave(newSecret).catch(err => log.exception('Quick-create error:', err as Error))}
+                onSave={newSecret => handleQuickCreateSave(newSecret)}
             />
         )}
         </>
