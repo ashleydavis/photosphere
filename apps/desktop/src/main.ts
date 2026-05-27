@@ -13,6 +13,7 @@ import { findAvailablePort } from 'node-utils';
 import { loadDesktopConfig, saveDesktopConfig, updateLastFolder, getTheme, setTheme, updateLastDownloadFolder, getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry, getRecentDatabases, markDatabaseOpened, removeRecentDatabaseName, findDatabase, fetchNews, getShownNewsIds, addShownNewsIds, getLastShownUpdateVersion, setLastShownUpdateVersion } from 'api';
 import type { IWorkerPoolOptions } from './lib/worker-pool-electron-main';
 import type { IRestApiWorkerStopMessage, IRestApiWorkerStartMessage } from './rest-api-worker';
+import { installMcpHandlers, initMcpServer, stopMcpServer } from './lib/mcp/main-bridge';
 import { FileLoggerElectron } from './lib/file-logger-electron';
 import type { IImportSession, IRendererLogMessage, ISaveAssetItem, IDatabaseEntry, IDatabaseSecrets } from 'electron-defs';
 import { verifyTools } from 'tools';
@@ -33,6 +34,7 @@ let workerPool: IQueueBackend | null = null;
 
 // REST API utility process
 let restApiWorker: UtilityProcess | null = null;
+
 
 // Flag to prevent restarting workers during shutdown
 let isShuttingDown: boolean = false;
@@ -285,6 +287,14 @@ app.whenReady().then(async () => {
     // Initialize REST API before creating main window
     await initRestApi();
 
+    // Install MCP IPC handlers and start the embedded MCP utility process.
+    installMcpHandlers({
+        getMainWindow: () => mainWindow,
+        isShuttingDown: () => isShuttingDown,
+        onWorkerLog: (message) => handleWorkerLogMessage(message, 'MCP Worker'),
+    });
+    await initMcpServer();
+
     // Create application menu
     await createMenu();
     
@@ -366,6 +376,9 @@ app.on('before-quit', async () => {
         restApiWorker.kill();
         restApiWorker = null;
     }
+
+    // Cleanup MCP utility process
+    stopMcpServer();
     
     // Close file logger last to capture all shutdown logs
     if (fileLogger) {
@@ -670,29 +683,34 @@ ipcMain.handle('set-config', logExceptions(async (_event, key: string, value: ID
     }
 }, 'Error setting config value'));
 
-// IPC handler for saving an asset to a user-chosen file path via save dialog.
-// IPC handler for showing a save dialog and enqueuing a background task to stream the asset to the chosen file.
-ipcMain.handle('save-asset', logExceptions(async (_event, assetId: string, assetType: string, filename: string, databasePath: string): Promise<void> => {
-    const config = await loadDesktopConfig();
-    const defaultPath = config.lastDownloadFolder
-        ? join(config.lastDownloadFolder, filename)
-        : filename;
-
-    const result = await dialog.showSaveDialog(mainWindow!, {
-        defaultPath,
-    });
-
-    if (result.canceled || !result.filePath) {
-        return;
+// IPC handler for saving an asset to disk. When `destPath` is provided (e.g. by the MCP
+// save_media_file tool, which already has a path from the model), the save dialog is
+// skipped and the asset is written straight to that path. When omitted, the user picks
+// a path via the standard save dialog.
+ipcMain.handle('save-asset', logExceptions(async (_event, assetId: string, assetType: string, filename: string, databasePath: string, destPath?: string): Promise<void> => {
+    let actualDestPath: string;
+    if (destPath) {
+        actualDestPath = destPath;
+    }
+    else {
+        const config = await loadDesktopConfig();
+        const defaultPath = config.lastDownloadFolder
+            ? join(config.lastDownloadFolder, filename)
+            : filename;
+        const result = await dialog.showSaveDialog(mainWindow!, {
+            defaultPath,
+        });
+        if (result.canceled || !result.filePath) {
+            return;
+        }
+        actualDestPath = result.filePath;
+        await updateLastDownloadFolder(dirname(actualDestPath));
     }
 
     if (!workerPool) {
         throw new Error('Worker pool not initialized');
     }
-
-    const destPath = result.filePath;
-    await updateLastDownloadFolder(dirname(destPath));
-    workerPool.addTask("save-asset", { assetId, assetType, destPath, databasePath }, databasePath);
+    workerPool.addTask("save-asset", { assetId, assetType, destPath: actualDestPath, databasePath }, databasePath);
 }, 'Error saving asset'));
 
 // IPC handler for showing a folder picker and enqueuing background tasks to save multiple assets.

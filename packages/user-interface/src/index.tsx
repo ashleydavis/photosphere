@@ -1,10 +1,10 @@
 import './styles.css';
 
 export { Main } from './main';
-export { GalleryContextProvider } from './context/gallery-context';
+export { GalleryContextProvider, useGallery, type IGalleryContext } from './context/gallery-context';
 export { GalleryLayoutContextProvider } from './context/gallery-layout-context';
 export { GalleryItemContextProvider } from './context/gallery-item-context';
-export { SearchContextProvider } from './context/search-context';
+export { SearchContextProvider, useSearch, type ISearchContext } from './context/search-context';
 export { DeleteConfirmationContextProvider } from './context/delete-confirmation-context';
 export * from './context/app-context';
 export { type IGalleryItem } from "./lib/gallery-item";

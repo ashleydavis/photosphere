@@ -201,8 +201,9 @@ Ensure `node-api` is already a dependency (it should be). No new dependency need
 
 Implement `mcpCommand`. It should:
 - Accept `ICommandContext` and `IMcpCommandOptions extends IBaseCommandOptions`.
-- Require `--db`. Call `loadDatabase` to open the database.
-- Create a `McpServer` from `@modelcontextprotocol/sdk/server/mcp.js`, register all tools inline using Zod schemas identical to `register-tools.ts`. Each tool calls the corresponding `node-api` function directly:
+- Do **NOT** take `--db`. The MCP client cannot be configured per-database; instead the model picks one via `list_databases` / `open_database` at runtime. The server starts with no database open.
+- Maintain an in-process "current database" handle (initially `undefined`). Methods that need an open database return `"No database is currently open. Use list_databases / open_database first."` until one is opened.
+- Create a `McpServer` from `@modelcontextprotocol/sdk/server/mcp.js`, register all tools inline using Zod schemas identical to `register-tools.ts`. Each tool calls the corresponding `api` function directly against the current database handle:
   - `get_database_summary` → `getDatabaseSummary(assetStorage)`
   - `list_assets` → `listAssetPage(bsonDatabase, limit, pageId)`
   - `get_asset_info` → `getAsset(bsonDatabase, assetId)`
@@ -211,7 +212,8 @@ Implement `mcpCommand`. It should:
   - `import_assets` → `addPaths(...)`
   - `verify_database` → `verify(...)`
   - `list_databases` → `getDatabases()`
-  - `open_database` / `close_database` → return `"Not supported in CLI mode."`
+  - `open_database` → resolve the requested entry via `getDatabases()` (match by name or path), then call `loadDatabase(...)` and store the result as the current handle. Returns a confirmation string.
+  - `close_database` → drop the current handle (without persisting any global state) and return a confirmation string.
   - `delete_asset` / `update_asset` → omit from CLI (desktop-only for now)
 - Start with `StdioServerTransport`. Print `Photosphere MCP server running` to `stderr`.
 - Keep the process alive until stdin closes, then call `server.close()` and `exit(0)`.
@@ -221,14 +223,14 @@ Implement `mcpCommand`. It should:
 ```ts
 program
     .command("mcp")
-    .description("Start an MCP server for the media file database (stdio transport).")
-    .option(...dbOption)
-    .option(...keyOption)
+    .description("Start an MCP server (stdio transport). The MCP client chooses which database to open at runtime via list_databases / open_database.")
     .option(...verboseOption)
     .option(...yesOption)
     .option(...cwdOption)
     .action(initContext(mcpCommand));
 ```
+
+Note: `--db` and `--key` are deliberately omitted. Encryption keys for specific databases are still resolved through the existing vault entries (set up via `psi dbs add` / `psi secrets`) when `open_database` is called.
 
 ---
 
@@ -251,7 +253,7 @@ flowchart LR
         electron --> mcp_http
     end
     subgraph cli["Photosphere CLI"]
-        psi["psi mcp --db <path>"]
+        psi["psi mcp"]
     end
     db[("Media database")]
     cc -->|"HTTP"| mcp_http
@@ -287,5 +289,5 @@ bun run test
 - **No duplication**: `mcp-tools` provides the `IMcpContext` interface and `registerPhotosphereTools` for the desktop only. The CLI registers tools inline and calls `node-api` directly. `node-api` contains the shared query logic (`listAssetPage`, `searchAssets`, `getAsset`, `streamAssetToFile`).
 - **IPC chain (desktop)**: MCP client → MCP worker → main process → renderer → main process → MCP worker → MCP client. Main is a stateless broker.
 - **HTTP vs stdio**: HTTP (Streamable HTTP) is used in Electron because the worker can't own stdin/stdout. Stdio is used in the CLI because the MCP client spawns it as a child process.
-- **Single database at a time**: Electron reflects whichever database is open via `setDatabaseOpen`. CLI takes it via `--db`.
+- **Single database at a time**: Electron reflects whichever database is open via `setDatabaseOpen`. The CLI starts with no database open and lets the MCP client pick one at runtime via `list_databases` / `open_database` (so a single MCP client config can switch between any configured database).
 - **`delete_asset` and `update_asset`**: Desktop-only for now; omit from CLI. Add later following the same pattern.

@@ -51,7 +51,7 @@ export async function retry<ReturnT>(operation: () => Promise<ReturnT>, maxAttem
                 waitTimeMS *= waitTimeScale;
             }
             else {
-                console.error("Operation failed, no more retries allowed.");
+                console.error(`Operation failed, no more retries allowed. Last error: ${error?.stack ?? error?.message ?? String(error)}`);
 
                 if (errorContext) {
                     throw new WrappedError(errorContext, { cause: error });

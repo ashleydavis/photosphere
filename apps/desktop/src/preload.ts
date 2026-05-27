@@ -47,8 +47,8 @@ const electronAPI: IElectronAPI = {
     sendFps: (fps: number): void => {
         ipcRenderer.send('fps-measurement', fps);
     },
-    saveAsset: (assetId: string, assetType: string, filename: string, databasePath: string): Promise<void> => {
-        return ipcRenderer.invoke('save-asset', assetId, assetType, filename, databasePath);
+    saveAsset: (assetId: string, assetType: string, filename: string, databasePath: string, destPath?: string): Promise<void> => {
+        return ipcRenderer.invoke('save-asset', assetId, assetType, filename, databasePath, destPath);
     },
     saveAssets: (assets: ISaveAssetItem[], databasePath: string): Promise<void> => {
         return ipcRenderer.invoke('save-assets', assets, databasePath);
@@ -139,6 +139,9 @@ const electronAPI: IElectronAPI = {
     },
     markNewsShown: (newsId: string): Promise<void> => {
         return ipcRenderer.invoke('mark-news-shown', newsId);
+    },
+    sendMcpToolResponse: (response: { requestId: string; result?: string; error?: string }): void => {
+        ipcRenderer.send('mcp-tool-response', response);
     },
 };
 

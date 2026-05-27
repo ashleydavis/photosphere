@@ -1,7 +1,23 @@
-import React from "react";
+import React, { useState } from "react";
 import { version } from "config";
+import Button from "@mui/joy/Button";
+import Input from "@mui/joy/Input";
+
+//
+// Fixed URL of the embedded MCP server in the desktop app. The port is a constant in the
+// desktop main process (apps/desktop/src/lib/mcp/main-bridge.ts:MCP_PORT).
+//
+const MCP_URL = "http://localhost:3475/mcp";
 
 export function AboutPage() {
+    const [ copyState, setCopyState ] = useState<"idle" | "copied">("idle");
+
+    async function copyMcpUrl(): Promise<void> {
+        await navigator.clipboard.writeText(MCP_URL);
+        setCopyState("copied");
+        setTimeout(() => setCopyState("idle"), 1500);
+    }
+
     return (
         <div className="w-full h-full p-4 overflow-y-auto pb-32">
             <div className="m-auto" style={{maxWidth: "800px"}}>
@@ -28,6 +44,33 @@ export function AboutPage() {
                     <li>Securely encrypt files that you store in the cloud vendor of your choice.</li>
                     <li>Use the GUI to search, view and edit your photos and videos.</li>
                 </ul>
+
+                <h2 className="mt-8 text-2xl">Claude / MCP integration</h2>
+                <p className="pt-2">
+                    The Photosphere desktop app ships with an embedded Model Context Protocol (MCP) server so AI assistants like Claude Code or Claude Desktop can browse and edit your library while it is open.
+                </p>
+                <p className="pt-2">
+                    Add this URL to your MCP client configuration as an HTTP server:
+                </p>
+                <div className="pt-2">
+                    <Input
+                        value={MCP_URL}
+                        readOnly
+                        sx={{ fontFamily: "monospace", maxWidth: "500px" }}
+                        endDecorator={
+                            <Button
+                                variant="plain"
+                                size="sm"
+                                onClick={() => { void copyMcpUrl(); }}
+                            >
+                                {copyState === "copied" ? "Copied!" : "Copy"}
+                            </Button>
+                        }
+                    />
+                </div>
+                <p className="pt-2 text-sm text-gray-500">
+                    The server only accepts connections from this machine and runs only while the Photosphere desktop app is open.
+                </p>
 
                 <p className="pt-4">
                     Early development of Photosphere was covered in the book <a target="_blank" href="https://tfdd.codecapers.com.au/">The Feedback-Driven Developer</a>.

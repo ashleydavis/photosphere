@@ -32,6 +32,7 @@ import { decryptCommand } from './src/cmd/decrypt';
 import { secretsCommand } from './src/cmd/secrets';
 import { dbsCommand } from './src/cmd/dbs';
 import { newsCommand } from './src/cmd/news';
+import { mcpCommand } from './src/cmd/mcp';
 import { initContext } from './src/lib/init-cmd';
 import { printNotifications } from './src/lib/print-notifications';
 import { MAIN_EXAMPLES, getCommandExamplesHelp } from './src/examples';
@@ -365,6 +366,14 @@ Resources:
         .option("--page-size <size>", "Number of files to display per page (default: 20)", "20")
         .addHelpText('after', getCommandExamplesHelp('list'))
         .action(initContext(listCommand));
+
+    program
+        .command("mcp")
+        .description("Start an MCP server (stdio transport). The MCP client chooses which database to open at runtime via list_databases / open_database.")
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option(...cwdOption)
+        .action(initContext(mcpCommand));
 
     program
         .command("news")

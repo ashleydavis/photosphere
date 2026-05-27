@@ -62,7 +62,7 @@ describe("retry", () => {
         expect(sleep).toHaveBeenCalledTimes(2);
         expect(sleep).toHaveBeenNthCalledWith(1, 100);
         expect(sleep).toHaveBeenNthCalledWith(2, 200);
-        expect(console.error).toHaveBeenCalledWith("Operation failed, no more retries allowed.");
+        expect(console.error).toHaveBeenCalledWith(expect.stringContaining("Operation failed, no more retries allowed. Last error:"));
     });
 
     test("should use default maxAttempts of 3", async () => {
@@ -131,7 +131,7 @@ describe("retry", () => {
         expect(operation).toHaveBeenCalledTimes(1);
         expect(sleep).toHaveBeenCalledTimes(0);
         expect(log.exception).not.toHaveBeenCalled();
-        expect(console.error).toHaveBeenCalledWith("Operation failed, no more retries allowed.");
+        expect(console.error).toHaveBeenCalledWith(expect.stringContaining("Operation failed, no more retries allowed. Last error:"));
     });
 
     test("should throw expected error when maxAttempts is 0", async () => {

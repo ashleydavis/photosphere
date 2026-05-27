@@ -201,9 +201,11 @@ export interface IElectronAPI {
     sendFps: (fps: number) => void;
 
     //
-    // Opens a save dialog and, if confirmed, enqueues a background task to stream the asset to the chosen file.
+    // Saves an asset to disk. When destPath is provided, writes straight to that path
+    // with no dialog (used by the MCP save_media_file tool which already has a path).
+    // When destPath is omitted, shows the standard save dialog defaulted to filename.
     //
-    saveAsset: (assetId: string, assetType: string, filename: string, databasePath: string) => Promise<void>;
+    saveAsset: (assetId: string, assetType: string, filename: string, databasePath: string, destPath?: string) => Promise<void>;
 
     //
     // Opens a folder picker and, if confirmed, enqueues background tasks to save all assets into it.
@@ -297,6 +299,11 @@ export interface IElectronAPI {
     // Returns all secrets stored in the vault.
     //
     vaultList: () => Promise<IVaultSecret[]>;
+
+    //
+    // Forwards a renderer-side MCP tool response back to the worker via the main process.
+    //
+    sendMcpToolResponse: (response: { requestId: string; result?: string; error?: string }) => void;
 
     //
     // Creates a database at the given path (no file picker) and sends database-opened to renderer.

@@ -16,6 +16,7 @@ import { PlatformProviderElectron } from "./lib/platform-provider-electron";
 import type { IElectronAPI } from "electron-defs";
 import { setLog } from "utils";
 import { createRendererLog } from "./lib/renderer-log";
+import { McpToolHandler } from "./lib/mcp-tool-handler";
 
 export function App() {
     const electronAPI = typeof window !== 'undefined' ? (window as unknown as { electronAPI: IElectronAPI }).electronAPI : undefined;
@@ -54,6 +55,7 @@ export function App() {
                                     <DeleteConfirmationContextProvider>
                                         <SearchContextProvider>
                                             <GalleryLayoutContextProvider>
+                                                <McpToolHandler />
                                                 <Main isMobile={false} initialTheme={initialTheme} />
                                             </GalleryLayoutContextProvider>
                                         </SearchContextProvider>
