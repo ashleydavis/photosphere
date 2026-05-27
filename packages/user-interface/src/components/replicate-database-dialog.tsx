@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { log, RandomUuidGenerator } from 'utils';
-import { replicateDatabase } from 'api/src/lib/replicate-database';
+import { log } from 'utils';
+import { useUuidGenerator } from '../context/uuid-generator-context';
+import { replicateDatabase } from 'node-api/src/lib/replicate-database';
 import type { IReplicateDatabaseData } from 'api/src/lib/replicate-database.types';
 import Modal from '@mui/joy/Modal';
 import ModalDialog from '@mui/joy/ModalDialog';
@@ -41,10 +42,6 @@ export interface IReplicateDatabaseDialogProps {
 
     // All available geocoding-api-key shared secrets the user can pick for the destination.
     geocodingSecrets: ISharedSecretEntry[];
-
-    // Optional callback fired after a new secret has been quick-created inside the Configure
-    // Secrets modal. The parent should reload its secret lists.
-    onSecretCreated?: () => Promise<void>;
 
     // Called when the dialog should close.
     onClose: () => void;
@@ -101,8 +98,9 @@ function emptyFormState(): IReplicateFormState {
 // Cancellation while running is intentionally out of scope for v1; the dialog only
 // shows a progress view once the task starts.
 //
-export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, s3Secrets, geocodingSecrets, onSecretCreated, onClose }: IReplicateDatabaseDialogProps) {
+export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, s3Secrets, geocodingSecrets, onClose }: IReplicateDatabaseDialogProps) {
     const platform = usePlatform();
+    const uuidGenerator = useUuidGenerator();
 
     const [step, setStep] = useState<ReplicateStep>("configure");
     const [form, setForm] = useState<IReplicateFormState>(emptyFormState());
@@ -173,7 +171,7 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
         };
 
         try {
-            await replicateDatabase(new RandomUuidGenerator(), taskData, setProgress);
+            await replicateDatabase(uuidGenerator, taskData, setProgress);
             setStep("success");
         }
         catch (err) {
@@ -181,7 +179,7 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
             setErrorMessage(err instanceof Error ? err.message : String(err));
             setStep("error");
         }
-    }, [sourceEntry, form]);
+    }, [sourceEntry, form, uuidGenerator]);
 
     return (
         <>
@@ -350,7 +348,6 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
                 setSecretsModalOpen(false);
             }}
             onClose={() => setSecretsModalOpen(false)}
-            onSecretCreated={onSecretCreated}
             quickCreateDefaultName={sourceEntry.name}
         />
         </>

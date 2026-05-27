@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { addPaths } from "api";
+import { addPaths } from "node-api";
 import type { IDatabaseDescriptor } from "api";
 import { requireDatabase, textResult } from "../result";
 import type { IMcpToolContext } from "../types";

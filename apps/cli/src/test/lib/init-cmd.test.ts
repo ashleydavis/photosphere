@@ -6,8 +6,11 @@ jest.mock('node-utils', () => ({
     TestTimestampProvider: jest.fn(),
     registerTerminationCallback: jest.fn(),
 }));
-jest.mock('api', () => ({
+jest.mock('node-api', () => ({
     getDatabases: jest.fn().mockResolvedValue([]),
+    createMediaFileDatabase: jest.fn(),
+    createDatabase: jest.fn(),
+    loadSortIndexes: jest.fn(),
 }));
 jest.mock('storage', () => ({ createStorage: jest.fn(), loadEncryptionKeysFromPem: jest.fn(), generateKeyPair: jest.fn(), exportPublicKeyToPem: jest.fn(), pathJoin: jest.fn() }));
 jest.mock('task-queue', () => ({ setQueueBackend: jest.fn() }));
@@ -55,7 +58,7 @@ import { getVault } from 'vault';
 import { fuzzyMatch } from 'fuzzy-match';
 import { generateKeyPair, exportPublicKeyToPem } from 'storage';
 import * as fsPromises from 'fs/promises';
-import { getDatabases } from 'api';
+import { getDatabases } from 'node-api';
 
 const mockGetVault = getVault as jest.Mock;
 const mockGenerateKeyPair = generateKeyPair as jest.Mock;

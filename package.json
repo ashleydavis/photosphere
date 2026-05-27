@@ -43,6 +43,8 @@
     "tcl": "bun run test:cli:lan-share",
     "test:lan-share:cli-desktop": "./cli-desktop-lan-share-smoke-tests.sh",
     "tlcd": "bun run test:lan-share:cli-desktop",
+    "test:stories": "./apps/desktop/cycle-stories-smoke-test.sh",
+    "tst": "bun run test:stories",
     "perf": "bun --filter '*' perf"
   },
   "workspaces": [

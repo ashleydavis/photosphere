@@ -6,7 +6,7 @@ jest.mock('config', () => ({
 
 const mockGetLastShownUpdateVersion = jest.fn();
 const mockSetLastShownUpdateVersion = jest.fn();
-jest.mock('api', () => ({
+jest.mock('node-api', () => ({
     getLastShownUpdateVersion: mockGetLastShownUpdateVersion,
     setLastShownUpdateVersion: mockSetLastShownUpdateVersion,
 }));

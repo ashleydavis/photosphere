@@ -6,23 +6,29 @@ import { cpus, platform, arch, release } from 'os';
 import { version } from 'config';
 import { existsSync, readdirSync, statSync, readFileSync } from 'fs';
 import type { IQueueBackend, ITaskMessageData } from 'task-queue';
-import { TaskQueue, TaskStatus, setQueueBackend } from 'task-queue';
+import { TaskStatus, setQueueBackend } from 'task-queue';
 import { WorkerPoolElectronMain } from './lib/worker-pool-electron-main';
 import { RandomUuidGenerator, TimestampProvider, logExceptions, log } from 'utils';
 import { findAvailablePort } from 'node-utils';
-import { loadDesktopConfig, saveDesktopConfig, updateLastFolder, getTheme, setTheme, updateLastDownloadFolder, getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry, getRecentDatabases, markDatabaseOpened, removeRecentDatabaseName, findDatabase, fetchNews, getShownNewsIds, addShownNewsIds, getLastShownUpdateVersion, setLastShownUpdateVersion } from 'api';
+import { loadDatabaseConfig, updateDatabaseConfig } from 'api';
+import type { IReplicateDatabaseData } from 'api';
+import { loadDesktopConfig, saveDesktopConfig, updateLastFolder, updateLastDownloadFolder, getTheme, setTheme, getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry, getRecentDatabases, markDatabaseOpened, removeRecentDatabaseName, findDatabase, fetchNews, getShownNewsIds, addShownNewsIds, getLastShownUpdateVersion, setLastShownUpdateVersion, checkConnectivity } from 'node-api';
+import type { IDatabaseEntry, IDesktopConfig } from 'node-api';
+import type { ISaveAssetItem } from 'api';
 import type { IWorkerPoolOptions } from './lib/worker-pool-electron-main';
 import type { IRestApiWorkerStopMessage, IRestApiWorkerStartMessage } from './rest-api-worker';
 import { installMcpHandlers, initMcpServer, stopMcpServer } from './lib/mcp/main-bridge';
+import { pickFolder as pickFolderDialog, pickFile as pickFileDialog } from './lib/pickers';
+import type { IPickFolderOptions } from './lib/pickers';
 import { FileLoggerElectron } from './lib/file-logger-electron';
-import type { IImportSession, IRendererLogMessage, ISaveAssetItem, IDatabaseEntry, IDatabaseSecrets } from 'electron-defs';
+import type { IRendererLogMessage } from 'desktop-frontend/src/lib/electron-ipc';
 import { verifyTools } from 'tools';
-import type { IDatabaseDescriptor, IDesktopConfig, IReplicateDatabaseData } from 'api';
 import { createStorage, CloudStorage, exportPublicKeyToPem } from 'storage';
-import { checkConnectivity, loadDatabaseConfig } from 'api';
 import { getVault, getDefaultVaultType } from 'vault';
-import { LanShareSender, LanShareReceiver, importDatabasePayload, importSecretPayload } from 'lan-share';
-import type { IDatabaseSharePayload, ISecretSharePayload, IReceiverEndpoint, IConflictResolution } from 'lan-share';
+import { LanShareSender, LanShareReceiver } from 'lan-share';
+import type { IReceiverEndpoint } from 'lan-share';
+import { importDatabasePayload, importSecretPayload } from 'api';
+import type { IDatabaseSharePayload, ISecretSharePayload, IConflictResolution } from 'api';
 import { TestControlServer } from './lib/test-control-server';
 import type { ITestControlServer } from './lib/test-control-server';
 
@@ -308,24 +314,10 @@ app.whenReady().then(async () => {
     log.event('Main window created');
 
     if (process.env.PHOTOSPHERE_TEST_MODE === '1' && mainWindow) {
-        const server = new TestControlServer(mainWindow, {
-            createDatabaseAtPath: createDatabaseAtPathDirect,
-            openDatabase: (databasePath) => {
-                if (mainWindow) {
-                    mainWindow.webContents.send('database-opened', databasePath);
-                }
-            },
-            importAssets: (paths) => {
-                if (workerPool && currentDatabasePath) {
-                    workerPool.addTask('add-paths', {
-                        paths,
-                        storageDescriptor: { databasePath: currentDatabasePath },
-                        sessionId: `test-import-${Date.now()}`,
-                        dryRun: false,
-                    }, `test-import-${Date.now()}`);
-                }
-            },
-        });
+        if (!workerPool) {
+            throw new Error('Worker pool not initialized');
+        }
+        const server = new TestControlServer(mainWindow, workerPool, () => currentDatabasePath);
         server.start();
         testControlServer = server;
     }
@@ -396,8 +388,25 @@ if (process.env.FPS_LOGGING === '1') {
     });
 }
 
+//
+// Request payload for the add-task IPC channel.
+//
+interface IAddTaskRequest {
+    // The task type identifier.
+    taskType: string;
+
+    // Task-specific input data.
+    data: any;
+
+    // Source tag used for bulk cancellation.
+    source: string;
+
+    // Optional explicit task ID; a UUID is generated when absent.
+    taskId?: string;
+}
+
 // IPC handler for adding tasks
-ipcMain.on('add-task', (_event, taskType: string, data: any, source: string, taskId?: string) => {
+ipcMain.on('add-task', (_event, { taskType, data, source, taskId }: IAddTaskRequest) => {
     if (!workerPool) {
         console.error('Worker pool not initialized');
         return;
@@ -419,8 +428,7 @@ ipcMain.on('cancel-tasks', (_event, source: string) => {
 // Note: ipcMain.handle automatically catches errors from async functions and sends them to the renderer.
 // If the handler throws or returns a rejected promise, Electron serializes the error and sends it to the renderer.
 // The renderer can catch it when calling ipcRenderer.invoke().
-ipcMain.handle('open-file', logExceptions(openDatabase, 'Error opening database'));
-ipcMain.handle('create-database', logExceptions(createNewDatabase, 'Error creating database'));
+ipcMain.handle('open-database', logExceptions(openDatabase, 'Error opening database'));
 
 // IPC handler for removing a database entry by name (secrets are independent and managed via the secrets page)
 ipcMain.handle('remove-database-entry', logExceptions(async (_event, name: string) => {
@@ -455,34 +463,6 @@ ipcMain.handle('vault-list', logExceptions(async () => {
     const vault = getVault(getDefaultVaultType());
     return await vault.list();
 }, 'Error listing vault secrets'));
-
-//
-// Creates a database at a known path (no file picker), notifies the renderer.
-// Shared by the IPC handler and the test control server.
-//
-async function createDatabaseAtPathDirect(databasePath: string): Promise<void> {
-    if (!workerPool) {
-        throw new Error('Worker pool not initialized');
-    }
-
-    const uuidGenerator = new RandomUuidGenerator();
-    const createQueue = new TaskQueue(uuidGenerator, databasePath);
-    const taskId = randomUUID();
-    createQueue.addTask('create-database', { databasePath }, taskId);
-    await createQueue.awaitTask(taskId);
-    createQueue.shutdown();
-
-    log.event(`Database created: ${databasePath}`);
-
-    if (mainWindow) {
-        mainWindow.webContents.send('database-opened', databasePath);
-    }
-}
-
-// IPC handler for creating a database at a known path (no file picker)
-ipcMain.handle('create-database-at-path', logExceptions(async (_event, databasePath: string) => {
-    await createDatabaseAtPathDirect(databasePath);
-}, 'Error creating database at path'));
 
 // IPC handler for checking whether a database is accessible (works for local FS, S3, etc.)
 ipcMain.handle('check-database-exists', logExceptions(async (_event, databasePath: string) => {
@@ -519,57 +499,74 @@ ipcMain.handle('add-database', logExceptions(async (_event, entry: IDatabaseEntr
     return entry;
 }, 'Error adding database'));
 
+//
+// Request payload for the update-database IPC channel.
+//
+interface IUpdateDatabaseRequest {
+    // The entry's current name, used to locate the record before renaming.
+    originalName: string;
+
+    // The updated database entry fields.
+    entry: IDatabaseEntry;
+}
+
 // IPC handler for updating an existing database entry
-ipcMain.handle('update-database', logExceptions(async (_event, originalName: string, entry: IDatabaseEntry) => {
+ipcMain.handle('update-database', logExceptions(async (_event, { originalName, entry }: IUpdateDatabaseRequest) => {
     await updateDatabaseEntry(originalName, entry);
 }, 'Error updating database'));
 
-// IPC handler for reading vault secrets for a database (resolved via shared secret reference IDs)
-ipcMain.handle('get-database-secrets', logExceptions(async (_event, databasePath: string) => {
+//
+// Request payload for the set-database-origin IPC channel.
+//
+interface ISetDatabaseOriginRequest {
+    // Path of the database whose .db/config.json should be updated.
+    databasePath: string;
+
+    // New origin string. Pass undefined to clear the origin.
+    origin: string | undefined;
+}
+
+// IPC handler for writing the database's origin to its .db/config.json
+ipcMain.handle('set-database-origin', logExceptions(async (_event, { databasePath, origin }: ISetDatabaseOriginRequest) => {
     const vault = getVault(getDefaultVaultType());
     const databases = await getDatabases();
-    const dbEntry = databases.find(entry => entry.path === databasePath);
-    const secrets: IDatabaseSecrets = {};
-
-    if (dbEntry) {
-        if (dbEntry.s3Key) {
-            const s3Secret = await vault.get(dbEntry.s3Key);
-            if (s3Secret) {
-                const parsed = JSON.parse(s3Secret.value);
-                secrets.s3Credentials = {
-                    region: parsed.region,
-                    accessKeyId: parsed.accessKeyId,
-                    secretAccessKey: parsed.secretAccessKey,
-                    endpoint: parsed.endpoint,
-                };
-            }
-        }
-        if (dbEntry.encryptionKey) {
-            const encryptionSecret = await vault.get(dbEntry.encryptionKey);
-            if (encryptionSecret) {
-                const privateKeyPem = encryptionSecret.value;
-                const publicKeyPem = exportPublicKeyToPem(createPublicKey(createPrivateKey(privateKeyPem)));
-                secrets.encryptionKeyPair = {
-                    privateKeyPem,
-                    publicKeyPem,
-                };
-            }
-        }
-        if (dbEntry.geocodingKey) {
-            const geocodingSecret = await vault.get(dbEntry.geocodingKey);
-            if (geocodingSecret) {
-                secrets.geocodingApiKey = geocodingSecret.value;
-            }
+    const dbEntry = databases.find(existingEntry => existingEntry.path === databasePath);
+    let s3Credentials = undefined;
+    if (dbEntry?.s3Key) {
+        const s3Secret = await vault.get(dbEntry.s3Key);
+        if (s3Secret) {
+            const parsed = JSON.parse(s3Secret.value);
+            s3Credentials = {
+                region: parsed.region,
+                accessKeyId: parsed.accessKeyId,
+                secretAccessKey: parsed.secretAccessKey,
+                endpoint: parsed.endpoint,
+            };
         }
     }
+    const { rawStorage } = createStorage(databasePath, s3Credentials);
+    await updateDatabaseConfig(rawStorage, { origin });
+    if (dbEntry && dbEntry.origin !== origin) {
+        await updateDatabaseEntry(dbEntry.name, { ...dbEntry, origin });
+    }
+    log.event(`Database origin updated for ${basename(databasePath)}`);
+}, 'Error setting database origin'));
 
-    return secrets;
-}, 'Error getting database secrets'));
-
-// IPC handler for opening a directory picker and returning the chosen path
-ipcMain.handle('pick-folder', logExceptions(async () => {
-    return await showDirectoryPicker('Select Folder');
+// IPC handler for opening a directory picker and returning the chosen path.
+// Accepts optional IPickFolderOptions to control title, default-folder config key, and the "New Folder" button.
+ipcMain.handle('pick-folder', logExceptions(async (_event, options?: IPickFolderOptions) => {
+    return await pickFolderDialog(mainWindow, options);
 }, 'Error picking folder'));
+
+// IPC handler for opening a save-file dialog and returning the chosen path
+ipcMain.handle('pick-file', logExceptions(async (_event, defaultFilename: string) => {
+    return await pickFileDialog(mainWindow, defaultFilename);
+}, 'Error picking save location'));
+
+// IPC handler for opening a multi-file picker dialog and returning the chosen paths
+ipcMain.handle('pick-files', logExceptions(async (_event, title: string) => {
+    return await showFilePicker(title);
+}, 'Error picking files'));
 
 // IPC handler for notifying that database was opened from frontend
 ipcMain.handle('notify-database-opened', logExceptions(async (_event, databasePath: string) => {
@@ -632,8 +629,22 @@ ipcMain.handle('remove-recent-database-name', logExceptions(async (_event, name:
     log.event(`Recent database removed: ${name}`);
 }, 'Error removing recent database name'));
 
+//
+// Request payload for the list-s3-dirs IPC channel.
+//
+interface IListS3DirsRequest {
+    // Vault secret name holding the S3 credentials.
+    s3Key: string;
+
+    // S3 bucket name.
+    bucket: string;
+
+    // Key prefix to list under.
+    prefix: string;
+}
+
 // IPC handler for listing directory names under an S3 bucket and prefix
-ipcMain.handle('list-s3-dirs', logExceptions(async (_event, s3Key: string, bucket: string, prefix: string) => {
+ipcMain.handle('list-s3-dirs', logExceptions(async (_event, { s3Key, bucket, prefix }: IListS3DirsRequest) => {
     const vault = getVault(getDefaultVaultType());
     const secret = await vault.get(s3Key);
     if (!secret) {
@@ -672,8 +683,19 @@ ipcMain.handle('get-config', logExceptions(async (_event, key: string) => {
     return config[key as keyof IDesktopConfig];
 }, 'Error getting config value'));
 
+//
+// Request payload for the set-config IPC channel.
+//
+interface ISetConfigRequest {
+    // The config key to write.
+    key: string;
+
+    // The new value to store.
+    value: IDesktopConfig[keyof IDesktopConfig];
+}
+
 // IPC handler for writing a value to the desktop config file
-ipcMain.handle('set-config', logExceptions(async (_event, key: string, value: IDesktopConfig[keyof IDesktopConfig]) => {
+ipcMain.handle('set-config', logExceptions(async (_event, { key, value }: ISetConfigRequest) => {
     const config = await loadDesktopConfig();
     (config as Record<string, IDesktopConfig[keyof IDesktopConfig]>)[key] = value;
     await saveDesktopConfig(config);
@@ -741,16 +763,6 @@ ipcMain.handle('open-path', logExceptions(async (_event, folderPath: string): Pr
     await shell.openPath(folderPath);
 }, 'Error opening path'));
 
-// IPC handler for importing directories — opens a directory picker when paths is omitted
-ipcMain.handle('import-directories', logExceptions(async (_event, paths?: string[]) => {
-    return await selectAndImportDirectories(paths);
-}, 'Error importing directories'));
-
-// IPC handler for importing files — opens a multi-file picker when paths is omitted
-ipcMain.handle('import-files', logExceptions(async (_event, paths?: string[]) => {
-    return await selectAndImportFiles(paths);
-}, 'Error importing files'));
-
 // IPC handler for starting a LAN share receiver.
 // Accepts the pairing code from the caller (generated by the sender and entered by the user).
 ipcMain.handle('start-share-receive', logExceptions(async (_event, code: string) => {
@@ -776,9 +788,20 @@ ipcMain.handle('cancel-share-receive', logExceptions(async () => {
     }
 }, 'Error cancelling share receiver'));
 
+//
+// Request payload for the wait-for-receiver IPC channel.
+//
+interface IWaitForReceiverRequest {
+    // The share payload to transmit once a receiver is found.
+    payload: IDatabaseSharePayload | ISecretSharePayload;
+
+    // The 4-digit pairing code entered by the receiver.
+    code: string;
+}
+
 // IPC handler for creating a sender and waiting for a receiver on the LAN.
 // Returns the receiver endpoint, or null on timeout or cancellation.
-ipcMain.handle('wait-for-receiver', logExceptions(async (_event, payload: IDatabaseSharePayload | ISecretSharePayload, code: string) => {
+ipcMain.handle('wait-for-receiver', logExceptions(async (_event, { payload, code }: IWaitForReceiverRequest) => {
     activeSender = new LanShareSender(payload, code);
     return await activeSender.waitForReceiver(60000);
 }, 'Error waiting for receiver'));
@@ -809,8 +832,19 @@ interface ISecretShareImportPayload extends ISecretSharePayload {
     saveName: string;
 }
 
+//
+// Request payload for the import-share-payload IPC channel.
+//
+interface IImportSharePayloadRequest {
+    // The share payload to import (database or secret).
+    payload: IDatabaseSharePayload | ISecretShareImportPayload;
+
+    // Per-secret conflict resolution decisions keyed by secret name.
+    conflictResolutions: Record<string, IConflictResolution>;
+}
+
 // IPC handler for importing a share payload (database or secret)
-ipcMain.handle('import-share-payload', logExceptions(async (_event, payload: IDatabaseSharePayload | ISecretShareImportPayload, conflictResolutions: Record<string, IConflictResolution>) => {
+ipcMain.handle('import-share-payload', logExceptions(async (_event, { payload, conflictResolutions }: IImportSharePayloadRequest) => {
     if (payload.type === 'database') {
         const resolver = async (secretName: string) => conflictResolutions[secretName] ?? { action: 'replace' as const };
         const dbEntry = await importDatabasePayload(payload, resolver);
@@ -896,25 +930,6 @@ function initWorkers() {
                 mainWindow.webContents.send('sync-completed');
             }
         }
-        if (result.type === "save-asset" && mainWindow) {
-            const { destPath } = result.inputs as { destPath: string };
-            const filename = basename(destPath);
-            const folderPath = dirname(destPath);
-            if (result.status === TaskStatus.Succeeded) {
-                mainWindow.webContents.send('show-notification', {
-                    message: `Downloaded "${filename}"`,
-                    color: 'success',
-                    folderPath,
-                });
-            }
-            else {
-                mainWindow.webContents.send('show-notification', {
-                    message: `Failed to download "${filename}": ${result.errorMessage || 'Unknown error'}`,
-                    color: 'danger',
-                    duration: 8000,
-                });
-            }
-        }
         if (result.type === "import-assets" && mainWindow) {
             if (result.status === TaskStatus.Succeeded) {
                 log.event('Import task completed');
@@ -942,32 +957,6 @@ function initWorkers() {
         }
         if (result.type === "add-paths" && result.status === TaskStatus.Succeeded) {
             log.info('Import task completed');
-        }
-        if (result.type === "save-assets-batch" && mainWindow) {
-            const { succeededFiles, failedFiles, folderPath } = result.outputs as { succeededFiles: string[]; failedFiles: Array<{ filename: string; error: string }>; folderPath: string };
-            const total = succeededFiles.length + failedFiles.length;
-            if (failedFiles.length === 0) {
-                mainWindow.webContents.send('show-notification', {
-                    message: `Downloaded ${total} asset${total !== 1 ? 's' : ''}`,
-                    color: 'success',
-                    folderPath,
-                });
-            }
-            else if (succeededFiles.length === 0) {
-                mainWindow.webContents.send('show-notification', {
-                    message: `Failed to download ${total} asset${total !== 1 ? 's' : ''}`,
-                    color: 'danger',
-                    duration: 8000,
-                });
-            }
-            else {
-                mainWindow.webContents.send('show-notification', {
-                    message: `Downloaded ${succeededFiles.length} of ${total} assets. ${failedFiles.length} failed.`,
-                    color: 'warning',
-                    duration: 8000,
-                    folderPath,
-                });
-            }
         }
     });
 
@@ -1305,27 +1294,6 @@ async function showFilePicker(title: string): Promise<string[] | undefined> {
 }
 
 //
-// Imports files from the given paths, or shows a file picker when paths is omitted.
-// Returns session info for progress tracking, or undefined if no database is open or the user cancelled.
-//
-async function selectAndImportFiles(paths?: string[]): Promise<IImportSession | undefined> {
-    if (!currentDatabasePath) {
-        return undefined;
-    }
-
-    if (paths && paths.length > 0) {
-        return startImportWithPaths(paths);
-    }
-
-    const selectedPaths = await showFilePicker('Import Files');
-    if (!selectedPaths || selectedPaths.length === 0) {
-        return undefined;
-    }
-
-    return startImportWithPaths(selectedPaths);
-}
-
-//
 // Opens a file dialog for the user to select a database directory, then notifies the frontend.
 // The REST API can handle multiple databases dynamically via the db query parameter.
 //
@@ -1343,88 +1311,6 @@ async function openDatabase(): Promise<void> {
         mainWindow.webContents.send('database-opened', databasePath);
         // Menu will be updated when frontend calls notifyDatabaseOpened()
     }
-}
-
-//
-// Creates a new database by showing a directory picker, dispatching initialization
-// to the task worker, then notifying the frontend to open the result.
-//
-async function createNewDatabase(): Promise<void> {
-    const databasePath = await showDirectoryPicker('Create Database', ['createDirectory']);
-    if (!databasePath) {
-        return;
-    }
-
-    if (!workerPool) {
-        throw new Error('Worker pool not initialized');
-    }
-
-    const uuidGenerator = new RandomUuidGenerator();
-    const createQueue = new TaskQueue(uuidGenerator, databasePath);
-    const taskId = randomUUID();
-    createQueue.addTask('create-database', { databasePath }, taskId);
-    await createQueue.awaitTask(taskId);
-    createQueue.shutdown();
-
-    await updateLastFolder(dirname(databasePath));
-
-    if (mainWindow) {
-        mainWindow.webContents.send('database-opened', databasePath);
-    }
-}
-
-//
-// Shows a folder picker and queues an add-paths task to import assets from the chosen directory.
-// Returns session info so the renderer can track progress and cancel, or undefined if the user
-// cancelled the folder picker.
-//
-//
-// Starts an import session for the given paths (files or directories).
-// Returns session info for progress tracking, or undefined if no database is open.
-//
-async function startImportWithPaths(paths: string[]): Promise<IImportSession | undefined> {
-    if (!currentDatabasePath) {
-        return undefined;
-    }
-
-    if (!workerPool) {
-        throw new Error('Worker pool not initialized');
-    }
-
-    const storageDescriptor: IDatabaseDescriptor = {
-        databasePath: currentDatabasePath,
-    };
-
-    const sessionId = randomUUID();
-    const importAssetsTaskId = workerPool.addTask('import-assets', {
-        paths,
-        storageDescriptor,
-        sessionId,
-        dryRun: false,
-    }, sessionId);
-
-    return { importAssetsTaskId, sessionId };
-}
-
-//
-// Imports from the given directory paths, or shows a directory picker when no paths are supplied.
-// Returns session info for progress tracking, or undefined if no database is open or the user cancelled.
-//
-async function selectAndImportDirectories(paths?: string[]): Promise<IImportSession | undefined> {
-    if (!currentDatabasePath) {
-        return undefined;
-    }
-
-    if (paths && paths.length > 0) {
-        return startImportWithPaths(paths);
-    }
-
-    const selectedPath = await showDirectoryPicker('Import Directory');
-    if (!selectedPath) {
-        return undefined;
-    }
-
-    return startImportWithPaths([selectedPath]);
 }
 
 //
@@ -1500,7 +1386,11 @@ async function createMenu(): Promise<void> {
             {
                 label: 'Import Assets...',
                 accelerator: 'CmdOrCtrl+I',
-                click: logExceptions(() => selectAndImportDirectories(), 'Error importing from menu'),
+                click: () => {
+                    if (mainWindow) {
+                        mainWindow.webContents.send('menu-action', 'import-assets');
+                    }
+                },
             },
             { type: 'separator' },
             {
@@ -1690,6 +1580,14 @@ async function createMenu(): Promise<void> {
         { role: 'reload', label: 'Reload' },
         { role: 'forceReload', label: 'Force Reload' },
         { role: 'toggleDevTools', label: 'Toggle Developer Tools' },
+        {
+            label: 'Stories',
+            click: () => {
+                if (mainWindow) {
+                    mainWindow.webContents.send('menu-action', 'open-stories');
+                }
+            },
+        },
     ];
 
     template.push({

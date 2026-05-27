@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { useNavigate, type NavigateFunction } from "react-router-dom";
-import type { IElectronAPI } from "electron-defs";
+import type { IElectronAPI } from "./electron-ipc";
 import { TaskQueue, TaskStatus } from "task-queue";
 import { RandomUuidGenerator } from "utils";
 import { useAssetDatabase, useGallery, useSearch, type IGalleryItem } from "user-interface";
@@ -41,11 +41,11 @@ export function McpToolHandler(): React.ReactElement | null {
         const handler = (request: IMcpToolRequest): void => {
             void dispatchTool(request, assetDatabase, gallery, search, navigate, electronAPI)
                 .then(result => {
-                    electronAPI.sendMcpToolResponse({ requestId: request.requestId, result });
+                    electronAPI.send("mcp-tool-response", { requestId: request.requestId, result });
                 })
                 .catch((error: unknown) => {
                     const message = error instanceof Error ? error.message : String(error);
-                    electronAPI.sendMcpToolResponse({ requestId: request.requestId, error: message });
+                    electronAPI.send("mcp-tool-response", { requestId: request.requestId, error: message });
                 });
         };
 
@@ -73,7 +73,7 @@ async function dispatchTool(
 ): Promise<string> {
     switch (request.tool) {
         case "list_databases": {
-            const databases = await electronAPI.getDatabases();
+            const databases = await electronAPI.invoke("get-databases");
             return JSON.stringify(databases, null, 2);
         }
         case "open_database": {
@@ -174,7 +174,7 @@ async function dispatchTool(
             // (no dialog — the model has already chosen the destination via Claude).
             //
             const defaultFilename = args.outputPath.split(/[\\/]/).pop() || args.outputPath;
-            await electronAPI.saveAsset(args.assetId, args.type, defaultFilename, databasePath, args.outputPath);
+            await electronAPI.invoke("save-asset", { assetId: args.assetId, assetType: args.type, filename: defaultFilename, databasePath, destPath: args.outputPath });
             return `Saving ${args.type} of media file ${args.assetId} to ${args.outputPath}`;
         }
         case "import_media_files": {
@@ -182,7 +182,7 @@ async function dispatchTool(
             if (args.dryRun) {
                 return "Dry-run import is not supported from the desktop MCP server. Use `psi mcp` (CLI) for dry runs.";
             }
-            const session = await electronAPI.importDirectories(args.paths);
+            const session = await electronAPI.invoke("import-directories", args.paths);
             return session
                 ? `Started import session ${session.sessionId}`
                 : "Import cancelled or no database open.";

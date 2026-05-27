@@ -6,6 +6,7 @@ export * from "./lib/swallow-error";
 export * from "./lib/retry-or-log";
 export * from "./lib/uuid-generator";
 export * from "./lib/random-uuid-generator";
+export * from "./lib/test-uuid-generator";
 export * from "./lib/image";
 export * from "./lib/wrapped-error";
 export * from "./lib/fatal-error";

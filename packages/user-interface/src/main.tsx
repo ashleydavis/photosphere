@@ -95,12 +95,12 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
 
     const { addToast } = useToast();
     const navigate = useNavigate();
-    const { status: importStatus, importItems } = useImport();
+    const { status: importStatus, importItems, startImportDirectories } = useImport();
 
     //
     // Show a completion toast when an import finishes, with a "View Import" action button.
     //
-    useEffect(() => {
+    useEffect(() => { //todo: This seems bad. Feel like there must be a better way to route notifications to the frontend.
         if (importStatus === 'completed') {
             const successCount = importItems.filter(item => item.status === 'success').length;
             log.event(`${successCount} assets imported`);
@@ -171,38 +171,42 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
         return unsubscribe;
     }, [platform, setMode]);
 
+
     //
-    // Listen for open-configuration menu action from the main process.
+    // Listen for menu actions from the main process and dispatch by action name.
     //
     useEffect(() => {
-        const unsubscribe = platform.onMenuAction('open-configuration', () => {
-            setConfigurationOpen(true);
+        return platform.onMenuAction((action) => {
+            switch (action) {
+                case 'open-configuration':
+                    setConfigurationOpen(true);
+                    break;
+
+                case 'new-database':
+                    setCreateDatabaseModalOpen(true);
+                    break;
+
+                case 'open-database':
+                    setOpenDatabaseModalOpen(true);
+                    break;
+
+                case 'import-assets':
+                    startImportDirectories().catch(error => {
+                        log.exception('Error starting import from menu', error as Error);
+                        addToast({
+                            message: `Failed to start import: ${(error as Error).message}`,
+                            color: 'danger',
+                            duration: 8000,
+                        });
+                    });
+                    break;
+
+                case 'open-stories':
+                    navigate('/stories');
+                    break;
+            }
         });
-
-        return unsubscribe;
-    }, [platform]);
-
-    //
-    // Listen for new-database menu action from the main process.
-    //
-    useEffect(() => {
-        const unsubscribe = platform.onMenuAction('new-database', () => {
-            setCreateDatabaseModalOpen(true);
-        });
-
-        return unsubscribe;
-    }, [platform]);
-
-    //
-    // Listen for open-database menu action from the main process.
-    //
-    useEffect(() => {
-        const unsubscribe = platform.onMenuAction('open-database', () => {
-            setOpenDatabaseModalOpen(true);
-        });
-
-        return unsubscribe;
-    }, [platform]);
+    }, [platform, startImportDirectories, addToast, navigate]);
 
     //
     // Listen for navigate events from the main process.

@@ -1,7 +1,7 @@
 import { log } from "utils";
 import { ITask, ITaskResult, WorkerTaskCompletionCallback, TaskMessageCallback, TaskStatus, IMessageCallbackEntry, IQueueBackend, UnsubscribeFn } from "task-queue";
 import { randomUUID } from "node:crypto";
-import { initTaskHandlers } from "api";
+import { initTaskHandlers } from "node-api";
 
 //
 // Options passed to workers for context initialization

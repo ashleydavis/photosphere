@@ -1,6 +1,6 @@
 import { exit } from "node-utils";
 import { loadDatabase, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
-import { loadMerkleTree } from "api";
+import { loadMerkleTree } from "node-api";
 import { log } from "utils";
 
 export interface IDatabaseIdCommandOptions extends IBaseCommandOptions {

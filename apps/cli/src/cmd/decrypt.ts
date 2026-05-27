@@ -12,7 +12,7 @@ import { resolveKeyPems, IBaseCommandOptions, ICommandContext, configureS3IfNeed
 import { createStorageForPath } from "../lib/storage-helper";
 import { writeProgress, clearProgressMessage } from "../lib/terminal-utils";
 import { confirm, isCancel } from "../lib/clack/prompts";
-import { decrypt as apiDecrypt } from "api";
+import { decrypt as apiDecrypt } from "node-api";
 import { configureLog } from "../lib/log";
 
 export interface IDecryptCommandOptions extends IBaseCommandOptions {

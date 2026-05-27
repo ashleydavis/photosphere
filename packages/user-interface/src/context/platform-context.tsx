@@ -1,5 +1,5 @@
 import React, { ReactNode, createContext, useContext } from "react";
-import type { IConflictResolution } from "lan-share";
+import type { IConflictResolution } from "api";
 
 //
 // Unsubscribe function type for event listeners.
@@ -32,20 +32,6 @@ export interface IEncryptionKeyPair {
 
     // PEM-encoded SPKI public key.
     publicKeyPem: string;
-}
-
-//
-// All secrets associated with a database entry (all fields optional).
-//
-export interface IDatabaseSecrets {
-    // S3 credentials for this database.
-    s3Credentials?: IS3Credentials;
-
-    // RSA key pair used to encrypt/decrypt assets.
-    encryptionKeyPair?: IEncryptionKeyPair;
-
-    // Google geocoding API key.
-    geocodingApiKey?: string;
 }
 
 //
@@ -207,6 +193,27 @@ export interface IToolStatus {
 }
 
 //
+// Options for the native folder picker dialog.
+//
+export interface IPickFolderOptions {
+    //
+    // Window title shown in the native dialog.
+    //
+    title?: string;
+
+    //
+    // Config key to read the default path from and persist the chosen path back to. The Electron
+    // implementation maps this to a key in IDesktopConfig ('lastFolder' is the existing default).
+    //
+    folderKey?: string;
+
+    //
+    // Whether to show the "New Folder" button.
+    //
+    createDirectory?: boolean;
+}
+
+//
 // Aggregated availability of all tools required for importing photos and videos.
 //
 export interface IToolsStatus {
@@ -236,12 +243,6 @@ export interface IPlatformContext {
     // The selected database path will be sent via the database-opened event.
     //
     openDatabase: () => Promise<void>;
-
-    //
-    // Shows a directory picker, creates a new empty database there, and
-    // sends the result via the database-opened event.
-    //
-    createDatabase: () => Promise<void>;
 
     //
     // Subscribes to database opened events.
@@ -274,10 +275,11 @@ export interface IPlatformContext {
     onThemeChanged: (callback: (theme: 'light' | 'dark' | 'system') => void) => Unsubscribe;
 
     //
-    // Subscribes to a named menu action sent from the main process (excluding theme changes).
+    // Subscribes to menu actions sent from the main process (excluding theme changes).
+    // The callback receives the action name and should switch on it.
     // Returns an unsubscribe function.
     //
-    onMenuAction: (action: string, callback: () => void) => Unsubscribe;
+    onMenuAction: (callback: (action: string) => void) => Unsubscribe;
 
     //
     // Subscribes to navigate events sent from the main process.
@@ -291,20 +293,6 @@ export interface IPlatformContext {
     // Used to trigger a debounced background sync.
     //
     notifyDatabaseEdited: () => void;
-
-    //
-    // Downloads a single asset to the local filesystem.
-    // On Electron, shows a save dialog and streams from the database.
-    // On web, fetches the blob and triggers a browser download.
-    //
-    downloadAsset: (assetId: string, assetType: string, filename: string, contentType: string, databasePath: string) => Promise<void>;
-
-    //
-    // Downloads multiple assets to the local filesystem.
-    // On Electron, shows a folder picker once then saves all files into it automatically.
-    // On web, triggers a browser download for each asset.
-    //
-    downloadAssets: (assets: IDownloadAssetItem[], databasePath: string) => Promise<void>;
 
     //
     // Copies a blob to the system clipboard.
@@ -342,20 +330,6 @@ export interface IPlatformContext {
     // Opens the given folder path in the system's file manager.
     //
     openFolder: (folderPath: string) => Promise<void>;
-
-    //
-    // Imports from the given directory paths, or shows a directory picker when paths is omitted.
-    // Returns session info so the caller can track progress and cancel, or undefined if no database is open
-    // or the user cancelled the picker. Desktop (Electron) only; returns undefined on web.
-    //
-    importDirectories: (paths?: string[]) => Promise<IImportSession | undefined>;
-
-    //
-    // Imports the given files, or shows a multi-file picker when paths is omitted.
-    // Returns session info so the caller can track progress and cancel, or undefined if no database is open
-    // or the user cancelled the picker. Desktop (Electron) only; returns undefined on web.
-    //
-    importFiles: (paths?: string[]) => Promise<IImportSession | undefined>;
 
     //
     // Returns the absolute file system path for a File object from a drag-and-drop event.
@@ -411,6 +385,13 @@ export interface IPlatformContext {
     updateDatabase: (originalName: string, entry: IDatabaseEntry) => Promise<void>;
 
     //
+    // Writes the database's origin into its .db/config.json. Pass undefined to clear.
+    // This is the canonical source of truth; the entry's cached `origin` is refreshed
+    // from here on each open.
+    //
+    setDatabaseOrigin: (databasePath: string, origin: string | undefined) => Promise<void>;
+
+    //
     // Removes a database entry by name (case-insensitive).
     //
     removeDatabaseEntry: (name: string) => Promise<void>;
@@ -422,13 +403,22 @@ export interface IPlatformContext {
 
     //
     // Opens a directory picker and returns the chosen path, or undefined if cancelled.
+    // Accepts optional IPickFolderOptions to control title, default-folder config key, and the
+    // "New Folder" button. Calling with no args keeps the default behaviour (title "Select Folder",
+    // reads from and persists to 'lastFolder', no "New Folder" button).
     //
-    pickFolder: () => Promise<string | undefined>;
+    pickFolder: (options?: IPickFolderOptions) => Promise<string | undefined>;
 
     //
-    // Creates a database at the given path (no file picker) and sends database-opened to renderer.
+    // Opens a save-file dialog and returns the chosen path, or undefined if cancelled.
+    // The default path is derived from the last download folder and the given filename.
     //
-    createDatabaseAtPath: (path: string) => Promise<void>;
+    pickFile: (defaultFilename: string) => Promise<string | undefined>;
+
+    //
+    // Opens a multi-file picker dialog and returns the chosen paths, or undefined if cancelled.
+    //
+    pickFiles: (title: string) => Promise<string[] | undefined>;
 
     //
     // Returns all shared secrets stored in the vault.

@@ -1,0 +1,167 @@
+import { resolveDatabaseSharePayload, resolveSecretSharePayload } from "../lan-share/lan-share-resolve";
+import type { IShareDatabaseConfig } from "../lan-share/index";
+
+// Mock the vault module
+const mockVaultGet = jest.fn();
+jest.mock("vault", () => ({
+    getDefaultVaultType: () => "plaintext",
+    getVault: () => ({
+        get: mockVaultGet,
+    }),
+}));
+
+// Mock storage to avoid the ESM-only serialize-error transitive dependency
+jest.mock("storage", () => ({
+    exportPublicKeyToPem: jest.fn(() => "-----MOCKED PUBLIC-----"),
+}));
+
+// Mock node:crypto so test fixtures with non-real PEM strings do not crash inside createPrivateKey.
+jest.mock("node:crypto", () => ({
+    ...jest.requireActual("node:crypto"),
+    createPrivateKey: jest.fn(() => ({})),
+    createPublicKey: jest.fn(() => ({})),
+}));
+
+beforeEach(() => {
+    mockVaultGet.mockReset();
+});
+
+test("resolves database payload with all secrets", async () => {
+    const entry: IShareDatabaseConfig = {
+        name: "my-photos",
+        description: "Family photos",
+        path: "/data/photos",
+        origin: "https://example.com",
+        s3Key: "abc12345",
+        encryptionKey: "def67890",
+        geocodingKey: "ghi11111",
+    };
+
+    mockVaultGet.mockImplementation(async (name: string) => {
+        if (name === "abc12345") {
+            return {
+                name: "abc12345",
+                type: "s3-credentials",
+                value: JSON.stringify({
+                    region: "us-east-1",
+                    accessKeyId: "AKID",
+                    secretAccessKey: "SECRET",
+                    endpoint: "https://s3.example.com",
+                }),
+            };
+        }
+        if (name === "def67890") {
+            return {
+                name: "def67890",
+                type: "encryption-key",
+                value: "-----PRIVATE-----",
+            };
+        }
+        if (name === "ghi11111") {
+            return {
+                name: "ghi11111",
+                type: "api-key",
+                value: "geo-key-123",
+            };
+        }
+        return undefined;
+    });
+
+    const payload = await resolveDatabaseSharePayload(entry);
+
+    expect(payload.type).toBe("database");
+    expect(payload.name).toBe("my-photos");
+    expect(payload.description).toBe("Family photos");
+    expect(payload.path).toBe("/data/photos");
+    expect(payload.origin).toBe("https://example.com");
+
+    expect(payload.s3Credentials).toBeDefined();
+    expect(payload.s3Credentials!.name).toBe("abc12345");
+    expect(payload.s3Credentials!.region).toBe("us-east-1");
+    expect(payload.s3Credentials!.accessKeyId).toBe("AKID");
+    expect(payload.s3Credentials!.secretAccessKey).toBe("SECRET");
+    expect(payload.s3Credentials!.endpoint).toBe("https://s3.example.com");
+
+    expect(payload.encryptionKey).toBeDefined();
+    expect(payload.encryptionKey!.name).toBe("def67890");
+    expect(payload.encryptionKey!.privateKeyPem).toBe("-----PRIVATE-----");
+    expect(payload.encryptionKey!.publicKeyPem).toBe("-----MOCKED PUBLIC-----");
+
+    expect(payload.geocodingKey).toBeDefined();
+    expect(payload.geocodingKey!.name).toBe("ghi11111");
+    expect(payload.geocodingKey!.apiKey).toBe("geo-key-123");
+});
+
+test("resolves database payload with no secrets", async () => {
+    const entry: IShareDatabaseConfig = {
+        name: "simple-db",
+        description: "",
+        path: "/data/simple",
+    };
+
+    const payload = await resolveDatabaseSharePayload(entry);
+
+    expect(payload.type).toBe("database");
+    expect(payload.name).toBe("simple-db");
+    expect(payload.s3Credentials).toBeUndefined();
+    expect(payload.encryptionKey).toBeUndefined();
+    expect(payload.geocodingKey).toBeUndefined();
+});
+
+test("resolves database payload when secret ID exists but vault entry is missing", async () => {
+    const entry: IShareDatabaseConfig = {
+        name: "orphaned-db",
+        description: "",
+        path: "/data/orphaned",
+        s3Key: "missing123",
+    };
+
+    mockVaultGet.mockResolvedValue(undefined);
+
+    const payload = await resolveDatabaseSharePayload(entry);
+
+    expect(payload.s3Credentials).toBeUndefined();
+});
+
+test("resolves secret share payload", async () => {
+    mockVaultGet.mockResolvedValue({
+        name: "abc12345",
+        type: "s3-credentials",
+        value: JSON.stringify({ region: "us-east-1", accessKeyId: "AKID", secretAccessKey: "SECRET" }),
+    });
+
+    const payload = await resolveSecretSharePayload("abc12345");
+
+    expect(payload.type).toBe("secret");
+    expect(payload.secretType).toBe("s3-credentials");
+    expect(JSON.parse(payload.value).region).toBe("us-east-1");
+});
+
+test("resolves secret share payload throws when secret not found", async () => {
+    mockVaultGet.mockResolvedValue(undefined);
+
+    await expect(resolveSecretSharePayload("nonexistent")).rejects.toThrow(
+        'Secret "nonexistent" not found in vault.'
+    );
+});
+
+test("derives publicKeyPem from raw-PEM encryption-key value", async () => {
+    const entry: IShareDatabaseConfig = {
+        name: "enc-only-db",
+        description: "",
+        path: "/data/enc",
+        encryptionKey: "raw-pem-key",
+    };
+
+    mockVaultGet.mockResolvedValue({
+        name: "raw-pem-key",
+        type: "encryption-key",
+        value: "-----RAW PRIVATE-----",
+    });
+
+    const payload = await resolveDatabaseSharePayload(entry);
+
+    expect(payload.encryptionKey).toBeDefined();
+    expect(payload.encryptionKey!.privateKeyPem).toBe("-----RAW PRIVATE-----");
+    expect(payload.encryptionKey!.publicKeyPem).toBe("-----MOCKED PUBLIC-----");
+});

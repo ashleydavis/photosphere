@@ -1,8 +1,8 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
-import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext, type IImportSession, type IToolsStatus, type IDownloadAssetItem, type IShowNotificationData, type IUpdateAvailableData, convertToPng, type IDatabaseEntry, type ISharedSecretEntry } from "user-interface";
-import type { IElectronAPI, ISaveAssetItem } from "electron-defs";
-import type { IConflictResolution } from "lan-share";
-import { ProxyVault } from "./proxy-vault";
+import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, convertToPng, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions } from "user-interface";
+import type { IElectronAPI } from "./electron-ipc";
+import type { IConflictResolution } from "api";
+import type { ISecret } from "vault";
 
 const isTestMode = typeof window !== 'undefined'
     && new URLSearchParams(window.location.search).get('testMode') === '1';
@@ -34,8 +34,8 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
     // Store callbacks for theme-changed events
     const themeCallbacksRef = useRef<Set<(theme: 'light' | 'dark' | 'system') => void>>(new Set());
 
-    // Store callbacks for menu actions, keyed by action name
-    const menuActionCallbacksRef = useRef<Map<string, Set<() => void>>>(new Map());
+    // Store callbacks for menu actions
+    const menuActionCallbacksRef = useRef<Set<(action: string) => void>>(new Set());
 
     // Store callbacks for navigate events
     const navigateCallbacksRef = useRef<Set<(page: string) => void>>(new Set());
@@ -162,7 +162,7 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
     // Set up message listener for menu-action events
     useEffect(() => {
         const handleMenuAction = (action: string) => {
-            menuActionCallbacksRef.current.get(action)?.forEach(cb => cb());
+            menuActionCallbacksRef.current.forEach(callback => callback(action));
         };
 
         electronAPI.onMessage('menu-action', handleMenuAction);
@@ -216,11 +216,7 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
     }, [electronAPI]);
 
     const openDatabase = useCallback(async (): Promise<void> => {
-        await electronAPI.openDatabase();
-    }, [electronAPI]);
-
-    const createDatabase = useCallback(async (): Promise<void> => {
-        await electronAPI.createDatabase();
+        await electronAPI.invoke('open-database');
     }, [electronAPI]);
 
     const onDatabaseOpened = useCallback((callback: (databasePath: string) => void): (() => void) => {
@@ -245,7 +241,7 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
 
     const notifyDatabaseOpened = useCallback(async (databasePath: string): Promise<void> => {
         // Notify main process to add to recent databases and update menu
-        await electronAPI.notifyDatabaseOpened(databasePath);
+        await electronAPI.invoke('notify-database-opened', databasePath);
 
         // Fire opened callbacks so UI components (e.g. recent databases list) refresh.
         openedCallbacksRef.current.forEach(callback => {
@@ -255,7 +251,7 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
 
     const notifyDatabaseClosed = useCallback(async (): Promise<void> => {
         // Notify main process to clear config and update menu
-        await electronAPI.notifyDatabaseClosed();
+        await electronAPI.invoke('notify-database-closed');
     }, [electronAPI]);
 
     const onThemeChanged = useCallback((callback: (theme: 'light' | 'dark' | 'system') => void): (() => void) => {
@@ -266,7 +262,7 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
     }, []);
 
     const notifyDatabaseEdited = useCallback((): void => {
-        electronAPI.notifyDatabaseEdited();
+        electronAPI.send('notify-database-edited');
     }, [electronAPI]);
 
     const onSyncStarted = useCallback((callback: () => void): (() => void) => {
@@ -297,13 +293,10 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         };
     }, []);
 
-    const onMenuAction = useCallback((action: string, callback: () => void): (() => void) => {
-        if (!menuActionCallbacksRef.current.has(action)) {
-            menuActionCallbacksRef.current.set(action, new Set());
-        }
-        menuActionCallbacksRef.current.get(action)!.add(callback);
+    const onMenuAction = useCallback((callback: (action: string) => void): (() => void) => {
+        menuActionCallbacksRef.current.add(callback);
         return () => {
-            menuActionCallbacksRef.current.get(action)?.delete(callback);
+            menuActionCallbacksRef.current.delete(callback);
         };
     }, []);
 
@@ -315,15 +308,7 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
     }, []);
 
     const openFolder = useCallback(async (folderPath: string): Promise<void> => {
-        await electronAPI.openPath(folderPath);
-    }, [electronAPI]);
-
-    const importDirectories = useCallback(async (paths?: string[]): Promise<IImportSession | undefined> => {
-        return await electronAPI.importDirectories(paths);
-    }, [electronAPI]);
-
-    const importFiles = useCallback(async (paths?: string[]): Promise<IImportSession | undefined> => {
-        return await electronAPI.importFiles(paths);
+        await electronAPI.invoke('open-path', folderPath);
     }, [electronAPI]);
 
     const getPathForFile = useCallback((file: File): string | undefined => {
@@ -337,11 +322,11 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
     }, [electronAPI]);
 
     const checkTools = useCallback(async (): Promise<IToolsStatus> => {
-        return await electronAPI.checkTools();
+        return await electronAPI.invoke('check-tools');
     }, [electronAPI]);
 
     const checkDatabaseExists = useCallback(async (databasePath: string): Promise<boolean> => {
-        return await electronAPI.checkDatabaseExists(databasePath);
+        return await electronAPI.invoke('check-database-exists', databasePath);
     }, [electronAPI]);
 
     const onTaskMessage = useCallback((handler: (taskId: string, message: Record<string, unknown>) => void): (() => void) => {
@@ -359,137 +344,127 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
     }, []);
 
     const cancelTasks = useCallback(async (sessionId: string): Promise<void> => {
-        electronAPI.cancelTasks(sessionId);
+        electronAPI.send('cancel-tasks', sessionId);
     }, [electronAPI]);
 
     const getDatabases = useCallback(async (): Promise<IDatabaseEntry[]> => {
-        return await electronAPI.getDatabases();
+        return await electronAPI.invoke('get-databases');
     }, [electronAPI]);
 
     const addDatabase = useCallback(async (entry: IDatabaseEntry): Promise<IDatabaseEntry> => {
-        return await electronAPI.addDatabase(entry);
+        return await electronAPI.invoke('add-database', entry);
     }, [electronAPI]);
 
     const updateDatabase = useCallback(async (originalName: string, entry: IDatabaseEntry): Promise<void> => {
-        await electronAPI.updateDatabase(originalName, entry);
+        await electronAPI.invoke('update-database', { originalName, entry });
+    }, [electronAPI]);
+
+    const setDatabaseOrigin = useCallback(async (databasePath: string, origin: string | undefined): Promise<void> => {
+        await electronAPI.invoke('set-database-origin', { databasePath, origin });
     }, [electronAPI]);
 
     const removeDatabaseEntry = useCallback(async (name: string): Promise<void> => {
-        await electronAPI.removeDatabaseEntry(name);
+        await electronAPI.invoke('remove-database-entry', name);
     }, [electronAPI]);
 
     const findDatabase = useCallback(async (name: string): Promise<IDatabaseEntry | undefined> => {
-        return await electronAPI.findDatabase(name);
+        return await electronAPI.invoke('find-database', name);
     }, [electronAPI]);
 
-    const pickFolder = useCallback(async (): Promise<string | undefined> => {
-        return await electronAPI.pickFolder();
+    const pickFolder = useCallback(async (options?: IPickFolderOptions): Promise<string | undefined> => {
+        return await electronAPI.invoke('pick-folder', options);
     }, [electronAPI]);
 
-    const createDatabaseAtPath = useCallback(async (path: string): Promise<void> => {
-        await electronAPI.createDatabaseAtPath(path);
+    const pickFile = useCallback(async (defaultFilename: string): Promise<string | undefined> => {
+        return await electronAPI.invoke('pick-file', defaultFilename);
+    }, [electronAPI]);
+
+    const pickFiles = useCallback(async (title: string): Promise<string[] | undefined> => {
+        return await electronAPI.invoke('pick-files', title);
     }, [electronAPI]);
 
     const listSecrets = useCallback(async (): Promise<ISharedSecretEntry[]> => {
-        const vault = new ProxyVault(electronAPI);
-        const allSecrets = await vault.list();
-        return allSecrets.map(secret => ({ name: secret.name, type: secret.type }));
+        const allSecrets = await electronAPI.invoke('vault-list');
+        return allSecrets.map((secretEntry: ISecret) => ({ name: secretEntry.name, type: secretEntry.type }));
     }, [electronAPI]);
 
     const addSecret = useCallback(async (entry: ISharedSecretEntry, value: string): Promise<ISharedSecretEntry> => {
-        const vault = new ProxyVault(electronAPI);
-        const existing = await vault.get(entry.name);
+        const existing = await electronAPI.invoke('vault-get', entry.name) as ISecret | undefined;
         if (existing) {
             throw new Error(`A secret named '${entry.name}' already exists.`);
         }
-        await vault.set({ name: entry.name, type: entry.type, value });
+        await electronAPI.invoke('vault-set', { name: entry.name, type: entry.type, value });
         return { name: entry.name, type: entry.type };
     }, [electronAPI]);
 
     const updateSecret = useCallback(async (originalName: string, entry: ISharedSecretEntry, value?: string): Promise<void> => {
-        const vault = new ProxyVault(electronAPI);
         if (value === undefined) {
             return;
         }
 
         // Set the new entry first, then delete the old one if the name changed.
         // Order matters: a crash between the two leaves data rather than losing it.
-        await vault.set({ name: entry.name, type: entry.type, value });
+        await electronAPI.invoke('vault-set', { name: entry.name, type: entry.type, value });
         if (originalName !== entry.name) {
-            await vault.delete(originalName);
+            await electronAPI.invoke('vault-delete', originalName);
         }
     }, [electronAPI]);
 
     const deleteSecret = useCallback(async (name: string): Promise<void> => {
-        const vault = new ProxyVault(electronAPI);
-        await vault.delete(name);
+        await electronAPI.invoke('vault-delete', name);
     }, [electronAPI]);
 
     const getSecretValue = useCallback(async (name: string): Promise<string | undefined> => {
-        const vault = new ProxyVault(electronAPI);
-        const secret = await vault.get(name);
+        const secret = await electronAPI.invoke('vault-get', name) as ISecret | undefined;
         return secret?.value;
     }, [electronAPI]);
 
     const getRecentDatabases = useCallback(async (): Promise<IDatabaseEntry[]> => {
-        return await electronAPI.getRecentDatabases();
+        return await electronAPI.invoke('get-recent-databases') as IDatabaseEntry[];
     }, [electronAPI]);
 
     const removeRecentDatabaseName = useCallback(async (name: string): Promise<void> => {
-        await electronAPI.removeRecentDatabaseName(name);
+        await electronAPI.invoke('remove-recent-database-name', name);
     }, [electronAPI]);
 
     const listS3Dirs = useCallback(async (s3Key: string, bucket: string, prefix: string): Promise<string[]> => {
-        return await electronAPI.listS3Dirs(s3Key, bucket, prefix);
+        return await electronAPI.invoke('list-s3-dirs', { s3Key, bucket, prefix }) as string[];
     }, [electronAPI]);
 
     const startShareReceive = useCallback(async (code: string): Promise<void> => {
-        await electronAPI.startShareReceive(code);
+        await electronAPI.invoke('start-share-receive', code);
     }, [electronAPI]);
 
     const waitShareReceive = useCallback(async (): Promise<unknown> => {
-        return await electronAPI.waitShareReceive();
+        return await electronAPI.invoke('wait-share-receive');
     }, [electronAPI]);
 
     const cancelShareReceive = useCallback(async (): Promise<void> => {
-        await electronAPI.cancelShareReceive();
+        await electronAPI.invoke('cancel-share-receive');
     }, [electronAPI]);
 
     const waitForReceiver = useCallback(async (payload: unknown, code: string): Promise<unknown> => {
-        return await electronAPI.waitForReceiver(payload, code);
+        return await electronAPI.invoke('wait-for-receiver', { payload, code });
     }, [electronAPI]);
 
     const sendToReceiver = useCallback(async (endpoint: unknown): Promise<boolean> => {
-        return await electronAPI.sendToReceiver(endpoint);
+        return await electronAPI.invoke('send-to-receiver', endpoint) as boolean;
     }, [electronAPI]);
 
     const cancelShareSend = useCallback(async (): Promise<void> => {
-        await electronAPI.cancelShareSend();
+        await electronAPI.invoke('cancel-share-send');
     }, [electronAPI]);
 
     const importSharePayload = useCallback(async (payload: unknown, conflictResolutions: Record<string, IConflictResolution>): Promise<void> => {
-        await electronAPI.importSharePayload(payload, conflictResolutions);
+        await electronAPI.invoke('import-share-payload', { payload, conflictResolutions });
     }, [electronAPI]);
 
     const markUpdateAsShown = useCallback(async (version: string): Promise<void> => {
-        await electronAPI.markUpdateShown(version);
+        await electronAPI.invoke('mark-update-shown', version);
     }, [electronAPI]);
 
     const markNewsAsShown = useCallback(async (newsId: string): Promise<void> => {
-        await electronAPI.markNewsShown(newsId);
-    }, [electronAPI]);
-
-    const downloadAsset = useCallback(async (assetId: string, assetType: string, filename: string, _contentType: string, databasePath: string): Promise<void> => {
-        await electronAPI.saveAsset(assetId, assetType, filename, databasePath);
-    }, [electronAPI]);
-
-    const downloadAssets = useCallback(async (assets: IDownloadAssetItem[], databasePath: string): Promise<void> => {
-        const saveItems: ISaveAssetItem[] = assets.map(asset => ({
-            assetId: asset.assetId,
-            assetType: asset.assetType,
-            filename: asset.filename,
-        }));
-        await electronAPI.saveAssets(saveItems, databasePath);
+        await electronAPI.invoke('mark-news-shown', newsId);
     }, [electronAPI]);
 
     const copyToClipboard = useCallback(async (blob: Blob, _contentType: string): Promise<void> => {
@@ -499,7 +474,6 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
 
     const platformContext: IPlatformContext = {
         openDatabase,
-        createDatabase,
         onDatabaseOpened,
         onDatabaseClosed,
         notifyDatabaseOpened,
@@ -508,16 +482,12 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         notifyDatabaseEdited,
         onSyncStarted,
         onSyncCompleted,
-        downloadAsset,
-        downloadAssets,
         copyToClipboard,
         onShowNotification,
         onUpdateAvailable,
         openFolder,
         onMenuAction,
         onNavigate,
-        importDirectories,
-        importFiles,
         getPathForFile,
         checkTools,
         checkDatabaseExists,
@@ -527,10 +497,12 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         getDatabases,
         addDatabase,
         updateDatabase,
+        setDatabaseOrigin,
         removeDatabaseEntry,
         findDatabase,
         pickFolder,
-        createDatabaseAtPath,
+        pickFile,
+        pickFiles,
         listSecrets,
         addSecret,
         updateSecret,
@@ -551,8 +523,8 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
     };
 
     const config = createConfig(
-        (key) => electronAPI.getConfig(key),
-        (key, value) => electronAPI.setConfig(key, value)
+        (key) => electronAPI.invoke('get-config', key),
+        (key, value) => electronAPI.invoke('set-config', { key, value })
     );
 
     return (

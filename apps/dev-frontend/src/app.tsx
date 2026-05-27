@@ -1,5 +1,5 @@
 import React from "react";
-import { HashRouter } from "react-router-dom";
+import { HashRouter, Route, Routes } from "react-router-dom";
 import {
     AppContextProvider, Main,
     GalleryContextProvider,
@@ -9,11 +9,22 @@ import {
     DeleteConfirmationContextProvider,
     ImportContextProvider,
     ToastContextProvider,
+    UuidGeneratorProvider,
+    StoriesPage,
 } from "user-interface";
 import { useWebSocket } from "./lib/use-web-socket";
 import { WebSocketQueueBackend } from "./lib/websocket-queue-backend";
 import { setQueueBackend } from "task-queue";
+import { RandomUuidGenerator, TestUuidGenerator } from "utils";
 import { PlatformProviderWeb } from "./lib/platform-provider-web";
+
+//
+// In test mode a deterministic TestUuidGenerator is used so smoke tests
+// get reproducible task ids; otherwise the real RandomUuidGenerator is used.
+//
+const isTestMode = typeof window !== 'undefined'
+    && new URLSearchParams(window.location.search).get('testMode') === '1';
+const uuidGenerator = isTestMode ? new TestUuidGenerator() : new RandomUuidGenerator();
 
 
 export function App() {
@@ -37,25 +48,32 @@ export function App() {
                 v7_relativeSplatPath: true,
             }}
         >
-            <PlatformProviderWeb ws={ws}>
-                <ImportContextProvider>
-                    <AppContextProvider>
-                        <ToastContextProvider>
-                            <AssetDatabaseProvider queueBackend={queueBackend} restApiUrl="http://localhost:3001">
-                                <GalleryContextProvider>
-                                    <DeleteConfirmationContextProvider>
-                                        <SearchContextProvider>
-                                            <GalleryLayoutContextProvider>
-                                                <Main isMobile={false} initialTheme={initialTheme} />
-                                            </GalleryLayoutContextProvider>
-                                        </SearchContextProvider>
-                                    </DeleteConfirmationContextProvider>
-                                </GalleryContextProvider>
-                            </AssetDatabaseProvider>
-                        </ToastContextProvider>
-                    </AppContextProvider>
-                </ImportContextProvider>
-            </PlatformProviderWeb>
+            <Routes>
+                <Route path="/stories" element={<StoriesPage />} />
+                <Route path="*" element={
+                    <UuidGeneratorProvider value={uuidGenerator}>
+                        <PlatformProviderWeb ws={ws}>
+                            <AppContextProvider>
+                                <ToastContextProvider>
+                                    <AssetDatabaseProvider queueBackend={queueBackend} restApiUrl="http://localhost:3001">
+                                        <ImportContextProvider>
+                                            <GalleryContextProvider>
+                                                <DeleteConfirmationContextProvider>
+                                                    <SearchContextProvider>
+                                                        <GalleryLayoutContextProvider>
+                                                            <Main isMobile={false} initialTheme={initialTheme} />
+                                                        </GalleryLayoutContextProvider>
+                                                    </SearchContextProvider>
+                                                </DeleteConfirmationContextProvider>
+                                            </GalleryContextProvider>
+                                        </ImportContextProvider>
+                                    </AssetDatabaseProvider>
+                                </ToastContextProvider>
+                            </AppContextProvider>
+                        </PlatformProviderWeb>
+                    </UuidGeneratorProvider>
+                } />
+            </Routes>
         </HashRouter>
     );
 }

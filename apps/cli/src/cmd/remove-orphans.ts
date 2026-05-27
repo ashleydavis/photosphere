@@ -2,7 +2,7 @@ import { log } from "utils";
 import pc from "picocolors";
 import { exit } from "node-utils";
 import { loadDatabase, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
-import { loadMerkleTree } from "api";
+import { loadMerkleTree } from "node-api";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import { findOrphans } from "../lib/find-orphans";
 import { getDirectoryForCommand } from '../lib/directory-picker';

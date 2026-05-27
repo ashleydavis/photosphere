@@ -4,7 +4,8 @@ import { exit } from "node-utils";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import { loadDatabase, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
 import { formatBytes } from "../lib/format";
-import { verify, verifyDatabaseFiles, IDatabaseFileVerifyResult, IDatabaseDescriptor } from "api";
+import type { IDatabaseDescriptor } from "api";
+import { verify, verifyDatabaseFiles, IDatabaseFileVerifyResult } from "node-api";
 
 export interface IVerifyCommandOptions extends IBaseCommandOptions {
     //

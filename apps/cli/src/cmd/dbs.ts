@@ -3,13 +3,14 @@ import { readFile } from 'fs/promises';
 import pc from 'picocolors';
 import { getVault, getDefaultVaultType, IVault } from 'vault';
 import { log } from 'utils';
-import { getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry, findDatabase } from 'api';
+import { getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry, findDatabase } from 'node-api';
 import { confirm, intro, outro, text, select, isCancel, spinner, note } from '../lib/clack/prompts';
 import { exit } from 'node-utils';
 import { generateKeyPair } from 'storage';
-import type { IDatabaseEntry } from 'electron-defs';
-import { LanShareSender, LanShareReceiver, resolveDatabaseSharePayload, importDatabasePayload } from 'lan-share';
-import type { IDatabaseSharePayload, ConflictResolver, IConflictResolution } from 'lan-share';
+import type { IDatabaseEntry } from 'node-api';
+import { LanShareSender, LanShareReceiver } from 'lan-share';
+import { resolveDatabaseSharePayload, importDatabasePayload } from 'api';
+import type { IDatabaseSharePayload, ConflictResolver, IConflictResolution } from 'api';
 import { findSimilarDatabaseNames, findSimilarKeyNames, findSimilarSecretNames } from '../lib/init-cmd';
 
 //

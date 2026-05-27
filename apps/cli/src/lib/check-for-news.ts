@@ -1,4 +1,4 @@
-import { fetchNews, getShownNewsIds, addShownNewsIds, type INewsItem } from "api";
+import { fetchNews, getShownNewsIds, addShownNewsIds, type INewsItem } from "node-api";
 
 //
 // URL of the news feed published in the Photosphere GitHub repo. Overridable via

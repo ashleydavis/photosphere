@@ -112,6 +112,10 @@ get_release_binary() {
 # Launches the Electron app in test mode as a background process.
 # Usage: start_app <port> <tmp_dir> [x_position]
 #
+# On Linux the app runs headlessly via xvfb-run by default. Set SHOW_UI=1 to
+# show the window instead (useful for debugging a failing test). xvfb-run is
+# Linux-only; on macOS/Windows the UI is always shown.
+#
 start_app() {
     local port="$1"
     local tmp_dir="$2"
@@ -125,6 +129,18 @@ start_app() {
         electron_bin=$(cd "$DESKTOP_DIR" && node -e "process.stdout.write(require('electron'))")
         launch_args+=("$electron_bin" "$DESKTOP_DIR")
     fi
+
+    # Headless wrapper: on Linux, prepend xvfb-run unless SHOW_UI=1 is set.
+    local wrapper=()
+    if [ "${SHOW_UI:-0}" != "1" ] && [ "$(detect_platform)" = "linux" ]; then
+        if command -v xvfb-run >/dev/null 2>&1; then
+            wrapper=(xvfb-run -a)
+            log_info "Running headless (xvfb-run). Set SHOW_UI=1 to show the window."
+        else
+            log_info "SHOW_UI not set but xvfb-run is not installed; running with visible UI. Install xvfb to run headless (e.g. 'apt install xvfb')."
+        fi
+    fi
+
     PHOTOSPHERE_TEST_MODE=1 \
     PHOTOSPHERE_TEST_PORT="$port" \
     PHOTOSPHERE_CONFIG_DIR="$tmp_dir/config" \
@@ -134,7 +150,7 @@ start_app() {
     PHOTOSPHERE_NEWS_URL="${PHOTOSPHERE_NEWS_URL:-}" \
     TEST_TMP_DIR="$tmp_dir" \
     NODE_ENV=testing \
-    "${launch_args[@]}" --no-sandbox --disable-gpu -geometry "960x800+${x_pos}+0" > "$tmp_dir/app.log" 2>&1 &
+    "${wrapper[@]}" "${launch_args[@]}" --no-sandbox --disable-gpu -geometry "960x800+${x_pos}+0" > "$tmp_dir/app.log" 2>&1 &
     echo $! > "$tmp_dir/app.pid"
     log_info "App started (PID $(cat "$tmp_dir/app.pid"), port $port)"
 }

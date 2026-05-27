@@ -10,7 +10,8 @@ import Input from '@mui/joy/Input';
 import Textarea from '@mui/joy/Textarea';
 import FormControl from '@mui/joy/FormControl';
 import FormLabel from '@mui/joy/FormLabel';
-import { usePlatform, type ISharedSecretEntry } from '../context/platform-context';
+import { type ISharedSecretEntry } from '../context/platform-context';
+import { useApp } from '../context/app-context';
 import { buildValueJson, emptyFormState, type ISecretFormState } from '../lib/secrets-form';
 
 export interface ICreateSecretDialogProps {
@@ -35,7 +36,7 @@ export interface ICreateSecretDialogProps {
 // used inline from the databases page and create-database modal.
 //
 export function CreateSecretDialog({ open, secretType, defaultName, onClose, onSave }: ICreateSecretDialogProps) {
-    const platform = usePlatform();
+    const { addSecret } = useApp();
 
     const [form, setForm] = useState<ISecretFormState>(() => ({
         ...emptyFormState(),
@@ -48,7 +49,7 @@ export function CreateSecretDialog({ open, secretType, defaultName, onClose, onS
     //
     async function handleSave(): Promise<void> {
         const valueJson = buildValueJson(form);
-        const newSecret = await platform.addSecret({ name: form.name.trim(), type: secretType }, valueJson);
+        const newSecret = await addSecret({ name: form.name.trim(), type: secretType }, valueJson);
         onSave(newSecret);
     }
 

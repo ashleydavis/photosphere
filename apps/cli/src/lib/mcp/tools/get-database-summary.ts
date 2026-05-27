@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { getDatabaseSummary } from "api";
+import { getDatabaseSummary } from "node-api";
 import { requireDatabase, textResult } from "../result";
 import type { IMcpToolContext } from "../types";
 

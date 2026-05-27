@@ -4,12 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Rules
 
+- When writing plans, do not add any steps for "Human Verification" or "Human Testing", plans you write should be automatically tested by unit tests and smoke tests. No human will be testing your work.
+- YOU ARE RESPONSIBLE FOR THE CODE IN THIS REPO. IT DOESN'T MATTER "IF IT WAS ALREADY LIKE THAT" - YOU ARE EXPECTED TO FIX IT.
+- IF YOU DON'T KNOW WHO WROTE THE CODE, IT MEANS YOU (CLAUDE) WROTE THE CODE.
 - IT IS ALWAYS YOUR RESPONSIBILTY TO FIX COMPILE ERRORS AND FAILING TESTS. NEVER USE THE "PREEXISTING" EXCUSE.
 - NEVER USE EM DASHES.
 - Never use memory.
 - All Claude configuration goes in this repository only, not in the home directory.
 - Never stash code unless asked.
-- Never use `cd` in shell commands. Always use absolute paths instead. The working directory persists across Bash tool calls and `cd` will cause subsequent commands to run from the wrong directory.
+- Never use `cd` to permanently change directories within the repo. Use it on case-by-case and temporary basis as part of a command to run the command from a particular directory. Use of `cd` by itself will leave you in the wrong directory meaning other commands won't work.
 - Never invoke shell scripts directly (e.g. `./apps/desktop/smoke-tests.sh`). Use the `bun run` equivalent from `package.json` (e.g. `bun run test:electron`, `bun run test:cli`).
 - When running smoke tests, do not manually `rm -rf` the test's `tmp/` directory — the runner already cleans it before each test.
 - When creating a new worktree, never use `EnterWorktree` with a `name` parameter. Instead: (1) run `git branch --show-current` to get the current branch, (2) run `git worktree add -b <new-branch> .claude/worktrees/<name> <current-branch>` to create the worktree explicitly branching from the current branch, (3) then use `EnterWorktree` with the `path` parameter to enter it.
@@ -25,7 +28,8 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 
 ### Root (run from repo root):
 - `bun run compile` - Compile all TypeScript
-- `bun run test` - Run all tests
+- `bun run test:all` - Run ALL tests (unit tests + all smoke tests). Use this when asked to run "all tests".
+- `bun run test` - Run unit tests only
 - `bun run test -- <test-name-or-pattern>` - Run a single test by name or pattern.
 - `bun run clean` - Clean all build artifacts
 - `bun run dev` - Start Electron desktop app in dev mode
@@ -33,6 +37,7 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 - `bun run test:cli` - Run CLI smoke tests
 - `bun run test:cli -- <number|name>` - Run a single CLI smoke test by number or name
 - `bun run test:electron` - Build and run Electron smoke tests
+- `bun run test:stories` - Run the long-running Electron cycle-stories smoke test (excluded from `test:all`)
 - `bun run start -- <command> [db-path]` - Run CLI commands locally (from `apps/cli`)
 - `bun run perf` - Run performance benchmarks for all packages
 

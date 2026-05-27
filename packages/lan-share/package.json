@@ -28,8 +28,6 @@
   },
   "dependencies": {
     "vault": "workspace:*",
-    "node-utils": "workspace:*",
-    "electron-defs": "workspace:*",
     "storage": "workspace:*"
   }
 }

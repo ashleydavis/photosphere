@@ -16,8 +16,9 @@ import Checkbox from '@mui/joy/Checkbox';
 import Box from '@mui/joy/Box';
 import Select from '@mui/joy/Select';
 import Option from '@mui/joy/Option';
-import type { IConflictResolution } from 'lan-share';
+import type { IConflictResolution } from 'api';
 import { usePlatform } from '../context/platform-context';
+import { useApp } from '../context/app-context';
 
 export interface IReceiveDatabaseDialogProps {
     // Whether the dialog is visible.
@@ -94,6 +95,7 @@ interface ISecretConflict {
 //
 export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogProps) {
     const platform = usePlatform();
+    const { removeDatabase, importSharePayload } = useApp();
     const [step, setStep] = useState<ReceiveStep>("enter-code");
     const [enteredCode, setEnteredCode] = useState("");
     const [payload, setPayload] = useState<IReceivedDatabasePayload | null>(null);
@@ -245,7 +247,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
     const handleDbNameConflictResolved = useCallback(async () => {
         if (dbNameConflictAction === "replace") {
             if (existingDbName !== undefined) {
-                await platform.removeDatabaseEntry(existingDbName);
+                await removeDatabase(existingDbName);
             }
             await doImport(pendingSecretResolutions, editedName.trim());
             return;
@@ -262,7 +264,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
             return;
         }
         await doImport(pendingSecretResolutions, trimmedRename);
-    }, [dbNameConflictAction, dbNameConflictRename, existingDbName, pendingSecretResolutions, editedName, platform]);
+    }, [dbNameConflictAction, dbNameConflictRename, existingDbName, pendingSecretResolutions, editedName, platform, removeDatabase]);
 
     //
     // Performs the actual import with the given secret-conflict resolutions and final name.
@@ -282,7 +284,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
             geocodingKey: importGeocoding ? payload.geocodingKey : undefined,
         };
 
-        await platform.importSharePayload(importPayload, conflictResolutions);
+        await importSharePayload(importPayload, conflictResolutions);
         setStep("success");
         log.event('Database imported');
     }
@@ -555,7 +557,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
                     )}
 
                     {(step === "success" || step === "error") && (
-                        <Button onClick={onClose}>Close</Button>
+                        <Button data-id="receive-database-close-button" onClick={onClose}>Close</Button>
                     )}
                 </DialogActions>
             </ModalDialog>

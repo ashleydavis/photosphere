@@ -7,7 +7,8 @@ import { createStorageForPath } from "../lib/storage-helper";
 import { getVault, getDefaultVaultType } from "vault";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import { getDirectoryForCommand } from "../lib/directory-picker";
-import { replicateDatabase, merkleTreeExists, loadDatabaseConfig } from "api";
+import { loadDatabaseConfig } from "api";
+import { replicateDatabase, merkleTreeExists } from "node-api";
 import { confirm, select, isCancel } from '../lib/clack/prompts';
 
 export interface IReplicateCommandOptions extends IBaseCommandOptions { 

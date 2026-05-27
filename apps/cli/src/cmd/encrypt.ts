@@ -13,7 +13,7 @@ import { createStorageForPath } from "../lib/storage-helper";
 import { getVault, getDefaultVaultType } from "vault";
 import { writeProgress, clearProgressMessage } from "../lib/terminal-utils";
 import { confirm, isCancel } from "../lib/clack/prompts";
-import { merkleTreeExists, encrypt as apiEncrypt } from "api";
+import { merkleTreeExists, encrypt as apiEncrypt } from "node-api";
 import { configureLog } from "../lib/log";
 
 export interface IEncryptCommandOptions extends IBaseCommandOptions {

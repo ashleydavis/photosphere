@@ -4,7 +4,8 @@ import { exit } from "node-utils";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import { loadDatabase, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
 import { formatBytes } from "../lib/format";
-import { repair, loadDatabaseConfig } from "api";
+import { loadDatabaseConfig } from "api";
+import { repair } from "node-api";
 
 export interface IRepairCommandOptions extends IBaseCommandOptions {
     //

@@ -48,6 +48,8 @@ apps/desktop/test-results
 apps/cli/test/tmp-encrypted/
 apps/cli/test/tmp-lan-share/
 tmp-cli-desktop-lan-share/
+apps/desktop/cycle-stories-tmp/
+apps/desktop/stories-screenshots/
 .claude/worktrees/
 .claude/permissions-log/
 .claude/permissions-debug.log

@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { getDatabases } from "api";
+import { getDatabases } from "node-api";
 import { textResult } from "../result";
 
 //

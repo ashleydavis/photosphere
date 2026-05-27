@@ -106,7 +106,7 @@ export function ShareSecretDialog({ open, entry, onClose }: IShareSecretDialogPr
                     </Alert>
 
                     <Typography level="body-sm" sx={{ mb: 2 }} color="neutral">
-                        Click Receive Secret on another device to receive this secret.
+                        Click Receive secret on another device to receive this secret.
                     </Typography>
 
                     {step === "confirm" && (

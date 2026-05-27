@@ -31,8 +31,9 @@
     "@modelcontextprotocol/sdk": "^1.0.0",
     "@types/express": "^5.0.6",
     "api": "workspace:*",
+    "node-api": "workspace:*",
     "config": "workspace:*",
-    "electron-defs": "workspace:*",
+    "desktop-frontend": "workspace:*",
     "express": "^5.2.1",
     "lan-share": "workspace:*",
     "node-utils": "workspace:*",
@@ -41,6 +42,7 @@
     "storage": "workspace:*",
     "task-queue": "workspace:*",
     "tools": "workspace:*",
+    "user-interface": "workspace:*",
     "utils": "workspace:*",
     "vault": "workspace:*",
     "zod": "^3.23.8"
@@ -48,8 +50,8 @@
   "devDependencies": {
     "cross-env": "^7.0.3",
     "electron": "^40.0.0",
-    "@types/node": "^20.10.0",
     "@types/jest": "^29.4.0",
+    "@types/node": "^20.10.0",
     "electron-builder": "^26.4.0",
     "jest": "^29.0.1",
     "ts-jest": "^29.0.5",

@@ -1,8 +1,10 @@
 import React, { ReactNode, createContext, useContext, useEffect, useRef, useState } from "react";
 import { IGalleryItem } from "../lib/gallery-item";
 import { GallerySourceContext, IItemsUpdate, IGalleryItemMap, IGallerySource } from "./gallery-source";
-import { IAsset, IDatabaseOp, IMoveAssetsData } from "api";
-import { RandomUuidGenerator, log } from "utils";
+import { IAsset, IDatabaseOp } from "api";
+import type { ISaveAssetItem } from "api";
+import type { IMoveAssetsData } from "node-api";
+import { log } from "utils";
 import { IObservable, Observable } from "../lib/subscription";
 import { loadAssets as loadAssetsApi } from "api/src/lib/load-assets";
 import type { ILoadAssetsData, ILoadAssetsResult } from "api/src/lib/load-assets.types";
@@ -11,7 +13,9 @@ import axios from "axios";
 import { TaskStatus, TaskQueue, getQueueBackend } from "task-queue";
 import type { IQueueBackend } from "task-queue";
 import { usePlatform } from "./platform-context";
+import type { IDownloadAssetItem } from "./platform-context";
 import { useToast } from "./toast-context";
+import { useUuidGenerator } from "./uuid-generator-context";
 
 //
 // Adds "asset database" specific functionality to the gallery source.
@@ -43,9 +47,15 @@ export interface IAssetDatabase extends IGallerySource {
     selectAndOpenDatabase(): Promise<void>;
 
     //
-    // Shows a directory picker, creates a new database there, and loads it.
+    // Shows a directory picker, creates a new database at the chosen path, and loads it.
+    // Returns without opening anything if the user cancels the picker.
     //
-    selectAndCreateDatabase(): Promise<void>;
+    createDatabase(): Promise<void>;
+
+    //
+    // Creates a new database at the given path (no folder picker) and loads it.
+    //
+    createDatabaseAtPath(dbPath: string): Promise<void>;
 
     //
     // Opens a database by path directly (without showing file dialog).
@@ -61,6 +71,18 @@ export interface IAssetDatabase extends IGallerySource {
     // Returns a direct URL for an asset, suitable for use in img src attributes.
     //
     assetUrl(assetId: string, assetType: string): string;
+
+    //
+    // Downloads a single asset by showing the platform save picker, queueing a save-asset
+    // task, and surfacing a success or failure toast when the task completes.
+    //
+    downloadAsset(asset: IGalleryItem): Promise<void>;
+
+    //
+    // Downloads multiple assets to a single folder by showing the folder picker,
+    // queueing a save-assets-batch task, and surfacing success/partial/failure toasts when it completes.
+    //
+    downloadAssets(assets: IDownloadAssetItem[]): Promise<void>;
 }
 
 export interface IAssetDatabaseProviderProps {
@@ -71,6 +93,7 @@ export interface IAssetDatabaseProviderProps {
 
 export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IAssetDatabaseProviderProps) {
     const platform = usePlatform();
+    const uuidGenerator = useUuidGenerator();
     const { addToast } = useToast();
 
     //
@@ -311,12 +334,38 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
     }
 
     //
-    // Shows a directory picker, creates a new database there, and loads it.
+    // Creates a new database at the given path by queueing a create-database task,
+    // awaiting its completion, and then notifying the platform that the database is
+    // open (which fires the database-opened callback chain to load the new database).
     //
-    async function selectAndCreateDatabase(): Promise<void> {
-        await platform.createDatabase();
+    async function createDatabaseAtPath(dbPath: string): Promise<void> {
+        const queue = new TaskQueue(uuidGenerator, dbPath);
+        try {
+            const taskId = queue.addTask("create-database", { databasePath: dbPath });
+            const result = await queue.awaitTask(taskId);
+            if (!result || result.status !== TaskStatus.Succeeded) {
+                throw new Error(`create-database task did not succeed: ${result?.errorMessage ?? "unknown error"}`);
+            }
+        }
+        finally {
+            queue.shutdown();
+        }
+        await platform.notifyDatabaseOpened(dbPath);
+    }
 
-        // The database-opened event will be handled by the useEffect listener
+    //
+    // Shows a directory picker, creates a new database at the chosen path, and loads it.
+    // Returns without opening anything if the user cancels the picker.
+    //
+    async function createDatabase(): Promise<void> {
+        const dbPath = await platform.pickFolder({
+            title: "Create Database",
+            createDirectory: true,
+        });
+        if (!dbPath) {
+            return;
+        }
+        await createDatabaseAtPath(dbPath);
     }
 
     //
@@ -367,7 +416,7 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
         try {
             setIsWorking(true);
 
-            const queue = new TaskQueue(new RandomUuidGenerator(), databasePath!);
+            const queue = new TaskQueue(uuidGenerator, databasePath!);
             const taskId = queue.addTask("move-assets", { sourceDatabasePath: databasePath!, destDatabasePath, assetIds } satisfies IMoveAssetsData);
             const result = await queue.awaitTask(taskId);
             queue.shutdown();
@@ -385,6 +434,122 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
         }
     }
 
+    //
+    // Extracts the parent folder and the file name from an absolute path.
+    // Works for both POSIX and Windows separators so the browser does not need a path module.
+    //
+    function splitDestPath(destPath: string): { folder: string; filename: string } {
+        const lastSep = Math.max(destPath.lastIndexOf("/"), destPath.lastIndexOf("\\"));
+        if (lastSep === -1) {
+            return { folder: "", filename: destPath };
+        }
+        return { folder: destPath.substring(0, lastSep), filename: destPath.substring(lastSep + 1) };
+    }
+
+    //
+    // Downloads a single asset by showing the platform save picker, queueing a save-asset
+    // task on the local task queue, and surfacing a success or failure toast when the task completes.
+    // On Electron destPath is an absolute file path and the success toast offers an "Open Folder" action.
+    // On web destPath is just the suggested filename (the browser handles where the bytes land) and no action is offered.
+    //
+    async function downloadAsset(asset: IGalleryItem): Promise<void> {
+        const filename = asset.origFileName || asset._id;
+        const destPath = await platform.pickFile(filename);
+        if (!destPath) {
+            return;
+        }
+
+        const queue = new TaskQueue(uuidGenerator, databasePath!);
+        const taskId = queue.addTask("save-asset", {
+            assetId: asset._id,
+            assetType: "asset",
+            destPath,
+            contentType: asset.contentType,
+            databasePath: databasePath!,
+        });
+        const result = await queue.awaitTask(taskId);
+        queue.shutdown();
+
+        const { folder, filename: savedFilename } = splitDestPath(destPath);
+        if (result && result.status === TaskStatus.Succeeded) {
+            log.event(`Download completed: ${savedFilename}`);
+            addToast({
+                message: `Downloaded "${savedFilename}"`,
+                color: "success",
+                action: folder
+                    ? { label: "Open Folder", onClick: () => platform.openFolder(folder) }
+                    : undefined,
+            });
+        }
+        else {
+            addToast({
+                message: `Failed to download "${savedFilename}": ${result?.errorMessage ?? "unknown error"}`,
+                color: "danger",
+                duration: 8000,
+            });
+        }
+    }
+
+    //
+    // Downloads multiple assets to a single folder by showing the folder picker,
+    // queueing a save-assets-batch task, and surfacing success/partial/failure toasts when it completes.
+    //
+    async function downloadAssets(assets: IDownloadAssetItem[]): Promise<void> {
+        const folderPath = await platform.pickFolder({
+            title: 'Choose folder to save assets',
+            folderKey: 'lastDownloadFolder',
+            createDirectory: true,
+        });
+        if (!folderPath) {
+            return;
+        }
+
+        const saveItems: ISaveAssetItem[] = assets.map(asset => ({
+            assetId: asset.assetId,
+            assetType: asset.assetType,
+            filename: asset.filename,
+        }));
+
+        const queue = new TaskQueue(uuidGenerator, databasePath!);
+        const taskId = queue.addTask("save-assets-batch", { assets: saveItems, folderPath, databasePath: databasePath! });
+        const result = await queue.awaitTask(taskId);
+        queue.shutdown();
+
+        if (result && result.status === TaskStatus.Succeeded) {
+            const { succeededFiles, failedFiles } = result.outputs as { succeededFiles: string[]; failedFiles: Array<{ filename: string; error: string }> };
+            const total = succeededFiles.length + failedFiles.length;
+            log.event(`Download to folder completed: ${succeededFiles.length} assets downloaded`);
+            if (failedFiles.length === 0) {
+                addToast({
+                    message: `Downloaded ${total} asset${total !== 1 ? 's' : ''}`,
+                    color: 'success',
+                    action: { label: 'Open Folder', onClick: () => platform.openFolder(folderPath) },
+                });
+            }
+            else if (succeededFiles.length === 0) {
+                addToast({
+                    message: `Failed to download ${failedFiles.length} asset${failedFiles.length !== 1 ? 's' : ''}`,
+                    color: 'danger',
+                    duration: 8000,
+                });
+            }
+            else {
+                addToast({
+                    message: `Downloaded ${succeededFiles.length} of ${total} assets (${failedFiles.length} failed)`,
+                    color: 'warning',
+                    duration: 8000,
+                    action: { label: 'Open Folder', onClick: () => platform.openFolder(folderPath) },
+                });
+            }
+        }
+        else {
+            addToast({
+                message: `Failed to download assets: ${result?.errorMessage ?? "unknown error"}`,
+                color: 'danger',
+                duration: 8000,
+            });
+        }
+    }
 
     //
     // Loads data for an asset from the current database via the local REST API.
@@ -461,7 +626,7 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
         //
         onReset.current.invoke();
 
-        const queue = new TaskQueue(new RandomUuidGenerator(), dbPath);
+        const queue = new TaskQueue(uuidGenerator, dbPath);
         currentLoadQueue.current = queue;
 
         // Store the database path at the time the load started
@@ -662,8 +827,11 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
         closeDatabase,
         moveToDatabase,
         selectAndOpenDatabase,
-        selectAndCreateDatabase,
+        createDatabase,
+        createDatabaseAtPath,
         openDatabase,
+        downloadAsset,
+        downloadAssets,
     };
     
     return (

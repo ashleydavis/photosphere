@@ -6,7 +6,7 @@ jest.mock('node-utils', () => ({
     registerTerminationCallback: jest.fn(),
     pathExists: jest.fn(),
 }));
-jest.mock('api', () => ({
+jest.mock('node-api', () => ({
     getDatabases: jest.fn().mockResolvedValue([]),
     addDatabaseEntry: jest.fn().mockResolvedValue(undefined),
     updateDatabaseEntry: jest.fn().mockResolvedValue(undefined),
@@ -36,7 +36,7 @@ jest.mock('../../lib/init-cmd', () => ({
 
 import { dbsView, dbsAdd, dbsEdit, dbsRemove, dbsSend } from '../../cmd/dbs';
 import { exit } from 'node-utils';
-import { getDatabases, addDatabaseEntry, findDatabase } from 'api';
+import { getDatabases, addDatabaseEntry, findDatabase } from 'node-api';
 import { log } from 'utils';
 import { getVault } from 'vault';
 import { findSimilarDatabaseNames, findSimilarKeyNames, findSimilarSecretNames } from '../../lib/init-cmd';

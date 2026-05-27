@@ -12,6 +12,7 @@ import { ContentCopy, Delete, Download, Flag, Star } from "@mui/icons-material";
 import { DeleteConfirmationDialog } from "./delete-confirmation-dialog";
 import { SetPhotoDateDialog } from "./set-photo-date-dialog";
 import { SetLocationDialog } from "./set-location-dialog";
+import { log } from "utils";
 
 export interface IAssetViewProps { 
 
@@ -38,8 +39,8 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
 
     const { getPrev, getNext, selectedItems, addToMultipleSelection, removeFromMultipleSelection, enableSelecting, search } = useGallery();
     const { loadAsset } = useGallerySource();
-    const { downloadAsset, copyToClipboard } = usePlatform();
-    const { databasePath } = useAssetDatabase();
+    const { copyToClipboard } = usePlatform();
+    const { downloadAsset } = useAssetDatabase();
     const { asset, updateAsset, addArrayValue, removeArrayValue, deleteAsset } = useGalleryItem();
 
     //
@@ -72,11 +73,15 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
     //
     const [newLabelName, setNewLabelName] = useState<string>("");
 
+    useEffect(() => {
+        log.event("AssetView opened");
+    }, []);
+
     //
     // Downloads the full-resolution asset.
     //
     async function handleDownload(): Promise<void> {
-        await downloadAsset(asset!._id, "asset", asset!.origFileName || asset!._id, asset!.contentType, databasePath!);
+        await downloadAsset(asset!);
     }
 
     //
@@ -254,6 +259,7 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                     </IconButton>
 
                     <IconButton
+                        data-id="download-asset-button"
                         className="pointer-events-auto"
                         variant="outlined"
                         color="neutral"

@@ -8,7 +8,7 @@ import type { ITaskContext } from "task-queue";
 import { createWorkerLog, setWorkerTaskId } from "./src/lib/worker-log-bun";
 import type { IWorkerOptions } from "./src/lib/worker-pool-bun";
 import type { IWorkerMessage, IWorkerTaskCompletedMessage, IWorkerTaskMessage, IWorkerReadyMessage } from "./src/lib/worker-pool-bun";
-import { initTaskHandlers } from "api";
+import { initTaskHandlers } from "node-api";
 import { RandomUuidGenerator, TimestampProvider, setLog, log } from "utils";
 import { TestUuidGenerator, TestTimestampProvider } from "node-utils";
 

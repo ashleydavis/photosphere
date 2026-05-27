@@ -25,6 +25,7 @@
   "type": "module",
   "dependencies": {
     "express": "4.18.2",
+    "node-api": "workspace:*",
     "rest-api": "workspace:*",
     "ws": "^8.18.3"
   }

@@ -5,7 +5,8 @@ import { getDirectoryForCommand } from '../lib/directory-picker';
 import { compareTrees } from "merkle-tree";
 import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import { loadDatabase, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
-import { loadMerkleTree, loadDatabaseConfig } from "api";
+import { loadDatabaseConfig } from "api";
+import { loadMerkleTree } from "node-api";
 
 export interface ICompareCommandOptions extends IBaseCommandOptions {
     //

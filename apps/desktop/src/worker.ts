@@ -7,7 +7,7 @@ import { executeTaskHandler, TaskStatus, setQueueBackend, WorkerQueueBackend } f
 import type { ITaskContext } from "task-queue";
 import { TaskContext } from "task-queue";
 import { type IWorkerOptions, type IWorkerMessage, type IWorkerTaskCompletedMessage, type IWorkerReadyMessage, type IWorkerTaskMessage } from "./lib/worker-pool-electron-main";
-import { initTaskHandlers } from "api";
+import { initTaskHandlers } from "node-api";
 import { RandomUuidGenerator, TimestampProvider, setLog, log } from "utils";
 import { TestUuidGenerator, TestTimestampProvider } from "node-utils";
 import { createWorkerLog } from "./lib/worker-log-electron";

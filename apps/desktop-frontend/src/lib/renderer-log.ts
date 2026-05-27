@@ -1,5 +1,5 @@
 import type { ILog } from "utils";
-import type { IElectronAPI } from "electron-defs";
+import type { IElectronAPI } from "./electron-ipc";
 
 //
 // Renderer log implementation that logs to browser console and forwards to main process.
