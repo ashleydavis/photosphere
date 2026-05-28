@@ -180,7 +180,7 @@ One `<component-name>.stories.tsx` file per component under `packages/user-inter
 Files to create, at minimum the listed stories:
 
 - `asset-view.stories.tsx` — `asset-view/image`, `asset-view/video`.
-- `carousel.stories.tsx` — `carousel/single-image`, `carousel/multiple-images`.
+- `carousel.stories.tsx` — `carousel/single-image`, `carousel/multiple-files`.
 - `collapsible-section.stories.tsx` — `collapsible-section/collapsed`, `collapsible-section/expanded`.
 - `empty-database.stories.tsx` — `empty-database/default`.
 - `film-strip.stories.tsx` — `film-strip/default` (mock gallery items).

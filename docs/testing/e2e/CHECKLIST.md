@@ -2,87 +2,90 @@
 
 Work through these manual tests and check them off as they pass.
 
+Upcoming version: 0.0.8
+
 ## CLI
 
 ### Import
-- [ ] [add-and-verify](cli/import/add-and-verify.md)
-- [ ] [add-duplicate-content](cli/import/add-duplicate-content.md)
-- [ ] [add-mp4](cli/import/add-mp4.md)
-- [ ] [add-multiple-files](cli/import/add-multiple-files.md)
-- [ ] [add-png](cli/import/add-png.md)
-- [ ] [add-same-file-twice](cli/import/add-same-file-twice.md)
-- [ ] [no-overwrite-existing-database](cli/import/no-overwrite-existing-database.md)
+- [x] [add-and-verify](cli/import/add-and-verify.md)
+- [x] [add-duplicate-content](cli/import/add-duplicate-content.md)
+- [x] [add-mp4](cli/import/add-mp4.md)
+- [x] [add-multiple-files](cli/import/add-multiple-files.md)
+- [x] [add-png](cli/import/add-png.md)
+- [x] [add-same-file-twice](cli/import/add-same-file-twice.md)
+- [ ] [add-zip](cli/import/add-zip.md)
+- [x] [no-overwrite-existing-database](cli/import/no-overwrite-existing-database.md)
 
 ### Inspect
-- [ ] [database-summary](cli/inspect/database-summary.md)
-- [ ] [export-asset](cli/inspect/export-asset.md)
+- [x] [database-summary](cli/inspect/database-summary.md)
+- [x] [export-asset](cli/inspect/export-asset.md)
 
 ### Verify
-- [ ] [detect-deleted-file](cli/verify/detect-deleted-file.md)
-- [ ] [detect-modified-file](cli/verify/detect-modified-file.md)
-- [ ] [repair-clean-database](cli/verify/repair-clean-database.md)
-- [ ] [repair-damaged-database](cli/verify/repair-damaged-database.md)
-- [ ] [verify-full](cli/verify/verify-full.md)
+- [x] [detect-deleted-file](cli/verify/detect-deleted-file.md)
+- [x] [detect-modified-file](cli/verify/detect-modified-file.md)
+- [x] [repair-clean-database](cli/verify/repair-clean-database.md)
+- [x] [repair-damaged-database](cli/verify/repair-damaged-database.md)
+- [x] [verify-full](cli/verify/verify-full.md)
 
 ### Remove
-- [ ] [remove-asset-by-id](cli/remove/remove-asset-by-id.md)
+- [x] [remove-asset-by-id](cli/remove/remove-asset-by-id.md)
 
 ### Compare
-- [ ] [compare-after-changes](cli/compare/compare-after-changes.md)
-- [ ] [compare-identical](cli/compare/compare-identical.md)
+- [x] [compare-after-changes](cli/compare/compare-after-changes.md)
+- [x] [compare-identical](cli/compare/compare-identical.md)
 
 ### Sync
-- [ ] [sync-copy-to-original](cli/sync/sync-copy-to-original.md)
-- [ ] [sync-delete-asset-copy](cli/sync/sync-delete-asset-copy.md)
-- [ ] [sync-delete-asset-original](cli/sync/sync-delete-asset-original.md)
-- [ ] [sync-edit-field-copy](cli/sync/sync-edit-field-copy.md)
-- [ ] [sync-edit-field-original](cli/sync/sync-edit-field-original.md)
-- [ ] [sync-original-to-copy](cli/sync/sync-original-to-copy.md)
+- [x] [sync-copy-to-original](cli/sync/sync-copy-to-original.md)
+- [x] [sync-delete-asset-copy](cli/sync/sync-delete-asset-copy.md)
+- [x] [sync-delete-asset-original](cli/sync/sync-delete-asset-original.md)
+- [x] [sync-edit-field-copy](cli/sync/sync-edit-field-copy.md)
+- [x] [sync-edit-field-original](cli/sync/sync-edit-field-original.md)
+- [x] [sync-original-to-copy](cli/sync/sync-original-to-copy.md)
 
 ### Move
 - [ ] [move-file-between-databases](cli/move/move-file-between-databases.md)
 
 ### Replication
-- [ ] [replicate-deleted-asset](cli/replication/replicate-deleted-asset.md)
-- [ ] [replicate-full-copy](cli/replication/replicate-full-copy.md)
-- [ ] [replicate-incremental-changes](cli/replication/replicate-incremental-changes.md)
-- [ ] [replicate-no-changes](cli/replication/replicate-no-changes.md)
-- [ ] [replicate-partial-copy](cli/replication/replicate-partial-copy.md)
-- [ ] [replicate-unrelated-fails](cli/replication/replicate-unrelated-fails.md)
+- [x] [replicate-deleted-asset](cli/replication/replicate-deleted-asset.md)
+- [x] [replicate-full-copy](cli/replication/replicate-full-copy.md)
+- [x] [replicate-incremental-changes](cli/replication/replicate-incremental-changes.md)
+- [x] [replicate-no-changes](cli/replication/replicate-no-changes.md)
+- [x] [replicate-partial-copy](cli/replication/replicate-partial-copy.md)
+- [x] [replicate-unrelated-fails](cli/replication/replicate-unrelated-fails.md)
 
 ### Upgrade
-- [ ] [add-file-after-upgrade](cli/upgrade/add-file-after-upgrade.md)
-- [ ] [upgrade-v2-to-v6](cli/upgrade/upgrade-v2-to-v6.md)
-- [ ] [upgrade-v3-to-v6](cli/upgrade/upgrade-v3-to-v6.md)
-- [ ] [upgrade-v4-to-v6](cli/upgrade/upgrade-v4-to-v6.md)
-- [ ] [upgrade-v5-to-v6](cli/upgrade/upgrade-v5-to-v6.md)
-- [ ] [v2-readonly](cli/upgrade/v2-readonly.md)
-- [ ] [v2-write-fails](cli/upgrade/v2-write-fails.md)
-- [ ] [v6-upgrade-noop](cli/upgrade/v6-upgrade-noop.md)
+- [x] [add-file-after-upgrade](cli/upgrade/add-file-after-upgrade.md)
+- [x] [upgrade-v2-to-v6](cli/upgrade/upgrade-v2-to-v6.md)
+- [x] [upgrade-v3-to-v6](cli/upgrade/upgrade-v3-to-v6.md)
+- [x] [upgrade-v4-to-v6](cli/upgrade/upgrade-v4-to-v6.md)
+- [x] [upgrade-v5-to-v6](cli/upgrade/upgrade-v5-to-v6.md)
+- [x] [v2-readonly](cli/upgrade/v2-readonly.md)
+- [x] [v2-write-fails](cli/upgrade/v2-write-fails.md)
+- [x] [v6-upgrade-noop](cli/upgrade/v6-upgrade-noop.md)
 
 ### Databases (dbs)
-- [ ] [add-and-list](cli/dbs/add-and-list.md)
-- [ ] [add-duplicate-fails](cli/dbs/add-duplicate-fails.md)
-- [ ] [add-via-flags](cli/dbs/add-via-flags.md)
-- [ ] [clear](cli/dbs/clear.md)
-- [ ] [edit-rename](cli/dbs/edit-rename.md)
-- [ ] [list-empty](cli/dbs/list-empty.md)
-- [ ] [no-match-fallback](cli/dbs/no-match-fallback.md)
-- [ ] [remove](cli/dbs/remove.md)
-- [ ] [resolve-by-name](cli/dbs/resolve-by-name.md)
-- [ ] [resolve-by-path](cli/dbs/resolve-by-path.md)
-- [ ] [view](cli/dbs/view.md)
+- [x] [add-and-list](cli/dbs/add-and-list.md)
+- [x] [add-duplicate-fails](cli/dbs/add-duplicate-fails.md)
+- [x] [add-via-flags](cli/dbs/add-via-flags.md)
+- [x] [clear](cli/dbs/clear.md)
+- [x] [edit-rename](cli/dbs/edit-rename.md)
+- [x] [list-empty](cli/dbs/list-empty.md)
+- [x] [no-match-fallback](cli/dbs/no-match-fallback.md)
+- [x] [remove](cli/dbs/remove.md)
+- [x] [resolve-by-name](cli/dbs/resolve-by-name.md)
+- [x] [resolve-by-path](cli/dbs/resolve-by-path.md)
+- [x] [view](cli/dbs/view.md)
 
 ### Vault (plaintext)
-- [ ] [add-duplicate-fails](cli/vault/plaintext/add-duplicate-fails.md)
-- [ ] [add-secret](cli/vault/plaintext/add-secret.md)
-- [ ] [clear](cli/vault/plaintext/clear.md)
-- [ ] [delete-secret](cli/vault/plaintext/delete-secret.md)
-- [ ] [edit-secret](cli/vault/plaintext/edit-secret.md)
-- [ ] [import-pem](cli/vault/plaintext/import-pem.md)
-- [ ] [list-empty](cli/vault/plaintext/list-empty.md)
-- [ ] [list-shared](cli/vault/plaintext/list-shared.md)
-- [ ] [view-secret](cli/vault/plaintext/view-secret.md)
+- [x] [add-duplicate-fails](cli/vault/plaintext/add-duplicate-fails.md)
+- [x] [add-secret](cli/vault/plaintext/add-secret.md)
+- [x] [clear](cli/vault/plaintext/clear.md)
+- [x] [delete-secret](cli/vault/plaintext/delete-secret.md)
+- [x] [edit-secret](cli/vault/plaintext/edit-secret.md)
+- [x] [import-pem](cli/vault/plaintext/import-pem.md)
+- [x] [list-empty](cli/vault/plaintext/list-empty.md)
+- [x] [list-shared](cli/vault/plaintext/list-shared.md)
+- [x] [view-secret](cli/vault/plaintext/view-secret.md)
 
 ### Vault (keychain)
 - [ ] [add-view-edit-delete](cli/vault/keychain/add-view-edit-delete.md)
@@ -93,7 +96,7 @@ Work through these manual tests and check them off as they pass.
 - [ ] [share-secret](cli/lan-share/share-secret.md)
 
 ### Misc
-- [ ] [config-timestamps](cli/misc/config-timestamps.md)
+- [x] [config-timestamps](cli/misc/config-timestamps.md)
 - [ ] [mcp-server](cli/misc/mcp-server.md)
 
 ---
@@ -101,7 +104,10 @@ Work through these manual tests and check them off as they pass.
 ## Desktop
 
 ### Import
-- [ ] [add-and-verify](desktop/import/add-and-verify.md)
+- [ ] [import-directory](desktop/import/import-directory.md)
+- [x] [import-files](desktop/import/import-files.md)
+- [ ] [import-video](desktop/import/import-video.md)
+- [ ] [import-zip](desktop/import/import-zip.md)
 
 ### Move
 - [ ] [move-file-between-databases](desktop/move/move-file-between-databases.md)

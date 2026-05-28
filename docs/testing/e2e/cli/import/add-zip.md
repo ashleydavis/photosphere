@@ -1,6 +1,6 @@
-# CLI Manual Test: Add MP4 Video
+# CLI Manual Test: Add Zip Archive
 
-Test that an MP4 video file can be added to a database using the CLI source.
+Test that a zip archive containing images and a video can be imported into a database using the CLI source. The zip contents should be extracted and each media file imported individually.
 
 ## Prerequisites
 
@@ -30,14 +30,14 @@ Expected: Output confirms a new media file database was created in `/tmp/psi-tes
 
 ---
 
-### 3. Add the MP4 file
+### 3. Add the zip archive
 
 ```bash
-bun run start -- add ../../test/multiple-files/test.mp4 --db /tmp/psi-test/source --yes
+bun run start -- add ../../test/multiple-files/test-archive.zip --db /tmp/psi-test/source --yes
 ```
 
 Expected:
-- Output shows `Files added: 1` and `Files failed: 0`.
+- Output shows `Files added: 3` and `Files failed: 0`.
 - No errors are shown.
 
 ---
@@ -49,7 +49,7 @@ bun run start -- list --db /tmp/psi-test/source
 ```
 
 Expected:
-- `test.mp4` is listed with type `video/mp4`.
+- `test-1.jpeg`, `test-2.png`, and `test.mp4` are each listed as separate assets.
 
 ---
 
@@ -61,4 +61,4 @@ bun run start -- verify --db /tmp/psi-test/source
 
 Expected:
 - Verification completes without errors.
-- `Files imported:` reports `1` and `Modified:` reports `0`.
+- `Files imported:` reports `3` and `Modified:` reports `0`.

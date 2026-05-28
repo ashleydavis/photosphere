@@ -6,7 +6,7 @@
 set -e
 
 TEST_DB_DIR="./test/tmp/test-add-multiple"
-MULTIPLE_IMAGES_DIR="../../test/multiple-images"
+MULTIPLE_IMAGES_DIR="../../test/multiple-files"
 
 # Delete test database if it exists
 echo "Deleting test database if it exists..."

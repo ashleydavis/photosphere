@@ -32,25 +32,25 @@ Expected: Output confirms a new media file database was created in `/tmp/psi-tes
 
 ### 3. Add a directory containing multiple files
 
-The repo ships a `test/multiple-images/` directory holding `test-1.jpeg` and `test-2.png`.
+The repo ships a `test/multiple-files/` directory holding `test-1.jpeg`, `test-2.png`, `test.mp4`, and a `test-archive.zip`. The zip contains the same files, so they are skipped as duplicates.
 
 ```bash
-bun run start -- add ../../test/multiple-images/ --db /tmp/psi-test/source --yes
+bun run start -- add ../../test/multiple-files/ --db /tmp/psi-test/source --yes
 ```
 
 Expected:
-- Output shows `Files added: 2` and `Files failed: 0`.
+- Output shows `Files added: 3` and `Files failed: 0`.
 
 ---
 
 ### 4. Confirm all files are now in the database
 
 ```bash
-bun run start -- check ../../test/multiple-images/ --db /tmp/psi-test/source --yes
+bun run start -- check ../../test/multiple-files/ --db /tmp/psi-test/source --yes
 ```
 
 Expected:
-- Output shows `Already added: 2`.
+- Output shows `Already added: 3`.
 
 ---
 
@@ -62,4 +62,4 @@ bun run start -- verify --db /tmp/psi-test/source
 
 Expected:
 - Verification completes without errors.
-- `Files imported:` reports `2`.
+- `Files imported:` reports `3`.

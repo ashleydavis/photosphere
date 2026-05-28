@@ -45,7 +45,7 @@ Expected: The app opens the new empty database with no assets shown.
 
 1. Navigate to the **Import** page.
 2. Click **Import photos**.
-3. Select two or more files from the `test/multiple-images/` directory in the repo root (for example `test-1.jpeg` and `test-2.png`).
+3. Select two or more files from the `test/multiple-files/` directory in the repo root (for example `test-1.jpeg` and `test-2.png`).
 4. Wait for the imports to complete.
 
 Expected:

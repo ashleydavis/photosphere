@@ -16,7 +16,7 @@ NC='\033[0m' # No Color
 export TEST_TMP_DIR="${ISOLATED_TEST_TMP_DIR:-${TEST_TMP_DIR:-./test/tmp}}"
 TEST_DB_DIR="$TEST_TMP_DIR/shared/test-db"
 TEST_FILES_DIR="../../test"
-MULTIPLE_IMAGES_DIR="../../test/multiple-images"
+MULTIPLE_IMAGES_DIR="../../test/multiple-files"
 DUPLICATE_IMAGES_DIR="../../test/duplicate-images"
 
 # Isolate the vault and config so tests don't pollute the user's real data.
@@ -776,12 +776,12 @@ VAULT_EOF
     chmod 600 "$file_path"
 }
 
-# Populate a pre-initialized database with the 5 standard test files (PNG, JPG, MP4, 2 from multiple-images).
+# Populate a pre-initialized database with the 5 standard test files (PNG, JPG, MP4, 2 from multiple-files).
 populate_db_with_5_files() {
     local db_dir="$1"
     invoke_command "Add PNG file" "$(get_cli_command) add --db $db_dir $TEST_FILES_DIR/test.png --yes"
     invoke_command "Add JPG file" "$(get_cli_command) add --db $db_dir $TEST_FILES_DIR/test.jpg --yes"
-    invoke_command "Add MP4 file" "$(get_cli_command) add --db $db_dir $TEST_FILES_DIR/test.mp4 --yes"
+    invoke_command "Add MP4 file" "$(get_cli_command) add --db $db_dir $TEST_FILES_DIR/multiple-files/test.mp4 --yes"
     if [ -d "$MULTIPLE_IMAGES_DIR" ]; then
         invoke_command "Add multiple images" "$(get_cli_command) add --db $db_dir $MULTIPLE_IMAGES_DIR/ --yes"
     fi

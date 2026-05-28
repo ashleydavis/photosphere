@@ -22,7 +22,7 @@ TEST_DIR="$(cd "$(dirname "$0")" && native_pwd)"
 DESKTOP_DIR="$(cd "$TEST_DIR/../.." && native_pwd)"
 REPO_DIR="$(cd "$DESKTOP_DIR/../.." && native_pwd)"
 CLI_DIR="$REPO_DIR/apps/cli"
-IMAGES_DIR="$REPO_DIR/test/multiple-images"
+IMAGES_DIR="$REPO_DIR/test/multiple-files"
 
 print_test_header 19 "download-single-asset"
 

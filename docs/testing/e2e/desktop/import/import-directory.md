@@ -1,6 +1,6 @@
-# Desktop Manual Test: Add and Verify
+# Desktop Manual Test: Import Directory
 
-Test that a database can be created, a file imported, and the database verified using the Photosphere desktop app.
+Test that a directory of files can be imported into a Photosphere database using the desktop app.
 
 ## Prerequisites
 
@@ -21,7 +21,7 @@ cd apps/cli/
 ### 1. Clean up any previous test run
 
 ```bash
-rm -rf /tmp/psi-desktop-test
+rm -rf /tmp/psi-desktop-dir-test
 ```
 
 ---
@@ -32,7 +32,7 @@ rm -rf /tmp/psi-desktop-test
 2. Click **Create database** from the File menu or the left side menu.
 3. Choose the following as the database directory:
    ```
-   /tmp/psi-desktop-test/source
+   /tmp/psi-desktop-dir-test/source
    ```
 4. Confirm creation.
 
@@ -40,15 +40,15 @@ Expected: The app opens the new empty database with no assets shown.
 
 ---
 
-### 3. Import a file
+### 3. Import a directory
 
 1. Navigate to the **Import** page.
-2. Click **Import photos**.
-3. Select `test/test.jpg` from the repo root.
+2. Click **Import directory**.
+3. Select the `test/multiple-files/` directory from the repo root.
 4. Wait for the import to complete.
 
 Expected:
-- The imported file appears in the gallery.
+- All files from the directory appear in the gallery.
 - No error notifications are shown.
 
 ---
@@ -56,18 +56,18 @@ Expected:
 ### 4. List files in the database
 
 ```bash
-bun run start -- list --db /tmp/psi-desktop-test/source
+bun run start -- list --db /tmp/psi-desktop-dir-test/source
 ```
 
 Expected:
-- The imported file is listed.
+- All imported files are listed.
 
 ---
 
 ### 5. Check that the database is ok
 
 ```bash
-bun run start -- verify --db /tmp/psi-desktop-test/source
+bun run start -- verify --db /tmp/psi-desktop-dir-test/source
 ```
 
 Expected:

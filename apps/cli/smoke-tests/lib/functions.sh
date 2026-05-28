@@ -113,7 +113,7 @@ test_add_mp4_file() {
 
     log_info "Database path: $TEST_DB_DIR"
 
-    test_add_file_parameterized "$TEST_FILES_DIR/test.mp4" "MP4" "Add MP4 file" "video/mp4" "video"
+    test_add_file_parameterized "$TEST_FILES_DIR/multiple-files/test.mp4" "MP4" "Add MP4 file" "video/mp4" "video"
 
     test_passed
 }
@@ -141,8 +141,8 @@ test_add_multiple_files() {
         local add_output
         invoke_command "Add multiple files" "$(get_cli_command) add --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes" 0 "add_output"
 
-        # Check that 2 files were imported
-        expect_output_value "$add_output" "Files added:" "2" "Two files imported from multiple images directory"
+        # Check that 3 files were imported (2 images + 1 video; zip contents are duplicates)
+        expect_output_value "$add_output" "Files added:" "3" "Three files imported from multiple files directory"
 
         invoke_command "Check multiple files added" "$(get_cli_command) check --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
     else

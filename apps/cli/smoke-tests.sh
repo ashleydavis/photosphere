@@ -58,7 +58,7 @@ NC='\033[0m' # No Color
 TEST_TMP_DIR="${TEST_TMP_DIR:-$_CLI_ABS_DIR/test/tmp}"
 TEST_DB_DIR="$TEST_TMP_DIR/shared/test-db"
 TEST_FILES_DIR="../../test"
-MULTIPLE_IMAGES_DIR="../../test/multiple-images"
+MULTIPLE_IMAGES_DIR="../../test/multiple-files"
 DUPLICATE_IMAGES_DIR="../../test/duplicate-images"
 
 # Isolate the vault and config so tests don't pollute the user's real data.
