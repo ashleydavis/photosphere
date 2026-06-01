@@ -88,12 +88,12 @@ Upcoming version: 0.0.8
 - [x] [view-secret](cli/vault/plaintext/view-secret.md)
 
 ### Vault (keychain)
-- [ ] [add-view-edit-delete](cli/vault/keychain/add-view-edit-delete.md)
-- [ ] [list-multiple](cli/vault/keychain/list-multiple.md)
+- [x] [add-view-edit-delete](cli/vault/keychain/add-view-edit-delete.md)
+- [x] [list-multiple](cli/vault/keychain/list-multiple.md)
 
 ### LAN Share
-- [ ] [share-database](cli/lan-share/share-database.md)
-- [ ] [share-secret](cli/lan-share/share-secret.md)
+- [x] [share-database](cli/lan-share/share-database.md)
+- [x] [share-secret](cli/lan-share/share-secret.md)
 
 ### Misc
 - [x] [config-timestamps](cli/misc/config-timestamps.md)
