@@ -141,8 +141,8 @@ test_add_multiple_files() {
         local add_output
         invoke_command "Add multiple files" "$(get_cli_command) add --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes" 0 "add_output"
 
-        # Check that 3 files were imported (2 images + 1 video; zip contents are duplicates)
-        expect_output_value "$add_output" "Files added:" "3" "Three files imported from multiple files directory"
+        # Check that 5 files were imported (2 images + 1 video + 2 images from the zip archive)
+        expect_output_value "$add_output" "Files added:" "5" "Five files imported from multiple files directory"
 
         invoke_command "Check multiple files added" "$(get_cli_command) check --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
     else
@@ -241,7 +241,7 @@ test_database_list() {
 
     # Check that it shows the expected number of files
     expect_output_string "$list_output" "End of results" "List shows end of results message"
-    expect_output_string "$list_output" "Displayed 5 files total" "List shows correct total file count"
+    expect_output_string "$list_output" "Displayed 7 files total" "List shows correct total file count"
     test_passed
 }
 
@@ -356,8 +356,8 @@ test_database_verify() {
     expect_output_string "$verify_output" "Total size:" "Verify output contains total size"
 
     # Check that the database is in a good state (no new, modified, or removed files)
-    expect_output_value "$verify_output" "Files imported:" "5" "File imported"
-    expect_output_value "$verify_output" "Unmodified:" "15" "Unmodified files in verification"
+    expect_output_value "$verify_output" "Files imported:" "7" "File imported"
+    expect_output_value "$verify_output" "Unmodified:" "20" "Unmodified files in verification"
     expect_output_value "$verify_output" "New:" "0" "New files in verification"
     expect_output_value "$verify_output" "Modified:" "0" "Modified files in verification"
     expect_output_value "$verify_output" "Removed:" "0" "Removed files in verification"
@@ -380,7 +380,7 @@ test_database_verify_full() {
     expect_output_string "$verify_output" "Total size:" "Full verify output contains total size"
 
     # Check that the database is in a good state even with full verification
-    expect_output_value "$verify_output" "Unmodified:" "15" "Unmodified files in full verification"
+    expect_output_value "$verify_output" "Unmodified:" "20" "Unmodified files in full verification"
     expect_output_value "$verify_output" "New:" "0" "New files in full verification"
     expect_output_value "$verify_output" "Modified:" "0" "Modified files in full verification"
     expect_output_value "$verify_output" "Removed:" "0" "Removed files in full verification"
@@ -440,7 +440,7 @@ test_detect_deleted_file() {
 
     # Check that verify detected the removed file
     expect_output_value "$verify_output" "New:" "0" "No new files"
-    expect_output_value "$verify_output" "Unmodified:" "14" "Unmodified files"
+    expect_output_value "$verify_output" "Unmodified:" "19" "Unmodified files"
     expect_output_value "$verify_output" "Modified:" "0" "No modified files"
     expect_output_value "$verify_output" "Removed:" "1" "Deleted file detected by verify"
 
@@ -504,7 +504,7 @@ test_detect_modified_file() {
 
     # Check that verify detected the modified file
     expect_output_value "$verify_output" "New:" "0" "No new files"
-    expect_output_value "$verify_output" "Unmodified:" "14" "Unmodified files"
+    expect_output_value "$verify_output" "Unmodified:" "19" "Unmodified files"
     expect_output_value "$verify_output" "Modified:" "1" "Modified file detected by verify"
     expect_output_value "$verify_output" "Removed:" "0" "No removed files"
 
@@ -536,8 +536,8 @@ test_database_replicate() {
     expect_output_string "$replicate_output" "Replication completed successfully" "Database replication completed successfully"
 
     # Check expected values from replication output
-    expect_output_value "$replicate_output" "Total files imported:" "5" "Total files imported"
-    expect_output_value "$replicate_output" "Total files copied:" "14" "Files copied"
+    expect_output_value "$replicate_output" "Total files imported:" "7" "Total files imported"
+    expect_output_value "$replicate_output" "Total files copied:" "19" "Files copied"
 
     # Check that replica was created
     check_exists "$replica_dir" "Replica database directory"
@@ -653,7 +653,7 @@ test_database_replicate_second() {
     expect_output_string "$second_replication_output" "Replication completed successfully" "Second replication completed successfully"
 
     # Check expected values from second replication output
-    expect_output_value "$second_replication_output" "Total files imported:" "5" "Total files imported"
+    expect_output_value "$second_replication_output" "Total files imported:" "7" "Total files imported"
     expect_output_value "$second_replication_output" "Total files copied:" "0" "Files copied (all up to date)"
 
     # Verify original and replica still have the same aggregate root hash after second replication
