@@ -104,7 +104,10 @@ Upcoming version: 0.0.8
 ## Desktop
 
 ### Import
-- [ ] [import-directory](desktop/import/import-directory.md)
+- [x] [import-directory](desktop/import/import-directory.md)
+    - Problem importing from the zip file
+        - Import files have uuid for file name and a wierd path.
+        - No immediate need to fix this.
 - [x] [import-files](desktop/import/import-files.md)
 - [ ] [import-video](desktop/import/import-video.md)
 - [ ] [import-zip](desktop/import/import-zip.md)
