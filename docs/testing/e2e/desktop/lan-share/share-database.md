@@ -17,9 +17,9 @@ from one instance to another.
 
 In the sender instance:
 
-1. Navigate to the **Secrets** page and add an `s3-credentials` secret named `test-s3-key` with `region`, `accessKeyId`, and `secretAccessKey` set to test values.
+1. Navigate to the **Manage Secrets** page and add an `s3-credentials` secret named `test-s3-key` with `region`, `accessKeyId`, and `secretAccessKey` set to test values.
 2. (Optional) Add an `encryption-key` secret named `test-enc-key`.
-3. Navigate to the **Databases** page and click **Add database**.
+3. Navigate to the **Manage Databases** page and click **Add database**.
 4. Enter name `test-db`, an arbitrary path, and link the S3 credential (and the encryption key, if you created one).
 
 Expected:
@@ -41,7 +41,7 @@ Record the pairing code as `<code>` for the next step.
 
 ### 3. Start the receive on the other instance
 
-1. In the receiver instance, navigate to the **Databases** page.
+1. In the receiver instance, navigate to the **Manage Databases** page.
 2. Click **Receive database**, enter `<code>`, and click **Start**.
 
 Expected:
@@ -56,5 +56,5 @@ Expected:
 Expected:
 - A success message indicates the database was imported.
 - The receiver's Databases page contains `test-db`.
-- The receiver's Secrets page contains `test-s3-key` (and `test-enc-key`, if seeded).
+- The receiver's Manage Secrets page contains `test-s3-key` (and `test-enc-key`, if seeded).
 - The corresponding vault files exist on the receiver.

@@ -34,7 +34,7 @@ Re-start the desktop app.
 
 ### 2. Try to add a second secret with the same name
 
-1. Navigate to the **Secrets** page.
+1. Navigate to the **Manage Secrets** page.
 2. Click **Add secret**.
 3. Type `dup-secret` into the name field.
 4. Click the confirm button.

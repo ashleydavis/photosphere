@@ -78,7 +78,7 @@ Expected:
 
 ### 6. Replicate a partial copy to a new directory
 
-1. Navigate to the **Databases** page.
+1. Navigate to the **Manage Databases** page.
 2. Click the **Replicate database** button on the source database entry.
 3. When prompted for the destination, enter:
    ```

@@ -49,6 +49,7 @@ Expected: The app opens the new empty database with no assets shown.
 
 Expected:
 - The imported video appears in the gallery with a video thumbnail.
+- Check that the video plays.
 - No error notifications are shown.
 
 ---

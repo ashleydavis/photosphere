@@ -18,11 +18,14 @@ cd apps/cli/
 
 ## Steps
 
-### 1. Clean up any previous test run
+### 1. Clean up any previous test run and create the download folder
 
 ```bash
 rm -rf /tmp/psi-desktop-test
+mkdir -p /tmp/psi-desktop-test/downloads
 ```
+
+The save dialog in step 5 can only save into a folder that already exists, so the `downloads` folder must be created up front.
 
 ---
 
@@ -66,11 +69,13 @@ Expected:
 ### 5. Download the asset
 
 1. In the asset view toolbar, click the **Download** icon (the down-arrow icon next to **Copy to clipboard**).
-2. In the save dialog, choose the following destination:
-   ```
-   /tmp/psi-desktop-test/downloads/test.jpg
-   ```
-3. Confirm the save.
+2. In the save dialog, set the destination to the `downloads` folder created in step 1:
+   - Press **Ctrl+L** to open the path entry field (plain typing triggers search within the current folder instead).
+   - Type the full destination path including the filename and press Enter:
+     ```
+     /tmp/psi-desktop-test/downloads/test.jpg
+     ```
+3. Click **Save** to confirm.
 
 Expected:
 - A success toast appears with the message `Downloaded "test.jpg"` and an **Open Folder** action.

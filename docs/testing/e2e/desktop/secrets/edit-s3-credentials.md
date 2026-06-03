@@ -32,7 +32,7 @@ Re-start the desktop app.
 
 ### 2. Open the Edit dialog and change the region
 
-1. Navigate to the **Secrets** page.
+1. Navigate to the **Manage Secrets** page.
 2. Click the **Edit** button on the `s3-creds-1` row.
 3. In the region field, type `eu-west-1`.
 4. Click the confirm button.

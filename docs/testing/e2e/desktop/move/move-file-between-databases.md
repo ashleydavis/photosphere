@@ -97,7 +97,17 @@ Expected:
 
 ---
 
-### 8. Check that the file is no longer in the source database
+### 8. Open the destination database and check the gallery
+
+1. Open the left side menu.
+2. Click on the **dest** database to open it.
+
+Expected:
+- The gallery shows `test.jpg`.
+
+---
+
+### 9. Check that the file is no longer in the source database
 
 ```bash
 bun run start -- list --db /tmp/psi-desktop-test/source
@@ -108,7 +118,7 @@ Expected:
 
 ---
 
-### 9. Check that the file is now in the destination database
+### 10. Check that the file is now in the destination database
 
 ```bash
 bun run start -- list --db /tmp/psi-desktop-test/dest

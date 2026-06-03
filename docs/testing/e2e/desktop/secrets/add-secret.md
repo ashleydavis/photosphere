@@ -12,12 +12,12 @@ bun run dev
 
 ## Steps
 
-### 1. Open the Secrets page
+### 1. Open the Manage Secrets page
 
-1. Navigate to the **Secrets** page in the desktop app.
+1. Navigate to the **Manage Secrets** page in the desktop app.
 
 Expected:
-- The Secrets page loads (it may be empty).
+- The Manage Secrets page loads (it may be empty).
 
 ---
 
@@ -29,5 +29,5 @@ Expected:
 
 Expected:
 - The dialog closes.
-- The Secrets page lists `test-secret`.
+- The Manage Secrets page lists `test-secret`.
 - A corresponding `test-secret.json` file exists in the app's vault directory.

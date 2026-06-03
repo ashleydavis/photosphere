@@ -35,7 +35,7 @@ Re-start the desktop app.
 
 ### 2. Open the Edit dialog for the secret
 
-1. Navigate to the **Secrets** page.
+1. Navigate to the **Manage Secrets** page.
 2. Click the **Edit** button on the `enc-key-1` row.
 
 Expected:

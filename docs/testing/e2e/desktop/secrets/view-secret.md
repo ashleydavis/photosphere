@@ -14,7 +14,7 @@ bun run dev
 
 ### 1. Add a secret to view
 
-1. Navigate to the **Secrets** page in the desktop app.
+1. Navigate to the **Manage Secrets** page in the desktop app.
 2. Click **Add secret**, type `smoke-secret`, and confirm.
 
 Expected:

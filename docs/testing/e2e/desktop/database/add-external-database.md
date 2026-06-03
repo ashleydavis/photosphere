@@ -41,7 +41,7 @@ Expected:
 
 ### 3. Link the external database from the app
 
-1. Navigate to the **Databases** page in the desktop app.
+1. Navigate to the **Manage Databases** page in the desktop app.
 2. Click **Add database**.
 3. Enter the name `External DB` and the path `/tmp/psi-desktop-test/external-db`.
 4. Save the entry.

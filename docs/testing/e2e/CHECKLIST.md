@@ -14,6 +14,7 @@ Upcoming version: 0.0.8
 - [x] [add-png](cli/import/add-png.md)
 - [x] [add-same-file-twice](cli/import/add-same-file-twice.md)
 - [ ] [add-zip](cli/import/add-zip.md)
+    - This needs testing and needs a smoke test.
 - [x] [no-overwrite-existing-database](cli/import/no-overwrite-existing-database.md)
 
 ### Inspect
@@ -44,6 +45,7 @@ Upcoming version: 0.0.8
 
 ### Move
 - [ ] [move-file-between-databases](cli/move/move-file-between-databases.md)
+    - This command doesn't exist yet.
 
 ### Replication
 - [x] [replicate-deleted-asset](cli/replication/replicate-deleted-asset.md)
@@ -109,19 +111,21 @@ Upcoming version: 0.0.8
         - Import files have uuid for file name and a wierd path.
         - No immediate need to fix this.
 - [x] [import-files](desktop/import/import-files.md)
-- [ ] [import-video](desktop/import/import-video.md)
+- [x] [import-video](desktop/import/import-video.md)
+    - Video imports, but doesn't play back.
 - [ ] [import-zip](desktop/import/import-zip.md)
+    - This will work but will have a similar problem as above.
 
 ### Move
-- [ ] [move-file-between-databases](desktop/move/move-file-between-databases.md)
+- [x] [move-file-between-databases](desktop/move/move-file-between-databases.md)
 
 ### Download
-- [ ] [download-multiple-assets](desktop/download/download-multiple-assets.md)
-- [ ] [download-single-asset](desktop/download/download-single-asset.md)
+- [x] [download-multiple-assets](desktop/download/download-multiple-assets.md)
+- [x] [download-single-asset](desktop/download/download-single-asset.md)
 
 ### Replication
-- [ ] [replicate-full-copy](desktop/replication/replicate-full-copy.md)
-- [ ] [replicate-partial-copy](desktop/replication/replicate-partial-copy.md)
+- [x] [replicate-full-copy](desktop/replication/replicate-full-copy.md)
+- [x] [replicate-partial-copy](desktop/replication/replicate-partial-copy.md)
 
 ### Database
 - [ ] [add-external-database](desktop/database/add-external-database.md)

@@ -37,7 +37,7 @@ bun run start -- init --db /tmp/psi-desktop-test/db --yes
 
 ### 3. Add a database entry in the desktop app
 
-1. Navigate to the **Databases** page in the desktop app.
+1. Navigate to the **Manage Databases** page in the desktop app.
 2. Click **Add database**.
 3. Enter the name `My Test DB` and the path `/tmp/psi-desktop-test/db`.
 4. Save the entry.

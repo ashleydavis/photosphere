@@ -22,7 +22,7 @@ Substitute terminal A for the sender and terminal B for the receiver.
 
 In the sender instance:
 
-1. Navigate to the **Secrets** page.
+1. Navigate to the **Manage Secrets** page.
 2. Click **Add secret**, type `test-secret`, and confirm.
 
 Expected:
@@ -32,7 +32,7 @@ Expected:
 
 ### 2. Start the share on the sender
 
-1. In the sender, navigate to the **Secrets** page.
+1. In the sender, navigate to the **Manage Secrets** page.
 2. Click **Share secret**.
 3. Click the **Send** button on the share dialog.
 
@@ -45,7 +45,7 @@ Record that code as `<code>` for the next step.
 
 ### 3. Start the receive on the other instance
 
-1. In the receiver instance, navigate to the **Secrets** page.
+1. In the receiver instance, navigate to the **Manage Secrets** page.
 2. Click **Receive secret**.
 3. Type the 4-digit pairing code `<code>` and click **Start**.
 
@@ -60,5 +60,5 @@ Expected:
 
 Expected:
 - A success message indicates the secret was saved.
-- The receiver's Secrets page lists `test-secret`.
+- The receiver's Manage Secrets page lists `test-secret`.
 - The receiver's vault directory contains a `test-secret.json` file with the same value as the sender's copy.

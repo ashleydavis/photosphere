@@ -18,11 +18,14 @@ cd apps/cli/
 
 ## Steps
 
-### 1. Clean up any previous test run
+### 1. Clean up any previous test run and create the download folder
 
 ```bash
 rm -rf /tmp/psi-desktop-test
+mkdir -p /tmp/psi-desktop-test/downloads
 ```
+
+The folder picker in step 6 can only select a folder that already exists, so the `downloads` folder must be created up front.
 
 ---
 
@@ -76,11 +79,14 @@ Expected:
 ### 6. Download the selected assets
 
 1. In the **Selection** section, click **Download N assets** (where N matches the number selected).
-2. In the folder picker, choose the following destination folder:
-   ```
-   /tmp/psi-desktop-test/downloads
-   ```
-3. Confirm the choice.
+2. In the folder picker, navigate to the `downloads` folder created in step 1:
+   - Press **Ctrl+L** to open the path entry field (plain typing triggers search within the current folder instead).
+   - Type the parent path and press Enter:
+     ```
+     /tmp/psi-desktop-test/
+     ```
+   - Single-click the `downloads` folder to select it (do not double-click, which navigates into it).
+3. Click **Open** to confirm the choice.
 
 Expected:
 - A success toast appears with the message `Downloaded N assets`.
