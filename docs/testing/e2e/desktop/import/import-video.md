@@ -29,7 +29,7 @@ rm -rf /tmp/psi-desktop-video-test
 ### 2. Create a new database
 
 1. Open the Photosphere desktop app.
-2. Click **Create database** from the File menu or the left side menu.
+2. Click **New database** from the File menu or the left side menu.
 3. Choose the following as the database directory:
    ```
    /tmp/psi-desktop-video-test/source

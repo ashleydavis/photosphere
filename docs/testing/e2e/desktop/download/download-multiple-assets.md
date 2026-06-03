@@ -32,7 +32,7 @@ The folder picker in step 6 can only select a folder that already exists, so the
 ### 2. Create a new database
 
 1. Open the Photosphere desktop app.
-2. Click **Create database** from the File menu or the left side menu.
+2. Click **New database** from the File menu or the left side menu.
 3. Enter `source` as the database name.
 4. Choose the following as the database directory:
    ```

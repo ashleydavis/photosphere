@@ -29,7 +29,7 @@ rm -rf /tmp/psi-desktop-test
 ### 2. Create a new database
 
 1. Open the Photosphere desktop app.
-2. Click **Create database** from the File menu or the left side menu.
+2. Click **New database** from the File menu or the left side menu.
 3. Enter `source` as the database name.
 4. Choose the following as the database directory:
    ```
@@ -56,7 +56,7 @@ Expected:
 
 ### 4. Create a second database
 
-1. Click **Create database** from the File menu or the left side menu.
+1. Click **New database** from the File menu or the left side menu.
 2. Enter `dest` as the database name.
 3. Choose the following as the database directory:
    ```
