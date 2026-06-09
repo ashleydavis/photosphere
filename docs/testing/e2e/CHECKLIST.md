@@ -13,7 +13,7 @@ Upcoming version: 0.0.8
 - [x] [add-multiple-files](cli/import/add-multiple-files.md)
 - [x] [add-png](cli/import/add-png.md)
 - [x] [add-same-file-twice](cli/import/add-same-file-twice.md)
-- [ ] [add-zip](cli/import/add-zip.md)
+- [-] [add-zip](cli/import/add-zip.md)
     - This needs testing and needs a smoke test.
 - [x] [no-overwrite-existing-database](cli/import/no-overwrite-existing-database.md)
 
@@ -44,7 +44,7 @@ Upcoming version: 0.0.8
 - [x] [sync-original-to-copy](cli/sync/sync-original-to-copy.md)
 
 ### Move
-- [ ] [move-file-between-databases](cli/move/move-file-between-databases.md)
+- [-] [move-file-between-databases](cli/move/move-file-between-databases.md)
     - This command doesn't exist yet.
 
 ### Replication
@@ -113,7 +113,7 @@ Upcoming version: 0.0.8
 - [x] [import-files](desktop/import/import-files.md)
 - [x] [import-video](desktop/import/import-video.md)
     - Video imports, but doesn't play back.
-- [ ] [import-zip](desktop/import/import-zip.md)
+- [-] [import-zip](desktop/import/import-zip.md)
     - This will work but will have a similar problem as above.
 
 ### Move
@@ -128,28 +128,32 @@ Upcoming version: 0.0.8
 - [x] [replicate-partial-copy](desktop/replication/replicate-partial-copy.md)
 
 ### Database
-- [ ] [add-external-database](desktop/database/add-external-database.md)
-- [ ] [edit-database-origin](desktop/database/edit-database-origin.md)
-- [ ] [load-50-asset-fixture](desktop/database/load-50-asset-fixture.md)
-- [ ] [open-existing-database](desktop/database/open-existing-database.md)
-- [ ] [remove-recent-database](desktop/database/remove-recent-database.md)
-- [ ] [view-database-details](desktop/database/view-database-details.md)
+- [x] [edit-database-origin](desktop/database/edit-database-origin.md)
+- [x] [load-50-asset-fixture](desktop/database/load-50-asset-fixture.md)
+- [x] [open-existing-database](desktop/database/open-existing-database.md)
+- [x] [remove-recent-database](desktop/database/remove-recent-database.md)
+- [x] [view-database-details](desktop/database/view-database-details.md)
+- [x] [view-database-secret](desktop/database/view-database-secret.md)
 
 ### Secrets
-- [ ] [add-duplicate-name](desktop/secrets/add-duplicate-name.md)
-- [ ] [add-secret](desktop/secrets/add-secret.md)
-- [ ] [edit-api-key](desktop/secrets/edit-api-key.md)
-- [ ] [edit-encryption-key](desktop/secrets/edit-encryption-key.md)
-- [ ] [edit-s3-credentials](desktop/secrets/edit-s3-credentials.md)
+- [-] [add-duplicate-name](desktop/secrets/add-duplicate-name.md)
+    - This fails. Clicking Save has no effect for the duplicate secret, no error/toast is shown.
+    - It would be good when typing in the duplicate secret name in the Add Secret modal if it shows you in the form that the name is duplicate.
+- [ ] [add-api-key](desktop/secrets/add-api-key.md)
+    - Should not be able to save unless a value is entered. Blank values are useless and should not be allowed.
+    - The should be a button that reveals the secret in the input while we are entering it.
+- [ ] [add-encryption-key](desktop/secrets/add-encryption-key.md)
+- [ ] [add-s3-credentials](desktop/secrets/add-s3-credentials.md)
 - [ ] [rename-secret](desktop/secrets/rename-secret.md)
 - [ ] [view-secret](desktop/secrets/view-secret.md)
 
 ### LAN Share
-- [ ] [share-database](desktop/lan-share/share-database.md)
-- [ ] [share-secret](desktop/lan-share/share-secret.md)
+- [x] [share-database](desktop/lan-share/share-database.md)
+    - When it tried to create db (with a fake path), the Create Database modal didn't dismiss automatically even though the new db appeared in the Manage Databases list.
+- [x] [share-secret](desktop/lan-share/share-secret.md)
 
 ### News
-- [ ] [news-notifications](desktop/news/news-notifications.md)
+- [x] [news-notifications](desktop/news/news-notifications.md)
 
 ### MCP
 - [ ] [mcp-server](desktop/mcp/mcp-server.md)

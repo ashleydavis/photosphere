@@ -38,7 +38,7 @@ The folder picker in step 6 can only select a folder that already exists, so the
    ```
    /tmp/psi-desktop-test/source
    ```
-5. Confirm creation.
+5. Click **Create**.
 
 Expected: The app opens the new empty database with no assets shown.
 

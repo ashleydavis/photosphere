@@ -34,7 +34,7 @@ rm -rf /tmp/psi-desktop-zip-test
    ```
    /tmp/psi-desktop-zip-test/source
    ```
-4. Confirm creation.
+4. Click **Create**.
 
 Expected: The app opens the new empty database with no assets shown.
 

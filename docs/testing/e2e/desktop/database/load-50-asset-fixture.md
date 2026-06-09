@@ -15,8 +15,18 @@ bun run dev
 
 ### 1. Open the fixture in the desktop app
 
-1. In the desktop app, choose **Open database**.
-2. Browse to `test/dbs/50-assets/` (relative to the repo root) and open it.
+1. Click **Open database**. It is on the startup screen (when no database is
+   loaded), in the left side menu, and in the **File > Open Database...** menu
+   (Ctrl/Cmd+O). All of these open the **Open Database** dialog.
+2. The **Open Database** dialog lists databases you have already configured.
+   - If `50-assets` is already listed, click it and skip to the expected result.
+   - Otherwise click **Add database** to register it first.
+3. In the **Add Database** dialog:
+   - **Name**: enter `50-assets`.
+   - **Type**: leave as **File system**.
+   - **Path**: click **Browse** and select `test/dbs/50-assets/` (relative to
+     the repo root), or type the path directly.
+   - Click **Add**. This registers the database and opens it.
 
 Expected:
 - The gallery loads and displays exactly 50 thumbnails.

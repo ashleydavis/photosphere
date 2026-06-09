@@ -35,7 +35,7 @@ Re-start the desktop app.
 1. Navigate to the **Manage Secrets** page.
 2. Click the **Edit** button on the `old-name` row.
 3. In the name field, type `new-name`.
-4. Click the confirm button.
+4. Click **Save**.
 
 Expected:
 - The dialog closes.

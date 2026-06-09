@@ -11,46 +11,35 @@ Start the desktop app from source (run from the repo root):
 bun run dev
 ```
 
-Locate the desktop app's vault directory and substitute `<VAULT_DIR>` below.
-
 ## Steps
 
-### 1. Seed the vault with a secret named `dup-secret`
+### 1. Add a secret named `dup-secret`
 
-Stop the desktop app, then:
+1. Navigate to the **Manage Secrets** page.
+2. Click **Add secret**.
+3. Type `dup-secret` into the name field.
+4. Fill in any valid value.
+5. Click **Save**.
 
-```bash
-mkdir -p <VAULT_DIR>
-cat > <VAULT_DIR>/dup-secret.json <<'EOF'
-{"name":"dup-secret","type":"s3-credentials","value":"{\"region\":\"\",\"accessKeyId\":\"\",\"secretAccessKey\":\"\"}"}
-EOF
-```
-
-Note the modification time of the file (for example, with `stat -c%y <VAULT_DIR>/dup-secret.json`).
-
-Re-start the desktop app.
+Expected:
+- The secret is added and `dup-secret` appears in the list.
 
 ---
 
 ### 2. Try to add a second secret with the same name
 
-1. Navigate to the **Manage Secrets** page.
-2. Click **Add secret**.
-3. Type `dup-secret` into the name field.
-4. Click the confirm button.
+1. Click **Add secret** again.
+2. Type `dup-secret` into the name field.
+3. Fill in a different value.
+4. Click **Save**.
 
 Expected:
 - An error is shown (either as a toast or inline in the dialog) along the lines of "A secret named 'dup-secret' already exists".
 
 ---
 
-### 3. Confirm the original file is untouched
-
-```bash
-ls <VAULT_DIR>/dup-secret*.json
-stat -c%y <VAULT_DIR>/dup-secret.json
-```
+### 3. Confirm the original is untouched
 
 Expected:
-- Exactly one file matches `dup-secret*.json`.
-- The modification time is unchanged (the duplicate-add did not overwrite the existing secret).
+- Only one `dup-secret` entry appears in the list.
+- Its value is the one from step 1 (the duplicate-add did not overwrite it).

@@ -38,7 +38,7 @@ bun run start -- init --db /tmp/psi-desktop-test/db --yes
 ### 3. Add the database to the app and open the Edit dialog
 
 1. Navigate to the **Manage Databases** page in the desktop app.
-2. Click **Add database**, enter `My Test DB` and `/tmp/psi-desktop-test/db`, save.
+2. Click **Add database**, enter `My Test DB` and `/tmp/psi-desktop-test/db`, then click **Add**.
 3. Click the **Edit** button for the row.
 
 Expected:
@@ -46,7 +46,18 @@ Expected:
 
 ---
 
-### 4. Change the origin and save
+### 4. Check the origin before the change with the CLI
+
+```bash
+bun run start -- origin --db /tmp/psi-desktop-test/db
+```
+
+Expected:
+- The output is `(not set)` (a freshly initialised database has no origin).
+
+---
+
+### 5. Change the origin and save
 
 1. In the Edit dialog's **Origin** field, type `s3:my-bucket:/origin-database`.
 2. Click **Save**.
@@ -56,7 +67,18 @@ Expected:
 
 ---
 
-### 5. Confirm the new origin was written to disk
+### 6. Check the origin after the change with the CLI
+
+```bash
+bun run start -- origin --db /tmp/psi-desktop-test/db
+```
+
+Expected:
+- The output is `s3:my-bucket:/origin-database`.
+
+---
+
+### 7. Confirm the new origin was written to disk
 
 ```bash
 cat /tmp/psi-desktop-test/db/.db/config.json

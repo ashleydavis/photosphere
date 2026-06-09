@@ -35,7 +35,7 @@ rm -rf /tmp/psi-desktop-test
    ```
    /tmp/psi-desktop-test/source
    ```
-5. Confirm creation.
+5. Click **Create**.
 
 Expected: The app opens the new empty database with no assets shown.
 
@@ -62,7 +62,7 @@ Expected:
    ```
    /tmp/psi-desktop-test/dest
    ```
-4. Confirm creation.
+4. Click **Create**.
 
 Expected: The app opens the new empty destination database with no assets shown.
 

@@ -38,7 +38,7 @@ The save dialog in step 5 can only save into a folder that already exists, so th
    ```
    /tmp/psi-desktop-test/source
    ```
-5. Confirm creation.
+5. Click **Create**.
 
 Expected: The app opens the new empty database with no assets shown.
 

@@ -66,3 +66,15 @@ grep -E "test-db-a|test-db-b" "$(find ~/.config -name databases.toml 2>/dev/null
 Expected:
 - Both `db-a` and `db-b` are still listed as `[[databases]]` entries.
 - Only `db-a` is missing from the `recent_database_names` array.
+
+---
+
+### 5. Restart the app and confirm the change persists
+
+1. Quit the desktop app.
+2. Start it again with `bun run dev`.
+3. Open the left sidebar.
+
+Expected:
+- `db-a` is still gone from the Recent databases list.
+- `db-b` is still in the Recent databases list.

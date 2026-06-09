@@ -34,7 +34,7 @@ rm -rf /tmp/psi-desktop-test
    ```
    /tmp/psi-desktop-test/source
    ```
-4. Confirm creation.
+4. Click **Create**.
 
 Expected: The app opens the new empty database with no assets shown.
 
@@ -85,7 +85,7 @@ Expected:
    /tmp/psi-desktop-test/replica
    ```
 4. When prompted for replication mode, select **Full**.
-5. Confirm and wait for replication to complete.
+5. Click **Start replication** and wait for replication to complete.
 
 Expected:
 - A progress indicator is shown during replication.

@@ -5,43 +5,33 @@ that dismissed items do not reappear on subsequent launches.
 
 ## Prerequisites
 
-Start the desktop app from source (run from the repo root):
-
-```bash
-bun run dev
-```
-
 This test points the app at a local news YAML file using the
-`PHOTOSPHERE_NEWS_URL` environment variable. Stop the app before performing
-the next step.
+`PHOTOSPHERE_NEWS_URL` environment variable, which must be set before the app
+launches.
 
 ## Steps
 
 ### 1. Set up a local news feed
 
+Run the setup script to write the local news feed. From the repo root:
+
 ```bash
-cat > /tmp/photosphere-news.yaml <<'EOF'
-items:
-  - id: smoke-test-001
-    message: "Welcome to Photosphere"
-    color: success
-    link:
-      label: "Read more"
-      url: "https://example.com/read"
-    action:
-      label: "Try it"
-      url: "https://example.com/try"
-  - id: smoke-test-002
-    message: "Second item"
-EOF
+./docs/testing/e2e/desktop/news/setup-news-feed.sh
 export PHOTOSPHERE_NEWS_URL="file:///tmp/photosphere-news.yaml"
 ```
 
-Re-start the desktop app.
+### 2. Start the desktop app
+
+In the same terminal as step 1 (so `PHOTOSPHERE_NEWS_URL` is still set), from the
+repo root:
+
+```bash
+bun run dev
+```
 
 ---
 
-### 2. First startup shows the first news item
+### 3. First startup shows the first news item
 
 After the app launches:
 
@@ -52,7 +42,7 @@ Expected:
 
 ---
 
-### 3. Dismiss the first item
+### 4. Dismiss the first item
 
 1. Click the dismiss button on the toast.
 
@@ -62,7 +52,7 @@ Expected:
 
 ---
 
-### 4. Restart the app
+### 5. Restart the app
 
 Stop the app, ensure `PHOTOSPHERE_NEWS_URL` is still set, and re-start it.
 
@@ -72,7 +62,7 @@ Expected:
 
 ---
 
-### 5. Dismiss the second item and restart again
+### 6. Dismiss the second item and restart again
 
 1. Dismiss the second toast.
 2. Stop and re-start the app.
