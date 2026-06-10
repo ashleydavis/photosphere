@@ -81,6 +81,7 @@ export function mockPlatform(): IPlatformContext {
         onSyncStarted: () => noUnsubscribe,
         onSyncCompleted: () => noUnsubscribe,
         onShowNotification: () => noUnsubscribe,
+        onDatabasesChanged: () => noUnsubscribe,
         onUpdateAvailable: () => noUnsubscribe,
         openFolder: async () => {},
         getPathForFile: () => undefined,

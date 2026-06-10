@@ -50,6 +50,9 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
     // Store callbacks for show-notification events
     const showNotificationCallbacksRef = useRef<Set<(data: IShowNotificationData) => void>>(new Set());
 
+    // Store callbacks for databases-changed events
+    const databasesChangedCallbacksRef = useRef<Set<() => void>>(new Set());
+
     // Store callbacks for update-available events
     const updateAvailableCallbacksRef = useRef<Set<(data: IUpdateAvailableData) => void>>(new Set());
 
@@ -143,6 +146,19 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
 
         return () => {
             electronAPI.removeAllListeners('show-notification');
+        };
+    }, [electronAPI]);
+
+    // Set up message listener for databases-changed events
+    useEffect(() => {
+        const handleDatabasesChanged = () => {
+            databasesChangedCallbacksRef.current.forEach(callback => callback());
+        };
+
+        electronAPI.onMessage('databases-changed', handleDatabasesChanged);
+
+        return () => {
+            electronAPI.removeAllListeners('databases-changed');
         };
     }, [electronAPI]);
 
@@ -283,6 +299,13 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         showNotificationCallbacksRef.current.add(callback);
         return () => {
             showNotificationCallbacksRef.current.delete(callback);
+        };
+    }, []);
+
+    const onDatabasesChanged = useCallback((callback: () => void): (() => void) => {
+        databasesChangedCallbacksRef.current.add(callback);
+        return () => {
+            databasesChangedCallbacksRef.current.delete(callback);
         };
     }, []);
 
@@ -484,6 +507,7 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         onSyncCompleted,
         copyToClipboard,
         onShowNotification,
+        onDatabasesChanged,
         onUpdateAvailable,
         openFolder,
         onMenuAction,

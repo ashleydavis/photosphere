@@ -140,6 +140,11 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         return () => {};
     }, []);
 
+    const onDatabasesChanged = useCallback((_callback: () => void): (() => void) => {
+        // No-op for web platform. There is no main process to push database changes.
+        return () => {};
+    }, []);
+
     const onUpdateAvailable = useCallback((_callback: (data: IUpdateAvailableData) => void): (() => void) => {
         // No-op for web platform. Host app store handles updates.
         return () => {};
@@ -310,6 +315,7 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         onSyncCompleted,
         copyToClipboard,
         onShowNotification,
+        onDatabasesChanged,
         onUpdateAvailable,
         openFolder,
         onMenuAction,

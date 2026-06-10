@@ -317,6 +317,15 @@ export interface IPlatformContext {
     onShowNotification: (callback: (data: IShowNotificationData) => void) => Unsubscribe;
 
     //
+    // Subscribes to databases-changed events fired from the main process when the set of
+    // configured databases changes outside of a renderer-initiated mutation (e.g. when a
+    // replication completes and registers a new database). The renderer uses this to refresh
+    // the Manage Databases list. No-op on web/mobile (which have no main process).
+    // Returns an unsubscribe function.
+    //
+    onDatabasesChanged: (callback: () => void) => Unsubscribe;
+
+    //
     // Subscribes to update-available events fired from the desktop main process when a
     // newer GitHub release is detected and has not already been recorded in news.yaml's
     // `last_shown_update_version`. The renderer uses this to render the navbar pill

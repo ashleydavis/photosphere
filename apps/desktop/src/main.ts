@@ -1016,6 +1016,12 @@ async function handleReplicateSucceeded(inputs: IReplicateDatabaseData): Promise
             encryptionKey: inputs.destEncryptionKey,
             s3Key: inputs.destS3Key,
         });
+
+        // Tell the renderer the set of configured databases changed so the
+        // Manage Databases list refreshes without a manual refresh.
+        if (mainWindow) {
+            mainWindow.webContents.send('databases-changed');
+        }
     }
     log.event(`Replication completed for "${basename(inputs.destPath)}"`);
     if (mainWindow) {

@@ -178,6 +178,14 @@ export function AppContextProvider({ children }: IProps) {
         });
     }, [platform]);
 
+    useEffect(() => {
+        return platform.onDatabasesChanged(() => {
+            refreshDbs().catch(err => {
+                log.exception(`Failed to reload databases after databases changed:`, err as Error);
+            });
+        });
+    }, [platform]);
+
     const value: IAppContext = {
         dbs,
         secrets,
