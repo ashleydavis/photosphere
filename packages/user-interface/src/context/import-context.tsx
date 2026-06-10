@@ -333,6 +333,17 @@ export function ImportContextProvider({ children }: IImportContextProviderProps)
         statusRef.current = 'idle';
     }, []);
 
+    //
+    // Clears import state whenever the active database changes or is closed.
+    // This prevents stale import results from a previous database leaking into a new one.
+    // Runs on initial mount too, which is harmless because state is already empty,
+    // and only re-runs when databasePath actually changes (starting an import does not
+    // change databasePath, so an in-flight import is never clobbered by this effect).
+    //
+    useEffect(() => {
+        clearImport();
+    }, [databasePath, clearImport]);
+
     const contextValue: IImportContext = {
         status,
         importItems,
