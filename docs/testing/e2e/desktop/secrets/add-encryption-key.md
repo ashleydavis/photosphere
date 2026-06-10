@@ -1,8 +1,7 @@
 # Desktop Manual Test: Add and Edit an Encryption-Key Secret
 
 Test that the **Add secret** dialog stores an `encryption-key` secret, and that
-editing it preserves the raw-PEM format (no JSON envelope is added on
-round-trip).
+editing and saving it keeps the PEM value exactly as entered.
 
 ## Prerequisites
 
@@ -47,21 +46,36 @@ bun run start -- secrets view --name enc-key-1 --yes
 
 Expected:
 - The view dialog shows the PEM you entered.
-- The CLI output shows `Type: encryption-key` and the value as the raw PEM string (no JSON envelope around it).
+- The CLI output shows `Type: encryption-key` and the value as the exact PEM string you entered.
 
 ---
 
-### 3. Edit the secret
+### 3. Edit the secret so a write is forced
+
+If you save without changing anything, the app may skip the write entirely, so
+the check below would prove nothing. So this step changes the PEM before
+saving, which guarantees the value is written again.
 
 1. Click the **Edit** button on the `enc-key-1` row.
-2. Click **Save** without changing anything.
+2. Clear the **Private Key PEM** field and paste this different key in its place:
+
+   ```
+   -----BEGIN PRIVATE KEY-----
+   MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAA
+   MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAB
+   -----END PRIVATE KEY-----
+   ```
+3. Click **Save**.
 
 Expected:
 - The dialog closes without errors.
 
 ---
 
-### 4. Confirm the edit preserved the raw PEM
+### 4. Confirm the edit kept the PEM exactly
+
+The edit in step 3 forced a real write, so this confirms saving did not
+change the PEM value.
 
 1. Click the **View secret** (eye) button on the `enc-key-1` row.
 
@@ -72,5 +86,5 @@ bun run start -- secrets view --name enc-key-1 --yes
 ```
 
 Expected:
-- The view dialog still shows the same PEM.
-- The CLI output shows `Type: encryption-key` and the same raw PEM string (no JSON envelope was added on round-trip).
+- The view dialog shows the replacement PEM you pasted in step 3, byte-for-byte.
+- The CLI output shows `Type: encryption-key` and that same PEM string, unchanged.

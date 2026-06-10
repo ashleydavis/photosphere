@@ -99,7 +99,7 @@ Upcoming version: 0.0.8
 
 ### Misc
 - [x] [config-timestamps](cli/misc/config-timestamps.md)
-- [ ] [mcp-server](cli/misc/mcp-server.md)
+- [-] [mcp-server](cli/misc/mcp-server.md)
 
 ---
 
@@ -139,13 +139,13 @@ Upcoming version: 0.0.8
 - [-] [add-duplicate-name](desktop/secrets/add-duplicate-name.md)
     - This fails. Clicking Save has no effect for the duplicate secret, no error/toast is shown.
     - It would be good when typing in the duplicate secret name in the Add Secret modal if it shows you in the form that the name is duplicate.
-- [ ] [add-api-key](desktop/secrets/add-api-key.md)
+- [x] [add-api-key](desktop/secrets/add-api-key.md)
     - Should not be able to save unless a value is entered. Blank values are useless and should not be allowed.
     - The should be a button that reveals the secret in the input while we are entering it.
-- [ ] [add-encryption-key](desktop/secrets/add-encryption-key.md)
-- [ ] [add-s3-credentials](desktop/secrets/add-s3-credentials.md)
-- [ ] [rename-secret](desktop/secrets/rename-secret.md)
-- [ ] [view-secret](desktop/secrets/view-secret.md)
+- [x] [add-encryption-key](desktop/secrets/add-encryption-key.md)
+- [x] [add-s3-credentials](desktop/secrets/add-s3-credentials.md)
+- [x] [rename-secret](desktop/secrets/rename-secret.md)
+- [x] [view-secret](desktop/secrets/view-secret.md)
 
 ### LAN Share
 - [x] [share-database](desktop/lan-share/share-database.md)
@@ -156,4 +156,4 @@ Upcoming version: 0.0.8
 - [x] [news-notifications](desktop/news/news-notifications.md)
 
 ### MCP
-- [ ] [mcp-server](desktop/mcp/mcp-server.md)
+- [-] [mcp-server](desktop/mcp/mcp-server.md)

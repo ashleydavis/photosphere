@@ -1,7 +1,7 @@
 # Desktop Manual Test: Rename a Secret
 
-Test that renaming a secret moves the vault file so that the on-disk key
-matches the secret's new name.
+Test that renaming a secret stores it under the new name, so it is found by the
+new name and no longer by the old one, with its value preserved.
 
 ## Prerequisites
 
@@ -11,22 +11,19 @@ Start the desktop app from source (run from the repo root):
 bun run dev
 ```
 
-Locate the desktop app's vault directory and substitute `<VAULT_DIR>` below.
-
 ## Steps
 
-### 1. Seed the vault with a secret named `old-name`
+### 1. Add a secret named `old-name`
 
-Stop the desktop app, then:
+1. Navigate to the **Manage Secrets** page.
+2. Click **Add secret**.
+3. Type `old-name` into the name field.
+4. Set the **Type** to `api-key`.
+5. Type `sk-rename-me` into the value field.
+6. Click **Save**.
 
-```bash
-mkdir -p <VAULT_DIR>
-cat > <VAULT_DIR>/old-name.json <<'EOF'
-{"name":"old-name","type":"api-key","value":"sk-rename-me"}
-EOF
-```
-
-Re-start the desktop app.
+Expected:
+- The Manage Secrets page lists `old-name`.
 
 ---
 
@@ -42,13 +39,17 @@ Expected:
 
 ---
 
-### 3. Confirm the vault key matches the new name
+### 3. Confirm the secret was renamed
+
+In the app:
+- The **Manage Secrets** page lists `new-name`.
+- `old-name` no longer appears.
+
+With the CLI, run from the repo root:
 
 ```bash
-ls <VAULT_DIR>
+bun run start -- secrets list
 ```
 
 Expected:
-- `<VAULT_DIR>/new-name.json` exists.
-- `<VAULT_DIR>/old-name.json` no longer exists.
-- The value inside `new-name.json` is still `sk-rename-me`.
+- `secrets list` shows `new-name` with `Type: api-key`, and does not show `old-name`.

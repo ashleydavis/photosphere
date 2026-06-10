@@ -1,7 +1,7 @@
 # Desktop Manual Test: Add and Edit an API-Key Secret
 
 Test that the **Add secret** dialog stores an `api-key` secret, and that editing
-it round-trips the raw key value (no JSON envelope is added).
+and saving it keeps the key value exactly as entered.
 
 ## Prerequisites
 
@@ -40,7 +40,7 @@ bun run start -- secrets view --name api-key-1 --yes
 
 Expected:
 - The view dialog shows the value `sk-test-1234567890ABCDEF`.
-- The CLI output shows `Type: api-key` and `Value: sk-test-1234567890ABCDEF` (the raw string, with no JSON envelope around it).
+- The CLI output shows `Type: api-key` and `Value: sk-test-1234567890ABCDEF`, the exact string you entered.
 
 ---
 
@@ -67,4 +67,4 @@ bun run start -- secrets view --name api-key-1 --yes
 
 Expected:
 - The view dialog shows the updated value `sk-test-CHANGED-99999`.
-- The CLI output shows `Value: sk-test-CHANGED-99999` as a raw string (no JSON envelope was added on round-trip).
+- The CLI output shows `Value: sk-test-CHANGED-99999`, the exact string you entered, unchanged.
