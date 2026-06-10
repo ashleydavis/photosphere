@@ -296,6 +296,13 @@ export function SecretsPage() {
                     </tr>
                 </thead>
                 <tbody>
+                    {secrets.length === 0 && (
+                        <tr>
+                            <td colSpan={3}>
+                               <p className="pt-2 text-gray-500">No secrets yet. Click Add secret to create one, or Receive secret to import one from another device.</p>
+                            </td>
+                        </tr>
+                    )}
                     {secrets.map(secret => (
                         <tr key={secret.name}>
                             <td data-id={`secret-row-name-${secret.name}`}>{secret.name}</td>

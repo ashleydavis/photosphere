@@ -163,6 +163,13 @@ export function DatabasesPage() {
                     </tr>
                 </thead>
                 <tbody>
+                    {databases.length === 0 && (
+                        <tr>
+                            <td colSpan={5}>
+                                <p className="pt-2 text-gray-500">No databases yet. Click New database to create one, Add database to register an existing one, or Receive database to import one from another device.</p>
+                            </td>
+                        </tr>
+                    )}
                     {databases.map(entry => (
                         <tr key={entry.name}>
                             <td data-id={`database-row-name-${entry.name}`}>{entry.name}</td>
