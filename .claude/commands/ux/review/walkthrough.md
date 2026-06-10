@@ -16,30 +16,52 @@ tell them how to see it live in the app.
 
 ## Style for everything you say
 
+The user does not want waffle. They want clear, direct, concise advice. This is
+the most important rule here. If in doubt, cut words.
+
 - Plain English. No jargon. No made-up terms.
 - No waffle. Only what matters.
 - Use bullet points.
 - Keep it short and easy to understand.
+- One line per labelled part. No sub-bullets. Max ~6 lines per finding.
 
 ## How to run the walkthrough
 
-Go through ONE finding at a time. Do not dump the whole list.
+Once, before the first finding, tell the user how to start the app:
+
+- Start the app: `bun run dev` (from the repo root).
+- Open a test database, e.g. `test/dbs/50-assets`.
+
+Then go through ONE finding at a time. Do not dump the whole list.
 
 For each finding, show:
 
-- **What it is** - one or two plain lines.
+- **What it is** - one plain line.
 - **Why it matters** - one line, from a new user's point of view.
-- **See it in the screenshot** - the screenshot file (e.g.
-  `ux-review/screenshots/02-gallery.png`) and exactly what to look at (e.g.
-  "top-right three-dot icon"). Read/open the image so you can describe it.
-- **See it live** - the steps to see it in the real app:
-  - Start the app: `bun run dev` (from the repo root).
-  - Open a test database, e.g. `test/dbs/50-assets`.
-  - Then the exact clicks or page to go to (e.g. "open any photo, then click
-    Gallery in the top bar - notice it does not return to the grid").
+- **See it in the screenshot** - the screenshot file and exactly what to look
+  at. Read/open the image so you can describe it.
+- **See it live** - only the unique clicks for this finding (the app is already
+  running from the intro above).
 
 Then stop and wait. Ask the user to say "next" to continue (or to skip, jump, or
 stop). Do not move on until they reply.
+
+### Example of a good finding
+
+This is the shape and length to aim for. Clear, direct, no waffle.
+
+```
+## Finding 1 of 14 🔴 (High)
+
+**The "Gallery" link can't close an open photo**
+
+- What it is: clicking "Gallery" while viewing a photo does nothing.
+- Why it matters: the user feels stuck; the obvious way back looks broken.
+- Screenshot: `ux-review/screenshots/03-asset-detail.png` - top-left, the only exit is a small "X".
+- See it live: open any photo, click "Gallery" in the top bar - nothing happens.
+
+Say "next" to continue.
+```
 
 ## Mapping findings to live steps
 
