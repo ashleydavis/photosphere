@@ -35,6 +35,13 @@ Run performance benchmarks:
 bun run perf
 ```
 
+Capture desktop app screenshots headlessly (for UX review / docs):
+
+```bash
+bun run screenshots
+```
+
 ## Structure
 
 - [e2e/](e2e/) - End-to-end manual test scripts covering full user workflows
+- [screenshots.md](screenshots.md) - Capturing desktop app screenshots via the test control server

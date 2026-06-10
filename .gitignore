@@ -50,6 +50,8 @@ apps/cli/test/tmp-lan-share/
 tmp-cli-desktop-lan-share/
 apps/desktop/cycle-stories-tmp/
 apps/desktop/stories-screenshots/
+apps/desktop/screenshots/out/
+ux-review/
 .claude/worktrees/
 .claude/permissions-log/
 .claude/permissions-debug.log

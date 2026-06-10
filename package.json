@@ -45,6 +45,7 @@
     "tlcd": "bun run test:lan-share:cli-desktop",
     "test:stories": "./apps/desktop/cycle-stories-smoke-test.sh",
     "tst": "bun run test:stories",
+    "screenshots": "bun run bundle && ./apps/desktop/screenshots/capture-ux.sh",
     "perf": "bun --filter '*' perf"
   },
   "workspaces": [
