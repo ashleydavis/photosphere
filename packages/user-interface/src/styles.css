@@ -313,6 +313,78 @@ body.mobile .photo-container .full.loaded {
     z-index: 2100;
 }
 
+/* Compact metadata summary card shown bottom-left over the photo. Acts as a preview of the full info panel.
+   Stacks an always-visible header over the collapsible body, so collapsing leaves just the title row. */
+.asset-summary-panel {
+    display: flex;
+    flex-direction: column;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    padding: 6px;
+    color: white;
+}
+
+/* The collapse toggle, sitting at the right end of the header. */
+.asset-summary-toggle {
+    flex-shrink: 0;
+    color: white !important;
+}
+
+/* Animates the body open/closed by collapsing it to the left. The column track drives the leftward
+   slide; the row track collapses the height in step so no empty gap is left below the header. */
+.asset-summary-collapse {
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
+    transition: grid-template-columns 0.25s ease, grid-template-rows 0.25s ease;
+}
+
+/* Collapsed state: both tracks animate to zero, hiding the body and leaving only the header. */
+.asset-summary-collapse.collapsed {
+    grid-template-columns: 0fr;
+    grid-template-rows: 0fr;
+}
+
+/* Clips the body as the grid tracks shrink so its content does not reflow during the animation. */
+.asset-summary-collapse-inner {
+    overflow: hidden;
+    min-width: 0;
+    min-height: 0;
+}
+
+/* The metadata content: date, location and labels stacked under the header, with a divider that
+   collapses away with the body. */
+.asset-summary-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: max-content;
+    max-width: 55vw;
+    padding: 8px 6px 4px 8px;
+    margin-top: 6px;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+/* Header of the summary card: titles it, opens the full info panel, and holds the collapse toggle. */
+.asset-summary-panel .summary-header {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    padding-left: 6px;
+}
+
+/* Small uppercase label that titles the summary card. */
+.asset-summary-panel .summary-title {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    opacity: 0.75;
+}
+
 @keyframes photo-enter-from-right {
     from { transform: translateX(35%); opacity: 0; }
     to   { transform: translateX(0);   opacity: 1; }
