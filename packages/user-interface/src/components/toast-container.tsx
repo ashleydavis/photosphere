@@ -87,11 +87,12 @@ export function ToastContainer() {
             style={{
                 position: 'fixed',
                 bottom: '16px',
-                right: '16px',
+                left: '50%',
+                transform: 'translateX(-50%)',
                 zIndex: 9999,
                 display: 'flex',
                 flexDirection: 'column',
-                alignItems: 'flex-end',
+                alignItems: 'center',
             }}
         >
             {toasts.map(toast => (
