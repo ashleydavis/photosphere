@@ -30,6 +30,11 @@ export interface IDesktopConfig {
     // The path of the last database that was opened; absent when none.
     //
     lastDatabase?: string;
+
+    //
+    // Whether the FPS indicator overlay is shown in the UI. Defaults to false when unset.
+    //
+    showFpsIndicator?: boolean;
 }
 
 //
@@ -50,6 +55,9 @@ interface ITomlDesktopConfig {
 
     // The path of the last database that was opened.
     last_database?: string;
+
+    // Whether the FPS indicator overlay is shown in the UI.
+    show_fps_indicator?: boolean;
 }
 
 const CONFIG_DIR = process.env.PHOTOSPHERE_CONFIG_DIR || path.join(os.homedir(), ".config", "photosphere");
@@ -77,6 +85,9 @@ function tomlToDesktopConfig(toml: ITomlDesktopConfig): IDesktopConfig {
     if (toml.last_database !== undefined) {
         config.lastDatabase = toml.last_database;
     }
+    if (toml.show_fps_indicator !== undefined) {
+        config.showFpsIndicator = toml.show_fps_indicator;
+    }
     return config;
 }
 
@@ -99,6 +110,9 @@ function desktopConfigToToml(config: IDesktopConfig): ITomlDesktopConfig {
     }
     if (config.lastDatabase !== undefined) {
         toml.last_database = config.lastDatabase;
+    }
+    if (config.showFpsIndicator !== undefined) {
+        toml.show_fps_indicator = config.showFpsIndicator;
     }
     return toml;
 }
@@ -160,6 +174,23 @@ export async function getTheme(): Promise<'light' | 'dark' | 'system'> {
 export async function setTheme(theme: 'light' | 'dark' | 'system'): Promise<void> {
     const config = await loadDesktopConfig();
     config.theme = theme;
+    await saveDesktopConfig(config);
+}
+
+//
+// Gets whether the FPS indicator overlay is shown. Defaults to false when unset.
+//
+export async function getShowFpsIndicator(): Promise<boolean> {
+    const config = await loadDesktopConfig();
+    return config.showFpsIndicator || false;
+}
+
+//
+// Sets whether the FPS indicator overlay is shown.
+//
+export async function setShowFpsIndicator(showFpsIndicator: boolean): Promise<void> {
+    const config = await loadDesktopConfig();
+    config.showFpsIndicator = showFpsIndicator;
     await saveDesktopConfig(config);
 }
 

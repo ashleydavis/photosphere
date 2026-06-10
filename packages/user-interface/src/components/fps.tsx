@@ -1,38 +1,58 @@
 // @ts-ignore
 import FPSStats from "react-fps-stats";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { useConfig } from "../context/config-context";
+import { usePlatform } from "../context/platform-context";
 
-const isProduction: boolean = false; //(import.meta.env.MODE === "production");
-
+//
+// Renders the FPS indicator overlay when the persisted `showFpsIndicator` setting is enabled.
+// The initial value is loaded from config and re-read live when the "Show FPS Indicator"
+// developer menu item is toggled (via the `toggle-fps` menu action). Defaults to not shown.
+//
 export function Fps() {
 
-    // useEffect(() => {
-    //     let frameCount = 0;
-    //     let lastTime = performance.now();
-    //     let rafHandle: number;
+    // Whether the FPS indicator overlay should currently be shown.
+    const [showFpsIndicator, setShowFpsIndicator] = useState<boolean>(false);
 
-    //     function onFrame() {
-    //         frameCount++;
-    //         const now = performance.now();
-    //         if (now - lastTime >= 1000) {
-    //             const fps = Math.round(frameCount * 1000 / (now - lastTime));
-    //             frameCount = 0;
-    //             lastTime = now;
-    //             (window as any).electronAPI?.sendFps(fps);
-    //         }
-    //         rafHandle = requestAnimationFrame(onFrame);
-    //     }
+    const config = useConfig();
+    const platform = usePlatform();
 
-    //     rafHandle = requestAnimationFrame(onFrame);
+    //
+    // Load the initial value of the setting from config.
+    //
+    useEffect(() => {
+        let isMounted = true;
+        config.get<boolean>("showFpsIndicator")
+            .then(value => {
+                if (isMounted) {
+                    setShowFpsIndicator(value === true);
+                }
+            });
 
-    //     return () => {
-    //         cancelAnimationFrame(rafHandle);
-    //     };
-    // }, []);
+        return () => {
+            isMounted = false;
+        };
+    }, [config]);
+
+    //
+    // Re-read the setting when the "Show FPS Indicator" developer menu item is toggled.
+    //
+    useEffect(() => {
+        const unsubscribe = platform.onMenuAction(action => {
+            if (action === "toggle-fps") {
+                config.get<boolean>("showFpsIndicator")
+                    .then(value => {
+                        setShowFpsIndicator(value === true);
+                    });
+            }
+        });
+
+        return unsubscribe;
+    }, [platform, config]);
 
     return (
         <>
-            {(isProduction === false)
+            {showFpsIndicator
                 && <FPSStats
                     top="auto"
                     left="auto"
