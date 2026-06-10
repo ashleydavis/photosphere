@@ -15,6 +15,7 @@ import { useGallery } from "../context/gallery-context";
 import { useAssetDatabase } from "../context/asset-database-source";
 import { useToast } from "../context/toast-context";
 import { usePlatform } from "../context/platform-context";
+import { ThemeToggle } from "./theme-toggle";
 
 export interface INavbarProps {
     //
@@ -238,6 +239,8 @@ export function Navbar({
                             v{updateVersion} available
                         </a>
                     )}
+
+                    <ThemeToggle />
 
                     <IconButton
                         data-id="right-sidebar-button"

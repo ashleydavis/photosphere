@@ -82,6 +82,11 @@ i {
     border-bottom: 1px solid rgb(218, 220, 224);
 }
 
+/* Dark mode: lighten the nav bar divider so it is visible against the dark background */
+[data-joy-color-scheme="dark"] #navbar {
+    border-bottom-color: rgba(255, 255, 255, 0.16);
+}
+
 body.mobile #navbar {
     top: env(safe-area-inset-top);
     left: env(safe-area-inset-left);
