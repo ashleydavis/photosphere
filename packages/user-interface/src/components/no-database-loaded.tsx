@@ -42,6 +42,9 @@ export function NoDatabaseLoaded() {
                     <Typography level="h4" sx={{ mb: 2 }}>
                         No database loaded
                     </Typography>
+                    <Typography level="body-md" sx={{ mb: 2, maxWidth: 400, mx: 'auto' }}>
+                        Photosphere is a local-first application for managing your database of digital media files.
+                    </Typography>
                     <Typography level="body-md" sx={{ mb: 4, maxWidth: 400, mx: 'auto' }}>
                         Create a new database or open an existing one.
                     </Typography>
