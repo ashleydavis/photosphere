@@ -1376,6 +1376,14 @@ async function createMenu(): Promise<void> {
             },
         },
         {
+            label: 'Add Database...',
+            click: () => {
+                if (mainWindow) {
+                    mainWindow.webContents.send('menu-action', 'add-database');
+                }
+            },
+        },
+        {
             label: 'Open Database...',
             accelerator: 'CmdOrCtrl+O',
             click: () => {

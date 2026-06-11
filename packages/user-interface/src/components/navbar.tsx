@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { Spinner } from "./spinner";
 import IconButton from '@mui/joy/IconButton';
 import MoreVert from '@mui/icons-material/MoreVert';
@@ -16,6 +16,7 @@ import { useAssetDatabase } from "../context/asset-database-source";
 import { useToast } from "../context/toast-context";
 import { usePlatform } from "../context/platform-context";
 import { ThemeToggle } from "./theme-toggle";
+import { findTemporaryNavPage } from "../lib/nav-pages";
 
 export interface INavbarProps {
     //
@@ -111,6 +112,13 @@ export function Navbar({
     const sortedItemsCount = sortedItems().length;
     const selectedItemsCount = selectedItems.size;
 
+    // The current location, used to show a temporary nav entry for pages that
+    // have no permanent navbar link.
+    const location = useLocation();
+    const navigate = useNavigate();
+    const temporaryNavPage = findTemporaryNavPage(location.pathname, ["/gallery", "/map", "/import"]);
+    const TemporaryNavPageIcon = temporaryNavPage?.icon;
+
     return (
         <div 
             id="navbar" 
@@ -136,6 +144,7 @@ export function Navbar({
                         className="ml-4 mr-1 sm:ml-8 sm:mr-3"
                         title="Search"
                         onClick={event => {
+                            navigate("/gallery");
                             setOpenSearch(true);
                         }}
                     >
@@ -146,8 +155,9 @@ export function Navbar({
                     </button>
 
                     <NavLink
-                        className={({ isActive }) => "mr-1 sm:mr-3" + (isActive ? "" : " opacity-40")}
+                        className={({ isActive }) => "mr-1 sm:mr-3" + (isActive ? " font-semibold text-sky-500" : "")}
                         to="/gallery"
+                        title="Gallery"
                     >
                         <div className="flex flex-row items-center">
                             <i className="w-5 text-center fa-solid fa-images"></i>
@@ -156,8 +166,9 @@ export function Navbar({
                     </NavLink>
 
                     <NavLink
-                        className={({ isActive }) => "mr-1 sm:mr-3" + (isActive ? "" : " opacity-40")}
+                        className={({ isActive }) => "mr-1 sm:mr-3" + (isActive ? " font-semibold text-sky-500" : "")}
                         to="/map"
+                        title="Map"
                     >
                         <div className="flex flex-row items-center">
                             <i className="w-5 text-center fa-solid fa-map"></i>
@@ -167,12 +178,26 @@ export function Navbar({
 
                     {databasePath && (
                         <NavLink
-                            className={({ isActive }) => "mr-1 sm:mr-3" + (isActive ? "" : " opacity-40")}
+                            className={({ isActive }) => "mr-1 sm:mr-3" + (isActive ? " font-semibold text-sky-500" : "")}
                             to="/import"
+                            title="Import"
                         >
                             <div className="flex flex-row items-center">
                                 <FileUpload fontSize="small" />
                                 <div className="hidden sm:block ml-2">Import</div>
+                            </div>
+                        </NavLink>
+                    )}
+
+                    {temporaryNavPage && TemporaryNavPageIcon && (
+                        <NavLink
+                            className="mr-1 sm:mr-3 font-semibold text-sky-500"
+                            to={temporaryNavPage.path}
+                            title={temporaryNavPage.label}
+                        >
+                            <div className="flex flex-row items-center">
+                                <TemporaryNavPageIcon fontSize="small" />
+                                <div className="hidden sm:block ml-2">{temporaryNavPage.label}</div>
                             </div>
                         </NavLink>
                     )}

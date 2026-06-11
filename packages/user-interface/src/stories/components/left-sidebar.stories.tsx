@@ -18,6 +18,7 @@ export const stories: IStory[] = [
                     setSidebarOpen={noOp}
                     onOpenConfiguration={noOp}
                     onNewDatabase={noOp}
+                    onAddDatabase={noOp}
                     onOpenDatabase={noOp}
                     />
             </MockProviders>

@@ -1,19 +1,44 @@
 import { log } from "utils";
 import React, { useEffect, useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAssetDatabase } from '../context/asset-database-source';
 import { usePlatform, type IDatabaseEntry } from '../context/platform-context';
 import { useTheme } from '@mui/joy/styles/ThemeProvider';
 import List from '@mui/joy/List/List';
 import ListItem from '@mui/joy/ListItem/ListItem';
 import ListItemDecorator from '@mui/joy/ListItemDecorator/ListItemDecorator';
-import { PhotoLibrary, Folder, FolderOpen, Map, Search, Settings, CreateNewFolder, FileUpload, ManageSearch, Key, Delete } from '@mui/icons-material';
+import { PhotoLibrary, Folder, FolderOpen, Map, Search, Settings, CreateNewFolder, LibraryAdd, FileUpload, ManageSearch, Key, Delete } from '@mui/icons-material';
 import { CollapsibleSection } from './collapsible-section';
 import ListItemContent from '@mui/joy/ListItemContent/ListItemContent';
 import ListItemButton from '@mui/joy/ListItemButton/ListItemButton';
 import IconButton from '@mui/joy/IconButton/IconButton';
 import Divider from '@mui/joy/Divider/Divider';
 import { useSearch } from '../context/search-context';
+import { findTemporaryNavPage } from '../lib/nav-pages';
+
+//
+// Styling applied to the active sidebar navigation item so it stands out
+// (bold text and an accent colour for both the label and icon). Joy's
+// ListItemButton sets its own colour, so the accent must override the button
+// and icon directly via `sx` rather than rely on a parent Tailwind class. This
+// matches the active link treatment in the navbar (Tailwind's sky-500).
+//
+const activeNavItemSx = {
+    //
+    // Accent colour and bold weight for the button label.
+    //
+    "& .MuiListItemButton-root": {
+        color: "rgb(14 165 233)",
+        fontWeight: 600,
+    },
+
+    //
+    // Apply the same accent colour to the decorator icon.
+    //
+    "& svg": {
+        color: "rgb(14 165 233)",
+    },
+};
 
 export interface ILeftSidebarProps {
     //
@@ -37,6 +62,11 @@ export interface ILeftSidebarProps {
     onNewDatabase: () => void;
 
     //
+    // Opens the add database modal.
+    //
+    onAddDatabase: () => void;
+
+    //
     // Opens the open database modal.
     //
     onOpenDatabase: () => void;
@@ -46,11 +76,17 @@ export interface ILeftSidebarProps {
 //
 // Renders the left sidebar for the app.
 //
-export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, onNewDatabase, onOpenDatabase }: ILeftSidebarProps) {
+export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, onNewDatabase, onAddDatabase, onOpenDatabase }: ILeftSidebarProps) {
     const { setOpenSearch } = useSearch();
     const { openDatabase, databasePath } = useAssetDatabase();
     const platform = usePlatform();
     const theme = useTheme();
+    const location = useLocation();
+    const navigate = useNavigate();
+    // The current location, used to show a temporary sidebar entry for pages
+    // that have no permanent sidebar link.
+    const temporaryNavPage = findTemporaryNavPage(location.pathname, ["/gallery", "/map", "/import", "/databases", "/secrets"]);
+    const TemporaryNavPageIcon = temporaryNavPage?.icon;
     // Recently opened databases (top 5).
     const [recentDatabases, setRecentDatabases] = useState<IDatabaseEntry[]>([]);
 
@@ -103,6 +139,18 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                     <ListItem
                         onClick={() => {
                             setSidebarOpen(false);
+                            onAddDatabase();
+                        }}
+                        >
+                        <ListItemButton>
+                            <ListItemDecorator><LibraryAdd /></ListItemDecorator>
+                            <ListItemContent>Add database</ListItemContent>
+                        </ListItemButton>
+                    </ListItem>
+
+                    <ListItem
+                        onClick={() => {
+                            setSidebarOpen(false);
                             onOpenDatabase();
                         }}
                         >
@@ -118,7 +166,7 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                             onClick={() => setSidebarOpen(false)}
                             >
                             {({ isActive }) => (
-                                <ListItem className={isActive ? "" : "opacity-40"}>
+                                <ListItem sx={isActive ? activeNavItemSx : undefined}>
                                     <ListItemButton>
                                         <ListItemDecorator><FileUpload /></ListItemDecorator>
                                         <ListItemContent>Import</ListItemContent>
@@ -132,6 +180,7 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                     <ListItem
                         onClick={() => {
                             setSidebarOpen(false);
+                            navigate("/gallery");
                             setTimeout(() => { // Delay the opening of the search input allows it auto focus.
                                 setOpenSearch(true);
                             }, 10);
@@ -148,7 +197,7 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                         onClick={() => setSidebarOpen(false)}
                         >
                         {({ isActive }) => (
-                            <ListItem className={isActive ? "" : "opacity-40"}>
+                            <ListItem sx={isActive ? activeNavItemSx : undefined}>
                                 <ListItemButton>
                                     <ListItemDecorator><PhotoLibrary /></ListItemDecorator>
                                     <ListItemContent>Gallery</ListItemContent>
@@ -162,7 +211,7 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                         onClick={() => setSidebarOpen(false)}
                         >
                         {({ isActive }) => (
-                            <ListItem className={isActive ? "" : "opacity-40"}>
+                            <ListItem sx={isActive ? activeNavItemSx : undefined}>
                                 <ListItemButton>
                                     <ListItemDecorator><Map /></ListItemDecorator>
                                     <ListItemContent>Map</ListItemContent>
@@ -170,6 +219,20 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                             </ListItem>
                         )}
                     </NavLink>
+
+                    {temporaryNavPage && TemporaryNavPageIcon && (
+                        <NavLink
+                            to={temporaryNavPage.path}
+                            onClick={() => setSidebarOpen(false)}
+                            >
+                            <ListItem sx={activeNavItemSx}>
+                                <ListItemButton>
+                                    <ListItemDecorator><TemporaryNavPageIcon /></ListItemDecorator>
+                                    <ListItemContent>{temporaryNavPage.label}</ListItemContent>
+                                </ListItemButton>
+                            </ListItem>
+                        </NavLink>
+                    )}
 
                 </List>
             </div>
@@ -233,7 +296,7 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                         onClick={() => setSidebarOpen(false)}
                         >
                         {({ isActive }) => (
-                            <ListItem className={isActive ? "" : "opacity-40"}>
+                            <ListItem sx={isActive ? activeNavItemSx : undefined}>
                                 <ListItemButton>
                                     <ListItemDecorator><ManageSearch /></ListItemDecorator>
                                     <ListItemContent>Manage Databases</ListItemContent>
@@ -247,7 +310,7 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                         onClick={() => setSidebarOpen(false)}
                         >
                         {({ isActive }) => (
-                            <ListItem className={isActive ? "" : "opacity-40"}>
+                            <ListItem sx={isActive ? activeNavItemSx : undefined}>
                                 <ListItemButton>
                                     <ListItemDecorator><Key /></ListItemDecorator>
                                     <ListItemContent>Manage Secrets</ListItemContent>

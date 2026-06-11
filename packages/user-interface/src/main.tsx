@@ -28,6 +28,7 @@ import { DatabaseSummaryPage } from "./pages/database-summary";
 import { SecretsPage } from "./pages/secrets/secrets-page";
 import { OpenDatabaseModal } from "./components/open-database-modal";
 import { CreateDatabaseModal } from "./components/create-database-modal";
+import { AddDatabaseModal } from "./components/add-database-modal";
 
 export interface IMainProps {
     //
@@ -75,6 +76,11 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
     // Set to true to open the "create database" modal.
     //
     const [createDatabaseModalOpen, setCreateDatabaseModalOpen] = useState<boolean>(false);
+
+    //
+    // Set to true to open the "add database" modal.
+    //
+    const [addDatabaseModalOpen, setAddDatabaseModalOpen] = useState<boolean>(false);
 
     const { openSearch } = useSearch();
 
@@ -186,6 +192,10 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
                     setCreateDatabaseModalOpen(true);
                     break;
 
+                case 'add-database':
+                    setAddDatabaseModalOpen(true);
+                    break;
+
                 case 'open-database':
                     setOpenDatabaseModalOpen(true);
                     break;
@@ -273,6 +283,7 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
                     setSidebarOpen={setSidebarOpen}
                     onOpenConfiguration={() => setConfigurationOpen(true)}
                     onNewDatabase={() => setCreateDatabaseModalOpen(true)}
+                    onAddDatabase={() => setAddDatabaseModalOpen(true)}
                     onOpenDatabase={() => setOpenDatabaseModalOpen(true)}
                     />
             </Drawer>
@@ -370,6 +381,11 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
             <CreateDatabaseModal
                 open={createDatabaseModalOpen}
                 onClose={() => setCreateDatabaseModalOpen(false)}
+                />
+
+            <AddDatabaseModal
+                open={addDatabaseModalOpen}
+                onClose={() => setAddDatabaseModalOpen(false)}
                 />
 
             {isWorking
