@@ -81,9 +81,12 @@ PHOTOSPHERE_LOG_DIR="$TEST_DIR/logs" \
 bun run dev
 ```
 
-The same variables work for CLI tests. Set them in the shell before running `bun run start -- <command>` so the CLI and desktop app share the same isolated config and vault:
+The same variables work for CLI tests. Set them in the shell before running `bun run start -- <command>` so the CLI and desktop app share the same isolated config and vault. If you are in a fresh shell (or did not run the desktop block above), set `TEST_DIR` first to the same path:
 
 ```bash
+TEST_DIR="/tmp/photosphere-isolated-$$"
+mkdir -p "$TEST_DIR"/{config,vault,logs}
+
 export PHOTOSPHERE_CONFIG_DIR="$TEST_DIR/config"
 export PHOTOSPHERE_VAULT_DIR="$TEST_DIR/vault"
 export PHOTOSPHERE_VAULT_TYPE=plaintext
