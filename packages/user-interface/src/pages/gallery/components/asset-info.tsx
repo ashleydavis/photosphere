@@ -168,7 +168,7 @@ export function AssetInfo({ onClose, onDeleted, onLabelSearch }: IAssetInfoProps
                         <i className="fa-solid fa-close" />
                     </IconButton>
 
-                    <Typography level="title-lg" className="ml-2">Info</Typography>
+                    <Typography level="title-lg" className="ml-2">Detail</Typography>
 
                     <div className="flex-grow" />
 

@@ -407,7 +407,7 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                 <div className="asset-summary-panel">
                     <div className="summary-header">
                         <span className="summary-title" style={{ flex: 1 }}>
-                            Details
+                            Quick Info
                         </span>
                         <IconButton
                             size="sm"
