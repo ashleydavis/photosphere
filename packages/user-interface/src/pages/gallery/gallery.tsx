@@ -11,16 +11,18 @@ export interface IGalleryPageProps {
 }
 
 export function GalleryPage({}: IGalleryPageProps) {
-    const { selectedItemId, setSelectedItemId, allItems, isLoading } = useGallery();
+    const { setSelectedItemId, allItems, isLoading } = useGallery();
     const { databasePath } = useAssetDatabase();
     const { assetId } = useParams();
 
     useEffect(() => {
-        if (assetId && assetId !== selectedItemId) {
-            // Selects the asset specified in the URL.
+        if (assetId) {
+            // Selects the asset specified in the URL. This reacts only to URL changes, not to
+            // selection changes made inside the asset view (prev/next/close), so those are not
+            // immediately overridden back to the asset named in the URL.
             setSelectedItemId(assetId);
         }
-    }, [assetId, selectedItemId, setSelectedItemId]);
+    }, [assetId, setSelectedItemId]);
 
     useEffect(() => {
         if (databasePath && !isLoading) {
