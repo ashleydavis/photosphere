@@ -5,8 +5,10 @@ import Typography from "@mui/joy/Typography";
 import Button from "@mui/joy/Button";
 import CreateNewFolderIcon from "@mui/icons-material/CreateNewFolder";
 import FolderOpenIcon from "@mui/icons-material/FolderOpen";
+import AddIcon from "@mui/icons-material/Add";
 import { CreateDatabaseModal } from "./create-database-modal";
 import { OpenDatabaseModal } from "./open-database-modal";
+import { AddDatabaseModal } from "./add-database-modal";
 import { usePlatform, type IDatabaseEntry } from "../context/platform-context";
 import { useAssetDatabase } from "../context/asset-database-source";
 
@@ -20,6 +22,7 @@ export function NoDatabaseLoaded() {
 
     const [createModalOpen, setCreateModalOpen] = useState(false);
     const [openModalOpen, setOpenModalOpen] = useState(false);
+    const [addModalOpen, setAddModalOpen] = useState(false);
 
     // Recently opened database entries (top 5).
     const [recentDatabases, setRecentDatabases] = useState<IDatabaseEntry[]>([]);
@@ -69,6 +72,16 @@ export function NoDatabaseLoaded() {
                         >
                             Open database
                         </Button>
+                        <Button
+                            variant="soft"
+                            color="neutral"
+                            size="lg"
+                            startDecorator={<AddIcon />}
+                            onClick={() => setAddModalOpen(true)}
+                            sx={{ borderRadius: 's', px: 4 }}
+                        >
+                            Add database
+                        </Button>
                     </Box>
 
                     {recentDatabases.length > 0 && (
@@ -103,6 +116,11 @@ export function NoDatabaseLoaded() {
             <OpenDatabaseModal
                 open={openModalOpen}
                 onClose={() => setOpenModalOpen(false)}
+            />
+
+            <AddDatabaseModal
+                open={addModalOpen}
+                onClose={() => setAddModalOpen(false)}
             />
         </>
     );
