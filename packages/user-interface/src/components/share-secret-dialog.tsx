@@ -11,6 +11,7 @@ import Alert from '@mui/joy/Alert';
 import CircularProgress from '@mui/joy/CircularProgress';
 import Box from '@mui/joy/Box';
 import { usePlatform, type ISharedSecretEntry } from '../context/platform-context';
+import { createDialogKeyHandler } from '../lib/dialog-keys';
 
 export interface IShareSecretDialogProps {
     // Whether the dialog is visible.
@@ -96,9 +97,24 @@ export function ShareSecretDialog({ open, entry, onClose }: IShareSecretDialogPr
         onClose();
     }, [step, platform, onClose]);
 
+    //
+    // The primary action for the current step: send while confirming, or close once finished.
+    //
+    async function handleDialogConfirm(): Promise<void> {
+        if (step === "confirm") {
+            await handleStartSend();
+        }
+        else if (step === "success" || step === "error") {
+            onClose();
+        }
+    }
+
+    // Enter does nothing while searching or showing the pairing code (only Cancel is available then).
+    const dialogConfirmDisabled = step === "searching" || step === "showing-code";
+
     return (
         <Modal open={open} onClose={handleCancel}>
-            <ModalDialog sx={{ minWidth: 420, maxWidth: 520 }}>
+            <ModalDialog onKeyDown={createDialogKeyHandler(handleDialogConfirm, dialogConfirmDisabled)} sx={{ minWidth: 420, maxWidth: 520 }}>
                 <DialogTitle>Share Secret</DialogTitle>
                 <DialogContent>
                     <Alert color="warning" sx={{ mb: 2 }}>

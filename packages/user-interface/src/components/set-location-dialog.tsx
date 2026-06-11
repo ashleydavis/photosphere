@@ -10,6 +10,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { reverseGeocode } from "../lib/reverse-geocode";
 import { useDebounce } from "../lib/use-debounce";
+import { createDialogKeyHandler } from "../lib/dialog-keys";
 
 //
 // A geographic coordinate.
@@ -320,6 +321,7 @@ export function SetLocationDialog({ open, initialCoordinates, onSetLocation, onC
     return (
         <Modal open={open} onClose={onClose}>
             <ModalDialog
+                onKeyDown={createDialogKeyHandler(onConfirm, !pinCoords || isConfirming)}
                 sx={{
                     width: "85vw",
                     height: "85vh",
@@ -342,6 +344,9 @@ export function SetLocationDialog({ open, initialCoordinates, onSetLocation, onC
                     }}
                     onKeyDown={async event => {
                         if (event.key === "Enter") {
+                            // Enter in the search box runs a search; prevent it from also
+                            // confirming the dialog via the dialog-level Enter handler.
+                            event.preventDefault();
                             searchDebounce.cancel();
                             await executeSearch(searchQuery);
                         }

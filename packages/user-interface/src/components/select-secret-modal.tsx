@@ -10,6 +10,7 @@ import Table from '@mui/joy/Table';
 import Typography from '@mui/joy/Typography';
 import { usePlatform, type ISharedSecretEntry } from '../context/platform-context';
 import { CreateSecretDialog } from './create-secret-dialog';
+import { createDialogKeyHandler } from '../lib/dialog-keys';
 
 export interface ISelectSecretModalProps {
     // Whether the modal is visible.
@@ -76,7 +77,7 @@ export function SelectSecretModal({ open, secretType, onClose, onSelect }: ISele
     return (
         <>
             <Modal open={open} onClose={onClose}>
-                <ModalDialog sx={{ minWidth: 480, maxWidth: 700, overflowY: 'auto' }}>
+                <ModalDialog onKeyDown={createDialogKeyHandler(handleSelect, selectedName === undefined)} sx={{ minWidth: 480, maxWidth: 700, overflowY: 'auto' }}>
                     <DialogTitle>Select {secretType}</DialogTitle>
                     <DialogContent>
                         {secrets.length === 0

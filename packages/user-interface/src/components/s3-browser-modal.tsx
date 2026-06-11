@@ -14,6 +14,7 @@ import List from '@mui/joy/List';
 import ListItem from '@mui/joy/ListItem';
 import ListItemButton from '@mui/joy/ListItemButton';
 import { usePlatform } from '../context/platform-context';
+import { createDialogKeyHandler } from '../lib/dialog-keys';
 
 export interface IS3BrowserModalProps {
     // Whether the modal is visible.
@@ -136,7 +137,7 @@ export function S3BrowserModal({ open, s3Key, onClose, onSelect }: IS3BrowserMod
 
     return (
         <Modal open={open} onClose={onClose}>
-            <ModalDialog sx={{ minWidth: 520, maxWidth: 740, overflowY: 'auto' }}>
+            <ModalDialog onKeyDown={createDialogKeyHandler(handleSelectLocation, !bucket)} sx={{ minWidth: 520, maxWidth: 740, overflowY: 'auto' }}>
                 <DialogTitle>Browse S3</DialogTitle>
                 <DialogContent>
                     <FormControl sx={{ mb: 2 }}>

@@ -12,6 +12,7 @@ import DialogTitle from "@mui/joy/DialogTitle";
 import DialogContent from "@mui/joy/DialogContent";
 import { useConfig } from "../context/config-context";
 import { useGalleryLayout } from "../context/gallery-layout-context";
+import { createDialogKeyHandler } from "../lib/dialog-keys";
 
 export interface IConfigurationDialogProps {
     //
@@ -35,7 +36,7 @@ export function ConfigurationDialog({ open, onClose }: IConfigurationDialogProps
 
     return (
         <Modal open={open} onClose={onClose}>
-            <ModalDialog>
+            <ModalDialog onKeyDown={createDialogKeyHandler(onClose, false)}>
                 <ModalClose />
                 <DialogTitle>Configuration</DialogTitle>
                 <DialogContent>

@@ -15,6 +15,7 @@ import CircularProgress from '@mui/joy/CircularProgress';
 import Box from '@mui/joy/Box';
 import { usePlatform } from '../context/platform-context';
 import { useApp } from '../context/app-context';
+import { createDialogKeyHandler } from '../lib/dialog-keys';
 
 export interface IReceiveSecretDialogProps {
     // Whether the dialog is visible.
@@ -119,9 +120,31 @@ export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps
         onClose();
     }, [step, platform, onClose]);
 
+    //
+    // The primary action for the current step: start receiving, save the reviewed
+    // secret, or close once finished.
+    //
+    async function handleDialogConfirm(): Promise<void> {
+        if (step === "enter-code") {
+            await handleStartReceiving();
+        }
+        else if (step === "review") {
+            await handleSave();
+        }
+        else if (step === "success" || step === "error") {
+            onClose();
+        }
+    }
+
+    // Enter mirrors the enabled state of each step's primary button.
+    const dialogConfirmDisabled =
+        (step === "enter-code" && !/^\d{4}$/.test(enteredCode))
+        || (step === "review" && !saveName.trim())
+        || step === "waiting";
+
     return (
         <Modal open={open} onClose={handleCancel}>
-            <ModalDialog sx={{ minWidth: 420, maxWidth: 520 }}>
+            <ModalDialog onKeyDown={createDialogKeyHandler(handleDialogConfirm, dialogConfirmDisabled)} sx={{ minWidth: 420, maxWidth: 520 }}>
                 <DialogTitle>Receive Secret</DialogTitle>
                 <DialogContent>
                     <Typography level="body-sm" sx={{ mb: 2 }} color="neutral">

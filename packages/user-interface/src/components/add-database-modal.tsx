@@ -19,6 +19,7 @@ import { useApp } from '../context/app-context';
 import { useAssetDatabase } from '../context/asset-database-source';
 import { SelectSecretModal } from './select-secret-modal';
 import { S3BrowserModal } from './s3-browser-modal';
+import { createDialogKeyHandler } from '../lib/dialog-keys';
 
 export interface IAddDatabaseModalProps {
     // Whether the modal is visible.
@@ -209,7 +210,10 @@ export function AddDatabaseModal({ open, onClose }: IAddDatabaseModalProps) {
     return (
         <>
             <Modal open={open} onClose={onClose}>
-                <ModalDialog sx={{ minWidth: 520, maxWidth: 700, overflowY: 'auto' }}>
+                <ModalDialog
+                    onKeyDown={createDialogKeyHandler(handleAdd, !form.path)}
+                    sx={{ minWidth: 520, maxWidth: 700, overflowY: 'auto' }}
+                >
                     <DialogTitle>Add Database</DialogTitle>
                     <DialogContent>
                         <FormControl sx={{ mb: 1 }}>

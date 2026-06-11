@@ -9,6 +9,7 @@ import Button from '@mui/joy/Button';
 import Typography from '@mui/joy/Typography';
 import Box from '@mui/joy/Box';
 import { type ISharedSecretEntry } from '../context/platform-context';
+import { createDialogKeyHandler } from '../lib/dialog-keys';
 
 //
 // Props for ViewSecretDialog.
@@ -144,9 +145,21 @@ export function ViewSecretDialog({ open, secret, onClose, getSecretValue }: IVie
         return <Field label="API Key" value={parsed?.apiKey ?? secretValue} />;
     }
 
+    //
+    // The primary action: reveal the value while still hidden, otherwise close.
+    //
+    async function handleConfirm(): Promise<void> {
+        if (!revealed) {
+            await handleReveal();
+        }
+        else {
+            onClose();
+        }
+    }
+
     return (
         <Modal open={open} onClose={onClose}>
-            <ModalDialog sx={{ minWidth: 480, maxWidth: 680 }}>
+            <ModalDialog onKeyDown={createDialogKeyHandler(handleConfirm, loading)} sx={{ minWidth: 480, maxWidth: 680 }}>
                 <DialogTitle>View Secret</DialogTitle>
                 <DialogContent>
                     <Typography level="body-md" sx={{ mb: 1 }}>

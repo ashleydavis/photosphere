@@ -23,6 +23,7 @@ import CircularProgress from '@mui/joy/CircularProgress';
 import { usePlatform, type IDatabaseEntry, type ISharedSecretEntry } from '../context/platform-context';
 import { S3BrowserModal } from './s3-browser-modal';
 import { ConfigureSecretsModal, type IDatabaseSecretsSelection } from './configure-secrets-modal';
+import { createDialogKeyHandler } from '../lib/dialog-keys';
 
 //
 // Props for the ReplicateDatabaseDialog component.
@@ -181,10 +182,26 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
         }
     }, [sourceEntry, form, uuidGenerator]);
 
+    //
+    // The primary action for the current step: start replication while configuring,
+    // or close once it has finished (success or error).
+    //
+    async function handleDialogConfirm(): Promise<void> {
+        if (step === "configure") {
+            await handleStart();
+        }
+        else if (step === "success" || step === "error") {
+            onClose();
+        }
+    }
+
+    // Enter is disabled while running, and while the configure form is incomplete.
+    const dialogConfirmDisabled = step === "configure" ? startDisabled : step === "running";
+
     return (
         <>
         <Modal open={open} onClose={step === "running" ? undefined : onClose}>
-            <ModalDialog data-id="replicate-database-dialog" sx={{ minWidth: 520, maxWidth: 720, overflowY: 'auto', overflowX: 'hidden' }}>
+            <ModalDialog data-id="replicate-database-dialog" onKeyDown={createDialogKeyHandler(handleDialogConfirm, dialogConfirmDisabled)} sx={{ minWidth: 520, maxWidth: 720, overflowY: 'auto', overflowX: 'hidden' }}>
                 <DialogTitle>Replicate Database</DialogTitle>
                 <DialogContent sx={{ overflowX: 'hidden' }}>
                     {step === "configure" && (

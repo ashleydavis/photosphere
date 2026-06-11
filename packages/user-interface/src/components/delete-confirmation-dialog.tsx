@@ -3,6 +3,7 @@ import Button from '@mui/joy/Button';
 import Modal from '@mui/joy/Modal';
 import Typography from '@mui/joy/Typography';
 import ModalDialog from '@mui/joy/ModalDialog';
+import { createDialogKeyHandler } from '../lib/dialog-keys';
 
 export interface IProps {
     //
@@ -30,12 +31,25 @@ export function DeleteConfirmationDialog({ open, numItems, onCancel, onDelete }:
     
     const [working, setWorking] = useState(false);
 
+    //
+    // Runs the delete, tracking the in-progress state.
+    //
+    async function handleDelete(): Promise<void> {
+        setWorking(true);
+        try {
+            await onDelete();
+        }
+        finally {
+            setWorking(false);
+        }
+    }
+
     return (
-        <Modal 
-            open={open} 
+        <Modal
+            open={open}
             onClose={onCancel}
             >
-            <ModalDialog>
+            <ModalDialog onKeyDown={createDialogKeyHandler(handleDelete, working)}>
                 <Typography component="h2">
                     Delete Confirmation
                 </Typography>
@@ -47,18 +61,10 @@ export function DeleteConfirmationDialog({ open, numItems, onCancel, onDelete }:
                         Cancel
                     </Button>
                     <div className="flex-grow" />
-                    <Button 
-                        variant="solid" 
-                        color="danger" 
-                        onClick={async () => {
-                            setWorking(true);
-                            try {
-                                await onDelete();
-                            }
-                            finally {
-                                setWorking(false);
-                            }
-                        }}
+                    <Button
+                        variant="solid"
+                        color="danger"
+                        onClick={handleDelete}
                         >
                         Delete
                     </Button>

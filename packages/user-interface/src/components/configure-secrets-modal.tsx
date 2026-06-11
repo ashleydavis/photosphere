@@ -12,6 +12,7 @@ import Option from '@mui/joy/Option';
 import Select from '@mui/joy/Select';
 import type { ISharedSecretEntry } from '../context/platform-context';
 import { CreateSecretDialog } from './create-secret-dialog';
+import { createDialogKeyHandler } from '../lib/dialog-keys';
 
 //
 // Vault-secret references for a database entry. Each field holds the chosen vault secret name,
@@ -174,7 +175,7 @@ export function ConfigureSecretsModal({
     return (
         <>
         <Modal open={open} onClose={onClose}>
-            <ModalDialog data-id="configure-secrets-modal" sx={{ minWidth: 480, maxWidth: 640, overflowY: 'auto', overflowX: 'hidden' }}>
+            <ModalDialog data-id="configure-secrets-modal" onKeyDown={createDialogKeyHandler(() => onSave(working), false)} sx={{ minWidth: 480, maxWidth: 640, overflowY: 'auto', overflowX: 'hidden' }}>
                 <DialogTitle>Configure Secrets</DialogTitle>
                 <DialogContent>
                     {fields.includes('s3') && renderSecretSelector(

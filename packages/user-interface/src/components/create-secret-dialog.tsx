@@ -13,6 +13,7 @@ import FormLabel from '@mui/joy/FormLabel';
 import { type ISharedSecretEntry } from '../context/platform-context';
 import { useApp } from '../context/app-context';
 import { buildValueJson, emptyFormState, type ISecretFormState } from '../lib/secrets-form';
+import { createDialogKeyHandler } from '../lib/dialog-keys';
 
 export interface ICreateSecretDialogProps {
     // Whether the dialog is open.
@@ -129,7 +130,10 @@ export function CreateSecretDialog({ open, secretType, defaultName, onClose, onS
 
     return (
         <Modal open={open} onClose={onClose}>
-            <ModalDialog sx={{ minWidth: 480, maxWidth: 640, overflowY: 'auto' }}>
+            <ModalDialog
+                onKeyDown={createDialogKeyHandler(handleSave, false)}
+                sx={{ minWidth: 480, maxWidth: 640, overflowY: 'auto' }}
+            >
                 <DialogTitle>New {secretType} Secret</DialogTitle>
                 <DialogContent>
                     <FormControl sx={{ mb: 2 }}>

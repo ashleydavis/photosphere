@@ -19,6 +19,7 @@ import Option from '@mui/joy/Option';
 import type { IConflictResolution } from 'api';
 import { usePlatform } from '../context/platform-context';
 import { useApp } from '../context/app-context';
+import { createDialogKeyHandler } from '../lib/dialog-keys';
 
 export interface IReceiveDatabaseDialogProps {
     // Whether the dialog is visible.
@@ -330,9 +331,37 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
         conflict => conflict.resolution.action === "rename" && !conflict.resolution.newName?.trim()
     );
 
+    //
+    // The primary action for the current step, mirroring each step's primary button.
+    //
+    async function handleDialogConfirm(): Promise<void> {
+        if (step === "enter-code") {
+            await handleStartReceiving();
+        }
+        else if (step === "review") {
+            await handleSave();
+        }
+        else if (step === "conflict") {
+            await handleConflictsResolved();
+        }
+        else if (step === "db-name-conflict") {
+            await handleDbNameConflictResolved();
+        }
+        else if (step === "success" || step === "error") {
+            onClose();
+        }
+    }
+
+    // Enter mirrors the enabled state of each step's primary button.
+    const dialogConfirmDisabled =
+        (step === "enter-code" && !/^\d{4}$/.test(enteredCode))
+        || (step === "review" && (!editedName || !editedPath))
+        || (step === "conflict" && conflictResolutionInvalid)
+        || step === "waiting";
+
     return (
         <Modal open={open} onClose={handleCancel}>
-            <ModalDialog sx={{ minWidth: 480, maxWidth: 600 }}>
+            <ModalDialog onKeyDown={createDialogKeyHandler(handleDialogConfirm, dialogConfirmDisabled)} sx={{ minWidth: 480, maxWidth: 600 }}>
                 <DialogTitle>Receive Database</DialogTitle>
                 <DialogContent>
                     <Typography level="body-sm" sx={{ mb: 2 }} color="neutral">

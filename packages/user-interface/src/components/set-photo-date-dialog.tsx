@@ -9,6 +9,7 @@ import Select from "@mui/joy/Select";
 import Option from "@mui/joy/Option";
 import Input from "@mui/joy/Input";
 import Button from "@mui/joy/Button";
+import { createDialogKeyHandler } from "../lib/dialog-keys";
 
 //
 // The mode for setting a photo date.
@@ -150,7 +151,7 @@ export function SetPhotoDateDialog({ open, onClose, onSetDate, currentDate }: IS
 
     return (
         <Modal open={open} onClose={onClose}>
-            <ModalDialog sx={{ width: 340, overflow: "hidden" }}>
+            <ModalDialog onKeyDown={createDialogKeyHandler(handleConfirm, isConfirmDisabled())} sx={{ width: 340, overflow: "hidden" }}>
                 <DialogTitle>Set Photo Date</DialogTitle>
                 <DialogContent sx={{ overflow: "visible", pb: 1 }}>
                     <Select

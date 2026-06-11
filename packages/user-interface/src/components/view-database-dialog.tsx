@@ -11,6 +11,7 @@ import Typography from '@mui/joy/Typography';
 import Box from '@mui/joy/Box';
 import { type IDatabaseEntry, type ISharedSecretEntry } from '../context/platform-context';
 import { ViewSecretDialog } from './view-secret-dialog';
+import { createDialogKeyHandler } from '../lib/dialog-keys';
 
 //
 // Props for ViewDatabaseDialog.
@@ -85,7 +86,7 @@ export function ViewDatabaseDialog({ open, entry, allSecrets, onClose, getSecret
     return (
         <>
             <Modal open={open} onClose={onClose}>
-                <ModalDialog sx={{ minWidth: 480, maxWidth: 680 }}>
+                <ModalDialog onKeyDown={createDialogKeyHandler(onClose, false)} sx={{ minWidth: 480, maxWidth: 680 }}>
                     <ModalClose />
                     <DialogTitle>View Database</DialogTitle>
                     <DialogContent>

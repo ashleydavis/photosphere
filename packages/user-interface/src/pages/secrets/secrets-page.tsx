@@ -24,6 +24,7 @@ import { ShareSecretDialog } from '../../components/share-secret-dialog';
 import { ReceiveSecretDialog } from '../../components/receive-secret-dialog';
 import { ViewSecretDialog } from '../../components/view-secret-dialog';
 import { applyValueJson, buildValueJson, emptyFormState, type ISecretFormState } from '../../lib/secrets-form';
+import { createDialogKeyHandler } from '../../lib/dialog-keys';
 
 //
 // The supported secret type identifiers.
@@ -352,7 +353,10 @@ export function SecretsPage() {
 
             {/* Add / Edit dialog */}
             <Modal open={dialogOpen} onClose={() => setDialogOpen(false)}>
-                <ModalDialog sx={{ minWidth: 500, maxWidth: 700, overflowY: 'auto' }}>
+                <ModalDialog
+                    onKeyDown={createDialogKeyHandler(handleSave, false)}
+                    sx={{ minWidth: 500, maxWidth: 700, overflowY: 'auto' }}
+                >
                     <ModalClose />
                     <DialogTitle>{editingSecret ? 'Edit Secret' : 'Add Secret'}</DialogTitle>
                     <DialogContent>
@@ -394,7 +398,7 @@ export function SecretsPage() {
 
             {/* First delete confirmation */}
             <Modal open={confirmDeleteOpen} onClose={() => setConfirmDeleteOpen(false)}>
-                <ModalDialog>
+                <ModalDialog onKeyDown={createDialogKeyHandler(handleFirstConfirm, false)}>
                     <DialogTitle>Delete Secret</DialogTitle>
                     <DialogContent>
                         <Typography>
@@ -415,7 +419,7 @@ export function SecretsPage() {
 
             {/* Second delete confirmation (secret is referenced by databases) */}
             <Modal open={confirmDeleteSecondOpen} onClose={() => setConfirmDeleteSecondOpen(false)}>
-                <ModalDialog>
+                <ModalDialog onKeyDown={createDialogKeyHandler(executeDelete, false)}>
                     <DialogTitle>Secret In Use</DialogTitle>
                     <DialogContent>
                         <Typography>

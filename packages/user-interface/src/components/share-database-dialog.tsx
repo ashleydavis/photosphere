@@ -16,6 +16,7 @@ import Checkbox from '@mui/joy/Checkbox';
 import Box from '@mui/joy/Box';
 import { usePlatform, type IDatabaseEntry } from '../context/platform-context';
 import type { IDatabaseSharePayload, IShareS3Credentials, IShareEncryptionKey, IShareGeocodingKey } from 'api';
+import { createDialogKeyHandler } from '../lib/dialog-keys';
 
 export interface IShareDatabaseDialogProps {
     // Whether the dialog is visible.
@@ -174,9 +175,24 @@ export function ShareDatabaseDialog({ open, entry, onClose }: IShareDatabaseDial
         onClose();
     }, [step, platform, onClose]);
 
+    //
+    // The primary action for the current step: send while reviewing, or close once finished.
+    //
+    async function handleDialogConfirm(): Promise<void> {
+        if (step === "review") {
+            await handleStartSend();
+        }
+        else if (step === "success" || step === "error") {
+            onClose();
+        }
+    }
+
+    // Enter does nothing while searching or showing the pairing code (only Cancel is available then).
+    const dialogConfirmDisabled = step === "searching" || step === "showing-code";
+
     return (
         <Modal open={open} onClose={handleCancel}>
-            <ModalDialog sx={{ minWidth: 480, maxWidth: 600 }}>
+            <ModalDialog onKeyDown={createDialogKeyHandler(handleDialogConfirm, dialogConfirmDisabled)} sx={{ minWidth: 480, maxWidth: 600 }}>
                 <DialogTitle>Share Database</DialogTitle>
                 <DialogContent>
                     <Alert color="warning" sx={{ mb: 2 }}>

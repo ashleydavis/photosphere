@@ -15,6 +15,7 @@ import FormLabel from '@mui/joy/FormLabel';
 import { usePlatform, type IDatabaseEntry, type ISharedSecretEntry } from '../context/platform-context';
 import { useApp } from '../context/app-context';
 import { ConfigureSecretsModal, type IDatabaseSecretsSelection } from './configure-secrets-modal';
+import { createDialogKeyHandler } from '../lib/dialog-keys';
 
 //
 // Form state for the edit-database modal.
@@ -211,7 +212,10 @@ export function EditDatabaseModal({
     return (
         <>
             <Modal open={open} onClose={onClose}>
-                <ModalDialog sx={{ minWidth: 500, maxWidth: 700, overflowY: 'auto' }}>
+                <ModalDialog
+                    onKeyDown={createDialogKeyHandler(handleSave, false)}
+                    sx={{ minWidth: 500, maxWidth: 700, overflowY: 'auto' }}
+                >
                     <ModalClose />
                     <DialogTitle>{entry ? 'Edit Database' : 'Add Database'}</DialogTitle>
                     <DialogContent>
