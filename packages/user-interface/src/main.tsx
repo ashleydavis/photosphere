@@ -104,20 +104,27 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
     const { status: importStatus, importItems, startImportDirectories } = useImport();
 
     //
-    // Show a completion toast when an import finishes, with a "View Import" action button.
+    // Show a completion toast when an import finishes, with a "View photo" action button
+    // that opens the first imported photo in the gallery.
     //
     useEffect(() => { //todo: This seems bad. Feel like there must be a better way to route notifications to the frontend.
         if (importStatus === 'completed') {
-            const successCount = importItems.filter(item => item.status === 'success').length;
+            const successItems = importItems.filter(item => item.status === 'success');
+            const successCount = successItems.length;
             log.event(`${successCount} assets imported`);
+
+            // Open the first successfully imported photo in the gallery; omit the action when nothing was added.
+            const firstImportedAssetId = successItems.length > 0 ? successItems[0].assetId : undefined;
             addToast({
                 message: `Import complete: ${successCount} asset${successCount !== 1 ? 's' : ''} added`,
                 color: 'success',
                 duration: 0,
-                action: {
-                    label: 'View Import',
-                    onClick: () => navigate('/import'),
-                },
+                action: firstImportedAssetId
+                    ? {
+                        label: 'View photo',
+                        onClick: () => navigate(`/gallery/${firstImportedAssetId}`),
+                    }
+                    : undefined,
             });
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
