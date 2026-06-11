@@ -32,7 +32,10 @@ function ToastItem({ toast }: { toast: IToast }) {
                             size="sm"
                             variant="soft"
                             color={toast.color}
-                            onClick={toast.action.onClick}
+                            onClick={() => {
+                                toast.action!.onClick();
+                                removeToast(toast.id);
+                            }}
                         >
                             {toast.action.label}
                         </Button>
