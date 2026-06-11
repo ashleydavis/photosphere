@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Box from "@mui/joy/Box";
 import Typography from "@mui/joy/Typography";
 import Button from "@mui/joy/Button";
-import FileUploadIcon from "@mui/icons-material/FileUpload";
+import NavigationIcon from "@mui/icons-material/Navigation";
 
 //
 // Displayed when a database is open but contains no assets, with a prompt to import photos.
@@ -30,14 +30,14 @@ export function EmptyDatabase() {
                     variant="soft"
                     color="neutral"
                     size="lg"
-                    startDecorator={<FileUploadIcon />}
+                    startDecorator={<NavigationIcon />}
                     onClick={() => navigate('/import')}
                     sx={{
                         borderRadius: "s",
                         px: 4,
                     }}
                 >
-                    Import photos
+                    Visit the Import page
                 </Button>
             </Box>
         </Box>
