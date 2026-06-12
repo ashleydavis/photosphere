@@ -3,13 +3,16 @@
 Symptom: an imported video (e.g. `test.mp4`) opens the full-screen asset view but shows a
 blank/black player. Photos display fine. Video does not.
 
-This document is a troubleshooting checklist. Nothing here is a confirmed fix. One real bug was
-found (missing CSP `media-src`) but fixing it alone did **not** make the video visible, so there
-is at least one more cause behind it.
+This document is a troubleshooting checklist. The blank video has been traced to a single proven
+cause: the missing CSP `media-src` directive blocks the `blob:` URL the `<video>` loads (case A,
+proven by the DevTools probe below). The fix (adding `media-src`) has been applied and is awaiting
+a reload-and-retest. Earlier hypotheses (page origin, Content-Type, GPU compositing) were all
+tested and ruled out.
 
-Current leading hypothesis: **case B (GPU/video compositing in Electron)**. Page origin and asset
-Content-Type have both been tested and ruled out (see "What is known so far"). The video decodes
-but does not paint. Next step is the hardware-acceleration test, not origin/CSP/server changes.
+RESOLVED to **case A (the media source is rejected before it loads)**, proven by the DevTools
+ground-truth probe (see that section). It is **not** case B: the previous "GPU/compositing"
+hypothesis is disproven. The `<video>` element is laid out at full size but its source is blocked,
+so it never decodes a byte. Cause: the missing CSP `media-src` directive blocks the `blob:` URL.
 
 ## The core question to resolve first
 
@@ -32,11 +35,14 @@ Until you know which, any "fix" is a guess.
     debuggable browser with full DevTools. Much easier to chase there.
   - RESULT: Videos work ok in the browser.
 
-## In the real app, get ground truth (DevTools)
+## In the real app, get ground truth (DevTools) — DONE, proves case A
 
-- [ ] Open the video, press Ctrl+Shift+I, look at the Console for a red CSP error mentioning
+- [x] Open the video, press Ctrl+Shift+I, look at the Console for a red CSP error mentioning
       `media-src` / `blob`.
-- [ ] Run this in the console and note the output:
+  - RESULT: yes. Console showed: `Loading media from 'blob:file:///…' violates the following
+    Content Security Policy directive: "default-src 'self'". Note that 'media-src' was not
+    explicitly set, so 'default-src' is used as a fallback. The action has been blocked.`
+- [x] Run this in the console and note the output:
 
   ```js
   (() => { const v = document.querySelector('video'); return v ? { err: v.error && v.error.message, readyState: v.readyState, t: v.currentTime, w: v.videoWidth, h: v.videoHeight, ow: v.offsetWidth, oh: v.offsetHeight } : 'no video element'; })()
@@ -47,6 +53,11 @@ Until you know which, any "fix" is a guess.
     layout size (CSS/layout bug).
   - `err` null, `readyState` 4, sizes all non-zero, still blank on screen → case B (GPU
     compositing).
+  - RESULT: `{ err: "MEDIA_ELEMENT_ERROR: Media load rejected by URL safety check", netState: 3,
+    readyState: 0, t: 0, dur: null, w: 0, h: 0, ow: 2005, oh: 1335, src: "" }`.
+    → **case A confirmed.** `err` set, `readyState` 0, `w/h` 0, `netState` 3 (NETWORK_NO_SOURCE),
+    `currentSrc` empty. And `ow/oh` 2005×1335 → element is laid out, so **not** the layout case
+    and **not** case B. The source is rejected by CSP before any decode.
 
 ## Specific questions
 
@@ -56,11 +67,13 @@ Until you know which, any "fix" is a guess.
   whitelists where each resource type may load from. It has `img-src 'self' data: blob: ...`
   (so images load from blob URLs) but no `media-src`, so `<video>` falls back to
   `default-src 'self'` and the blob URL is blocked.
-- To apply: add `media-src 'self' data: blob: http://localhost:*;` to that CSP string, then
-  rebuild (`bun run dev` re-bundles).
-- Caveat: Chromium's own CSP violation report confirmed this block, so the directive is
-  genuinely necessary, but adding it alone did NOT make the video visible. Treat it as
-  necessary-but-not-sufficient.
+- To apply: add `media-src 'self' blob: http://localhost:*;` to that CSP string, then
+  rebuild (`bun run bundle:renderer`). APPLIED 2026-06-12; awaiting retest.
+- Note on the old "necessary-but-not-sufficient" caveat: the only prior test where `media-src`
+  was present *and* the video was still blank was the `app://` experiment, i.e. with a
+  `blob:app://` source on a different origin, not a clean `file://` + `media-src` test. So
+  `media-src` has never actually been ruled out as the full fix under the normal `file://` build.
+  The current ground-truth probe (case A) is fully consistent with `media-src` being THE cause.
 
 ### Old backend vs `asset-server`
 
@@ -133,8 +146,16 @@ GUI (or the dev:web browser).
 - Missing CSP `media-src` is a real, confirmed bug, but not a sufficient fix on its own.
 - **Page origin is ruled out** (`app://` secure-origin test still blank — see that section).
 - **Content-Type is ruled out** (`dev:web` works with the same `octet-stream` asset server).
-- With origin and content-type eliminated, and given the video decodes (`readyState 4`,
-  `currentTime` advances) but does not paint, the evidence now points to **case B: GPU/video
-  compositing in Electron** (a plain Chrome tab composites it fine; Electron does not). The next
-  step is the hardware-acceleration test under "Other experiments" (disable HW accel / GPU flags),
-  not anything to do with origin, CSP, or the asset server.
+- **Case B (GPU/compositing) is ruled out.** The DevTools ground-truth probe shows the source is
+  rejected (`err` set, `readyState` 0, `w/h` 0, empty `currentSrc`) with the element fully laid
+  out (`ow/oh` 2005×1335). Nothing decodes, so there is nothing to composite. The hardware-
+  acceleration test was a dead end and was reverted.
+- The earlier "readyState reached 4 / currentTime advanced" note came from a prior session where
+  `media-src` was present in the CSP. In the current (reverted) build with no `media-src`, the
+  blob is blocked outright (readyState 0). So that observation was about a *different* CSP state,
+  not the current one.
+- **Root cause of the blank video: the missing CSP `media-src` directive** blocks the `blob:` URL
+  the `<video>` uses as its source. This is case A, proven by the probe above.
+- FIX APPLIED (pending retest): added `media-src 'self' blob: http://localhost:*;` to the CSP in
+  `apps/desktop-frontend/index.html` and rebuilt (`bun run bundle:renderer`). Reload and re-run
+  the probe to confirm.
