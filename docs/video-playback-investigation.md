@@ -7,6 +7,10 @@ This document is a troubleshooting checklist. Nothing here is a confirmed fix. O
 found (missing CSP `media-src`) but fixing it alone did **not** make the video visible, so there
 is at least one more cause behind it.
 
+Current leading hypothesis: **case B (GPU/video compositing in Electron)**. Page origin and asset
+Content-Type have both been tested and ruled out (see "What is known so far"). The video decodes
+but does not paint. Next step is the hardware-acceleration test, not origin/CSP/server changes.
+
 ## The core question to resolve first
 
 "Blank video box" has two very different causes. Everything depends on which one it is:
@@ -20,12 +24,13 @@ Until you know which, any "fix" is a guess.
 
 ## Do this first: the cleanest isolating test
 
-- [ ] Run `bun run dev:web` and open the app in a normal Chrome/Chromium tab (not Electron).
+- [x] Run `bun run dev:web` and open the app in a normal Chrome/Chromium tab (not Electron).
       Open the same imported video.
   - Plays in the browser → the problem is Electron-specific (file:// origin and/or GPU video
     compositing), not the app code. Focus on Electron.
   - Also blank in the browser → it is app code / CSP / source, reproducible in a normal
     debuggable browser with full DevTools. Much easier to chase there.
+  - RESULT: Videos work ok in the browser.
 
 ## In the real app, get ground truth (DevTools)
 
@@ -63,23 +68,32 @@ Until you know which, any "fix" is a guess.
   the `GET /asset` handler. It did `readStream.pipe(res)` — no Content-Type, no Range.
 - Current: `packages/rest-api/src/lib/asset-server.ts` also pipes the whole stream but hardcodes
   `Content-Type: application/octet-stream`.
-- The real difference was not the server code, it was the page origin: the old frontend was
-  served over `http://` (web app + remote backend); the desktop now loads the frontend over
-  `file://`. The asset bytes themselves are fine (the served file is byte-identical and a valid
-  mp4).
+- Earlier theory (now DISPROVED): "the real difference is the page origin (`http://` web vs
+  `file://` desktop)." The `app://` experiment above shows origin is not the cause.
+- Also ruled out: Content-Type is **not** the differentiator. `bun run dev:web` (which works)
+  serves assets through the *same* `createAssetServer` returning the *same*
+  `Content-Type: application/octet-stream` (`apps/dev-server/src/index.ts` →
+  `packages/rest-api/src/lib/asset-server.ts`). So the working web build plays an octet-stream
+  blob fine; the desktop does not. The asset bytes themselves are fine (byte-identical, valid mp4).
 - Worth doing regardless (but probably not the blank-video fix): make `asset-server` send the
   correct `Content-Type` (e.g. `video/mp4`) and support HTTP Range requests, so the player can
   stream/seek instead of the frontend downloading the whole file into a Blob. Diff `server.ts`
   vs `asset-server.ts` to see what got dropped.
 
-### The `app://` custom protocol idea
+### The `app://` custom protocol idea — TESTED, DISPROVES THE ORIGIN THEORY
 
-- Tried it; it did not work — `<video>` was still rejected from an `app://` origin. A custom
-  scheme is a dead end on its own.
-- Relevant finding: in a minimal Electron test, video played from an `http://` origin but not
-  from `file://` or `app://`. So if origin turns out to matter, the move is to serve the
-  frontend over a real `http://localhost` server, not a custom scheme. Lower priority: only
-  pursue if the dev:web test shows it is origin/Electron-specific.
+- Properly retested (2026-06-12): registered `app://` as a **privileged standard + secure**
+  scheme (`protocol.registerSchemesAsPrivileged` with `standard: true, secure: true,
+  supportFetchAPI: true, stream: true, corsEnabled: true`), served the frontend bundle over it,
+  loaded the page as `app://photosphere/index.html`, and added `media-src 'self' blob:
+  http://localhost:*` to the CSP.
+- RESULT: **still blank.** `app://photosphere` is a secure, standard origin — exactly the
+  secure context that "blob media needs a secure origin" would require — yet the video did not
+  appear. This was a clean test of the origin theory and it **failed**.
+- Conclusion: the page origin (`file://` vs `app://` vs `http://`) is **not** the cause. The
+  earlier "video played from `http://` but not `file://`/`app://`" minimal-test note is not a
+  reliable basis to chase origin; do not pursue serving the frontend over `http://localhost` as
+  a fix. The changes for this experiment were reverted.
 
 ## Other experiments (in priority order)
 
@@ -117,3 +131,10 @@ GUI (or the dev:web browser).
 - Despite that, the player is blank on a real screen, which points at a load-vs-paint distinction
   not yet resolved (see "core question" above).
 - Missing CSP `media-src` is a real, confirmed bug, but not a sufficient fix on its own.
+- **Page origin is ruled out** (`app://` secure-origin test still blank — see that section).
+- **Content-Type is ruled out** (`dev:web` works with the same `octet-stream` asset server).
+- With origin and content-type eliminated, and given the video decodes (`readyState 4`,
+  `currentTime` advances) but does not paint, the evidence now points to **case B: GPU/video
+  compositing in Electron** (a plain Chrome tab composites it fine; Electron does not). The next
+  step is the hardware-acceleration test under "Other experiments" (disable HW accel / GPU flags),
+  not anything to do with origin, CSP, or the asset server.
