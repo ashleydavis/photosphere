@@ -57,6 +57,10 @@ export function shouldConfirmOnKey(event: IDialogKeyEvent, confirmDisabled: bool
 // app-wide convention that Enter confirms a dialog. Escape-to-cancel is already
 // provided by MUI's Modal, which calls its onClose handler on Escape.
 //
+// Do not use this for destructive confirmations (delete/remove dialogs).
+// Those must only be confirmed by clicking the button, never by pressing Enter,
+// so an accidental keypress cannot destroy data.
+//
 // The confirm callback may be async; any rejection is caught and logged here so
 // callers can pass plain async functions without their own catch handlers.
 //

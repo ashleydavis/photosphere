@@ -398,7 +398,7 @@ export function SecretsPage() {
 
             {/* First delete confirmation */}
             <Modal open={confirmDeleteOpen} onClose={() => setConfirmDeleteOpen(false)}>
-                <ModalDialog onKeyDown={createDialogKeyHandler(handleFirstConfirm, false)}>
+                <ModalDialog>
                     <DialogTitle>Delete Secret</DialogTitle>
                     <DialogContent>
                         <Typography>
@@ -419,7 +419,7 @@ export function SecretsPage() {
 
             {/* Second delete confirmation (secret is referenced by databases) */}
             <Modal open={confirmDeleteSecondOpen} onClose={() => setConfirmDeleteSecondOpen(false)}>
-                <ModalDialog onKeyDown={createDialogKeyHandler(executeDelete, false)}>
+                <ModalDialog>
                     <DialogTitle>Secret In Use</DialogTitle>
                     <DialogContent>
                         <Typography>

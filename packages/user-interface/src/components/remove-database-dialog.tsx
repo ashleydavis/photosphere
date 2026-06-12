@@ -9,7 +9,6 @@ import DialogActions from '@mui/joy/DialogActions';
 import Typography from '@mui/joy/Typography';
 import { type IDatabaseEntry } from '../context/platform-context';
 import { useApp } from '../context/app-context';
-import { createDialogKeyHandler } from '../lib/dialog-keys';
 
 //
 // Props for RemoveDatabaseDialog.
@@ -44,7 +43,7 @@ export function RemoveDatabaseDialog({ open, entry, onClose }: IRemoveDatabaseDi
 
     return (
         <Modal open={open} onClose={onClose}>
-            <ModalDialog onKeyDown={createDialogKeyHandler(handleConfirm, false)}>
+            <ModalDialog>
                 <DialogTitle>Remove Database Entry</DialogTitle>
                 <DialogContent>
                     <Typography>

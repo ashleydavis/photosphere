@@ -3,7 +3,6 @@ import Button from '@mui/joy/Button';
 import Modal from '@mui/joy/Modal';
 import Typography from '@mui/joy/Typography';
 import ModalDialog from '@mui/joy/ModalDialog';
-import { createDialogKeyHandler } from '../lib/dialog-keys';
 
 export interface IProps {
     //
@@ -49,7 +48,7 @@ export function DeleteConfirmationDialog({ open, numItems, onCancel, onDelete }:
             open={open}
             onClose={onCancel}
             >
-            <ModalDialog onKeyDown={createDialogKeyHandler(handleDelete, working)}>
+            <ModalDialog>
                 <Typography component="h2">
                     Delete Confirmation
                 </Typography>
@@ -64,6 +63,7 @@ export function DeleteConfirmationDialog({ open, numItems, onCancel, onDelete }:
                     <Button
                         variant="solid"
                         color="danger"
+                        disabled={working}
                         onClick={handleDelete}
                         >
                         Delete
