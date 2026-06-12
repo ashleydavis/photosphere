@@ -21,6 +21,14 @@ Run a basic manual test of the CLI and desktop app on each platform.
 - [ ] Windows (.exe installer)
 - [ ] Windows (.zip portable)
 
+### UI stories
+
+Open the desktop app at `/#/stories?cycle=1` and check every story cycles through without failures.
+
+- [ ] Linux
+- [ ] macOS
+- [ ] Windows
+
 ## CLI
 
 ### Import
