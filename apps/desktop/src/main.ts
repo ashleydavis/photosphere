@@ -32,6 +32,11 @@ import type { IDatabaseSharePayload, ISecretSharePayload, IConflictResolution } 
 import { TestControlServer } from './lib/test-control-server';
 import type { ITestControlServer } from './lib/test-control-server';
 
+// Video decodes (canplay) but paints black on Linux Electron: a GPU video-compositing problem.
+// Disabling hardware acceleration forces video to composite on the CPU, which paints correctly.
+// Must run before app is ready.
+app.disableHardwareAcceleration();
+
 // Main application window
 let mainWindow: BrowserWindow | null = null;
 
