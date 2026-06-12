@@ -375,7 +375,7 @@ body.mobile .photo-container .full.loaded {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    width: max-content;
+    width: fit-content;
     max-width: 55vw;
     padding: 8px 6px 4px 8px;
     margin-top: 6px;

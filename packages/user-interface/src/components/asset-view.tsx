@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import dayjs from "dayjs";
 import { AssetInfo } from "../pages/gallery/components/asset-info";
 import { useGalleryItem } from "../context/gallery-item-context";
@@ -8,12 +8,11 @@ import { useGallerySource } from "../context/gallery-source";
 import { usePlatform } from "../context/platform-context";
 import { useAssetDatabase } from "../context/asset-database-source";
 import { useConfig } from "../context/config-context";
-import { Chip, Drawer, IconButton, Input } from "@mui/joy";
+import { Chip, Drawer, IconButton } from "@mui/joy";
 import { ContentCopy, Delete, Download, Flag, Star } from "@mui/icons-material";
 import { DeleteConfirmationDialog } from "./delete-confirmation-dialog";
-import { SetPhotoDateDialog } from "./set-photo-date-dialog";
-import { SetLocationDialog } from "./set-location-dialog";
 import { dedupeLabels } from "../lib/labels";
+import { formatCoordinates } from "../lib/coordinates";
 import { log } from "utils";
 
 export interface IAssetViewProps { 
@@ -54,7 +53,7 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
     const { loadAsset } = useGallerySource();
     const { copyToClipboard } = usePlatform();
     const { downloadAsset } = useAssetDatabase();
-    const { asset, updateAsset, addArrayValue, removeArrayValue, deleteAsset } = useGalleryItem();
+    const { asset, addArrayValue, removeArrayValue, deleteAsset } = useGalleryItem();
     const config = useConfig();
 
     //
@@ -63,29 +62,24 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
     const [openInfo, setOpenInfo] = useState<boolean>(false);
 
     //
-    // Set to true to open the set date dialog.
-    //
-    const [editingDate, setEditingDate] = useState<boolean>(false);
-
-    //
-    // Set to true to open the set location dialog.
-    //
-    const [editingLocation, setEditingLocation] = useState<boolean>(false);
-
-    //
     // Set to true to show the delete confirmation dialog.
     //
     const [confirmingDelete, setConfirmingDelete] = useState<boolean>(false);
 
     //
-    // Controls visibility of the inline add-label input.
+    // Reference to the quick-info labels container, used to detect when labels overflow two rows.
     //
-    const [addingLabel, setAddingLabel] = useState<boolean>(false);
+    const labelsContainerRef = useRef<HTMLDivElement>(null);
 
     //
-    // The text currently typed into the add-label input.
+    // True when the quick-info labels wrap onto more than two rows and are clamped with an ellipsis.
     //
-    const [newLabelName, setNewLabelName] = useState<string>("");
+    const [labelsOverflow, setLabelsOverflow] = useState<boolean>(false);
+
+    //
+    // Maximum height (in pixels) for the quick-info labels container, sized to fit exactly two rows.
+    //
+    const [labelsMaxHeight, setLabelsMaxHeight] = useState<number | undefined>(undefined);
 
     //
     // Whether the summary card is collapsed to just its header. Persisted across restarts.
@@ -114,6 +108,32 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
     }, []);
 
     //
+    // Measures the quick-info labels after layout to clamp them to two rows and detect overflow.
+    //
+    useLayoutEffect(() => {
+        const container = labelsContainerRef.current;
+        if (!container) {
+            return;
+        }
+        const labelChips = Array.from(container.children).filter(child => child.hasAttribute("data-label-chip")) as HTMLElement[];
+        if (labelChips.length === 0) {
+            setLabelsOverflow(false);
+            setLabelsMaxHeight(undefined);
+            return;
+        }
+        const rowGap = 4;
+        const rowTops: number[] = [];
+        for (const chip of labelChips) {
+            if (!rowTops.some(top => Math.abs(top - chip.offsetTop) < 1)) {
+                rowTops.push(chip.offsetTop);
+            }
+        }
+        const chipHeight = labelChips[0].offsetHeight;
+        setLabelsMaxHeight(chipHeight * 2 + rowGap);
+        setLabelsOverflow(rowTops.length > 2);
+    }, [asset?.labels, summaryCollapsed]);
+
+    //
     // Toggles the summary card between collapsed and expanded, persisting the choice.
     //
     async function toggleSummaryCollapsed(): Promise<void> {
@@ -137,25 +157,6 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
         await deleteAsset();
         setConfirmingDelete(false);
         onClose();
-    }
-
-    //
-    // Confirms the new label and adds it to the asset.
-    //
-    async function onConfirmLabel(): Promise<void> {
-        const trimmed = newLabelName.trim();
-        if (trimmed) {
-            await addArrayValue("labels", trimmed);
-        }
-        setNewLabelName("");
-        setAddingLabel(false);
-    }
-
-    //
-    // Removes a label from the asset.
-    //
-    async function onRemoveLabel(labelName: string): Promise<void> {
-        await removeArrayValue("labels", labelName);
     }
 
     //
@@ -370,30 +371,6 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                 onDelete={handleDelete}
                 />
 
-            <SetPhotoDateDialog
-                open={editingDate}
-                onClose={() => setEditingDate(false)}
-                currentDate={asset.photoDate}
-                onSetDate={async (date) => {
-                    await updateAsset({ photoDate: date });
-                    setEditingDate(false);
-                }}
-                />
-
-            <SetLocationDialog
-                open={editingLocation}
-                initialCoordinates={asset.coordinates}
-                onSetLocation={async (coordinates, location) => {
-                    await updateAsset({ coordinates, location });
-                    setEditingLocation(false);
-                }}
-                onClearLocation={async () => {
-                    await updateAsset({ coordinates: undefined, location: undefined });
-                    setEditingLocation(false);
-                }}
-                onClose={() => setEditingLocation(false)}
-                />
-
             <div
                 className="pointer-events-auto"
                 data-joy-color-scheme="dark"
@@ -402,12 +379,17 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                     bottom: "16px",
                     left: "16px",
                     zIndex: 2100,
-                    maxWidth: "60%",
+                    maxWidth: "min(425px, 75%)",
                 }}
                 >
                 <div className="asset-summary-panel">
                     <div className="summary-header">
-                        <span className="summary-title" style={{ flex: 1 }}>
+                        <span
+                            className="summary-title"
+                            style={{ flex: 1, cursor: "pointer" }}
+                            title={summaryCollapsed ? "Expand details" : "Collapse details"}
+                            onClick={toggleSummaryCollapsed}
+                            >
                             Quick Info
                         </span>
                         <IconButton
@@ -438,119 +420,77 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                                     style={{
                                         display: "flex",
                                         flexDirection: "row",
+                                        flexWrap: "wrap",
                                         alignItems: "center",
-                                        gap: "6px",
+                                        gap: "4px 8px",
+                                        fontSize: "0.85rem",
+                                        opacity: 0.85,
                                     }}
                                     >
-                                    <span style={{ fontSize: "0.85rem", opacity: 0.85 }}>
+                                    <i className="fa-solid fa-calendar-day" style={{ opacity: 0.7 }} title="Date" />
+                                    <span>
                                         {asset.photoDate ? dayjs(asset.photoDate).format("MMM D, YYYY") : "No date"}
                                     </span>
-                                    <IconButton
-                                        size="sm"
-                                        variant="outlined"
-                                        color="neutral"
-                                        title="Edit date"
-                                        onClick={() => setEditingDate(true)}
-                                        >
-                                        <i className="fa-solid fa-pen text-xs" />
-                                    </IconButton>
-                                </div>
-
-                                <div
-                                    style={{
-                                        display: "flex",
-                                        flexDirection: "row",
-                                        alignItems: "center",
-                                        gap: "6px",
-                                    }}
-                                    >
-                                    <span style={{ fontSize: "0.85rem", opacity: 0.85 }}>
+                                    <i className="fa-solid fa-location-dot" style={{ opacity: 0.7, marginLeft: "16px" }} title="Location" />
+                                    <span>
                                         {asset.location
                                             ? asset.location
                                             : asset.coordinates
-                                                ? `${asset.coordinates.lat.toFixed(4)}, ${asset.coordinates.lng.toFixed(4)}`
+                                                ? formatCoordinates(asset.coordinates)
                                                 : "No location"
                                         }
                                     </span>
-                                    <IconButton
-                                        size="sm"
-                                        variant="outlined"
-                                        color="neutral"
-                                        title="Edit location"
-                                        onClick={() => setEditingLocation(true)}
-                                        >
-                                        <i className="fa-solid fa-pen text-xs" />
-                                    </IconButton>
                                 </div>
 
-                                <div
-                                    style={{
-                                        display: "flex",
-                                        flexDirection: "row",
-                                        flexWrap: "wrap",
-                                        alignItems: "center",
-                                        gap: "4px",
-                                    }}
-                                    >
-                                    {customLabels.length === 0 && !addingLabel && (
-                                        <span style={{ fontSize: "0.85rem", opacity: 0.85 }}>No labels</span>
-                                    )}
-                                    {customLabels.map(label => (
+                                <div style={{ position: "relative" }}>
+                                    <div
+                                        ref={labelsContainerRef}
+                                        style={{
+                                            display: "flex",
+                                            flexDirection: "row",
+                                            flexWrap: "wrap",
+                                            alignItems: "center",
+                                            gap: "4px",
+                                            maxHeight: labelsMaxHeight !== undefined ? `${labelsMaxHeight}px` : undefined,
+                                            overflow: "hidden",
+                                        }}
+                                        >
+                                        <i className="fa-solid fa-tags" style={{ opacity: 0.7, marginRight: "2px" }} title="Labels" />
+                                        {customLabels.length === 0 && (
+                                            <span style={{ fontSize: "0.85rem", opacity: 0.85 }}>No labels</span>
+                                        )}
+                                        {customLabels.map(label => (
+                                            <Chip
+                                                key={label}
+                                                data-label-chip
+                                                variant="outlined"
+                                                color="neutral"
+                                                onClick={() => {
+                                                    search(`.labels="${label}"`);
+                                                    onClose();
+                                                }}
+                                                sx={{ cursor: "pointer" }}
+                                                >
+                                                {label}
+                                            </Chip>
+                                        ))}
+                                    </div>
+                                    {labelsOverflow && (
                                         <Chip
-                                            key={label}
-                                            variant="outlined"
+                                            variant="soft"
                                             color="neutral"
-                                            onClick={() => {
-                                                search(`.labels="${label}"`);
-                                                onClose();
+                                            title="Show all labels"
+                                            onClick={() => setOpenInfo(true)}
+                                            sx={{
+                                                cursor: "pointer",
+                                                position: "absolute",
+                                                right: 0,
+                                                bottom: 0,
                                             }}
-                                            sx={{ cursor: "pointer" }}
-                                            endDecorator={
-                                                <IconButton
-                                                    size="sm"
-                                                    variant="plain"
-                                                    color="neutral"
-                                                    title="Remove label"
-                                                    onClick={event => {
-                                                        event.stopPropagation();
-                                                        onRemoveLabel(label);
-                                                    }}
-                                                    sx={{ minHeight: "20px", minWidth: "20px", ml: 0.5 }}
-                                                    >
-                                                    <i className="fa-solid fa-close text-xs" />
-                                                </IconButton>
-                                            }
                                             >
-                                            {label}
+                                            …
                                         </Chip>
-                                    ))}
-                                    {addingLabel
-                                        ? <Input
-                                            autoFocus
-                                            size="sm"
-                                            placeholder="Label name"
-                                            value={newLabelName}
-                                            onChange={event => setNewLabelName(event.target.value)}
-                                            onKeyDown={async event => {
-                                                if (event.key === "Enter") {
-                                                    await onConfirmLabel();
-                                                }
-                                                else if (event.key === "Escape") {
-                                                    setNewLabelName("");
-                                                    setAddingLabel(false);
-                                                }
-                                            }}
-                                            onBlur={onConfirmLabel}
-                                            />
-                                        : <IconButton
-                                            variant="outlined"
-                                            color="neutral"
-                                            title="Add label"
-                                            onClick={() => setAddingLabel(true)}
-                                            >
-                                            <i className="fa-solid fa-tag" />
-                                        </IconButton>
-                                    }
+                                    )}
                                 </div>
                             </div>
                         </div>
