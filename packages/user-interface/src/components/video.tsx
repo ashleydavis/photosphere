@@ -34,6 +34,7 @@ export function Video({ asset }: IVideoProps) {
                 height: "80%",
                 margin: "auto",
                 objectFit: "contain",
+                pointerEvents: "auto",
             }}
             />
     );
