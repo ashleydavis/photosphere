@@ -15,8 +15,67 @@ on:
       - main
 
   workflow_dispatch:
+    inputs:
+      release:
+        description: "Release action. none = nightly build. update-latest = move the latest v*.*.* tag to this commit and re-release it. new-patch = create the next patch tag (e.g. v0.0.8 -> v0.0.9) and release it."
+        type: choice
+        options:
+          - none
+          - update-latest
+          - new-patch
+        default: none
 
 jobs:
+  prepare-tag:
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+      is-release: ${{ steps.resolve.outputs.is-release }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release tag
+        id: resolve
+        run: |
+          RELEASE_INPUT="${{ inputs.release }}"
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            TAG="${{ github.ref_name }}"
+            IS_RELEASE="true"
+          elif [ "$RELEASE_INPUT" = "update-latest" ]; then
+            TAG=$(git tag --list 'v*.*.*' --sort=-version:refname | head -1)
+            if [ -z "$TAG" ]; then
+              echo "No existing v*.*.* tag to update"
+              exit 1
+            fi
+            git tag -f "$TAG"
+            git push --force origin "$TAG"
+            IS_RELEASE="true"
+          elif [ "$RELEASE_INPUT" = "new-patch" ]; then
+            LATEST=$(git tag --list 'v*.*.*' --sort=-version:refname | head -1)
+            if [ -z "$LATEST" ]; then
+              LATEST="v0.0.0"
+            fi
+            MAJOR=$(echo "${LATEST#v}" | cut -d. -f1)
+            MINOR=$(echo "${LATEST#v}" | cut -d. -f2)
+            PATCH=$(echo "${LATEST#v}" | cut -d. -f3)
+            TAG="v${MAJOR}.${MINOR}.$((PATCH + 1))"
+            git tag "$TAG"
+            git push origin "$TAG"
+            IS_RELEASE="true"
+          else
+            TAG=""
+            IS_RELEASE="false"
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "is-release=$IS_RELEASE" >> $GITHUB_OUTPUT
+          echo "Resolved tag: '$TAG' (is-release: $IS_RELEASE)"
+
   unit-tests:
     timeout-minutes: 20
     runs-on: ubuntu-latest
@@ -294,6 +353,7 @@ jobs:
 
   build-linux:
     timeout-minutes: 20
+    needs: prepare-tag
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
@@ -301,8 +361,8 @@ jobs:
 
       - name: Set config
         run: |
-          if [ "${{ github.ref_type }}" = "tag" ]; then
-            VERSION="${{ github.ref_name }}"
+          if [ "${{ needs.prepare-tag.outputs.is-release }}" = "true" ]; then
+            VERSION="${{ needs.prepare-tag.outputs.tag }}"
             VERSION="${VERSION#v}"
             IS_NIGHTLY="false"
           else
@@ -413,6 +473,7 @@ jobs:
 
   build-windows:
     timeout-minutes: 20
+    needs: prepare-tag
     runs-on: windows-latest
     steps:
       - name: Checkout code
@@ -421,8 +482,8 @@ jobs:
       - name: Set config
         shell: bash
         run: |
-          if [ "${{ github.ref_type }}" = "tag" ]; then
-            VERSION="${{ github.ref_name }}"
+          if [ "${{ needs.prepare-tag.outputs.is-release }}" = "true" ]; then
+            VERSION="${{ needs.prepare-tag.outputs.tag }}"
             VERSION="${VERSION#v}"
             IS_NIGHTLY="false"
           else
@@ -524,6 +585,7 @@ jobs:
 
   build-windows-baseline:
     timeout-minutes: 20
+    needs: prepare-tag
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
@@ -532,8 +594,8 @@ jobs:
       - name: Set config
         shell: bash
         run: |
-          if [ "${{ github.ref_type }}" = "tag" ]; then
-            VERSION="${{ github.ref_name }}"
+          if [ "${{ needs.prepare-tag.outputs.is-release }}" = "true" ]; then
+            VERSION="${{ needs.prepare-tag.outputs.tag }}"
             VERSION="${VERSION#v}"
             IS_NIGHTLY="false"
           else
@@ -586,6 +648,7 @@ jobs:
 
   build-macos-x64:
     timeout-minutes: 20
+    needs: prepare-tag
     runs-on: macos-15-intel # x64 architecture
     steps:
       - name: Checkout code
@@ -593,8 +656,8 @@ jobs:
 
       - name: Set config
         run: |
-          if [ "${{ github.ref_type }}" = "tag" ]; then
-            VERSION="${{ github.ref_name }}"
+          if [ "${{ needs.prepare-tag.outputs.is-release }}" = "true" ]; then
+            VERSION="${{ needs.prepare-tag.outputs.tag }}"
             VERSION="${VERSION#v}"
             IS_NIGHTLY="false"
           else
@@ -704,6 +767,7 @@ jobs:
 
   build-macos-arm64:
     timeout-minutes: 20
+    needs: prepare-tag
     runs-on: macos-latest # ARM64 architecture
     steps:
       - name: Checkout code
@@ -711,8 +775,8 @@ jobs:
 
       - name: Set config
         run: |
-          if [ "${{ github.ref_type }}" = "tag" ]; then
-            VERSION="${{ github.ref_name }}"
+          if [ "${{ needs.prepare-tag.outputs.is-release }}" = "true" ]; then
+            VERSION="${{ needs.prepare-tag.outputs.tag }}"
             VERSION="${VERSION#v}"
             IS_NIGHTLY="false"
           else
@@ -892,6 +956,7 @@ jobs:
 
   build-desktop:
     timeout-minutes: 60
+    needs: prepare-tag
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -921,8 +986,8 @@ jobs:
       - name: Set config
         shell: bash
         run: |
-          if [ "${{ github.ref_type }}" = "tag" ]; then
-            VERSION="${{ github.ref_name }}"
+          if [ "${{ needs.prepare-tag.outputs.is-release }}" = "true" ]; then
+            VERSION="${{ needs.prepare-tag.outputs.tag }}"
             VERSION="${VERSION#v}"
             IS_NIGHTLY="false"
             DESKTOP_PACKAGE_VERSION="$VERSION"
@@ -1018,7 +1083,7 @@ jobs:
 
   create-release:
     timeout-minutes: 20
-    needs: [compile, unit-tests, perf-tests, build-linux, build-windows, build-windows-baseline, build-macos-x64, build-macos-arm64, build-desktop, smoke-test, smoke-test-encrypted, write-lock-tests, sync-tests, lan-share-smoke-test, electron-smoke-tests, cli-desktop-lan-share-smoke-tests]
+    needs: [prepare-tag, compile, unit-tests, perf-tests, build-linux, build-windows, build-windows-baseline, build-macos-x64, build-macos-arm64, build-desktop, smoke-test, smoke-test-encrypted, write-lock-tests, sync-tests, lan-share-smoke-test, electron-smoke-tests, cli-desktop-lan-share-smoke-tests]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -1077,9 +1142,9 @@ jobs:
         id: release-notes
         run: |
           # Get the latest non-nightly tag (excluding current tag if this is a tagged build)
-          if [ "${{ github.ref_type }}" == "tag" ]; then
+          if [ "${{ needs.prepare-tag.outputs.is-release }}" == "true" ]; then
             # For tagged releases, get commits since the previous tag (excluding current and nightly tags)
-            PREVIOUS_TAG=$(git tag --list --sort=-version:refname | grep -v "^${{ github.ref_name }}$" | grep -v "^nightly$" | head -1)
+            PREVIOUS_TAG=$(git tag --list --sort=-version:refname | grep -v "^${{ needs.prepare-tag.outputs.tag }}$" | grep -v "^nightly$" | head -1)
             if [ -n "$PREVIOUS_TAG" ]; then
               echo "Generating release notes for tagged release since previous tag: $PREVIOUS_TAG"
               COMMIT_RANGE="${PREVIOUS_TAG}..HEAD"
@@ -1133,7 +1198,7 @@ jobs:
           echo "$RELEASE_NOTES"
 
       - name: Delete existing nightly release
-        if: github.ref_type != 'tag'
+        if: needs.prepare-tag.outputs.is-release != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -1143,10 +1208,10 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'nightly' }}
-          name: ${{ github.ref_type == 'tag' && format('Photosphere {0}', github.ref_name) || 'Photosphere Nightly' }}
+          tag_name: ${{ needs.prepare-tag.outputs.is-release == 'true' && needs.prepare-tag.outputs.tag || 'nightly' }}
+          name: ${{ needs.prepare-tag.outputs.is-release == 'true' && format('Photosphere {0}', needs.prepare-tag.outputs.tag) || 'Photosphere Nightly' }}
           draft: false
-          prerelease: ${{ github.ref_type != 'tag' }}
+          prerelease: ${{ needs.prepare-tag.outputs.is-release != 'true' }}
           files: |
             ./artifacts/photosphere-cli-linux-x64.tar.gz
             ./artifacts/photosphere-cli-windows-x64.zip
@@ -1155,10 +1220,10 @@ jobs:
             ./artifacts/photosphere-cli-macos-arm64.tar.gz
             ./artifacts/desktop/**/*
           body: |
-            ${{ github.ref_type == 'tag' && format('Photosphere release {0}', github.ref_name) || format('Photosphere nightly build - {0}', github.sha) }}
+            ${{ needs.prepare-tag.outputs.is-release == 'true' && format('Photosphere release {0}', needs.prepare-tag.outputs.tag) || format('Photosphere nightly build - {0}', github.sha) }}
 
-            ${{ github.ref_type != 'tag' && '⚠️ **This is a nightly build and may be unstable**' || '' }}
-            ${{ github.ref_type != 'tag' && format('Built from commit: {0}', github.sha) || '' }}
+            ${{ needs.prepare-tag.outputs.is-release != 'true' && '⚠️ **This is a nightly build and may be unstable**' || '' }}
+            ${{ needs.prepare-tag.outputs.is-release != 'true' && format('Built from commit: {0}', github.sha) || '' }}
 
             ## What's Changed
             ${{ steps.release-notes.outputs.RELEASE_NOTES }}
