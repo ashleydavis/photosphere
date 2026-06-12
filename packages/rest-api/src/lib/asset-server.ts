@@ -148,8 +148,13 @@ export async function createAssetServer(options: IAssetServerOptions): Promise<I
 
         try {
             const assetStream = await loadAssetStream(assetId, assetType, databasePath);
-            
-            res.setHeader("Content-Type", "application/octet-stream");
+
+            // Use the caller-provided content type when present (the desktop video player needs a
+            // real media type to play a direct <video src>). Falls back to octet-stream otherwise.
+            const contentTypeHint = req.query.contentType as string | undefined;
+            const contentType = contentTypeHint ? contentTypeHint : "application/octet-stream";
+
+            res.setHeader("Content-Type", contentType);
             await pipeline(assetStream, res);
         }
         catch (error: any) {

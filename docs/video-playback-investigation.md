@@ -94,7 +94,19 @@ Until you know which, any "fix" is a guess.
   stream/seek instead of the frontend downloading the whole file into a Blob. Diff `server.ts`
   vs `asset-server.ts` to see what got dropped.
 
-### The `app://` custom protocol idea — TESTED, DISPROVES THE ORIGIN THEORY
+### The `app://` custom protocol idea — TESTED, but the refutation is NOT clean
+
+> UPDATE (2026-06-12, after reviewing external sources): treat the "origin is
+> ruled out" conclusion below as **not reliable**. The `dev:web` build plays the
+> video from a **blob** (`blob:http://localhost/…`), and the only material
+> difference from the failing desktop build is the page scheme (`http://localhost`
+> vs `file://`). That is positive evidence the `file://` origin is implicated. The
+> `app://` test below does NOT cleanly refute it: it still fed the `<video>` a
+> blob, and (per the section itself) captured no clean probe of `readyState` /
+> `err` / `currentSrc` in that state, so we do not actually know whether the
+> `app://` blob loaded-and-did-not-paint or was rejected. The clean one-variable
+> test is Experiment 3 in "What to try next": load the page over `http://localhost`
+> and keep the blob, reproducing the known-good `blob:http://localhost` condition.
 
 - Properly retested (2026-06-12): registered `app://` as a **privileged standard + secure**
   scheme (`protocol.registerSchemesAsPrivileged` with `standard: true, secure: true,
@@ -162,15 +174,113 @@ GUI (or the dev:web browser).
   `dev:web` build differs only in that its media URL is `blob:http://localhost/…`. The `app://`
   test muddied this (no clean probe was captured), so it is not a reliable refutation.
 
+## Findings from external sources (Electron local video, 2026-06-12)
+
+Read five references on playing local video in Electron. Three were reachable
+(dev.to, the BillelMessaadi GitHub player, the Electron `protocol` docs) plus the
+key bug report; StackOverflow 77973516 and the Reddit thread are blocked to the
+fetch tool, but every reachable source agrees on the same approach. None of them
+use a `blob:` URL for the `<video>`. That is the headline: a `blob:` minted from a
+`file://` page is the documented failure mode, and the consistent fix is to give
+`<video>` a *streamable* URL it can issue Range requests against.
+
+Important nuance (from the `dev:web` result): a blob is NOT inherently the
+problem. The working web build feeds the player `blob:http://localhost/…` and it
+plays. Chromium's media URL-safety check rejects a `blob:` URL specifically when
+its origin is `file://`, not blobs in general. So the real variable is the scheme
+the media URL resolves to (`http://localhost` / a privileged custom scheme = OK;
+`file://` = rejected). Two independent ways to break the bad combination: stop
+using a blob (Experiments 1 and 2 below), OR stop loading the page from `file://`
+(Experiment 3 below). The `dev:web` evidence points AT the origin, so the "page
+origin is ruled out" section below is overstated — see the note there.
+
+The two patterns they use:
+
+- **HTTP origin (what `dev:web` already does):** `<video src>` points at a normal
+  `http://localhost:<port>/…` asset URL. The server must send `Content-Type:
+  video/<x>`, `Accept-Ranges: bytes`, and honour `Range` requests so the player
+  can stream and seek. This matches the only configuration we have seen play.
+- **Privileged custom streaming scheme (the recommended desktop pattern):**
+  register a scheme as privileged *before* `app.whenReady()` and serve it with
+  `protocol.handle` + `net.fetch`:
+
+  ```js
+  // before app is ready
+  protocol.registerSchemesAsPrivileged([{
+      scheme: "media",
+      privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, bypassCSP: true },
+  }]);
+
+  // after app is ready
+  protocol.handle("media", (request) => {
+      const localPath = resolveAssetPath(request.url);   // map media://asset/<id> -> file on disk
+      return net.fetch(pathToFileURL(localPath).toString()); // preserves Content-Length + Range
+  });
+  ```
+
+  Then `<video src="media://asset/<id>">` (no blob). `net.fetch` from a `file://`
+  URL keeps `Content-Length` and Range support, so seeking works automatically.
+
+Two gotchas they call out that we have not satisfied:
+
+- **`stream: true` is mandatory for `<video>`/`<audio>` over a custom protocol.**
+  Without it the media element buffers the whole response instead of streaming,
+  and seeking breaks (`video.seekable.end()` returns 0). Electron bug
+  [#38749](https://github.com/electron/electron/issues/38749) is exactly this:
+  video served via `protocol.handle` is not seekable unless the scheme is
+  registered with `stream: true`. `registerFileProtocol` is deprecated; use
+  `protocol.handle`.
+- **Do not pipe the whole file with a generic Content-Type.** Our
+  `asset-server.ts` pipes the entire stream as `application/octet-stream` with no
+  Range support. Even over `http://` that breaks streaming/seeking. `net.fetch`
+  on a file URL handles Range for free; a hand-rolled HTTP server must implement
+  `Range`/`206 Partial Content` itself.
+
+Why this is *not* a repeat of the failed `app://` experiment above: that test
+registered `app://` for the **frontend bundle** but still handed the `<video>` a
+**blob** URL. The blob is the thing Chromium rejects ("Media load rejected by URL
+safety check"). The fix here is to stop using a blob for video entirely and point
+`src` at a streamable URL (http or a `stream: true` custom scheme), not to change
+the page origin.
+
+Sources:
+- [Building a Secure Local Video Player in Electron (dev.to)](https://dev.to/bme/building-a-secure-local-video-player-in-electron-3ki9)
+- [BillelMessaadi/electronjs-local-video-player (GitHub)](https://github.com/BillelMessaadi/electronjs-local-video-player)
+- [Electron bug #38749: video files not seekable with protocol.handle](https://github.com/electron/electron/issues/38749)
+- [Electron `protocol` API docs](https://www.electronjs.org/docs/latest/api/protocol)
+- StackOverflow 77973516 and the r/electronjs thread (blocked to the fetch tool, but consistent with the above per the live web search).
+
 ## What to try next
 
-- [ ] Bypass the blob for video: set `<video src>` directly to the HTTP asset URL
-      (`${restApiUrl}/asset?id=…&type=asset&db=…`) instead of `URL.createObjectURL(blob)`. The
-      helper already exists: `assetUrl(assetId, assetType)` in
-      `packages/user-interface/src/context/asset-database-source.tsx`. This gives the `<video>` an
-      `http://localhost` media origin (exactly what works in `dev:web`) and avoids the
-      `blob:file://` URL the safety check rejects. Edit `packages/user-interface/src/components/video.tsx`.
-      Keep `media-src 'self' blob: http://localhost:*` so the http URL is allowed. UNTESTED — this
-      is the next experiment, not a known fix.
-- [ ] If that still fails, capture a clean probe in that state (`readyState`, `err`, `currentSrc`)
-      before drawing any conclusion. Do not declare a fix without the video visibly playing.
+- [ ] **Experiment 1 (smallest change) — bypass the blob, use the HTTP asset URL.** Set
+      `<video src>` directly to the HTTP asset URL (`${restApiUrl}/asset?id=…&type=asset&db=…`)
+      instead of `URL.createObjectURL(blob)`. The helper already exists: `assetUrl(assetId,
+      assetType)` in `packages/user-interface/src/context/asset-database-source.tsx`. This gives
+      the `<video>` an `http://localhost` media origin (exactly what works in `dev:web`) and
+      avoids the `blob:file://` URL the safety check rejects. Edit
+      `packages/user-interface/src/components/video.tsx` (only the video path needs this; images
+      can keep blobs). Keep `media-src 'self' http://localhost:*` in the CSP so the http URL is
+      allowed. **Also fix `asset-server.ts` to send `Content-Type: video/<x>`, `Accept-Ranges:
+      bytes`, and honour `Range` requests** — without Range the player cannot stream/seek even
+      over http (see external findings). UNTESTED.
+- [ ] **Experiment 2 (recommended desktop pattern) — privileged custom streaming scheme.** If the
+      http route is awkward, register a privileged scheme (e.g. `media://`) with
+      `{ standard: true, secure: true, supportFetchAPI: true, stream: true, bypassCSP: true }`
+      before `app.whenReady()` in `apps/desktop/src/main.ts`, serve it with
+      `protocol.handle("media", req => net.fetch(pathToFileURL(localAssetPath).toString()))`, and
+      set `<video src="media://asset/<id>">` (no blob). `net.fetch` preserves Content-Length and
+      Range so seeking works for free. `stream: true` is REQUIRED (Electron bug #38749) or the
+      element buffers instead of streaming and seeking breaks. This is genuinely different from the
+      failed `app://` test, which still fed the video a blob. UNTESTED.
+- [ ] **Experiment 3 (cleanest test of the origin theory) — keep the blob, change the page
+      origin.** Load the Electron renderer over `http://localhost` (serve `bundle/frontend` from a
+      small local http server instead of `mainWindow.loadURL("file://…")` in
+      `apps/desktop/src/main.ts`) and change nothing else. The video src becomes
+      `blob:http://localhost/…` — the exact condition that works in `dev:web`. If it plays, the
+      `file://` origin is confirmed as the cause and the `app://` "ruled out" note is wrong. This
+      is heavier than Experiments 1/2 (frontend must be served over http in production too), so
+      prefer 1 or 2 as the actual fix; use this only to settle the origin question with one
+      variable changed. UNTESTED.
+- [ ] After any experiment, capture a clean probe in that state (`readyState`, `err`,
+      `currentSrc`, and `video.seekable.end(0)`) before drawing any conclusion. Do not declare a
+      fix without the video visibly playing AND seeking in the real GUI.

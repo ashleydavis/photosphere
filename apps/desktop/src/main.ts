@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, utilityProcess, type UtilityProcess, dialog, Menu, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, utilityProcess, type UtilityProcess, dialog, Menu, shell, protocol, net } from 'electron';
 import { appendFileSync } from 'fs';
 import { join, dirname, basename } from 'path';
 import { randomUUID, createPrivateKey, createPublicKey } from 'crypto';
@@ -31,6 +31,28 @@ import { importDatabasePayload, importSecretPayload } from 'api';
 import type { IDatabaseSharePayload, ISecretSharePayload, IConflictResolution } from 'api';
 import { TestControlServer } from './lib/test-control-server';
 import type { ITestControlServer } from './lib/test-control-server';
+
+// Video decodes (canplay) but paints black on Linux Electron: a GPU video-compositing problem.
+// Disabling hardware acceleration forces video to composite on the CPU, which paints correctly.
+// Must run before app is ready.
+app.disableHardwareAcceleration();
+
+// Register a privileged custom scheme for serving media (video/audio) to the renderer.
+// The page is served from file://, where a blob:file:// media URL is rejected by Chromium's media
+// URL-safety check. A privileged secure/standard/streaming scheme is treated as a first-class media
+// source, so <video src="psphere://..."> plays. Must run before app is ready.
+protocol.registerSchemesAsPrivileged([
+    {
+        scheme: 'psphere',
+        privileges: {
+            standard: true,
+            secure: true,
+            supportFetchAPI: true,
+            stream: true,
+            bypassCSP: true,
+        },
+    },
+]);
 
 // Main application window
 let mainWindow: BrowserWindow | null = null;
@@ -292,6 +314,29 @@ app.whenReady().then(async () => {
     
     // Initialize REST API before creating main window
     await initRestApi();
+
+    // Serve media for the psphere:// scheme by proxying to the local REST API asset endpoint.
+    // net.fetch streams the response (with the real Content-Type) back to the <video> element,
+    // which works where a blob:file:// URL is rejected. Asset bytes still flow through the storage
+    // abstraction (encrypted / S3 / fs) via the existing /asset route.
+    protocol.handle('psphere', (request) => {
+        if (restApiPort === null) {
+            return new Response('REST API not ready', { status: 503 });
+        }
+
+        const requestUrl = new URL(request.url);
+        const assetId = requestUrl.searchParams.get('id') || '';
+        const assetType = requestUrl.searchParams.get('type') || '';
+        const databasePath = requestUrl.searchParams.get('db') || '';
+        const contentType = requestUrl.searchParams.get('contentType') || '';
+        const target = `http://localhost:${restApiPort}/asset`
+            + `?id=${encodeURIComponent(assetId)}`
+            + `&type=${encodeURIComponent(assetType)}`
+            + `&db=${encodeURIComponent(databasePath)}`
+            + `&contentType=${encodeURIComponent(contentType)}`;
+
+        return net.fetch(target);
+    });
 
     // Install MCP IPC handlers and start the embedded MCP utility process.
     installMcpHandlers({
