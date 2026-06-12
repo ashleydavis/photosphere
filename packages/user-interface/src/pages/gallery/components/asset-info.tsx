@@ -113,10 +113,10 @@ export function AssetInfo({ onClose, onDeleted, onLabelSearch }: IAssetInfoProps
     //
     // Renders a label.
     //
-    function renderLabel(name: string) {
+    function renderLabel(name: string, index: number) {
         return (
             <Chip
-                key={name}
+                key={`${name}-${index}`}
                 variant="outlined"
                 color="neutral"
                 className="ml-2 mt-1"
@@ -260,8 +260,8 @@ export function AssetInfo({ onClose, onDeleted, onLabelSearch }: IAssetInfoProps
                             </div>
                             <div className="flex flex-col ml-3">
                                 <div className="flex flex-row flex-wrap items-center">
-                                    {asset.labels?.map(label => {
-                                        return renderLabel(label);
+                                    {asset.labels?.map((label, labelIndex) => {
+                                        return renderLabel(label, labelIndex);
                                     })}
 
                                     {addingLabel
