@@ -26,7 +26,7 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 ### Setup
 - `bun install` (from repo root) - You must do this before you can run any other scripts.
 
-### Root (run from repo root):
+### Run from repo root:
 - `bun run compile` - Compile all TypeScript
 - `bun run test:all` - Run ALL tests (unit tests + all smoke tests). Use this when asked to run "all tests".
 - `bun run test` - Run unit tests only
