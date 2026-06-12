@@ -7,6 +7,7 @@ import { Flag, FlagOutlined, Star, StarBorder } from "@mui/icons-material";
 import { useGallery } from "../../../context/gallery-context";
 import { SetPhotoDateDialog } from "../../../components/set-photo-date-dialog";
 import { SetLocationDialog } from "../../../components/set-location-dialog";
+import { dedupeLabels } from "../../../lib/labels";
 
 export interface IAssetInfoProps { 
 
@@ -113,10 +114,10 @@ export function AssetInfo({ onClose, onDeleted, onLabelSearch }: IAssetInfoProps
     //
     // Renders a label.
     //
-    function renderLabel(name: string, index: number) {
+    function renderLabel(name: string) {
         return (
             <Chip
-                key={`${name}-${index}`}
+                key={name}
                 variant="outlined"
                 color="neutral"
                 className="ml-2 mt-1"
@@ -260,8 +261,8 @@ export function AssetInfo({ onClose, onDeleted, onLabelSearch }: IAssetInfoProps
                             </div>
                             <div className="flex flex-col ml-3">
                                 <div className="flex flex-row flex-wrap items-center">
-                                    {asset.labels?.map((label, labelIndex) => {
-                                        return renderLabel(label, labelIndex);
+                                    {dedupeLabels(asset.labels || []).map(label => {
+                                        return renderLabel(label);
                                     })}
 
                                     {addingLabel

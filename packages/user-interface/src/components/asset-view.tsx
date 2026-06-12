@@ -13,6 +13,7 @@ import { ContentCopy, Delete, Download, Flag, Star } from "@mui/icons-material";
 import { DeleteConfirmationDialog } from "./delete-confirmation-dialog";
 import { SetPhotoDateDialog } from "./set-photo-date-dialog";
 import { SetLocationDialog } from "./set-location-dialog";
+import { dedupeLabels } from "../lib/labels";
 import { log } from "utils";
 
 export interface IAssetViewProps { 
@@ -174,7 +175,7 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
     const isStarred = asset.labels && Array.isArray(asset.labels) && asset.labels.includes("starred");
     const isFlagged = asset.labels && Array.isArray(asset.labels) && asset.labels.includes("flagged");
     const isSelected = selectedItems.has(asset._id);
-    const customLabels = (asset.labels || []).filter(label => label !== "starred" && label !== "flagged");
+    const customLabels = dedupeLabels((asset.labels || []).filter(label => label !== "starred" && label !== "flagged"));
 
     return (
         <div className="photo text-xl">
@@ -494,9 +495,9 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                                     {customLabels.length === 0 && !addingLabel && (
                                         <span style={{ fontSize: "0.85rem", opacity: 0.85 }}>No labels</span>
                                     )}
-                                    {customLabels.map((label, labelIndex) => (
+                                    {customLabels.map(label => (
                                         <Chip
-                                            key={`${label}-${labelIndex}`}
+                                            key={label}
                                             variant="outlined"
                                             color="neutral"
                                             onClick={() => {
