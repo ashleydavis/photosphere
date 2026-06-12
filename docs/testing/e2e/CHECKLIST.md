@@ -9,14 +9,17 @@ Upcoming version: 0.0.8
 Run a basic manual test of the CLI and desktop app on each platform.
 
 ### CLI
-- [ ] Linux
+- [x] Linux
 - [ ] macOS
 - [ ] Windows
 
 ### Desktop
-- [ ] Linux
-- [ ] macOS
-- [ ] Windows
+- [x] Linux (.deb installer)
+- [x] Linux (.zip portable)
+- [ ] macOS (.dmg installer)
+- [ ] macOS (.zip portable)
+- [ ] Windows (.exe installer)
+- [ ] Windows (.zip portable)
 
 ## CLI
 
