@@ -4,6 +4,20 @@ Work through these manual tests and check them off as they pass.
 
 Upcoming version: 0.0.8
 
+## Platforms
+
+Run a basic manual test of the CLI and desktop app on each platform.
+
+### CLI
+- [ ] Linux
+- [ ] macOS
+- [ ] Windows
+
+### Desktop
+- [ ] Linux
+- [ ] macOS
+- [ ] Windows
+
 ## CLI
 
 ### Import
@@ -100,8 +114,6 @@ Upcoming version: 0.0.8
 ### Misc
 - [x] [config-timestamps](cli/misc/config-timestamps.md)
 - [-] [mcp-server](cli/misc/mcp-server.md)
-
----
 
 ## Desktop
 
