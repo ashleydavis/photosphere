@@ -313,6 +313,20 @@ body.mobile .photo-container .full.loaded {
     z-index: 2100;
 }
 
+/* Previous/next nav buttons. Always visible with a translucent dark backing so the arrow reads
+   clearly over any photo, with a larger tap target suitable for touch devices. */
+.photo-nav-btn {
+    background: rgba(0, 0, 0, 0.45) !important;
+    color: white !important;
+    border-color: rgba(255, 255, 255, 0.35) !important;
+    min-width: 44px !important;
+    min-height: 44px !important;
+}
+
+.photo-nav-btn:hover {
+    background: rgba(0, 0, 0, 0.65) !important;
+}
+
 /* Compact metadata summary card shown bottom-left over the photo. Acts as a preview of the full info panel.
    Stacks an always-visible header over the collapsible body, so collapsing leaves just the title row. */
 .asset-summary-panel {

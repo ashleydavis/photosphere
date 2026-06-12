@@ -188,7 +188,7 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                     {getPrev(asset) !== undefined
                         && <div className="flex flex-col justify-center">
                             <IconButton
-                                className="ml-4 pointer-events-auto"
+                                className="ml-4 pointer-events-auto photo-nav-btn"
                                 variant="outlined"
                                 color="neutral"
                                 title="Previous"
@@ -202,7 +202,7 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                     {getNext(asset) !== undefined
                         && <div className="flex flex-col justify-center">
                             <IconButton
-                                className="mr-4 pointer-events-auto"
+                                className="mr-4 pointer-events-auto photo-nav-btn"
                                 variant="outlined"
                                 color="neutral"
                                 title="Next"
