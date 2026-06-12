@@ -71,12 +71,19 @@ function showWindowsInstructions(needsImageMagick: boolean, needsFfmpeg: boolean
     log.info('');
     log.info(pc.bold('Manual installation:'));
     if (needsImageMagick) {
-        log.info('  • ImageMagick: https://imagemagick.org/script/download.php#windows');
-        log.info('    (Installs both modern "magick" and legacy "convert/identify" commands)');
+        log.info('  • ImageMagick:');
+        log.info('    1. Download the Windows installer from https://imagemagick.org/script/download.php#windows');
+        log.info('    2. Run the installer and tick "Add application directory to your system path"');
+        log.info('    3. Also tick "Install legacy utilities (e.g. convert)"');
+        log.info('    4. Open a new terminal and run "magick -version" to verify');
     }
     if (needsFfmpeg) {
-        log.info('  • ffmpeg: https://www.gyan.dev/ffmpeg/builds/');
-        log.info('    (Download "release essentials" build - includes ffprobe)');
+        log.info('  • ffmpeg:');
+        log.info('    1. Download the "release essentials" build from https://www.gyan.dev/ffmpeg/builds/');
+        log.info('       (includes ffprobe)');
+        log.info('    2. Extract the zip to a folder, e.g. C:\\ffmpeg');
+        log.info('    3. Add the bin folder (e.g. C:\\ffmpeg\\bin) to your PATH environment variable');
+        log.info('    4. Open a new terminal and run "ffmpeg -version" to verify');
     }
 }
 
@@ -114,12 +121,18 @@ function showMacOSInstructions(needsImageMagick: boolean, needsFfmpeg: boolean):
     log.info('');
     log.info(pc.bold('Manual installation:'));
     if (needsImageMagick) {
-        log.info('  • ImageMagick: https://imagemagick.org/script/download.php#macosx');
-        log.info('    (Installs both modern "magick" and legacy "convert/identify" commands)');
+        log.info('  • ImageMagick:');
+        log.info('    1. Download the macOS build from https://imagemagick.org/script/download.php#macosx');
+        log.info('    2. Extract it and move the contents to a folder, e.g. /usr/local/imagemagick');
+        log.info('    3. Add the bin folder to your PATH, e.g. add this to ~/.zshrc:');
+        log.info('       export PATH="/usr/local/imagemagick/bin:$PATH"');
+        log.info('    4. Open a new terminal and run "magick -version" to verify');
     }
     if (needsFfmpeg) {
-        log.info('  • ffmpeg: https://evermeet.cx/ffmpeg/');
-        log.info('    (Includes ffprobe)');
+        log.info('  • ffmpeg:');
+        log.info('    1. Download ffmpeg and ffprobe from https://evermeet.cx/ffmpeg/');
+        log.info('    2. Extract the archives and move both binaries to /usr/local/bin');
+        log.info('    3. Open a new terminal and run "ffmpeg -version" to verify');
     }
 }
 
@@ -171,12 +184,18 @@ function showLinuxInstructions(needsImageMagick: boolean, needsFfmpeg: boolean):
     log.info('');
     log.info(pc.bold('Manual/Binary installation:'));
     if (needsImageMagick) {
-        log.info('  • ImageMagick: https://imagemagick.org/script/download.php#linux');
-        log.info('    (Both modern "magick" and legacy "convert/identify" commands supported)');
+        log.info('  • ImageMagick:');
+        log.info('    1. Download the AppImage from https://imagemagick.org/script/download.php#linux');
+        log.info('    2. Make it executable and place it on your PATH:');
+        log.info('       chmod +x ImageMagick-*.AppImage && sudo mv ImageMagick-*.AppImage /usr/local/bin/magick');
+        log.info('    3. Run "magick -version" to verify');
     }
     if (needsFfmpeg) {
-        log.info('  • ffmpeg: https://johnvansickle.com/ffmpeg/');
-        log.info('    (Static builds for Linux - includes ffprobe)');
+        log.info('  • ffmpeg:');
+        log.info('    1. Download a static build from https://github.com/BtbN/FFmpeg-Builds/releases');
+        log.info('       (linked from https://ffmpeg.org/download.html - includes ffprobe)');
+        log.info('    2. Extract the archive and copy ffmpeg and ffprobe to /usr/local/bin');
+        log.info('    3. Run "ffmpeg -version" to verify');
     }
 }
 
