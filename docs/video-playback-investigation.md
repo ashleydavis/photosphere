@@ -3,16 +3,20 @@
 Symptom: an imported video (e.g. `test.mp4`) opens the full-screen asset view but shows a
 blank/black player. Photos display fine. Video does not.
 
-This document is a troubleshooting checklist. The blank video has been traced to a single proven
-cause: the missing CSP `media-src` directive blocks the `blob:` URL the `<video>` loads (case A,
-proven by the DevTools probe below). The fix (adding `media-src`) has been applied and is awaiting
-a reload-and-retest. Earlier hypotheses (page origin, Content-Type, GPU compositing) were all
-tested and ruled out.
+Status: still NOT fixed. What is established:
+- The `<video>` source is blocked (case A), confirmed by the DevTools probe below.
+- The missing CSP `media-src` is *a* real cause of the CSP console error.
+- BUT adding `media-src 'self' blob: http://localhost:*` and rebuilding did **not** make the video
+  play. Tested 2026-06-12: result was *worse* — no blank player and no playback controls at all
+  (the `<video>` appears not to render). So `media-src` alone is necessary-but-not-sufficient,
+  exactly as the original note said. Adding it is not the fix.
+- The probe error was `MEDIA_ELEMENT_ERROR: Media load rejected by URL safety check`. This points
+  at Chromium refusing the `blob:file://` media URL itself (a media URL-safety restriction), which
+  `media-src` does not address.
 
-RESOLVED to **case A (the media source is rejected before it loads)**, proven by the DevTools
-ground-truth probe (see that section). It is **not** case B: the previous "GPU/compositing"
-hypothesis is disproven. The `<video>` element is laid out at full size but its source is blocked,
-so it never decodes a byte. Cause: the missing CSP `media-src` directive blocks the `blob:` URL.
+Earlier hypotheses (page origin via `app://`, Content-Type, GPU compositing) were tested and did
+not fix it either. The only configuration that DOES play the video is `bun run dev:web`, where the
+page origin is `http://localhost` and the media URL is `blob:http://localhost/…`.
 
 ## The core question to resolve first
 
@@ -67,13 +71,10 @@ Until you know which, any "fix" is a guess.
   whitelists where each resource type may load from. It has `img-src 'self' data: blob: ...`
   (so images load from blob URLs) but no `media-src`, so `<video>` falls back to
   `default-src 'self'` and the blob URL is blocked.
-- To apply: add `media-src 'self' blob: http://localhost:*;` to that CSP string, then
-  rebuild (`bun run bundle:renderer`). APPLIED 2026-06-12; awaiting retest.
-- Note on the old "necessary-but-not-sufficient" caveat: the only prior test where `media-src`
-  was present *and* the video was still blank was the `app://` experiment, i.e. with a
-  `blob:app://` source on a different origin, not a clean `file://` + `media-src` test. So
-  `media-src` has never actually been ruled out as the full fix under the normal `file://` build.
-  The current ground-truth probe (case A) is fully consistent with `media-src` being THE cause.
+- TESTED 2026-06-12 under the normal `file://` build: added `media-src 'self' blob:
+  http://localhost:*;`, rebuilt, reloaded. Video still did not play, and the player/controls
+  disappeared entirely. So `media-src` is necessary to clear the CSP console error but is NOT the
+  fix. The original "necessary-but-not-sufficient" caveat was correct.
 
 ### Old backend vs `asset-server`
 
@@ -154,8 +155,22 @@ GUI (or the dev:web browser).
   `media-src` was present in the CSP. In the current (reverted) build with no `media-src`, the
   blob is blocked outright (readyState 0). So that observation was about a *different* CSP state,
   not the current one.
-- **Root cause of the blank video: the missing CSP `media-src` directive** blocks the `blob:` URL
-  the `<video>` uses as its source. This is case A, proven by the probe above.
-- FIX APPLIED (pending retest): added `media-src 'self' blob: http://localhost:*;` to the CSP in
-  `apps/desktop-frontend/index.html` and rebuilt (`bun run bundle:renderer`). Reload and re-run
-  the probe to confirm.
+- `media-src` is necessary to clear the CSP console error but does NOT fix playback (tested; made
+  it worse). Root cause is NOT just the CSP.
+- Best remaining lead: the media URL itself. Desktop builds a `blob:file://…` URL; the probe error
+  `Media load rejected by URL safety check` indicates Chromium refuses that media URL. The working
+  `dev:web` build differs only in that its media URL is `blob:http://localhost/…`. The `app://`
+  test muddied this (no clean probe was captured), so it is not a reliable refutation.
+
+## What to try next
+
+- [ ] Bypass the blob for video: set `<video src>` directly to the HTTP asset URL
+      (`${restApiUrl}/asset?id=…&type=asset&db=…`) instead of `URL.createObjectURL(blob)`. The
+      helper already exists: `assetUrl(assetId, assetType)` in
+      `packages/user-interface/src/context/asset-database-source.tsx`. This gives the `<video>` an
+      `http://localhost` media origin (exactly what works in `dev:web`) and avoids the
+      `blob:file://` URL the safety check rejects. Edit `packages/user-interface/src/components/video.tsx`.
+      Keep `media-src 'self' blob: http://localhost:*` so the http URL is allowed. UNTESTED — this
+      is the next experiment, not a known fix.
+- [ ] If that still fails, capture a clean probe in that state (`readyState`, `err`, `currentSrc`)
+      before drawing any conclusion. Do not declare a fix without the video visibly playing.

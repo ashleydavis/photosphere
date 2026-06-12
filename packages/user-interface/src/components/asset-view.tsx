@@ -494,9 +494,9 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                                     {customLabels.length === 0 && !addingLabel && (
                                         <span style={{ fontSize: "0.85rem", opacity: 0.85 }}>No labels</span>
                                     )}
-                                    {customLabels.map(label => (
+                                    {customLabels.map((label, labelIndex) => (
                                         <Chip
-                                            key={label}
+                                            key={`${label}-${labelIndex}`}
                                             variant="outlined"
                                             color="neutral"
                                             onClick={() => {
