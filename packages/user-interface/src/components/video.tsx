@@ -18,12 +18,23 @@ export function Video({ asset }: IVideoProps) {
 
     return (
         <video
-            className="w-full h-full"
             muted={true}
             autoPlay={true}
             controls={true}
             loop={true}
             src={assetUrl(asset._id, "asset")}
+            style={{
+                padding: "2px",
+                position: "absolute",
+                top: "0",
+                left: "0",
+                right: "0",
+                bottom: "0",
+                width: "80%",
+                height: "80%",
+                margin: "auto",
+                objectFit: "contain",
+            }}
             />
     );
 };
