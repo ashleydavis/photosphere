@@ -19,6 +19,7 @@ import type { IElectronAPI } from "./lib/electron-ipc";
 import { setLog, RandomUuidGenerator, TestUuidGenerator } from "utils";
 import { createRendererLog } from "./lib/renderer-log";
 import { McpToolHandler } from "./lib/mcp-tool-handler";
+import { PreviewBanner } from "./lib/preview-banner";
 
 //
 // In test mode a deterministic TestUuidGenerator is used so smoke tests
@@ -73,6 +74,7 @@ export function App({ electronAPI }: IAppProps) {
                                                     <SearchContextProvider>
                                                         <GalleryLayoutContextProvider>
                                                             <McpToolHandler />
+                                                            <PreviewBanner />
                                                             <Main isMobile={false} initialTheme={initialTheme} />
                                                         </GalleryLayoutContextProvider>
                                                     </SearchContextProvider>

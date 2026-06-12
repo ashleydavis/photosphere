@@ -3,7 +3,7 @@
 // Writes log messages directly to the console, prefixed with worker and task IDs.
 //
 
-import { ILog, formatErrorChain } from "utils";
+import { ILog, ILogDetails, noLogDetails, formatErrorChain } from "utils";
 
 //
 // Bun CLI worker log implementation.
@@ -83,6 +83,14 @@ class WorkerLogBun implements ILog {
 
     event(message: string): void {
         console.log(this.prefixMessage(`[EVENT] ${message}`));
+    }
+
+    //
+    // Gets details about the active log file for inclusion in bug reports.
+    // Worker logs have no log file of their own.
+    //
+    getLogDetails(): Promise<ILogDetails> {
+        return Promise.resolve(noLogDetails);
     }
 }
 

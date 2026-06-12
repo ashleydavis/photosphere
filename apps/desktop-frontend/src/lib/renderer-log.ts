@@ -1,4 +1,4 @@
-import type { ILog } from "utils";
+import type { ILog, ILogDetails } from "utils";
 import type { IElectronAPI } from "./electron-ipc";
 
 //
@@ -85,6 +85,14 @@ class RendererLog implements ILog {
             level: 'event',
             message,
         });
+    }
+
+    //
+    // Gets details about the main process log file for inclusion in bug reports.
+    // Fetched from the main process on demand, not cached.
+    //
+    getLogDetails(): Promise<ILogDetails> {
+        return this.electronAPI.invoke('get-log-details');
     }
 }
 

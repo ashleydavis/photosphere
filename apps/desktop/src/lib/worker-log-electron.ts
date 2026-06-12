@@ -1,4 +1,5 @@
-import type { ILog } from "utils";
+import type { ILog, ILogDetails } from "utils";
+import { noLogDetails } from "utils";
 
 //
 // Post message function for Electron utility process
@@ -84,6 +85,14 @@ class WorkerLogElectron implements ILog {
 
     event(message: string): void {
         this.sendLog("event", message);
+    }
+
+    //
+    // Gets details about the active log file for inclusion in bug reports.
+    // Worker logs have no log file of their own.
+    //
+    getLogDetails(): Promise<ILogDetails> {
+        return Promise.resolve(noLogDetails);
     }
 }
 

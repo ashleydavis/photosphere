@@ -2,7 +2,7 @@ import * as fs from "fs/promises";
 import { ensureDirSync } from "node-utils";
 import path from "path";
 import os from "os";
-import type { ILog } from "utils";
+import type { ILog, ILogDetails } from "utils";
 import type { IWorkerLogMessage } from "./worker-log-electron";
 import { Image, Video } from "tools";
 
@@ -286,7 +286,34 @@ export class FileLoggerElectron implements ILog {
         this.writeToFile('event', message, source);
         console.log(source ? `[EVENT] [${source}] ${message}` : `[EVENT] ${message}`);
     }
-    
+
+    //
+    // Gets details about the active log file for inclusion in bug reports.
+    // The header is read from the log file on demand, not cached.
+    //
+    async getLogDetails(): Promise<ILogDetails> {
+        return {
+            logFilePath: this.logFile,
+            logHeader: await this.readLogHeader(),
+        };
+    }
+
+    //
+    // Reads the header section of the log file (everything up to "--- Log Start ---").
+    //
+    private async readLogHeader(): Promise<string> {
+        const logContent = await fs.readFile(this.logFile, 'utf8');
+        const logStartIndex = logContent.indexOf('--- Log Start ---');
+        if (logStartIndex === -1) {
+            // No "--- Log Start ---" marker found, return the first 50 lines.
+            return logContent.split('\n').slice(0, 50).join('\n');
+        }
+
+        // Return everything up to (and including) the "--- Log Start ---" line.
+        return logContent.substring(0, logStartIndex + '--- Log Start ---'.length);
+    }
+
+
     //
     // Handle log message from a worker (utility process or renderer)
     //

@@ -2,7 +2,7 @@ import * as fs from "fs/promises";
 import { ensureDirSync } from "node-utils";
 import path from "path";
 import os from "os";
-import { ILog, formatErrorChain } from "utils";
+import { ILog, ILogDetails, formatErrorChain } from "utils";
 import { registerTerminationCallback } from "node-utils";
 import { Image, Video } from "tools";
 import { version } from "config";
@@ -298,6 +298,32 @@ export class FileLogger implements ILog {
     event(message: string): void {
         this.writeToFile('event', message);
         this.consoleLogger.event(message);
+    }
+
+    //
+    // Gets details about the active log file for inclusion in bug reports.
+    // The header is read from the log file on demand, not cached.
+    //
+    async getLogDetails(): Promise<ILogDetails> {
+        return {
+            logFilePath: this.logFile,
+            logHeader: await this.readLogHeader(),
+        };
+    }
+
+    //
+    // Reads the header section of the log file (everything up to "--- Log Start ---").
+    //
+    private async readLogHeader(): Promise<string> {
+        const logContent = await fs.readFile(this.logFile, 'utf8');
+        const logStartIndex = logContent.indexOf('--- Log Start ---');
+        if (logStartIndex === -1) {
+            // No "--- Log Start ---" marker found, return the first 50 lines.
+            return logContent.split('\n').slice(0, 50).join('\n');
+        }
+
+        // Return everything up to (and including) the "--- Log Start ---" line.
+        return logContent.substring(0, logStartIndex + '--- Log Start ---'.length);
     }
     
     //

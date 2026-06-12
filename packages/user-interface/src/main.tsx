@@ -29,6 +29,7 @@ import { SecretsPage } from "./pages/secrets/secrets-page";
 import { OpenDatabaseModal } from "./components/open-database-modal";
 import { CreateDatabaseModal } from "./components/create-database-modal";
 import { AddDatabaseModal } from "./components/add-database-modal";
+import { openBugReport } from "./lib/bug-report";
 
 export interface IMainProps {
     //
@@ -220,6 +221,10 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
 
                 case 'open-stories':
                     navigate('/stories');
+                    break;
+
+                case 'report-bug':
+                    openBugReport();
                     break;
             }
         });

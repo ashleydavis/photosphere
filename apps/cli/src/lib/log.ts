@@ -1,4 +1,4 @@
-import { ILog, setLog, formatErrorChain } from "utils";
+import { ILog, ILogDetails, noLogDetails, setLog, formatErrorChain } from "utils";
 import { FileLogger } from "./file-logger";
 
 export interface ILogOptions {
@@ -84,6 +84,14 @@ class Log implements ILog {
 
     event(message: string): void {
         console.log(`[EVENT] ${message}`);
+    }
+
+    //
+    // Gets details about the active log file for inclusion in bug reports.
+    // The console logger has no log file.
+    //
+    getLogDetails(): Promise<ILogDetails> {
+        return Promise.resolve(noLogDetails);
     }
 }
 

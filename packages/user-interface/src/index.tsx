@@ -20,6 +20,7 @@ export * from "./context/platform-context";
 export * from "./context/uuid-generator-context";
 export * from "./context/config-context";
 export * from "./lib/clipboard";
+export * from "./lib/bug-report";
 export * from "./context/toast-context";
 export { ToastContainer } from "./components/toast-container";
 export * from "./context/import-context";

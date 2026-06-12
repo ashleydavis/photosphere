@@ -1,5 +1,24 @@
 import { formatErrorChain } from "./wrapped-error";
 
+//
+// Details about the active log file, used to pre-fill bug reports.
+//
+export interface ILogDetails {
+    // Full path to the active log file, or null when file logging is not active.
+    logFilePath: string | null;
+
+    // The header section of the active log file (system information), or a placeholder when unavailable.
+    logHeader: string;
+}
+
+//
+// Log details placeholder for log implementations that do not write to a log file.
+//
+export const noLogDetails: ILogDetails = {
+    logFilePath: null,
+    logHeader: "No log file available",
+};
+
 export interface ILog {
     info(message: string): void;
     verbose(message: string): void;
@@ -10,6 +29,9 @@ export interface ILog {
     tool(tool: string, data: { stdout?: string; stderr?: string }): void;
     event(message: string): void;
     verboseEnabled: boolean;
+
+    // Gets details about the active log file for inclusion in bug reports.
+    getLogDetails(): Promise<ILogDetails>;
 }
 
 //
@@ -46,6 +68,10 @@ export let log: ILog = {
 
     event(message: string): void {
         console.log(`[EVENT] ${message}`);
+    },
+
+    getLogDetails(): Promise<ILogDetails> {
+        return Promise.resolve(noLogDetails);
     },
 
     verboseEnabled: false

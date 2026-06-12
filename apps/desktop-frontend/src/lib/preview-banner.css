@@ -1,0 +1,20 @@
+/*
+    Layout offsets for the preview release banner (32px tall).
+
+    The banner itself is styled with Tailwind classes in preview-banner.tsx.
+    These rules cannot be Tailwind utilities because they restyle the #navbar
+    and #main elements rendered by the user-interface package, shifting them
+    down to make room for the banner.
+*/
+
+#navbar {
+    top: 32px;
+}
+
+#main {
+    padding-top: calc(52px + 32px);
+}
+
+#main.search {
+    padding-top: calc(100px + 32px);
+}
