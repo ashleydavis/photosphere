@@ -2,6 +2,7 @@ import React, { Component, ReactNode, useEffect, useMemo, useState } from "react
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { CssVarsProvider } from "@mui/joy/styles/CssVarsProvider";
 import { log } from "utils";
+import { nextStoryIndex } from "../lib/story-navigation";
 import { stories } from "./index";
 import type { IStory, StoryCategory } from "./types";
 
@@ -91,11 +92,43 @@ function StoriesBrowser(): JSX.Element {
     }, [filteredStories]);
 
     //
+    // Flat list of stories in the same order they are rendered in the
+    // sidebar (grouped by category). Used for backward/forward navigation.
+    //
+    const orderedStories = useMemo(() => {
+        const result: IStory[] = [];
+        for (const category of CATEGORY_ORDER) {
+            result.push(...(grouped[category] || []));
+        }
+        return result;
+    }, [grouped]);
+
+    //
     // Click handler that updates the URL query so individual stories are linkable.
     //
     function selectStory(story: IStory): void {
         setSearchParams({ id: story.id });
     }
+
+    //
+    // Moves the selection backward or forward through the ordered story
+    // list, wrapping around at either end. With no current selection,
+    // forward selects the first story and backward selects the last.
+    //
+    function navigateStories(offset: number): void {
+        const currentIndex = selectedId
+            ? orderedStories.findIndex(story => story.id === selectedId)
+            : -1;
+        const nextIndex = nextStoryIndex(currentIndex, offset, orderedStories.length);
+        if (nextIndex === -1) {
+            return;
+        }
+        setSearchParams({ id: orderedStories[nextIndex].id });
+    }
+
+    const selectedIndex = selectedId
+        ? orderedStories.findIndex(story => story.id === selectedId)
+        : -1;
 
     return (
         <div className="flex h-screen w-screen" style={{ background: "var(--joy-palette-background-body)", color: "var(--joy-palette-text-primary)" }}>
@@ -154,18 +187,48 @@ function StoriesBrowser(): JSX.Element {
                 </div>
             </aside>
 
-            <main className="flex-1 overflow-auto">
-                {!selectedId
-                    && <div className="p-6 opacity-70">Select a story</div>
-                }
-                {selectedId && !selectedStory
-                    && <div className="p-6 opacity-70" data-testid="stories-unknown-story">{`Unknown story: ${selectedId}`}</div>
-                }
-                {selectedStory
-                    && <div key={selectedStory.id} className="h-full w-full" data-testid={`stories-render-${selectedStory.id}`}>
-                        {selectedStory.render()}
-                    </div>
-                }
+            <main className="flex-1 flex flex-col overflow-hidden">
+                <div
+                    className="flex items-center gap-2 p-2 border-b"
+                    style={{ borderColor: "var(--joy-palette-divider, #ddd)" }}
+                    >
+                    <button
+                        type="button"
+                        onClick={() => navigateStories(-1)}
+                        className="px-2 py-1 rounded border"
+                        style={{ borderColor: "var(--joy-palette-divider, #ddd)" }}
+                        data-testid="stories-prev-button"
+                        >
+                        ◀ Prev
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => navigateStories(1)}
+                        className="px-2 py-1 rounded border"
+                        style={{ borderColor: "var(--joy-palette-divider, #ddd)" }}
+                        data-testid="stories-next-button"
+                        >
+                        Next ▶
+                    </button>
+                    {selectedStory && selectedIndex !== -1
+                        && <span className="text-sm opacity-70" data-testid="stories-position">
+                            {`${selectedIndex + 1} / ${orderedStories.length} — ${selectedStory.name}`}
+                        </span>
+                    }
+                </div>
+                <div className="flex-1 overflow-auto">
+                    {!selectedId
+                        && <div className="p-6 opacity-70">Select a story</div>
+                    }
+                    {selectedId && !selectedStory
+                        && <div className="p-6 opacity-70" data-testid="stories-unknown-story">{`Unknown story: ${selectedId}`}</div>
+                    }
+                    {selectedStory
+                        && <div key={selectedStory.id} className="h-full w-full p-6" data-testid={`stories-render-${selectedStory.id}`}>
+                            {selectedStory.render()}
+                        </div>
+                    }
+                </div>
             </main>
         </div>
     );
@@ -300,9 +363,11 @@ function StoriesCycle({ stories: cycleStories, durationMs }: IStoriesCycleProps)
     return (
         <div className="h-screen w-screen">
             <div className="p-2 text-xs opacity-70">{`Cycle: ${index + 1}/${cycleStories.length} — ${current.id}`}</div>
-            <StoryErrorBoundary storyId={current.id}>
-                {current.render()}
-            </StoryErrorBoundary>
+            <div className="p-6">
+                <StoryErrorBoundary storyId={current.id}>
+                    {current.render()}
+                </StoryErrorBoundary>
+            </div>
         </div>
     );
 }
