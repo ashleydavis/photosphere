@@ -10,14 +10,14 @@ Run a basic manual test of the CLI and desktop app on each platform.
 
 ### CLI
 - [x] Linux
-- [ ] macOS
+- [x] macOS
 - [x] Windows
 
 ### Desktop
 - [x] Linux (.deb installer)
 - [x] Linux (.zip portable)
-- [ ] macOS (.dmg installer)
-- [ ] macOS (.zip portable)
+- [x] macOS (.dmg installer)
+- [-] macOS (.zip portable) - there is none for x86 yet.
 - [x] Windows (.exe installer)
 - [x] Windows (.zip portable)
 
@@ -25,7 +25,7 @@ Run a basic manual test of the CLI and desktop app on each platform.
 
 Open the desktop app at `/#/stories?cycle=1` and check every story cycles through without failures.
 
-- [ ] Linux
+- [?] Linux
 - [ ] macOS
 - [ ] Windows
 
