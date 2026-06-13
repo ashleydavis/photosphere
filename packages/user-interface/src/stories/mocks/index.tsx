@@ -1,6 +1,7 @@
-import React, { ReactNode } from "react";
+import React, { ReactNode, useEffect, useState } from "react";
 import { CssVarsProvider } from "@mui/joy/styles/CssVarsProvider";
-import type { IUuidGenerator } from "utils";
+import { RandomUuidGenerator, type IUuidGenerator } from "utils";
+import { getQueueBackend } from "task-queue";
 import { UuidGeneratorProvider } from "../../context/uuid-generator-context";
 import {
     PlatformContextProvider,
@@ -15,6 +16,8 @@ import { ToastContextProvider } from "../../context/toast-context";
 import { ConfigContextProvider, createConfig } from "../../context/config-context";
 import {
     AssetDatabaseContext,
+    AssetDatabaseProvider,
+    useAssetDatabase,
     type IAssetDatabase,
 } from "../../context/asset-database-source";
 import { GallerySourceContext } from "../../context/gallery-source";
@@ -134,7 +137,7 @@ export function mockGalleryItem(overrides?: Partial<IGalleryItem>): IGalleryItem
         fileDate: "2024-01-01T00:00:00.000Z",
         uploadDate: "2024-01-01T00:00:00.000Z",
         photoDate: "2024-01-01T00:00:00.000Z",
-        micro: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+        micro: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
         color: [128, 128, 128],
     };
     return { ...base, ...overrides };
@@ -155,7 +158,7 @@ export function mockAsset(overrides?: Partial<IAsset>): IAsset {
         fileDate: "2024-01-01T00:00:00.000Z",
         uploadDate: "2024-01-01T00:00:00.000Z",
         photoDate: "2024-01-01T00:00:00.000Z",
-        micro: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+        micro: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
         color: [128, 128, 128],
     };
     return { ...base, ...overrides };
@@ -188,6 +191,17 @@ export function mockAssetDatabase(assets?: IGalleryItem[]): IAssetDatabase {
         }
     }
 
+    //
+    // Deliver the assets to the gallery context the same way the real asset
+    // database delivers items loaded from disk. Observable buffers payloads
+    // invoked before the first subscription, so the items arrive when the
+    // gallery context subscribes on mount.
+    //
+    const onNewItems = new Observable<IGalleryItem[]>();
+    if (assets && assets.length > 0) {
+        onNewItems.invoke(assets);
+    }
+
     return {
         isLoading: false,
         isSyncing: false,
@@ -195,7 +209,7 @@ export function mockAssetDatabase(assets?: IGalleryItem[]): IAssetDatabase {
         isReadOnly: false,
         getAssets: () => assetMap,
         onReset: new Observable<void>(),
-        onNewItems: new Observable<IGalleryItem[]>(),
+        onNewItems,
         onItemsUpdated: new Observable<{ assetIds: string[] }>(),
         onItemsDeleted: new Observable<{ assetIds: string[] }>(),
         updateAsset: async () => {},
@@ -257,6 +271,18 @@ export interface IMockProvidersProps {
 // HashRouter (via the /stories route), so adding one here would trigger
 // React Router's "cannot render a <Router> inside another <Router>" error.
 //
+//
+// Builds an in-memory IConfig backed by a plain object, so components that
+// consume useConfig() get a working implementation in stories.
+//
+function createInMemoryConfig() {
+    const configStore: { [key: string]: unknown } = {};
+    return createConfig(
+        async (key: string) => configStore[key],
+        async (key: string, value: unknown) => { configStore[key] = value; },
+    );
+}
+
 export function MockProviders({
     children,
     uuidGenerator,
@@ -271,11 +297,7 @@ export function MockProviders({
     // In-memory config so any story that consumes useConfig() gets a real
     // implementation instead of crashing on missing context.
     //
-    const configStore: { [key: string]: unknown } = {};
-    const config = createConfig(
-        async (key: string) => configStore[key],
-        async (key: string, value: unknown) => { configStore[key] = value; },
-    );
+    const config = createInMemoryConfig();
 
     return (
         <CssVarsProvider>
@@ -299,6 +321,159 @@ export function MockProviders({
                                         </ImportContextProvider>
                                     </GallerySourceContext.Provider>
                                 </AssetDatabaseContext.Provider>
+                            </ToastContextProvider>
+                        </AppContextProvider>
+                    </ConfigContextProvider>
+                </PlatformContextProvider>
+            </UuidGeneratorProvider>
+        </CssVarsProvider>
+    );
+}
+
+//
+// Candidate paths for the repo's 50-assets test database, relative to the
+// working directory of the process hosting the REST API. The first covers
+// `bun run dev` and `bun run dev:web` (the server runs from apps/<app>), the
+// second covers app processes launched from the repo root (smoke tests).
+//
+const testDatabaseCandidates = [
+    "../../test/dbs/50-assets",
+    "test/dbs/50-assets",
+];
+
+//
+// Id of a known asset in the 50-assets test database. Used to probe which
+// candidate database path the REST API can actually reach.
+//
+const probeAssetId = "63e9c637-9164-6376-13e9-ef3200000000";
+
+//
+// Resolves the REST API base url for stories. The Electron shell passes
+// restApiUrl as a query parameter (same as the real app); the dev web
+// frontend talks to the fixed dev-server url.
+//
+function storyRestApiUrl(): string {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get("restApiUrl") || "http://localhost:3001";
+}
+
+//
+// Props for OpenTestDatabase.
+//
+interface IOpenTestDatabaseProps {
+    //
+    // Story content rendered while and after the database loads.
+    //
+    children: ReactNode | ReactNode[];
+}
+
+//
+// Probes the REST API for the repo's 50-assets test database and opens the
+// first reachable candidate path through the real asset database provider.
+// Renders an explanatory message when the database cannot be reached (e.g.
+// a packaged app installed outside the repo).
+//
+function OpenTestDatabase({ children }: IOpenTestDatabaseProps) {
+    const { openDatabase } = useAssetDatabase();
+    const [probeFailed, setProbeFailed] = useState<boolean>(false);
+
+    useEffect(() => {
+        let disposed = false;
+
+        //
+        // Finds the first candidate database path the REST API can serve an
+        // asset from, then opens it the same way the app opens any database.
+        //
+        async function locateAndOpenDatabase(): Promise<void> {
+            const restApiUrl = storyRestApiUrl();
+            for (const candidatePath of testDatabaseCandidates) {
+                const probeUrl = `${restApiUrl}/asset?id=${encodeURIComponent(probeAssetId)}&type=thumb&db=${encodeURIComponent(candidatePath)}`;
+                try {
+                    const response = await fetch(probeUrl);
+                    if (response.ok) {
+                        if (!disposed) {
+                            await openDatabase(candidatePath);
+                        }
+                        return;
+                    }
+                }
+                catch {
+                    // The REST API itself is unreachable; no candidate can work.
+                    break;
+                }
+            }
+            if (!disposed) {
+                setProbeFailed(true);
+            }
+        }
+
+        locateAndOpenDatabase();
+
+        return () => {
+            disposed = true;
+        };
+    }, []);
+
+    if (probeFailed) {
+        return (
+            <div className="p-4">
+                Could not reach the 50-assets test database (test/dbs/50-assets) via the REST API.
+                This story needs the app to be running from the repository.
+            </div>
+        );
+    }
+
+    return <>{children}</>;
+}
+
+//
+// Props for RealDatabaseProviders.
+//
+export interface IRealDatabaseProvidersProps {
+    //
+    // Story content to wrap in the provider stack.
+    //
+    children: ReactNode | ReactNode[];
+}
+
+//
+// Wraps story content in the real provider stack: the real
+// AssetDatabaseProvider talking to the app's REST API and task queue, loading
+// the repo's 50-assets test database exactly the way the app loads any
+// database. Platform and config stay mocked because stories run outside the
+// app shell.
+//
+export function RealDatabaseProviders({ children }: IRealDatabaseProvidersProps) {
+    //
+    // Created once per mount (lazy state initialisers) so context consumers
+    // do not resubscribe on every render.
+    //
+    const [platformValue] = useState<IPlatformContext>(() => mockPlatform());
+    const [uuidGeneratorValue] = useState<IUuidGenerator>(() => new RandomUuidGenerator());
+    const [config] = useState(() => createInMemoryConfig());
+
+    return (
+        <CssVarsProvider>
+            <UuidGeneratorProvider value={uuidGeneratorValue}>
+                <PlatformContextProvider value={platformValue}>
+                    <ConfigContextProvider value={config}>
+                        <AppContextProvider>
+                            <ToastContextProvider>
+                                <AssetDatabaseProvider queueBackend={getQueueBackend()} restApiUrl={storyRestApiUrl()}>
+                                    <ImportContextProvider>
+                                        <GalleryContextProvider>
+                                            <DeleteConfirmationContextProvider>
+                                                <SearchContextProvider>
+                                                    <GalleryLayoutContextProvider>
+                                                        <OpenTestDatabase>
+                                                            {children}
+                                                        </OpenTestDatabase>
+                                                    </GalleryLayoutContextProvider>
+                                                </SearchContextProvider>
+                                            </DeleteConfirmationContextProvider>
+                                        </GalleryContextProvider>
+                                    </ImportContextProvider>
+                                </AssetDatabaseProvider>
                             </ToastContextProvider>
                         </AppContextProvider>
                     </ConfigContextProvider>
