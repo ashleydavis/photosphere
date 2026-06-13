@@ -26,6 +26,8 @@ export function AboutPage() {
 
                 <p className="pt-4">Photosphere is developed by <a target="_blank" href="https://codecapers.com.au/about">Ashley Davis</a>.</p>
 
+                <p className="pt-4">Visit the <a target="_blank" href="https://photosphere.codecapers.com.au/">Photosphere website</a> to learn more.</p>
+
                 <p className="pt-4">
                     Photosphere is a local-first application for managing your database of digital media files (photos and videos). Think of it as the spiritual successor to Picasa, but with a UI more like modern Google Photos, backed by a Git-style database for immutable binary files with editable metadata.
                 </p>
