@@ -14,7 +14,7 @@ Important features:
 - Use the GUI to search, view and edit your photos and videos.
 
 Photosphere is a local-first application available as:
-- A CLI tool (build and manage databases from the command line).
+- A CLI tool (build and manage databases from the command line) - grab it from the [releases page](https://github.com/ashleydavis/photosphere/releases).
 - A desktop application app for Windows, macOS, and Linux - grab it from the [releases page](https://github.com/ashleydavis/photosphere/releases).
 - A mobile application (Android and iOS apps - COMING SOON).
 
@@ -28,7 +28,8 @@ Contained herein are the code for Photosphere's:
 Early development of Photosphere was covered in the book [The Feedback-Driven Developer](https://tfdd.codecapers.com.au/).
 
 To get up and running, see the [wiki](https://github.com/ashleydavis/photosphere/wiki):
-- [Installation](https://github.com/ashleydavis/photosphere/wiki/Installation)
+- [Installation - Desktop](https://github.com/ashleydavis/photosphere/wiki/Installation-Desktop)
+- [Installation - CLI](https://github.com/ashleydavis/photosphere/wiki/Installation-CLI)
 - [Getting Started - Desktop](https://github.com/ashleydavis/photosphere/wiki/Getting-Started-Desktop)
 - [Getting Started - CLI](https://github.com/ashleydavis/photosphere/wiki/Getting-Started-CLI)
 
