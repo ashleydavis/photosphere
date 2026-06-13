@@ -15,7 +15,7 @@ Important features:
 
 Photosphere is a local-first application available as:
 - A CLI tool (build and manage databases from the command line).
-- A desktop application (Electron-based app for Windows, macOS, and Linux - COMING SOON).
+- A desktop application app for Windows, macOS, and Linux - grab it from the [releases page](https://github.com/ashleydavis/photosphere/releases).
 - A mobile application (Android and iOS apps - COMING SOON).
 
 Note: The self-hosted server option has been discontinued for now, but may be reinstated later if there's demand for it.
@@ -27,11 +27,18 @@ Contained herein are the code for Photosphere's:
 
 Early development of Photosphere was covered in the book [The Feedback-Driven Developer](https://tfdd.codecapers.com.au/).
 
-See the [wiki](https://github.com/ashleydavis/photosphere/wiki) for installation and getting started.
+To get up and running, see the [wiki](https://github.com/ashleydavis/photosphere/wiki):
+- [Installation](https://github.com/ashleydavis/photosphere/wiki/Installation)
+- [Getting Started - Desktop](https://github.com/ashleydavis/photosphere/wiki/Getting-Started-Desktop)
+- [Getting Started - CLI](https://github.com/ashleydavis/photosphere/wiki/Getting-Started-CLI)
 
 ## Ingesting assets
 
-Use the CLI tool `psi add` to scan a directory and do bulk uploads. Use `psi summary` to view database statistics, `psi verify` to check integrity, `psi replicate` to create backups, `psi sync` to synchronize databases between devices, and `psi compare` to verify backup consistency.  
+You can ingest assets using either the desktop app or the CLI tool.
+
+In the desktop app, use the Import page to drag and drop files or folders (it can unpack zip files for you), and they are added to your gallery automatically.
+
+From the command line, use `psi add` to scan a directory and do bulk uploads (it can unpack zip files for you).
 
 To move assets from Google Photos:
 - Use Google Takeout to export all your assets to a series of large zip files.
@@ -51,8 +58,12 @@ To move assets from Google Photos:
     - packages/
         - api - Core API for database operations
         - bdb - BSON database implementation
-        - defs - Type definitions
+        - config - Shared configuration values such as the application version
+        - encryption - Encryption primitives (AES-256-CBC + RSA hybrid, key management, streaming)
+        - fuzzy-match - Fuzzy string matching based on Levenshtein edit distance
+        - lan-share - Local-network sharing of database configs and secrets between devices
         - merkle-tree - Merkle tree data structure
+        - node-api - Node.js API for database operations
         - node-utils - Node.js utility functions
         - rest-api - REST API server (used by the desktop app to serve local photos)
         - serialization - Serialization utilities
@@ -61,6 +72,7 @@ To move assets from Google Photos:
         - tools - Tool management and media processing (ffmpeg, ffprobe, ImageMagick)
         - user-interface - Shared React UI components
         - utils - General utility functions
+        - vault - Cross-platform secrets management with multiple vault backends
     - test - Data for testing.
 
 ## Running Photosphere locally for development
