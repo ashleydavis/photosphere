@@ -5,6 +5,8 @@ import { useGallery } from "../../context/gallery-context";
 import { useAssetDatabase } from "../../context/asset-database-source";
 import { NoDatabaseLoaded } from "../../components/no-database-loaded";
 import { EmptyDatabase } from "../../components/empty-database";
+import Box from "@mui/joy/Box";
+import CircularProgress from "@mui/joy/CircularProgress";
 import { log } from "utils";
 
 export interface IGalleryPageProps {
@@ -38,11 +40,20 @@ export function GalleryPage({}: IGalleryPageProps) {
                 <NoDatabaseLoaded />
             )}
 
+            {databasePath && isLoading && allItems().length === 0 && (
+                <Box
+                    className="flex items-center justify-center"
+                    sx={{ height: "calc(100vh - 60px)" }}
+                >
+                    <CircularProgress variant="soft" />
+                </Box>
+            )}
+
             {databasePath && !isLoading && allItems().length === 0 && (
                 <EmptyDatabase />
             )}
 
-            {databasePath && (isLoading || allItems().length > 0) && (
+            {databasePath && allItems().length > 0 && (
                 <Gallery />
             )}
         </div>
