@@ -11,15 +11,15 @@ Run a basic manual test of the CLI and desktop app on each platform.
 ### CLI
 - [x] Linux
 - [ ] macOS
-- [ ] Windows
+- [x] Windows
 
 ### Desktop
 - [x] Linux (.deb installer)
 - [x] Linux (.zip portable)
 - [ ] macOS (.dmg installer)
 - [ ] macOS (.zip portable)
-- [ ] Windows (.exe installer)
-- [ ] Windows (.zip portable)
+- [x] Windows (.exe installer)
+- [x] Windows (.zip portable)
 
 ### UI stories
 
