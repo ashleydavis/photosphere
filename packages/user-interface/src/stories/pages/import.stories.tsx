@@ -1,6 +1,6 @@
 import React from "react";
 import { ImportPage } from "../../pages/import/import-page";
-import { MockProviders } from "../mocks";
+import { MockProviders, mockImportContext, mockInProgressImportItems } from "../mocks";
 import type { IStory } from "../types";
 
 //
@@ -22,7 +22,7 @@ export const stories: IStory[] = [
         name: "Import (in progress)",
         category: "Pages",
         render: () => (
-            <MockProviders>
+            <MockProviders importContext={mockImportContext({ status: 'running', importItems: mockInProgressImportItems() })}>
                 <ImportPage />
             </MockProviders>
         ),

@@ -9,10 +9,10 @@ import { IObservable, Observable } from "../lib/subscription";
 import { loadAssets as loadAssetsApi } from "api/src/lib/load-assets";
 import type { ILoadAssetsData, ILoadAssetsResult } from "api/src/lib/load-assets.types";
 import type { ISyncBatchMessage } from "api/src/lib/sync-database.types";
-import axios from "axios";
 import { TaskStatus, TaskQueue, getQueueBackend } from "task-queue";
 import type { IQueueBackend } from "task-queue";
 import { usePlatform } from "./platform-context";
+import { useApi } from "./api-context";
 import type { IDownloadAssetItem } from "./platform-context";
 import { useToast } from "./toast-context";
 import { useUuidGenerator } from "./uuid-generator-context";
@@ -93,6 +93,7 @@ export interface IAssetDatabaseProviderProps {
 
 export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IAssetDatabaseProviderProps) {
     const platform = usePlatform();
+    const api = useApi();
     const uuidGenerator = useUuidGenerator();
     const { addToast } = useToast();
 
@@ -161,7 +162,7 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
             return;
         }
 
-        await axios.post(`${restApiUrl}/apply-database-ops`, { ops }, {
+        await api.post(`${restApiUrl}/apply-database-ops`, { ops }, {
             headers: { "Content-Type": "application/json" },
         });
         platform.notifyDatabaseEdited();
@@ -559,7 +560,7 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
             throw new Error("No database path provided.");
         }
 
-        const response = await axios.get(
+        const response = await api.get<Blob>(
             `${restApiUrl}/asset?id=${encodeURIComponent(assetId)}&type=${encodeURIComponent(assetType)}&db=${encodeURIComponent(databasePath)}`,
             {
                 responseType: "blob",

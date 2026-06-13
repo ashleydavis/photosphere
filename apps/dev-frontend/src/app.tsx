@@ -10,6 +10,8 @@ import {
     ImportContextProvider,
     ToastContextProvider,
     UuidGeneratorProvider,
+    ApiContextProvider,
+    axiosApi,
     StoriesPage,
 } from "user-interface";
 import { useWebSocket } from "./lib/use-web-socket";
@@ -53,6 +55,7 @@ export function App() {
                 <Route path="*" element={
                     <UuidGeneratorProvider value={uuidGenerator}>
                         <PlatformProviderWeb ws={ws}>
+                            <ApiContextProvider value={axiosApi}>
                             <AppContextProvider>
                                 <ToastContextProvider>
                                     <AssetDatabaseProvider queueBackend={queueBackend} restApiUrl="http://localhost:3001">
@@ -70,6 +73,7 @@ export function App() {
                                     </AssetDatabaseProvider>
                                 </ToastContextProvider>
                             </AppContextProvider>
+                            </ApiContextProvider>
                         </PlatformProviderWeb>
                     </UuidGeneratorProvider>
                 } />

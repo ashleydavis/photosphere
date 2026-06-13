@@ -12,6 +12,7 @@ import {
     type IToolsStatus,
 } from "../../context/platform-context";
 import { AppContextProvider } from "../../context/app-context";
+import { ApiContextProvider, axiosApi, type IApi } from "../../context/api-context";
 import { ToastContextProvider } from "../../context/toast-context";
 import { ConfigContextProvider, createConfig } from "../../context/config-context";
 import {
@@ -23,7 +24,7 @@ import {
 import { GallerySourceContext } from "../../context/gallery-source";
 import type { IGalleryItem } from "../../lib/gallery-item";
 import { Observable } from "../../lib/subscription";
-import { ImportContextProvider } from "../../context/import-context";
+import { ImportContext, ImportContextProvider, type IImportContext, type IImportItem } from "../../context/import-context";
 import { GalleryContextProvider } from "../../context/gallery-context";
 import { DeleteConfirmationContextProvider } from "../../context/delete-confirmation-context";
 import { SearchContextProvider } from "../../context/search-context";
@@ -120,6 +121,21 @@ export function mockPlatform(): IPlatformContext {
         markUpdateAsShown: async () => {},
         markNewsAsShown: async () => {},
     };
+}
+
+//
+// Returns a fake API client whose requests resolve to empty responses. Stories
+// that need specific HTTP behaviour pass their own IApi to MockProviders.
+//
+export function mockApi(): IApi {
+    return {
+        async get() {
+            return { data: "", status: 200 };
+        },
+        async post() {
+            return { data: "", status: 200 };
+        },
+    } as IApi;
 }
 
 //
@@ -234,6 +250,43 @@ export function mockAssetDatabase(assets?: IGalleryItem[]): IAssetDatabase {
 }
 
 //
+// A base64-encoded JPEG micro-thumbnail used for mock import items so the
+// "in progress" story renders real thumbnails next to imported files.
+//
+const mockMicroThumbnail = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+
+//
+// Returns a fake import context value with sensible defaults. Pass overrides
+// to set a particular status or item list for stories that need to show an
+// import in a specific state. All action methods are no-ops.
+//
+export function mockImportContext(overrides?: Partial<IImportContext>): IImportContext {
+    const base: IImportContext = {
+        status: 'idle',
+        importItems: [],
+        startImportDirectories: async () => false,
+        startImportFiles: async () => false,
+        cancelImport: noOpAsync,
+        clearImport: noOp,
+    };
+    return { ...base, ...overrides };
+}
+
+//
+// Returns a list of mock import items representing an import in progress:
+// some files already succeeded (with thumbnails) and some are still pending.
+//
+export function mockInProgressImportItems(): IImportItem[] {
+    return [
+        { assetId: "mock-import-1", logicalPath: "photos/holiday/img001.jpg", status: 'success', micro: mockMicroThumbnail },
+        { assetId: "mock-import-2", logicalPath: "photos/holiday/img002.jpg", status: 'success', micro: mockMicroThumbnail },
+        { assetId: "mock-import-3", logicalPath: "photos/holiday/img003.jpg", status: 'skipped' },
+        { assetId: "mock-import-4", logicalPath: "photos/holiday/img004.jpg", status: 'pending' },
+        { assetId: "mock-import-5", logicalPath: "photos/holiday/img005.jpg", status: 'pending' },
+    ];
+}
+
+//
 // Props consumed by MockProviders. Each override lets a story replace
 // the default mock instance for a particular context.
 //
@@ -256,10 +309,24 @@ export interface IMockProvidersProps {
     platform?: IPlatformContext;
 
     //
+    // Optional override for the API/HTTP client. Defaults to the empty-response
+    // mock returned by mockApi(). Pass a custom IApi to control HTTP responses
+    // (e.g. the news feed) for a story.
+    //
+    api?: IApi;
+
+    //
     // Optional override for the asset database context. Defaults to an
     // in-memory mock with no assets loaded.
     //
     assetDatabase?: IAssetDatabase;
+
+    //
+    // Optional override for the import context. When provided, the real
+    // ImportContextProvider is bypassed and this value is supplied directly,
+    // letting a story render the import page in a specific state.
+    //
+    importContext?: IImportContext;
 }
 
 //
@@ -287,9 +354,12 @@ export function MockProviders({
     children,
     uuidGenerator,
     platform,
+    api,
     assetDatabase,
+    importContext,
 }: IMockProvidersProps) {
     const platformValue = platform || mockPlatform();
+    const apiValue = api || mockApi();
     const uuidGeneratorValue = uuidGenerator || mockUuidGenerator();
     const databaseValue = assetDatabase || mockAssetDatabase();
 
@@ -299,16 +369,37 @@ export function MockProviders({
     //
     const config = createInMemoryConfig();
 
+    //
+    // When a story supplies an import context, provide it directly so the
+    // import page can be rendered in a fixed state; otherwise use the real
+    // provider which manages live import state.
+    //
+    function withImportContext(content: ReactNode): JSX.Element {
+        if (importContext) {
+            return (
+                <ImportContext.Provider value={importContext}>
+                    {content}
+                </ImportContext.Provider>
+            );
+        }
+        return (
+            <ImportContextProvider>
+                {content}
+            </ImportContextProvider>
+        );
+    }
+
     return (
         <CssVarsProvider>
             <UuidGeneratorProvider value={uuidGeneratorValue}>
                 <PlatformContextProvider value={platformValue}>
+                    <ApiContextProvider value={apiValue}>
                     <ConfigContextProvider value={config}>
                         <AppContextProvider>
                             <ToastContextProvider>
                                 <AssetDatabaseContext.Provider value={databaseValue}>
                                     <GallerySourceContext.Provider value={databaseValue}>
-                                        <ImportContextProvider>
+                                        {withImportContext(
                                             <GalleryContextProvider>
                                                 <DeleteConfirmationContextProvider>
                                                     <SearchContextProvider>
@@ -318,12 +409,13 @@ export function MockProviders({
                                                     </SearchContextProvider>
                                                 </DeleteConfirmationContextProvider>
                                             </GalleryContextProvider>
-                                        </ImportContextProvider>
+                                        )}
                                     </GallerySourceContext.Provider>
                                 </AssetDatabaseContext.Provider>
                             </ToastContextProvider>
                         </AppContextProvider>
                     </ConfigContextProvider>
+                    </ApiContextProvider>
                 </PlatformContextProvider>
             </UuidGeneratorProvider>
         </CssVarsProvider>
@@ -456,6 +548,7 @@ export function RealDatabaseProviders({ children }: IRealDatabaseProvidersProps)
         <CssVarsProvider>
             <UuidGeneratorProvider value={uuidGeneratorValue}>
                 <PlatformContextProvider value={platformValue}>
+                    <ApiContextProvider value={axiosApi}>
                     <ConfigContextProvider value={config}>
                         <AppContextProvider>
                             <ToastContextProvider>
@@ -477,6 +570,7 @@ export function RealDatabaseProviders({ children }: IRealDatabaseProvidersProps)
                             </ToastContextProvider>
                         </AppContextProvider>
                     </ConfigContextProvider>
+                    </ApiContextProvider>
                 </PlatformContextProvider>
             </UuidGeneratorProvider>
         </CssVarsProvider>

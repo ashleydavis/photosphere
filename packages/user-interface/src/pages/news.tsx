@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { version } from "config";
+import { useApi } from "../context/api-context";
 
 //
 // URL of the GitHub API endpoint that returns the latest non-prerelease release.
@@ -143,6 +144,7 @@ function parseNewsYaml(text: string): INewsItem[] {
 // directly from GitHub on mount; no main-process IPC is involved.
 //
 export function NewsPage() {
+    const api = useApi();
     const [latestVersion, setLatestVersion] = useState<string | undefined>(undefined);
     const [items, setItems] = useState<INewsItem[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
@@ -150,11 +152,8 @@ export function NewsPage() {
     useEffect(() => {
         let cancelled = false;
         async function load() {
-            const versionPromise = fetch(LATEST_RELEASE_URL).then(async (response) => {
-                if (!response.ok) {
-                    return undefined;
-                }
-                const data = await response.json() as { tag_name?: string };
+            const versionPromise = api.get(LATEST_RELEASE_URL).then((response) => {
+                const data = response.data as { tag_name?: string };
                 if (!data.tag_name || typeof data.tag_name !== 'string') {
                     return undefined;
                 }
@@ -163,12 +162,8 @@ export function NewsPage() {
                     : data.tag_name;
             }).catch(() => undefined);
 
-            const feedPromise = fetch(NEWS_FEED_URL).then(async (response) => {
-                if (!response.ok) {
-                    return [] as INewsItem[];
-                }
-                const text = await response.text();
-                return parseNewsYaml(text);
+            const feedPromise = api.get(NEWS_FEED_URL, { responseType: "text" }).then((response) => {
+                return parseNewsYaml(response.data as string);
             }).catch(() => [] as INewsItem[]);
 
             const [resolvedVersion, resolvedItems] = await Promise.all([versionPromise, feedPromise]);
@@ -183,7 +178,7 @@ export function NewsPage() {
         return () => {
             cancelled = true;
         };
-    }, []);
+    }, [api]);
 
     const runningVersion = version;
     const hasUpdate = latestVersion !== undefined && latestVersion !== runningVersion;

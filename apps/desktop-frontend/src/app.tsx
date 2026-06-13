@@ -10,6 +10,8 @@ import {
     ImportContextProvider,
     ToastContextProvider,
     UuidGeneratorProvider,
+    ApiContextProvider,
+    axiosApi,
     StoriesPage,
 } from "user-interface";
 import { ElectronRendererQueueBackend } from "./lib/electron-renderer-queue-backend";
@@ -65,6 +67,7 @@ export function App({ electronAPI }: IAppProps) {
                 <Route path="*" element={
                     <UuidGeneratorProvider value={uuidGenerator}>
                         <PlatformProviderElectron electronAPI={electronAPI}>
+                            <ApiContextProvider value={axiosApi}>
                             <AppContextProvider>
                                 <ToastContextProvider>
                                     <AssetDatabaseProvider queueBackend={queueBackend} restApiUrl={restApiUrl}>
@@ -84,6 +87,7 @@ export function App({ electronAPI }: IAppProps) {
                                     </AssetDatabaseProvider>
                                 </ToastContextProvider>
                             </AppContextProvider>
+                            </ApiContextProvider>
                         </PlatformProviderElectron>
                     </UuidGeneratorProvider>
                 } />

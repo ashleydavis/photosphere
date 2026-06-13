@@ -139,7 +139,11 @@ export interface IImportContext {
     clearImport: () => void;
 }
 
-const ImportContext = createContext<IImportContext | undefined>(undefined);
+//
+// React context carrying the current import session state.
+// Exported so stories and tests can supply a custom value directly.
+//
+export const ImportContext = createContext<IImportContext | undefined>(undefined);
 
 export interface IImportContextProviderProps {
     // Child components that can access the import context.
