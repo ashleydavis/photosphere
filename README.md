@@ -18,6 +18,8 @@ Photosphere is a local-first application available as:
 - A desktop application app for Windows, macOS, and Linux - grab it from the [releases page](https://github.com/ashleydavis/photosphere/releases).
 - A mobile application (Android and iOS apps - COMING SOON).
 
+Visit the [Photosphere website](https://photosphere.codecapers.com.au/) to learn more.
+
 Note: The self-hosted server option has been discontinued for now, but may be reinstated later if there's demand for it.
 
 Contained herein are the code for Photosphere's:
