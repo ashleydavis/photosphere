@@ -1,6 +1,6 @@
 import React from "react";
 import { Gallery } from "../../components/gallery";
-import { MockProviders, mockAssetDatabase, mockAssets } from "../mocks";
+import { MockProviders, RealDatabaseProviders, mockAssetDatabase } from "../mocks";
 import type { IStory } from "../types";
 
 //
@@ -22,9 +22,11 @@ export const stories: IStory[] = [
         name: "Gallery (populated)",
         category: "Components",
         render: () => (
-            <MockProviders assetDatabase={mockAssetDatabase(mockAssets(24))}>
-                <Gallery />
-            </MockProviders>
+            <RealDatabaseProviders>
+                <div style={{ position: "relative", width: "100%", height: "500px" }}>
+                    <Gallery />
+                </div>
+            </RealDatabaseProviders>
         ),
     },
 ];

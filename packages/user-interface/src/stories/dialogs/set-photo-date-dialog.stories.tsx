@@ -1,6 +1,6 @@
 import React from "react";
 import { SetPhotoDateDialog } from "../../components/set-photo-date-dialog";
-import { MockProviders, noOp, noOpAsync } from "../mocks";
+import { MockProviders, StoryModalLauncher, noOpAsync } from "../mocks";
 import type { IStory } from "../types";
 
 //
@@ -13,7 +13,9 @@ export const stories: IStory[] = [
         category: "Dialogs",
         render: () => (
             <MockProviders>
-                <SetPhotoDateDialog open={true} onClose={noOp} onSetDate={noOpAsync} />
+                <StoryModalLauncher label="set photo date dialog (empty)">
+                    {(open, onClose) => <SetPhotoDateDialog open={open} onClose={onClose} onSetDate={noOpAsync} />}
+                </StoryModalLauncher>
             </MockProviders>
         ),
     },
@@ -23,12 +25,16 @@ export const stories: IStory[] = [
         category: "Dialogs",
         render: () => (
             <MockProviders>
-                <SetPhotoDateDialog
-                    open={true}
-                    onClose={noOp}
-                    onSetDate={noOpAsync}
-                    currentDate="2024-06-15T10:30:00.000Z"
-                    />
+                <StoryModalLauncher label="set photo date dialog (with existing)">
+                    {(open, onClose) => (
+                        <SetPhotoDateDialog
+                            open={open}
+                            onClose={onClose}
+                            onSetDate={noOpAsync}
+                            currentDate="2024-06-15T10:30:00.000Z"
+                            />
+                    )}
+                </StoryModalLauncher>
             </MockProviders>
         ),
     },

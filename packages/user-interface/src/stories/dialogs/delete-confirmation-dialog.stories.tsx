@@ -1,6 +1,6 @@
 import React from "react";
 import { DeleteConfirmationDialog } from "../../components/delete-confirmation-dialog";
-import { MockProviders, noOp, noOpAsync } from "../mocks";
+import { MockProviders, StoryModalLauncher } from "../mocks";
 import type { IStory } from "../types";
 
 //
@@ -13,7 +13,12 @@ export const stories: IStory[] = [
         category: "Dialogs",
         render: () => (
             <MockProviders>
-                <DeleteConfirmationDialog open={true} numItems={1} onCancel={noOp} onDelete={noOpAsync} />
+                <StoryModalLauncher label="delete confirmation (1 item)">
+                    {(open, onClose) => open
+                        ? <DeleteConfirmationDialog open={open} numItems={1} onCancel={onClose} onDelete={async () => onClose()} />
+                        : null
+                    }
+                </StoryModalLauncher>
             </MockProviders>
         ),
     },
@@ -23,7 +28,12 @@ export const stories: IStory[] = [
         category: "Dialogs",
         render: () => (
             <MockProviders>
-                <DeleteConfirmationDialog open={true} numItems={42} onCancel={noOp} onDelete={noOpAsync} />
+                <StoryModalLauncher label="delete confirmation (many items)">
+                    {(open, onClose) => open
+                        ? <DeleteConfirmationDialog open={open} numItems={42} onCancel={onClose} onDelete={async () => onClose()} />
+                        : null
+                    }
+                </StoryModalLauncher>
             </MockProviders>
         ),
     },

@@ -1,6 +1,6 @@
 import React from "react";
 import { RemoveDatabaseDialog } from "../../components/remove-database-dialog";
-import { MockProviders, noOp } from "../mocks";
+import { MockProviders, StoryModalLauncher } from "../mocks";
 import type { IStory } from "../types";
 import type { IDatabaseEntry } from "../../context/platform-context";
 
@@ -23,7 +23,9 @@ export const stories: IStory[] = [
         category: "Dialogs",
         render: () => (
             <MockProviders>
-                <RemoveDatabaseDialog open={true} entry={sampleEntry} onClose={noOp} />
+                <StoryModalLauncher label="remove database dialog">
+                    {(open, onClose) => <RemoveDatabaseDialog open={open} entry={sampleEntry} onClose={onClose} />}
+                </StoryModalLauncher>
             </MockProviders>
         ),
     },

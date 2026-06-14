@@ -1,6 +1,6 @@
 import React from "react";
 import { ReceiveSecretDialog } from "../../components/receive-secret-dialog";
-import { MockProviders, noOp } from "../mocks";
+import { MockProviders, StoryModalLauncher } from "../mocks";
 import type { IStory } from "../types";
 
 //
@@ -13,7 +13,9 @@ export const stories: IStory[] = [
         category: "Dialogs",
         render: () => (
             <MockProviders>
-                <ReceiveSecretDialog open={true} onClose={noOp} />
+                <StoryModalLauncher label="receive secret dialog">
+                    {(open, onClose) => <ReceiveSecretDialog open={open} onClose={onClose} />}
+                </StoryModalLauncher>
             </MockProviders>
         ),
     },

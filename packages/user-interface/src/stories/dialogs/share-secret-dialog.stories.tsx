@@ -1,6 +1,6 @@
 import React from "react";
 import { ShareSecretDialog } from "../../components/share-secret-dialog";
-import { MockProviders, noOp } from "../mocks";
+import { MockProviders, StoryModalLauncher } from "../mocks";
 import type { IStory } from "../types";
 import type { ISharedSecretEntry } from "../../context/platform-context";
 
@@ -19,7 +19,9 @@ export const stories: IStory[] = [
         category: "Dialogs",
         render: () => (
             <MockProviders>
-                <ShareSecretDialog open={true} entry={sampleEntry} onClose={noOp} />
+                <StoryModalLauncher label="share secret dialog">
+                    {(open, onClose) => <ShareSecretDialog open={open} entry={sampleEntry} onClose={onClose} />}
+                </StoryModalLauncher>
             </MockProviders>
         ),
     },

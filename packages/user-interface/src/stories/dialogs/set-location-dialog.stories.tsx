@@ -1,6 +1,6 @@
 import React from "react";
 import { SetLocationDialog } from "../../components/set-location-dialog";
-import { MockProviders, noOp } from "../mocks";
+import { MockProviders, StoryModalLauncher, noOp } from "../mocks";
 import type { IStory } from "../types";
 
 //
@@ -13,12 +13,19 @@ export const stories: IStory[] = [
         category: "Dialogs",
         render: () => (
             <MockProviders>
-                <SetLocationDialog
-                    open={true}
-                    onSetLocation={noOp}
-                    onClearLocation={noOp}
-                    onClose={noOp}
-                    />
+                <StoryModalLauncher label="set location dialog (empty)">
+                    {(open, onClose) => open
+                        ? (
+                            <SetLocationDialog
+                                open={open}
+                                onSetLocation={noOp}
+                                onClearLocation={noOp}
+                                onClose={onClose}
+                                />
+                        )
+                        : null
+                    }
+                </StoryModalLauncher>
             </MockProviders>
         ),
     },
@@ -28,13 +35,20 @@ export const stories: IStory[] = [
         category: "Dialogs",
         render: () => (
             <MockProviders>
-                <SetLocationDialog
-                    open={true}
-                    initialCoordinates={{ lat: -33.8688, lng: 151.2093 }}
-                    onSetLocation={noOp}
-                    onClearLocation={noOp}
-                    onClose={noOp}
-                    />
+                <StoryModalLauncher label="set location dialog (with existing)">
+                    {(open, onClose) => open
+                        ? (
+                            <SetLocationDialog
+                                open={open}
+                                initialCoordinates={{ lat: -33.8688, lng: 151.2093 }}
+                                onSetLocation={noOp}
+                                onClearLocation={noOp}
+                                onClose={onClose}
+                                />
+                        )
+                        : null
+                    }
+                </StoryModalLauncher>
             </MockProviders>
         ),
     },

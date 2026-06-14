@@ -1,6 +1,6 @@
 import React from "react";
 import { EditDatabaseModal } from "../../components/edit-database-modal";
-import { MockProviders, noOp } from "../mocks";
+import { MockProviders, StoryModalLauncher } from "../mocks";
 import type { IStory } from "../types";
 import type { IDatabaseEntry } from "../../context/platform-context";
 
@@ -23,15 +23,19 @@ export const stories: IStory[] = [
         category: "Modals",
         render: () => (
             <MockProviders>
-                <EditDatabaseModal
-                    open={true}
-                    entry={sampleEntry}
-                    databases={[sampleEntry]}
-                    s3Secrets={[]}
-                    encryptionSecrets={[]}
-                    geocodingSecrets={[]}
-                    onClose={noOp}
-                    />
+                <StoryModalLauncher label="edit database modal">
+                    {(open, onClose) => (
+                        <EditDatabaseModal
+                            open={open}
+                            entry={sampleEntry}
+                            databases={[sampleEntry]}
+                            s3Secrets={[]}
+                            encryptionSecrets={[]}
+                            geocodingSecrets={[]}
+                            onClose={onClose}
+                            />
+                    )}
+                </StoryModalLauncher>
             </MockProviders>
         ),
     },

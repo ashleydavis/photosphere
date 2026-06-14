@@ -1,6 +1,6 @@
 import React from "react";
 import { ConfigurationDialog } from "../../components/configuration-dialog";
-import { MockProviders, noOp } from "../mocks";
+import { MockProviders, StoryModalLauncher } from "../mocks";
 import type { IStory } from "../types";
 
 //
@@ -13,7 +13,9 @@ export const stories: IStory[] = [
         category: "Dialogs",
         render: () => (
             <MockProviders>
-                <ConfigurationDialog open={true} onClose={noOp} />
+                <StoryModalLauncher label="configuration dialog">
+                    {(open, onClose) => <ConfigurationDialog open={open} onClose={onClose} />}
+                </StoryModalLauncher>
             </MockProviders>
         ),
     },

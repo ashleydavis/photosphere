@@ -14,7 +14,10 @@ const singleItem = mockGalleryItem({ _id: "carousel-single", origFileName: "alon
 const multipleItems = mockAssets(5);
 
 //
-// Stories for the Carousel.
+// Stories for the Carousel. Uses mock items whose micro thumbnail is a real
+// image, so the centre and side frames all show a picture. The carousel items
+// are absolutely positioned, so each story hosts them in a sized,
+// relatively-positioned box.
 //
 export const stories: IStory[] = [
     {
@@ -23,7 +26,9 @@ export const stories: IStory[] = [
         category: "Components",
         render: () => (
             <MockProviders assetDatabase={mockAssetDatabase([singleItem])}>
-                <Carousel asset={singleItem} />
+                <div style={{ position: "relative", width: "100%", height: "400px", overflow: "hidden" }}>
+                    <Carousel asset={singleItem} />
+                </div>
             </MockProviders>
         ),
     },
@@ -33,7 +38,9 @@ export const stories: IStory[] = [
         category: "Components",
         render: () => (
             <MockProviders assetDatabase={mockAssetDatabase(multipleItems)}>
-                <Carousel asset={multipleItems[2]} />
+                <div style={{ position: "relative", width: "100%", height: "400px", overflow: "hidden" }}>
+                    <Carousel asset={multipleItems[2]} />
+                </div>
             </MockProviders>
         ),
     },

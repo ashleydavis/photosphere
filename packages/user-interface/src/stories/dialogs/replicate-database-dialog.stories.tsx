@@ -1,6 +1,6 @@
 import React from "react";
 import { ReplicateDatabaseDialog } from "../../components/replicate-database-dialog";
-import { MockProviders, noOp } from "../mocks";
+import { MockProviders, StoryModalLauncher } from "../mocks";
 import type { IStory } from "../types";
 import type { IDatabaseEntry } from "../../context/platform-context";
 
@@ -23,14 +23,18 @@ export const stories: IStory[] = [
         category: "Dialogs",
         render: () => (
             <MockProviders>
-                <ReplicateDatabaseDialog
-                    open={true}
-                    sourceEntry={sampleEntry}
-                    encryptionSecrets={[]}
-                    s3Secrets={[]}
-                    geocodingSecrets={[]}
-                    onClose={noOp}
-                    />
+                <StoryModalLauncher label="replicate database dialog">
+                    {(open, onClose) => (
+                        <ReplicateDatabaseDialog
+                            open={open}
+                            sourceEntry={sampleEntry}
+                            encryptionSecrets={[]}
+                            s3Secrets={[]}
+                            geocodingSecrets={[]}
+                            onClose={onClose}
+                            />
+                    )}
+                </StoryModalLauncher>
             </MockProviders>
         ),
     },

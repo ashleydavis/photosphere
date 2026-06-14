@@ -5,11 +5,14 @@ import type { IStory } from "../types";
 import type { IGalleryLayout } from "../../lib/create-layout";
 
 //
-// Empty layout shell used by the gallery-scrollbar story.
+// Layout shell used by the gallery-scrollbar story. The scrollbar only reads
+// galleryHeight to size and place its thumb, so a tall gallery (relative to the
+// 300px host below) is enough to make the scrollbar appear instead of rendering
+// nothing.
 //
 const layout: IGalleryLayout = {
     rows: [],
-    galleryHeight: 0,
+    galleryHeight: 2000,
 };
 
 //

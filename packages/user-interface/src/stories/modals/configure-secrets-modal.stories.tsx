@@ -1,6 +1,6 @@
 import React from "react";
 import { ConfigureSecretsModal } from "../../components/configure-secrets-modal";
-import { MockProviders, noOp } from "../mocks";
+import { MockProviders, StoryModalLauncher, noOp } from "../mocks";
 import type { IStory } from "../types";
 
 //
@@ -13,15 +13,19 @@ export const stories: IStory[] = [
         category: "Modals",
         render: () => (
             <MockProviders>
-                <ConfigureSecretsModal
-                    open={true}
-                    initialValue={{ s3Key: undefined, encryptionKey: undefined, geocodingKey: undefined }}
-                    s3Secrets={[]}
-                    encryptionSecrets={[]}
-                    geocodingSecrets={[]}
-                    onSave={noOp}
-                    onClose={noOp}
-                    />
+                <StoryModalLauncher label="configure secrets modal">
+                    {(open, onClose) => (
+                        <ConfigureSecretsModal
+                            open={open}
+                            initialValue={{ s3Key: undefined, encryptionKey: undefined, geocodingKey: undefined }}
+                            s3Secrets={[]}
+                            encryptionSecrets={[]}
+                            geocodingSecrets={[]}
+                            onSave={noOp}
+                            onClose={onClose}
+                            />
+                    )}
+                </StoryModalLauncher>
             </MockProviders>
         ),
     },

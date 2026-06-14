@@ -1,6 +1,6 @@
 import React from "react";
 import { CreateSecretDialog } from "../../components/create-secret-dialog";
-import { MockProviders, noOp } from "../mocks";
+import { MockProviders, StoryModalLauncher, noOp } from "../mocks";
 import type { IStory } from "../types";
 
 //
@@ -13,13 +13,17 @@ export const stories: IStory[] = [
         category: "Dialogs",
         render: () => (
             <MockProviders>
-                <CreateSecretDialog
-                    open={true}
-                    secretType="s3-credentials"
-                    defaultName="my-secret"
-                    onClose={noOp}
-                    onSave={noOp}
-                    />
+                <StoryModalLauncher label="create secret dialog">
+                    {(open, onClose) => (
+                        <CreateSecretDialog
+                            open={open}
+                            secretType="s3-credentials"
+                            defaultName="my-secret"
+                            onClose={onClose}
+                            onSave={noOp}
+                            />
+                    )}
+                </StoryModalLauncher>
             </MockProviders>
         ),
     },

@@ -1,15 +1,12 @@
 import React from "react";
 import { FullImage } from "../../components/full-image";
-import { MockProviders, mockAssetDatabase, mockGalleryItem } from "../mocks";
+import { RealDatabaseProviders, WithRealAssets } from "../mocks";
 import type { IStory } from "../types";
 
 //
-// Item used by the full-image story.
-//
-const item = mockGalleryItem({ _id: "full-image-1" });
-
-//
-// Stories for the FullImage component.
+// Stories for the FullImage component. Uses the 50-assets fixture so a real
+// photo loads. FullImage positions its image absolutely, so it is hosted in a
+// sized, relatively-positioned box.
 //
 export const stories: IStory[] = [
     {
@@ -17,9 +14,15 @@ export const stories: IStory[] = [
         name: "Full Image",
         category: "Components",
         render: () => (
-            <MockProviders assetDatabase={mockAssetDatabase([item])}>
-                <FullImage asset={item} />
-            </MockProviders>
+            <RealDatabaseProviders>
+                <WithRealAssets count={1}>
+                    {assets => (
+                        <div style={{ position: "relative", width: "100%", height: "400px" }}>
+                            <FullImage asset={assets[0]} />
+                        </div>
+                    )}
+                </WithRealAssets>
+            </RealDatabaseProviders>
         ),
     },
 ];

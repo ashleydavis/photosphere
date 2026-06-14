@@ -1,6 +1,6 @@
 import React from "react";
 import { ReceiveDatabaseDialog } from "../../components/receive-database-dialog";
-import { MockProviders, noOp } from "../mocks";
+import { MockProviders, StoryModalLauncher } from "../mocks";
 import type { IStory } from "../types";
 
 //
@@ -13,7 +13,9 @@ export const stories: IStory[] = [
         category: "Dialogs",
         render: () => (
             <MockProviders>
-                <ReceiveDatabaseDialog open={true} onClose={noOp} />
+                <StoryModalLauncher label="receive database dialog">
+                    {(open, onClose) => <ReceiveDatabaseDialog open={open} onClose={onClose} />}
+                </StoryModalLauncher>
             </MockProviders>
         ),
     },

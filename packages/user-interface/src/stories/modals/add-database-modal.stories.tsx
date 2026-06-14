@@ -1,6 +1,6 @@
 import React from "react";
 import { AddDatabaseModal } from "../../components/add-database-modal";
-import { MockProviders, noOp } from "../mocks";
+import { MockProviders, StoryModalLauncher } from "../mocks";
 import type { IStory } from "../types";
 
 //
@@ -13,7 +13,9 @@ export const stories: IStory[] = [
         category: "Modals",
         render: () => (
             <MockProviders>
-                <AddDatabaseModal open={true} onClose={noOp} />
+                <StoryModalLauncher label="add database modal">
+                    {(open, onClose) => <AddDatabaseModal open={open} onClose={onClose} />}
+                </StoryModalLauncher>
             </MockProviders>
         ),
     },

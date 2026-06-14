@@ -1,6 +1,6 @@
 import React from "react";
 import { S3BrowserModal } from "../../components/s3-browser-modal";
-import { MockProviders, mockPlatform, noOp } from "../mocks";
+import { MockProviders, StoryModalLauncher, mockPlatform, noOp } from "../mocks";
 import type { IStory } from "../types";
 
 //
@@ -16,7 +16,9 @@ export const stories: IStory[] = [
             platform.listS3Dirs = async () => ["albums", "raw", "thumbnails"];
             return (
                 <MockProviders platform={platform}>
-                    <S3BrowserModal open={true} s3Key="aws-prod" onClose={noOp} onSelect={noOp} />
+                    <StoryModalLauncher label="S3 browser modal">
+                        {(open, onClose) => <S3BrowserModal open={open} s3Key="aws-prod" onClose={onClose} onSelect={noOp} />}
+                    </StoryModalLauncher>
                 </MockProviders>
             );
         },

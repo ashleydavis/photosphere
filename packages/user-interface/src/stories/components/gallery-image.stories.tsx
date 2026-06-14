@@ -1,15 +1,41 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { GalleryImage } from "../../components/gallery-image";
-import { MockProviders, mockGalleryItem, mockAssetDatabase, noOp } from "../mocks";
+import { RealDatabaseProviders, WithRealAssets, noOp } from "../mocks";
+import { useGallery } from "../../context/gallery-context";
+import type { IGalleryItem } from "../../lib/gallery-item";
 import type { IStory } from "../types";
 
 //
-// Item used by both gallery-image stories.
+// Props for SelectOnMount.
 //
-const item = mockGalleryItem({ _id: "gallery-image-1" });
+interface ISelectOnMountProps {
+    //
+    // The asset to mark as selected once the gallery context is ready.
+    //
+    item: IGalleryItem;
+
+    //
+    // Content rendered inside the selecting gallery context.
+    //
+    children: React.ReactNode;
+}
 
 //
-// Stories for the GalleryImage component.
+// Puts the gallery into multi-select mode and selects the given item on mount,
+// so the "selected" gallery-image story shows the selected (ticked) state.
+//
+function SelectOnMount({ item, children }: ISelectOnMountProps) {
+    const { enableSelecting, addToMultipleSelection } = useGallery();
+    useEffect(() => {
+        enableSelecting(true);
+        addToMultipleSelection(item);
+    }, []);
+    return <>{children}</>;
+}
+
+//
+// Stories for the GalleryImage component. Uses the 50-assets fixture so a real
+// thumbnail loads instead of a grey placeholder.
 //
 export const stories: IStory[] = [
     {
@@ -17,11 +43,15 @@ export const stories: IStory[] = [
         name: "Gallery Image (default)",
         category: "Components",
         render: () => (
-            <MockProviders assetDatabase={mockAssetDatabase([item])}>
-                <div style={{ position: "relative", width: "200px", height: "200px" }}>
-                    <GalleryImage item={item} onClick={noOp} x={0} y={0} width={200} height={200} />
-                </div>
-            </MockProviders>
+            <RealDatabaseProviders>
+                <WithRealAssets count={1}>
+                    {assets => (
+                        <div style={{ position: "relative", width: "200px", height: "200px" }}>
+                            <GalleryImage item={assets[0]} onClick={noOp} x={0} y={0} width={200} height={200} />
+                        </div>
+                    )}
+                </WithRealAssets>
+            </RealDatabaseProviders>
         ),
     },
     {
@@ -29,11 +59,17 @@ export const stories: IStory[] = [
         name: "Gallery Image (selected)",
         category: "Components",
         render: () => (
-            <MockProviders assetDatabase={mockAssetDatabase([item])}>
-                <div style={{ position: "relative", width: "200px", height: "200px" }}>
-                    <GalleryImage item={item} onClick={noOp} x={0} y={0} width={200} height={200} />
-                </div>
-            </MockProviders>
+            <RealDatabaseProviders>
+                <WithRealAssets count={1}>
+                    {assets => (
+                        <SelectOnMount item={assets[0]}>
+                            <div style={{ position: "relative", width: "200px", height: "200px" }}>
+                                <GalleryImage item={assets[0]} onClick={noOp} x={0} y={0} width={200} height={200} />
+                            </div>
+                        </SelectOnMount>
+                    )}
+                </WithRealAssets>
+            </RealDatabaseProviders>
         ),
     },
 ];

@@ -9,7 +9,9 @@ import type { IStory } from "../types";
 const item = mockGalleryItem({ _id: "video-1", origFileName: "clip.mp4", contentType: "video/mp4" });
 
 //
-// Stories for the Video component.
+// Stories for the Video component. The video element is absolutely positioned
+// and would otherwise cover the whole viewer, so it is hosted in a sized,
+// relatively-positioned box that keeps it within the preview pane.
 //
 export const stories: IStory[] = [
     {
@@ -18,7 +20,9 @@ export const stories: IStory[] = [
         category: "Components",
         render: () => (
             <MockProviders assetDatabase={mockAssetDatabase([item])}>
-                <Video asset={item} />
+                <div style={{ position: "relative", width: "100%", height: "400px", overflow: "hidden" }}>
+                    <Video asset={item} />
+                </div>
             </MockProviders>
         ),
     },

@@ -1,6 +1,6 @@
 import React from "react";
 import { ViewDatabaseDialog } from "../../components/view-database-dialog";
-import { MockProviders, noOp } from "../mocks";
+import { MockProviders, StoryModalLauncher } from "../mocks";
 import type { IStory } from "../types";
 import type { IDatabaseEntry } from "../../context/platform-context";
 
@@ -24,13 +24,17 @@ export const stories: IStory[] = [
         category: "Dialogs",
         render: () => (
             <MockProviders>
-                <ViewDatabaseDialog
-                    open={true}
-                    entry={sampleEntry}
-                    allSecrets={[]}
-                    onClose={noOp}
-                    getSecretValue={async () => undefined}
-                    />
+                <StoryModalLauncher label="view database dialog">
+                    {(open, onClose) => (
+                        <ViewDatabaseDialog
+                            open={open}
+                            entry={sampleEntry}
+                            allSecrets={[]}
+                            onClose={onClose}
+                            getSecretValue={async () => undefined}
+                            />
+                    )}
+                </StoryModalLauncher>
             </MockProviders>
         ),
     },

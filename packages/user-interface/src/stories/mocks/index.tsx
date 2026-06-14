@@ -1,5 +1,6 @@
 import React, { ReactNode, useEffect, useState } from "react";
 import { CssVarsProvider } from "@mui/joy/styles/CssVarsProvider";
+import Button from "@mui/joy/Button";
 import { RandomUuidGenerator, type IUuidGenerator } from "utils";
 import { getQueueBackend } from "task-queue";
 import { UuidGeneratorProvider } from "../../context/uuid-generator-context";
@@ -25,7 +26,7 @@ import { GallerySourceContext } from "../../context/gallery-source";
 import type { IGalleryItem } from "../../lib/gallery-item";
 import { Observable } from "../../lib/subscription";
 import { ImportContext, ImportContextProvider, type IImportContext, type IImportItem } from "../../context/import-context";
-import { GalleryContextProvider } from "../../context/gallery-context";
+import { GalleryContextProvider, useGallery } from "../../context/gallery-context";
 import { DeleteConfirmationContextProvider } from "../../context/delete-confirmation-context";
 import { SearchContextProvider } from "../../context/search-context";
 import { GalleryLayoutContextProvider } from "../../context/gallery-layout-context";
@@ -42,6 +43,99 @@ export const noOp: () => void = () => {};
 // in stories where the action does not need to do anything.
 //
 export const noOpAsync: () => Promise<void> = async () => {};
+
+//
+// Props for StoryModalLauncher.
+//
+export interface IStoryModalLauncherProps {
+    //
+    // Text shown on the trigger button (prefixed with Show/Hide).
+    //
+    label: string;
+
+    //
+    // Renders the modal/overlay. Receives whether it is currently open and a
+    // callback that dismisses it.
+    //
+    children: (open: boolean, onClose: () => void) => ReactNode;
+}
+
+//
+// Renders a trigger button that opens a modal or overlay on demand and lets it
+// be dismissed again. Stories use this so modal content does not cover the
+// story browser the moment a story loads: the modal is shown only after the
+// button is pressed. When open, a solid full-screen backdrop is drawn behind
+// the modal so the story browser is hidden, and clicking that backdrop dismisses
+// the modal and restores the browser.
+//
+export function StoryModalLauncher({ label, children }: IStoryModalLauncherProps) {
+    const [open, setOpen] = useState<boolean>(false);
+
+    //
+    // Dismisses the modal, but only when the backdrop itself is clicked (not when
+    // a click bubbles up from the modal content).
+    //
+    function handleBackdropClick(event: React.MouseEvent<HTMLDivElement>): void {
+        if (event.target === event.currentTarget) {
+            setOpen(false);
+        }
+    }
+
+    return (
+        <div className="p-4">
+            {!open && (
+                <Button onClick={() => setOpen(true)}>
+                    {`Show ${label}`}
+                </Button>
+            )}
+            {open && (
+                <div
+                    onClick={handleBackdropClick}
+                    style={{
+                        position: "fixed",
+                        inset: 0,
+                        background: "var(--joy-palette-background-body, #1a1a1a)",
+                        zIndex: 1000,
+                    }}
+                    >
+                    {children(open, () => setOpen(false))}
+                </div>
+            )}
+        </div>
+    );
+}
+
+//
+// Props for WithRealAssets.
+//
+export interface IWithRealAssetsProps {
+    //
+    // Number of real assets the story needs before it can render.
+    //
+    count: number;
+
+    //
+    // Renders story content once enough real assets have loaded from the
+    // 50-assets fixture. Receives the first `count` loaded gallery items.
+    //
+    children: (assets: IGalleryItem[]) => ReactNode;
+}
+
+//
+// Supplies real gallery items loaded from the 50-assets fixture to a story.
+// Must be rendered inside RealDatabaseProviders. Shows a short loading message
+// until at least `count` assets have arrived from the REST API, then hands the
+// first `count` items to the render callback so components display real photos
+// instead of grey placeholders.
+//
+export function WithRealAssets({ count, children }: IWithRealAssetsProps) {
+    const { sortedItems } = useGallery();
+    const items = sortedItems();
+    if (items.length < count) {
+        return <div className="p-4">Loading assets…</div>;
+    }
+    return <>{children(items.slice(0, count))}</>;
+}
 
 //
 // Builds a deterministic uuid generator that returns "mock-uuid-<n>" values.
@@ -139,6 +233,14 @@ export function mockApi(): IApi {
 }
 
 //
+// Base64-encoded JPEG (one of the repo's test images) used as the micro
+// thumbnail for mock gallery items, so components that render `item.micro`
+// directly (film strip, carousel side frames) show a real image rather than a
+// blank/1px placeholder.
+//
+export const sampleMicroBase64 = "/9j/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCABQAGQDASIAAhEBAxEB/8QAGQABAQEBAQEAAAAAAAAAAAAAAAMEBQIH/8QAJhAAAgMAAQMEAgMBAAAAAAAAAAECAwQRBRIxEyFRcSJhBhRBUv/EABQBAQAAAAAAAAAAAAAAAAAAAAD/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwD74AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADkfyLZsyZZTx1xUYrunbLh8e/HCXye+o6r/7GPJlnGu2/mUrHHu7Ypc+PkfyGrTpwTzZaPUdq95d6j28NP8A3yT00a7LMW2rOloo7oyolYvyi1x58cgZrOq66I35JuE9sL4Uws7eE+9cptfSZsx6NNPVHh2Wxv7qvVhYoKL88NNIx2dK1Xxv1zUIbZXwuhX3cpdi4Sb+mzZjz6buqPdsqjR21elCtTUn55bbQGrV1CjJcoaZOtODkpyX4vjyk/n9F89vr0QtUJwUlyozXDX2ZN/TobrU9Nk3TGP41x9uJf8AXPz8GmqqyORVWXOdii4+pxw3+wODl6pqnbllK+udtt3p2Y1DiVUeX78+fbj/AEpZu33U7Nue2uFGecoxpcOe9R8tvyiNPS9aqy53lprlTapy1xmm5JPnx55f7LWYd9NOzFnqrnRonKUbnPjsUvKa8sDuZrVfnquj7Rsipr6a5KE81Soz1Ux941xUF9JcFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/2Q==";
+
+//
 // Returns a fake gallery item with sensible defaults. Pass overrides to
 // customise specific fields.
 //
@@ -153,7 +255,7 @@ export function mockGalleryItem(overrides?: Partial<IGalleryItem>): IGalleryItem
         fileDate: "2024-01-01T00:00:00.000Z",
         uploadDate: "2024-01-01T00:00:00.000Z",
         photoDate: "2024-01-01T00:00:00.000Z",
-        micro: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+        micro: sampleMicroBase64,
         color: [128, 128, 128],
     };
     return { ...base, ...overrides };
@@ -174,7 +276,7 @@ export function mockAsset(overrides?: Partial<IAsset>): IAsset {
         fileDate: "2024-01-01T00:00:00.000Z",
         uploadDate: "2024-01-01T00:00:00.000Z",
         photoDate: "2024-01-01T00:00:00.000Z",
-        micro: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+        micro: sampleMicroBase64,
         color: [128, 128, 128],
     };
     return { ...base, ...overrides };

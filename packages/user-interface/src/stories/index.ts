@@ -39,7 +39,6 @@ import { stories as carouselStories } from "./components/carousel.stories";
 import { stories as collapsibleSectionStories } from "./components/collapsible-section.stories";
 import { stories as emptyDatabaseStories } from "./components/empty-database.stories";
 import { stories as filmStripStories } from "./components/film-strip.stories";
-import { stories as fpsStories } from "./components/fps.stories";
 import { stories as fullImageStories } from "./components/full-image.stories";
 import { stories as fullScreenSpinnerStories } from "./components/full-screen-spinner.stories";
 import { stories as galleryStories } from "./components/gallery.stories";
@@ -101,7 +100,6 @@ export const stories: IStory[] = [
     ...collapsibleSectionStories,
     ...emptyDatabaseStories,
     ...filmStripStories,
-    ...fpsStories,
     ...fullImageStories,
     ...fullScreenSpinnerStories,
     ...galleryStories,
