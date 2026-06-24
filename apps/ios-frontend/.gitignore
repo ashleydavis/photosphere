@@ -1,0 +1,17 @@
+.idea/
+node_modules/
+.vscode/
+*.map
+.DS_Store
+.sourcemaps
+dist/
+build/
+tsconfig.tsbuildinfo
+
+# iOS generated build outputs (native sources under ios/ stay tracked).
+ios/App/Pods/
+ios/App/public/
+ios/App/App/capacitor.config.json
+ios/App/App/config.xml
+ios/DerivedData/
+ios/build/

@@ -1,0 +1,38 @@
+{
+  "name": "android-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "compile": "tsc --noEmit",
+    "c": "bun run compile",
+    "bundle": "vite build",
+    "test": "jest --passWithNoTests",
+    "t": "bun run test",
+    "clean": "rm -rf dist build tsconfig.tsbuildinfo",
+    "sync": "vite build && cap sync android",
+    "open": "bun run sync && cap open android",
+    "launch": "vite build && cap run android",
+    "smoke": "./smoke-tests.sh"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "@capacitor/core": "^5.7.4",
+    "@capacitor/android": "^5.7.4"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^5.7.4",
+    "@vitejs/plugin-react": "^4.2.1",
+    "vite": "^5.1.6",
+    "typescript": "^5.3.3",
+    "jest": "^29.0.1",
+    "ts-jest": "^29.0.5",
+    "@types/jest": "^29.4.0",
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "jest-environment-jsdom": "^29.4.1",
+    "@testing-library/react": "^14.2.1",
+    "@testing-library/jest-dom": "^6.4.2"
+  }
+}
