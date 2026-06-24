@@ -85,7 +85,7 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
     const navigate = useNavigate();
     // The current location, used to show a temporary sidebar entry for pages
     // that have no permanent sidebar link.
-    const temporaryNavPage = findTemporaryNavPage(location.pathname, ["/gallery", "/map", "/import", "/databases", "/secrets"]);
+    const temporaryNavPage = findTemporaryNavPage(location.pathname, ["/gallery", "/map", "/import", "/databases", "/secrets", "/about"]);
     const TemporaryNavPageIcon = temporaryNavPage?.icon;
     // Recently opened databases (top 5).
     const [recentDatabases, setRecentDatabases] = useState<IDatabaseEntry[]>([]);
@@ -289,6 +289,21 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
             <div className="flex-grow" />
 
             <div className="flex flex-col">
+                <List sx={{ pl: "15px" }}>
+                    <NavLink
+                        to="/about"
+                        onClick={() => setSidebarOpen(false)}
+                        >
+                        {({ isActive }) => (
+                            <ListItem sx={isActive ? activeNavItemSx : undefined}>
+                                <ListItemButton>
+                                    <ListItemDecorator><i className="fa-solid fa-circle-info" /></ListItemDecorator>
+                                    <ListItemContent>About</ListItemContent>
+                                </ListItemButton>
+                            </ListItem>
+                        )}
+                    </NavLink>
+                </List>
                 <Divider />
                 <List sx={{ pl: "15px" }}>
                     <NavLink

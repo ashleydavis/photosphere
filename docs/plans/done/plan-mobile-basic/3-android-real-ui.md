@@ -76,4 +76,18 @@ Run all tests and confirm they pass before marking this step complete.
 
 ## Summary
 
-_To be completed when this step is implemented._
+Replaced the Phase 1 "Hello world" in `apps/android-frontend` with the real Photosphere UI.
+
+Files changed/added:
+- `package.json`: added `user-interface`, `task-queue`, `utils`, `react-router-dom`, `uuid` deps and `@fortawesome/fontawesome-free`, `tailwindcss`, `postcss`, `autoprefixer`, `@types/uuid` devDeps.
+- `tailwind.config.js`, `postcss.config.js`, `.postcssrc`, `src/tailwind.css`: Tailwind setup mirroring `desktop-frontend`.
+- `src/lib/mobile-queue-backend.ts`: no-op `MobileQueueBackend` (no mobile worker yet).
+- `src/lib/platform-provider-mobile.tsx`: fully stubbed `PlatformProviderMobile` with in-memory config; `checkDatabaseExists` returns false, `checkTools` reports all available.
+- `src/app.tsx`: mounts the real UI via `HashRouter` with the same provider nesting as `dev-frontend`, `Main isMobile={true}`, no WebSocket gate.
+- `src/index.tsx`: imports fontawesome CSS and `tailwind.css`.
+- `smoke-tests.sh`: bundle-content assertion changed from "Hello world" to "About Photosphere".
+
+Diverged from the step:
+- Unit tests and all Jest configuration were removed at the user's instruction (no React-component unit tests wanted). The step's `## Unit Tests` section and the jest `moduleNameMapper` work item were dropped. Jest deps/scripts/config removed from `package.json` and `jest.config.js` deleted.
+
+Verified: `bun run --filter=android-frontend compile` and `bun run --filter=android-frontend smoke` both pass (compile + vite build + About-page bundle check + `cap sync android`).

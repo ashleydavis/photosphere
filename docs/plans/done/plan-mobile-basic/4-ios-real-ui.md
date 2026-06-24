@@ -77,4 +77,17 @@ Run all tests and confirm they pass before marking this step complete.
 
 ## Summary
 
-_To be completed when this step is implemented._
+Mirrored Step 3 to `apps/ios-frontend`: replaced the Phase 1 "Hello world" with the real Photosphere UI.
+
+Files changed/added (identical frontend code to the Android version):
+- `package.json`: added `user-interface`, `task-queue`, `utils`, `react-router-dom`, `uuid` deps and `@fortawesome/fontawesome-free`, `tailwindcss`, `postcss`, `autoprefixer`, `@types/uuid` devDeps.
+- `tailwind.config.js`, `postcss.config.js`, `.postcssrc`, `src/tailwind.css`.
+- `src/lib/mobile-queue-backend.ts`, `src/lib/platform-provider-mobile.tsx` (copied from Android, identical).
+- `src/app.tsx`: mounts the real UI via `HashRouter`, `Main isMobile={true}`, no WebSocket gate.
+- `src/index.tsx`: imports fontawesome CSS and `tailwind.css`.
+- `smoke-tests.sh`: bundle-content assertion changed from "Hello world" to "About Photosphere".
+
+Diverged from the step:
+- Unit tests and all Jest configuration were removed at the user's instruction (no React-component unit tests). The step's `## Unit Tests` section and the jest `moduleNameMapper` work item were dropped; `jest.config.js` and Jest deps/scripts removed from this package.
+
+Verified: `bun run --filter=ios-frontend smoke` passes (compile + vite build + About-page bundle check + `cap sync ios`). `pod install` is skipped on Linux (no CocoaPods), but `ios/` was already generated so web assets copied successfully; `pod install` must be completed on macOS before a device build.

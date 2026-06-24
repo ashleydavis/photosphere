@@ -49,19 +49,3 @@ Run on Android directly from the terminal:
 cd apps/android-frontend
 bun run launch
 ```
-
-## Tests
-
-Unit tests (headless render checks):
-
-```bash
-cd apps/android-frontend
-bun run test
-```
-
-Build-based smoke test (compile, bundle, and sync):
-
-```bash
-cd apps/android-frontend
-bun run smoke
-```

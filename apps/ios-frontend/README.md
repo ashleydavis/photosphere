@@ -51,19 +51,3 @@ Run on iOS directly from the terminal:
 cd apps/ios-frontend
 bun run launch
 ```
-
-## Tests
-
-Unit tests (headless render checks):
-
-```bash
-cd apps/ios-frontend
-bun run test
-```
-
-Build-based smoke test (compile, bundle, and sync):
-
-```bash
-cd apps/ios-frontend
-bun run smoke
-```

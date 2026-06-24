@@ -4,8 +4,8 @@
 
 - [x] 1. Android "Hello world" frontend + native project — `plan-mobile-basic/1-android-hello-world.md`
 - [x] 2. iOS "Hello world" frontend + native project — `plan-mobile-basic/2-ios-hello-world.md`
-- [ ] 3. Android real Photosphere UI reaching the About page — `plan-mobile-basic/3-android-real-ui.md`
-- [ ] 4. iOS real Photosphere UI reaching the About page — `plan-mobile-basic/4-ios-real-ui.md`
+- [x] 3. Android real Photosphere UI reaching the About page — `plan-mobile-basic/3-android-real-ui.md`
+- [x] 4. iOS real Photosphere UI reaching the About page — `plan-mobile-basic/4-ios-real-ui.md`
 
 > Documentation: the only docs needed are a per-package `README.md` in each frontend, modeled on `capacitor-example/README.md` (pre-reqs, setup, Android, iOS run commands). No other docs (no `docs/mobile-apps.md`, no wiki pages).
 
