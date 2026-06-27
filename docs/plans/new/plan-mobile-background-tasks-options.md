@@ -1,5 +1,33 @@
 # Mobile Background Tasks: Plan (Embedded JS Engine)
 
+## Issues
+
+Found by `/plan:check`. Check each off as it is addressed.
+
+- [ ] 1. (Missing) Sync/async bridge mismatch: `IQueueBackend.addTask` is synchronous and must return the taskId immediately, but Capacitor plugin calls return Promises. State that `JsEngine.addTask` must be fire-and-forget (id generated locally, like the Electron `send` path) and specify how the un-awaited dispatch promise's rejection is handled.
+- [ ] 2. (Missing) Capacitor `addListener` is async (returns `Promise<PluginListenerHandle>`) while Electron registers listeners synchronously. Address the race where `taskCompleted`/`taskMessage` can fire before the listener resolves, and listener-handle cleanup.
+- [ ] 3. (Missing) Ownership of `EmbeddedJsQueueBackend` is unspecified: android and ios `mobile-queue-backend.ts` are currently byte-identical duplicates. Decide shared module vs per-app duplication. Same for the location of `mobile-worker-entry.ts`.
+- [ ] 4. (Missing) Pool size configuration source is unspecified (build constant vs runtime setting vs device detection).
+- [ ] 5. (Missing) `shutdown()` behaviour for the pool/plugin (engine-thread teardown, Capacitor listener removal) is not described.
+- [ ] 6. (Missing) `sessionId` ownership on mobile is unspecified; pin which side owns it and how it stays consistent with the WebView session.
+- [ ] 7. (Missing) Inventory grep list omits network APIs (`http`/`https`/`net`/`tls`/`fetch`); confirm nothing bundled needs them once storage is replaced by `HostStorage`.
+- [ ] 8. (Inconsistency) Components names only the android backend path, but step 8 wires both android and ios `app.tsx`; specify the ios side.
+- [ ] 9. (Inconsistency) "reuse the prototype's `build:bundle`/`copy:bundle` scripts" and "`JsRunner` ... reused": the prototype is a separate repo, so these are re-created/ported here, not reused. Reword.
+- [ ] 10. (Inconsistency) Worker-entry location named two ways ("packages/api (or a new packages/mobile-worker)"); existing worker entries live under `apps/`. Settle the location.
+- [ ] 11. (Issue) esbuild `--global-name=Worker` collides with the manual `globalThis.Worker = { runTask }` assignment (global-name clobbers the manual assignment after the IIFE body runs). Use one mechanism, not both.
+- [ ] 12. (Issue) Global name `Worker` shadows the built-in Web Worker constructor and can collide in the Bun / `quickjs-emscripten` parity harnesses; consider a non-colliding name.
+- [ ] 13. (Issue) Whole-file base64 marshalling of bytes across the bridge risks OOM for large assets; consider streaming/file-handle for large blobs beyond the `host.sha256` hashing path.
+- [ ] 14. (Issue) Synchronous `isCancelled()`/`sendMessage()` require native sync callables touching a lock-guarded shared set from inside a running task; confirm both engine bindings support this and the lock is safe for a sync mid-task call.
+- [ ] 15. (Tests) No native unit test for the pool dispatcher (FIFO order, idle-slot assignment, cancel-drops-pending, concurrency cap, size-1 serial). Add direct dispatcher tests on both platforms.
+- [ ] 16. (Tests) No test for the addTask fire-and-forget / dispatch-rejection path, nor the addListener race/cleanup.
+- [ ] 17. (Tests) No large-payload base64 round-trip test (the OOM-risk path).
+- [ ] 18. (Tests) Cancellation of a pending (not running) task is not a distinct test case.
+- [ ] 19. (Docs) `docs/background-tasks.md` is not updated for the mobile/embedded-engine path.
+- [ ] 20. (Docs) CLAUDE.md Mobile/Architecture section is not updated to mention the embedded JS engine + host bridge.
+- [ ] 21. (Docs) The host-bridge checklist file's repo location is not fixed.
+- [ ] 22. (Security) Path traversal: native storage host functions take JS/task-supplied path strings; sandbox to the storage root and reject `..`/absolute paths.
+- [ ] 23. (Security) State that `worker.bundle.js` is only ever eval'd from the packaged app asset, never a remote/OTA source.
+
 ## How it works (Android and iOS)
 The flow is identical on both platforms; only the engine implementation differs (iOS uses JavaScriptCore, Android uses QuickJS).
 
@@ -33,7 +61,7 @@ flowchart TD
 ```
 
 ## Overview
-Background tasks on mobile will be implemented by running the existing task handlers as JavaScript inside a JS interpreter embedded in the app's native code, driven from native, off the WebView. This is the approach proven by the standalone prototype at `/home/ash/projects/photosphere/capacitor-embedded-javascript-prototype`. This plan records the chosen engines and specifies how the worker code is compiled and packaged for the engine, and how tasks are dispatched into it and results/events flow back to the web app.
+Background tasks on mobile will be implemented by running the existing task handlers as JavaScript inside a JS interpreter embedded in the app's native code, driven from native, off the WebView. This is the approach proven by the standalone `capacitor-embedded-javascript-prototype` repo (a separate project outside this monorepo). This plan records the chosen engines and specifies how the worker code is compiled and packaged for the engine, and how tasks are dispatched into it and results/events flow back to the web app.
 
 The orchestration layer (`packages/task-queue`) stays in TypeScript and is reused. The handlers (`packages/node-api/src/lib/*.worker.ts`) are compiled to a single JS bundle and executed by the embedded engine, with their Node dependencies (`fs`, native tools) replaced by a host bridge into native code. The rest of the app is unchanged: it keeps using `TaskQueue` against an `IQueueBackend`, exactly as on desktop.
 

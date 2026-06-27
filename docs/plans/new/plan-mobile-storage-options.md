@@ -33,12 +33,18 @@ Taken from `packages/storage/src/lib/file-storage.ts` and `packages/node-utils/s
 - Delete: `unlink` (`fsUnlink`), `rm` (`fsRm`, recursive, `force`).
 - Error semantics that callers depend on: missing-path errors carry `code === 'ENOENT'`, the `wx` collision carries `code === 'EEXIST'`. The native bridge must surface these `code` values so existing `try/catch` logic (lock acquisition, `remove`, `pathExists`) behaves the same.
 
+### Streaming reads and writes (required, not deferred)
+`readStream` / `writeStream` and the `stream` / `createReadStream` / `createWriteStream` / `stream/promises` `pipeline` they rest on are needed by the first handlers, not optional. Hashing reads through `storage.readStream` (`computeHash(await storage.readStream(...))` in `tree.ts`, `verify.worker.ts`, `sync.ts`, `repair.ts`, `replicate.ts`), `serialization` reads through `readStream` (`packages/serialization/src/lib/serialization.ts`), and several worker handlers call `createReadStream` / `createWriteStream` / `pipeline` directly (`save-asset.worker.ts`, `save-assets-batch.worker.ts`, `upload-asset.worker.ts`). They must work from the start.
+- First cut, no new native host functions: implement `readStream` / `writeStream` and the `stream` / `pipeline` surface as a pure-JS shim on top of the already-required whole-file `host.fsReadFile` / `host.fsWriteFile`. `readStream` reads the whole file via `fsReadFile` and returns a bundled `Readable` over the bytes; `writeStream` collects the input stream to a `Buffer` and calls `fsWriteFile`. This reuses the native functions already in the inventory, so nothing the handlers need is left throwing.
+- Known limitation and later optimisation: the whole-file shim holds a file in memory, which is fine for typical photos but heavy for large video. The upgrade path is true chunked streaming via new native host functions (`fsOpenRead` / `fsReadChunk` / `fsClose` and `fsOpenWrite` / `fsWriteChunk` / `fsClose`); add these only when large-media memory pressure on device demands it. Until then the whole-file shim is the implementation, not a NOT IMPLEMENTED stub.
+
 ### Resolved without native code (pure JS, bundled)
 - `path` (`dirname`, `join`, `resolve`): pure-JS shim, no native.
 - `os.tmpdir` / `getProcessTmpDir`: return an app sandbox temp directory path from the host; no real OS temp on mobile.
-- `stream.Readable`, `createReadStream` / `createWriteStream`, `stream/promises` `pipeline`: the streaming `IStorage` methods (`readStream`, `writeStream`). Implement these in the shim on top of `readFile` / `writeFile` (whole-file), or leave them throwing NOT IMPLEMENTED until a streaming serving path needs them (serving is decided in `plan-mobile-serving-options.md`). They are not needed for the pure read/write/append/list handlers.
 - `Buffer`: bytes cross the native bridge as base64 strings; the shim converts base64 to/from `Uint8Array` / `Buffer` polyfill, matching the background-tasks plan's `Buffer` handling.
-- `*Sync` helpers (`ensureDirSync`, `removeSync`, `copySync`): only used by Node-side tooling, not expected on a mobile hot path. Leave them throwing NOT IMPLEMENTED so that if something does call them on device, it fails loudly rather than silently.
+
+### Deliberately not implemented (and proven safe to leave loud)
+- `*Sync` helpers (`ensureDirSync`, `removeSync`, `copySync`, and the `fsSync.*` they use): the only callers are the desktop and CLI file loggers (`apps/desktop/src/lib/file-logger-electron.ts`, `apps/cli/src/lib/file-logger.ts`), which are not part of the mobile worker bundle. They are left throwing NOT IMPLEMENTED so that if anything ever does pull them onto the mobile path, it fails loudly rather than silently. This is a justified non-implementation backed by the caller audit, not an unfinished gap.
 
 ## Unimplemented `fs` functions must fail loudly (never silently)
 Any `fs` function the storage code calls but that is not yet implemented in native must produce an immediate, unmistakable error, never a silent `undefined`, a hang, or a wrong result. This is the same rule as the background-tasks plan, applied to the `fs` host functions, and it is the mechanism that tells us exactly which native function to write next.
@@ -117,37 +123,13 @@ Define the suite once as data (a TS/JSON fixture, for example `packages/mobile-f
 - Confirm the shared host-bridge checklist is current: every `fs` function used by the storage code is `implemented` and `tested` on both platforms, and any remaining `stubbed` function throws the NOT IMPLEMENTED error rather than failing silently.
 - Run the full repo `bun run test:all` to confirm desktop/CLI storage paths (which keep using the Node `fs` backing) are unaffected.
 
-## Options considered (recorded for context)
-The decision above is the native storage bridge, realised at the `fs` function level. The full option set that was weighed:
-
-### Native option: custom storage bridge (our own Swift / Kotlin) — chosen
-Our own native code exposing file operations to JS, backing the existing storage code. Chosen, and realised here at the `fs` function boundary (native `host.fs*` versions of the Node `fs` functions used) rather than as a separate `IStorage` reimplementation, so `FileStorage` and `node-utils` are reused unchanged.
+## Chosen approach (why)
+The native storage bridge, realised at the `fs` function level: native `host.fs*` versions of the Node `fs` functions the storage code uses, rather than a separate `IStorage` reimplementation, so `FileStorage` and `node-utils` are reused unchanged. Scoped to the app's own sandbox (iOS Documents / Application Support, Android app-private storage) for the first cut.
 - Pro: full control over behaviour, paths, streaming, and range reads. Our own code, no third-party plugin.
-- Pro: real path-based native files, the direct analog to Electron `fs`.
-- Pro: can stream bytes and support partial reads, which helps video serving.
-- Pro: extensible later to shared storage / camera roll.
-- Con: two native codebases (Swift and Kotlin) to write and maintain (mitigated by the shared conformance suite above).
-
-### Native option: app-sandbox-only storage bridge
-The same idea scoped to the app's own Documents / Application Support sandbox: no permissions prompts, no shared-storage handling. This is the scope chosen for the first cut (see Native file system scope above).
-- Pro: smallest native surface; no runtime permissions; real native files backed up as app data.
-- Con: files live only inside the app sandbox, not visible to other apps or the gallery.
-
-### Native option: storage bridge with shared media / photo-library access
-Extending the bridge to `PHPhotoLibrary` / `MediaStore`. Out of scope for now, a later extension.
-- Pro: can read the user's existing photo library and write into shared storage.
-- Con: most native code, runtime permission prompts, and media APIs that map awkwardly onto a file system.
-
-### Web-storage option: OPFS (Origin Private File System)
-- Pro: browser-standard, no native code, fast, large capacity, Web Worker accessible.
-- Con: sandboxed web storage, not the real OS file system; WebView support varies. Not chosen: does not give real native files and does not fit the embedded-engine `fs` model.
-
-### Web-storage option: IndexedDB
-- Pro: browser-standard, broad support, large capacity.
-- Con: sandboxed, no real filesystem/path semantics, clunky for streaming video. Not chosen.
-
-### Web-storage option: localStorage / browser local store
-- Con: ~5-10 MB cap, synchronous, strings only. Unusable for photos / video. Not chosen.
+- Pro: real path-based native files, the direct analog to Electron `fs`, compatible with `convertFileSrc` serving.
+- Pro: smallest native surface, no runtime permission prompts, files backed up as app data, survives restarts.
+- Pro: extensible later to shared storage / camera roll (`PHPhotoLibrary` / `MediaStore`).
+- Con: two native codebases (Swift and Kotlin) to write and maintain, mitigated by the shared conformance suite above.
 
 ## Notes
 - Serving is decided separately (`plan-mobile-serving-options.md`). The native `fs` files are real paths, so they are compatible with the `convertFileSrc` serving option; the sandboxed web-storage options were rejected partly because they are not.
