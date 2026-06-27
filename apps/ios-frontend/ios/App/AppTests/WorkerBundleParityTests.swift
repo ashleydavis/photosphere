@@ -94,16 +94,16 @@ final class WorkerBundleParityTests: XCTestCase {
         // JavaScriptCore drains the microtask queue synchronously, but spin the run loop briefly in
         // case any timer-backed continuation is involved before reading the stored result.
         let deadline = Date().addingTimeInterval(2.0)
-        while context.objectForKeyedSubscript("__parityResult").isUndefined && Date() < deadline {
+        while context.objectForKeyedSubscript("__parityResult")?.isUndefined != false && Date() < deadline {
             RunLoop.current.run(until: Date().addingTimeInterval(0.01))
         }
 
         let result = context.objectForKeyedSubscript("__parityResult")
-        XCTAssertFalse(result.isUndefined, "runTask promise did not settle")
-        XCTAssertEqual(result.objectForKeyedSubscript("ok").toBool(), false, "unknown handler should reject")
+        XCTAssertFalse(result?.isUndefined ?? true, "runTask promise did not settle")
+        XCTAssertEqual(result?.objectForKeyedSubscript("ok")?.toBool(), false, "unknown handler should reject")
 
-        let errorText = result.objectForKeyedSubscript("error").toString() ?? ""
+        let errorText = result?.objectForKeyedSubscript("error")?.toString() ?? ""
         XCTAssertTrue(errorText.contains("No handler registered for task type: no-such-handler"), "got: \(errorText)")
-        XCTAssertTrue(errorText.contains("hash-file"), "registered handler list should include hash-file; got: \(errorText)")
+        XCTAssertTrue(errorText.contains("hello-world"), "registered handler list should include hello-world; got: \(errorText)")
     }
 }
