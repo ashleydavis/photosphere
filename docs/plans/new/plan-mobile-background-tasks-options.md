@@ -1,5 +1,24 @@
 # Mobile Background Tasks: Plan (Embedded JS Engine)
 
+## Implementation Steps
+
+- [ ] 1. Write documentation — `plan-mobile-background-tasks-options/1-write-documentation.md`
+- [ ] 2. Inventory Node/Bun API surface and create host-bridge checklist — `plan-mobile-background-tasks-options/2-inventory-and-checklist.md`
+- [ ] 3. Create the shared `packages/mobile-worker` package — `plan-mobile-background-tasks-options/3-mobile-worker-package.md`
+- [ ] 4. Implement `HostStorage`, storage alias, and byte-payload split — `plan-mobile-background-tasks-options/4-host-storage-and-shims.md`
+- [ ] 5. Native NOT IMPLEMENTED helper, dispatch, and path-sandbox guard — `plan-mobile-background-tasks-options/5-native-guards.md`
+- [ ] 6. Add native media host functions (stubbed) — `plan-mobile-background-tasks-options/6-native-media-stubs.md`
+- [ ] 7. Wire the bundle build and copy into both native projects — `plan-mobile-background-tasks-options/7-bundle-build-and-copy.md`
+- [ ] 8. Create `packages/mobile-frontend` and the `JsEngine` plugin interface — `plan-mobile-background-tasks-options/8-mobile-frontend-plugin-interface.md`
+- [ ] 9. Implement `EmbeddedJsQueueBackend` and wire it into both apps — `plan-mobile-background-tasks-options/9-embedded-js-queue-backend.md`
+- [ ] 10. Implement the native engine pool and dispatcher — `plan-mobile-background-tasks-options/10-native-pool-dispatcher.md`
+- [ ] 11. Implement the iOS plugin and JavaScriptCore engine host — `plan-mobile-background-tasks-options/11-ios-javascriptcore-host.md`
+- [ ] 12. Implement the Android plugin and QuickJS engine host — `plan-mobile-background-tasks-options/12-android-quickjs-host.md`
+- [ ] 13. Implement the native storage host functions — `plan-mobile-background-tasks-options/13-native-storage-host-functions.md`
+- [ ] 14. Wire the mobile platform context to the embedded engine — `plan-mobile-background-tasks-options/14-wire-platform-context.md`
+- [ ] 15. Add the automated on-device background-task smoke tests — `plan-mobile-background-tasks-options/15-on-device-smoke-tests.md`
+- [ ] 16. Update documentation — `plan-mobile-background-tasks-options/16-update-documentation.md`
+
 ## Issues
 
 Found by `/plan:check`. Check each off as it is addressed.
