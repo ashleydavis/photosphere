@@ -39,11 +39,6 @@ A small HTTP server we write, running on localhost on the device, serving assets
 - Con: weaker for large galleries (memory) and video range / streaming.
 - Con: object-URL lifetime and revocation must be managed.
 
-### Remote option: server serving (`restApiUrl` over the network)
-- Pro: reuses all existing REST code unchanged. No native code, no plugin.
-- Con: requires connectivity. Not local / offline.
-- Con: bandwidth cost for every thumbnail / asset.
-
 ## Steps
 Pending a chosen serving mechanism. Once selected, this section will be filled with concrete file-level implementation steps (native handler / server if applicable, wiring in `PlatformProviderMobile`, and asset-URL construction in the frontend).
 
