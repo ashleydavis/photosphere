@@ -7,15 +7,17 @@
     "compile": "tsc --noEmit",
     "c": "bun run compile",
     "bundle": "vite build",
+    "bundle:worker": "bun --filter=mobile-worker build:bundle && bun --filter=mobile-worker copy:bundle",
     "clean": "rm -rf dist build tsconfig.tsbuildinfo",
-    "sync": "vite build && cap sync ios",
+    "sync": "bun run bundle:worker && vite build && cap sync ios",
     "open": "bun run sync && cap open ios",
-    "launch": "vite build && cap run ios"
+    "launch": "bun run bundle:worker && vite build && cap run ios"
   },
   "dependencies": {
     "user-interface": "workspace:*",
     "task-queue": "workspace:*",
     "utils": "workspace:*",
+    "mobile-frontend": "workspace:*",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.4.1",

@@ -5,7 +5,7 @@ The Android and iOS frontends (`apps/android-frontend`, `apps/ios-frontend`) cur
 
 The chosen approach: run the existing compiled TypeScript storage code under the native JS engine described in `plan-mobile-background-tasks-options.md` (JavaScriptCore on iOS, QuickJS on Android), and back Node's `fs` module with native implementations of only the `fs` functions the code actually calls (reading, writing, appending, listing, and the supporting calls those need). `FileStorage` (`packages/storage/src/lib/file-storage.ts`) and the `node-utils` helpers run unchanged on top of that native-backed `fs`.
 
-This plan is the concrete realisation of the storage host functions referred to in `plan-mobile-background-tasks-options.md`. It uses that plan's exact machinery: the same `host` bridge, the same engine pool, the same NOT IMPLEMENTED rule, and the same host-bridge checklist. The only refinement is where the bridge sits: rather than rewriting `IStorage` into a separate `HostStorage` that calls `host.storageRead` / `host.storageWrite` / etc., we bridge one level lower at the `fs` function boundary, so the real `FileStorage` and `node-utils` code is reused as-is and the storage host functions are `fs`-shaped (`host.fsReadFile`, `host.fsWriteFile`, ...) instead of `IStorage`-shaped. Same bridge, same rules, lower seam.
+This plan is the concrete realisation of the storage host functions referred to in `plan-mobile-background-tasks-options.md`. It uses that plan's exact machinery: the same `host` bridge, the same engine pool, the same NOT IMPLEMENTED rule, and the same host-function inventory (kept in the plans, not a separate document). The only refinement is where the bridge sits: rather than rewriting `IStorage` into a separate `HostStorage` that calls `host.storageRead` / `host.storageWrite` / etc., we bridge one level lower at the `fs` function boundary, so the real `FileStorage` and `node-utils` code is reused as-is and the storage host functions are `fs`-shaped (`host.fsReadFile`, `host.fsWriteFile`, ...) instead of `IStorage`-shaped. Same bridge, same rules, lower seam.
 
 Serving asset bytes to the WebView is a separate decision, covered in `plan-mobile-serving-options.md`.
 
@@ -15,7 +15,7 @@ Hard rule: no third-party Capacitor plugins. The native `fs` host functions are 
 - Same `host` bridge: the `fs` functions are members of the same `host` object the engine installs into each pool thread, alongside `host.sendMessage`, `host.isCancelled`, `host.sha256`, and the media tools. They are not a separate mechanism.
 - Same engine pool and thread-safety rule: the pool calls `host.fs*` from multiple engine threads at once, so every native `fs` function must be thread-safe, like all other host functions.
 - Same NOT IMPLEMENTED rule and message (verbatim): `NOT IMPLEMENTED: native host function "<name>" is not implemented yet on <ios|android>. Implement it ASAP.`, where `<name>` is the host function (for example `fsAppendFile`).
-- Same checklist: the `fs` functions are rows in the one host-bridge checklist that plan maintains (`not-started` / `stubbed` / `implemented` / `tested`, per platform). This document does not introduce a second checklist.
+- Same inventory: the `fs` functions listed below are the storage portion of the host-function inventory, and their per-platform status (`not-started` / `stubbed` / `implemented` / `tested`, iOS and Android) is tracked here in this plan. The non-`fs` host functions are inventoried in `plan-mobile-background-tasks-options.md`. There is no separate checklist document.
 - Supersedes only the `HostStorage`-over-`host.storage*` sketch in that plan's Concern 1 (step 3) and Concern 1's storage bullet: storage is bridged at the `fs` boundary instead, so `FileStorage` runs unchanged. Everything else in that plan stands.
 
 ## Chosen approach: native-backed Node `fs`
@@ -32,6 +32,8 @@ Taken from `packages/storage/src/lib/file-storage.ts` and `packages/node-utils/s
 - Append: `appendFile` (`fsAppendFile`), and / or `writeFile` with flag `a`, to cover append-style writes.
 - Delete: `unlink` (`fsUnlink`), `rm` (`fsRm`, recursive, `force`).
 - Error semantics that callers depend on: missing-path errors carry `code === 'ENOENT'`, the `wx` collision carries `code === 'EEXIST'`. The native bridge must surface these `code` values so existing `try/catch` logic (lock acquisition, `remove`, `pathExists`) behaves the same.
+
+This list is the `fs` checklist: each function above gets a `host.fs*` implementation on iOS and Android, and its per-platform status (`not-started` / `stubbed` / `implemented` / `tested`) is tracked as it lands. Anything not on this list throws NOT IMPLEMENTED until it is added.
 
 ### Streaming reads and writes (required, not deferred)
 `readStream` / `writeStream` and the `stream` / `createReadStream` / `createWriteStream` / `stream/promises` `pipeline` they rest on are needed by the first handlers, not optional. Hashing reads through `storage.readStream` (`computeHash(await storage.readStream(...))` in `tree.ts`, `verify.worker.ts`, `sync.ts`, `repair.ts`, `replicate.ts`), `serialization` reads through `readStream` (`packages/serialization/src/lib/serialization.ts`), and several worker handlers call `createReadStream` / `createWriteStream` / `pipeline` directly (`save-asset.worker.ts`, `save-assets-batch.worker.ts`, `upload-asset.worker.ts`). They must work from the start.
@@ -99,7 +101,7 @@ Define the suite once as data (a TS/JSON fixture, for example `packages/mobile-f
 6. Implement the native `host.fs*` functions on iOS (Swift, `FileManager`): `fsReadFile`, `fsWriteFile` (with `wx` -> `EEXIST`), `fsAppendFile`, `fsReaddir` (plain + `withFileTypes`), `fsStat`, `fsAccess` (`ENOENT`), `fsMkdir` recursive, `fsRename`, `fsCopyFile`, `fsUnlink`, `fsRm` recursive. Each runs against the app sandbox and is thread-safe (the engine pool calls from multiple threads).
 7. Implement the same native `host.fs*` functions on Android (Kotlin/Java, `java.io.File`) with identical names, error codes, and thread-safety.
 8. Wire the bundle build + copy of the shim-backed worker bundle into both native projects before `cap sync`, alongside the background-tasks bundle wiring (same bundle).
-9. Update the shared host-bridge checklist as each native `fs` function moves `stubbed` -> `implemented` -> `tested` on each platform.
+9. Update the per-platform status of each `fs` function in this plan's `fs` inventory as it moves `stubbed` -> `implemented` -> `tested` on each platform.
 
 ## Unit Tests
 - Mobile `fs` shim test (Bun): with a mock `globalThis.host`, assert each shim function calls the matching `host.fs*` function, marshals `Buffer`/base64 correctly both directions, and propagates `code` (`ENOENT`, `EEXIST`) on errors.
@@ -120,7 +122,7 @@ Define the suite once as data (a TS/JSON fixture, for example `packages/mobile-f
 - Run all unit tests (shim, conformance shim layer, `FileStorage`-over-shim, and native isolation on both platforms) and confirm they pass, including the NOT IMPLEMENTED guard tests.
 - Run the QuickJS and JavaScriptCore parity smokes and the on-device conformance smoke, and confirm every `fs` case matches the Node golden fixture under both engines and on both devices, and that an unimplemented `fs` function fails with the exact NOT IMPLEMENTED message.
 - Build the Android and iOS projects with the native `fs` functions and confirm both compile.
-- Confirm the shared host-bridge checklist is current: every `fs` function used by the storage code is `implemented` and `tested` on both platforms, and any remaining `stubbed` function throws the NOT IMPLEMENTED error rather than failing silently.
+- Confirm this plan's `fs` inventory is current: every `fs` function used by the storage code is `implemented` and `tested` on both platforms, and any remaining `stubbed` function throws the NOT IMPLEMENTED error rather than failing silently.
 - Run the full repo `bun run test:all` to confirm desktop/CLI storage paths (which keep using the Node `fs` backing) are unaffected.
 
 ## Chosen approach (why)
@@ -133,8 +135,8 @@ The native storage bridge, realised at the `fs` function level: native `host.fs*
 
 ## Notes
 - Serving is decided separately (`plan-mobile-serving-options.md`). The native `fs` files are real paths, so they are compatible with the `convertFileSrc` serving option; the sandboxed web-storage options were rejected partly because they are not.
-- Fits `plan-mobile-background-tasks-options.md`: the `fs` functions are host functions on that plan's `host` bridge, run by that plan's engine pool, governed by that plan's NOT IMPLEMENTED rule and host-bridge checklist. This plan supersedes only that plan's `HostStorage`-over-`host.storage*` sketch, replacing it with the lower `fs`-level seam so `FileStorage` runs unchanged.
-- Native versions of Node `fs` functions are a first-class deliverable, tracked in the shared host-bridge checklist. The checklist plus the NOT IMPLEMENTED rule mean an unimplemented `fs` function is always visible (loud error, failed task, error log) and never silently skipped, which is how we discover the next native function to implement.
+- Fits `plan-mobile-background-tasks-options.md`: the `fs` functions are host functions on that plan's `host` bridge, run by that plan's engine pool, governed by that plan's NOT IMPLEMENTED rule and host-function inventory. This plan supersedes only that plan's `HostStorage`-over-`host.storage*` sketch, replacing it with the lower `fs`-level seam so `FileStorage` runs unchanged.
+- Native versions of Node `fs` functions are a first-class deliverable, tracked in this plan's `fs` inventory. That inventory plus the NOT IMPLEMENTED rule mean an unimplemented `fs` function is always visible (loud error, failed task, error log) and never silently skipped, which is how we discover the next native function to implement.
 - Robustness of the native `fs` is owned by the shared, data-driven conformance suite: one case list and one Node-generated golden fixture, run at the shim, native-isolation, and native-via-engine layers, so every function is proven byte-for-byte and code-for-code identical on iOS and Android.
 - Thread-safety: the engine pool calls `host.fs*` from multiple engine threads at once, so every native `fs` function must be thread-safe.
 - Key code references:

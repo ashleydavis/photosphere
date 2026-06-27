@@ -1,0 +1,87 @@
+//
+// The native platform the embedded worker is running on. Used so the
+// NOT IMPLEMENTED error message can name the platform that is missing the
+// native implementation.
+//
+export type HostPlatform = "ios" | "android";
+
+//
+// A native host function exposed on the host bridge. Different host functions
+// have different signatures, so the generic stub machinery treats them as a
+// permissive callable.
+//
+export type HostFunction = (...args: any[]) => any;
+
+//
+// The native host bridge. The native plugin installs this as `globalThis.host`
+// before calling `runTask`. Its members are native callables (Swift on iOS,
+// Kotlin/Java on Android) plus the plugin-owned session id.
+//
+export interface IHost {
+    // Identifies the native platform so NOT IMPLEMENTED errors can name it.
+    platform: HostPlatform;
+
+    // The session id owned by the native plugin, shared by every engine and task in the pool.
+    sessionId: string;
+
+    // Streams a message (already JSON-encoded) from a running task back to native.
+    sendMessage: (taskId: string, messageJson: string) => void;
+
+    // Returns true if the task with this id has been cancelled and should stop as soon as possible.
+    isCancelled: (taskId: string) => boolean;
+
+    // Hashes the file at the given storage path natively. First-slice demonstrator (real native impl lands later).
+    sha256: (path: string) => string;
+}
+
+//
+// The host functions the bundle expects the native side to install. Any name in
+// this list that native did not install is replaced by a stub that throws the
+// NOT IMPLEMENTED error, so a missing native function fails loudly instead of
+// surfacing as `undefined`. This list is the single place to extend as later
+// steps add more host functions (the `fs.*` and media functions).
+//
+export const EXPECTED_HOST_FUNCTIONS: string[] = [
+    "sendMessage",
+    "isCancelled",
+    "sha256",
+];
+
+//
+// Builds the exact NOT IMPLEMENTED error message used verbatim on both platforms.
+//
+export function notImplementedMessage(name: string, platform: HostPlatform): string {
+    return `NOT IMPLEMENTED: native host function "${name}" is not implemented yet on ${platform}. Implement it ASAP.`;
+}
+
+//
+// Resolves a single expected host function: returns the native function bound to
+// the host if it was installed, otherwise a stub that throws the NOT IMPLEMENTED
+// error when called.
+//
+function resolveHostFunction(rawHost: IHost, name: string, platform: HostPlatform): HostFunction {
+    const candidate = (rawHost as any)[name];
+    if (typeof candidate === "function") {
+        return candidate.bind(rawHost);
+    }
+
+    return function notImplementedHostFunction(): never {
+        throw new Error(notImplementedMessage(name, platform));
+    };
+}
+
+//
+// Builds the effective host object from the raw native-installed host. Every
+// expected host function is replaced by either the native function or a stub
+// that throws the NOT IMPLEMENTED error, so any host method native did not
+// install fails loudly the moment it is called.
+//
+export function buildHost(rawHost: IHost): IHost {
+    const platform = rawHost.platform;
+    const effectiveHost = { ...rawHost } as IHost;
+    for (const name of EXPECTED_HOST_FUNCTIONS) {
+        (effectiveHost as any)[name] = resolveHostFunction(rawHost, name, platform);
+    }
+
+    return effectiveHost;
+}

@@ -1,4 +1,5 @@
 import { log } from "utils";
+import { getQueueBackend } from "task-queue";
 import React, { useEffect, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAssetDatabase } from '../context/asset-database-source';
@@ -7,7 +8,7 @@ import { useTheme } from '@mui/joy/styles/ThemeProvider';
 import List from '@mui/joy/List/List';
 import ListItem from '@mui/joy/ListItem/ListItem';
 import ListItemDecorator from '@mui/joy/ListItemDecorator/ListItemDecorator';
-import { PhotoLibrary, Folder, FolderOpen, Map, Search, Settings, CreateNewFolder, LibraryAdd, FileUpload, ManageSearch, Key, Delete } from '@mui/icons-material';
+import { PhotoLibrary, Folder, FolderOpen, Map, Search, Settings, CreateNewFolder, LibraryAdd, FileUpload, ManageSearch, Key, Delete, Science } from '@mui/icons-material';
 import { CollapsibleSection } from './collapsible-section';
 import ListItemContent from '@mui/joy/ListItemContent/ListItemContent';
 import ListItemButton from '@mui/joy/ListItemButton/ListItemButton';
@@ -90,10 +91,36 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
     // Recently opened databases (top 5).
     const [recentDatabases, setRecentDatabases] = useState<IDatabaseEntry[]>([]);
 
+    // Result text from the most recent background-task demo run.
+    const [backgroundTaskResult, setBackgroundTaskResult] = useState<string>("");
+
     function loadRecentDatabases(): void {
         platform.getRecentDatabases()
             .then(recent => setRecentDatabases(recent))
             .catch(err => log.exception('Failed to load recent databases:', err as Error));
+    }
+
+    //
+    // Dispatches the "hello-world" demonstrator background task through the active queue backend
+    // (the desktop worker pool or the mobile embedded JS engine) and shows its result inline.
+    // This proves the background-task path runs end to end on whatever platform the app is on.
+    //
+    function runBackgroundTaskDemo(): void {
+        setBackgroundTaskResult("running...");
+        const backend = getQueueBackend();
+        const taskId = backend.addTask("hello-world", { name: "World" }, "hello-demo");
+        const unsubscribe = backend.onTaskComplete(result => {
+            if (result.taskId !== taskId) {
+                return;
+            }
+            unsubscribe();
+            if (result.status === "succeeded") {
+                setBackgroundTaskResult(JSON.stringify(result.outputs));
+            }
+            else {
+                setBackgroundTaskResult(`failed: ${result.errorMessage ?? "unknown error"}`);
+            }
+        });
     }
 
     useEffect(() => {
@@ -219,6 +246,22 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                             </ListItem>
                         )}
                     </NavLink>
+
+                    <ListItem
+                        onClick={runBackgroundTaskDemo}
+                        >
+                        <ListItemButton>
+                            <ListItemDecorator><Science /></ListItemDecorator>
+                            <ListItemContent>
+                                Run background task
+                                {backgroundTaskResult && (
+                                    <div style={{ fontSize: "0.72rem", opacity: 0.8, wordBreak: "break-all", marginTop: "2px" }}>
+                                        {backgroundTaskResult}
+                                    </div>
+                                )}
+                            </ListItemContent>
+                        </ListItemButton>
+                    </ListItem>
 
                     {temporaryNavPage && TemporaryNavPageIcon && (
                         <NavLink

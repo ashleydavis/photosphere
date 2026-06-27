@@ -16,8 +16,7 @@ import {
 } from "user-interface";
 import { setQueueBackend } from "task-queue";
 import { RandomUuidGenerator } from "utils";
-import { MobileQueueBackend } from "./lib/mobile-queue-backend";
-import { PlatformProviderMobile } from "./lib/platform-provider-mobile";
+import { EmbeddedJsQueueBackend, PlatformProviderMobile } from "mobile-frontend";
 
 //
 // UUID generator used for task ids on mobile.
@@ -25,10 +24,26 @@ import { PlatformProviderMobile } from "./lib/platform-provider-mobile";
 const uuidGenerator = new RandomUuidGenerator();
 
 //
-// The mobile queue backend is a no-op until background tasks are implemented on mobile.
+// The mobile queue backend dispatches background tasks into the native embedded JS engine
+// via the JsEngine Capacitor plugin.
 //
-const queueBackend = new MobileQueueBackend();
-setQueueBackend(queueBackend);
+const queueBackend = new EmbeddedJsQueueBackend();
+
+//
+// Registers the native JsEngine event listeners, then installs the backend as the process
+// queue backend. Called from index.tsx before the app renders so a listener is always
+// registered before the first task can be dispatched. A failed init (for example running in
+// a browser preview without the native plugin) is logged but does not block the UI.
+//
+export async function bootstrapMobileBackend(): Promise<void> {
+    try {
+        await queueBackend.init();
+    }
+    catch (error) {
+        console.error("Failed to initialise the mobile JsEngine backend:", error);
+    }
+    setQueueBackend(queueBackend);
+}
 
 //
 // Root mobile app. Mounts the real Photosphere UI backed by the stubbed mobile

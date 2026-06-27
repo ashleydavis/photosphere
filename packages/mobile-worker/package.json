@@ -1,0 +1,35 @@
+{
+  "name": "mobile-worker",
+  "version": "1.0.0",
+  "description": "Shared embedded worker entry and bundle that runs the Photosphere task handlers inside the mobile JS engine.",
+  "main": "src/index.ts",
+  "type": "module",
+  "scripts": {
+    "t": "bun run test",
+    "tw": "bun run test:watch",
+    "test": "jest --passWithNoTests",
+    "test:coverage": "jest --coverage",
+    "test:watch": "jest --watch",
+    "c": "bun run compile",
+    "cw": "bun run compile:watch",
+    "compile": "tsc",
+    "compile:watch": "tsc --watch --preserveWatchOutput",
+    "build:bundle": "bun build ./mobile-worker-entry.ts --outfile worker.bundle.js --format=iife --target=browser",
+    "copy:bundle": "cp worker.bundle.js ../../apps/android-frontend/android/app/src/main/assets/worker.bundle.js && cp worker.bundle.js ../../apps/ios-frontend/ios/App/App/worker.bundle.js",
+    "clean": "rm -rf build dist coverage worker.bundle.js tsconfig.tsbuildinfo"
+  },
+  "keywords": [],
+  "author": "ashley@codecapers.com.au",
+  "license": "MIT",
+  "dependencies": {
+    "task-queue": "workspace:*",
+    "utils": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.4.0",
+    "@types/node": "^22.9.1",
+    "jest": "^29.0.1",
+    "ts-jest": "^29.0.5",
+    "typescript": "^5.6.3"
+  }
+}
