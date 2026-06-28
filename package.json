@@ -47,6 +47,8 @@
     "tst": "bun run test:stories",
     "test:android": "cd ./apps/smoke-tests && PLATFORM=android ./run.sh",
     "test:ios": "cd ./apps/smoke-tests && PLATFORM=ios ./run.sh",
+    "open:android": "bun run --filter=android-frontend open",
+    "open:ios": "bun run --filter=ios-frontend open",
     "screenshots": "bun run bundle && ./apps/desktop/screenshots/capture-ux.sh",
     "perf": "bun --filter '*' perf"
   },
