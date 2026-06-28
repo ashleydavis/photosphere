@@ -173,6 +173,10 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
 
         try {
             await replicateDatabase(uuidGenerator, taskData, setProgress);
+            // Log completion so it is observable on every platform (the desktop main process logs the
+            // same line for its own path); the smoke test waits for it.
+            const destName = taskData.destPath.split(/[\\/]/).filter(Boolean).pop() ?? taskData.destPath;
+            log.info(`Replication completed for "${destName}"`);
             setStep("success");
         }
         catch (err) {

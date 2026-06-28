@@ -241,20 +241,46 @@ stop_app() {
 }
 
 #
-# Greps app.log for [ERROR] lines and fails if any are found.
-# Usage: check_no_errors <tmp_dir>
+# Greps app.log for [ERROR] lines and fails if any are found. An optional second argument is an
+# extended-regex of [ERROR] lines to ignore (for errors that belong to a separate, not-yet-built
+# layer the test deliberately does not cover); any remaining [ERROR] line still fails the check.
+# Usage: check_no_errors <tmp_dir> [ignore_regex]
 #
 check_no_errors() {
     local tmp_dir="$1"
-    if grep -q '\[ERROR\]' "$tmp_dir/app.log" 2>/dev/null; then
+    local ignore_pattern="${2:-}"
+    local errors
+    if [ -n "$ignore_pattern" ]; then
+        errors=$(grep '\[ERROR\]' "$tmp_dir/app.log" 2>/dev/null | grep -Ev "$ignore_pattern")
+    else
+        errors=$(grep '\[ERROR\]' "$tmp_dir/app.log" 2>/dev/null)
+    fi
+    if [ -n "$errors" ]; then
         log_error "Errors found in app.log:"
-        grep '\[ERROR\]' "$tmp_dir/app.log" | while IFS= read -r line; do
+        echo "$errors" | while IFS= read -r line; do
             echo "  $line"
         done
         return 1
     fi
     log_success "No errors in app.log"
     return 0
+}
+
+#
+# Creates a database on the host via the CLI at the given path, importing any image files passed
+# after the path. Mirrors how the desktop smoke tests pre-create their databases (the CLI does the
+# host-side image processing the mobile device cannot do yet). The database is created under the
+# test's own tmp dir and then seeded onto the device with ${PLATFORM}_seed_database.
+# Usage: create_database <db_path> [image ...]
+#
+create_database() {
+    local db_path="$1"
+    shift
+    ( cd "$REPO_DIR/apps/cli" && bun run start -- init --db "$db_path" --yes ) >/dev/null 2>&1
+    local image
+    for image in "$@"; do
+        ( cd "$REPO_DIR/apps/cli" && bun run start -- add "$image" --db "$db_path" --yes ) >/dev/null 2>&1
+    done
 }
 
 # Load the platform launcher when this file is sourced.

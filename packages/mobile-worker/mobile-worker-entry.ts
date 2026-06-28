@@ -1,5 +1,15 @@
+// Install Buffer/process globals BEFORE any storage/database module evaluates (import order matters:
+// bson selects its byte-utils based on globalThis.Buffer at import time).
+import "./src/lib/install-globals";
+
 import { registerHandler } from "task-queue";
 import { helloWorldHandler } from "./src/lib/hello-world-handler";
+import { loadAssetsHandler } from "node-api/src/lib/load-assets.worker";
+import { createDatabaseHandler } from "node-api/src/lib/create-database.worker";
+import { replicateDatabaseHandler } from "node-api/src/lib/replicate-database.worker";
+import { moveAssetsHandler } from "node-api/src/lib/move-assets.worker";
+import { saveAssetHandler } from "node-api/src/lib/save-asset.worker";
+import { saveAssetsBatchHandler } from "node-api/src/lib/save-assets-batch.worker";
 import { installWorkerGlobal } from "./src/index";
 
 //
@@ -8,14 +18,32 @@ import { installWorkerGlobal } from "./src/index";
 // handlers and exposes `globalThis.__photosphereWorker.runTask` so native code can
 // dispatch tasks into the engine.
 //
-// The real Node.js-using handlers (`initTaskHandlers()` from `node-api`) are not
-// registered here yet because they import Node built-ins the browser bundle target
-// cannot resolve; they are added once the native Node/`fs` seam exists. The
-// `hello-world` handler uses no Node APIs, so it runs end to end in the engine today.
+// The build (see build-bundle.ts) redirects Node built-ins (`fs`, `path`, `os`, `stream`,
+// `crypto`, `child_process`) to the mobile shims in `src/shims`, and stubs the native-only
+// packages (`@aws-sdk/*`, `vault`, `tools`) that the load-assets module graph imports but the
+// read path never calls. This lets the real `load-assets` handler run unchanged: it reads the
+// database through `FileStorage` over the native `host.fs*` functions.
 //
 
 // Register the Hello World demonstrator handler.
 registerHandler("hello-world", helloWorldHandler);
+
+// Register the real load-assets handler: it opens a database via storage (native-backed fs) and
+// streams asset pages back to the gallery.
+registerHandler("load-assets", loadAssetsHandler);
+
+// Register the create-database handler: initializes a new empty database on device storage.
+registerHandler("create-database", createDatabaseHandler);
+
+// Register the replicate-database handler: copies a source database to a destination path.
+registerHandler("replicate-database", replicateDatabaseHandler);
+
+// Register the move-assets handler: moves assets from one database to another.
+registerHandler("move-assets", moveAssetsHandler);
+
+// Register the save-asset / save-assets-batch handlers: export asset files to a chosen destination.
+registerHandler("save-asset", saveAssetHandler);
+registerHandler("save-assets-batch", saveAssetsBatchHandler);
 
 // Expose the worker entry point (globalThis.__photosphereWorker = { runTask }).
 installWorkerGlobal();

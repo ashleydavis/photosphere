@@ -30,6 +30,15 @@ function createMockHost(sessionId: string): IMockHost {
             return false;
         },
         sha256: (path: string) => `sha256(${path})`,
+        fsReadFile: () => null,
+        fsAccess: () => false,
+        fsStat: () => null,
+        fsReaddir: () => null,
+        fsWriteFile: () => { /* no-op */ },
+        fsMkdir: () => { /* no-op */ },
+        fsRename: () => { /* no-op */ },
+        fsUnlink: () => { /* no-op */ },
+        fsRm: () => { /* no-op */ },
     };
 
     return mockHost;

@@ -32,6 +32,33 @@ export interface IHost {
 
     // Hashes the file at the given storage path natively. First-slice demonstrator (real native impl lands later).
     sha256: (path: string) => string;
+
+    // Reads a sandboxed file, returning its bytes as base64 (or null when the file is missing).
+    fsReadFile: (path: string) => string | null;
+
+    // Returns whether a sandboxed file or directory exists.
+    fsAccess: (path: string) => boolean;
+
+    // Returns a JSON stat string { size, mtimeMs, isFile, isDirectory } for a sandboxed path (or null when missing).
+    fsStat: (path: string) => string | null;
+
+    // Returns a JSON listing of { name, isDirectory } entries for a sandboxed directory (or null when missing).
+    fsReaddir: (path: string) => string | null;
+
+    // Writes base64-decoded bytes to a sandboxed path (exclusive maps the Node 'wx' flag).
+    fsWriteFile: (path: string, base64: string, exclusive: boolean) => void;
+
+    // Creates a sandboxed directory (recursive maps Node's { recursive: true }).
+    fsMkdir: (path: string, recursive: boolean) => void;
+
+    // Renames/moves a sandboxed file, overwriting an existing destination.
+    fsRename: (srcPath: string, destPath: string) => void;
+
+    // Deletes a sandboxed file.
+    fsUnlink: (path: string) => void;
+
+    // Deletes a sandboxed file or directory tree.
+    fsRm: (path: string, recursive: boolean, force: boolean) => void;
 }
 
 //
@@ -45,6 +72,15 @@ export const EXPECTED_HOST_FUNCTIONS: string[] = [
     "sendMessage",
     "isCancelled",
     "sha256",
+    "fsReadFile",
+    "fsAccess",
+    "fsStat",
+    "fsReaddir",
+    "fsWriteFile",
+    "fsMkdir",
+    "fsRename",
+    "fsUnlink",
+    "fsRm",
 ];
 
 //

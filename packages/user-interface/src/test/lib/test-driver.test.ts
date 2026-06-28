@@ -11,9 +11,19 @@ import {
     doNavigate,
     doMenu,
     doOpenDatabase,
+    doSeedDatabases,
+    doSeedSecrets,
+    doSeedRecent,
+    doSeedNews,
+    doResetConfig,
     installTestDriver,
     TEST_MENU_EVENT,
     TEST_OPEN_DATABASE_EVENT,
+    TEST_SEED_DATABASES_EVENT,
+    TEST_SEED_SECRETS_EVENT,
+    TEST_SEED_RECENT_EVENT,
+    TEST_SEED_NEWS_EVENT,
+    TEST_RESET_CONFIG_EVENT,
 } from "../../lib/test-driver";
 import type { ITestTransport, ITestCommandPayload } from "../../lib/test-driver";
 
@@ -239,5 +249,82 @@ describe("doMenu and doOpenDatabase", () => {
             window.removeEventListener(TEST_OPEN_DATABASE_EVENT, listener);
         }
         expect(received).toBe("/data/fixture-db");
+    });
+});
+
+describe("mobile config-seeding driver commands", () => {
+
+    //
+    // Captures the detail of the first event of the given name dispatched while running an action.
+    //
+    function captureEvent(eventName: string, action: () => void): unknown {
+        let detail: unknown;
+        const listener = (event: Event) => { detail = (event as CustomEvent).detail; };
+        window.addEventListener(eventName, listener);
+        try {
+            action();
+        }
+        finally {
+            window.removeEventListener(eventName, listener);
+        }
+        return detail;
+    }
+
+    test("doSeedDatabases dispatches the databases to seed", () => {
+        const databases = [{ name: "db", description: "", path: "db" }];
+        expect(captureEvent(TEST_SEED_DATABASES_EVENT, () => doSeedDatabases(databases))).toEqual(databases);
+    });
+
+    test("doSeedSecrets dispatches the secrets to seed", () => {
+        const secrets = [{ entry: { name: "s", type: "api-key" }, value: "v" }];
+        expect(captureEvent(TEST_SEED_SECRETS_EVENT, () => doSeedSecrets(secrets))).toEqual(secrets);
+    });
+
+    test("doSeedRecent dispatches the recent databases to seed", () => {
+        const recent = [{ name: "r", description: "", path: "r" }];
+        expect(captureEvent(TEST_SEED_RECENT_EVENT, () => doSeedRecent(recent))).toEqual(recent);
+    });
+
+    test("doSeedNews dispatches the news items to seed", () => {
+        const news = [{ id: "n1", message: "hello" }];
+        expect(captureEvent(TEST_SEED_NEWS_EVENT, () => doSeedNews(news))).toEqual(news);
+    });
+
+    test("doResetConfig dispatches the reset-config event", () => {
+        let fired = false;
+        const listener = () => { fired = true; };
+        window.addEventListener(TEST_RESET_CONFIG_EVENT, listener);
+        try {
+            doResetConfig();
+        }
+        finally {
+            window.removeEventListener(TEST_RESET_CONFIG_EVENT, listener);
+        }
+        expect(fired).toBe(true);
+    });
+
+    test("installTestDriver routes seed/reset commands to their handlers", async () => {
+        let handler: ((command: string, payload: ITestCommandPayload) => Promise<string | undefined>) | undefined;
+        const transport: ITestTransport = {
+            onCommand: (incoming) => { handler = incoming; },
+            sendLog: () => { /* unused */ },
+        };
+        installTestDriver(transport);
+
+        const seeded = captureEvent(TEST_SEED_NEWS_EVENT, () => {
+            void handler!("seed-news", { news: [{ id: "n1", message: "hi" }] });
+        });
+        expect(seeded).toEqual([{ id: "n1", message: "hi" }]);
+
+        let resetFired = false;
+        const resetListener = () => { resetFired = true; };
+        window.addEventListener(TEST_RESET_CONFIG_EVENT, resetListener);
+        try {
+            await handler!("reset-config", {});
+        }
+        finally {
+            window.removeEventListener(TEST_RESET_CONFIG_EVENT, resetListener);
+        }
+        expect(resetFired).toBe(true);
     });
 });

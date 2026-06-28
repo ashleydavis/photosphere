@@ -108,6 +108,74 @@ public final class HostBridge {
     }
 
     //
+    // host.fsReadFile(path): reads a sandboxed file and returns its bytes as base64 (or null when
+    // missing). Backs the mobile fs shim's readFile/createReadStream.
+    //
+    public String fsReadFile(String path) {
+        return HostFunctions.fsReadFile(storageRoot, path);
+    }
+
+    //
+    // host.fsAccess(path): returns whether a sandboxed file or directory exists. Backs pathExists.
+    //
+    public boolean fsAccess(String path) {
+        return HostFunctions.fsAccess(storageRoot, path);
+    }
+
+    //
+    // host.fsStat(path): returns a JSON stat string for a sandboxed path (or null when missing).
+    //
+    public String fsStat(String path) {
+        return HostFunctions.fsStat(storageRoot, path);
+    }
+
+    //
+    // host.fsReaddir(path): returns a JSON directory listing for a sandboxed path (or null when
+    // missing). Backs the mobile fs shim's readdir.
+    //
+    public String fsReaddir(String path) {
+        return HostFunctions.fsReaddir(storageRoot, path);
+    }
+
+    //
+    // host.fsWriteFile(path, base64, exclusive): writes base64-decoded bytes to a sandboxed path.
+    // Backs the mobile fs shim's writeFile (exclusive maps the Node 'wx' flag).
+    //
+    public void fsWriteFile(String path, String base64, boolean exclusive) {
+        HostFunctions.fsWriteFile(storageRoot, path, base64, exclusive);
+    }
+
+    //
+    // host.fsMkdir(path, recursive): creates a sandboxed directory. Backs the mobile fs shim's mkdir.
+    //
+    public void fsMkdir(String path, boolean recursive) {
+        HostFunctions.fsMkdir(storageRoot, path, recursive);
+    }
+
+    //
+    // host.fsRename(srcPath, destPath): renames/moves a sandboxed file. Backs the mobile fs shim's
+    // rename.
+    //
+    public void fsRename(String srcPath, String destPath) {
+        HostFunctions.fsRename(storageRoot, srcPath, destPath);
+    }
+
+    //
+    // host.fsUnlink(path): deletes a sandboxed file. Backs the mobile fs shim's unlink.
+    //
+    public void fsUnlink(String path) {
+        HostFunctions.fsUnlink(storageRoot, path);
+    }
+
+    //
+    // host.fsRm(path, recursive, force): deletes a sandboxed file or directory tree. Backs the mobile
+    // fs shim's rm.
+    //
+    public void fsRm(String path, boolean recursive, boolean force) {
+        HostFunctions.fsRm(storageRoot, path, recursive, force);
+    }
+
+    //
     // The unknown-method path. Any host function the bundle expects that native did not
     // install must surface as a loud, verbatim NOT IMPLEMENTED failure. The JS side installs
     // throwing stubs for missing methods, and this helper is available for any native host

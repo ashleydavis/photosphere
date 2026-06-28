@@ -170,3 +170,40 @@ android_stop() {
         adb reverse --remove "tcp:$port" 2>/dev/null || true
     fi
 }
+
+#
+# Seeds a database fixture into the app's private files directory (the native storage sandbox root
+# resolved by getFilesDir / PathSandbox), so the embedded worker can read it via the host fs
+# functions. The host path is pushed to a world-readable temp location, then copied into the app
+# sandbox via run-as (the only way to write app-private storage; works because the debug build is
+# debuggable).
+# Usage: android_seed_database <host_fixture_dir> <relative_dest_under_files>
+#
+android_seed_database() {
+    local host_src="$1"
+    local rel_dest="$2"
+    local base
+    base="$(basename "$host_src")"
+    local tmp_remote="/data/local/tmp/$base"
+
+    # Each step is a single adb shell command (no shell operators), because `adb shell` re-splits the
+    # remote command on spaces and mangles `sh -c "...&&..."` quoting. run-as runs in the app's data
+    # directory, so the destination is relative to that (files/ is the getFilesDir sandbox root).
+    adb shell rm -rf "$tmp_remote" >/dev/null 2>&1 || true
+    adb push "$host_src" /data/local/tmp/ >/dev/null
+    adb shell run-as "$APP_ID" rm -rf "files/$rel_dest"
+    adb shell run-as "$APP_ID" mkdir -p files
+    adb shell run-as "$APP_ID" cp -r "$tmp_remote" "files/$rel_dest"
+    adb shell rm -rf "$tmp_remote" >/dev/null 2>&1 || true
+    log_info "Seeded database fixture '$base' into app sandbox at files/$rel_dest"
+}
+
+#
+# Removes a path under the app's private files directory (the storage sandbox root), so a test that
+# creates fresh state at that path is rerunnable. No-op when the app is not installed yet.
+# Usage: android_reset_path <relative_path_under_files>
+#
+android_reset_path() {
+    local rel="$1"
+    adb shell run-as "$APP_ID" rm -rf "files/$rel" >/dev/null 2>&1 || true
+}

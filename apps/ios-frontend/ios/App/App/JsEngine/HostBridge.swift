@@ -22,6 +22,35 @@ struct NotImplementedError: Error, CustomStringConvertible {
 }
 
 //
+// Error thrown by the native fs write host functions. `.exists` carries the EEXIST marker the JS fs
+// shim maps to a Node EEXIST code (used by the storage write-lock); `.message` is any other failure.
+//
+enum HostFsError: Error, CustomStringConvertible {
+
+    //
+    // An exclusive ('wx') write found an existing file at the path.
+    //
+    case exists(String)
+
+    //
+    // Any other fs failure, carrying a human-readable message.
+    //
+    case message(String)
+
+    //
+    // The message surfaced as the task's error (and matched by the JS shim for EEXIST).
+    //
+    var description: String {
+        switch self {
+        case .exists(let path):
+            return "EEXIST: file already exists: \(path)"
+        case .message(let text):
+            return text
+        }
+    }
+}
+
+//
 // Builds the exact NOT IMPLEMENTED error message used verbatim on both platforms. Kept in
 // one helper so the wording can never drift from the TypeScript `notImplementedMessage`.
 //
@@ -125,6 +154,129 @@ final class HostBridge {
         }
         host.setValue(JSValue(object: sha256, in: context), forProperty: "sha256")
 
+        // The fs host functions never raise a JS exception across the bridge: on error they return an
+        // error-envelope string (mirrored with Android and the JS shim) that the shim decodes and
+        // throws. This keeps the contract identical on both engines. The boolean fsAccess returns
+        // false on error.
+
+        // fsReadFile(path): bytes as a base64 string, JS null when missing, or an error envelope.
+        let fsReadFile: @convention(block) (String) -> JSValue = { [weak self] path in
+            guard let self = self else { return JSValue(nullIn: context) }
+            do {
+                if let base64 = try self.fsReadFile(path: path) {
+                    return JSValue(object: base64, in: context)
+                }
+                return JSValue(nullIn: context)
+            }
+            catch {
+                return JSValue(object: HostBridge.hostErrorEnvelope(error), in: context)
+            }
+        }
+        host.setValue(JSValue(object: fsReadFile, in: context), forProperty: "fsReadFile")
+
+        // fsAccess(path): whether a sandboxed file or directory exists (false on any error).
+        let fsAccess: @convention(block) (String) -> Bool = { [weak self] path in
+            guard let self = self else { return false }
+            return (try? self.fsAccess(path: path)) ?? false
+        }
+        host.setValue(JSValue(object: fsAccess, in: context), forProperty: "fsAccess")
+
+        // fsStat(path): JSON stat string, JS null when missing, or an error envelope.
+        let fsStat: @convention(block) (String) -> JSValue = { [weak self] path in
+            guard let self = self else { return JSValue(nullIn: context) }
+            do {
+                if let json = try self.fsStat(path: path) {
+                    return JSValue(object: json, in: context)
+                }
+                return JSValue(nullIn: context)
+            }
+            catch {
+                return JSValue(object: HostBridge.hostErrorEnvelope(error), in: context)
+            }
+        }
+        host.setValue(JSValue(object: fsStat, in: context), forProperty: "fsStat")
+
+        // fsReaddir(path): JSON listing, JS null when missing, or an error envelope.
+        let fsReaddir: @convention(block) (String) -> JSValue = { [weak self] path in
+            guard let self = self else { return JSValue(nullIn: context) }
+            do {
+                if let json = try self.fsReaddir(path: path) {
+                    return JSValue(object: json, in: context)
+                }
+                return JSValue(nullIn: context)
+            }
+            catch {
+                return JSValue(object: HostBridge.hostErrorEnvelope(error), in: context)
+            }
+        }
+        host.setValue(JSValue(object: fsReaddir, in: context), forProperty: "fsReaddir")
+
+        // fsWriteFile(path, base64, exclusive): writes bytes; returns JS null on success or an error
+        // envelope (its message contains EEXIST for an exclusive write over an existing file).
+        let fsWriteFile: @convention(block) (String, String, Bool) -> JSValue = { [weak self] path, base64, exclusive in
+            guard let self = self else { return JSValue(nullIn: context) }
+            do {
+                try self.fsWriteFile(path: path, base64: base64, exclusive: exclusive)
+                return JSValue(nullIn: context)
+            }
+            catch {
+                return JSValue(object: HostBridge.hostErrorEnvelope(error), in: context)
+            }
+        }
+        host.setValue(JSValue(object: fsWriteFile, in: context), forProperty: "fsWriteFile")
+
+        // fsMkdir(path, recursive): creates a sandboxed directory; null on success or error envelope.
+        let fsMkdir: @convention(block) (String, Bool) -> JSValue = { [weak self] path, recursive in
+            guard let self = self else { return JSValue(nullIn: context) }
+            do {
+                try self.fsMkdir(path: path, recursive: recursive)
+                return JSValue(nullIn: context)
+            }
+            catch {
+                return JSValue(object: HostBridge.hostErrorEnvelope(error), in: context)
+            }
+        }
+        host.setValue(JSValue(object: fsMkdir, in: context), forProperty: "fsMkdir")
+
+        // fsRename(srcPath, destPath): renames/moves a file; null on success or error envelope.
+        let fsRename: @convention(block) (String, String) -> JSValue = { [weak self] srcPath, destPath in
+            guard let self = self else { return JSValue(nullIn: context) }
+            do {
+                try self.fsRename(srcPath: srcPath, destPath: destPath)
+                return JSValue(nullIn: context)
+            }
+            catch {
+                return JSValue(object: HostBridge.hostErrorEnvelope(error), in: context)
+            }
+        }
+        host.setValue(JSValue(object: fsRename, in: context), forProperty: "fsRename")
+
+        // fsUnlink(path): deletes a file; null on success or error envelope.
+        let fsUnlink: @convention(block) (String) -> JSValue = { [weak self] path in
+            guard let self = self else { return JSValue(nullIn: context) }
+            do {
+                try self.fsUnlink(path: path)
+                return JSValue(nullIn: context)
+            }
+            catch {
+                return JSValue(object: HostBridge.hostErrorEnvelope(error), in: context)
+            }
+        }
+        host.setValue(JSValue(object: fsUnlink, in: context), forProperty: "fsUnlink")
+
+        // fsRm(path, recursive, force): deletes a file or directory tree; null on success or envelope.
+        let fsRm: @convention(block) (String, Bool, Bool) -> JSValue = { [weak self] path, recursive, force in
+            guard let self = self else { return JSValue(nullIn: context) }
+            do {
+                try self.fsRm(path: path, recursive: recursive, force: force)
+                return JSValue(nullIn: context)
+            }
+            catch {
+                return JSValue(object: HostBridge.hostErrorEnvelope(error), in: context)
+            }
+        }
+        host.setValue(JSValue(object: fsRm, in: context), forProperty: "fsRm")
+
         context.globalObject.setValue(host, forProperty: "host")
     }
 
@@ -136,5 +288,203 @@ final class HostBridge {
     //
     func sha256(path: String) throws -> String {
         throw notImplemented("sha256")
+    }
+
+    //
+    // host.fsReadFile(path): reads a sandboxed file and returns its bytes as a base64 string, or nil
+    // when the path is missing or is not a regular file (surfaced as ENOENT by the JS shim). Whole-file
+    // read matches the mobile read model (only small database metadata files are read).
+    //
+    func fsReadFile(path: String) throws -> String? {
+        let url = try PathSandbox.resolveWithin(root: storageRoot, candidate: path)
+        let fileManager = FileManager.default
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory), !isDirectory.boolValue else {
+            return nil
+        }
+        let data = try Data(contentsOf: url)
+        return data.base64EncodedString()
+    }
+
+    //
+    // host.fsAccess(path): returns true when a sandboxed file or directory exists. Backs pathExists.
+    //
+    func fsAccess(path: String) throws -> Bool {
+        let url = try PathSandbox.resolveWithin(root: storageRoot, candidate: path)
+        return FileManager.default.fileExists(atPath: url.path)
+    }
+
+    //
+    // host.fsStat(path): returns a JSON string { size, mtimeMs, isFile, isDirectory } for a sandboxed
+    // path, or nil when it does not exist. Built by hand (only numbers/booleans) to mirror the Android
+    // implementation byte-for-byte in shape. mtimeMs is epoch milliseconds, matching Android.
+    //
+    func fsStat(path: String) throws -> String? {
+        let url = try PathSandbox.resolveWithin(root: storageRoot, candidate: path)
+        let fileManager = FileManager.default
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory) else {
+            return nil
+        }
+
+        let attributes = try fileManager.attributesOfItem(atPath: url.path)
+        let size = (attributes[.size] as? NSNumber)?.int64Value ?? 0
+        let modificationDate = (attributes[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
+        let mtimeMs = Int64((modificationDate * 1000).rounded())
+        let isFile = !isDirectory.boolValue
+        return "{\"size\":\(size),\"mtimeMs\":\(mtimeMs),\"isFile\":\(isFile),\"isDirectory\":\(isDirectory.boolValue)}"
+    }
+
+    //
+    // host.fsReaddir(path): returns a JSON string array of { name, isDirectory } entries for a
+    // sandboxed directory, or nil when the directory does not exist. Entry names are JSON-escaped so
+    // names with quotes/backslashes/control characters cannot corrupt the payload.
+    //
+    func fsReaddir(path: String) throws -> String? {
+        let url = try PathSandbox.resolveWithin(root: storageRoot, candidate: path)
+        let fileManager = FileManager.default
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory), isDirectory.boolValue else {
+            return nil
+        }
+
+        let entries = try fileManager.contentsOfDirectory(at: url, includingPropertiesForKeys: [.isDirectoryKey], options: [])
+        var parts: [String] = []
+        for entry in entries {
+            let values = try entry.resourceValues(forKeys: [.isDirectoryKey])
+            let entryIsDirectory = values.isDirectory ?? false
+            parts.append("{\"name\":\"\(HostBridge.jsonEscape(entry.lastPathComponent))\",\"isDirectory\":\(entryIsDirectory)}")
+        }
+        return "[" + parts.joined(separator: ",") + "]"
+    }
+
+    //
+    // host.fsWriteFile(path, base64, exclusive): writes base64-decoded bytes to a sandboxed path,
+    // creating parent directories as needed. With exclusive true (Node 'wx') it throws an
+    // EEXIST-marked error when the file already exists, so the JS shim surfaces EEXIST.
+    //
+    func fsWriteFile(path: String, base64: String, exclusive: Bool) throws {
+        let url = try PathSandbox.resolveWithin(root: storageRoot, candidate: path)
+        let fileManager = FileManager.default
+        if exclusive && fileManager.fileExists(atPath: url.path) {
+            throw HostFsError.exists(path)
+        }
+
+        let parent = url.deletingLastPathComponent()
+        if !fileManager.fileExists(atPath: parent.path) {
+            try fileManager.createDirectory(at: parent, withIntermediateDirectories: true)
+        }
+
+        guard let data = Data(base64Encoded: base64) else {
+            throw HostFsError.message("fsWriteFile: invalid base64 for \(path)")
+        }
+        try data.write(to: url)
+    }
+
+    //
+    // host.fsMkdir(path, recursive): creates a sandboxed directory, a no-op when it already exists
+    // (matching Node's fs.mkdir({ recursive: true })).
+    //
+    func fsMkdir(path: String, recursive: Bool) throws {
+        let url = try PathSandbox.resolveWithin(root: storageRoot, candidate: path)
+        let fileManager = FileManager.default
+        var isDirectory: ObjCBool = false
+        if fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory) {
+            if isDirectory.boolValue {
+                return
+            }
+            throw HostFsError.message("fsMkdir: path exists and is not a directory: \(path)")
+        }
+        try fileManager.createDirectory(at: url, withIntermediateDirectories: recursive)
+    }
+
+    //
+    // host.fsRename(srcPath, destPath): renames/moves a sandboxed file, overwriting an existing
+    // destination (Node semantics).
+    //
+    func fsRename(srcPath: String, destPath: String) throws {
+        let source = try PathSandbox.resolveWithin(root: storageRoot, candidate: srcPath)
+        let destination = try PathSandbox.resolveWithin(root: storageRoot, candidate: destPath)
+        let fileManager = FileManager.default
+
+        let parent = destination.deletingLastPathComponent()
+        if !fileManager.fileExists(atPath: parent.path) {
+            try fileManager.createDirectory(at: parent, withIntermediateDirectories: true)
+        }
+        if fileManager.fileExists(atPath: destination.path) {
+            try fileManager.removeItem(at: destination)
+        }
+        try fileManager.moveItem(at: source, to: destination)
+    }
+
+    //
+    // host.fsUnlink(path): deletes a sandboxed file. Throws an ENOENT-marked error when missing
+    // (callers that tolerate that catch it).
+    //
+    func fsUnlink(path: String) throws {
+        let url = try PathSandbox.resolveWithin(root: storageRoot, candidate: path)
+        let fileManager = FileManager.default
+        if !fileManager.fileExists(atPath: url.path) {
+            throw HostFsError.message("ENOENT: no such file or directory, unlink '\(path)'")
+        }
+        try fileManager.removeItem(at: url)
+    }
+
+    //
+    // host.fsRm(path, recursive, force): deletes a sandboxed file or directory tree. With force, a
+    // missing path is a no-op; otherwise a missing path throws ENOENT.
+    //
+    func fsRm(path: String, recursive: Bool, force: Bool) throws {
+        let url = try PathSandbox.resolveWithin(root: storageRoot, candidate: path)
+        let fileManager = FileManager.default
+        if !fileManager.fileExists(atPath: url.path) {
+            if force {
+                return
+            }
+            throw HostFsError.message("ENOENT: no such file or directory, rm '\(path)'")
+        }
+        try fileManager.removeItem(at: url)
+    }
+
+    //
+    // Builds an error-envelope string (format shared with the JS host-access shim and Android) so a
+    // native fs failure crosses the bridge as a value the shim decodes and throws, rather than as a
+    // JS exception. The shim recognises EEXIST/ENOENT in the code segment.
+    //
+    static func hostErrorEnvelope(_ error: Error) -> String {
+        let message = "\(error)"
+        let code = message.contains("EEXIST") ? "EEXIST" : (message.contains("ENOENT") ? "ENOENT" : "")
+        return "@@HOSTERR@@" + code + ":" + message
+    }
+
+    //
+    // Escapes a string for embedding inside a JSON string literal (quotes, backslashes, and control
+    // characters). Mirrors the Android jsonEscape so both platforms produce identical listing JSON.
+    //
+    static func jsonEscape(_ value: String) -> String {
+        var result = ""
+        result.reserveCapacity(value.count + 2)
+        for character in value.unicodeScalars {
+            switch character {
+            case "\"":
+                result += "\\\""
+            case "\\":
+                result += "\\\\"
+            case "\n":
+                result += "\\n"
+            case "\r":
+                result += "\\r"
+            case "\t":
+                result += "\\t"
+            default:
+                if character.value < 0x20 {
+                    result += String(format: "\\u%04x", character.value)
+                }
+                else {
+                    result.unicodeScalars.append(character)
+                }
+            }
+        }
+        return result
     }
 }

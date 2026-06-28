@@ -41,6 +41,15 @@ describe("host bridge NOT IMPLEMENTED guard", () => {
                 calls.push(path);
                 return "deadbeef";
             },
+            fsReadFile: () => null,
+            fsAccess: () => false,
+            fsStat: () => null,
+            fsReaddir: () => null,
+            fsWriteFile: () => { /* no-op */ },
+            fsMkdir: () => { /* no-op */ },
+            fsRename: () => { /* no-op */ },
+            fsUnlink: () => { /* no-op */ },
+            fsRm: () => { /* no-op */ },
         } as IHost;
 
         const effectiveHost = buildHost(rawHost);

@@ -19,6 +19,11 @@ trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 start_app "$APP_PORT" "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
+# Seed a news item (desktop feeds news.yaml via PHOTOSPHERE_NEWS_URL; on mobile the news feed is
+# seeded via the test driver). Seeding shows the first unshown item as a toast.
+send_command "$APP_PORT" reset-config '{}' || exit 1
+send_command "$APP_PORT" seed-news '{"news":[{"id":"smoke-news-001","message":"Smoke test news item"}]}' || exit 1
+
 wait_for_log "$TMP_DIR" "Showed news notification:" 20
 
 send_command "$APP_PORT" click '{"dataId":"toast-dismiss"}' || exit 1

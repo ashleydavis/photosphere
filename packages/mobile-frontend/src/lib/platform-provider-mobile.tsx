@@ -1,6 +1,14 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
-import { PlatformContextProvider, ConfigContextProvider, createConfig, TEST_MENU_EVENT, TEST_OPEN_DATABASE_EVENT, type IPlatformContext, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions } from "user-interface";
+import { PlatformContextProvider, ConfigContextProvider, createConfig, TEST_MENU_EVENT, TEST_OPEN_DATABASE_EVENT, TEST_SEED_DATABASES_EVENT, TEST_SEED_SECRETS_EVENT, TEST_SEED_RECENT_EVENT, TEST_SEED_NEWS_EVENT, TEST_RESET_CONFIG_EVENT, type IPlatformContext, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions } from "user-interface";
+import { log } from "utils";
 import { cancelMobileTasks, subscribeMobileTaskMessage, subscribeMobileTaskComplete } from "./mobile-platform-tasks";
+import * as configStore from "./mobile-config-store";
+
+//
+// The WebView localStorage used to persist the configured-databases / recent-databases lists. It
+// satisfies the small key/value interface the config store needs.
+//
+const persistentStore: configStore.IKeyValueStore = window.localStorage;
 
 //
 // Props for the mobile platform provider.
@@ -29,6 +37,9 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
     const menuActionCallbacksRef = useRef<Set<(action: string) => void>>(new Set());
     const openedCallbacksRef = useRef<Set<(databasePath: string) => void>>(new Set());
 
+    // Registered callbacks for show-notification events (used by the news-notification flow).
+    const showNotificationCallbacksRef = useRef<Set<(data: IShowNotificationData) => void>>(new Set());
+
     const openDatabase = useCallback(async (): Promise<void> => {
         // No-op: no native database picker on mobile yet.
     }, []);
@@ -44,7 +55,13 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         return () => {};
     }, []);
 
-    const notifyDatabaseOpened = useCallback(async (_databasePath: string): Promise<void> => {
+    const notifyDatabaseOpened = useCallback(async (databasePath: string): Promise<void> => {
+        // Record the opened database as most-recent (look up its registered name, else use the path's
+        // final segment) and log a line matching the desktop main process so smoke tests observe it.
+        const known = configStore.findDatabaseByPath(persistentStore, databasePath);
+        const name = known?.name ?? configStore.databaseBasename(databasePath);
+        configStore.addRecentDatabase(persistentStore, known ?? { name, description: "", path: databasePath });
+        log.info(`Database opened: ${configStore.databaseBasename(databasePath)}`);
     }, []);
 
     const notifyDatabaseClosed = useCallback(async (): Promise<void> => {
@@ -73,11 +90,38 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
             const databasePath = (event as CustomEvent<string>).detail;
             openedCallbacksRef.current.forEach(callback => callback(databasePath));
         };
+        // Test setup: seed the configured-databases list (mirrors desktop seeding databases.toml).
+        const handleSeedDatabases = (event: Event) => {
+            const databases = (event as CustomEvent<IDatabaseEntry[]>).detail || [];
+            configStore.seedDatabases(persistentStore, databases);
+        };
+        // Test setup: seed the secrets list (mirrors desktop seeding the vault).
+        const handleSeedSecrets = (event: Event) => {
+            const secrets = (event as CustomEvent<configStore.IStoredSecret[]>).detail || [];
+            configStore.seedSecrets(persistentStore, secrets);
+        };
+        // Test setup: seed the recent-databases list.
+        const handleSeedRecent = (event: Event) => {
+            const databases = (event as CustomEvent<IDatabaseEntry[]>).detail || [];
+            configStore.seedRecentDatabases(persistentStore, databases);
+        };
+        // Test setup: clear all persisted config for a deterministic starting state.
+        const handleResetConfig = () => {
+            configStore.resetConfig(persistentStore);
+        };
         window.addEventListener(TEST_MENU_EVENT, handleMenu);
         window.addEventListener(TEST_OPEN_DATABASE_EVENT, handleOpenDatabase);
+        window.addEventListener(TEST_SEED_DATABASES_EVENT, handleSeedDatabases);
+        window.addEventListener(TEST_SEED_SECRETS_EVENT, handleSeedSecrets);
+        window.addEventListener(TEST_SEED_RECENT_EVENT, handleSeedRecent);
+        window.addEventListener(TEST_RESET_CONFIG_EVENT, handleResetConfig);
         return () => {
             window.removeEventListener(TEST_MENU_EVENT, handleMenu);
             window.removeEventListener(TEST_OPEN_DATABASE_EVENT, handleOpenDatabase);
+            window.removeEventListener(TEST_SEED_DATABASES_EVENT, handleSeedDatabases);
+            window.removeEventListener(TEST_SEED_SECRETS_EVENT, handleSeedSecrets);
+            window.removeEventListener(TEST_SEED_RECENT_EVENT, handleSeedRecent);
+            window.removeEventListener(TEST_RESET_CONFIG_EVENT, handleResetConfig);
         };
     }, []);
 
@@ -100,9 +144,41 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         return () => {};
     }, []);
 
-    const onShowNotification = useCallback((_callback: (data: IShowNotificationData) => void): (() => void) => {
-        return () => {};
+    const onShowNotification = useCallback((callback: (data: IShowNotificationData) => void): (() => void) => {
+        showNotificationCallbacksRef.current.add(callback);
+        return () => {
+            showNotificationCallbacksRef.current.delete(callback);
+        };
     }, []);
+
+    // Shows the first not-yet-shown news item as a toast (fires the show-notification callbacks) and
+    // logs a line matching the desktop main process so smoke tests observe it. No-op when there is no
+    // unshown news. News items are seeded in tests; production news fetching is a later layer.
+    const showFirstUnshownNews = useCallback((): void => {
+        const item = configStore.firstUnshownNews(persistentStore);
+        if (!item) {
+            return;
+        }
+        const data: IShowNotificationData = configStore.buildNewsNotification(item);
+        showNotificationCallbacksRef.current.forEach(callback => callback(data));
+        log.info(`Showed news notification: ${item.id}`);
+    }, []);
+
+    // News notifications: show any unshown news on startup, and (in tests) when news is seeded. The
+    // show-notification callbacks are registered by the app's notification effect, which runs before
+    // this parent effect, so they are in place when showFirstUnshownNews fires.
+    useEffect(() => {
+        const handleSeedNews = (event: Event) => {
+            const items = (event as CustomEvent<configStore.INewsItemRecord[]>).detail || [];
+            configStore.seedNews(persistentStore, items);
+            showFirstUnshownNews();
+        };
+        window.addEventListener(TEST_SEED_NEWS_EVENT, handleSeedNews);
+        showFirstUnshownNews();
+        return () => {
+            window.removeEventListener(TEST_SEED_NEWS_EVENT, handleSeedNews);
+        };
+    }, [showFirstUnshownNews]);
 
     const onDatabasesChanged = useCallback((_callback: () => void): (() => void) => {
         return () => {};
@@ -131,8 +207,10 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
     }, []);
 
     const checkDatabaseExists = useCallback(async (_databasePath: string): Promise<boolean> => {
-        // No database support on mobile yet.
-        return false;
+        // The WebView has no filesystem access, so existence cannot be checked here directly. Treat
+        // the database as present and let the load-assets task surface a genuinely missing/corrupt
+        // database as a task error. (A precise check would need a native fs call from the WebView.)
+        return true;
     }, []);
 
     const onTaskMessage = useCallback((handler: (taskId: string, message: Record<string, unknown>) => void): (() => void) => {
@@ -151,28 +229,35 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
     }, []);
 
     const getDatabases = useCallback(async (): Promise<IDatabaseEntry[]> => {
-        return [];
+        return configStore.getDatabases(persistentStore);
     }, []);
 
     const addDatabase = useCallback(async (entry: IDatabaseEntry): Promise<IDatabaseEntry> => {
-        return entry;
+        const added = configStore.addDatabase(persistentStore, entry);
+        // Matches the desktop main process so smoke tests observe the same log line.
+        log.info("Database entry added");
+        return added;
     }, []);
 
-    const updateDatabase = useCallback(async (_originalName: string, _entry: IDatabaseEntry): Promise<void> => {
+    const updateDatabase = useCallback(async (originalName: string, entry: IDatabaseEntry): Promise<void> => {
+        configStore.updateDatabase(persistentStore, originalName, entry);
     }, []);
 
-    const setDatabaseOrigin = useCallback(async (_databasePath: string, _origin: string | undefined): Promise<void> => {
+    const setDatabaseOrigin = useCallback(async (databasePath: string, origin: string | undefined): Promise<void> => {
+        configStore.setDatabaseOrigin(persistentStore, databasePath, origin);
     }, []);
 
-    const removeDatabaseEntry = useCallback(async (_name: string): Promise<void> => {
+    const removeDatabaseEntry = useCallback(async (name: string): Promise<void> => {
+        configStore.removeDatabase(persistentStore, name);
     }, []);
 
-    const findDatabase = useCallback(async (_name: string): Promise<IDatabaseEntry | undefined> => {
-        return undefined;
+    const findDatabase = useCallback(async (name: string): Promise<IDatabaseEntry | undefined> => {
+        return configStore.findDatabase(persistentStore, name);
     }, []);
 
     const pickFolder = useCallback(async (_options?: IPickFolderOptions): Promise<string | undefined> => {
-        return undefined;
+        // No native folder picker yet; downloads go to a fixed sandbox-relative "downloads" folder.
+        return "downloads";
     }, []);
 
     const pickFile = useCallback(async (defaultFilename: string): Promise<string | undefined> => {
@@ -184,28 +269,33 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
     }, []);
 
     const listSecrets = useCallback(async (): Promise<ISharedSecretEntry[]> => {
-        return [];
+        return configStore.listSecrets(persistentStore);
     }, []);
 
-    const addSecret = useCallback(async (entry: ISharedSecretEntry, _value: string): Promise<ISharedSecretEntry> => {
-        return entry;
+    const addSecret = useCallback(async (entry: ISharedSecretEntry, value: string): Promise<ISharedSecretEntry> => {
+        return configStore.addSecret(persistentStore, entry, value);
     }, []);
 
-    const updateSecret = useCallback(async (_originalName: string, _entry: ISharedSecretEntry, _value?: string): Promise<void> => {
+    const updateSecret = useCallback(async (originalName: string, entry: ISharedSecretEntry, value?: string): Promise<void> => {
+        configStore.updateSecret(persistentStore, originalName, entry, value);
     }, []);
 
-    const deleteSecret = useCallback(async (_name: string): Promise<void> => {
+    const deleteSecret = useCallback(async (name: string): Promise<void> => {
+        configStore.deleteSecret(persistentStore, name);
     }, []);
 
-    const getSecretValue = useCallback(async (_name: string): Promise<string | undefined> => {
-        return undefined;
+    const getSecretValue = useCallback(async (name: string): Promise<string | undefined> => {
+        return configStore.getSecretValue(persistentStore, name);
     }, []);
 
     const getRecentDatabases = useCallback(async (): Promise<IDatabaseEntry[]> => {
-        return [];
+        return configStore.getRecentDatabases(persistentStore);
     }, []);
 
-    const removeRecentDatabaseName = useCallback(async (_name: string): Promise<void> => {
+    const removeRecentDatabaseName = useCallback(async (name: string): Promise<void> => {
+        configStore.removeRecentDatabase(persistentStore, name);
+        // Matches the desktop main process so smoke tests observe the same log line.
+        log.info(`Recent database removed: ${name}`);
     }, []);
 
     const listS3Dirs = useCallback(async (_s3Key: string, _bucket: string, _prefix: string): Promise<string[]> => {
@@ -239,7 +329,10 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
     const markUpdateAsShown = useCallback(async (_version: string): Promise<void> => {
     }, []);
 
-    const markNewsAsShown = useCallback(async (_newsId: string): Promise<void> => {
+    const markNewsAsShown = useCallback(async (newsId: string): Promise<void> => {
+        configStore.addShownNewsId(persistentStore, newsId);
+        // Matches the desktop main process so smoke tests observe the same log line.
+        log.info(`Marked news notification as shown: ${newsId}`);
     }, []);
 
     const platformContext: IPlatformContext = {

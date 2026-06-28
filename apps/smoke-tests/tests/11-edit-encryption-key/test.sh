@@ -18,6 +18,11 @@ trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 start_app "$APP_PORT" "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
+# Seed one encryption-key secret to edit (desktop seeds the vault; on mobile the secrets store is
+# seeded via the test driver). The value is the raw private-key PEM.
+send_command "$APP_PORT" reset-config '{}' || exit 1
+send_command "$APP_PORT" seed-secrets '{"secrets":[{"entry":{"name":"enc-key","type":"encryption-key"},"value":"-----BEGIN PRIVATE KEY-----\nMOCK\n-----END PRIVATE KEY-----"}]}' || exit 1
+
 send_command "$APP_PORT" navigate '{"page":"secrets"}' || exit 1
 wait_for_log "$TMP_DIR" "Secrets page loaded" 20
 

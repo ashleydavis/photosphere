@@ -16,6 +16,9 @@ trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 start_app "$APP_PORT" "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
+# Clean slate so the secret name is unique.
+send_command "$APP_PORT" reset-config '{}' || exit 1
+
 send_command "$APP_PORT" navigate '{"page":"secrets"}' || exit 1
 wait_for_log "$TMP_DIR" "Secrets page loaded" 20
 

@@ -97,3 +97,22 @@ ios_launch() {
 ios_stop() {
     xcrun simctl terminate "${IOS_SIMULATOR_UDID:-booted}" "$BUNDLE_ID"
 }
+
+#
+# iOS database seeding is not implemented yet (the native iOS host fs functions are not implemented
+# either). Logged as a no-op so the shared test still runs on iOS and fails later at the missing
+# native fs layer rather than here. Android is the supported platform for the fixture-load test.
+# Usage: ios_seed_database <host_fixture_dir> <relative_dest_under_files>
+#
+ios_seed_database() {
+    log_info "ios_seed_database is not implemented yet (no native iOS fs); skipping seed of '$1'."
+}
+
+#
+# iOS path reset is not implemented yet (the iOS native storage path is managed by the simulator
+# container). Logged as a no-op so the shared test still runs on iOS.
+# Usage: ios_reset_path <relative_path_under_files>
+#
+ios_reset_path() {
+    log_info "ios_reset_path is not implemented yet; skipping reset of '$1'."
+}

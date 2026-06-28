@@ -84,6 +84,18 @@ interface IBridgePayload {
 
     // Database path (create/open-database).
     path?: string;
+
+    // Database entries to seed into the mobile config store (seed-databases).
+    databases?: Array<{ name: string; description?: string; path: string }>;
+
+    // Secret records to seed into the mobile config store (seed-secrets).
+    secrets?: Array<{ entry: { name: string; type: string }; value: string }>;
+
+    // Database entries to seed into the recent-databases list (seed-recent).
+    recent?: Array<{ name: string; description?: string; path: string }>;
+
+    // News items to seed into the mobile config store (seed-news).
+    news?: Array<{ id: string; message: string; color?: string }>;
 }
 
 //
@@ -378,6 +390,26 @@ export class ControlBridge {
 
         this.expressApp.post("/data", (req: Request, res: Response) => {
             void this.forward("data", req.body, res);
+        });
+
+        this.expressApp.post("/seed-databases", (req: Request, res: Response) => {
+            void this.forward("seed-databases", { databases: req.body.databases }, res);
+        });
+
+        this.expressApp.post("/seed-secrets", (req: Request, res: Response) => {
+            void this.forward("seed-secrets", { secrets: req.body.secrets }, res);
+        });
+
+        this.expressApp.post("/seed-recent", (req: Request, res: Response) => {
+            void this.forward("seed-recent", { recent: req.body.recent }, res);
+        });
+
+        this.expressApp.post("/seed-news", (req: Request, res: Response) => {
+            void this.forward("seed-news", { news: req.body.news }, res);
+        });
+
+        this.expressApp.post("/reset-config", (req: Request, res: Response) => {
+            void this.forward("reset-config", {}, res);
         });
 
         this.expressApp.post("/screenshot", (req: Request, res: Response) => {

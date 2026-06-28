@@ -71,6 +71,12 @@ export function SecretsPage() {
     // The secret currently being viewed (undefined when dialog is closed).
     const [viewingSecret, setViewingSecret] = useState<ISharedSecretEntry | undefined>(undefined);
 
+    // Re-read the secrets/databases lists when the page mounts, so state seeded or changed outside
+    // this provider instance (e.g. mobile test setup) is reflected when the page is entered.
+    useEffect(() => {
+        refresh().catch(err => log.exception('Failed to refresh on secrets page mount:', err as Error));
+    }, []);
+
     useEffect(() => {
         log.info('Secrets page loaded');
     }, [secrets]);

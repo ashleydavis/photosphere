@@ -16,6 +16,8 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
 
 //
 // The production TaskEngine that runs the embedded worker bundle in a QuickJS context, using the
@@ -135,7 +137,7 @@ public final class QuickJsTaskEngine implements TaskEngine {
 
             String outputsJson = null;
             String errorMessage = null;
-            for (int attempt = 0; attempt < 500; attempt++) {
+            for (int attempt = 0; attempt < 5000; attempt++) {
                 Object result = globalObject.getProperty("__ptResult");
                 if (result instanceof String) {
                     outputsJson = (String) result;
@@ -146,8 +148,21 @@ public final class QuickJsTaskEngine implements TaskEngine {
                     errorMessage = (String) error;
                     break;
                 }
-                // Pump any remaining QuickJS jobs (promise callbacks) and re-check.
+                // Drain any remaining QuickJS jobs (promise callbacks). Evaluating drains the whole
+                // microtask queue to empty.
                 context.evaluate("void 0;");
+
+                // Re-check before advancing a timer: if the task settled while draining microtasks,
+                // do not fire any pending timer (e.g. a retry timeout guard).
+                if (globalObject.getProperty("__ptResult") instanceof String
+                        || globalObject.getProperty("__ptError") instanceof String) {
+                    continue;
+                }
+
+                // The engine has no real clock: with the microtask queue drained and the task still
+                // unsettled, advance the earliest pending timer (setTimeout) so timer-driven progress
+                // (retry backoff, timeout guards) can happen. Returns false when no timers remain.
+                context.evaluate("globalThis.__ptPumped = (typeof globalThis.__pumpTimers === 'function') ? globalThis.__pumpTimers() : false;");
             }
 
             if (errorMessage != null) {
@@ -203,11 +218,84 @@ public final class QuickJsTaskEngine implements TaskEngine {
             return null;
         });
         host.setProperty("isCancelled", (JSCallFunction) args -> hostBridge.isCancelled((String) args[0]));
-        host.setProperty("sha256", (JSCallFunction) args -> hostBridge.sha256((String) args[0]));
+        // A native host function must NEVER let a Java exception escape into QuickJS: the wrapper does
+        // not convert a thrown Java exception into a JS exception and the process would crash. Every
+        // host function below is wrapped so an exception is returned as an error-envelope string the
+        // JS fs shim decodes and throws (the boolean fsAccess returns false on error instead).
+        host.setProperty("sha256", (JSCallFunction) args -> safeString(() -> hostBridge.sha256((String) args[0])));
+
+        // Native-backed fs read functions: the storage layer (FileStorage over the mobile fs shim)
+        // calls these to read a database from the app sandbox. Binary file contents cross as base64
+        // strings; stat/readdir results cross as JSON strings; a missing path returns null.
+        host.setProperty("fsReadFile", (JSCallFunction) args -> safeString(() -> hostBridge.fsReadFile((String) args[0])));
+        host.setProperty("fsAccess", (JSCallFunction) args -> safeBoolean(() -> hostBridge.fsAccess((String) args[0])));
+        host.setProperty("fsStat", (JSCallFunction) args -> safeString(() -> hostBridge.fsStat((String) args[0])));
+        host.setProperty("fsReaddir", (JSCallFunction) args -> safeString(() -> hostBridge.fsReaddir((String) args[0])));
+
+        // Native-backed fs write functions (create-database, import, save, move, replicate). Bytes
+        // arrive as base64 strings; booleans cross directly. They return null on success or an
+        // error-envelope string on failure.
+        host.setProperty("fsWriteFile", (JSCallFunction) args -> safeVoid(() ->
+            hostBridge.fsWriteFile((String) args[0], (String) args[1], toBoolean(args[2]))));
+        host.setProperty("fsMkdir", (JSCallFunction) args -> safeVoid(() ->
+            hostBridge.fsMkdir((String) args[0], toBoolean(args[1]))));
+        host.setProperty("fsRename", (JSCallFunction) args -> safeVoid(() ->
+            hostBridge.fsRename((String) args[0], (String) args[1])));
+        host.setProperty("fsUnlink", (JSCallFunction) args -> safeVoid(() ->
+            hostBridge.fsUnlink((String) args[0])));
+        host.setProperty("fsRm", (JSCallFunction) args -> safeVoid(() ->
+            hostBridge.fsRm((String) args[0], toBoolean(args[1]), toBoolean(args[2]))));
+
         context.getGlobalObject().setProperty("host", host);
 
         // Evaluate the bundle once. It installs globalThis.__photosphereWorker.runTask.
         context.evaluate(readBundleAsset(), BUNDLE_ASSET_NAME);
+    }
+
+    //
+    // Coerces a host-call argument to a primitive boolean. QuickJS passes JS booleans as
+    // java.lang.Boolean; anything else (including null/undefined) is treated as false.
+    //
+    private static boolean toBoolean(Object value) {
+        return value instanceof Boolean && (Boolean) value;
+    }
+
+    //
+    // Runs a string-returning host action, returning its result or, on any throwable, an error
+    // envelope string (HostFunctions.hostErrorEnvelope, shared with the JS shim and iOS).
+    //
+    private static String safeString(Supplier<String> action) {
+        try {
+            return action.get();
+        }
+        catch (Throwable error) {
+            return HostFunctions.hostErrorEnvelope(error);
+        }
+    }
+
+    //
+    // Runs a boolean-returning host action (existence check), returning false on any throwable.
+    //
+    private static boolean safeBoolean(BooleanSupplier action) {
+        try {
+            return action.getAsBoolean();
+        }
+        catch (Throwable error) {
+            return false;
+        }
+    }
+
+    //
+    // Runs a void host action, returning null on success or an error envelope string on any throwable.
+    //
+    private static String safeVoid(Runnable action) {
+        try {
+            action.run();
+            return null;
+        }
+        catch (Throwable error) {
+            return HostFunctions.hostErrorEnvelope(error);
+        }
     }
 
     //

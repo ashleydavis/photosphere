@@ -66,6 +66,12 @@ export function DatabasesPage() {
     // The database entry currently being replicated (undefined when the dialog is closed).
     const [replicatingEntry, setReplicatingEntry] = useState<IDatabaseEntry | undefined>(undefined);
 
+    // Re-read the databases/secrets lists when the page mounts, so state seeded or changed outside
+    // this provider instance (e.g. mobile test setup) is reflected when the page is entered.
+    useEffect(() => {
+        refresh().catch(err => log.exception('Failed to refresh on databases page mount:', err as Error));
+    }, []);
+
     useEffect(() => {
         log.event('Databases page loaded');
     }, [databases, secrets]);

@@ -17,6 +17,10 @@ trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 start_app "$APP_PORT" "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
+# Seed the conflicting secret so adding one of the same name triggers the duplicate-name guard.
+send_command "$APP_PORT" reset-config '{}' || exit 1
+send_command "$APP_PORT" seed-secrets '{"secrets":[{"entry":{"name":"dup-secret","type":"api-key"},"value":"existing"}]}' || exit 1
+
 send_command "$APP_PORT" navigate '{"page":"secrets"}' || exit 1
 wait_for_log "$TMP_DIR" "Secrets page loaded" 20
 

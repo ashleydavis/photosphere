@@ -17,6 +17,10 @@ trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 start_app "$APP_PORT" "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
+# Seed one s3-credentials secret to edit (the value is JSON with region/accessKeyId/secretAccessKey).
+send_command "$APP_PORT" reset-config '{}' || exit 1
+send_command "$APP_PORT" seed-secrets '{"secrets":[{"entry":{"name":"s3-cred","type":"s3-credentials"},"value":"{\"region\":\"us-east-1\",\"accessKeyId\":\"AKIAEXAMPLE\",\"secretAccessKey\":\"secretvalue\"}"}]}' || exit 1
+
 send_command "$APP_PORT" navigate '{"page":"secrets"}' || exit 1
 wait_for_log "$TMP_DIR" "Secrets page loaded" 20
 

@@ -17,6 +17,15 @@ trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 start_app "$APP_PORT" "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
+# Seed one recent database (desktop seeds databases.toml). Place its (empty) files in the sandbox and
+# open it so the sidebar re-reads the recent list (it refreshes on the database-opened event).
+send_command "$APP_PORT" reset-config '{}' || exit 1
+create_database "$TMP_DIR/test-db"
+"${PLATFORM}_seed_database" "$TMP_DIR/test-db" "test-db"
+send_command "$APP_PORT" seed-recent '{"recent":[{"name":"test-db","path":"test-db"}]}' || exit 1
+send_command "$APP_PORT" open-database '{"path":"test-db"}' || exit 1
+wait_for_log "$TMP_DIR" "Load assets task completed: 0 assets loaded" 20
+
 send_command "$APP_PORT" click '{"dataId":"sidebar-toggle-button"}' || exit 1
 sleep 1
 
