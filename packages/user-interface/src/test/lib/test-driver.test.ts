@@ -9,7 +9,11 @@ import {
     doDrop,
     getValue,
     doNavigate,
+    doMenu,
+    doOpenDatabase,
     installTestDriver,
+    TEST_MENU_EVENT,
+    TEST_OPEN_DATABASE_EVENT,
 } from "../../lib/test-driver";
 import type { ITestTransport, ITestCommandPayload } from "../../lib/test-driver";
 
@@ -176,5 +180,64 @@ describe("installTestDriver", () => {
         const { transport, invoke } = makeTransport();
         installTestDriver(transport);
         await expect(invoke("create-database", {})).rejects.toThrow("not implemented");
+    });
+
+    test("routes a menu command to a window event", async () => {
+        const { transport, invoke } = makeTransport();
+        installTestDriver(transport);
+        let received: string | undefined;
+        const listener = (event: Event) => { received = (event as CustomEvent<string>).detail; };
+        window.addEventListener(TEST_MENU_EVENT, listener);
+        try {
+            await invoke("menu", { itemId: "new-database" });
+        }
+        finally {
+            window.removeEventListener(TEST_MENU_EVENT, listener);
+        }
+        expect(received).toBe("new-database");
+    });
+
+    test("routes an open-database command to a window event", async () => {
+        const { transport, invoke } = makeTransport();
+        installTestDriver(transport);
+        let received: string | undefined;
+        const listener = (event: Event) => { received = (event as CustomEvent<string>).detail; };
+        window.addEventListener(TEST_OPEN_DATABASE_EVENT, listener);
+        try {
+            await invoke("open-database", { path: "/data/test-db" });
+        }
+        finally {
+            window.removeEventListener(TEST_OPEN_DATABASE_EVENT, listener);
+        }
+        expect(received).toBe("/data/test-db");
+    });
+});
+
+describe("doMenu and doOpenDatabase", () => {
+
+    test("doMenu dispatches the menu window event", () => {
+        let received: string | undefined;
+        const listener = (event: Event) => { received = (event as CustomEvent<string>).detail; };
+        window.addEventListener(TEST_MENU_EVENT, listener);
+        try {
+            doMenu("open-database");
+        }
+        finally {
+            window.removeEventListener(TEST_MENU_EVENT, listener);
+        }
+        expect(received).toBe("open-database");
+    });
+
+    test("doOpenDatabase dispatches the open-database window event", () => {
+        let received: string | undefined;
+        const listener = (event: Event) => { received = (event as CustomEvent<string>).detail; };
+        window.addEventListener(TEST_OPEN_DATABASE_EVENT, listener);
+        try {
+            doOpenDatabase("/data/fixture-db");
+        }
+        finally {
+            window.removeEventListener(TEST_OPEN_DATABASE_EVENT, listener);
+        }
+        expect(received).toBe("/data/fixture-db");
     });
 });

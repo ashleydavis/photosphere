@@ -1,5 +1,5 @@
-import React, { ReactNode, useCallback, useRef } from "react";
-import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions } from "user-interface";
+import React, { ReactNode, useCallback, useEffect, useRef } from "react";
+import { PlatformContextProvider, ConfigContextProvider, createConfig, TEST_MENU_EVENT, TEST_OPEN_DATABASE_EVENT, type IPlatformContext, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions } from "user-interface";
 import { cancelMobileTasks, subscribeMobileTaskMessage, subscribeMobileTaskComplete } from "./mobile-platform-tasks";
 
 //
@@ -23,12 +23,21 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
     // In-memory config store. Persists for the lifetime of the app session only.
     const configStoreRef = useRef<Map<string, unknown>>(new Map());
 
+    // Registered callbacks for menu actions and database-opened events. On desktop these fire
+    // from native menu / IPC; on mobile (no menu bar) the smoke-test driver drives them via
+    // window events (see the useEffect below) so tests exercise the real action handlers.
+    const menuActionCallbacksRef = useRef<Set<(action: string) => void>>(new Set());
+    const openedCallbacksRef = useRef<Set<(databasePath: string) => void>>(new Set());
+
     const openDatabase = useCallback(async (): Promise<void> => {
         // No-op: no native database picker on mobile yet.
     }, []);
 
-    const onDatabaseOpened = useCallback((_callback: (databasePath: string) => void): (() => void) => {
-        return () => {};
+    const onDatabaseOpened = useCallback((callback: (databasePath: string) => void): (() => void) => {
+        openedCallbacksRef.current.add(callback);
+        return () => {
+            openedCallbacksRef.current.delete(callback);
+        };
     }, []);
 
     const onDatabaseClosed = useCallback((_callback: () => void): (() => void) => {
@@ -45,8 +54,31 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         return () => {};
     }, []);
 
-    const onMenuAction = useCallback((_callback: (action: string) => void): (() => void) => {
-        return () => {};
+    const onMenuAction = useCallback((callback: (action: string) => void): (() => void) => {
+        menuActionCallbacksRef.current.add(callback);
+        return () => {
+            menuActionCallbacksRef.current.delete(callback);
+        };
+    }, []);
+
+    // Bridge the smoke-test driver's window events to the registered callbacks so menu actions
+    // and open-database requests drive the real app code paths (which fail where the underlying
+    // mobile feature, e.g. storage, is not implemented yet).
+    useEffect(() => {
+        const handleMenu = (event: Event) => {
+            const itemId = (event as CustomEvent<string>).detail;
+            menuActionCallbacksRef.current.forEach(callback => callback(itemId));
+        };
+        const handleOpenDatabase = (event: Event) => {
+            const databasePath = (event as CustomEvent<string>).detail;
+            openedCallbacksRef.current.forEach(callback => callback(databasePath));
+        };
+        window.addEventListener(TEST_MENU_EVENT, handleMenu);
+        window.addEventListener(TEST_OPEN_DATABASE_EVENT, handleOpenDatabase);
+        return () => {
+            window.removeEventListener(TEST_MENU_EVENT, handleMenu);
+            window.removeEventListener(TEST_OPEN_DATABASE_EVENT, handleOpenDatabase);
+        };
     }, []);
 
     const onNavigate = useCallback((_callback: (page: string) => void): (() => void) => {

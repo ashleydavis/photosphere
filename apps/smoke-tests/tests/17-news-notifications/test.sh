@@ -1,0 +1,29 @@
+#!/bin/bash
+
+# Mobile port of desktop 17-news-notifications. The desktop test feeds a news.yaml via the
+# PHOTOSPHERE_NEWS_URL env var (read by the Node main process) and checks the toast lifecycle.
+# Mobile has no Node main process to read that env var or fetch a host file, so this port simply
+# expects a news notification toast to appear, surfacing whether the news feature is wired on
+# mobile at all. Full lifecycle coverage needs a device-served news feed and is follow-up work.
+
+TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$TEST_DIR/../../lib/common.sh"
+
+print_test_header 17 "news-notifications"
+
+TMP_DIR="$TEST_DIR/tmp"
+APP_PORT=$(find_free_port)
+
+trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
+
+start_app "$APP_PORT" "$TMP_DIR"
+wait_for_ready "$APP_PORT"
+
+wait_for_log "$TMP_DIR" "Showed news notification:" 20
+
+send_command "$APP_PORT" click '{"dataId":"toast-dismiss"}' || exit 1
+wait_for_log "$TMP_DIR" "Marked news notification as shown:" 20
+
+check_no_errors "$TMP_DIR"
+
+log_success "Test 17 passed: news-notifications"

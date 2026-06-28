@@ -27,6 +27,12 @@ export interface ITestCommandPayload {
 
     // Route to navigate to (navigate command).
     page?: string;
+
+    // Menu item id (menu command).
+    itemId?: string;
+
+    // Database path (open-database command).
+    path?: string;
 }
 
 //
@@ -153,6 +159,37 @@ export function doNavigate(page: string): void {
 }
 
 //
+// Triggers an application menu action by dispatching a window event. On desktop the menu is a
+// native menu wired over IPC, so this is unused there; on mobile (which has no menu bar) the
+// platform provider listens for this event and fires the same menu-action callbacks the app
+// registers, exercising the real action handler.
+//
+export function doMenu(itemId: string): void {
+    console.log(`test-menu: dispatching menu action "${itemId}"`);
+    window.dispatchEvent(new CustomEvent(TEST_MENU_EVENT, { detail: itemId }));
+}
+
+//
+// Requests opening a database by dispatching a window event. On mobile the platform provider
+// listens for this event and fires the onDatabaseOpened callbacks the app registers, driving
+// the real database-load path (which fails where mobile storage is not yet implemented).
+//
+export function doOpenDatabase(path: string): void {
+    console.log(`test-open-database: opening database "${path}"`);
+    window.dispatchEvent(new CustomEvent(TEST_OPEN_DATABASE_EVENT, { detail: path }));
+}
+
+//
+// Window event name used to drive a menu action into the app.
+//
+export const TEST_MENU_EVENT = "photosphere-test:menu";
+
+//
+// Window event name used to drive opening a database into the app.
+//
+export const TEST_OPEN_DATABASE_EVENT = "photosphere-test:open-database";
+
+//
 // Installs the shared DOM test driver onto the given transport. Each command received over
 // the transport is dispatched to the matching DOM action; get-value returns the element's
 // value, the rest resolve undefined. Unknown commands reject with a clear message so a
@@ -177,6 +214,12 @@ export function installTestDriver(transport: ITestTransport): void {
                 return getValue(payload.dataId!);
             case 'navigate':
                 doNavigate(payload.page!);
+                return undefined;
+            case 'menu':
+                doMenu(payload.itemId!);
+                return undefined;
+            case 'open-database':
+                doOpenDatabase(payload.path!);
                 return undefined;
             default:
                 throw new Error(`Test command not implemented on this platform: ${command}`);
