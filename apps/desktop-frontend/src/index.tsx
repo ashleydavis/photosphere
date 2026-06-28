@@ -3,7 +3,9 @@ import { createRoot } from 'react-dom/client';
 import { App } from './app';
 import '@fortawesome/fontawesome-free/css/all.css';
 import './tailwind.css';
-import type { IElectronAPI } from "./lib/electron-ipc";
+import type { IElectronAPI, LogLevel } from "./lib/electron-ipc";
+import { installTestDriver } from "user-interface";
+import type { ITestTransport, ITestCommandPayload } from "user-interface";
 
 //
 // Get the Electron API for forwarding errors to main process
@@ -81,70 +83,23 @@ if (isTestMode && electronAPI) {
 }
 
 //
-// In test mode, set up test-click and test-type IPC handlers so the test control server
-// can drive UI elements by their data-id attribute.
+// In test mode, install the shared DOM test driver over an Electron-IPC transport so the
+// test control server can drive UI elements by their data-id attribute. The DOM-action
+// logic lives in user-interface's test-driver so it is shared with the mobile WebView.
 //
 if (isTestMode && electronAPI) {
-    electronAPI.onMessage('test-click', (data: { dataId: string; nth?: number }) => {
-        const elements = document.querySelectorAll(`[data-id="${data.dataId}"]`);
-        const index = data.nth ?? 0;
-        const element = elements[index] as HTMLElement | undefined;
-        if (element) {
-            console.log(`test-click: clicking element data-id="${data.dataId}" nth=${index}`);
-            element.click();
-        }
-        else {
-            console.warn(`test-click: element not found data-id="${data.dataId}" nth=${index}`);
-        }
-    });
-    electronAPI.onMessage('test-long-press-click', (data: { dataId: string; nth?: number }) => {
-        const elements = document.querySelectorAll(`[data-id="${data.dataId}"]`);
-        const index = data.nth ?? 0;
-        const element = elements[index] as HTMLElement | undefined;
-        if (!element) {
-            console.warn(`test-long-press-click: element not found data-id="${data.dataId}" nth=${index}`);
-            return;
-        }
-        console.log(`test-long-press-click: clicking element data-id="${data.dataId}" nth=${index}`);
-        const rect = element.getBoundingClientRect();
-        const clientX = rect.left + rect.width / 2;
-        const clientY = rect.top + rect.height / 2;
-        // Dispatch mousedown then mouseup so useLongPress treats this as a real short click.
-        element.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0, clientX, clientY }));
-        element.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, button: 0, clientX, clientY }));
-    });
-    electronAPI.onMessage('test-drop', (data: { dataId: string; paths: string[] }) => {
-        const element = document.querySelector(`[data-id="${data.dataId}"]`) as HTMLElement | null;
-        if (!element) {
-            console.warn(`test-drop: element not found data-id="${data.dataId}"`);
-            return;
-        }
-        console.log(`test-drop: dropping ${data.paths.length} path(s) onto data-id="${data.dataId}"`);
-        const dt = new DataTransfer();
-        for (const filePath of data.paths) {
-            const filename = filePath.split('/').pop() || filePath;
-            const file = new File([], filename);
-            (file as any).__testPath = filePath;
-            dt.items.add(file);
-        }
-        const dropEvent = new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt });
-        element.dispatchEvent(dropEvent);
-    });
-    electronAPI.onMessage('test-type', (data: { dataId: string; text: string }) => {
-        const element = document.querySelector(`[data-id="${data.dataId}"] input`) as HTMLInputElement | null;
-        if (element) {
-            console.log(`test-type: typing into element data-id="${data.dataId}"`);
-            const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
-            if (nativeInputValueSetter) {
-                nativeInputValueSetter.call(element, data.text);
-                element.dispatchEvent(new Event('input', { bubbles: true }));
-                element.dispatchEvent(new Event('change', { bubbles: true }));
-            }
-        }
-        else {
-            console.warn(`test-type: element not found data-id="${data.dataId}"`);
-        }
-    });
+    const transport: ITestTransport = {
+        onCommand(handler: (command: string, payload: ITestCommandPayload) => Promise<string | undefined>): void {
+            electronAPI.onMessage('test-click', (data: ITestCommandPayload) => { void handler('click', data); });
+            electronAPI.onMessage('test-long-press-click', (data: ITestCommandPayload) => { void handler('long-press-click', data); });
+            electronAPI.onMessage('test-type', (data: ITestCommandPayload) => { void handler('type', data); });
+            electronAPI.onMessage('test-drop', (data: ITestCommandPayload) => { void handler('drop', data); });
+        },
+        sendLog(level: string, message: string): void {
+            electronAPI.log({ level: level as LogLevel, message });
+        },
+    };
+    installTestDriver(transport);
 }
 
 const container = document.getElementById('root');

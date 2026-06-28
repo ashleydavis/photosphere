@@ -1,0 +1,185 @@
+//
+// Shared DOM test driver.
+//
+// In test mode the app is driven by smoke-test scripts that issue commands ("click",
+// "type", ...) targeting elements by their `data-id` attribute. The same DOM-action logic
+// is used by every shell (Electron desktop renderer, Android/iOS WebView). The transport
+// that carries commands into the driver differs per shell (Electron IPC vs WebSocket), so
+// the driver is parameterised by an ITestTransport.
+//
+
+//
+// Payload carried with a test command. Fields are optional because each command only uses
+// the subset relevant to it (e.g. "type" uses dataId + text, "navigate" uses page).
+//
+export interface ITestCommandPayload {
+    // The target element's `data-id` attribute (click/long-press-click/type/drop/get-value).
+    dataId?: string;
+
+    // Index of the matching element when several share the same `data-id` (defaults to 0).
+    nth?: number;
+
+    // Text to type into an input (type command).
+    text?: string;
+
+    // File paths to drop onto a drop target (drop command).
+    paths?: string[];
+
+    // Route to navigate to (navigate command).
+    page?: string;
+}
+
+//
+// Transport abstraction over which the shared DOM test driver receives commands and emits
+// log lines. Implemented by an Electron-IPC transport (desktop renderer) and a WebSocket
+// transport (mobile WebView).
+//
+export interface ITestTransport {
+    //
+    // Registers the handler invoked for each incoming test command. The handler resolves with
+    // the command's result value (returned to the caller for transports that reply, such as
+    // get-value over the WebSocket); commands with no result resolve undefined.
+    //
+    onCommand(handler: (command: string, payload: ITestCommandPayload) => Promise<string | undefined>): void;
+
+    //
+    // Forwards a log line (level + message) to the host log file.
+    //
+    sendLog(level: string, message: string): void;
+}
+
+//
+// Clicks the element with the given `data-id`. When several elements share the id, `nth`
+// selects which one (defaults to the first).
+//
+export function doClick(dataId: string, nth?: number): void {
+    const elements = document.querySelectorAll(`[data-id="${dataId}"]`);
+    const index = nth ?? 0;
+    const element = elements[index] as HTMLElement | undefined;
+    if (element) {
+        console.log(`test-click: clicking element data-id="${dataId}" nth=${index}`);
+        element.click();
+    }
+    else {
+        console.warn(`test-click: element not found data-id="${dataId}" nth=${index}`);
+    }
+}
+
+//
+// Performs a short press (mousedown then mouseup) on the element with the given `data-id`,
+// so components using a long-press gesture treat it as a normal short click.
+//
+export function doLongPressClick(dataId: string, nth?: number): void {
+    const elements = document.querySelectorAll(`[data-id="${dataId}"]`);
+    const index = nth ?? 0;
+    const element = elements[index] as HTMLElement | undefined;
+    if (!element) {
+        console.warn(`test-long-press-click: element not found data-id="${dataId}" nth=${index}`);
+        return;
+    }
+    console.log(`test-long-press-click: clicking element data-id="${dataId}" nth=${index}`);
+    const rect = element.getBoundingClientRect();
+    const clientX = rect.left + rect.width / 2;
+    const clientY = rect.top + rect.height / 2;
+    // Dispatch mousedown then mouseup so useLongPress treats this as a real short click.
+    element.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0, clientX, clientY }));
+    element.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, button: 0, clientX, clientY }));
+}
+
+//
+// Types text into the input nested under the element with the given `data-id`, using the
+// native value setter so React's controlled inputs observe the change.
+//
+export function doType(dataId: string, text: string): void {
+    const element = document.querySelector(`[data-id="${dataId}"] input`) as HTMLInputElement | null;
+    if (element) {
+        console.log(`test-type: typing into element data-id="${dataId}"`);
+        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+        if (nativeInputValueSetter) {
+            nativeInputValueSetter.call(element, text);
+            element.dispatchEvent(new Event('input', { bubbles: true }));
+            element.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    }
+    else {
+        console.warn(`test-type: element not found data-id="${dataId}"`);
+    }
+}
+
+//
+// Simulates a file drop of the given paths onto the element with the given `data-id`. The
+// real file path is stashed on each File as `__testPath` so the drop handler can resolve it
+// (the renderer cannot construct real File paths in test mode).
+//
+export function doDrop(dataId: string, paths: string[]): void {
+    const element = document.querySelector(`[data-id="${dataId}"]`) as HTMLElement | null;
+    if (!element) {
+        console.warn(`test-drop: element not found data-id="${dataId}"`);
+        return;
+    }
+    console.log(`test-drop: dropping ${paths.length} path(s) onto data-id="${dataId}"`);
+    const dataTransfer = new DataTransfer();
+    for (const filePath of paths) {
+        const filename = filePath.split('/').pop() || filePath;
+        const file = new File([], filename);
+        (file as any).__testPath = filePath;
+        dataTransfer.items.add(file);
+    }
+    const dropEvent = new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer });
+    element.dispatchEvent(dropEvent);
+}
+
+//
+// Reads the current value of the element with the given `data-id`, preferring its input
+// value and falling back to its text content. Returns an empty string when not found.
+//
+export function getValue(dataId: string): string {
+    const element = document.querySelector(`[data-id="${dataId}"]`) as HTMLElement | null;
+    if (!element) {
+        return '';
+    }
+    const inputValue = (element as HTMLInputElement).value;
+    return inputValue || element.textContent || '';
+}
+
+//
+// Navigates the app to the given route by updating the location hash (both desktop and
+// mobile shells mount a HashRouter). The route is normalised to start with a slash.
+//
+export function doNavigate(page: string): void {
+    const normalized = page.startsWith('/') ? page : `/${page}`;
+    console.log(`test-navigate: navigating to ${normalized}`);
+    window.location.hash = normalized;
+}
+
+//
+// Installs the shared DOM test driver onto the given transport. Each command received over
+// the transport is dispatched to the matching DOM action; get-value returns the element's
+// value, the rest resolve undefined. Unknown commands reject with a clear message so a
+// shell that has not yet implemented a capability reports it rather than silently passing.
+//
+export function installTestDriver(transport: ITestTransport): void {
+    transport.onCommand(async (command: string, payload: ITestCommandPayload): Promise<string | undefined> => {
+        switch (command) {
+            case 'click':
+                doClick(payload.dataId!, payload.nth);
+                return undefined;
+            case 'long-press-click':
+                doLongPressClick(payload.dataId!, payload.nth);
+                return undefined;
+            case 'type':
+                doType(payload.dataId!, payload.text!);
+                return undefined;
+            case 'drop':
+                doDrop(payload.dataId!, payload.paths!);
+                return undefined;
+            case 'get-value':
+                return getValue(payload.dataId!);
+            case 'navigate':
+                doNavigate(payload.page!);
+                return undefined;
+            default:
+                throw new Error(`Test command not implemented on this platform: ${command}`);
+        }
+    });
+}

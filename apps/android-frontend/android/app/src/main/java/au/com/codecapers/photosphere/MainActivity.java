@@ -1,6 +1,10 @@
 package au.com.codecapers.photosphere;
 
+import android.content.Intent;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.webkit.WebView;
 
 import com.getcapacitor.BridgeActivity;
 
@@ -20,5 +24,35 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(JsEnginePlugin.class);
         super.onCreate(savedInstanceState);
+        injectTestConfig();
+    }
+
+    //
+    // In test mode (launched with the photosphereTestMode intent extra) injects the host
+    // control bridge address into the WebView as globalThis.__PHOTOSPHERE_TEST__, which the
+    // frontend reads to open its test-driver WebSocket. The injection is retried at a few
+    // delays because the WebView page may still be loading when onCreate returns; the frontend
+    // also polls for the global, so a late injection is still picked up.
+    //
+    private void injectTestConfig() {
+        Intent intent = getIntent();
+        if (intent == null || !intent.getBooleanExtra("photosphereTestMode", false)) {
+            return;
+        }
+        String hostExtra = intent.getStringExtra("photosphereTestHost");
+        final String host = hostExtra != null ? hostExtra : "localhost";
+        final int port = intent.getIntExtra("photosphereTestPort", 0);
+        final String script = "globalThis.__PHOTOSPHERE_TEST__ = { host: '" + host + "', port: " + port + " };";
+        final WebView webView = getBridge().getWebView();
+        final Handler handler = new Handler(Looper.getMainLooper());
+        final int[] delays = { 200, 600, 1200, 2500 };
+        for (final int delay : delays) {
+            handler.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    webView.evaluateJavascript(script, null);
+                }
+            }, delay);
+        }
     }
 }
