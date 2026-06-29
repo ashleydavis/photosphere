@@ -71,4 +71,19 @@ describe("formatErrorChain", () => {
         const result = formatErrorChain(error);
         expect(result).toContain("no stack here");
     });
+
+    test("should prepend the message when the stack omits it (JavaScriptCore stacks)", () => {
+        // JavaScriptCore (iOS) stacks contain only frames, with no leading "Error: message" line.
+        const error: any = { message: "duplicate name", stack: "wte@app.js:1:2\nonClick@app.js:3:4", cause: undefined };
+        const result = formatErrorChain(error);
+        expect(result).toContain("duplicate name");
+        expect(result).toContain("wte@app.js:1:2");
+    });
+
+    test("should not duplicate the message when the stack already contains it (V8 stacks)", () => {
+        // V8 (Android/desktop) stacks already start with the "Error: message" line.
+        const error: any = { message: "already here", stack: "Error: already here\n    at foo (app.js:1:2)", cause: undefined };
+        const result = formatErrorChain(error);
+        expect(result).toBe(error.stack);
+    });
 });

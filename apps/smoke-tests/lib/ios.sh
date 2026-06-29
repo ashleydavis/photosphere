@@ -99,20 +99,50 @@ ios_stop() {
 }
 
 #
-# iOS database seeding is not implemented yet (the native iOS host fs functions are not implemented
-# either). Logged as a no-op so the shared test still runs on iOS and fails later at the missing
-# native fs layer rather than here. Android is the supported platform for the fixture-load test.
-# Usage: ios_seed_database <host_fixture_dir> <relative_dest_under_files>
+# Resolves the host path of the installed app's data container on the simulator. The native iOS
+# storage root is the app's Documents directory (see JsEnginePlugin.storageRoot), which lives under
+# this container, so seeding/reset copy into Documents/. The app must already be installed (the
+# container does not exist before install); start_app installs and launches it before any seeding.
 #
-ios_seed_database() {
-    log_info "ios_seed_database is not implemented yet (no native iOS fs); skipping seed of '$1'."
+ios_app_container() {
+    xcrun simctl get_app_container "${IOS_SIMULATOR_UDID:-booted}" "$BUNDLE_ID" data 2>/dev/null
 }
 
 #
-# iOS path reset is not implemented yet (the iOS native storage path is managed by the simulator
-# container). Logged as a no-op so the shared test still runs on iOS.
-# Usage: ios_reset_path <relative_path_under_files>
+# Seeds a database fixture into the app's Documents directory (the native iOS storage sandbox root
+# resolved by JsEnginePlugin.storageRoot / PathSandbox), so the embedded worker can read it via the
+# host fs functions. The simulator container is on the host filesystem, so a plain recursive copy is
+# enough (no run-as dance like Android). Mirrors android_seed_database's contract: <rel_dest> is
+# relative to the storage root.
+# Usage: ios_seed_database <host_fixture_dir> <relative_dest_under_documents>
+#
+ios_seed_database() {
+    local host_src="$1"
+    local rel_dest="$2"
+    local container
+    container="$(ios_app_container)"
+    if [ -z "$container" ]; then
+        log_error "Could not resolve iOS app data container for $BUNDLE_ID (is the app installed?)"
+        return 1
+    fi
+    local dest="$container/Documents/$rel_dest"
+    rm -rf "$dest"
+    mkdir -p "$(dirname "$dest")"
+    cp -R "$host_src" "$dest"
+    log_info "Seeded database fixture '$(basename "$host_src")' into app container at Documents/$rel_dest"
+}
+
+#
+# Removes a path under the app's Documents directory (the storage sandbox root), so a test that
+# creates fresh state at that path is rerunnable. No-op when the app/container is not present yet.
+# Usage: ios_reset_path <relative_path_under_documents>
 #
 ios_reset_path() {
-    log_info "ios_reset_path is not implemented yet; skipping reset of '$1'."
+    local rel="$1"
+    local container
+    container="$(ios_app_container)"
+    if [ -z "$container" ]; then
+        return 0
+    fi
+    rm -rf "$container/Documents/$rel" 2>/dev/null || true
 }

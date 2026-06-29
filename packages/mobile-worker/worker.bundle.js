@@ -15365,7 +15365,14 @@ __p += '`;
     const parts = [];
     let current = error;
     while (current) {
-      parts.push(current.stack || current.message || String(current));
+      const stack = current.stack;
+      const message = current.message;
+      if (stack && message && !stack.includes(message)) {
+        parts.push(`${message}
+${stack}`);
+      } else {
+        parts.push(stack || message || String(current));
+      }
       current = current.cause;
       if (current) {
         parts.push("Caused by:");
@@ -30154,7 +30161,7 @@ ${JSON.stringify(b, null, 2)}`);
             throw new Error("Invalid tree structure: nodeB has a left child but no right child");
           } else if (nodeB.right) {
             throw new Error("Invalid tree structure: nodeB has a right child but no left child");
-          } else {}
+          }
         }
       }
       const currentLevelA = queueA;
@@ -30207,7 +30214,7 @@ ${JSON.stringify(b, null, 2)}`);
           onlyInTree1: [tree1],
           onlyInTree2: []
         };
-      } else {}
+      }
     }
     if (tree1.hash.equals(tree2.hash)) {
       return {

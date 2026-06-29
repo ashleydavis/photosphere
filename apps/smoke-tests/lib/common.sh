@@ -122,8 +122,12 @@ start_app() {
     PHOTOSPHERE_TEST_BUNDLE_ID="$BUNDLE_ID" \
     PHOTOSPHERE_TEST_IOS_UDID="${IOS_SIMULATOR_UDID:-}" \
     bun "$LIB_DIR/control-bridge-main.ts" > "$tmp_dir/bridge.log" 2>&1 &
-    echo $! > "$tmp_dir/bridge.pid"
-    log_info "Control bridge started (PID $(cat "$tmp_dir/bridge.pid"), port $port)"
+    local bridge_pid=$!
+    # Remove the bridge from the shell's job table so killing it in stop_app does not print an
+    # asynchronous "Terminated: 15" job-control notice. It is still stopped explicitly by PID.
+    disown "$bridge_pid"
+    echo "$bridge_pid" > "$tmp_dir/bridge.pid"
+    log_info "Control bridge started (PID $bridge_pid, port $port)"
 
     wait_for_bridge "$port"
 
