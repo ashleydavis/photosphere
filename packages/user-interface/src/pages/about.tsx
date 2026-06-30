@@ -1,7 +1,9 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { version } from "config";
 import Button from "@mui/joy/Button";
 import Input from "@mui/joy/Input";
+import { useApp } from "../context/app-context";
+import { useToast } from "../context/toast-context";
 
 //
 // Fixed URL of the embedded MCP server in the desktop app. The port is a constant in the
@@ -11,6 +13,31 @@ const MCP_URL = "http://localhost:3475/mcp";
 
 export function AboutPage() {
     const [ copyState, setCopyState ] = useState<"idle" | "copied">("idle");
+    const { enableDeveloperMode } = useApp();
+    const { addToast } = useToast();
+
+    //
+    // Running tap state for the hidden developer-mode activation gesture on the version label.
+    //
+    const tapState = useRef({ count: 0, lastTapTime: 0 });
+
+    //
+    // Registers a tap on the version label and enables developer mode after 4 rapid taps,
+    // each within 2 seconds of the previous one. A longer gap restarts the streak.
+    //
+    function onVersionTap(): void {
+        const now = Date.now();
+        const withinWindow = now - tapState.current.lastTapTime <= 2000;
+        const count = withinWindow ? tapState.current.count + 1 : 1;
+        if (count >= 4) {
+            tapState.current = { count: 0, lastTapTime: now };
+            enableDeveloperMode();
+            addToast({ message: "Developer mode enabled", color: "success" });
+        }
+        else {
+            tapState.current = { count, lastTapTime: now };
+        }
+    }
 
     async function copyMcpUrl(): Promise<void> {
         await navigator.clipboard.writeText(MCP_URL);
@@ -22,7 +49,14 @@ export function AboutPage() {
         <div className="w-full h-full p-4 overflow-y-auto pb-32">
             <div className="m-auto" style={{maxWidth: "800px"}}>
                 <h1 className="mt-6 text-3xl">About Photosphere</h1>
-                <p className="pt-2 text-gray-500">Version {version}</p>
+                <p
+                    data-id="about-version"
+                    className="pt-2 text-gray-500"
+                    style={{ cursor: "default" }}
+                    onClick={onVersionTap}
+                    >
+                    Version {version}
+                </p>
 
                 <p className="pt-4">Photosphere is developed by <a target="_blank" href="https://codecapers.com.au/about">Ashley Davis</a>.</p>
 

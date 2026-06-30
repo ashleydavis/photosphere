@@ -131,7 +131,7 @@ function StoriesBrowser(): JSX.Element {
         : -1;
 
     return (
-        <div className="flex h-screen w-screen" style={{ background: "var(--joy-palette-background-body)", color: "var(--joy-palette-text-primary)" }}>
+        <div data-id="stories-page" className="flex h-screen w-screen" style={{ background: "var(--joy-palette-background-body)", color: "var(--joy-palette-text-primary)" }}>
             <aside
                 className="flex flex-col border-r"
                 style={{ width: "280px", borderColor: "var(--joy-palette-divider, #ddd)" }}
@@ -146,7 +146,7 @@ function StoriesBrowser(): JSX.Element {
                         style={{ borderColor: "var(--joy-palette-divider, #ddd)", background: "transparent", color: "inherit" }}
                         data-testid="stories-search-input"
                         />
-                    <Link to="/" className="text-sm underline" data-testid="stories-back-link">
+                    <Link to="/" className="text-sm underline" data-id="stories-back-link" data-testid="stories-back-link">
                         Back to app
                     </Link>
                 </div>

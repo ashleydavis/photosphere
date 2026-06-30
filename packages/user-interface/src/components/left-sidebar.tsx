@@ -8,13 +8,14 @@ import { useTheme } from '@mui/joy/styles/ThemeProvider';
 import List from '@mui/joy/List/List';
 import ListItem from '@mui/joy/ListItem/ListItem';
 import ListItemDecorator from '@mui/joy/ListItemDecorator/ListItemDecorator';
-import { PhotoLibrary, Folder, FolderOpen, Map, Search, Settings, CreateNewFolder, LibraryAdd, FileUpload, ManageSearch, Key, Delete, Science } from '@mui/icons-material';
+import { PhotoLibrary, Folder, FolderOpen, Map, Search, Settings, CreateNewFolder, LibraryAdd, FileUpload, ManageSearch, Key, Delete, Science, DeveloperMode } from '@mui/icons-material';
 import { CollapsibleSection } from './collapsible-section';
 import ListItemContent from '@mui/joy/ListItemContent/ListItemContent';
 import ListItemButton from '@mui/joy/ListItemButton/ListItemButton';
 import IconButton from '@mui/joy/IconButton/IconButton';
 import Divider from '@mui/joy/Divider/Divider';
 import { useSearch } from '../context/search-context';
+import { useApp } from '../context/app-context';
 import { findTemporaryNavPage } from '../lib/nav-pages';
 
 //
@@ -79,6 +80,7 @@ export interface ILeftSidebarProps {
 //
 export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, onNewDatabase, onAddDatabase, onOpenDatabase }: ILeftSidebarProps) {
     const { setOpenSearch } = useSearch();
+    const { developerMode } = useApp();
     const { openDatabase, databasePath } = useAssetDatabase();
     const platform = usePlatform();
     const theme = useTheme();
@@ -388,6 +390,23 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                             <ListItemContent>Configuration</ListItemContent>
                         </ListItemButton>
                     </ListItem>
+
+                    {developerMode && (
+                        <NavLink
+                            to="/developer"
+                            data-id="sidebar-developer"
+                            onClick={() => setSidebarOpen(false)}
+                            >
+                            {({ isActive }) => (
+                                <ListItem sx={isActive ? activeNavItemSx : undefined}>
+                                    <ListItemButton>
+                                        <ListItemDecorator><DeveloperMode /></ListItemDecorator>
+                                        <ListItemContent>Developer</ListItemContent>
+                                    </ListItemButton>
+                                </ListItem>
+                            )}
+                        </NavLink>
+                    )}
                 </List>
             </div>
 

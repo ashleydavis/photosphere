@@ -25,12 +25,9 @@ export interface IPlatformProviderMobileProps {
 // Most native integrations are still stubbed (database, sync, vault, share, file-picker),
 // but the background-task bindings (cancelTasks / onTaskMessage / onTaskComplete) are wired
 // to the native JsEngine plugin so task-driven UI (notably the Job Manager) works on mobile.
-// Config is held in an in-memory Map for the lifetime of the app session.
+// Generic config is persisted to WebView localStorage so settings survive app restarts.
 //
 export function PlatformProviderMobile({ children }: IPlatformProviderMobileProps) {
-    // In-memory config store. Persists for the lifetime of the app session only.
-    const configStoreRef = useRef<Map<string, unknown>>(new Map());
-
     // Registered callbacks for menu actions and database-opened events. On desktop these fire
     // from native menu / IPC; on mobile (no menu bar) the smoke-test driver drives them via
     // window events (see the useEffect below) so tests exercise the real action handlers.
@@ -386,11 +383,12 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         markNewsAsShown,
     };
 
-    // In-memory config backed by the session-lifetime Map above.
+    // Generic config persisted to WebView localStorage so settings (developer mode, theme, etc.)
+    // survive app restarts, matching how databases and secrets are persisted.
     const config = createConfig(
-        async (key) => configStoreRef.current.get(key),
+        async (key) => configStore.getConfigValue(persistentStore, key),
         async (key, value) => {
-            configStoreRef.current.set(key, value);
+            configStore.setConfigValue(persistentStore, key, value);
         }
     );
 

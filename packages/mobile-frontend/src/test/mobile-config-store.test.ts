@@ -25,6 +25,8 @@ import {
     firstUnshownNews,
     buildNewsNotification,
     databaseBasename,
+    getConfigValue,
+    setConfigValue,
     resetConfig as resetConfigForNews,
 } from "../lib/mobile-config-store";
 
@@ -46,6 +48,32 @@ function memoryStore(): IKeyValueStore {
 function entry(name: string, path: string): any {
     return { name, description: "", path };
 }
+
+describe("mobile-config-store generic config", () => {
+
+    test("getConfigValue returns undefined when nothing is stored", () => {
+        expect(getConfigValue<boolean>(memoryStore(), "developerMode")).toBeUndefined();
+    });
+
+    test("setConfigValue then getConfigValue round-trips a value", () => {
+        const store = memoryStore();
+        setConfigValue<boolean>(store, "developerMode", true);
+        expect(getConfigValue<boolean>(store, "developerMode")).toBe(true);
+    });
+
+    test("setConfigValue with undefined removes the stored value", () => {
+        const store = memoryStore();
+        setConfigValue<boolean>(store, "developerMode", true);
+        setConfigValue<boolean>(store, "developerMode", undefined as unknown as boolean);
+        expect(getConfigValue<boolean>(store, "developerMode")).toBeUndefined();
+    });
+
+    test("getConfigValue returns undefined for malformed JSON", () => {
+        const store = memoryStore();
+        store.setItem("photosphere.config.developerMode", "{not json");
+        expect(getConfigValue<boolean>(store, "developerMode")).toBeUndefined();
+    });
+});
 
 describe("mobile-config-store databases", () => {
 

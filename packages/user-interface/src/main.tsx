@@ -16,6 +16,7 @@ import { RightSidebar } from "./components/right-sidebar";
 import { Navbar } from "./components/navbar";
 import { Fps } from "./components/fps";
 import { AboutPage } from "./pages/about";
+import { DeveloperPage } from "./pages/developer";
 import { NewsPage } from "./pages/news";
 import { MapPage } from "./pages/map/map-page";
 import { ConfigurationDialog } from "./components/configuration-dialog";
@@ -338,6 +339,11 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
                         <Route
                             path="/about"
                             element={<AboutPage />}
+                            />
+
+                        <Route
+                            path="/developer"
+                            element={<DeveloperPage />}
                             />
 
                         <Route

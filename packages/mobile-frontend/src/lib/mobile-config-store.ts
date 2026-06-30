@@ -317,6 +317,39 @@ export function databaseBasename(databasePath: string): string {
 }
 
 //
+// localStorage key prefix for generic config values (the IConfig get/set store: developer mode,
+// theme, collapsed-section state, etc.). Distinct from the list keys above so the two never collide.
+//
+export const CONFIG_KEY_PREFIX = "photosphere.config.";
+
+//
+// Returns a stored generic config value, or undefined when absent or malformed.
+//
+export function getConfigValue<ValueT>(store: IKeyValueStore, key: string): ValueT | undefined {
+    const raw = store.getItem(CONFIG_KEY_PREFIX + key);
+    if (raw === null) {
+        return undefined;
+    }
+    try {
+        return JSON.parse(raw) as ValueT;
+    }
+    catch {
+        return undefined;
+    }
+}
+
+//
+// Stores a generic config value as JSON, or removes it when the value is undefined.
+//
+export function setConfigValue<ValueT>(store: IKeyValueStore, key: string, value: ValueT): void {
+    if (value === undefined) {
+        store.removeItem(CONFIG_KEY_PREFIX + key);
+        return;
+    }
+    store.setItem(CONFIG_KEY_PREFIX + key, JSON.stringify(value));
+}
+
+//
 // Clears all persisted config (databases, recent databases, secrets), used by test setup to start
 // from a clean, deterministic state on a device whose storage persists between test runs.
 //

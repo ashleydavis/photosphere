@@ -1,7 +1,13 @@
 import React, { ReactNode, createContext, useContext, useEffect, useState } from "react";
 import { usePlatform, type IDatabaseEntry, type ISharedSecretEntry } from "./platform-context";
+import { useConfig } from "./config-context";
 import { log } from "utils";
 import type { IConflictResolution } from "api";
+
+//
+// Config persistence key for the developer-mode flag.
+//
+const DEVELOPER_MODE_CONFIG_KEY = "developerMode";
 
 //
 // Application-wide reactive data layer for configured databases and shared secrets.
@@ -61,6 +67,21 @@ export interface IAppContext {
     // into the local config and vault.
     //
     importSharePayload: (payload: unknown, conflictResolutions: Record<string, IConflictResolution>) => Promise<void>;
+
+    //
+    // True while developer mode is enabled (reveals developer tools in the UI).
+    //
+    developerMode: boolean;
+
+    //
+    // Turns developer mode on and persists the flag.
+    //
+    enableDeveloperMode: () => void;
+
+    //
+    // Turns developer mode off and persists the flag.
+    //
+    disableDeveloperMode: () => void;
 }
 
 const AppContext = createContext<IAppContext | undefined>(undefined);
@@ -71,6 +92,7 @@ export interface IProps {
 
 export function AppContextProvider({ children }: IProps) {
     const platform = usePlatform();
+    const config = useConfig();
 
     //
     // Configured database entries.
@@ -81,6 +103,11 @@ export function AppContextProvider({ children }: IProps) {
     // All shared secret entries in the vault.
     //
     const [secrets, setSecrets] = useState<ISharedSecretEntry[]>([]);
+
+    //
+    // Whether developer mode is currently enabled. Loaded from persistent config on mount.
+    //
+    const [developerMode, setDeveloperMode] = useState<boolean>(false);
 
     //
     // Re-reads the database list from the platform.
@@ -164,11 +191,39 @@ export function AppContextProvider({ children }: IProps) {
         await refresh();
     }
 
+    //
+    // Enables developer mode and persists the change (fire and forget).
+    //
+    function enableDeveloperMode(): void {
+        setDeveloperMode(true);
+        config.set<boolean>(DEVELOPER_MODE_CONFIG_KEY, true)
+            .catch(err => log.exception("Failed to persist developer mode:", err as Error));
+        log.event("Developer mode enabled");
+    }
+
+    //
+    // Disables developer mode and persists the change (fire and forget).
+    //
+    function disableDeveloperMode(): void {
+        setDeveloperMode(false);
+        config.set<boolean>(DEVELOPER_MODE_CONFIG_KEY, false)
+            .catch(err => log.exception("Failed to persist developer mode:", err as Error));
+        log.event("Developer mode disabled");
+    }
+
     useEffect(() => {
         refresh().catch(err => {
             log.exception(`Failed to load app data:`, err as Error);
         });
     }, [platform]);
+
+    useEffect(() => {
+        config.get<boolean>(DEVELOPER_MODE_CONFIG_KEY).then(value => {
+            if (value !== undefined) {
+                setDeveloperMode(value);
+            }
+        });
+    }, []);
 
     useEffect(() => {
         return platform.onDatabaseOpened(() => {
@@ -197,6 +252,9 @@ export function AppContextProvider({ children }: IProps) {
         updateSecret,
         deleteSecret,
         importSharePayload,
+        developerMode,
+        enableDeveloperMode,
+        disableDeveloperMode,
     };
 
     return (

@@ -1,0 +1,82 @@
+#!/bin/bash
+
+TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$TEST_DIR/../lib/common.sh"
+TEST_DIR="$(cd "$(dirname "$0")" && native_pwd)"
+DESKTOP_DIR="$(cd "$TEST_DIR/../.." && native_pwd)"
+
+print_test_header 23 "developer-screen"
+
+TMP_DIR="$TEST_DIR/tmp"
+APP_PORT=$(find_free_port)
+
+cleanup() {
+    if [ -f "$TMP_DIR/app.pid" ]; then
+        local pid
+        pid=$(cat "$TMP_DIR/app.pid")
+        kill "$pid" 2>/dev/null || true
+        sleep 0.5
+        kill -9 "$pid" 2>/dev/null || true
+    fi
+}
+trap cleanup EXIT
+
+#
+# Polls get-value for the given data-id until its value contains the expected substring.
+# Usage: wait_for_value <port> <data-id> <expected-substring>
+#
+wait_for_value() {
+    local port="$1"
+    local data_id="$2"
+    local expected="$3"
+    local elapsed=0
+    while [ "$elapsed" -lt 30 ]; do
+        local response
+        response=$(curl -sf "http://localhost:$port/get-value?dataId=$data_id" 2>/dev/null || true)
+        if echo "$response" | grep -q "$expected"; then
+            return 0
+        fi
+        sleep 1
+        elapsed=$((elapsed + 1))
+    done
+    log_error "Timed out waiting for data-id '$data_id' to contain '$expected' (last response: $response)"
+    exit 1
+}
+
+start_app "$APP_PORT" "$TMP_DIR"
+wait_for_ready "$APP_PORT"
+
+# Open the About page and wait for the hidden version label to render.
+send_command "$APP_PORT" navigate '{"page":"/about"}'
+wait_for_value "$APP_PORT" "about-version" "Version"
+
+# Tap the version label the required number of times to enable developer mode.
+send_command "$APP_PORT" click '{"dataId":"about-version"}'
+send_command "$APP_PORT" click '{"dataId":"about-version"}'
+send_command "$APP_PORT" click '{"dataId":"about-version"}'
+send_command "$APP_PORT" click '{"dataId":"about-version"}'
+wait_for_log "$TMP_DIR" "Developer mode enabled"
+
+# The developer screen is now reachable and lists the Stories tool.
+send_command "$APP_PORT" navigate '{"page":"/developer"}'
+wait_for_value "$APP_PORT" "developer-page" "Developer"
+wait_for_value "$APP_PORT" "developer-tool-stories" "Stories"
+
+# Open Stories from the developer screen and confirm it rendered. Stories is a
+# top-level route outside Main, so the navigate command (handled inside Main) no
+# longer works here; leave via the in-page back link to remount Main.
+send_command "$APP_PORT" click '{"dataId":"developer-tool-stories"}'
+wait_for_value "$APP_PORT" "stories-page" "story"
+send_command "$APP_PORT" click '{"dataId":"stories-back-link"}'
+
+# Return to the developer screen (developer mode is persisted) and exit it.
+send_command "$APP_PORT" navigate '{"page":"/developer"}'
+wait_for_value "$APP_PORT" "developer-page" "Developer"
+send_command "$APP_PORT" click '{"dataId":"developer-exit"}'
+wait_for_log "$TMP_DIR" "Developer mode disabled"
+
+check_no_errors "$TMP_DIR"
+
+stop_app "$APP_PORT" "$TMP_DIR"
+
+log_success "Test 23 passed: developer-screen"
