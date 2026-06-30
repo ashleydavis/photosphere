@@ -428,6 +428,24 @@ ipcMain.on('cancel-tasks', (_event, source: string) => {
     workerPool.cancelTasks(source);
 });
 
+// Generic channel that lets the renderer trigger named actions in the main
+// process. Add new actions to the switch as the need arises.
+ipcMain.on('main-command', (_event, command: string) => {
+    if (!mainWindow) {
+        return;
+    }
+
+    switch (command) {
+        case 'toggle-devtools':
+            mainWindow.webContents.toggleDevTools();
+            break;
+
+        default:
+            console.error(`Unknown main-command: ${command}`);
+            break;
+    }
+});
+
 // IPC handler for opening file dialog
 // Note: ipcMain.handle automatically catches errors from async functions and sends them to the renderer.
 // If the handler throws or returns a rejected promise, Electron serializes the error and sends it to the renderer.

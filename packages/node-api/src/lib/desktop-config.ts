@@ -35,6 +35,11 @@ export interface IDesktopConfig {
     // Whether the FPS indicator overlay is shown in the UI. Defaults to false when unset.
     //
     showFpsIndicator?: boolean;
+
+    //
+    // Whether developer mode is enabled (reveals developer tools in the UI). Defaults to false when unset.
+    //
+    developerMode?: boolean;
 }
 
 //
@@ -58,6 +63,9 @@ interface ITomlDesktopConfig {
 
     // Whether the FPS indicator overlay is shown in the UI.
     show_fps_indicator?: boolean;
+
+    // Whether developer mode is enabled.
+    developer_mode?: boolean;
 }
 
 const CONFIG_DIR = process.env.PHOTOSPHERE_CONFIG_DIR || path.join(os.homedir(), ".config", "photosphere");
@@ -88,6 +96,9 @@ function tomlToDesktopConfig(toml: ITomlDesktopConfig): IDesktopConfig {
     if (toml.show_fps_indicator !== undefined) {
         config.showFpsIndicator = toml.show_fps_indicator;
     }
+    if (toml.developer_mode !== undefined) {
+        config.developerMode = toml.developer_mode;
+    }
     return config;
 }
 
@@ -113,6 +124,9 @@ function desktopConfigToToml(config: IDesktopConfig): ITomlDesktopConfig {
     }
     if (config.showFpsIndicator !== undefined) {
         toml.show_fps_indicator = config.showFpsIndicator;
+    }
+    if (config.developerMode !== undefined) {
+        toml.developer_mode = config.developerMode;
     }
     return toml;
 }

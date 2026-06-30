@@ -48,6 +48,7 @@
     "colorthief": "^2.6.0",
     "config": "workspace:*",
     "dayjs": "^1.11.7",
+    "eruda": "^3.0.0",
     "jszip": "^3.10.1",
     "leaflet": "^1.9.4",
     "lodash": "^4.17.21",

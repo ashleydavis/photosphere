@@ -302,3 +302,37 @@ describe('removeRecentSearch', () => {
     });
 });
 
+describe('developerMode persistence', () => {
+    beforeEach(() => jest.clearAllMocks());
+
+    test('reads developer_mode from TOML into developerMode', async () => {
+        mockPathExists.mockImplementation((filePath: string) => filePath.endsWith('.toml'));
+        mockReadToml.mockResolvedValue({ developer_mode: true });
+
+        const config = await loadDesktopConfig();
+
+        expect(config.developerMode).toBe(true);
+    });
+
+    test('writes developerMode to TOML as developer_mode', async () => {
+        const config = { developerMode: true };
+
+        await saveDesktopConfig(config);
+
+        const tomlArg = mockWriteToml.mock.calls[0][1];
+        expect(tomlArg.developer_mode).toBe(true);
+    });
+
+    test('round-trips developerMode through save and load', async () => {
+        mockPathExists.mockImplementation((filePath: string) => filePath.endsWith('.toml'));
+
+        await saveDesktopConfig({ developerMode: true });
+        const savedToml = mockWriteToml.mock.calls[0][1];
+
+        mockReadToml.mockResolvedValue(savedToml);
+        const loaded = await loadDesktopConfig();
+
+        expect(loaded.developerMode).toBe(true);
+    });
+});
+

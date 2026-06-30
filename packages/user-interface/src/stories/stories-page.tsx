@@ -2,6 +2,7 @@ import React, { Component, ReactNode, useEffect, useMemo, useState } from "react
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { CssVarsProvider } from "@mui/joy/styles/CssVarsProvider";
 import { log } from "utils";
+import eruda from "eruda";
 import { nextStoryIndex } from "../lib/story-navigation";
 import { stories } from "./index";
 import type { IStory, StoryCategory } from "./types";
@@ -46,11 +47,70 @@ export function StoriesPage(): JSX.Element {
 }
 
 //
-// The interactive two-pane browser shown when cycle mode is not enabled.
+// Minimal shape of the Electron preload bridge, present only when running
+// inside the desktop app. Used to send generic commands to the main process.
+//
+interface IStoriesElectronApi {
+    // Sends a fire-and-forget command to the Electron main process.
+    send(channel: string, data?: string): void;
+}
+
+//
+// The browser window extended with the optional Electron preload bridge.
+//
+interface IWindowWithElectron extends Window {
+    // Injected by the Electron preload script; absent on web and mobile.
+    electronAPI?: IStoriesElectronApi;
+}
+
+//
+// Whether the in-page Eruda console has been initialised, and whether it is
+// currently visible. Module-level so the toggle keeps its state across renders.
+//
+let erudaInitialised = false;
+let erudaVisible = false;
+
+//
+// Toggles the developer tools, using the real inspector on each platform. In
+// the desktop app it asks the main process to toggle the native Electron dev
+// tools over the generic command channel; on the web and mobile, where no
+// native inspector is reachable from inside the WebView, it shows or hides the
+// embedded Eruda console instead.
+//
+function toggleDevTools(): void {
+    const electronApi = (window as IWindowWithElectron).electronAPI;
+    if (electronApi) {
+        electronApi.send("main-command", "toggle-devtools");
+        return;
+    }
+
+    if (!erudaInitialised) {
+        eruda.init();
+        erudaInitialised = true;
+    }
+    if (erudaVisible) {
+        eruda.hide();
+    }
+    else {
+        eruda.show();
+    }
+    erudaVisible = !erudaVisible;
+}
+
+//
+// The interactive browser shown when cycle mode is not enabled. The story list
+// lives in an overlay drawer and the navigation controls float over the
+// rendered story, so the layout is identical on every platform.
 //
 function StoriesBrowser(): JSX.Element {
     const [searchParams, setSearchParams] = useSearchParams();
     const [searchText, setSearchText] = useState<string>("");
+
+    //
+    // Whether the overlay sidebar drawer is open. The drawer is the only way to
+    // reach the story list, on every platform.
+    //
+    const [drawerOpen, setDrawerOpen] = useState<boolean>(false);
 
     const selectedId = searchParams.get("id") || undefined;
     const selectedStory = selectedId
@@ -126,24 +186,53 @@ function StoriesBrowser(): JSX.Element {
         setSearchParams({ id: orderedStories[nextIndex].id });
     }
 
-    const selectedIndex = selectedId
-        ? orderedStories.findIndex(story => story.id === selectedId)
-        : -1;
+    //
+    // Divider colour reused across the sidebar and toolbar borders.
+    //
+    const borderColor = "var(--joy-palette-divider, #ddd)";
+
+    //
+    // The sidebar is an overlay drawer that slides in from the left over the
+    // content and is dismissed by the backdrop or by picking a story.
+    //
+    const asideStyle: React.CSSProperties = {
+        width: "280px",
+        maxWidth: "85vw",
+        borderColor,
+        position: "absolute",
+        top: 0,
+        bottom: 0,
+        left: 0,
+        zIndex: 30,
+        background: "var(--joy-palette-background-body)",
+        transform: drawerOpen ? "translateX(0)" : "translateX(-100%)",
+        transition: "transform 0.2s ease",
+        boxShadow: drawerOpen ? "0 0 20px rgba(0, 0, 0, 0.3)" : "none",
+    };
 
     return (
-        <div data-id="stories-page" className="flex h-screen w-screen" style={{ background: "var(--joy-palette-background-body)", color: "var(--joy-palette-text-primary)" }}>
+        <div data-id="stories-page" className="flex h-screen w-screen relative" style={{ background: "var(--joy-palette-background-body)", color: "var(--joy-palette-text-primary)" }}>
+            {drawerOpen
+                && <div
+                    className="absolute inset-0 z-20"
+                    style={{ background: "rgba(0, 0, 0, 0.4)" }}
+                    onClick={() => setDrawerOpen(false)}
+                    data-testid="stories-drawer-backdrop"
+                    />
+            }
+
             <aside
                 className="flex flex-col border-r"
-                style={{ width: "280px", borderColor: "var(--joy-palette-divider, #ddd)" }}
+                style={asideStyle}
                 >
-                <div className="p-3 flex flex-col gap-2 border-b" style={{ borderColor: "var(--joy-palette-divider, #ddd)" }}>
+                <div className="p-3 flex flex-col gap-2 border-b" style={{ borderColor }}>
                     <input
                         type="text"
                         value={searchText}
                         onChange={event => setSearchText(event.target.value)}
                         placeholder="Filter stories"
                         className="px-2 py-1 rounded border w-full"
-                        style={{ borderColor: "var(--joy-palette-divider, #ddd)", background: "transparent", color: "inherit" }}
+                        style={{ borderColor, background: "transparent", color: "inherit" }}
                         data-testid="stories-search-input"
                         />
                     <Link to="/" className="text-sm underline" data-id="stories-back-link" data-testid="stories-back-link">
@@ -167,7 +256,10 @@ function StoriesBrowser(): JSX.Element {
                                             <li key={story.id}>
                                                 <button
                                                     type="button"
-                                                    onClick={() => selectStory(story)}
+                                                    onClick={() => {
+                                                        selectStory(story);
+                                                        setDrawerOpen(false);
+                                                    }}
                                                     className="text-left px-2 py-1 w-full rounded"
                                                     style={{
                                                         background: isActive ? "var(--joy-palette-primary-softBg, #e3f2fd)" : "transparent",
@@ -187,48 +279,68 @@ function StoriesBrowser(): JSX.Element {
                 </div>
             </aside>
 
-            <main className="flex-1 flex flex-col overflow-hidden">
-                <div
-                    className="flex items-center gap-2 p-2 border-b"
-                    style={{ borderColor: "var(--joy-palette-divider, #ddd)" }}
-                    >
+            <main className="flex-1 flex flex-col overflow-hidden min-w-0">
+                <div className="absolute top-2 left-2 z-10 flex items-center gap-1">
                     <button
                         type="button"
-                        onClick={() => navigateStories(-1)}
-                        className="px-2 py-1 rounded border"
-                        style={{ borderColor: "var(--joy-palette-divider, #ddd)" }}
-                        data-testid="stories-prev-button"
+                        onClick={() => setDrawerOpen(true)}
+                        className="px-2 py-1 text-sm rounded border"
+                        style={{ borderColor, background: "var(--joy-palette-background-surface, rgba(255, 255, 255, 0.9))", boxShadow: "0 1px 6px rgba(0, 0, 0, 0.25)" }}
+                        data-testid="stories-menu-button"
+                        aria-label="Open stories list"
                         >
-                        ◀ Prev
+                        ☰
                     </button>
                     <button
                         type="button"
-                        onClick={() => navigateStories(1)}
-                        className="px-2 py-1 rounded border"
-                        style={{ borderColor: "var(--joy-palette-divider, #ddd)" }}
-                        data-testid="stories-next-button"
+                        onClick={() => toggleDevTools()}
+                        className="px-2 py-1 text-sm rounded border"
+                        style={{ borderColor, background: "var(--joy-palette-background-surface, rgba(255, 255, 255, 0.9))", boxShadow: "0 1px 6px rgba(0, 0, 0, 0.25)" }}
+                        data-testid="stories-devtools-button"
+                        aria-label="Toggle developer tools"
                         >
-                        Next ▶
+                        {"</>"}
                     </button>
-                    {selectedStory && selectedIndex !== -1
-                        && <span className="text-sm opacity-70" data-testid="stories-position">
-                            {`${selectedIndex + 1} / ${orderedStories.length} — ${selectedStory.name}`}
-                        </span>
-                    }
                 </div>
                 <div className="flex-1 overflow-auto">
                     {!selectedId
-                        && <div className="p-6 opacity-70">Select a story</div>
+                        && <div className="h-full w-full flex items-center justify-center p-6" data-testid="stories-empty-help">
+                            <div className="max-w-md text-center opacity-70 flex flex-col gap-3">
+                                <div className="text-lg font-semibold">Story browser</div>
+                                <div>Each story renders one page, dialog, or component on its own so it can be built and checked in isolation.</div>
+                                <div>Open the <span className="font-semibold">☰</span> menu at the top-left to pick a story, or step through them with the <span className="font-semibold">◀</span> and <span className="font-semibold">▶</span> buttons in the bottom corners.</div>
+                            </div>
+                        </div>
                     }
                     {selectedId && !selectedStory
                         && <div className="p-6 opacity-70" data-testid="stories-unknown-story">{`Unknown story: ${selectedId}`}</div>
                     }
                     {selectedStory
-                        && <div key={selectedStory.id} className="h-full w-full p-6" data-testid={`stories-render-${selectedStory.id}`}>
+                        && <div key={selectedStory.id} className="h-full w-full p-2" data-testid={`stories-render-${selectedStory.id}`}>
                             {selectedStory.render()}
                         </div>
                     }
                 </div>
+                <button
+                    type="button"
+                    onClick={() => navigateStories(-1)}
+                    className="absolute bottom-5 left-5 z-10 w-14 h-14 rounded-full border flex items-center justify-center text-2xl"
+                    style={{ borderColor, background: "var(--joy-palette-background-surface, rgba(255, 255, 255, 0.9))", boxShadow: "0 1px 6px rgba(0, 0, 0, 0.25)" }}
+                    data-testid="stories-prev-button"
+                    aria-label="Previous story"
+                    >
+                    ◀
+                </button>
+                <button
+                    type="button"
+                    onClick={() => navigateStories(1)}
+                    className="absolute bottom-5 right-5 z-10 w-14 h-14 rounded-full border flex items-center justify-center text-2xl"
+                    style={{ borderColor, background: "var(--joy-palette-background-surface, rgba(255, 255, 255, 0.9))", boxShadow: "0 1px 6px rgba(0, 0, 0, 0.25)" }}
+                    data-testid="stories-next-button"
+                    aria-label="Next story"
+                    >
+                    ▶
+                </button>
             </main>
         </div>
     );
