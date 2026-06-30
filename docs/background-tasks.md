@@ -42,7 +42,13 @@ TaskQueue.addTask(type, data)            // shared frontend, packages/task-queue
 
 A handler may use whatever Node APIs it needs, the same as on desktop or CLI: many import `fs`/`fs/promises`, `stream`, `path`, `crypto`, and `os` directly. The embedded engine has no Node runtime. This infrastructure layer does **not** implement those Node APIs and does not shim them: a background task that calls a Node.js function reports NOT IMPLEMENTED rather than silently doing the wrong thing. Implementing them (native-backed `fs` so `FileStorage` and `node-utils` run unchanged, native file hashing, native image/video tools) is the job of later layers, which add the corresponding `host.*` functions and the build-time wiring that routes the Node calls to them.
 
-The host functions that are genuinely infrastructure — `sendMessage` (stream a progress message) and `isCancelled` (cancellation check) — are installed and working. Every other `host.*` function (hashing, fs, media) reports NOT IMPLEMENTED until its layer lands.
+The host functions that are genuinely infrastructure — `sendMessage` (stream a progress message), `isCancelled` (cancellation check), and the TCP socket functions `tcpListen`/`tcpWrite`/`tcpClose`/`tcpStopListening` — are installed and working. The remaining `host.*` functions (hashing, media) report NOT IMPLEMENTED until their layer lands.
+
+### The asset-server task and TCP host functions
+
+The `asset-server` task runs the express asset server (the same serving model as desktop) inside the embedded engine so the WebView can load `http://localhost:<port>/asset?...` URLs over a real loopback socket. Everything above the socket is TypeScript: the `http` and `net` shims (`packages/mobile-worker/src/shims/node-http.ts`, `node-net.ts`) implement minimal HTTP/1.1 and a `Server`/`Socket` over four native TCP host functions plus an inbound event push. Native delivers `connection`, `data`, and `close` events into the engine by calling `globalThis.__tcpEvent(eventJson)` (installed by the `net` shim).
+
+The native TCP functions are implemented on both platforms (`TcpHost.java` on Android over `java.net.ServerSocket`; `TcpHost.swift` on iOS over POSIX sockets), each bound to loopback and accepting/reading on background threads. On Android the QuickJS engine's run loop drains the inbound event queue and keeps a long-running server task alive (it does not time out while a listener is open); on iOS the JavaScriptCore engine drains the queue on its context thread whenever an event is enqueued. The gallery loads thumbnails over this server: see the `1-load-fixture` mobile smoke test, which opens a seeded database and asserts the gallery renders with no asset-load errors plus a direct check that the server serves real JPEG bytes.
 
 ### The NOT IMPLEMENTED rule
 
@@ -237,3 +243,4 @@ The `onTaskMessage` filter matches only messages whose `type` field equals the g
 | `"prefetch-database"` | `prefetch-database.worker.ts` | Prefetch thumbnails |
 | `"create-database"` | `create-database.worker.ts` | Initialize a new database |
 | `"get-database-summary"` | `get-database-summary.worker.ts` | Compute database statistics |
+| `"asset-server"` | `asset-server.worker.ts` | Long-running express asset server bound to a loopback port (serves `/asset`, applies database ops) |

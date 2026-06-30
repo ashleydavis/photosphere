@@ -93,6 +93,13 @@ final class HostBridge {
     let storageRoot: URL
 
     //
+    // The native TCP socket layer behind the host.tcp* functions. Owned per engine context; the
+    // engine drains its inbound event queue on the JSContext thread and delivers each event into the
+    // JS net shim via globalThis.__tcpEvent.
+    //
+    let tcp = TcpHost()
+
+    //
     // Returns true when the task with the given id has been cancelled. Reads an atomic/volatile
     // flag WITHOUT taking the pool lock, so a running handler can poll cancellation cheaply from
     // inside a tight loop without contending with the dispatcher.
@@ -276,6 +283,44 @@ final class HostBridge {
             }
         }
         host.setValue(JSValue(object: fsRm, in: context), forProperty: "fsRm")
+
+        // Native-backed TCP socket functions: the embedded asset server (run as a long-lived task)
+        // binds a loopback listener and reads/writes connections through these. Inbound connection /
+        // data / close events are pushed back into the engine via globalThis.__tcpEvent (driven by the
+        // engine's drain loop). tcpListen returns the listener JSON (or an error envelope); the others
+        // return JS null on success or an error envelope on failure.
+        let tcpListen: @convention(block) (String, Int) -> JSValue = { [weak self] host, port in
+            guard let self = self else { return JSValue(nullIn: context) }
+            return JSValue(object: self.tcp.tcpListen(host: host, port: port), in: context)
+        }
+        host.setValue(JSValue(object: tcpListen, in: context), forProperty: "tcpListen")
+
+        let tcpWrite: @convention(block) (String, String) -> JSValue = { [weak self] connectionId, base64 in
+            guard let self = self else { return JSValue(nullIn: context) }
+            if let envelope = self.tcp.tcpWrite(connectionId: connectionId, base64: base64) {
+                return JSValue(object: envelope, in: context)
+            }
+            return JSValue(nullIn: context)
+        }
+        host.setValue(JSValue(object: tcpWrite, in: context), forProperty: "tcpWrite")
+
+        let tcpClose: @convention(block) (String) -> JSValue = { [weak self] connectionId in
+            guard let self = self else { return JSValue(nullIn: context) }
+            if let envelope = self.tcp.tcpClose(connectionId: connectionId) {
+                return JSValue(object: envelope, in: context)
+            }
+            return JSValue(nullIn: context)
+        }
+        host.setValue(JSValue(object: tcpClose, in: context), forProperty: "tcpClose")
+
+        let tcpStopListening: @convention(block) (String) -> JSValue = { [weak self] listenerId in
+            guard let self = self else { return JSValue(nullIn: context) }
+            if let envelope = self.tcp.tcpStopListening(listenerId: listenerId) {
+                return JSValue(object: envelope, in: context)
+            }
+            return JSValue(nullIn: context)
+        }
+        host.setValue(JSValue(object: tcpStopListening, in: context), forProperty: "tcpStopListening")
 
         context.globalObject.setValue(host, forProperty: "host")
     }

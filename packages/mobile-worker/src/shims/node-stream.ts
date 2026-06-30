@@ -236,8 +236,24 @@ export const PassThrough = function PassThrough(this: any): void {
 } as unknown as { new (): any };
 
 //
-// The default export mirrors `import stream from "stream"`.
+// The base `Stream` constructor. In Node `require("stream")` IS this constructor (with Readable,
+// Writable, etc. attached as properties), and packages like `send` do `util.inherits(SubClass, Stream)`
+// at module-eval time. It is a plain function (not an ES6 class) so it works as an inheritance super
+// and can be called without `new`. No streaming behaviour is required on it.
 //
-const streamModule = { Readable, Writable, Duplex, Transform, PassThrough };
+export const Stream = function Stream(this: any): void {
+    // No-op base constructor.
+} as unknown as { new (): any };
 
-export default streamModule;
+// Attach the stream subclasses so `import stream from "stream"; stream.Readable` resolves as in Node.
+(Stream as any).Readable = Readable;
+(Stream as any).Writable = Writable;
+(Stream as any).Duplex = Duplex;
+(Stream as any).Transform = Transform;
+(Stream as any).PassThrough = PassThrough;
+
+//
+// The default export mirrors `import stream from "stream"` — the Stream constructor itself (with the
+// subclasses attached above).
+//
+export default Stream;

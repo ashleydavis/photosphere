@@ -137,7 +137,11 @@ public final class QuickJsTaskEngine implements TaskEngine {
 
             String outputsJson = null;
             String errorMessage = null;
-            for (int attempt = 0; attempt < 5000; attempt++) {
+            // Counts iterations only while no server (TCP listener) is bound, so a normal task that
+            // never settles still fails fast; a long-running asset-server task (which keeps a listener
+            // open) runs until it is cancelled.
+            int idleAttempts = 0;
+            while (true) {
                 Object result = globalObject.getProperty("__ptResult");
                 if (result instanceof String) {
                     outputsJson = (String) result;
@@ -148,6 +152,18 @@ public final class QuickJsTaskEngine implements TaskEngine {
                     errorMessage = (String) error;
                     break;
                 }
+
+                // Deliver any inbound TCP events (connection / data / close) into the JS net shim on
+                // this worker thread. This drives the embedded asset server: each delivered request
+                // runs express and writes its response back through host.tcpWrite synchronously.
+                boolean deliveredEvent = false;
+                String tcpEvent = hostBridge.tcp.pollInboundEvent();
+                while (tcpEvent != null) {
+                    deliverTcpEvent(globalObject, tcpEvent);
+                    deliveredEvent = true;
+                    tcpEvent = hostBridge.tcp.pollInboundEvent();
+                }
+
                 // Drain any remaining QuickJS jobs (promise callbacks). Evaluating drains the whole
                 // microtask queue to empty.
                 context.evaluate("void 0;");
@@ -161,8 +177,32 @@ public final class QuickJsTaskEngine implements TaskEngine {
 
                 // The engine has no real clock: with the microtask queue drained and the task still
                 // unsettled, advance the earliest pending timer (setTimeout) so timer-driven progress
-                // (retry backoff, timeout guards) can happen. Returns false when no timers remain.
+                // (retry backoff, timeout guards, the asset-server keep-alive poll) can happen.
                 context.evaluate("globalThis.__ptPumped = (typeof globalThis.__pumpTimers === 'function') ? globalThis.__pumpTimers() : false;");
+                boolean pumped = Boolean.TRUE.equals(globalObject.getProperty("__ptPumped"));
+
+                if (hostBridge.tcp.hasLiveListeners()) {
+                    // A server is bound and waiting. Park the worker thread briefly for the next
+                    // inbound event instead of busy-spinning; cancellation is re-checked each round
+                    // via the keep-alive timer above. Any event that arrives is delivered immediately.
+                    if (!deliveredEvent) {
+                        String waited = hostBridge.tcp.awaitInboundEvent(50);
+                        if (waited != null) {
+                            deliverTcpEvent(globalObject, waited);
+                            context.evaluate("void 0;");
+                        }
+                    }
+                    idleAttempts = 0;
+                }
+                else if (deliveredEvent || pumped) {
+                    idleAttempts = 0;
+                }
+                else {
+                    idleAttempts++;
+                    if (idleAttempts >= 5000) {
+                        break;
+                    }
+                }
             }
 
             if (errorMessage != null) {
@@ -246,6 +286,20 @@ public final class QuickJsTaskEngine implements TaskEngine {
         host.setProperty("fsRm", (JSCallFunction) args -> safeVoid(() ->
             hostBridge.fsRm((String) args[0], toBoolean(args[1]), toBoolean(args[2]))));
 
+        // Native-backed TCP socket functions: the embedded asset server (run as a long-lived task)
+        // binds a loopback listener and reads/writes connections through these. Inbound connection /
+        // data / close events are pushed back into the engine via globalThis.__tcpEvent (see the run
+        // loop). They return a string result/error envelope (tcpListen returns the listener JSON);
+        // tcpWrite/tcpClose/tcpStopListening return null on success.
+        host.setProperty("tcpListen", (JSCallFunction) args -> safeString(() ->
+            hostBridge.tcpListen((String) args[0], ((Number) args[1]).intValue())));
+        host.setProperty("tcpWrite", (JSCallFunction) args -> safeString(() ->
+            hostBridge.tcpWrite((String) args[0], (String) args[1])));
+        host.setProperty("tcpClose", (JSCallFunction) args -> safeString(() ->
+            hostBridge.tcpClose((String) args[0])));
+        host.setProperty("tcpStopListening", (JSCallFunction) args -> safeString(() ->
+            hostBridge.tcpStopListening((String) args[0])));
+
         context.getGlobalObject().setProperty("host", host);
 
         // Evaluate the bundle once. It installs globalThis.__photosphereWorker.runTask.
@@ -299,6 +353,16 @@ public final class QuickJsTaskEngine implements TaskEngine {
     }
 
     //
+    // Delivers one inbound TCP event (connection / data / close) JSON into the JS net shim by setting
+    // it on a global and invoking globalThis.__tcpEvent. Runs on the worker thread so the QuickJS
+    // context is only ever touched here, never from the socket accept/read threads.
+    //
+    private void deliverTcpEvent(JSObject globalObject, String eventJson) {
+        globalObject.setProperty("__tcpEventArg", eventJson);
+        context.evaluate("(typeof globalThis.__tcpEvent === 'function') && globalThis.__tcpEvent(globalThis.__tcpEventArg);");
+    }
+
+    //
     // Reads the worker bundle asset into a string. Loaded only from the packaged app asset.
     //
     private String readBundleAsset() throws IOException {
@@ -322,6 +386,9 @@ public final class QuickJsTaskEngine implements TaskEngine {
     //
     @Override
     public void dispose() {
+        if (hostBridge != null) {
+            hostBridge.tcp.shutdown();
+        }
         worker.submit(() -> {
             if (context != null) {
                 try {

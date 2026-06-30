@@ -16,7 +16,7 @@ import {
 } from "user-interface";
 import { setQueueBackend } from "task-queue";
 import { RandomUuidGenerator } from "utils";
-import { EmbeddedJsQueueBackend, PlatformProviderMobile } from "mobile-frontend";
+import { EmbeddedJsQueueBackend, PlatformProviderMobile, useMobileAssetServer } from "mobile-frontend";
 
 //
 // UUID generator used for task ids on mobile.
@@ -50,6 +50,11 @@ export async function bootstrapMobileBackend(): Promise<void> {
 // platform provider. There is no WebSocket gate as on web — the UI renders immediately.
 //
 export function App() {
+    // Start the asset-server background task (in the embedded engine) and use its bound localhost
+    // port as the restApiUrl, so the gallery loads thumbnails/images/video over the same URL model
+    // as desktop. Falls back to the default URL until the task reports its port.
+    const restApiUrl = useMobileAssetServer();
+
     return (
         <HashRouter
             future={{
@@ -65,7 +70,7 @@ export function App() {
                             <ApiContextProvider value={axiosApi}>
                             <AppContextProvider>
                                 <ToastContextProvider>
-                                    <AssetDatabaseProvider queueBackend={queueBackend} restApiUrl="http://localhost:3001">
+                                    <AssetDatabaseProvider queueBackend={queueBackend} restApiUrl={restApiUrl}>
                                         <ImportContextProvider>
                                             <GalleryContextProvider>
                                                 <DeleteConfirmationContextProvider>

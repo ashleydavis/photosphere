@@ -56,6 +56,41 @@ public final class HostBridge {
     }
 
     //
+    // The native TCP socket layer behind the host.tcp* functions. Owned per engine context; the
+    // engine drains its inbound event queue on the worker thread. Public so the engine run loop can
+    // poll inbound events and check whether a server is still listening.
+    //
+    public final TcpHost tcp = new TcpHost();
+
+    //
+    // host.tcpListen(host, port): binds a loopback TCP listener and returns JSON { listenerId, port }.
+    //
+    public String tcpListen(String host, int port) {
+        return tcp.tcpListen(host, port);
+    }
+
+    //
+    // host.tcpWrite(connectionId, base64): writes bytes to an accepted connection.
+    //
+    public String tcpWrite(String connectionId, String base64) {
+        return tcp.tcpWrite(connectionId, base64);
+    }
+
+    //
+    // host.tcpClose(connectionId): closes one accepted connection.
+    //
+    public String tcpClose(String connectionId) {
+        return tcp.tcpClose(connectionId);
+    }
+
+    //
+    // host.tcpStopListening(listenerId): closes a TCP listener.
+    //
+    public String tcpStopListening(String listenerId) {
+        return tcp.tcpStopListening(listenerId);
+    }
+
+    //
     // Sets the task that is about to run on this context. Called by the engine before
     // invoking runTask, and cleared after.
     //

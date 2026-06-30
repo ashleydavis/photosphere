@@ -59,6 +59,18 @@ export interface IHost {
 
     // Deletes a sandboxed file or directory tree.
     fsRm: (path: string, recursive: boolean, force: boolean) => void;
+
+    // Binds a loopback TCP listener and returns a JSON string { listenerId, port } (port resolved when 0 was requested).
+    tcpListen: (host: string, port: number) => string;
+
+    // Writes base64-encoded bytes to an accepted connection.
+    tcpWrite: (connectionId: string, base64: string) => string | null;
+
+    // Closes one accepted connection.
+    tcpClose: (connectionId: string) => string | null;
+
+    // Closes a TCP listener so it accepts no further connections.
+    tcpStopListening: (listenerId: string) => string | null;
 }
 
 //
@@ -81,6 +93,10 @@ export const EXPECTED_HOST_FUNCTIONS: string[] = [
     "fsRename",
     "fsUnlink",
     "fsRm",
+    "tcpListen",
+    "tcpWrite",
+    "tcpClose",
+    "tcpStopListening",
 ];
 
 //

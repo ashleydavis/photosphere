@@ -142,6 +142,14 @@ final class JavaScriptCoreTaskEngine: TaskEngine {
         // bootstrap (and certainly runTask later) sees `globalThis.host`.
         hostBridge.install(into: newContext)
 
+        // When the native TCP layer enqueues an inbound event (connection / data / close), drain and
+        // deliver it on the engine queue so the JSContext is only ever touched from its owning thread.
+        hostBridge.tcp.onEventAvailable = { [weak self] in
+            self?.engineQueue.async {
+                self?.drainTcpEvents()
+            }
+        }
+
         var evaluationException: JSValue?
         newContext.exceptionHandler = { _, exception in
             evaluationException = exception
@@ -261,6 +269,24 @@ final class JavaScriptCoreTaskEngine: TaskEngine {
     }
 
     //
+    // Drains the native TCP inbound event queue, delivering each event JSON into the JS net shim by
+    // invoking globalThis.__tcpEvent. Runs on the engine queue (dispatched from the TcpHost callback),
+    // so the JSContext is only ever touched from its owning thread. JavaScriptCore drains the microtask
+    // queue after each call returns, so the express response kicked off by a delivered request completes.
+    //
+    private func drainTcpEvents() {
+        guard let context = self.context else {
+            return
+        }
+        guard let tcpEventFunction = context.globalObject.objectForKeyedSubscript("__tcpEvent"), !tcpEventFunction.isUndefined else {
+            return
+        }
+        while let eventJson = self.hostBridge.tcp.pollInboundEvent() {
+            tcpEventFunction.call(withArguments: [eventJson])
+        }
+    }
+
+    //
     // Extracts a human-readable message from a JS error or rejection reason. Prefers the error's
     // `.message` property (so the verbatim NOT IMPLEMENTED text is preserved) and falls back to the
     // value's string form.
@@ -278,6 +304,7 @@ final class JavaScriptCoreTaskEngine: TaskEngine {
     // shutdown; after this the engine must not be reused.
     //
     func dispose() {
+        hostBridge.tcp.shutdown()
         engineQueue.async { [weak self] in
             guard let self = self else {
                 return

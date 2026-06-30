@@ -32,10 +32,36 @@ send_command "$APP_PORT" open-database "{\"path\":\"$DB_NAME\"}" || exit 1
 
 wait_for_log "$TMP_DIR" "Gallery loaded: 50 assets" 30
 
-# The gallery renders the 50 assets from the loaded metadata. It also tries to upgrade each tile
-# from its embedded micro-thumbnail to a full thumbnail, which requires the mobile asset-serving
-# layer (plan-mobile-serving-options.md) that is not built yet, so those thumbnail fetches error.
-# Ignore exactly those serving errors here; any other error still fails this test.
-check_no_errors "$TMP_DIR" 'Failed to load asset: thumb:|Network Error' || exit 1
+# The gallery renders the 50 assets from the loaded metadata and upgrades each tile from its embedded
+# micro-thumbnail to a full thumbnail, fetched over the embedded asset server (plan-mobile-serving-options.md):
+# http://localhost:<port>/asset?type=thumb&db=50-assets, served from device storage by the asset-server
+# background task over the native TCP socket. With that layer in place the thumbnail fetches succeed, so
+# no asset-load errors are tolerated here.
+check_no_errors "$TMP_DIR" || exit 1
+
+# Directly confirm the embedded asset server serves real thumbnail bytes on device (the same request the
+# WebView <img> makes): read the bound port from logcat, forward it to the host, and assert a JPEG body.
+if [ "$PLATFORM" = "android" ]; then
+    ASSET_ID="$(ls "$REPO_DIR/test/dbs/$DB_NAME/thumb" | head -1)"
+    SERVER_PORT="$(adb logcat -d 2>/dev/null | grep -oE 'Asset server task listening on http://127.0.0.1:[0-9]+' | tail -1 | grep -oE '[0-9]+$')"
+    if [ -z "$SERVER_PORT" ]; then
+        log_error "Asset server did not report a bound port"
+        exit 1
+    fi
+    HOST_PORT="$(find_free_port)"
+    adb forward "tcp:$HOST_PORT" "tcp:$SERVER_PORT" >/dev/null
+    THUMB_OUT="$TMP_DIR/served-thumb.bin"
+    HTTP_CODE="$(curl -s -o "$THUMB_OUT" -w '%{http_code}' --max-time 10 "http://localhost:$HOST_PORT/asset?id=$ASSET_ID&type=thumb&db=$DB_NAME")"
+    adb forward --remove "tcp:$HOST_PORT" >/dev/null 2>&1 || true
+    if [ "$HTTP_CODE" != "200" ]; then
+        log_error "Asset server returned HTTP $HTTP_CODE for thumbnail $ASSET_ID"
+        exit 1
+    fi
+    if ! file "$THUMB_OUT" | grep -q "JPEG image data"; then
+        log_error "Asset server did not return JPEG thumbnail bytes (got: $(file "$THUMB_OUT"))"
+        exit 1
+    fi
+    log_success "Asset server served a JPEG thumbnail over localhost:$SERVER_PORT"
+fi
 
 log_success "Test 1 passed: load-fixture"

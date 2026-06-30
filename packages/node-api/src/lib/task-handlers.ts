@@ -14,6 +14,7 @@ import { importAssetsHandler } from "./import-assets.worker";
 import { hashFileHandler } from "./hash-file.worker";
 import { getDatabaseSummaryHandler } from "./get-database-summary.worker";
 import { moveAssetsHandler } from "./move-assets.worker";
+import { assetServerHandler } from "./asset-server.worker";
 
 //
 // Register all task handlers
@@ -35,4 +36,5 @@ export function initTaskHandlers(): void {
     registerHandler("hash-file", hashFileHandler);
     registerHandler("get-database-summary", getDatabaseSummaryHandler);
     registerHandler("move-assets", moveAssetsHandler);
+    registerHandler("asset-server", assetServerHandler);
 }

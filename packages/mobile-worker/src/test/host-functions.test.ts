@@ -50,6 +50,10 @@ describe("host bridge NOT IMPLEMENTED guard", () => {
             fsRename: () => { /* no-op */ },
             fsUnlink: () => { /* no-op */ },
             fsRm: () => { /* no-op */ },
+            tcpListen: () => JSON.stringify({ listenerId: "L1", port: 0 }),
+            tcpWrite: () => null,
+            tcpClose: () => null,
+            tcpStopListening: () => null,
         } as IHost;
 
         const effectiveHost = buildHost(rawHost);

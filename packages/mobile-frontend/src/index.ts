@@ -7,3 +7,4 @@ export * from "./lib/js-engine-plugin";
 export * from "./lib/embedded-js-queue-backend";
 export * from "./lib/mobile-platform-tasks";
 export * from "./lib/platform-provider-mobile";
+export * from "./lib/use-mobile-asset-server";

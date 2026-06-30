@@ -10,6 +10,7 @@ import { replicateDatabaseHandler } from "node-api/src/lib/replicate-database.wo
 import { moveAssetsHandler } from "node-api/src/lib/move-assets.worker";
 import { saveAssetHandler } from "node-api/src/lib/save-asset.worker";
 import { saveAssetsBatchHandler } from "node-api/src/lib/save-assets-batch.worker";
+import { assetServerHandler } from "node-api/src/lib/asset-server.worker";
 import { installWorkerGlobal } from "./src/index";
 
 //
@@ -44,6 +45,11 @@ registerHandler("move-assets", moveAssetsHandler);
 // Register the save-asset / save-assets-batch handlers: export asset files to a chosen destination.
 registerHandler("save-asset", saveAssetHandler);
 registerHandler("save-assets-batch", saveAssetsBatchHandler);
+
+// Register the long-running asset-server handler: stands up the express asset server over the
+// shimmed http/net (backed by the native TCP host functions) so the WebView loads assets over a
+// real localhost socket, exactly like desktop.
+registerHandler("asset-server", assetServerHandler);
 
 // Expose the worker entry point (globalThis.__photosphereWorker = { runTask }).
 installWorkerGlobal();
