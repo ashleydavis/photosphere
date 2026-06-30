@@ -32,6 +32,7 @@
 		D000000000000000000000B7 /* PathSandbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000A7 /* PathSandbox.swift */; };
 		D000000000000000000000B8 /* PooledTask.swift in Sources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000A8 /* PooledTask.swift */; };
 		D000000000000000000000B9 /* TaskEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000A9 /* TaskEngine.swift */; };
+		D000000000000000000000BA /* TcpHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000AA /* TcpHost.swift */; };
 		D000000000000000000000D2 /* worker.bundle.js in Resources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000D1 /* worker.bundle.js */; };
 		E0338ECE1EB4F25F0FEF21BB /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C33C28F06BF4AE2905753A5B /* Foundation.framework */; };
 /* End PBXBuildFile section */
@@ -79,6 +80,7 @@
 		D000000000000000000000A7 /* PathSandbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PathSandbox.swift; sourceTree = "<group>"; };
 		D000000000000000000000A8 /* PooledTask.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PooledTask.swift; sourceTree = "<group>"; };
 		D000000000000000000000A9 /* TaskEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskEngine.swift; sourceTree = "<group>"; };
+		D000000000000000000000AA /* TcpHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TcpHost.swift; sourceTree = "<group>"; };
 		D000000000000000000000D1 /* worker.bundle.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = worker.bundle.js; sourceTree = "<group>"; };
 		FC68EB0AF532CFC21C3344DD /* Pods-App.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-App.debug.xcconfig"; path = "Pods/Target Support Files/Pods-App/Pods-App.debug.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -197,6 +199,7 @@
 				D000000000000000000000A7 /* PathSandbox.swift */,
 				D000000000000000000000A8 /* PooledTask.swift */,
 				D000000000000000000000A9 /* TaskEngine.swift */,
+				D000000000000000000000AA /* TcpHost.swift */,
 			);
 			path = JsEngine;
 			sourceTree = "<group>";
@@ -388,6 +391,7 @@
 				D000000000000000000000B7 /* PathSandbox.swift in Sources */,
 				D000000000000000000000B8 /* PooledTask.swift in Sources */,
 				D000000000000000000000B9 /* TaskEngine.swift in Sources */,
+				D000000000000000000000BA /* TcpHost.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -110,12 +110,12 @@ final class TcpHost {
         // Read back the actually bound port (resolves port 0 to the OS-assigned port).
         var boundAddress = sockaddr_in()
         var boundLength = socklen_t(MemoryLayout<sockaddr_in>.size)
-        let boundPort: UInt16 = withUnsafeMutablePointer(to: &boundAddress) { pointer in
+        withUnsafeMutablePointer(to: &boundAddress) { pointer in
             pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPointer in
-                getsockname(listenSocket, sockaddrPointer, &boundLength)
-                return UInt16(bigEndian: boundAddress.sin_port)
+                _ = getsockname(listenSocket, sockaddrPointer, &boundLength)
             }
         }
+        let boundPort = UInt16(bigEndian: boundAddress.sin_port)
 
         let listenerId = makeId("L")
         lock.lock()
