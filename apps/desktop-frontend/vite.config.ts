@@ -7,6 +7,8 @@ export default defineConfig({
   base: './',
   define: {
     'process.env.NODE_ENV': '"development"', // Use development builds for better error messages
+    // Bakes the PHOTOSPHERE_THEME env override into the build (read by user-interface env-theme.ts).
+    '__PHOTOSPHERE_THEME__': JSON.stringify(process.env.PHOTOSPHERE_THEME || ''),
   },
   build: {
     sourcemap: true, // Generate separate source map files

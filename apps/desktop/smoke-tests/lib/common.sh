@@ -150,7 +150,7 @@ start_app() {
     PHOTOSPHERE_NEWS_URL="${PHOTOSPHERE_NEWS_URL:-}" \
     TEST_TMP_DIR="$tmp_dir" \
     NODE_ENV=testing \
-    "${wrapper[@]}" "${launch_args[@]}" --no-sandbox --disable-gpu -geometry "960x800+${x_pos}+0" > "$tmp_dir/app.log" 2>&1 &
+    "${wrapper[@]}" "${launch_args[@]}" --no-sandbox --disable-gpu -geometry "${PHOTOSPHERE_TEST_GEOMETRY:-960x800+${x_pos}+0}" > "$tmp_dir/app.log" 2>&1 &
     echo $! > "$tmp_dir/app.pid"
     log_info "App started (PID $(cat "$tmp_dir/app.pid"), port $port)"
 }

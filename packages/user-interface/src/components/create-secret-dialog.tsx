@@ -2,6 +2,7 @@ import { log } from "utils";
 import React, { useState } from 'react';
 import Modal from '@mui/joy/Modal';
 import ModalDialog from '@mui/joy/ModalDialog';
+import { responsiveModalSx } from '../lib/modal-styles';
 import DialogTitle from '@mui/joy/DialogTitle';
 import DialogContent from '@mui/joy/DialogContent';
 import DialogActions from '@mui/joy/DialogActions';
@@ -132,7 +133,7 @@ export function CreateSecretDialog({ open, secretType, defaultName, onClose, onS
         <Modal open={open} onClose={onClose}>
             <ModalDialog
                 onKeyDown={createDialogKeyHandler(handleSave, false)}
-                sx={{ minWidth: 480, maxWidth: 640, overflowY: 'auto' }}
+                sx={{ ...responsiveModalSx(480, 640) }}
             >
                 <DialogTitle>New {secretType} Secret</DialogTitle>
                 <DialogContent>

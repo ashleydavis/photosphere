@@ -3,6 +3,7 @@ import { log } from 'utils';
 import Box from '@mui/joy/Box';
 import Modal from '@mui/joy/Modal';
 import ModalDialog from '@mui/joy/ModalDialog';
+import { responsiveModalSx } from '../lib/modal-styles';
 import DialogTitle from '@mui/joy/DialogTitle';
 import DialogContent from '@mui/joy/DialogContent';
 import DialogActions from '@mui/joy/DialogActions';
@@ -211,7 +212,7 @@ export function CreateDatabaseModal({ open, onClose }: ICreateDatabaseModalProps
             <Modal open={open} onClose={onClose}>
                 <ModalDialog
                     onKeyDown={createDialogKeyHandler(handleCreate, !form.path || nameError !== undefined)}
-                    sx={{ minWidth: 520, maxWidth: 700, overflowY: 'auto' }}
+                    sx={{ ...responsiveModalSx(520, 700) }}
                 >
                     <DialogTitle>New Database</DialogTitle>
                     <DialogContent>

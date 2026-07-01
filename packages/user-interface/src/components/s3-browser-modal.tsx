@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import Modal from '@mui/joy/Modal';
 import ModalDialog from '@mui/joy/ModalDialog';
+import { responsiveModalSx } from '../lib/modal-styles';
 import DialogTitle from '@mui/joy/DialogTitle';
 import DialogContent from '@mui/joy/DialogContent';
 import DialogActions from '@mui/joy/DialogActions';
@@ -137,7 +138,7 @@ export function S3BrowserModal({ open, s3Key, onClose, onSelect }: IS3BrowserMod
 
     return (
         <Modal open={open} onClose={onClose}>
-            <ModalDialog onKeyDown={createDialogKeyHandler(handleSelectLocation, !bucket)} sx={{ minWidth: 520, maxWidth: 740, overflowY: 'auto' }}>
+            <ModalDialog onKeyDown={createDialogKeyHandler(handleSelectLocation, !bucket)} sx={{ ...responsiveModalSx(520, 740) }}>
                 <DialogTitle>Browse S3</DialogTitle>
                 <DialogContent>
                     <FormControl sx={{ mb: 2 }}>

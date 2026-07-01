@@ -3,6 +3,7 @@ import { log } from 'utils';
 import Modal from '@mui/joy/Modal';
 import ModalClose from '@mui/joy/ModalClose';
 import ModalDialog from '@mui/joy/ModalDialog';
+import { responsiveModalSx } from '../lib/modal-styles';
 import DialogTitle from '@mui/joy/DialogTitle';
 import DialogContent from '@mui/joy/DialogContent';
 import DialogActions from '@mui/joy/DialogActions';
@@ -86,7 +87,7 @@ export function ViewDatabaseDialog({ open, entry, allSecrets, onClose, getSecret
     return (
         <>
             <Modal open={open} onClose={onClose}>
-                <ModalDialog onKeyDown={createDialogKeyHandler(onClose, false)} sx={{ minWidth: 480, maxWidth: 680 }}>
+                <ModalDialog onKeyDown={createDialogKeyHandler(onClose, false)} sx={{ ...responsiveModalSx(480, 680) }}>
                     <ModalClose />
                     <DialogTitle>View Database</DialogTitle>
                     <DialogContent>

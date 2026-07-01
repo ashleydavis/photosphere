@@ -8,6 +8,7 @@ import FormControl from '@mui/joy/FormControl';
 import FormLabel from '@mui/joy/FormLabel';
 import Modal from '@mui/joy/Modal';
 import ModalDialog from '@mui/joy/ModalDialog';
+import { responsiveModalSx } from '../lib/modal-styles';
 import Option from '@mui/joy/Option';
 import Select from '@mui/joy/Select';
 import type { ISharedSecretEntry } from '../context/platform-context';
@@ -175,7 +176,7 @@ export function ConfigureSecretsModal({
     return (
         <>
         <Modal open={open} onClose={onClose}>
-            <ModalDialog data-id="configure-secrets-modal" onKeyDown={createDialogKeyHandler(() => onSave(working), false)} sx={{ minWidth: 480, maxWidth: 640, overflowY: 'auto', overflowX: 'hidden' }}>
+            <ModalDialog data-id="configure-secrets-modal" onKeyDown={createDialogKeyHandler(() => onSave(working), false)} sx={{ ...responsiveModalSx(480, 640) }}>
                 <DialogTitle>Configure Secrets</DialogTitle>
                 <DialogContent>
                     {fields.includes('s3') && renderSecretSelector(

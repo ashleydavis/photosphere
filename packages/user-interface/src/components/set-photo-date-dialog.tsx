@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import dayjs from "dayjs";
 import Modal from "@mui/joy/Modal";
 import ModalDialog from "@mui/joy/ModalDialog";
+import { responsiveModalSx } from "../lib/modal-styles";
 import DialogTitle from "@mui/joy/DialogTitle";
 import DialogContent from "@mui/joy/DialogContent";
 import DialogActions from "@mui/joy/DialogActions";
@@ -151,7 +152,7 @@ export function SetPhotoDateDialog({ open, onClose, onSetDate, currentDate }: IS
 
     return (
         <Modal open={open} onClose={onClose}>
-            <ModalDialog onKeyDown={createDialogKeyHandler(handleConfirm, isConfirmDisabled())} sx={{ width: 340, overflow: "hidden" }}>
+            <ModalDialog onKeyDown={createDialogKeyHandler(handleConfirm, isConfirmDisabled())} sx={{ ...responsiveModalSx(340, 340) }}>
                 <DialogTitle>Set Photo Date</DialogTitle>
                 <DialogContent sx={{ overflow: "visible", pb: 1 }}>
                     <Select

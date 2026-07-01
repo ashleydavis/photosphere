@@ -13,6 +13,7 @@ import {
     ApiContextProvider,
     axiosApi,
     StoriesPage,
+    resolveInitialTheme, themeOverrideFromEnv,
 } from "user-interface";
 import { ElectronRendererQueueBackend } from "./lib/electron-renderer-queue-backend";
 import { setQueueBackend } from "task-queue";
@@ -50,7 +51,9 @@ export function App({ electronAPI }: IAppProps) {
     if (!restApiUrl) {
         throw new Error('restApiUrl query parameter is required but was not provided.');
     }
-    const initialTheme = (urlParams.get('theme') as 'light' | 'dark' | 'system') || 'system';
+    // Startup theme: PHOTOSPHERE_THEME env override if set, otherwise the saved theme. See user-interface env-theme.ts.
+    const savedTheme = (urlParams.get('theme') as 'light' | 'dark' | 'system') || 'system';
+    const initialTheme = resolveInitialTheme(themeOverrideFromEnv(), savedTheme);
 
     const queueBackend = new ElectronRendererQueueBackend(electronAPI);
     setQueueBackend(queueBackend);

@@ -13,6 +13,7 @@ import {
     ApiContextProvider,
     axiosApi,
     StoriesPage,
+    resolveInitialTheme, themeOverrideFromEnv,
 } from "user-interface";
 import { setQueueBackend } from "task-queue";
 import { RandomUuidGenerator } from "utils";
@@ -54,6 +55,8 @@ export function App() {
     // port as the restApiUrl, so the gallery loads thumbnails/images/video over the same URL model
     // as desktop. Falls back to the default URL until the task reports its port.
     const restApiUrl = useMobileAssetServer();
+    // Startup theme: PHOTOSPHERE_THEME env override if set, otherwise system. See user-interface env-theme.ts.
+    const initialTheme = resolveInitialTheme(themeOverrideFromEnv(), "system");
 
     return (
         <HashRouter
@@ -80,7 +83,7 @@ export function App() {
                                                 <DeleteConfirmationContextProvider>
                                                     <SearchContextProvider>
                                                         <GalleryLayoutContextProvider>
-                                                            <Main initialTheme="system" />
+                                                            <Main initialTheme={initialTheme} />
                                                         </GalleryLayoutContextProvider>
                                                     </SearchContextProvider>
                                                 </DeleteConfirmationContextProvider>

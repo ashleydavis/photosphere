@@ -5,6 +5,7 @@ import { replicateDatabase } from 'node-api/src/lib/replicate-database';
 import type { IReplicateDatabaseData } from 'api/src/lib/replicate-database.types';
 import Modal from '@mui/joy/Modal';
 import ModalDialog from '@mui/joy/ModalDialog';
+import { responsiveModalSx } from '../lib/modal-styles';
 import DialogTitle from '@mui/joy/DialogTitle';
 import DialogContent from '@mui/joy/DialogContent';
 import DialogActions from '@mui/joy/DialogActions';
@@ -205,7 +206,7 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
     return (
         <>
         <Modal open={open} onClose={step === "running" ? undefined : onClose}>
-            <ModalDialog data-id="replicate-database-dialog" onKeyDown={createDialogKeyHandler(handleDialogConfirm, dialogConfirmDisabled)} sx={{ minWidth: 520, maxWidth: 720, overflowY: 'auto', overflowX: 'hidden' }}>
+            <ModalDialog data-id="replicate-database-dialog" onKeyDown={createDialogKeyHandler(handleDialogConfirm, dialogConfirmDisabled)} sx={{ ...responsiveModalSx(520, 720) }}>
                 <DialogTitle>Replicate Database</DialogTitle>
                 <DialogContent sx={{ overflowX: 'hidden' }}>
                     {step === "configure" && (

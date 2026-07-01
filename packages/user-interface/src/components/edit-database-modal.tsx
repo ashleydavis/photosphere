@@ -6,6 +6,7 @@ import Button from '@mui/joy/Button';
 import Modal from '@mui/joy/Modal';
 import ModalClose from '@mui/joy/ModalClose';
 import ModalDialog from '@mui/joy/ModalDialog';
+import { responsiveModalSx } from '../lib/modal-styles';
 import DialogTitle from '@mui/joy/DialogTitle';
 import DialogContent from '@mui/joy/DialogContent';
 import DialogActions from '@mui/joy/DialogActions';
@@ -214,7 +215,7 @@ export function EditDatabaseModal({
             <Modal open={open} onClose={onClose}>
                 <ModalDialog
                     onKeyDown={createDialogKeyHandler(handleSave, false)}
-                    sx={{ minWidth: 500, maxWidth: 700, overflowY: 'auto' }}
+                    sx={{ ...responsiveModalSx(500, 700) }}
                 >
                     <ModalClose />
                     <DialogTitle>{entry ? 'Edit Database' : 'Add Database'}</DialogTitle>

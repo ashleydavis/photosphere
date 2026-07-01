@@ -2,6 +2,7 @@ import { log } from "utils";
 import React, { useState, useEffect, useCallback } from 'react';
 import Modal from '@mui/joy/Modal';
 import ModalDialog from '@mui/joy/ModalDialog';
+import { responsiveModalSx } from '../lib/modal-styles';
 import DialogTitle from '@mui/joy/DialogTitle';
 import DialogContent from '@mui/joy/DialogContent';
 import DialogActions from '@mui/joy/DialogActions';
@@ -114,7 +115,7 @@ export function ShareSecretDialog({ open, entry, onClose }: IShareSecretDialogPr
 
     return (
         <Modal open={open} onClose={handleCancel}>
-            <ModalDialog onKeyDown={createDialogKeyHandler(handleDialogConfirm, dialogConfirmDisabled)} sx={{ minWidth: 420, maxWidth: 520 }}>
+            <ModalDialog onKeyDown={createDialogKeyHandler(handleDialogConfirm, dialogConfirmDisabled)} sx={{ ...responsiveModalSx(420, 520) }}>
                 <DialogTitle>Share Secret</DialogTitle>
                 <DialogContent>
                     <Alert color="warning" sx={{ mb: 2 }}>

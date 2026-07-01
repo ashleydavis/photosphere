@@ -1,6 +1,6 @@
 import React, { ReactNode, useEffect, useState } from "react";
-import { CssVarsProvider } from "@mui/joy/styles/CssVarsProvider";
 import Button from "@mui/joy/Button";
+import { useSearchParams } from "react-router-dom";
 import { RandomUuidGenerator, type IUuidGenerator } from "utils";
 import { getQueueBackend } from "task-queue";
 import { UuidGeneratorProvider } from "../../context/uuid-generator-context";
@@ -69,7 +69,15 @@ export interface IStoryModalLauncherProps {
 // the modal and restores the browser.
 //
 export function StoryModalLauncher({ label, children }: IStoryModalLauncherProps) {
-    const [open, setOpen] = useState<boolean>(false);
+    //
+    // In cycle mode (the automated stories smoke test drives the page with
+    // ?cycle=1) the modal opens immediately so the cycle actually mounts,
+    // renders, and screenshots the real modal content rather than just the
+    // trigger button. In the interactive browser (no cycle param) it stays
+    // closed until the button is pressed so it does not cover the story list.
+    //
+    const [searchParams] = useSearchParams();
+    const [open, setOpen] = useState<boolean>(searchParams.get("cycle") === "1");
 
     //
     // Dismisses the modal, but only when the backdrop itself is clicked (not when
@@ -493,7 +501,7 @@ export function MockProviders({
     }
 
     return (
-        <CssVarsProvider>
+        <>
             <UuidGeneratorProvider value={uuidGeneratorValue}>
                 <PlatformContextProvider value={platformValue}>
                     <ApiContextProvider value={apiValue}>
@@ -521,7 +529,7 @@ export function MockProviders({
                     </ApiContextProvider>
                 </PlatformContextProvider>
             </UuidGeneratorProvider>
-        </CssVarsProvider>
+        </>
     );
 }
 
@@ -648,7 +656,7 @@ export function RealDatabaseProviders({ children }: IRealDatabaseProvidersProps)
     const [config] = useState(() => createInMemoryConfig());
 
     return (
-        <CssVarsProvider>
+        <>
             <UuidGeneratorProvider value={uuidGeneratorValue}>
                 <PlatformContextProvider value={platformValue}>
                     <ApiContextProvider value={axiosApi}>
@@ -676,6 +684,6 @@ export function RealDatabaseProviders({ children }: IRealDatabaseProvidersProps)
                     </ApiContextProvider>
                 </PlatformContextProvider>
             </UuidGeneratorProvider>
-        </CssVarsProvider>
+        </>
     );
 }

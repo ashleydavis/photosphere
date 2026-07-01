@@ -8,6 +8,7 @@ import Slider from "@mui/joy/Slider/Slider";
 import Modal from "@mui/joy/Modal";
 import ModalClose from "@mui/joy/ModalClose";
 import ModalDialog from "@mui/joy/ModalDialog";
+import { responsiveModalSx } from "../lib/modal-styles";
 import DialogTitle from "@mui/joy/DialogTitle";
 import DialogContent from "@mui/joy/DialogContent";
 import { useConfig } from "../context/config-context";
@@ -36,7 +37,7 @@ export function ConfigurationDialog({ open, onClose }: IConfigurationDialogProps
 
     return (
         <Modal open={open} onClose={onClose}>
-            <ModalDialog onKeyDown={createDialogKeyHandler(onClose, false)}>
+            <ModalDialog onKeyDown={createDialogKeyHandler(onClose, false)} sx={{ ...responsiveModalSx(300, 440) }}>
                 <ModalClose />
                 <DialogTitle>Configuration</DialogTitle>
                 <DialogContent>
