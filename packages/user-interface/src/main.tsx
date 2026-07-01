@@ -4,6 +4,7 @@ import { Route, Routes, Navigate, useNavigate } from "react-router-dom";
 import { GalleryPage } from "./pages/gallery/gallery";
 import classNames from "classnames";
 import { usePlatform } from "./context/platform-context";
+import { useIsMobile, MOBILE_BREAKPOINT_PX } from "./lib/use-is-mobile";
 import { useConfig } from "./context/config-context";
 import { useAssetDatabase } from "./context/asset-database-source";
 import { useSearch } from "./context/search-context";
@@ -34,11 +35,6 @@ import { openBugReport } from "./lib/bug-report";
 
 export interface IMainProps {
     //
-    // Set to true if running on mobile device to enable mobile-specific styles.
-    //
-    isMobile: boolean;
-
-    //
     // Initial theme mode to use before loading from platform.
     //
     initialTheme: 'light' | 'dark' | 'system';
@@ -47,12 +43,19 @@ export interface IMainProps {
 //
 // The main page of the Photosphere app.
 //
-function __Main({ isMobile, initialTheme }: IMainProps) {
-    const { 
+function __Main({ initialTheme }: IMainProps) {
+    const {
         isWorking,
         databasePath,
         openDatabase,
     } = useAssetDatabase();
+
+    //
+    // Whether the mobile (compact) layout is active, derived from the viewport
+    // width and updated live as the window is resized or a device rotates. This
+    // drives only layout/CSS; platform and native behaviour are unaffected.
+    //
+    const isMobile = useIsMobile();
 
     //
     // Set to true to open the left sidebar.
@@ -241,12 +244,15 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
     }, [platform, navigate]);
 
     //
-    // Adds mobile or desktop class to body based on isMobile prop.
+    // Adds the mobile or desktop class to the body based on the current form
+    // factor, re-running whenever the viewport crosses the mobile breakpoint.
     //
     useEffect(() => {
+        const formFactor = isMobile ? 'mobile' : 'desktop';
         document.body.classList.remove('mobile', 'desktop');
-        document.body.classList.add(isMobile ? 'mobile' : 'desktop');
-        
+        document.body.classList.add(formFactor);
+        log.info(`Form factor: ${formFactor} (viewport width ${window.innerWidth}px, breakpoint ${MOBILE_BREAKPOINT_PX}px)`);
+
         // Cleanup: remove class on unmount
         return () => {
             document.body.classList.remove('mobile', 'desktop');
@@ -420,10 +426,10 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
 //
 // Wrapped/exported version of Main that ties in the MUI theme.
 //
-export function Main({ isMobile, initialTheme }: IMainProps) {
+export function Main({ initialTheme }: IMainProps) {
     return (
         <CssVarsProvider defaultMode={initialTheme}>
-            <__Main isMobile={isMobile} initialTheme={initialTheme} />
+            <__Main initialTheme={initialTheme} />
         </CssVarsProvider>
     );
 }

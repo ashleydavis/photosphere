@@ -1,10 +1,33 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
+import eruda from "eruda";
 import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions, convertToPng } from "user-interface";
 
 const restApiUrl = "http://localhost:3001";
 
 // Monotonically increasing counter used to correlate WebSocket request/response pairs.
 let nextRequestId = 0;
+
+// Whether the in-page Eruda console has been initialised and whether it is currently visible.
+let erudaInitialised = false;
+let erudaVisible = false;
+
+//
+// Shows or hides the in-page Eruda developer console, the inspector used on the
+// web where the native browser dev tools are not wired to an in-app button.
+//
+function toggleEruda(): void {
+    if (!erudaInitialised) {
+        eruda.init();
+        erudaInitialised = true;
+    }
+    if (erudaVisible) {
+        eruda.hide();
+    }
+    else {
+        eruda.show();
+    }
+    erudaVisible = !erudaVisible;
+}
 
 export interface IPlatformProviderWebProps {
     children: ReactNode | ReactNode[];
@@ -303,6 +326,13 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         // No-op for web platform; news notifications are not surfaced as toasts here.
     }, []);
 
+    //
+    // Toggles the in-page Eruda console; the web has no native in-app inspector.
+    //
+    const toggleDevTools = useCallback((): void => {
+        toggleEruda();
+    }, []);
+
     const platformContext: IPlatformContext = {
         openDatabase,
         onDatabaseOpened,
@@ -352,6 +382,7 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         importSharePayload,
         markUpdateAsShown,
         markNewsAsShown,
+        toggleDevTools,
     };
 
     //

@@ -524,6 +524,14 @@ export interface IPlatformContext {
     // the user clicks the close button. No-op on web/mobile.
     //
     markNewsAsShown: (newsId: string) => Promise<void>;
+
+    //
+    // Toggles the developer tools for the current platform. The desktop app
+    // opens or closes the native Electron dev tools; the web and mobile apps
+    // show or hide an in-page console. The shared UI calls this without knowing
+    // which inspector is used.
+    //
+    toggleDevTools: () => void;
 }
 
 const PlatformContext = createContext<IPlatformContext | undefined>(undefined);

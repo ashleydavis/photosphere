@@ -1,6 +1,7 @@
 import './styles.css';
 
 export { Main } from './main';
+export { useIsMobile, MOBILE_BREAKPOINT_PX } from './lib/use-is-mobile';
 export { GalleryContextProvider, useGallery, type IGalleryContext } from './context/gallery-context';
 export { GalleryLayoutContextProvider } from './context/gallery-layout-context';
 export { GalleryItemContextProvider } from './context/gallery-item-context';

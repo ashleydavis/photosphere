@@ -159,6 +159,7 @@
         "axios": "^0.27.2",
         "blob-util": "^2.0.2",
         "dayjs": "^1.11.7",
+        "eruda": "^3.0.0",
         "jszip": "^3.10.1",
         "react": "^18.2.0",
         "react-dom": "^18.2.0",
@@ -394,6 +395,7 @@
       "version": "1.0.0",
       "dependencies": {
         "@capacitor/core": "^5.7.4",
+        "eruda": "^3.0.0",
         "react": "^18.2.0",
         "react-dom": "^18.2.0",
         "task-queue": "workspace:*",
@@ -596,7 +598,6 @@
         "colorthief": "^2.6.0",
         "config": "workspace:*",
         "dayjs": "^1.11.7",
-        "eruda": "^3.0.0",
         "jszip": "^3.10.1",
         "leaflet": "^1.9.4",
         "lodash": "^4.17.21",

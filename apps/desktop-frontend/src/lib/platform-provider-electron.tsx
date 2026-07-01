@@ -495,6 +495,14 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         await navigator.clipboard.write([new ClipboardItem({ "image/png": pngBlob })]);
     }, []);
 
+    //
+    // Toggles the native Electron developer tools via the generic main-command
+    // channel, so no developer-tools-specific IPC channel is needed.
+    //
+    const toggleDevTools = useCallback((): void => {
+        electronAPI.send('main-command', 'toggle-devtools');
+    }, [electronAPI]);
+
     const platformContext: IPlatformContext = {
         openDatabase,
         onDatabaseOpened,
@@ -544,6 +552,7 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         importSharePayload,
         markUpdateAsShown,
         markNewsAsShown,
+        toggleDevTools,
     };
 
     const config = createConfig(

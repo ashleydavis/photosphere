@@ -63,7 +63,11 @@ export function App({ electronAPI }: IAppProps) {
             }}
         >
             <Routes>
-                <Route path="/stories" element={<StoriesPage />} />
+                <Route path="/stories" element={
+                    <PlatformProviderElectron electronAPI={electronAPI}>
+                        <StoriesPage />
+                    </PlatformProviderElectron>
+                } />
                 <Route path="*" element={
                     <UuidGeneratorProvider value={uuidGenerator}>
                         <PlatformProviderElectron electronAPI={electronAPI}>
@@ -78,7 +82,7 @@ export function App({ electronAPI }: IAppProps) {
                                                         <GalleryLayoutContextProvider>
                                                             <McpToolHandler />
                                                             <PreviewBanner />
-                                                            <Main isMobile={false} initialTheme={initialTheme} />
+                                                            <Main initialTheme={initialTheme} />
                                                         </GalleryLayoutContextProvider>
                                                     </SearchContextProvider>
                                                 </DeleteConfirmationContextProvider>

@@ -20,7 +20,8 @@
     "user-interface": "workspace:*",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "@capacitor/core": "^5.7.4"
+    "@capacitor/core": "^5.7.4",
+    "eruda": "^3.0.0"
   },
   "devDependencies": {
     "@types/jest": "^29.4.0",

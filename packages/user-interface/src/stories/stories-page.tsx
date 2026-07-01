@@ -2,8 +2,8 @@ import React, { Component, ReactNode, useEffect, useMemo, useState } from "react
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { CssVarsProvider } from "@mui/joy/styles/CssVarsProvider";
 import { log } from "utils";
-import eruda from "eruda";
 import { nextStoryIndex } from "../lib/story-navigation";
+import { usePlatform } from "../context/platform-context";
 import { stories } from "./index";
 import type { IStory, StoryCategory } from "./types";
 
@@ -47,57 +47,6 @@ export function StoriesPage(): JSX.Element {
 }
 
 //
-// Minimal shape of the Electron preload bridge, present only when running
-// inside the desktop app. Used to send generic commands to the main process.
-//
-interface IStoriesElectronApi {
-    // Sends a fire-and-forget command to the Electron main process.
-    send(channel: string, data?: string): void;
-}
-
-//
-// The browser window extended with the optional Electron preload bridge.
-//
-interface IWindowWithElectron extends Window {
-    // Injected by the Electron preload script; absent on web and mobile.
-    electronAPI?: IStoriesElectronApi;
-}
-
-//
-// Whether the in-page Eruda console has been initialised, and whether it is
-// currently visible. Module-level so the toggle keeps its state across renders.
-//
-let erudaInitialised = false;
-let erudaVisible = false;
-
-//
-// Toggles the developer tools, using the real inspector on each platform. In
-// the desktop app it asks the main process to toggle the native Electron dev
-// tools over the generic command channel; on the web and mobile, where no
-// native inspector is reachable from inside the WebView, it shows or hides the
-// embedded Eruda console instead.
-//
-function toggleDevTools(): void {
-    const electronApi = (window as IWindowWithElectron).electronAPI;
-    if (electronApi) {
-        electronApi.send("main-command", "toggle-devtools");
-        return;
-    }
-
-    if (!erudaInitialised) {
-        eruda.init();
-        erudaInitialised = true;
-    }
-    if (erudaVisible) {
-        eruda.hide();
-    }
-    else {
-        eruda.show();
-    }
-    erudaVisible = !erudaVisible;
-}
-
-//
 // The interactive browser shown when cycle mode is not enabled. The story list
 // lives in an overlay drawer and the navigation controls float over the
 // rendered story, so the layout is identical on every platform.
@@ -105,6 +54,13 @@ function toggleDevTools(): void {
 function StoriesBrowser(): JSX.Element {
     const [searchParams, setSearchParams] = useSearchParams();
     const [searchText, setSearchText] = useState<string>("");
+
+    //
+    // Platform abstraction, used here to toggle the developer tools without the
+    // shared UI knowing which inspector (native dev tools or an in-page console)
+    // the current platform uses.
+    //
+    const platform = usePlatform();
 
     //
     // Whether the overlay sidebar drawer is open. The drawer is the only way to
@@ -280,28 +236,26 @@ function StoriesBrowser(): JSX.Element {
             </aside>
 
             <main className="flex-1 flex flex-col overflow-hidden min-w-0">
-                <div className="absolute top-2 left-2 z-10 flex items-center gap-1">
-                    <button
-                        type="button"
-                        onClick={() => setDrawerOpen(true)}
-                        className="px-2 py-1 text-sm rounded border"
-                        style={{ borderColor, background: "var(--joy-palette-background-surface, rgba(255, 255, 255, 0.9))", boxShadow: "0 1px 6px rgba(0, 0, 0, 0.25)" }}
-                        data-testid="stories-menu-button"
-                        aria-label="Open stories list"
-                        >
-                        ☰
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => toggleDevTools()}
-                        className="px-2 py-1 text-sm rounded border"
-                        style={{ borderColor, background: "var(--joy-palette-background-surface, rgba(255, 255, 255, 0.9))", boxShadow: "0 1px 6px rgba(0, 0, 0, 0.25)" }}
-                        data-testid="stories-devtools-button"
-                        aria-label="Toggle developer tools"
-                        >
-                        {"</>"}
-                    </button>
-                </div>
+                <button
+                    type="button"
+                    onClick={() => setDrawerOpen(true)}
+                    className="absolute top-2 left-2 z-10 px-2 py-1 text-sm rounded border"
+                    style={{ borderColor, background: "var(--joy-palette-background-surface, rgba(255, 255, 255, 0.9))", boxShadow: "0 1px 6px rgba(0, 0, 0, 0.25)" }}
+                    data-testid="stories-menu-button"
+                    aria-label="Open stories list"
+                    >
+                    ☰
+                </button>
+                <button
+                    type="button"
+                    onClick={() => platform.toggleDevTools()}
+                    className="absolute top-2 right-5 z-10 px-2 py-1 text-sm rounded border"
+                    style={{ borderColor, background: "var(--joy-palette-background-surface, rgba(255, 255, 255, 0.9))", boxShadow: "0 1px 6px rgba(0, 0, 0, 0.25)" }}
+                    data-testid="stories-devtools-button"
+                    aria-label="Toggle developer tools"
+                    >
+                    {"</>"}
+                </button>
                 <div className="flex-1 overflow-auto">
                     {!selectedId
                         && <div className="h-full w-full flex items-center justify-center p-6" data-testid="stories-empty-help">

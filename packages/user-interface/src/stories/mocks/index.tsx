@@ -214,6 +214,7 @@ export function mockPlatform(): IPlatformContext {
         importSharePayload: async () => {},
         markUpdateAsShown: async () => {},
         markNewsAsShown: async () => {},
+        toggleDevTools: () => {},
     };
 }
 

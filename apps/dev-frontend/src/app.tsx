@@ -51,7 +51,11 @@ export function App() {
             }}
         >
             <Routes>
-                <Route path="/stories" element={<StoriesPage />} />
+                <Route path="/stories" element={
+                    <PlatformProviderWeb ws={ws}>
+                        <StoriesPage />
+                    </PlatformProviderWeb>
+                } />
                 <Route path="*" element={
                     <UuidGeneratorProvider value={uuidGenerator}>
                         <PlatformProviderWeb ws={ws}>
@@ -64,7 +68,7 @@ export function App() {
                                                 <DeleteConfirmationContextProvider>
                                                     <SearchContextProvider>
                                                         <GalleryLayoutContextProvider>
-                                                            <Main isMobile={false} initialTheme={initialTheme} />
+                                                            <Main initialTheme={initialTheme} />
                                                         </GalleryLayoutContextProvider>
                                                     </SearchContextProvider>
                                                 </DeleteConfirmationContextProvider>

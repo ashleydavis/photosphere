@@ -1,8 +1,31 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
+import eruda from "eruda";
 import { PlatformContextProvider, ConfigContextProvider, createConfig, TEST_MENU_EVENT, TEST_OPEN_DATABASE_EVENT, TEST_SEED_DATABASES_EVENT, TEST_SEED_SECRETS_EVENT, TEST_SEED_RECENT_EVENT, TEST_SEED_NEWS_EVENT, TEST_RESET_CONFIG_EVENT, type IPlatformContext, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions } from "user-interface";
 import { log } from "utils";
 import { cancelMobileTasks, subscribeMobileTaskMessage, subscribeMobileTaskComplete } from "./mobile-platform-tasks";
 import * as configStore from "./mobile-config-store";
+
+// Whether the in-page Eruda console has been initialised and whether it is currently visible.
+let erudaInitialised = false;
+let erudaVisible = false;
+
+//
+// Shows or hides the in-page Eruda developer console, the only inspector
+// reachable from inside the WebView on a physical mobile device.
+//
+function toggleEruda(): void {
+    if (!erudaInitialised) {
+        eruda.init();
+        erudaInitialised = true;
+    }
+    if (erudaVisible) {
+        eruda.hide();
+    }
+    else {
+        eruda.show();
+    }
+    erudaVisible = !erudaVisible;
+}
 
 //
 // The WebView localStorage used to persist the configured-databases / recent-databases lists. It
@@ -332,6 +355,13 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         log.info(`Marked news notification as shown: ${newsId}`);
     }, []);
 
+    //
+    // Toggles the in-page Eruda console; mobile has no native in-app inspector.
+    //
+    const toggleDevTools = useCallback((): void => {
+        toggleEruda();
+    }, []);
+
     const platformContext: IPlatformContext = {
         openDatabase,
         onDatabaseOpened,
@@ -381,6 +411,7 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         importSharePayload,
         markUpdateAsShown,
         markNewsAsShown,
+        toggleDevTools,
     };
 
     // Generic config persisted to WebView localStorage so settings (developer mode, theme, etc.)
