@@ -1,13 +1,15 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import Button from "@mui/joy/Button";
+import Switch from "@mui/joy/Switch";
 import List from "@mui/joy/List/List";
 import ListItem from "@mui/joy/ListItem/ListItem";
 import ListItemButton from "@mui/joy/ListItemButton/ListItemButton";
 import ListItemDecorator from "@mui/joy/ListItemDecorator/ListItemDecorator";
 import ListItemContent from "@mui/joy/ListItemContent/ListItemContent";
-import { Science } from "@mui/icons-material";
+import { Science, Speed, BugReport } from "@mui/icons-material";
 import { useApp } from "../context/app-context";
+import { usePlatform } from "../context/platform-context";
 
 //
 // A dedicated screen listing developer tools, reachable only while developer
@@ -15,7 +17,8 @@ import { useApp } from "../context/app-context";
 //
 export function DeveloperPage(): JSX.Element {
     const navigate = useNavigate();
-    const { disableDeveloperMode } = useApp();
+    const { disableDeveloperMode, showFpsIndicator, toggleShowFpsIndicator } = useApp();
+    const { toggleDevTools } = usePlatform();
 
     return (
         <div data-id="developer-page" className="w-full h-full p-4 overflow-y-auto pb-32">
@@ -31,6 +34,33 @@ export function DeveloperPage(): JSX.Element {
                         <ListItemButton>
                             <ListItemDecorator><Science /></ListItemDecorator>
                             <ListItemContent>Stories</ListItemContent>
+                        </ListItemButton>
+                    </ListItem>
+
+                    <ListItem
+                        data-id="developer-tool-fps-toggle"
+                        onClick={() => toggleShowFpsIndicator()}
+                        endAction={
+                            <Switch
+                                readOnly
+                                checked={showFpsIndicator}
+                                sx={{ pointerEvents: "none" }}
+                                />
+                        }
+                        >
+                        <ListItemButton>
+                            <ListItemDecorator><Speed /></ListItemDecorator>
+                            <ListItemContent>Show FPS indicator</ListItemContent>
+                        </ListItemButton>
+                    </ListItem>
+
+                    <ListItem
+                        data-id="developer-tool-devtools"
+                        onClick={() => toggleDevTools()}
+                        >
+                        <ListItemButton>
+                            <ListItemDecorator><BugReport /></ListItemDecorator>
+                            <ListItemContent>Toggle developer tools</ListItemContent>
                         </ListItemButton>
                     </ListItem>
                 </List>

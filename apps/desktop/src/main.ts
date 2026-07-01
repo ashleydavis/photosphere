@@ -11,7 +11,7 @@ import { RandomUuidGenerator, TimestampProvider, logExceptions, log, noLogDetail
 import { findAvailablePort } from 'node-utils';
 import { loadDatabaseConfig, updateDatabaseConfig } from 'api';
 import type { IReplicateDatabaseData } from 'api';
-import { loadDesktopConfig, saveDesktopConfig, updateLastFolder, updateLastDownloadFolder, getTheme, setTheme, getShowFpsIndicator, setShowFpsIndicator, getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry, getRecentDatabases, markDatabaseOpened, removeRecentDatabaseName, findDatabase, fetchNews, getShownNewsIds, addShownNewsIds, getLastShownUpdateVersion, setLastShownUpdateVersion, checkConnectivity } from 'node-api';
+import { loadDesktopConfig, saveDesktopConfig, updateLastFolder, updateLastDownloadFolder, getTheme, setTheme, getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry, getRecentDatabases, markDatabaseOpened, removeRecentDatabaseName, findDatabase, fetchNews, getShownNewsIds, addShownNewsIds, getLastShownUpdateVersion, setLastShownUpdateVersion, checkConnectivity } from 'node-api';
 import type { IDatabaseEntry, IDesktopConfig } from 'node-api';
 import type { ISaveAssetItem } from 'api';
 import type { IWorkerPoolOptions } from './lib/worker-pool-electron-main';
@@ -1368,7 +1368,6 @@ async function createMenu(): Promise<void> {
     const isMac = process.platform === 'darwin';
     const template: Electron.MenuItemConstructorOptions[] = [];
     const currentTheme = await getTheme();
-    const currentShowFpsIndicator = await getShowFpsIndicator();
 
     // macOS App Menu (first menu on macOS)
     if (isMac) {
@@ -1619,39 +1618,6 @@ async function createMenu(): Promise<void> {
     template.push({
         label: 'Window',
         submenu: windowSubmenu,
-    });
-
-    // Developer Menu
-    const developerSubmenu: Electron.MenuItemConstructorOptions[] = [
-        { role: 'reload', label: 'Reload' },
-        { role: 'forceReload', label: 'Force Reload' },
-        { role: 'toggleDevTools', label: 'Toggle Developer Tools' },
-        {
-            label: 'Stories',
-            click: () => {
-                if (mainWindow) {
-                    mainWindow.webContents.send('menu-action', 'open-stories');
-                }
-            },
-        },
-        {
-            label: 'Show FPS Indicator',
-            type: 'checkbox',
-            checked: currentShowFpsIndicator,
-            click: async () => {
-                const newValue = !currentShowFpsIndicator;
-                await setShowFpsIndicator(newValue);
-                if (mainWindow) {
-                    mainWindow.webContents.send('menu-action', 'toggle-fps');
-                }
-                await updateMenu();
-            },
-        },
-    ];
-
-    template.push({
-        label: 'Developer',
-        submenu: developerSubmenu,
     });
 
     // Help Menu

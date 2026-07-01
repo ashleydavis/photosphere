@@ -10,6 +10,12 @@ import type { IConflictResolution } from "api";
 const DEVELOPER_MODE_CONFIG_KEY = "developerMode";
 
 //
+// Config persistence key for the FPS-indicator flag. Reused from the former
+// desktop Developer menu so previously persisted values continue to apply.
+//
+const SHOW_FPS_INDICATOR_CONFIG_KEY = "showFpsIndicator";
+
+//
 // Application-wide reactive data layer for configured databases and shared secrets.
 // Pages and dialogs read `dbs` / `secrets` from here and call the mutation methods
 // to add, update or remove entries. Each mutation refreshes the relevant slice of
@@ -82,6 +88,16 @@ export interface IAppContext {
     // Turns developer mode off and persists the flag.
     //
     disableDeveloperMode: () => void;
+
+    //
+    // True while the FPS-indicator overlay should be shown.
+    //
+    showFpsIndicator: boolean;
+
+    //
+    // Toggles the FPS-indicator overlay and persists the flag.
+    //
+    toggleShowFpsIndicator: () => void;
 }
 
 const AppContext = createContext<IAppContext | undefined>(undefined);
@@ -108,6 +124,11 @@ export function AppContextProvider({ children }: IProps) {
     // Whether developer mode is currently enabled. Loaded from persistent config on mount.
     //
     const [developerMode, setDeveloperMode] = useState<boolean>(false);
+
+    //
+    // Whether the FPS-indicator overlay is currently shown. Loaded from persistent config on mount.
+    //
+    const [showFpsIndicator, setShowFpsIndicator] = useState<boolean>(false);
 
     //
     // Re-reads the database list from the platform.
@@ -211,6 +232,17 @@ export function AppContextProvider({ children }: IProps) {
         log.event("Developer mode disabled");
     }
 
+    //
+    // Toggles the FPS indicator and persists the change (fire and forget).
+    //
+    function toggleShowFpsIndicator(): void {
+        const nextValue = !showFpsIndicator;
+        setShowFpsIndicator(nextValue);
+        config.set<boolean>(SHOW_FPS_INDICATOR_CONFIG_KEY, nextValue)
+            .catch(err => log.exception("Failed to persist FPS indicator setting:", err as Error));
+        log.event(`FPS indicator ${nextValue ? "enabled" : "disabled"}`);
+    }
+
     useEffect(() => {
         refresh().catch(err => {
             log.exception(`Failed to load app data:`, err as Error);
@@ -221,6 +253,14 @@ export function AppContextProvider({ children }: IProps) {
         config.get<boolean>(DEVELOPER_MODE_CONFIG_KEY).then(value => {
             if (value !== undefined) {
                 setDeveloperMode(value);
+            }
+        });
+    }, []);
+
+    useEffect(() => {
+        config.get<boolean>(SHOW_FPS_INDICATOR_CONFIG_KEY).then(value => {
+            if (value !== undefined) {
+                setShowFpsIndicator(value);
             }
         });
     }, []);
@@ -255,6 +295,8 @@ export function AppContextProvider({ children }: IProps) {
         developerMode,
         enableDeveloperMode,
         disableDeveloperMode,
+        showFpsIndicator,
+        toggleShowFpsIndicator,
     };
 
     return (

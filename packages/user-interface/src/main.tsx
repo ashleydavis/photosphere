@@ -223,10 +223,6 @@ function __Main({ initialTheme }: IMainProps) {
                     });
                     break;
 
-                case 'open-stories':
-                    navigate('/stories');
-                    break;
-
                 case 'report-bug':
                     openBugReport();
                     break;

@@ -43,6 +43,29 @@ wait_for_value() {
     exit 1
 }
 
+#
+# Polls get-value for the given data-id until its value no longer contains the
+# expected substring (e.g. an overlay that has been hidden).
+# Usage: wait_for_value_gone <port> <data-id> <substring>
+#
+wait_for_value_gone() {
+    local port="$1"
+    local data_id="$2"
+    local substring="$3"
+    local elapsed=0
+    while [ "$elapsed" -lt 30 ]; do
+        local response
+        response=$(curl -sf "http://localhost:$port/get-value?dataId=$data_id" 2>/dev/null || true)
+        if ! echo "$response" | grep -q "$substring"; then
+            return 0
+        fi
+        sleep 1
+        elapsed=$((elapsed + 1))
+    done
+    log_error "Timed out waiting for data-id '$data_id' to stop containing '$substring' (last response: $response)"
+    exit 1
+}
+
 start_app "$APP_PORT" "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
@@ -69,9 +92,26 @@ send_command "$APP_PORT" click '{"dataId":"developer-tool-stories"}'
 wait_for_value "$APP_PORT" "stories-page" "story"
 send_command "$APP_PORT" click '{"dataId":"stories-back-link"}'
 
-# Return to the developer screen (developer mode is persisted) and exit it.
+# Return to the developer screen (developer mode is persisted).
 send_command "$APP_PORT" navigate '{"page":"/developer"}'
 wait_for_value "$APP_PORT" "developer-page" "Developer"
+
+# The FPS toggle shows the FPS overlay; toggling again hides it. The overlay
+# rendered by <FPSStats> contains the text "FPS" inside the data-id wrapper.
+wait_for_value "$APP_PORT" "developer-tool-fps-toggle" "Show FPS indicator"
+send_command "$APP_PORT" click '{"dataId":"developer-tool-fps-toggle"}'
+wait_for_value "$APP_PORT" "fps-indicator" "FPS"
+send_command "$APP_PORT" click '{"dataId":"developer-tool-fps-toggle"}'
+wait_for_value_gone "$APP_PORT" "fps-indicator" "FPS"
+
+# The Dev Tools item is present and clicking it toggles the native DevTools.
+# Clicking opens real DevTools, so assert presence and that the click does not
+# error rather than asserting DevTools state (keeps the test non-flaky).
+wait_for_value "$APP_PORT" "developer-tool-devtools" "Toggle developer tools"
+send_command "$APP_PORT" click '{"dataId":"developer-tool-devtools"}'
+send_command "$APP_PORT" click '{"dataId":"developer-tool-devtools"}'
+
+# Exit developer mode.
 send_command "$APP_PORT" click '{"dataId":"developer-exit"}'
 wait_for_log "$TMP_DIR" "Developer mode disabled"
 

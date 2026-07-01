@@ -20,8 +20,6 @@ import {
     updateLastFolder,
     getTheme,
     setTheme,
-    getShowFpsIndicator,
-    setShowFpsIndicator,
     updateLastDownloadFolder,
     getRecentSearches,
     addRecentSearch,
@@ -180,36 +178,20 @@ describe('setTheme', () => {
     });
 });
 
-describe('getShowFpsIndicator', () => {
+describe('showFpsIndicator config round-trip', () => {
     beforeEach(() => jest.clearAllMocks());
 
-    test('returns false when show_fps_indicator is unset', async () => {
-        mockPathExists.mockImplementation((filePath: string) => filePath.endsWith('.toml'));
-        mockReadToml.mockResolvedValue({});
-
-        const result = await getShowFpsIndicator();
-
-        expect(result).toBe(false);
-    });
-
-    test('returns stored true value', async () => {
+    test('loadDesktopConfig reads show_fps_indicator from toml', async () => {
         mockPathExists.mockImplementation((filePath: string) => filePath.endsWith('.toml'));
         mockReadToml.mockResolvedValue({ show_fps_indicator: true });
 
-        const result = await getShowFpsIndicator();
+        const config = await loadDesktopConfig();
 
-        expect(result).toBe(true);
+        expect(config.showFpsIndicator).toBe(true);
     });
-});
 
-describe('setShowFpsIndicator', () => {
-    beforeEach(() => jest.clearAllMocks());
-
-    test('sets show_fps_indicator and saves', async () => {
-        mockPathExists.mockImplementation((filePath: string) => filePath.endsWith('.toml'));
-        mockReadToml.mockResolvedValue({});
-
-        await setShowFpsIndicator(true);
+    test('saveDesktopConfig writes showFpsIndicator to show_fps_indicator', async () => {
+        await saveDesktopConfig({ showFpsIndicator: true });
 
         const tomlArg = mockWriteToml.mock.calls[0][1];
         expect(tomlArg.show_fps_indicator).toBe(true);

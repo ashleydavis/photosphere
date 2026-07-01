@@ -192,23 +192,6 @@ export async function setTheme(theme: 'light' | 'dark' | 'system'): Promise<void
 }
 
 //
-// Gets whether the FPS indicator overlay is shown. Defaults to false when unset.
-//
-export async function getShowFpsIndicator(): Promise<boolean> {
-    const config = await loadDesktopConfig();
-    return config.showFpsIndicator || false;
-}
-
-//
-// Sets whether the FPS indicator overlay is shown.
-//
-export async function setShowFpsIndicator(showFpsIndicator: boolean): Promise<void> {
-    const config = await loadDesktopConfig();
-    config.showFpsIndicator = showFpsIndicator;
-    await saveDesktopConfig(config);
-}
-
-//
 // Updates the last folder used when downloading assets.
 //
 export async function updateLastDownloadFolder(folderPath: string): Promise<void> {
