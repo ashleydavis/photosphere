@@ -745,7 +745,7 @@ async function showDirectoryDialog(lastFolder?: string, title: string = "Open Da
 }
 
 // Start server
-server.listen(PORT, () => {
+server.listen(PORT, "127.0.0.1", () => {
     console.log(`Server running on http://localhost:${PORT} (HTTP) and ws://localhost:${PORT} (WebSocket)`);
 });
 

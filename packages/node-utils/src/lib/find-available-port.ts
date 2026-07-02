@@ -7,7 +7,7 @@ import { AddressInfo } from 'net';
 export async function findAvailablePort(): Promise<number> {
     return new Promise((resolve, reject) => {
         const server = createHttpServer();
-        server.listen(0, () => {
+        server.listen(0, "127.0.0.1", () => {
             const addressInfo = server.address() as AddressInfo;
             const port = addressInfo.port;
             server.close(() => {

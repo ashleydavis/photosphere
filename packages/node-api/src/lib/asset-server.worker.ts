@@ -13,11 +13,6 @@ export interface IAssetServerTaskData {
     // Port to bind. 0 or omitted lets the OS assign a free loopback port.
     //
     port?: number;
-
-    //
-    // Host/interface to bind. Defaults to 127.0.0.1 (loopback only).
-    //
-    host?: string;
 }
 
 //
@@ -92,7 +87,9 @@ function sleep(milliseconds: number): Promise<void> {
 // engine over the shimmed http/net layers.
 //
 export async function assetServerHandler(data: IAssetServerTaskData, context: ITaskContext): Promise<IAssetServerTaskResult> {
-    const host = data.host ?? "127.0.0.1";
+    // The asset server serves local content and must only be reachable from this machine, so it
+    // always binds the loopback interface.
+    const host = "127.0.0.1";
     const requestedPort = data.port ?? 0;
 
     const core = createAssetServerCore({

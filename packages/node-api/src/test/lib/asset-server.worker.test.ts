@@ -111,6 +111,18 @@ describe("assetServerHandler", () => {
         await handlerPromise;
     });
 
+    test("binds the loopback interface and reports it in asset-server-ready", async () => {
+        const test = makeTestContext();
+        const handlerPromise = assetServerHandler({ port: 0 }, test.context);
+
+        await waitForReadyPort(test.messages);
+        const ready = test.messages.find(message => message.type === "asset-server-ready") as IAssetServerReadyMessage;
+        expect(ready.host).toBe("127.0.0.1");
+
+        test.cancel();
+        await handlerPromise;
+    });
+
     test("stops serving after the task is cancelled", async () => {
         const test = makeTestContext();
         const handlerPromise = assetServerHandler({ port: 0 }, test.context);

@@ -331,7 +331,10 @@ export class LanShareReceiver {
             (request: IncomingMessage, response: ServerResponse) => this.handleRequest(request, response)
         );
 
-        // Listen on a random port
+        // Listen on a random port. Note: this server intentionally binds all network interfaces
+        // (no host argument) because its purpose is to serve paired devices over the LAN. This is
+        // the sole deliberate exception to the loopback-only rule (binding 127.0.0.1) that every
+        // other HTTP/REST server in the codebase follows.
         const port = await new Promise<number>((resolve) => {
             this.httpsServer!.listen(0, () => {
                 const address = this.httpsServer!.address();

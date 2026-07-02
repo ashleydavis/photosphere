@@ -214,7 +214,12 @@ export class ControlBridge {
     //
     start(): Promise<void> {
         return new Promise<void>((resolve) => {
-            this.httpServer.listen(this.options.port, () => {
+            //
+            // Bind to loopback only. This is a test-control server driven from the same machine (the
+            // iOS simulator and Android emulator both reach the host loopback interface), so it must
+            // never be exposed on the LAN.
+            //
+            this.httpServer.listen(this.options.port, "127.0.0.1", () => {
                 resolve();
             });
         });
