@@ -104,12 +104,14 @@ wait_for_value "$APP_PORT" "fps-indicator" "FPS"
 send_command "$APP_PORT" click '{"dataId":"developer-tool-fps-toggle"}'
 wait_for_value_gone "$APP_PORT" "fps-indicator" "FPS"
 
-# The Dev Tools item is present and clicking it toggles the native DevTools.
-# Clicking opens real DevTools, so assert presence and that the click does not
-# error rather than asserting DevTools state (keeps the test non-flaky).
-wait_for_value "$APP_PORT" "developer-tool-devtools" "Toggle developer tools"
+# The Dev Tools item is a persisted toggle. Clicking opens the native DevTools
+# and logs the state change; clicking again closes it. Assert via the log so the
+# test does not depend on inspecting the DevTools window (keeps it non-flaky).
+wait_for_value "$APP_PORT" "developer-tool-devtools" "Developer tools"
 send_command "$APP_PORT" click '{"dataId":"developer-tool-devtools"}'
+wait_for_log "$TMP_DIR" "Developer tools opened"
 send_command "$APP_PORT" click '{"dataId":"developer-tool-devtools"}'
+wait_for_log "$TMP_DIR" "Developer tools closed"
 
 # Exit developer mode.
 send_command "$APP_PORT" click '{"dataId":"developer-exit"}'

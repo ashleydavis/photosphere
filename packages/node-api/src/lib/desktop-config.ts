@@ -40,6 +40,11 @@ export interface IDesktopConfig {
     // Whether developer mode is enabled (reveals developer tools in the UI). Defaults to false when unset.
     //
     developerMode?: boolean;
+
+    //
+    // Whether the developer tools (native inspector) should be open. Reopened on startup when true. Defaults to false when unset.
+    //
+    devToolsOpen?: boolean;
 }
 
 //
@@ -66,6 +71,9 @@ interface ITomlDesktopConfig {
 
     // Whether developer mode is enabled.
     developer_mode?: boolean;
+
+    // Whether the developer tools should be open, reopened on startup.
+    dev_tools_open?: boolean;
 }
 
 const CONFIG_DIR = process.env.PHOTOSPHERE_CONFIG_DIR || path.join(os.homedir(), ".config", "photosphere");
@@ -99,6 +107,9 @@ function tomlToDesktopConfig(toml: ITomlDesktopConfig): IDesktopConfig {
     if (toml.developer_mode !== undefined) {
         config.developerMode = toml.developer_mode;
     }
+    if (toml.dev_tools_open !== undefined) {
+        config.devToolsOpen = toml.dev_tools_open;
+    }
     return config;
 }
 
@@ -127,6 +138,9 @@ function desktopConfigToToml(config: IDesktopConfig): ITomlDesktopConfig {
     }
     if (config.developerMode !== undefined) {
         toml.developer_mode = config.developerMode;
+    }
+    if (config.devToolsOpen !== undefined) {
+        toml.dev_tools_open = config.devToolsOpen;
     }
     return toml;
 }

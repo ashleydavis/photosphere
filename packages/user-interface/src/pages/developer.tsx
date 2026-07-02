@@ -9,7 +9,6 @@ import ListItemDecorator from "@mui/joy/ListItemDecorator/ListItemDecorator";
 import ListItemContent from "@mui/joy/ListItemContent/ListItemContent";
 import { Science, Speed, BugReport } from "@mui/icons-material";
 import { useApp } from "../context/app-context";
-import { usePlatform } from "../context/platform-context";
 
 //
 // A dedicated screen listing developer tools, reachable only while developer
@@ -17,8 +16,7 @@ import { usePlatform } from "../context/platform-context";
 //
 export function DeveloperPage(): JSX.Element {
     const navigate = useNavigate();
-    const { disableDeveloperMode, showFpsIndicator, toggleShowFpsIndicator } = useApp();
-    const { toggleDevTools } = usePlatform();
+    const { disableDeveloperMode, showFpsIndicator, toggleShowFpsIndicator, devToolsOpen, toggleDevTools } = useApp();
 
     return (
         <div data-id="developer-page" className="w-full h-full p-4 overflow-y-auto pb-32">
@@ -57,10 +55,17 @@ export function DeveloperPage(): JSX.Element {
                     <ListItem
                         data-id="developer-tool-devtools"
                         onClick={() => toggleDevTools()}
+                        endAction={
+                            <Switch
+                                readOnly
+                                checked={devToolsOpen}
+                                sx={{ pointerEvents: "none" }}
+                                />
+                        }
                         >
                         <ListItemButton>
                             <ListItemDecorator><BugReport /></ListItemDecorator>
-                            <ListItemContent>Toggle developer tools</ListItemContent>
+                            <ListItemContent>Developer tools</ListItemContent>
                         </ListItemButton>
                     </ListItem>
                 </List>

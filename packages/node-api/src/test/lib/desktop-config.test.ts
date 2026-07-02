@@ -198,6 +198,26 @@ describe('showFpsIndicator config round-trip', () => {
     });
 });
 
+describe('devToolsOpen config round-trip', () => {
+    beforeEach(() => jest.clearAllMocks());
+
+    test('loadDesktopConfig reads dev_tools_open from toml', async () => {
+        mockPathExists.mockImplementation((filePath: string) => filePath.endsWith('.toml'));
+        mockReadToml.mockResolvedValue({ dev_tools_open: true });
+
+        const config = await loadDesktopConfig();
+
+        expect(config.devToolsOpen).toBe(true);
+    });
+
+    test('saveDesktopConfig writes devToolsOpen to dev_tools_open', async () => {
+        await saveDesktopConfig({ devToolsOpen: true });
+
+        const tomlArg = mockWriteToml.mock.calls[0][1];
+        expect(tomlArg.dev_tools_open).toBe(true);
+    });
+});
+
 describe('updateLastDownloadFolder', () => {
     beforeEach(() => jest.clearAllMocks());
 

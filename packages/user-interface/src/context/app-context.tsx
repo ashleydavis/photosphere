@@ -16,6 +16,12 @@ const DEVELOPER_MODE_CONFIG_KEY = "developerMode";
 const SHOW_FPS_INDICATOR_CONFIG_KEY = "showFpsIndicator";
 
 //
+// Config persistence key for the developer-tools open flag. When true the
+// developer tools are reopened on startup.
+//
+const DEV_TOOLS_OPEN_CONFIG_KEY = "devToolsOpen";
+
+//
 // Application-wide reactive data layer for configured databases and shared secrets.
 // Pages and dialogs read `dbs` / `secrets` from here and call the mutation methods
 // to add, update or remove entries. Each mutation refreshes the relevant slice of
@@ -98,6 +104,17 @@ export interface IAppContext {
     // Toggles the FPS-indicator overlay and persists the flag.
     //
     toggleShowFpsIndicator: () => void;
+
+    //
+    // True while the developer tools are open. Persisted and reopened on startup.
+    //
+    devToolsOpen: boolean;
+
+    //
+    // Toggles the developer tools (native inspector on desktop, in-page console
+    // on web/mobile), persisting the new state so it is reapplied on startup.
+    //
+    toggleDevTools: () => void;
 }
 
 const AppContext = createContext<IAppContext | undefined>(undefined);
@@ -129,6 +146,12 @@ export function AppContextProvider({ children }: IProps) {
     // Whether the FPS-indicator overlay is currently shown. Loaded from persistent config on mount.
     //
     const [showFpsIndicator, setShowFpsIndicator] = useState<boolean>(false);
+
+    //
+    // Whether the developer tools are currently open. Loaded from persistent config on mount
+    // and reapplied to the platform so the tools reopen on startup.
+    //
+    const [devToolsOpen, setDevToolsOpen] = useState<boolean>(false);
 
     //
     // Re-reads the database list from the platform.
@@ -243,6 +266,19 @@ export function AppContextProvider({ children }: IProps) {
         log.event(`FPS indicator ${nextValue ? "enabled" : "disabled"}`);
     }
 
+    //
+    // Toggles the developer tools and persists the new state (fire and forget).
+    // The platform applies the actual inspector; the persisted flag reopens it on startup.
+    //
+    function toggleDevTools(): void {
+        const nextValue = !devToolsOpen;
+        setDevToolsOpen(nextValue);
+        platform.toggleDevTools();
+        config.set<boolean>(DEV_TOOLS_OPEN_CONFIG_KEY, nextValue)
+            .catch(err => log.exception("Failed to persist developer tools setting:", err as Error));
+        log.event(`Developer tools ${nextValue ? "opened" : "closed"}`);
+    }
+
     useEffect(() => {
         refresh().catch(err => {
             log.exception(`Failed to load app data:`, err as Error);
@@ -261,6 +297,17 @@ export function AppContextProvider({ children }: IProps) {
         config.get<boolean>(SHOW_FPS_INDICATOR_CONFIG_KEY).then(value => {
             if (value !== undefined) {
                 setShowFpsIndicator(value);
+            }
+        });
+    }, []);
+
+    useEffect(() => {
+        config.get<boolean>(DEV_TOOLS_OPEN_CONFIG_KEY).then(value => {
+            if (value === true) {
+                setDevToolsOpen(true);
+                // Reopen the developer tools on startup. Both inspectors start closed
+                // after a restart, so a single toggle brings them back to the open state.
+                platform.toggleDevTools();
             }
         });
     }, []);
@@ -297,6 +344,8 @@ export function AppContextProvider({ children }: IProps) {
         disableDeveloperMode,
         showFpsIndicator,
         toggleShowFpsIndicator,
+        devToolsOpen,
+        toggleDevTools,
     };
 
     return (
