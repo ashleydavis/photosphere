@@ -9,6 +9,7 @@ export { GalleryItemContextProvider } from './context/gallery-item-context';
 export { SearchContextProvider, useSearch, type ISearchContext } from './context/search-context';
 export { DeleteConfirmationContextProvider } from './context/delete-confirmation-context';
 export * from './context/app-context';
+export * from './context/developer-context';
 export { type IGalleryItem } from "./lib/gallery-item";
 export { Gallery } from "./components/gallery";
 export { AssetView } from "./components/asset-view";

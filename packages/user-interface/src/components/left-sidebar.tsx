@@ -15,7 +15,7 @@ import ListItemButton from '@mui/joy/ListItemButton/ListItemButton';
 import IconButton from '@mui/joy/IconButton/IconButton';
 import Divider from '@mui/joy/Divider/Divider';
 import { useSearch } from '../context/search-context';
-import { useApp } from '../context/app-context';
+import { useDeveloper } from '../context/developer-context';
 import { findTemporaryNavPage } from '../lib/nav-pages';
 
 //
@@ -80,7 +80,7 @@ export interface ILeftSidebarProps {
 //
 export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, onNewDatabase, onAddDatabase, onOpenDatabase }: ILeftSidebarProps) {
     const { setOpenSearch } = useSearch();
-    const { developerMode } = useApp();
+    const { developerMode } = useDeveloper();
     const { openDatabase, databasePath } = useAssetDatabase();
     const platform = usePlatform();
     const theme = useTheme();

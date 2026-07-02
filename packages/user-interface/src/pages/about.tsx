@@ -2,7 +2,7 @@ import React, { useRef, useState } from "react";
 import { version } from "config";
 import Button from "@mui/joy/Button";
 import Input from "@mui/joy/Input";
-import { useApp } from "../context/app-context";
+import { useDeveloper } from "../context/developer-context";
 import { useToast } from "../context/toast-context";
 
 //
@@ -13,7 +13,7 @@ const MCP_URL = "http://localhost:3475/mcp";
 
 export function AboutPage() {
     const [ copyState, setCopyState ] = useState<"idle" | "copied">("idle");
-    const { enableDeveloperMode } = useApp();
+    const { enableDeveloperMode } = useDeveloper();
     const { addToast } = useToast();
 
     //

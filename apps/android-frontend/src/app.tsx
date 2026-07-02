@@ -1,7 +1,7 @@
 import React from "react";
 import { HashRouter, Route, Routes } from "react-router-dom";
 import {
-    AppContextProvider, Main,
+    AppContextProvider, DeveloperContextProvider, Main,
     GalleryContextProvider,
     AssetDatabaseProvider,
     GalleryLayoutContextProvider,
@@ -83,7 +83,9 @@ export function App() {
                                                 <DeleteConfirmationContextProvider>
                                                     <SearchContextProvider>
                                                         <GalleryLayoutContextProvider>
-                                                            <Main initialTheme={initialTheme} />
+                                                            <DeveloperContextProvider>
+                                                                <Main initialTheme={initialTheme} />
+                                                            </DeveloperContextProvider>
                                                         </GalleryLayoutContextProvider>
                                                     </SearchContextProvider>
                                                 </DeleteConfirmationContextProvider>

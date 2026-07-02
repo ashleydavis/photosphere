@@ -13,6 +13,7 @@ import {
     type IToolsStatus,
 } from "../../context/platform-context";
 import { AppContextProvider } from "../../context/app-context";
+import { DeveloperContextProvider } from "../../context/developer-context";
 import { ApiContextProvider, axiosApi, type IApi } from "../../context/api-context";
 import { ToastContextProvider } from "../../context/toast-context";
 import { ConfigContextProvider, createConfig } from "../../context/config-context";
@@ -515,7 +516,9 @@ export function MockProviders({
                                                 <DeleteConfirmationContextProvider>
                                                     <SearchContextProvider>
                                                         <GalleryLayoutContextProvider>
-                                                            {children}
+                                                            <DeveloperContextProvider>
+                                                                {children}
+                                                            </DeveloperContextProvider>
                                                         </GalleryLayoutContextProvider>
                                                     </SearchContextProvider>
                                                 </DeleteConfirmationContextProvider>
@@ -670,7 +673,9 @@ export function RealDatabaseProviders({ children }: IRealDatabaseProvidersProps)
                                                 <SearchContextProvider>
                                                     <GalleryLayoutContextProvider>
                                                         <OpenTestDatabase>
-                                                            {children}
+                                                            <DeveloperContextProvider>
+                                                                {children}
+                                                            </DeveloperContextProvider>
                                                         </OpenTestDatabase>
                                                     </GalleryLayoutContextProvider>
                                                 </SearchContextProvider>

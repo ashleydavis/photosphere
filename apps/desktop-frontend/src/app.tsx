@@ -1,7 +1,7 @@
 import React from "react";
 import { HashRouter, Route, Routes } from "react-router-dom";
 import {
-    AppContextProvider, Main,
+    AppContextProvider, DeveloperContextProvider, Main,
     GalleryContextProvider,
     AssetDatabaseProvider,
     GalleryLayoutContextProvider,
@@ -85,7 +85,9 @@ export function App({ electronAPI }: IAppProps) {
                                                         <GalleryLayoutContextProvider>
                                                             <McpToolHandler />
                                                             <PreviewBanner />
-                                                            <Main initialTheme={initialTheme} />
+                                                            <DeveloperContextProvider>
+                                                                <Main initialTheme={initialTheme} />
+                                                            </DeveloperContextProvider>
                                                         </GalleryLayoutContextProvider>
                                                     </SearchContextProvider>
                                                 </DeleteConfirmationContextProvider>

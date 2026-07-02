@@ -8,7 +8,7 @@ import ListItemButton from "@mui/joy/ListItemButton/ListItemButton";
 import ListItemDecorator from "@mui/joy/ListItemDecorator/ListItemDecorator";
 import ListItemContent from "@mui/joy/ListItemContent/ListItemContent";
 import { Science, Speed, BugReport } from "@mui/icons-material";
-import { useApp } from "../context/app-context";
+import { useDeveloper } from "../context/developer-context";
 
 //
 // A dedicated screen listing developer tools, reachable only while developer
@@ -16,7 +16,7 @@ import { useApp } from "../context/app-context";
 //
 export function DeveloperPage(): JSX.Element {
     const navigate = useNavigate();
-    const { disableDeveloperMode, showFpsIndicator, toggleShowFpsIndicator, devToolsOpen, toggleDevTools } = useApp();
+    const { disableDeveloperMode, showFpsIndicator, toggleShowFpsIndicator, devToolsOpen, toggleDevTools } = useDeveloper();
 
     return (
         <div data-id="developer-page" className="w-full h-full p-4 overflow-y-auto pb-32">

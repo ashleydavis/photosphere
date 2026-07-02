@@ -1,16 +1,16 @@
 // @ts-ignore
 import FPSStats from "react-fps-stats";
-import { useApp } from "../context/app-context";
+import { useDeveloper } from "../context/developer-context";
 
 //
 // Renders the FPS indicator overlay when the `showFpsIndicator` value from
-// AppContext is enabled. The value is config-backed reactive state, so the
-// overlay shows and hides immediately when the developer-page toggle flips it.
-// Defaults to not shown.
+// the developer context is enabled. The value is config-backed reactive state,
+// so the overlay shows and hides immediately when the developer-page toggle
+// flips it. Defaults to not shown.
 //
 export function Fps() {
 
-    const { showFpsIndicator } = useApp();
+    const { showFpsIndicator } = useDeveloper();
 
     return (
         <>
