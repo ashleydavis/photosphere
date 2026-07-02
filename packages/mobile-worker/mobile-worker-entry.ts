@@ -11,6 +11,7 @@ import { moveAssetsHandler } from "node-api/src/lib/move-assets.worker";
 import { saveAssetHandler } from "node-api/src/lib/save-asset.worker";
 import { saveAssetsBatchHandler } from "node-api/src/lib/save-assets-batch.worker";
 import { assetServerHandler } from "node-api/src/lib/asset-server.worker";
+import { receiveShareHandler, findReceiverHandler, sendPayloadHandler } from "./src/lib/lan-share-handlers";
 import { installWorkerGlobal } from "./src/index";
 
 //
@@ -50,6 +51,13 @@ registerHandler("save-assets-batch", saveAssetsBatchHandler);
 // shimmed http/net (backed by the native TCP host functions) so the WebView loads assets over a
 // real localhost socket, exactly like desktop.
 registerHandler("asset-server", assetServerHandler);
+
+// Register the mobile LAN-share stand-ins. Real UDP/HTTPS/TLS is not available in the embedded
+// engine yet, so these keep the share/receive tasks pending for the timeout window (honouring
+// cancellation) and then report no peer, instead of failing and crashing the share dialog.
+registerHandler("receive-share", receiveShareHandler);
+registerHandler("find-receiver", findReceiverHandler);
+registerHandler("send-payload", sendPayloadHandler);
 
 // Expose the worker entry point (globalThis.__photosphereWorker = { runTask }).
 installWorkerGlobal();

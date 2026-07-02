@@ -1,6 +1,6 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
 import eruda from "eruda";
-import { PlatformContextProvider, ConfigContextProvider, createConfig, TEST_MENU_EVENT, TEST_OPEN_DATABASE_EVENT, TEST_SEED_DATABASES_EVENT, TEST_SEED_SECRETS_EVENT, TEST_SEED_RECENT_EVENT, TEST_SEED_NEWS_EVENT, TEST_RESET_CONFIG_EVENT, type IPlatformContext, type IPlatformEvent, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions } from "user-interface";
+import { PlatformContextProvider, ConfigContextProvider, createConfig, useLanShareTasks, TEST_MENU_EVENT, TEST_OPEN_DATABASE_EVENT, TEST_SEED_DATABASES_EVENT, TEST_SEED_SECRETS_EVENT, TEST_SEED_RECENT_EVENT, TEST_SEED_NEWS_EVENT, TEST_RESET_CONFIG_EVENT, type IPlatformContext, type IPlatformEvent, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions } from "user-interface";
 import { log } from "utils";
 import { cancelMobileTasks, subscribeMobileTaskMessage, subscribeMobileTaskComplete } from "./mobile-platform-tasks";
 import * as configStore from "./mobile-config-store";
@@ -45,12 +45,17 @@ export interface IPlatformProviderMobileProps {
 
 //
 // Mobile platform context provider.
-// Most native integrations are still stubbed (database, sync, vault, share, file-picker),
+// Most native integrations are still stubbed (database, sync, vault, file-picker),
 // but the background-task bindings (cancelTasks / onTaskMessage / onTaskComplete) are wired
 // to the native JsEngine plugin so task-driven UI (notably the Job Manager) works on mobile.
+// Share/receive now run as background tasks via useLanShareTasks; these fail at runtime on
+// the embedded JS engine until native networking host functions exist.
 // Generic config is persisted to WebView localStorage so settings survive app restarts.
 //
 export function PlatformProviderMobile({ children }: IPlatformProviderMobileProps) {
+    // LAN database-sharing methods, dispatched through the shared task queue.
+    const { startShareReceive, waitShareReceive, cancelShareReceive, waitForReceiver, sendToReceiver, cancelShareSend } = useLanShareTasks();
+
     // Registered callbacks for menu actions and database-opened events. On desktop these fire
     // from native menu / IPC; on mobile (no menu bar) the smoke-test driver drives them via
     // window events (see the useEffect below) so tests exercise the real action handlers.
@@ -321,27 +326,6 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
 
     const listS3Dirs = useCallback(async (_s3Key: string, _bucket: string, _prefix: string): Promise<string[]> => {
         return [];
-    }, []);
-
-    const startShareReceive = useCallback(async (_code: string): Promise<void> => {
-    }, []);
-
-    const waitShareReceive = useCallback(async (): Promise<unknown> => {
-        return null;
-    }, []);
-
-    const cancelShareReceive = useCallback(async (): Promise<void> => {
-    }, []);
-
-    const waitForReceiver = useCallback(async (_payload: unknown, _code: string): Promise<unknown> => {
-        return null;
-    }, []);
-
-    const sendToReceiver = useCallback(async (_endpoint: unknown): Promise<boolean> => {
-        return false;
-    }, []);
-
-    const cancelShareSend = useCallback(async (): Promise<void> => {
     }, []);
 
     const importSharePayload = useCallback(async (_payload: unknown, _conflictResolutions: Record<string, unknown>): Promise<void> => {

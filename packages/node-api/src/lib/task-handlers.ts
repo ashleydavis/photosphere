@@ -15,6 +15,7 @@ import { hashFileHandler } from "./hash-file.worker";
 import { getDatabaseSummaryHandler } from "./get-database-summary.worker";
 import { moveAssetsHandler } from "./move-assets.worker";
 import { assetServerHandler } from "./asset-server.worker";
+import { receiveShareHandler, findReceiverHandler, sendPayloadHandler } from "./lan-share.worker";
 
 //
 // Register all task handlers
@@ -37,4 +38,7 @@ export function initTaskHandlers(): void {
     registerHandler("get-database-summary", getDatabaseSummaryHandler);
     registerHandler("move-assets", moveAssetsHandler);
     registerHandler("asset-server", assetServerHandler);
+    registerHandler("receive-share", receiveShareHandler);
+    registerHandler("find-receiver", findReceiverHandler);
+    registerHandler("send-payload", sendPayloadHandler);
 }

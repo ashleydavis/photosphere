@@ -56801,6 +56801,41 @@ Copied hash: ${copiedHash.toString("hex")}
     return { port: boundPort, host };
   }
 
+  // src/lib/lan-share-handlers.ts
+  var SHARE_TIMEOUT_MS = 60000;
+  var CANCEL_POLL_INTERVAL_MS2 = 250;
+  function waitUntilTimeoutOrCancelled(context, timeoutMs, pollIntervalMs) {
+    return new Promise((resolve2) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearInterval(pollTimer);
+        clearTimeout(timeoutTimer);
+        resolve2();
+      };
+      const pollTimer = setInterval(() => {
+        if (context.isCancelled()) {
+          finish();
+        }
+      }, pollIntervalMs);
+      const timeoutTimer = setTimeout(finish, timeoutMs);
+    });
+  }
+  async function receiveShareHandler(_data, context) {
+    await waitUntilTimeoutOrCancelled(context, SHARE_TIMEOUT_MS, CANCEL_POLL_INTERVAL_MS2);
+    return { payload: null };
+  }
+  async function findReceiverHandler(_data, context) {
+    await waitUntilTimeoutOrCancelled(context, SHARE_TIMEOUT_MS, CANCEL_POLL_INTERVAL_MS2);
+    return { endpoint: null };
+  }
+  async function sendPayloadHandler(_data) {
+    return { success: false };
+  }
+
   // src/lib/host-functions.ts
   var EXPECTED_HOST_FUNCTIONS = [
     "sendMessage",
@@ -56887,5 +56922,8 @@ Copied hash: ${copiedHash.toString("hex")}
   registerHandler("save-asset", saveAssetHandler);
   registerHandler("save-assets-batch", saveAssetsBatchHandler);
   registerHandler("asset-server", assetServerHandler);
+  registerHandler("receive-share", receiveShareHandler);
+  registerHandler("find-receiver", findReceiverHandler);
+  registerHandler("send-payload", sendPayloadHandler);
   installWorkerGlobal();
 })();

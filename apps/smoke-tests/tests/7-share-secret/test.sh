@@ -2,9 +2,11 @@
 
 # Mobile port of desktop 7-share-secret. The desktop test runs two app windows (sender +
 # receiver) and completes a LAN pairing. Two concurrent app instances are not feasible on a
-# single emulator/simulator, so this port drives the sender side only: it opens the share flow
-# and waits for a pairing code, surfacing whether LAN secret sharing works on mobile at all.
-# The full two-party flow needs two devices and is follow-up work.
+# single emulator/simulator, so this port drives the sender side only: it adds a secret, opens
+# the share flow, and waits for a pairing code, surfacing whether the sender-side LAN secret
+# share flow works on mobile. The full two-party transfer needs two devices and native
+# networking (a later layer); until then the sender shows its pairing code and the background
+# discovery task waits and times out gracefully.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$TEST_DIR/../../lib/common.sh"
@@ -19,8 +21,18 @@ trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 start_app "$APP_PORT" "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
+# Clean slate, then add a secret so the Secrets page has a row with a Share button to click.
+send_command "$APP_PORT" reset-config '{}' || exit 1
+
 send_command "$APP_PORT" navigate '{"page":"secrets"}' || exit 1
 wait_for_log "$TMP_DIR" "Secrets page loaded" 20
+
+send_command "$APP_PORT" click '{"dataId":"add-secret-button"}' || exit 1
+wait_for_log "$TMP_DIR" "Add secret dialog opened" 20
+
+send_command "$APP_PORT" type '{"dataId":"secret-name-input","text":"smoke-secret"}' || exit 1
+send_command "$APP_PORT" click '{"dataId":"add-secret-confirm"}' || exit 1
+wait_for_log "$TMP_DIR" "Secret added" 20
 
 send_command "$APP_PORT" click '{"dataId":"share-secret-button"}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"share-secret-send-button"}' || exit 1

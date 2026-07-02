@@ -27,6 +27,7 @@ export * from "./lib/clipboard";
 export * from "./lib/bug-report";
 export * from "./lib/test-driver";
 export * from "./lib/test-driver-ws";
+export * from "./lib/use-lan-share-tasks";
 export * from "./context/toast-context";
 export { ToastContainer } from "./components/toast-container";
 export * from "./context/import-context";

@@ -1,5 +1,5 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
-import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext, type IPlatformEvent, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, convertToPng, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions } from "user-interface";
+import { PlatformContextProvider, ConfigContextProvider, createConfig, useLanShareTasks, type IPlatformContext, type IPlatformEvent, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, convertToPng, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions } from "user-interface";
 import type { IElectronAPI } from "./electron-ipc";
 import type { IConflictResolution } from "api";
 import type { ISecret } from "vault";
@@ -25,6 +25,9 @@ export interface IPlatformProviderElectronProps {
 // Provides database opening functionality via Electron IPC.
 //
 export function PlatformProviderElectron({ children, electronAPI }: IPlatformProviderElectronProps) {
+    // LAN database-sharing methods, dispatched through the shared task queue.
+    const { startShareReceive, waitShareReceive, cancelShareReceive, waitForReceiver, sendToReceiver, cancelShareSend } = useLanShareTasks();
+
     // Store callbacks for database-opened events
     const openedCallbacksRef = useRef<Set<(databasePath: string) => void>>(new Set());
     
@@ -452,30 +455,6 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
 
     const listS3Dirs = useCallback(async (s3Key: string, bucket: string, prefix: string): Promise<string[]> => {
         return await electronAPI.invoke('list-s3-dirs', { s3Key, bucket, prefix }) as string[];
-    }, [electronAPI]);
-
-    const startShareReceive = useCallback(async (code: string): Promise<void> => {
-        await electronAPI.invoke('start-share-receive', code);
-    }, [electronAPI]);
-
-    const waitShareReceive = useCallback(async (): Promise<unknown> => {
-        return await electronAPI.invoke('wait-share-receive');
-    }, [electronAPI]);
-
-    const cancelShareReceive = useCallback(async (): Promise<void> => {
-        await electronAPI.invoke('cancel-share-receive');
-    }, [electronAPI]);
-
-    const waitForReceiver = useCallback(async (payload: unknown, code: string): Promise<unknown> => {
-        return await electronAPI.invoke('wait-for-receiver', { payload, code });
-    }, [electronAPI]);
-
-    const sendToReceiver = useCallback(async (endpoint: unknown): Promise<boolean> => {
-        return await electronAPI.invoke('send-to-receiver', endpoint) as boolean;
-    }, [electronAPI]);
-
-    const cancelShareSend = useCallback(async (): Promise<void> => {
-        await electronAPI.invoke('cancel-share-send');
     }, [electronAPI]);
 
     const importSharePayload = useCallback(async (payload: unknown, conflictResolutions: Record<string, IConflictResolution>): Promise<void> => {
