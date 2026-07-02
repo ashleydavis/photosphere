@@ -170,6 +170,22 @@ export function DeveloperContextProvider({ children }: IDeveloperContextProvider
         });
     }, []);
 
+    //
+    // Keep the toggle in sync with the real developer-tools state reported by the
+    // host, including when the user closes the tools with their native close
+    // button. Persist the reported state so a restart reopens (or leaves closed)
+    // the tools to match. No-op on platforms that never emit this event.
+    //
+    useEffect(() => {
+        return platform.onPlatformEvent(event => {
+            if (event.type === "devtools-state") {
+                setDevToolsOpen(event.open);
+                config.set<boolean>(DEV_TOOLS_OPEN_CONFIG_KEY, event.open)
+                    .catch(err => log.exception("Failed to persist developer tools setting:", err as Error));
+            }
+        });
+    }, [platform]);
+
     const value: IDeveloperContext = {
         developerMode,
         enableDeveloperMode,

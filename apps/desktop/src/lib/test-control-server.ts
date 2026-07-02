@@ -75,7 +75,7 @@ export class TestControlServer implements ITestControlServer {
         });
 
         expressApp.post('/menu', (req, res) => {
-            this.mainWindow.webContents.send('menu-action', req.body.itemId);
+            this.mainWindow.webContents.send('platform-event', { type: 'menu-action', action: req.body.itemId });
             res.json({ ok: true });
         });
 

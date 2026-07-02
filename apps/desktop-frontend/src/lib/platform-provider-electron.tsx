@@ -1,5 +1,5 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
-import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, convertToPng, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions } from "user-interface";
+import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext, type IPlatformEvent, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, convertToPng, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions } from "user-interface";
 import type { IElectronAPI } from "./electron-ipc";
 import type { IConflictResolution } from "api";
 import type { ISecret } from "vault";
@@ -35,7 +35,7 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
     const themeCallbacksRef = useRef<Set<(theme: 'light' | 'dark' | 'system') => void>>(new Set());
 
     // Store callbacks for menu actions
-    const menuActionCallbacksRef = useRef<Set<(action: string) => void>>(new Set());
+    const platformEventCallbacksRef = useRef<Set<(event: IPlatformEvent) => void>>(new Set());
 
     // Store callbacks for navigate events
     const navigateCallbacksRef = useRef<Set<(page: string) => void>>(new Set());
@@ -175,16 +175,16 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         };
     }, [electronAPI]);
 
-    // Set up message listener for menu-action events
+    // Set up message listener for platform events pushed from the main process.
     useEffect(() => {
-        const handleMenuAction = (action: string) => {
-            menuActionCallbacksRef.current.forEach(callback => callback(action));
+        const handlePlatformEvent = (event: IPlatformEvent) => {
+            platformEventCallbacksRef.current.forEach(callback => callback(event));
         };
 
-        electronAPI.onMessage('menu-action', handleMenuAction);
+        electronAPI.onMessage('platform-event', handlePlatformEvent);
 
         return () => {
-            electronAPI.removeAllListeners('menu-action');
+            electronAPI.removeAllListeners('platform-event');
         };
     }, [electronAPI]);
 
@@ -316,10 +316,10 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         };
     }, []);
 
-    const onMenuAction = useCallback((callback: (action: string) => void): (() => void) => {
-        menuActionCallbacksRef.current.add(callback);
+    const onPlatformEvent = useCallback((callback: (event: IPlatformEvent) => void): (() => void) => {
+        platformEventCallbacksRef.current.add(callback);
         return () => {
-            menuActionCallbacksRef.current.delete(callback);
+            platformEventCallbacksRef.current.delete(callback);
         };
     }, []);
 
@@ -518,7 +518,7 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         onDatabasesChanged,
         onUpdateAvailable,
         openFolder,
-        onMenuAction,
+        onPlatformEvent,
         onNavigate,
         getPathForFile,
         checkTools,

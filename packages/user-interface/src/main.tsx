@@ -191,11 +191,14 @@ function __Main({ initialTheme }: IMainProps) {
 
 
     //
-    // Listen for menu actions from the main process and dispatch by action name.
+    // Listen for platform events from the host and dispatch menu actions by name.
     //
     useEffect(() => {
-        return platform.onMenuAction((action) => {
-            switch (action) {
+        return platform.onPlatformEvent((event) => {
+            if (event.type !== 'menu-action') {
+                return;
+            }
+            switch (event.action) {
                 case 'open-configuration':
                     setConfigurationOpen(true);
                     break;

@@ -7,6 +7,41 @@ import type { IConflictResolution } from "api";
 export type Unsubscribe = () => void;
 
 //
+// A named UI action pushed from the host (for example a native menu item on
+// desktop, or a smoke-test injection). Formerly delivered on its own
+// "menu-action" channel; now one kind of platform event.
+//
+export interface IMenuActionEvent {
+    // Discriminant identifying this platform event as a menu action.
+    type: "menu-action";
+
+    // The action name for the renderer to dispatch on.
+    action: string;
+}
+
+//
+// Reports that the host developer tools were opened or closed, including via
+// their native close button, so the renderer can reflect the real state.
+//
+export interface IDevToolsStateEvent {
+    // Discriminant identifying this platform event as a dev-tools state change.
+    type: "devtools-state";
+
+    // True when the developer tools are open.
+    open: boolean;
+}
+
+//
+// A message pushed from the host platform to the renderer. Desktop delivers
+// these from the Electron main process; mobile from its native/bridge layer.
+// New host-to-renderer messages are added as members of this union so every
+// platform shares a single delivery path instead of a channel per message.
+//
+export type IPlatformEvent =
+    | IMenuActionEvent
+    | IDevToolsStateEvent;
+
+//
 // S3 credentials for accessing an S3-compatible object store.
 //
 export interface IS3Credentials {
@@ -275,11 +310,13 @@ export interface IPlatformContext {
     onThemeChanged: (callback: (theme: 'light' | 'dark' | 'system') => void) => Unsubscribe;
 
     //
-    // Subscribes to menu actions sent from the main process (excluding theme changes).
-    // The callback receives the action name and should switch on it.
+    // Subscribes to platform events pushed from the host (menu actions,
+    // dev-tools state, and future host-to-renderer messages). Delivered from the
+    // Electron main process on desktop and from the native/bridge layer on
+    // mobile. The callback should switch on `event.type`.
     // Returns an unsubscribe function.
     //
-    onMenuAction: (callback: (action: string) => void) => Unsubscribe;
+    onPlatformEvent: (callback: (event: IPlatformEvent) => void) => Unsubscribe;
 
     //
     // Subscribes to navigate events sent from the main process.

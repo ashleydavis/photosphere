@@ -1,6 +1,6 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
 import eruda from "eruda";
-import { PlatformContextProvider, ConfigContextProvider, createConfig, TEST_MENU_EVENT, TEST_OPEN_DATABASE_EVENT, TEST_SEED_DATABASES_EVENT, TEST_SEED_SECRETS_EVENT, TEST_SEED_RECENT_EVENT, TEST_SEED_NEWS_EVENT, TEST_RESET_CONFIG_EVENT, type IPlatformContext, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions } from "user-interface";
+import { PlatformContextProvider, ConfigContextProvider, createConfig, TEST_MENU_EVENT, TEST_OPEN_DATABASE_EVENT, TEST_SEED_DATABASES_EVENT, TEST_SEED_SECRETS_EVENT, TEST_SEED_RECENT_EVENT, TEST_SEED_NEWS_EVENT, TEST_RESET_CONFIG_EVENT, type IPlatformContext, type IPlatformEvent, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions } from "user-interface";
 import { log } from "utils";
 import { cancelMobileTasks, subscribeMobileTaskMessage, subscribeMobileTaskComplete } from "./mobile-platform-tasks";
 import * as configStore from "./mobile-config-store";
@@ -54,7 +54,7 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
     // Registered callbacks for menu actions and database-opened events. On desktop these fire
     // from native menu / IPC; on mobile (no menu bar) the smoke-test driver drives them via
     // window events (see the useEffect below) so tests exercise the real action handlers.
-    const menuActionCallbacksRef = useRef<Set<(action: string) => void>>(new Set());
+    const platformEventCallbacksRef = useRef<Set<(event: IPlatformEvent) => void>>(new Set());
     const openedCallbacksRef = useRef<Set<(databasePath: string) => void>>(new Set());
 
     // Registered callbacks for show-notification events (used by the news-notification flow).
@@ -91,10 +91,10 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         return () => {};
     }, []);
 
-    const onMenuAction = useCallback((callback: (action: string) => void): (() => void) => {
-        menuActionCallbacksRef.current.add(callback);
+    const onPlatformEvent = useCallback((callback: (event: IPlatformEvent) => void): (() => void) => {
+        platformEventCallbacksRef.current.add(callback);
         return () => {
-            menuActionCallbacksRef.current.delete(callback);
+            platformEventCallbacksRef.current.delete(callback);
         };
     }, []);
 
@@ -104,7 +104,7 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
     useEffect(() => {
         const handleMenu = (event: Event) => {
             const itemId = (event as CustomEvent<string>).detail;
-            menuActionCallbacksRef.current.forEach(callback => callback(itemId));
+            platformEventCallbacksRef.current.forEach(callback => callback({ type: "menu-action", action: itemId }));
         };
         const handleOpenDatabase = (event: Event) => {
             const databasePath = (event as CustomEvent<string>).detail;
@@ -377,7 +377,7 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         onDatabasesChanged,
         onUpdateAvailable,
         openFolder,
-        onMenuAction,
+        onPlatformEvent,
         onNavigate,
         getPathForFile,
         checkTools,

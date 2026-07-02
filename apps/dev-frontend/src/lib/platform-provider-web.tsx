@@ -1,6 +1,6 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
 import eruda from "eruda";
-import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions, convertToPng } from "user-interface";
+import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext, type IPlatformEvent, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions, convertToPng } from "user-interface";
 
 const restApiUrl = "http://localhost:3001";
 
@@ -177,8 +177,8 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         // Not applicable on web platform.
     }, []);
 
-    const onMenuAction = useCallback((_callback: (action: string) => void): (() => void) => {
-        // No-op for web platform.
+    const onPlatformEvent = useCallback((_callback: (event: IPlatformEvent) => void): (() => void) => {
+        // No-op for web platform: the browser has no host process pushing events.
         return () => {};
     }, []);
 
@@ -348,7 +348,7 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         onDatabasesChanged,
         onUpdateAvailable,
         openFolder,
-        onMenuAction,
+        onPlatformEvent,
         onNavigate,
         getPathForFile,
         checkTools,

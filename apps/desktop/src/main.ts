@@ -145,6 +145,21 @@ async function createMainWindow() {
         }
     });
 
+    // Notify the renderer when the native developer tools are opened or closed
+    // (including via their native close button) as a platform event, so the
+    // developer page's dev-tools toggle reflects the real inspector state.
+    mainWindow.webContents.on('devtools-opened', () => {
+        if (mainWindow) {
+            mainWindow.webContents.send('platform-event', { type: 'devtools-state', open: true });
+        }
+    });
+
+    mainWindow.webContents.on('devtools-closed', () => {
+        if (mainWindow) {
+            mainWindow.webContents.send('platform-event', { type: 'devtools-state', open: false });
+        }
+    });
+
     mainWindow.webContents.once('did-finish-load', () => {
         if (testControlServer) {
             testControlServer.notifyReady();
@@ -1401,7 +1416,7 @@ async function createMenu(): Promise<void> {
             accelerator: 'CmdOrCtrl+N',
             click: () => {
                 if (mainWindow) {
-                    mainWindow.webContents.send('menu-action', 'new-database');
+                    mainWindow.webContents.send('platform-event', { type: 'menu-action', action: 'new-database' });
                 }
             },
         },
@@ -1409,7 +1424,7 @@ async function createMenu(): Promise<void> {
             label: 'Add Database...',
             click: () => {
                 if (mainWindow) {
-                    mainWindow.webContents.send('menu-action', 'add-database');
+                    mainWindow.webContents.send('platform-event', { type: 'menu-action', action: 'add-database' });
                 }
             },
         },
@@ -1418,7 +1433,7 @@ async function createMenu(): Promise<void> {
             accelerator: 'CmdOrCtrl+O',
             click: () => {
                 if (mainWindow) {
-                    mainWindow.webContents.send('menu-action', 'open-database');
+                    mainWindow.webContents.send('platform-event', { type: 'menu-action', action: 'open-database' });
                 }
             },
         },
@@ -1433,7 +1448,7 @@ async function createMenu(): Promise<void> {
                 accelerator: 'CmdOrCtrl+I',
                 click: () => {
                     if (mainWindow) {
-                        mainWindow.webContents.send('menu-action', 'import-assets');
+                        mainWindow.webContents.send('platform-event', { type: 'menu-action', action: 'import-assets' });
                     }
                 },
             },
@@ -1589,7 +1604,7 @@ async function createMenu(): Promise<void> {
                 label: 'Configuration...',
                 click: () => {
                     if (mainWindow) {
-                        mainWindow.webContents.send('menu-action', 'open-configuration');
+                        mainWindow.webContents.send('platform-event', { type: 'menu-action', action: 'open-configuration' });
                     }
                 },
             },
@@ -1652,7 +1667,7 @@ async function createMenu(): Promise<void> {
             label: 'Report Bug...',
             click: () => {
                 if (mainWindow) {
-                    mainWindow.webContents.send('menu-action', 'report-bug');
+                    mainWindow.webContents.send('platform-event', { type: 'menu-action', action: 'report-bug' });
                 }
             },
         },
