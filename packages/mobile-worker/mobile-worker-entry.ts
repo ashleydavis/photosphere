@@ -11,7 +11,7 @@ import { moveAssetsHandler } from "node-api/src/lib/move-assets.worker";
 import { saveAssetHandler } from "node-api/src/lib/save-asset.worker";
 import { saveAssetsBatchHandler } from "node-api/src/lib/save-assets-batch.worker";
 import { assetServerHandler } from "node-api/src/lib/asset-server.worker";
-import { receiveShareHandler, findReceiverHandler, sendPayloadHandler } from "./src/lib/lan-share-handlers";
+import { receiveShareHandler, findReceiverHandler, sendPayloadHandler } from "node-api/src/lib/lan-share.worker";
 import { installWorkerGlobal } from "./src/index";
 
 //
@@ -52,9 +52,9 @@ registerHandler("save-assets-batch", saveAssetsBatchHandler);
 // real localhost socket, exactly like desktop.
 registerHandler("asset-server", assetServerHandler);
 
-// Register the mobile LAN-share stand-ins. Real UDP/HTTPS/TLS is not available in the embedded
-// engine yet, so these keep the share/receive tasks pending for the timeout window (honouring
-// cancellation) and then report no peer, instead of failing and crashing the share dialog.
+// Register the real shared LAN-share handlers (the same ones desktop/CLI use). They run unchanged in
+// the embedded engine because the bundle aliases dgram/tls/https/crypto to native-backed shims, so
+// discovery and the cert-pinned HTTPS transfer work on device.
 registerHandler("receive-share", receiveShareHandler);
 registerHandler("find-receiver", findReceiverHandler);
 registerHandler("send-payload", sendPayloadHandler);

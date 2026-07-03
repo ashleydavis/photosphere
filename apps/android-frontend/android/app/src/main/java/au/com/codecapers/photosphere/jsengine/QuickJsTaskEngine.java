@@ -164,6 +164,22 @@ public final class QuickJsTaskEngine implements TaskEngine {
                     tcpEvent = hostBridge.tcp.pollInboundEvent();
                 }
 
+                // Deliver inbound UDP datagrams (LAN-share discovery) into the JS dgram shim.
+                String udpEvent = hostBridge.udp.pollInboundEvent();
+                while (udpEvent != null) {
+                    deliverInboundEvent(globalObject, "__udpEvent", udpEvent);
+                    deliveredEvent = true;
+                    udpEvent = hostBridge.udp.pollInboundEvent();
+                }
+
+                // Deliver inbound TLS events (LAN-share HTTPS transfer) into the JS tls shim.
+                String tlsEvent = hostBridge.tls.pollInboundEvent();
+                while (tlsEvent != null) {
+                    deliverInboundEvent(globalObject, "__tlsEvent", tlsEvent);
+                    deliveredEvent = true;
+                    tlsEvent = hostBridge.tls.pollInboundEvent();
+                }
+
                 // Drain any remaining QuickJS jobs (promise callbacks). Evaluating drains the whole
                 // microtask queue to empty.
                 context.evaluate("void 0;");
@@ -181,14 +197,37 @@ public final class QuickJsTaskEngine implements TaskEngine {
                 context.evaluate("globalThis.__ptPumped = (typeof globalThis.__pumpTimers === 'function') ? globalThis.__pumpTimers() : false;");
                 boolean pumped = Boolean.TRUE.equals(globalObject.getProperty("__ptPumped"));
 
-                if (hostBridge.tcp.hasLiveListeners()) {
-                    // A server is bound and waiting. Park the worker thread briefly for the next
-                    // inbound event instead of busy-spinning; cancellation is re-checked each round
-                    // via the keep-alive timer above. Any event that arrives is delivered immediately.
+                // A live "port" is any bound TCP listener, TLS listener, or UDP socket. The asset-server
+                // task keeps a TCP listener; a LAN-share receiver keeps a TLS listener plus a broadcasting
+                // UDP socket; a LAN-share sender's discovery keeps a UDP socket. While any is live the task
+                // is long-running, so park for the next inbound event instead of counting toward the idle
+                // limit. Prefer the TLS queue (the receiver's HTTPS request) for the lowest latency.
+                boolean tlsLive = hostBridge.tls.hasLiveListeners() || hostBridge.tls.hasLiveConnections();
+                boolean anyPortLive = hostBridge.tcp.hasLiveListeners()
+                    || tlsLive
+                    || hostBridge.udp.hasLiveSockets();
+                if (anyPortLive) {
                     if (!deliveredEvent) {
-                        String waited = hostBridge.tcp.awaitInboundEvent(50);
+                        String waited = null;
+                        if (tlsLive) {
+                            waited = hostBridge.tls.awaitInboundEvent(50);
+                            if (waited != null) {
+                                deliverInboundEvent(globalObject, "__tlsEvent", waited);
+                            }
+                        }
+                        else if (hostBridge.udp.hasLiveSockets()) {
+                            waited = hostBridge.udp.awaitInboundEvent(50);
+                            if (waited != null) {
+                                deliverInboundEvent(globalObject, "__udpEvent", waited);
+                            }
+                        }
+                        else {
+                            waited = hostBridge.tcp.awaitInboundEvent(50);
+                            if (waited != null) {
+                                deliverTcpEvent(globalObject, waited);
+                            }
+                        }
                         if (waited != null) {
-                            deliverTcpEvent(globalObject, waited);
                             context.evaluate("void 0;");
                         }
                     }
@@ -300,6 +339,36 @@ public final class QuickJsTaskEngine implements TaskEngine {
         host.setProperty("tcpStopListening", (JSCallFunction) args -> safeString(() ->
             hostBridge.tcpStopListening((String) args[0])));
 
+        // Native-backed UDP functions: LAN-share discovery binds a datagram socket and broadcasts /
+        // receives through these. Inbound datagrams are pushed into the engine via globalThis.__udpEvent.
+        host.setProperty("udpBind", (JSCallFunction) args -> safeString(() ->
+            hostBridge.udpBind((String) args[0], ((Number) args[1]).intValue(), toBoolean(args[2]))));
+        host.setProperty("udpSend", (JSCallFunction) args -> safeString(() ->
+            hostBridge.udpSend((String) args[0], (String) args[1], (String) args[2], ((Number) args[3]).intValue())));
+        host.setProperty("udpClose", (JSCallFunction) args -> safeString(() ->
+            hostBridge.udpClose((String) args[0])));
+
+        // Native-backed TLS functions: LAN-share's receiver runs a self-signed HTTPS server and its
+        // sender connects with certificate pinning through these. Inbound connection / data / close
+        // events are pushed into the engine via globalThis.__tlsEvent.
+        host.setProperty("tlsListen", (JSCallFunction) args -> safeString(() ->
+            hostBridge.tlsListen((String) args[0], ((Number) args[1]).intValue(), (String) args[2], (String) args[3])));
+        host.setProperty("tlsConnect", (JSCallFunction) args -> safeString(() ->
+            hostBridge.tlsConnect((String) args[0], ((Number) args[1]).intValue())));
+        host.setProperty("tlsWrite", (JSCallFunction) args -> safeString(() ->
+            hostBridge.tlsWrite((String) args[0], (String) args[1])));
+        host.setProperty("tlsClose", (JSCallFunction) args -> safeString(() ->
+            hostBridge.tlsClose((String) args[0])));
+        host.setProperty("tlsStopListening", (JSCallFunction) args -> safeString(() ->
+            hostBridge.tlsStopListening((String) args[0])));
+
+        // Native-backed RSA crypto: LAN-share's receiver generates a key pair and self-signs its TLS
+        // certificate through these (SHA-256 hashing stays in pure JS).
+        host.setProperty("cryptoGenerateRsaKeyPair", (JSCallFunction) args -> safeString(() ->
+            hostBridge.cryptoGenerateRsaKeyPair(((Number) args[0]).intValue())));
+        host.setProperty("cryptoSignSha256", (JSCallFunction) args -> safeString(() ->
+            hostBridge.cryptoSignSha256((String) args[0], (String) args[1])));
+
         context.getGlobalObject().setProperty("host", host);
 
         // Evaluate the bundle once. It installs globalThis.__photosphereWorker.runTask.
@@ -363,6 +432,16 @@ public final class QuickJsTaskEngine implements TaskEngine {
     }
 
     //
+    // Delivers one inbound event JSON into the named JS entry point (globalThis.__udpEvent or
+    // globalThis.__tlsEvent) by setting it on a global and invoking the function. Runs on the worker
+    // thread so the QuickJS context is only ever touched here, never from the socket callback threads.
+    //
+    private void deliverInboundEvent(JSObject globalObject, String functionName, String eventJson) {
+        globalObject.setProperty("__inboundEventArg", eventJson);
+        context.evaluate("(typeof globalThis." + functionName + " === 'function') && globalThis." + functionName + "(globalThis.__inboundEventArg);");
+    }
+
+    //
     // Reads the worker bundle asset into a string. Loaded only from the packaged app asset.
     //
     private String readBundleAsset() throws IOException {
@@ -388,6 +467,8 @@ public final class QuickJsTaskEngine implements TaskEngine {
     public void dispose() {
         if (hostBridge != null) {
             hostBridge.tcp.shutdown();
+            hostBridge.udp.shutdown();
+            hostBridge.tls.shutdown();
         }
         worker.submit(() -> {
             if (context != null) {

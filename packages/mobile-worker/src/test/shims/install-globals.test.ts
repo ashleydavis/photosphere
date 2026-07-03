@@ -54,6 +54,42 @@ describe("install-globals", () => {
             expect(scope.setTimeout).toBe(existing);
             expect(scope.__pumpTimers).toBeUndefined();
         });
+
+        test("setInterval fires repeatedly across pumps until clearInterval stops it", () => {
+            const scope: any = {};
+            installTimers(scope);
+
+            let ticks = 0;
+            const id = scope.setInterval(() => { ticks += 1; }, 100);
+
+            expect(scope.__pumpTimers()).toBe(true);
+            expect(scope.__pumpTimers()).toBe(true);
+            expect(scope.__pumpTimers()).toBe(true);
+            expect(ticks).toBe(3);
+
+            scope.clearInterval(id);
+            expect(scope.__pumpTimers()).toBe(false);
+            expect(ticks).toBe(3);
+        });
+
+        test("a short interval fires many times before a longer timeout, and both run", () => {
+            const scope: any = {};
+            installTimers(scope);
+
+            const order: string[] = [];
+            scope.setInterval(() => order.push("tick"), 100);
+            scope.setTimeout(() => order.push("timeout"), 250);
+
+            // Pump until the one-shot timeout has fired.
+            for (let index = 0; index < 5; index++) {
+                scope.__pumpTimers();
+            }
+
+            expect(order).toContain("timeout");
+            // The interval fires before the timeout and more often than it.
+            expect(order.filter(entry => entry === "tick").length).toBeGreaterThanOrEqual(2);
+            expect(order.indexOf("tick")).toBeLessThan(order.indexOf("timeout"));
+        });
     });
 
     describe("installTextCodecs", () => {

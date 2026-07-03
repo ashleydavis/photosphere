@@ -37,6 +37,9 @@ const aliasMap: Record<string, string> = {
     "util": "src/shims/node-util.ts",
     "http": "src/shims/node-http.ts",
     "net": "src/shims/node-net.ts",
+    "dgram": "src/shims/node-dgram.ts",
+    "tls": "src/shims/node-tls.ts",
+    "https": "src/shims/node-https.ts",
     "@aws-sdk/client-s3": "src/shims/aws-s3.ts",
     "@aws-sdk/lib-storage": "src/shims/aws-lib-storage.ts",
     "vault": "src/shims/vault.ts",
@@ -52,7 +55,7 @@ const aliasPlugin: import("bun").BunPlugin = {
     setup(build) {
         // Match the aliased bare specifiers (with or without a node: prefix). Anchored so only exact
         // module names match, never a deep import that merely starts with one of these names.
-        const filter = /^(node:)?(fs\/promises|fs|path|os|stream\/promises|stream|crypto|child_process|zlib|util|http|net|@aws-sdk\/client-s3|@aws-sdk\/lib-storage|vault|tools)$/;
+        const filter = /^(node:)?(fs\/promises|fs|path|os|stream\/promises|stream|crypto|child_process|zlib|util|http|net|dgram|tls|https|@aws-sdk\/client-s3|@aws-sdk\/lib-storage|vault|tools)$/;
         build.onResolve({ filter }, args => {
             const specifier = args.path.replace(/^node:/, "");
             const target = aliasMap[specifier];

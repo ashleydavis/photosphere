@@ -8,6 +8,69 @@
 // the driver is parameterised by an ITestTransport.
 //
 
+import { TaskQueue, TaskStatus, getQueueBackend } from "task-queue";
+import { RandomUuidGenerator } from "utils";
+
+//
+// The fixed pairing code and payload used by the lan-share-roundtrip test command.
+//
+const ROUNDTRIP_CODE = "4321";
+
+//
+// A known secret payload the roundtrip sends; the test asserts the receiver delivers it back intact.
+//
+const ROUNDTRIP_PAYLOAD = {
+    type: "secret" as const,
+    name: "roundtrip-secret",
+    secretType: "api-key" as const,
+    value: JSON.stringify({ apiKey: "roundtrip-value-42" }),
+};
+
+//
+// Runs a full LAN-share transfer against the device's own loopback, as a single test command: it
+// dispatches a real receiver task and a real sender (find-receiver then send-payload) through the same
+// TaskQueue the app uses, so the whole native UDP discovery + cert-pinned HTTPS transfer runs on the
+// device. Returns a JSON string describing the outcome (whether the send succeeded and what payload the
+// receiver actually delivered) so the smoke test can assert an end-to-end transfer really happened.
+//
+async function runLanShareRoundtrip(): Promise<string> {
+    // Fail clearly if the queue backend was never installed (misconfigured host), rather than hang.
+    getQueueBackend();
+
+    const queue = new TaskQueue(new RandomUuidGenerator(), "lan-share-roundtrip");
+    try {
+        // Start the receiver first so it is broadcasting before the sender searches.
+        const receiverTaskId = queue.addTask("receive-share", { code: ROUNDTRIP_CODE });
+        const receiverPromise = queue.awaitTask(receiverTaskId);
+
+        const finderTaskId = queue.addTask("find-receiver", { code: ROUNDTRIP_CODE });
+        const finderResult = await queue.awaitTask(finderTaskId);
+        const endpoint = finderResult && finderResult.status === TaskStatus.Succeeded ? finderResult.outputs.endpoint : null;
+        if (!endpoint) {
+            return JSON.stringify({ ok: false, stage: "find-receiver", error: finderResult?.errorMessage ?? "no receiver discovered" });
+        }
+
+        const sendTaskId = queue.addTask("send-payload", { payload: ROUNDTRIP_PAYLOAD, code: ROUNDTRIP_CODE, endpoint });
+        const sendResult = await queue.awaitTask(sendTaskId);
+        const sendSuccess = sendResult && sendResult.status === TaskStatus.Succeeded ? sendResult.outputs.success === true : false;
+
+        const receiverResult = await receiverPromise;
+        const delivered = receiverResult && receiverResult.status === TaskStatus.Succeeded ? receiverResult.outputs.payload : null;
+
+        return JSON.stringify({
+            ok: sendSuccess && delivered != null,
+            sendSuccess,
+            sendStatus: sendResult ? sendResult.status : "no-result",
+            sendError: sendResult ? sendResult.errorMessage ?? null : null,
+            deliveredName: delivered ? delivered.name : null,
+            deliveredValue: delivered ? delivered.value : null,
+        });
+    }
+    finally {
+        queue.shutdown();
+    }
+}
+
 //
 // Payload carried with a test command. Fields are optional because each command only uses
 // the subset relevant to it (e.g. "type" uses dataId + text, "navigate" uses page).
@@ -359,6 +422,8 @@ export function installTestDriver(transport: ITestTransport): void {
             case 'reset-config':
                 doResetConfig();
                 return undefined;
+            case 'lan-share-roundtrip':
+                return await runLanShareRoundtrip();
             default:
                 throw new Error(`Test command not implemented on this platform: ${command}`);
         }

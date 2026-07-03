@@ -46,6 +46,16 @@ function createMockHost(sessionId: string): IMockHost {
         imageMagick: () => JSON.stringify({ exitCode: 0, output: "" }),
         ffmpeg: () => JSON.stringify({ exitCode: 0, output: "" }),
         ffprobe: () => JSON.stringify({ exitCode: 0, output: "" }),
+        udpBind: () => JSON.stringify({ socketId: "U1", port: 0 }),
+        udpSend: () => null,
+        udpClose: () => null,
+        tlsListen: () => JSON.stringify({ listenerId: "T1", port: 0 }),
+        tlsConnect: () => JSON.stringify({ connectionId: "TC1", peerCertBase64: "" }),
+        tlsWrite: () => null,
+        tlsClose: () => null,
+        tlsStopListening: () => null,
+        cryptoGenerateRsaKeyPair: () => JSON.stringify({ privateKeyPem: "", publicKeyPem: "" }),
+        cryptoSignSha256: () => "",
     };
 
     return mockHost;

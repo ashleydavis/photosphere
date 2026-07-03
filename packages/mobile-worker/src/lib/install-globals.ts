@@ -35,31 +35,36 @@ interface IMinimalProcess {
 }
 
 //
-// A pending timer registered via setTimeout.
+// A pending timer registered via setTimeout or setInterval.
 //
 interface IPendingTimer {
-    // The timer id returned to the caller (used by clearTimeout).
+    // The timer id returned to the caller (used by clearTimeout/clearInterval).
     id: number;
 
     // The callback to run when the timer fires.
     callback: (...args: any[]) => void;
 
-    // The requested delay in ms; used to order which timer fires first.
-    delay: number;
+    // Virtual milliseconds remaining until this timer next fires. Advanced by the pump.
+    remaining: number;
+
+    // For a repeating timer (setInterval), the period to re-arm to after firing; null for a one-shot.
+    interval: number | null;
 
     // Extra arguments forwarded to the callback.
     args: any[];
 }
 
 //
-// Installs setTimeout/clearTimeout backed by an idle-driven timer queue.
+// Installs setTimeout/clearTimeout and setInterval/clearInterval backed by an idle-driven timer queue.
 //
-// The embedded engine (QuickJS/JavaScriptCore) has no timer loop: the native engine drives a task
-// by repeatedly draining the JS microtask queue. So timers cannot fire on a real clock. Instead,
-// timers are queued here and fired one at a time by the native pump (via globalThis.__pumpTimers)
-// ONLY when the microtask queue is drained and the task has not yet settled. The earliest-delay
-// timer fires first, so a short retry backoff fires before a long timeout guard, and a long timeout
-// guard (e.g. retry's 30s race) never preempts work that completes via microtasks.
+// The embedded engine (QuickJS/JavaScriptCore) has no timer loop: the native engine drives a task by
+// repeatedly draining the JS microtask queue. So timers cannot fire on a real clock. Instead, timers
+// are queued here and fired one at a time by the native pump (via globalThis.__pumpTimers) ONLY when
+// the microtask queue is drained and the task has not yet settled. A virtual clock advances by the
+// smallest remaining delay each pump, so the earliest timer fires first and relative ordering is
+// preserved: a 1s broadcast interval fires many times before a 60s timeout guard, and an interval
+// re-arms after each firing (LAN-share's receiver broadcasts on setInterval and both roles poll
+// cancellation on setInterval, while overall timeouts use setTimeout).
 //
 export function installTimers(globalScope: any): void {
     // Only install the queue on an engine that lacks timers (QuickJS/JavaScriptCore). Where a real
@@ -73,19 +78,36 @@ export function installTimers(globalScope: any): void {
 
     globalScope.setTimeout = (callback: (...args: any[]) => void, delay?: number, ...args: any[]): number => {
         const id = nextTimerId++;
-        timers.push({ id, callback, delay: delay && delay > 0 ? delay : 0, args });
+        timers.push({ id, callback, remaining: delay && delay > 0 ? delay : 0, interval: null, args });
         return id;
     };
 
-    globalScope.clearTimeout = (id: number): void => {
+    globalScope.setInterval = (callback: (...args: any[]) => void, delay?: number, ...args: any[]): number => {
+        const id = nextTimerId++;
+        // Clamp the period to at least 1ms so a 0-delay interval cannot starve the virtual clock.
+        const period = delay && delay > 0 ? delay : 1;
+        timers.push({ id, callback, remaining: period, interval: period, args });
+        return id;
+    };
+
+    const removeTimer = (id: number): void => {
         const index = timers.findIndex(timer => timer.id === id);
         if (index >= 0) {
             timers.splice(index, 1);
         }
     };
 
-    // Fires the earliest-delay pending timer, if any. Returns true when a timer was run, so the
-    // native pump knows whether progress is still possible. Called only when otherwise idle.
+    globalScope.clearTimeout = (id: number): void => {
+        removeTimer(id);
+    };
+
+    globalScope.clearInterval = (id: number): void => {
+        removeTimer(id);
+    };
+
+    // Advances the virtual clock to the earliest pending timer and fires it. A one-shot is removed; an
+    // interval is re-armed to its period. Returns true when a timer was run, so the native pump knows
+    // whether progress is still possible. Called only when otherwise idle.
     globalScope.__pumpTimers = (): boolean => {
         if (timers.length === 0) {
             return false;
@@ -93,12 +115,25 @@ export function installTimers(globalScope: any): void {
 
         let earliestIndex = 0;
         for (let index = 1; index < timers.length; index++) {
-            if (timers[index].delay < timers[earliestIndex].delay) {
+            if (timers[index].remaining < timers[earliestIndex].remaining) {
                 earliestIndex = index;
             }
         }
 
-        const timer = timers.splice(earliestIndex, 1)[0];
+        const advance = timers[earliestIndex].remaining;
+        if (advance > 0) {
+            for (const timer of timers) {
+                timer.remaining -= advance;
+            }
+        }
+
+        const timer = timers[earliestIndex];
+        if (timer.interval !== null) {
+            timer.remaining = timer.interval;
+        }
+        else {
+            timers.splice(earliestIndex, 1);
+        }
         timer.callback(...timer.args);
         return true;
     };

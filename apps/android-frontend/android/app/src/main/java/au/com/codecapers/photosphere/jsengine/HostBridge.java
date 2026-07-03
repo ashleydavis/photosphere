@@ -91,6 +91,88 @@ public final class HostBridge {
     }
 
     //
+    // The native UDP layer behind the host.udp* functions. Owned per engine context; the engine drains
+    // its inbound event queue on the worker thread. Public so the run loop can poll and check liveness.
+    //
+    public final UdpHost udp = new UdpHost();
+
+    //
+    // host.udpBind(host, port, broadcast): binds a UDP socket and returns JSON { socketId, port }.
+    //
+    public String udpBind(String host, int port, boolean broadcast) {
+        return udp.udpBind(host, port, broadcast);
+    }
+
+    //
+    // host.udpSend(socketId, base64, host, port): sends a datagram to host/port.
+    //
+    public String udpSend(String socketId, String base64, String host, int port) {
+        return udp.udpSend(socketId, base64, host, port);
+    }
+
+    //
+    // host.udpClose(socketId): closes a UDP socket.
+    //
+    public String udpClose(String socketId) {
+        return udp.udpClose(socketId);
+    }
+
+    //
+    // The native TLS layer behind the host.tls* functions. Owned per engine context; the engine drains
+    // its inbound event queue on the worker thread. Public so the run loop can poll and check liveness.
+    //
+    public final TlsHost tls = new TlsHost();
+
+    //
+    // host.tlsListen(host, port, certPem, keyPem): binds a TLS listener and returns JSON { listenerId, port }.
+    //
+    public String tlsListen(String host, int port, String certPem, String keyPem) {
+        return tls.tlsListen(host, port, certPem, keyPem);
+    }
+
+    //
+    // host.tlsConnect(host, port): opens a cert-capturing TLS client and returns JSON { connectionId, peerCertBase64 }.
+    //
+    public String tlsConnect(String host, int port) {
+        return tls.tlsConnect(host, port);
+    }
+
+    //
+    // host.tlsWrite(connectionId, base64): writes bytes to a TLS connection.
+    //
+    public String tlsWrite(String connectionId, String base64) {
+        return tls.tlsWrite(connectionId, base64);
+    }
+
+    //
+    // host.tlsClose(connectionId): closes one TLS connection.
+    //
+    public String tlsClose(String connectionId) {
+        return tls.tlsClose(connectionId);
+    }
+
+    //
+    // host.tlsStopListening(listenerId): closes a TLS listener.
+    //
+    public String tlsStopListening(String listenerId) {
+        return tls.tlsStopListening(listenerId);
+    }
+
+    //
+    // host.cryptoGenerateRsaKeyPair(modulusLength): generates an RSA key pair as JSON { privateKeyPem, publicKeyPem }.
+    //
+    public String cryptoGenerateRsaKeyPair(int modulusLength) {
+        return CryptoHost.cryptoGenerateRsaKeyPair(modulusLength);
+    }
+
+    //
+    // host.cryptoSignSha256(privateKeyPem, dataBase64): signs data with SHA256withRSA, returning a base64 signature.
+    //
+    public String cryptoSignSha256(String privateKeyPem, String dataBase64) {
+        return CryptoHost.cryptoSignSha256(privateKeyPem, dataBase64);
+    }
+
+    //
     // Sets the task that is about to run on this context. Called by the engine before
     // invoking runTask, and cleared after.
     //

@@ -80,6 +80,36 @@ export interface IHost {
 
     // Runs an in-process ffprobe argv (JSON-encoded string[]); returns a JSON string { exitCode, output }.
     ffprobe: (argvJson: string) => string;
+
+    // Binds a UDP datagram socket (broadcast enabled when requested) and returns a JSON string { socketId, port }.
+    udpBind: (host: string, port: number, broadcast: boolean) => string;
+
+    // Sends base64-encoded bytes as a datagram to the given host/port from a bound socket.
+    udpSend: (socketId: string, base64: string, host: string, port: number) => string | null;
+
+    // Closes a UDP socket.
+    udpClose: (socketId: string) => string | null;
+
+    // Binds a TLS listener using the given PEM cert/key and returns a JSON string { listenerId, port }.
+    tlsListen: (host: string, port: number, certPem: string, keyPem: string) => string;
+
+    // Opens a TLS client connection (trusting any cert so the JS side can pin) and returns a JSON string { connectionId, peerCertBase64 }.
+    tlsConnect: (host: string, port: number) => string;
+
+    // Writes base64-encoded bytes to an accepted or connected TLS connection.
+    tlsWrite: (connectionId: string, base64: string) => string | null;
+
+    // Closes one TLS connection.
+    tlsClose: (connectionId: string) => string | null;
+
+    // Closes a TLS listener so it accepts no further connections.
+    tlsStopListening: (listenerId: string) => string | null;
+
+    // Generates an RSA key pair and returns a JSON string { privateKeyPem, publicKeyPem } (pkcs8 + spki PEM).
+    cryptoGenerateRsaKeyPair: (modulusLength: number) => string;
+
+    // Signs base64-encoded data with SHA256withRSA using the PEM private key and returns a base64 signature.
+    cryptoSignSha256: (privateKeyPem: string, dataBase64: string) => string;
 }
 
 //
@@ -109,6 +139,16 @@ export const EXPECTED_HOST_FUNCTIONS: string[] = [
     "imageMagick",
     "ffmpeg",
     "ffprobe",
+    "udpBind",
+    "udpSend",
+    "udpClose",
+    "tlsListen",
+    "tlsConnect",
+    "tlsWrite",
+    "tlsClose",
+    "tlsStopListening",
+    "cryptoGenerateRsaKeyPair",
+    "cryptoSignSha256",
 ];
 
 //

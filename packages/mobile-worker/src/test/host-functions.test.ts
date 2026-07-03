@@ -57,7 +57,7 @@ describe("host bridge NOT IMPLEMENTED guard", () => {
             imageMagick: () => JSON.stringify({ exitCode: 0, output: "" }),
             ffmpeg: () => JSON.stringify({ exitCode: 0, output: "" }),
             ffprobe: () => JSON.stringify({ exitCode: 0, output: "" }),
-        } as IHost;
+        } as unknown as IHost;
 
         const effectiveHost = buildHost(rawHost);
 

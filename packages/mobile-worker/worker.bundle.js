@@ -14877,6 +14877,7 @@ __p += '`;
     privateDecrypt: () => privateDecrypt,
     generateKeyPairSync: () => generateKeyPairSync,
     default: () => node_crypto_default,
+    createSign: () => createSign,
     createPublicKey: () => createPublicKey,
     createPrivateKey: () => createPrivateKey,
     createHash: () => createHash,
@@ -14885,6 +14886,13 @@ __p += '`;
     KeyObject: () => KeyObject,
     Decipher: () => Decipher
   });
+  function getCryptoHost() {
+    const host = globalThis.host;
+    if (!host) {
+      throw new Error("Native host bridge (globalThis.host) is not installed; crypto shim cannot run.");
+    }
+    return host;
+  }
   function hostPlatform3() {
     const platform = globalThis.host?.platform;
     return typeof platform === "string" ? platform : "mobile";
@@ -14907,8 +14915,28 @@ __p += '`;
   function createPublicKey() {
     notImplemented4("cryptoCreatePublicKey");
   }
-  function generateKeyPairSync() {
-    notImplemented4("cryptoGenerateKeyPairSync");
+  function generateKeyPairSync(_type, options) {
+    const host = getCryptoHost();
+    const modulusLength = options && typeof options.modulusLength === "number" ? options.modulusLength : 2048;
+    const resultJson = callHost(() => host.cryptoGenerateRsaKeyPair(modulusLength));
+    const parsed = JSON.parse(resultJson);
+    return { publicKey: parsed.publicKeyPem, privateKey: parsed.privateKeyPem };
+  }
+  function createSign(_algorithm) {
+    const chunks = [];
+    const signer = {
+      update(data) {
+        chunks.push(typeof data === "string" ? Buffer2.from(data, "utf8") : Buffer2.from(data));
+        return signer;
+      },
+      sign(privateKeyPem) {
+        const host = getCryptoHost();
+        const data = Buffer2.concat(chunks);
+        const signatureBase64 = callHost(() => host.cryptoSignSha256(privateKeyPem, data.toString("base64")));
+        return Buffer2.from(signatureBase64, "base64");
+      }
+    };
+    return signer;
   }
   function createCipheriv() {
     notImplemented4("cryptoCreateCipheriv");
@@ -14927,9 +14955,12 @@ __p += '`;
   }
   var import_create_hash, cryptoModule, node_crypto_default;
   var init_node_crypto = __esm(() => {
+    init_buffer();
+    init_host_access();
     import_create_hash = __toESM(require_browser2(), 1);
     cryptoModule = {
       createHash,
+      createSign,
       createPrivateKey,
       createPublicKey,
       generateKeyPairSync,
@@ -43602,14 +43633,26 @@ __p += '`;
     let nextTimerId = 1;
     globalScope.setTimeout = (callback, delay, ...args) => {
       const id = nextTimerId++;
-      timers.push({ id, callback, delay: delay && delay > 0 ? delay : 0, args });
+      timers.push({ id, callback, remaining: delay && delay > 0 ? delay : 0, interval: null, args });
       return id;
     };
-    globalScope.clearTimeout = (id) => {
+    globalScope.setInterval = (callback, delay, ...args) => {
+      const id = nextTimerId++;
+      const period = delay && delay > 0 ? delay : 1;
+      timers.push({ id, callback, remaining: period, interval: period, args });
+      return id;
+    };
+    const removeTimer = (id) => {
       const index = timers.findIndex((timer) => timer.id === id);
       if (index >= 0) {
         timers.splice(index, 1);
       }
+    };
+    globalScope.clearTimeout = (id) => {
+      removeTimer(id);
+    };
+    globalScope.clearInterval = (id) => {
+      removeTimer(id);
     };
     globalScope.__pumpTimers = () => {
       if (timers.length === 0) {
@@ -43617,11 +43660,22 @@ __p += '`;
       }
       let earliestIndex = 0;
       for (let index = 1;index < timers.length; index++) {
-        if (timers[index].delay < timers[earliestIndex].delay) {
+        if (timers[index].remaining < timers[earliestIndex].remaining) {
           earliestIndex = index;
         }
       }
-      const timer = timers.splice(earliestIndex, 1)[0];
+      const advance = timers[earliestIndex].remaining;
+      if (advance > 0) {
+        for (const timer2 of timers) {
+          timer2.remaining -= advance;
+        }
+      }
+      const timer = timers[earliestIndex];
+      if (timer.interval !== null) {
+        timer.remaining = timer.interval;
+      } else {
+        timers.splice(earliestIndex, 1);
+      }
       timer.callback(...timer.args);
       return true;
     };
@@ -55870,21 +55924,22 @@ ${JSON.stringify(b, null, 2)}`);
     }
     return combineHashes(filesRootHash, bsonRootHash);
   }
-  async function stampDatabaseModified(assetStorage, rawStorage) {
+  async function buildStampPartial(assetStorage, extra) {
+    const partial = { ...extra };
     const contentHash = await getDatabaseContentHash(assetStorage);
-    const partial = { lastModifiedAt: new Date().toISOString() };
     if (contentHash) {
       partial.contentHash = contentHash;
     }
-    await mergeDatabaseState(rawStorage, partial);
+    return partial;
+  }
+  async function stampDatabaseState(assetStorage, rawStorage, extra) {
+    await mergeDatabaseState(rawStorage, await buildStampPartial(assetStorage, extra));
+  }
+  async function stampDatabaseModified(assetStorage, rawStorage) {
+    await stampDatabaseState(assetStorage, rawStorage, { lastModifiedAt: new Date().toISOString() });
   }
   async function stampDatabaseStateLocked(assetStorage, rawStorage, sessionId, extra) {
-    const contentHash = await getDatabaseContentHash(assetStorage);
-    const partial = { ...extra };
-    if (contentHash) {
-      partial.contentHash = contentHash;
-    }
-    await updateDatabaseStateLocked(rawStorage, sessionId, partial);
+    await updateDatabaseStateLocked(rawStorage, sessionId, await buildStampPartial(assetStorage, extra));
   }
   async function loadCollectionMerkleTree2(storage2, collectionName) {
     return loadCollectionMerkleTree(storage2, ".db/bson", collectionName);
@@ -56800,40 +56855,1043 @@ Copied hash: ${copiedHash.toString("hex")}
     log.info(`Asset server task on http://${host}:${boundPort} stopped`);
     return { port: boundPort, host };
   }
+  // src/shims/node-https.ts
+  init_buffer();
+  init_node_http();
 
-  // src/lib/lan-share-handlers.ts
-  var SHARE_TIMEOUT_MS = 60000;
-  var CANCEL_POLL_INTERVAL_MS2 = 250;
-  function waitUntilTimeoutOrCancelled(context, timeoutMs, pollIntervalMs) {
-    return new Promise((resolve2) => {
-      let settled = false;
-      const finish = () => {
-        if (settled) {
+  // src/shims/node-tls.ts
+  init_buffer();
+  init_host_access();
+  function getTlsHost() {
+    const host = globalThis.host;
+    if (!host) {
+      throw new Error("Native host bridge (globalThis.host) is not installed; tls shim cannot run.");
+    }
+    return host;
+  }
+
+  class TinyEmitter2 {
+    tlsListeners = new Map;
+    on(eventName, listener) {
+      const existing = this.tlsListeners.get(eventName);
+      if (existing) {
+        existing.push(listener);
+      } else {
+        this.tlsListeners.set(eventName, [listener]);
+      }
+      return this;
+    }
+    once(eventName, listener) {
+      const wrapper = (...args) => {
+        this.off(eventName, wrapper);
+        listener(...args);
+      };
+      return this.on(eventName, wrapper);
+    }
+    off(eventName, listener) {
+      const existing = this.tlsListeners.get(eventName);
+      if (existing) {
+        const index = existing.indexOf(listener);
+        if (index >= 0) {
+          existing.splice(index, 1);
+        }
+      }
+      return this;
+    }
+    emit(eventName, ...args) {
+      const handlers2 = this.tlsListeners.get(eventName);
+      if (!handlers2) {
+        return;
+      }
+      for (const handler of handlers2.slice()) {
+        handler(...args);
+      }
+    }
+  }
+  var activeTlsServers = new Map;
+  var activeTlsSockets = new Map;
+
+  class TLSSocket extends TinyEmitter2 {
+    connectionId;
+    peerCertBase64;
+    closed = false;
+    constructor(connectionId, peerCertBase64 = "") {
+      super();
+      this.connectionId = connectionId;
+      this.peerCertBase64 = peerCertBase64;
+    }
+    getPeerCertificate() {
+      return { raw: Buffer2.from(this.peerCertBase64, "base64") };
+    }
+    write(chunk) {
+      if (this.closed) {
+        return false;
+      }
+      const buffer2 = typeof chunk === "string" ? Buffer2.from(chunk, "utf8") : Buffer2.from(chunk);
+      const host = getTlsHost();
+      callHost(() => host.tlsWrite(this.connectionId, buffer2.toString("base64")));
+      return true;
+    }
+    end(chunk) {
+      if (chunk !== undefined) {
+        this.write(chunk);
+      }
+      this.close();
+    }
+    destroy() {
+      this.close();
+    }
+    close() {
+      if (this.closed) {
+        return;
+      }
+      this.closed = true;
+      activeTlsSockets.delete(this.connectionId);
+      const host = getTlsHost();
+      callHost(() => host.tlsClose(this.connectionId));
+      this.emit("close");
+    }
+    deliverData(base64) {
+      this.emit("data", Buffer2.from(base64, "base64"));
+    }
+    deliverClose() {
+      if (this.closed) {
+        return;
+      }
+      this.closed = true;
+      activeTlsSockets.delete(this.connectionId);
+      this.emit("end");
+      this.emit("close");
+    }
+  }
+
+  class Server3 extends TinyEmitter2 {
+    certPem;
+    keyPem;
+    listenerId = undefined;
+    boundPort = 0;
+    boundHost = "127.0.0.1";
+    constructor(certPem, keyPem) {
+      super();
+      this.certPem = certPem;
+      this.keyPem = keyPem;
+    }
+    listen(port, host, callback) {
+      const actualHost = typeof host === "string" ? host : "0.0.0.0";
+      const actualCallback = typeof host === "function" ? host : callback;
+      const tlsHost = getTlsHost();
+      const resultJson = callHost(() => tlsHost.tlsListen(actualHost, port, this.certPem, this.keyPem));
+      const result = JSON.parse(resultJson);
+      this.listenerId = result.listenerId;
+      this.boundPort = result.port;
+      this.boundHost = actualHost;
+      activeTlsServers.set(result.listenerId, this);
+      if (actualCallback) {
+        this.once("listening", actualCallback);
+      }
+      Promise.resolve().then(() => {
+        this.emit("listening");
+      });
+      return this;
+    }
+    address() {
+      return { port: this.boundPort, address: this.boundHost, family: "IPv4" };
+    }
+    close(callback) {
+      if (this.listenerId !== undefined) {
+        const tlsHost = getTlsHost();
+        const listenerId = this.listenerId;
+        activeTlsServers.delete(listenerId);
+        this.listenerId = undefined;
+        callHost(() => tlsHost.tlsStopListening(listenerId));
+      }
+      this.emit("close");
+      if (callback) {
+        callback();
+      }
+      return this;
+    }
+    acceptConnection(connectionId) {
+      const socket = new TLSSocket(connectionId);
+      activeTlsSockets.set(connectionId, socket);
+      this.emit("secureConnection", socket);
+    }
+  }
+  function connectClient(port, host) {
+    const tlsHost = getTlsHost();
+    const resultJson = callHost(() => tlsHost.tlsConnect(host, port));
+    const result = JSON.parse(resultJson);
+    const socket = new TLSSocket(result.connectionId, result.peerCertBase64);
+    activeTlsSockets.set(result.connectionId, socket);
+    return socket;
+  }
+  function dispatchInboundEvent2(event) {
+    if (event.kind === "connection") {
+      if (event.listenerId === undefined || event.connectionId === undefined) {
+        return;
+      }
+      const server = activeTlsServers.get(event.listenerId);
+      if (server) {
+        server.acceptConnection(event.connectionId);
+      }
+      return;
+    }
+    if (event.kind === "data") {
+      if (event.connectionId === undefined || event.base64 === undefined) {
+        return;
+      }
+      const socket = activeTlsSockets.get(event.connectionId);
+      if (socket) {
+        socket.deliverData(event.base64);
+      }
+      return;
+    }
+    if (event.kind === "close") {
+      if (event.connectionId === undefined) {
+        return;
+      }
+      const socket = activeTlsSockets.get(event.connectionId);
+      if (socket) {
+        socket.deliverClose();
+      }
+    }
+  }
+  function installTlsInbound(globalScope = globalThis) {
+    globalScope.__tlsEvent = (eventJson) => {
+      const event = JSON.parse(eventJson);
+      dispatchInboundEvent2(event);
+    };
+  }
+  installTlsInbound();
+
+  // src/shims/node-https.ts
+  class TinyEmitter3 {
+    httpsListeners = new Map;
+    on(eventName, listener) {
+      const existing = this.httpsListeners.get(eventName);
+      if (existing) {
+        existing.push(listener);
+      } else {
+        this.httpsListeners.set(eventName, [listener]);
+      }
+      return this;
+    }
+    emit(eventName, ...args) {
+      const handlers2 = this.httpsListeners.get(eventName);
+      if (!handlers2) {
+        return;
+      }
+      for (const handler of handlers2.slice()) {
+        handler(...args);
+      }
+    }
+  }
+  function parseResponseHead(headerText) {
+    const lines = headerText.split(`\r
+`);
+    const statusLine = lines[0] || "HTTP/1.1 200 OK";
+    const parts = statusLine.split(" ");
+    const statusCode = parseInt(parts[1] || "200", 10);
+    const headers = {};
+    for (let index = 1;index < lines.length; index++) {
+      const line = lines[index];
+      const colon = line.indexOf(":");
+      if (colon > 0) {
+        const name = line.slice(0, colon).trim().toLowerCase();
+        const value = line.slice(colon + 1).trim();
+        headers[name] = value;
+      }
+    }
+    return { statusCode: Number.isNaN(statusCode) ? 200 : statusCode, headers };
+  }
+
+  class ClientRequest extends TinyEmitter3 {
+    socket;
+    bodyChunks = [];
+    aborted = false;
+    constructor(options, callback) {
+      super();
+      this.socket = connectClient(options.port, options.hostname);
+      Promise.resolve().then(() => {
+        this.emit("socket", this.socket);
+        Promise.resolve().then(() => {
+          this.socket.emit("secureConnect");
+          Promise.resolve().then(() => {
+            if (this.aborted) {
+              return;
+            }
+            this.sendRequest(options, callback);
+          });
+        });
+      });
+    }
+    write(chunk) {
+      this.bodyChunks.push(typeof chunk === "string" ? Buffer2.from(chunk, "utf8") : Buffer2.from(chunk));
+      return true;
+    }
+    end(chunk) {
+      if (chunk !== undefined && chunk !== null) {
+        this.write(chunk);
+      }
+    }
+    destroy(error) {
+      if (this.aborted) {
+        return;
+      }
+      this.aborted = true;
+      this.socket.destroy();
+      if (error) {
+        this.emit("error", error);
+      }
+    }
+    get destroyed() {
+      return this.aborted;
+    }
+    sendRequest(options, callback) {
+      const body = Buffer2.concat(this.bodyChunks);
+      let head = `${options.method} ${options.path} HTTP/1.1\r
+`;
+      head += `Host: ${options.hostname}:${options.port}\r
+`;
+      const headers = options.headers || {};
+      for (const name of Object.keys(headers)) {
+        head += `${name}: ${headers[name]}\r
+`;
+      }
+      head += `Connection: close\r
+\r
+`;
+      this.setupResponseParsing(callback);
+      this.socket.write(Buffer2.from(head, "utf8"));
+      if (body.length > 0) {
+        this.socket.write(body);
+      }
+    }
+    setupResponseParsing(callback) {
+      let buffer2 = Buffer2.alloc(0);
+      let headParsed = false;
+      let response = undefined;
+      let bodyRemaining = 0;
+      const feedBody = (chunk) => {
+        if (!response) {
           return;
         }
-        settled = true;
-        clearInterval(pollTimer);
-        clearTimeout(timeoutTimer);
-        resolve2();
-      };
-      const pollTimer = setInterval(() => {
-        if (context.isCancelled()) {
-          finish();
+        if (bodyRemaining > 0) {
+          const take = chunk.subarray(0, bodyRemaining);
+          response.push(take);
+          bodyRemaining -= take.length;
         }
-      }, pollIntervalMs);
-      const timeoutTimer = setTimeout(finish, timeoutMs);
+        if (bodyRemaining <= 0) {
+          response.push(null);
+        }
+      };
+      this.socket.on("data", (chunk) => {
+        if (headParsed) {
+          feedBody(chunk);
+          return;
+        }
+        buffer2 = Buffer2.concat([buffer2, chunk]);
+        const terminator = buffer2.indexOf(`\r
+\r
+`);
+        if (terminator === -1) {
+          return;
+        }
+        const headerText = buffer2.subarray(0, terminator).toString("utf8");
+        const remainder = buffer2.subarray(terminator + 4);
+        const parsed = parseResponseHead(headerText);
+        headParsed = true;
+        response = new IncomingMessage("", "", parsed.headers, this.socket);
+        response.statusCode = parsed.statusCode;
+        const contentLength = parseInt(parsed.headers["content-length"] || "0", 10);
+        bodyRemaining = Number.isNaN(contentLength) ? 0 : contentLength;
+        callback(response);
+        if (bodyRemaining > 0 && remainder.length > 0) {
+          feedBody(remainder);
+        } else if (bodyRemaining <= 0) {
+          response.push(null);
+        }
+      });
+      this.socket.on("end", () => {
+        if (response && bodyRemaining > 0) {
+          response.push(null);
+        }
+      });
+    }
+  }
+
+  class Server4 {
+    tlsServer;
+    requestListener;
+    constructor(options, requestListener) {
+      this.requestListener = requestListener;
+      this.tlsServer = new Server3(options.cert, options.key);
+      this.tlsServer.on("secureConnection", (socket) => this.handleConnection(socket));
+    }
+    listen(port, host, callback) {
+      this.tlsServer.listen(port, host, callback);
+      return this;
+    }
+    address() {
+      return this.tlsServer.address();
+    }
+    close(callback) {
+      this.tlsServer.close(callback);
+      return this;
+    }
+    handleConnection(socket) {
+      let buffer2 = Buffer2.alloc(0);
+      let headersParsed = false;
+      let request = undefined;
+      let bodyRemaining = 0;
+      const feedBody = (chunk) => {
+        if (!request) {
+          return;
+        }
+        if (bodyRemaining > 0) {
+          const take = chunk.subarray(0, bodyRemaining);
+          request.push(take);
+          bodyRemaining -= take.length;
+        }
+        if (bodyRemaining <= 0) {
+          request.push(null);
+        }
+      };
+      socket.on("data", (chunk) => {
+        if (headersParsed) {
+          feedBody(chunk);
+          return;
+        }
+        buffer2 = Buffer2.concat([buffer2, chunk]);
+        const terminator = buffer2.indexOf(`\r
+\r
+`);
+        if (terminator === -1) {
+          return;
+        }
+        const headerText = buffer2.subarray(0, terminator).toString("utf8");
+        const remainder = buffer2.subarray(terminator + 4);
+        const lines = headerText.split(`\r
+`);
+        const requestLine = (lines[0] || "").split(" ");
+        const method = (requestLine[0] || "GET").toUpperCase();
+        const url = requestLine[1] || "/";
+        const headers = {};
+        for (let index = 1;index < lines.length; index++) {
+          const colon = lines[index].indexOf(":");
+          if (colon > 0) {
+            headers[lines[index].slice(0, colon).trim().toLowerCase()] = lines[index].slice(colon + 1).trim();
+          }
+        }
+        headersParsed = true;
+        request = new IncomingMessage(method, url, headers, socket);
+        const response = new ServerResponse(socket);
+        const contentLength = parseInt(headers["content-length"] || "0", 10);
+        bodyRemaining = Number.isNaN(contentLength) ? 0 : contentLength;
+        this.requestListener(request, response);
+        if (bodyRemaining > 0 && remainder.length > 0) {
+          feedBody(remainder);
+        } else if (bodyRemaining <= 0) {
+          request.push(null);
+        }
+      });
+      socket.on("end", () => {
+        if (request && bodyRemaining > 0) {
+          request.push(null);
+        }
+      });
+    }
+  }
+  function createServer3(options, requestListener) {
+    return new Server4(options, requestListener);
+  }
+  function request(options, callback) {
+    return new ClientRequest(options, callback);
+  }
+
+  // src/shims/node-dgram.ts
+  init_buffer();
+  init_host_access();
+  function getUdpHost() {
+    const host = globalThis.host;
+    if (!host) {
+      throw new Error("Native host bridge (globalThis.host) is not installed; dgram shim cannot run.");
+    }
+    return host;
+  }
+
+  class TinyEmitter4 {
+    udpListeners = new Map;
+    on(eventName, listener) {
+      const existing = this.udpListeners.get(eventName);
+      if (existing) {
+        existing.push(listener);
+      } else {
+        this.udpListeners.set(eventName, [listener]);
+      }
+      return this;
+    }
+    once(eventName, listener) {
+      const wrapper = (...args) => {
+        this.off(eventName, wrapper);
+        listener(...args);
+      };
+      return this.on(eventName, wrapper);
+    }
+    off(eventName, listener) {
+      const existing = this.udpListeners.get(eventName);
+      if (existing) {
+        const index = existing.indexOf(listener);
+        if (index >= 0) {
+          existing.splice(index, 1);
+        }
+      }
+      return this;
+    }
+    emit(eventName, ...args) {
+      const handlers2 = this.udpListeners.get(eventName);
+      if (!handlers2) {
+        return;
+      }
+      for (const handler of handlers2.slice()) {
+        handler(...args);
+      }
+    }
+  }
+  var activeUdpSockets = new Map;
+
+  class Socket2 extends TinyEmitter4 {
+    socketId = undefined;
+    boundPort = 0;
+    closed = false;
+    bind(portOrCallback, callback) {
+      const port = typeof portOrCallback === "number" ? portOrCallback : 0;
+      const actualCallback = typeof portOrCallback === "function" ? portOrCallback : callback;
+      const host = getUdpHost();
+      const resultJson = callHost(() => host.udpBind("0.0.0.0", port, true));
+      const result = JSON.parse(resultJson);
+      this.socketId = result.socketId;
+      this.boundPort = result.port;
+      activeUdpSockets.set(result.socketId, this);
+      if (actualCallback) {
+        this.once("listening", actualCallback);
+      }
+      Promise.resolve().then(() => {
+        this.emit("listening");
+      });
+      return this;
+    }
+    setBroadcast(_flag) {}
+    send(message, offset, length, port, address, callback) {
+      if (this.socketId === undefined || this.closed) {
+        if (callback) {
+          callback(new Error("send on a closed or unbound udp socket"));
+        }
+        return;
+      }
+      const full = typeof message === "string" ? Buffer2.from(message, "utf8") : Buffer2.from(message);
+      const slice = full.subarray(offset, offset + length);
+      const host = getUdpHost();
+      const socketId = this.socketId;
+      callHost(() => host.udpSend(socketId, slice.toString("base64"), address, port));
+      if (callback) {
+        Promise.resolve().then(() => callback(null));
+      }
+    }
+    address() {
+      return { address: "0.0.0.0", port: this.boundPort, family: "IPv4", size: 0 };
+    }
+    close(callback) {
+      if (this.closed) {
+        if (callback) {
+          callback();
+        }
+        return;
+      }
+      this.closed = true;
+      if (this.socketId !== undefined) {
+        const host = getUdpHost();
+        const socketId = this.socketId;
+        activeUdpSockets.delete(socketId);
+        this.socketId = undefined;
+        callHost(() => host.udpClose(socketId));
+      }
+      this.emit("close");
+      if (callback) {
+        callback();
+      }
+    }
+    deliverMessage(base64, address, port) {
+      const buffer2 = Buffer2.from(base64, "base64");
+      const remoteInfo = { address, port, family: "IPv4", size: buffer2.length };
+      this.emit("message", buffer2, remoteInfo);
+    }
+  }
+  function createSocket(typeOrOptions, messageListener) {
+    const socket = new Socket2;
+    if (messageListener) {
+      socket.on("message", messageListener);
+    }
+    return socket;
+  }
+  function dispatchInboundEvent3(event) {
+    if (event.kind !== "message") {
+      return;
+    }
+    const socket = activeUdpSockets.get(event.socketId);
+    if (socket) {
+      socket.deliverMessage(event.base64, event.address, event.port);
+    }
+  }
+  function installUdpInbound(globalScope = globalThis) {
+    globalScope.__udpEvent = (eventJson) => {
+      const event = JSON.parse(eventJson);
+      dispatchInboundEvent3(event);
+    };
+  }
+  installUdpInbound();
+
+  // ../lan-share/src/lib/lan-share-receiver.ts
+  init_node_crypto();
+  var MAX_REQUESTS = 5;
+  var BROADCAST_INTERVAL_MS = 1000;
+  var DISCOVERY_PORT = 54321;
+  function generateSelfSignedCert() {
+    const keyPair = generateKeyPairSync("rsa", {
+      modulusLength: 2048,
+      publicKeyEncoding: { type: "spki", format: "pem" },
+      privateKeyEncoding: { type: "pkcs8", format: "pem" }
     });
+    const cert = buildSelfSignedCert(keyPair.publicKey, keyPair.privateKey);
+    const fingerprint = createHash("sha256").update(extractDerFromPem(cert)).digest("hex");
+    return {
+      cert,
+      key: keyPair.privateKey,
+      fingerprint
+    };
   }
-  async function receiveShareHandler(_data, context) {
-    await waitUntilTimeoutOrCancelled(context, SHARE_TIMEOUT_MS, CANCEL_POLL_INTERVAL_MS2);
-    return { payload: null };
+  function extractDerFromPem(pem) {
+    const base64 = pem.replace(/-----BEGIN [A-Z ]+-----/g, "").replace(/-----END [A-Z ]+-----/g, "").replace(/\s/g, "");
+    return Buffer.from(base64, "base64");
   }
-  async function findReceiverHandler(_data, context) {
-    await waitUntilTimeoutOrCancelled(context, SHARE_TIMEOUT_MS, CANCEL_POLL_INTERVAL_MS2);
-    return { endpoint: null };
+  function buildSelfSignedCert(publicKeyPem, privateKeyPem) {
+    const publicKeyDer = extractDerFromPem(publicKeyPem);
+    const now = new Date;
+    const notBefore = now;
+    const notAfter = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const serialNumber = encodeAsn1Integer(Buffer.from([1]));
+    const signatureAlgorithm = encodeAsn1Sequence([
+      encodeAsn1Oid([1, 2, 840, 113549, 1, 1, 11]),
+      encodeAsn1Null()
+    ]);
+    const issuer = encodeAsn1Sequence([
+      encodeAsn1Set([
+        encodeAsn1Sequence([
+          encodeAsn1Oid([2, 5, 4, 3]),
+          encodeAsn1Utf8String("Photosphere LAN Share")
+        ])
+      ])
+    ]);
+    const validity = encodeAsn1Sequence([
+      encodeAsn1UtcTime(notBefore),
+      encodeAsn1UtcTime(notAfter)
+    ]);
+    const subject = issuer;
+    const version = encodeAsn1Explicit(0, encodeAsn1Integer(Buffer.from([2])));
+    const tbsCertificate = encodeAsn1Sequence([
+      version,
+      serialNumber,
+      signatureAlgorithm,
+      issuer,
+      validity,
+      subject,
+      Buffer.from(publicKeyDer)
+    ]);
+    const signer = createSign("SHA256");
+    signer.update(tbsCertificate);
+    const signature = signer.sign(privateKeyPem);
+    const certificate = encodeAsn1Sequence([
+      tbsCertificate,
+      signatureAlgorithm,
+      encodeAsn1BitString(signature)
+    ]);
+    const base64Cert = certificate.toString("base64");
+    const lines = [];
+    for (let offset = 0;offset < base64Cert.length; offset += 64) {
+      lines.push(base64Cert.slice(offset, offset + 64));
+    }
+    return `-----BEGIN CERTIFICATE-----
+${lines.join(`
+`)}
+-----END CERTIFICATE-----
+`;
   }
-  async function sendPayloadHandler(_data) {
-    return { success: false };
+  function encodeAsn1Length(length) {
+    if (length < 128) {
+      return Buffer.from([length]);
+    }
+    const bytes = [];
+    let remaining = length;
+    while (remaining > 0) {
+      bytes.unshift(remaining & 255);
+      remaining >>= 8;
+    }
+    return Buffer.from([128 | bytes.length, ...bytes]);
+  }
+  function encodeAsn1Tag(tag, content) {
+    return Buffer.concat([Buffer.from([tag]), encodeAsn1Length(content.length), content]);
+  }
+  function encodeAsn1Sequence(items) {
+    return encodeAsn1Tag(48, Buffer.concat(items));
+  }
+  function encodeAsn1Set(items) {
+    return encodeAsn1Tag(49, Buffer.concat(items));
+  }
+  function encodeAsn1Integer(value) {
+    if (value[0] & 128) {
+      value = Buffer.concat([Buffer.from([0]), value]);
+    }
+    return encodeAsn1Tag(2, value);
+  }
+  function encodeAsn1BitString(data) {
+    const content = Buffer.concat([Buffer.from([0]), data]);
+    return encodeAsn1Tag(3, content);
+  }
+  function encodeAsn1Null() {
+    return Buffer.from([5, 0]);
+  }
+  function encodeAsn1Oid(components) {
+    const bytes = [];
+    bytes.push(40 * components[0] + components[1]);
+    for (let index = 2;index < components.length; index++) {
+      const component = components[index];
+      if (component < 128) {
+        bytes.push(component);
+      } else {
+        const encodedBytes = [];
+        let remaining = component;
+        encodedBytes.unshift(remaining & 127);
+        remaining >>= 7;
+        while (remaining > 0) {
+          encodedBytes.unshift(remaining & 127 | 128);
+          remaining >>= 7;
+        }
+        bytes.push(...encodedBytes);
+      }
+    }
+    return encodeAsn1Tag(6, Buffer.from(bytes));
+  }
+  function encodeAsn1Utf8String(value) {
+    return encodeAsn1Tag(12, Buffer.from(value, "utf-8"));
+  }
+  function encodeAsn1UtcTime(date) {
+    const year = date.getUTCFullYear() % 100;
+    const month = date.getUTCMonth() + 1;
+    const day = date.getUTCDate();
+    const hours = date.getUTCHours();
+    const minutes = date.getUTCMinutes();
+    const seconds = date.getUTCSeconds();
+    const timeStr = String(year).padStart(2, "0") + String(month).padStart(2, "0") + String(day).padStart(2, "0") + String(hours).padStart(2, "0") + String(minutes).padStart(2, "0") + String(seconds).padStart(2, "0") + "Z";
+    return encodeAsn1Tag(23, Buffer.from(timeStr, "ascii"));
+  }
+  function encodeAsn1Explicit(tagNumber, content) {
+    const tag = 160 | tagNumber;
+    return encodeAsn1Tag(tag, content);
+  }
+
+  class LanShareReceiver {
+    timeoutMs;
+    code;
+    codeHash;
+    httpsServer;
+    udpSocket;
+    broadcastTimer;
+    requestCount;
+    receiveResolve;
+    timeoutTimer;
+    isDone;
+    constructor(timeoutMs) {
+      this.timeoutMs = timeoutMs;
+      this.code = null;
+      this.codeHash = null;
+      this.httpsServer = null;
+      this.udpSocket = null;
+      this.broadcastTimer = null;
+      this.requestCount = 0;
+      this.receiveResolve = null;
+      this.timeoutTimer = null;
+      this.isDone = false;
+    }
+    async start(code2) {
+      this.code = code2;
+      this.codeHash = createHash("sha256").update(code2).digest("hex");
+      const selfSigned = generateSelfSignedCert();
+      this.httpsServer = createServer3({ key: selfSigned.key, cert: selfSigned.cert }, (request2, response) => this.handleRequest(request2, response));
+      const port = await new Promise((resolve2) => {
+        this.httpsServer.listen(0, () => {
+          const address = this.httpsServer.address();
+          if (address && typeof address !== "string") {
+            resolve2(address.port);
+          }
+        });
+      });
+      this.udpSocket = createSocket("udp4");
+      this.udpSocket.bind(() => {
+        this.udpSocket.setBroadcast(true);
+        const message = Buffer.from(`PSIE_RECV:${port}:${selfSigned.fingerprint}`);
+        this.broadcastTimer = setInterval(() => {
+          this.udpSocket.send(message, 0, message.length, DISCOVERY_PORT, "255.255.255.255");
+          this.udpSocket.send(message, 0, message.length, DISCOVERY_PORT, "127.0.0.1");
+        }, BROADCAST_INTERVAL_MS);
+        this.udpSocket.send(message, 0, message.length, DISCOVERY_PORT, "255.255.255.255");
+        this.udpSocket.send(message, 0, message.length, DISCOVERY_PORT, "127.0.0.1");
+      });
+    }
+    async receive() {
+      return new Promise((resolve2) => {
+        this.receiveResolve = resolve2;
+        this.timeoutTimer = setTimeout(() => {
+          this.complete(null);
+        }, this.timeoutMs);
+      });
+    }
+    cancel() {
+      this.complete(null);
+    }
+    handleRequest(request2, response) {
+      this.requestCount++;
+      if (this.requestCount > MAX_REQUESTS) {
+        response.writeHead(429, { "Content-Type": "application/json" });
+        response.end(JSON.stringify({ error: "Too many requests" }));
+        this.complete(null);
+        return;
+      }
+      if (request2.method === "GET" && request2.url === "/pairing-code-hash") {
+        const body = { codeHash: this.codeHash };
+        response.writeHead(200, { "Content-Type": "application/json" });
+        response.end(JSON.stringify(body));
+        return;
+      }
+      if (request2.method === "POST" && request2.url === "/share-payload") {
+        const chunks = [];
+        request2.on("data", (chunk) => {
+          chunks.push(chunk);
+        });
+        request2.on("end", () => {
+          const rawBody = Buffer.concat(chunks).toString("utf-8");
+          let parsed;
+          try {
+            parsed = JSON.parse(rawBody);
+          } catch {
+            response.writeHead(400, { "Content-Type": "application/json" });
+            response.end(JSON.stringify({ error: "Invalid JSON" }));
+            return;
+          }
+          if (parsed.codeHash !== this.codeHash) {
+            response.writeHead(403, { "Content-Type": "application/json" });
+            response.end(JSON.stringify({ error: "Invalid pairing code" }));
+            return;
+          }
+          response.writeHead(200, { "Content-Type": "application/json" });
+          response.end(JSON.stringify({ success: true }));
+          this.complete(parsed.payload);
+        });
+        return;
+      }
+      response.writeHead(404, { "Content-Type": "application/json" });
+      response.end(JSON.stringify({ error: "Not found" }));
+    }
+    complete(payload) {
+      if (this.isDone) {
+        return;
+      }
+      this.isDone = true;
+      if (this.timeoutTimer) {
+        clearTimeout(this.timeoutTimer);
+        this.timeoutTimer = null;
+      }
+      if (this.broadcastTimer) {
+        clearInterval(this.broadcastTimer);
+        this.broadcastTimer = null;
+      }
+      if (this.udpSocket) {
+        this.udpSocket.close();
+        this.udpSocket = null;
+      }
+      if (this.httpsServer) {
+        this.httpsServer.close();
+        this.httpsServer = null;
+      }
+      if (this.receiveResolve) {
+        this.receiveResolve(payload);
+        this.receiveResolve = null;
+      }
+    }
+  }
+  // ../lan-share/src/lib/lan-share-sender.ts
+  init_node_crypto();
+  var DISCOVERY_PORT2 = 54321;
+  var BROADCAST_PREFIX = "PSIE_RECV:";
+  function generatePairingCode() {
+    const code2 = Math.floor(1000 + Math.random() * 9000);
+    return String(code2);
+  }
+
+  class LanShareSender {
+    payload;
+    udpSocket;
+    isCancelled;
+    pairingCode;
+    constructor(payload, pairingCode) {
+      this.payload = payload;
+      this.pairingCode = pairingCode ?? generatePairingCode();
+      this.udpSocket = null;
+      this.isCancelled = false;
+    }
+    async waitForReceiver(timeoutMs) {
+      return new Promise((resolve2) => {
+        this.udpSocket = createSocket({ type: "udp4", reuseAddr: true });
+        const timeoutTimer = setTimeout(() => {
+          this.cleanupUdp();
+          resolve2(null);
+        }, timeoutMs);
+        this.udpSocket.on("message", (message, remoteInfo) => {
+          if (this.isCancelled) {
+            return;
+          }
+          const text = message.toString("utf-8");
+          if (!text.startsWith(BROADCAST_PREFIX)) {
+            return;
+          }
+          const parts = text.slice(BROADCAST_PREFIX.length).split(":");
+          if (parts.length < 2) {
+            return;
+          }
+          const port = parseInt(parts[0], 10);
+          const certFingerprint = parts.slice(1).join(":");
+          if (isNaN(port) || !certFingerprint) {
+            return;
+          }
+          clearTimeout(timeoutTimer);
+          this.cleanupUdp();
+          resolve2({
+            address: remoteInfo.address,
+            port,
+            certFingerprint
+          });
+        });
+        this.udpSocket.bind(DISCOVERY_PORT2);
+      });
+    }
+    makeRequest(endpoint, method, path, requestBody) {
+      return new Promise((resolve2, reject) => {
+        const options = {
+          hostname: endpoint.address,
+          port: endpoint.port,
+          path,
+          method,
+          headers: requestBody ? { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(requestBody) } : {},
+          rejectUnauthorized: false
+        };
+        const req = request(options, (response) => {
+          const chunks = [];
+          response.on("data", (chunk) => {
+            chunks.push(chunk);
+          });
+          response.on("end", () => {
+            resolve2({ statusCode: response.statusCode, body: Buffer.concat(chunks).toString("utf-8") });
+          });
+        });
+        req.on("socket", (socket) => {
+          const tlsSocket = socket;
+          tlsSocket.on("secureConnect", () => {
+            const cert = tlsSocket.getPeerCertificate();
+            if (cert && cert.raw) {
+              const actualFingerprint = createHash("sha256").update(cert.raw).digest("hex");
+              if (actualFingerprint !== endpoint.certFingerprint) {
+                req.destroy(new Error("Certificate fingerprint mismatch — possible MITM attack. " + `Expected ${endpoint.certFingerprint}, got ${actualFingerprint}`));
+              }
+            }
+          });
+        });
+        req.on("error", reject);
+        if (requestBody) {
+          req.write(requestBody);
+        }
+        req.end();
+      });
+    }
+    async send(endpoint) {
+      const codeHash = createHash("sha256").update(this.pairingCode).digest("hex");
+      const hashResponse = await this.makeRequest(endpoint, "GET", "/pairing-code-hash");
+      if (hashResponse.statusCode !== 200) {
+        return false;
+      }
+      const hashBody = JSON.parse(hashResponse.body);
+      if (hashBody.codeHash !== codeHash) {
+        return false;
+      }
+      const payloadBody = JSON.stringify({ codeHash, payload: this.payload });
+      const sendResponse = await this.makeRequest(endpoint, "POST", "/share-payload", payloadBody);
+      if (sendResponse.statusCode === 403) {
+        return false;
+      }
+      if (sendResponse.statusCode === 200) {
+        return true;
+      }
+      throw new Error(`Unexpected status code: ${sendResponse.statusCode}`);
+    }
+    cancel() {
+      this.isCancelled = true;
+      this.cleanupUdp();
+    }
+    cleanupUdp() {
+      if (this.udpSocket) {
+        this.udpSocket.close();
+        this.udpSocket = null;
+      }
+    }
+  }
+  // ../node-api/src/lib/lan-share.worker.ts
+  var SHARE_TIMEOUT_MS = 60000;
+  var CANCEL_POLL_INTERVAL_MS2 = 250;
+  function watchForCancellation(context, onCancel) {
+    let cancelled = false;
+    const timer = setInterval(() => {
+      if (!cancelled && context.isCancelled()) {
+        cancelled = true;
+        onCancel();
+      }
+    }, CANCEL_POLL_INTERVAL_MS2);
+    return () => {
+      clearInterval(timer);
+    };
+  }
+  async function receiveShareHandler(data, context) {
+    const receiver = new LanShareReceiver(SHARE_TIMEOUT_MS);
+    await receiver.start(data.code);
+    const stopWatching = watchForCancellation(context, () => receiver.cancel());
+    try {
+      const payload = await receiver.receive();
+      return { payload };
+    } finally {
+      stopWatching();
+    }
+  }
+  async function findReceiverHandler(data, context) {
+    const sender = new LanShareSender(undefined, data.code);
+    const stopWatching = watchForCancellation(context, () => sender.cancel());
+    try {
+      const endpoint = await sender.waitForReceiver(SHARE_TIMEOUT_MS);
+      return { endpoint };
+    } finally {
+      stopWatching();
+    }
+  }
+  async function sendPayloadHandler(data) {
+    const sender = new LanShareSender(data.payload, data.code);
+    const success = await sender.send(data.endpoint);
+    return { success };
   }
 
   // src/lib/host-functions.ts
@@ -56856,7 +57914,17 @@ Copied hash: ${copiedHash.toString("hex")}
     "tcpStopListening",
     "imageMagick",
     "ffmpeg",
-    "ffprobe"
+    "ffprobe",
+    "udpBind",
+    "udpSend",
+    "udpClose",
+    "tlsListen",
+    "tlsConnect",
+    "tlsWrite",
+    "tlsClose",
+    "tlsStopListening",
+    "cryptoGenerateRsaKeyPair",
+    "cryptoSignSha256"
   ];
   function notImplementedMessage(name, platform) {
     return `NOT IMPLEMENTED: native host function "${name}" is not implemented yet on ${platform}. Implement it ASAP.`;

@@ -381,6 +381,10 @@ export class ControlBridge {
             void this.forward("get-value", { dataId: req.query.dataId as string }, res);
         });
 
+        this.expressApp.post("/lan-share-roundtrip", (_req: Request, res: Response) => {
+            void this.forward("lan-share-roundtrip", {}, res);
+        });
+
         this.expressApp.post("/create-database", (req: Request, res: Response) => {
             void this.forward("create-database", { path: req.body.path }, res);
         });
