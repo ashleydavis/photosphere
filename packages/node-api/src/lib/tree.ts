@@ -1,13 +1,14 @@
-import { buildMerkleTree, saveTree, IMerkleTree, loadTree, createTree, upsertItem } from "merkle-tree";
+import { buildMerkleTree, saveTree, IMerkleTree, loadTree, createTree, upsertItem, combineHashes } from "merkle-tree";
 import { IDatabaseMetadata } from "./media-file-database";
 import { IStorage, walkDirectory } from "storage";
 import {
     loadCollectionMerkleTree as loadCollectionMerkleTreeBdb,
     loadShardMerkleTree as loadShardMerkleTreeBdb,
+    getDatabaseRootHash,
 } from "bdb";
 import { computeHash } from "./hash";
 import { batchGenerator, retry, IUuidGenerator } from "utils";
-import { LARGE_FILE_TIMEOUT } from "api";
+import { LARGE_FILE_TIMEOUT, mergeDatabaseState, updateDatabaseStateLocked, IDatabaseState } from "api";
 
 //
 // Path for the files Merkle tree (v6). Legacy path was .db/tree.dat.
@@ -65,6 +66,69 @@ export async function loadMerkleTree(assetStorage: IStorage): Promise<IMerkleTre
 export async function getFilesRootHash(assetStorage: IStorage): Promise<Buffer | undefined> {
     const tree = await loadMerkleTree(assetStorage);
     return tree?.merkle?.hash;
+}
+
+//
+// BSON database path within a database (v6 layout).
+//
+const BSON_DB_PATH = ".db/bson";
+
+//
+// Computes the combined content hash of the database: the files-tree root combined with the bson-db-tree root.
+// Two databases with the same content hash are identical. Returns undefined if either root is unavailable
+// (e.g. an empty database), in which case callers skip the content-hash based sync early-out.
+//
+export async function getDatabaseContentHash(assetStorage: IStorage): Promise<Buffer | undefined> {
+    const filesRootHash = await getFilesRootHash(assetStorage);
+    if (!filesRootHash) {
+        return undefined;
+    }
+    const bsonRootHash = await getDatabaseRootHash(assetStorage, BSON_DB_PATH);
+    if (!bsonRootHash) {
+        return undefined;
+    }
+    return combineHashes(filesRootHash, bsonRootHash);
+}
+
+//
+// Builds the state-file partial for a stamp: the given fields plus the database's current content hash
+// (only when both merkle trees are available, so an empty database does not clear an existing hash).
+//
+async function buildStampPartial(assetStorage: IStorage, extra: Partial<IDatabaseState>): Promise<Partial<IDatabaseState>> {
+    const partial: Partial<IDatabaseState> = { ...extra };
+    const contentHash = await getDatabaseContentHash(assetStorage);
+    if (contentHash) {
+        partial.contentHash = contentHash;
+    }
+    return partial;
+}
+
+//
+// Refreshes the content hash in the state file together with the given fields (e.g. lastModifiedAt or
+// lastSyncedAt). Lock-free: the caller must already hold the database write lock and should call this as
+// the last step of the locked mutation, after the merkle tree and bson database are persisted. A crash
+// between persisting the trees and this call leaves the previous content hash, which only causes an extra
+// full sync (which self-heals the state file), never data loss.
+//
+export async function stampDatabaseState(assetStorage: IStorage, rawStorage: IStorage, extra: Partial<IDatabaseState>): Promise<void> {
+    await mergeDatabaseState(rawStorage, await buildStampPartial(assetStorage, extra));
+}
+
+//
+// Records that the database was modified locally: stamps lastModifiedAt and refreshes the content hash.
+// Lock-free: the caller must already hold the database write lock.
+//
+export async function stampDatabaseModified(assetStorage: IStorage, rawStorage: IStorage): Promise<void> {
+    await stampDatabaseState(assetStorage, rawStorage, { lastModifiedAt: new Date().toISOString() });
+}
+
+//
+// Refreshes the content hash in the state file together with the given fields (e.g. lastSyncedAt or
+// lastReplicatedAt), acquiring the write lock for the duration. For callers that do not already hold the
+// lock (replicate, repair). Does nothing if the lock cannot be acquired.
+//
+export async function stampDatabaseStateLocked(assetStorage: IStorage, rawStorage: IStorage, sessionId: string, extra: Partial<IDatabaseState>): Promise<void> {
+    await updateDatabaseStateLocked(rawStorage, sessionId, await buildStampPartial(assetStorage, extra));
 }
 
 //

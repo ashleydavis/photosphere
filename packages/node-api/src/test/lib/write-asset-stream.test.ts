@@ -3,12 +3,12 @@ jest.mock("api", () => ({
     acquireWriteLock: jest.fn().mockResolvedValue(true),
     releaseWriteLock: jest.fn().mockResolvedValue(undefined),
     refreshWriteLock: jest.fn().mockResolvedValue(undefined),
-    updateDatabaseConfig: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock("../../lib/tree", () => ({
     loadMerkleTree: jest.fn().mockResolvedValue({ databaseMetadata: { filesImported: 0 } }),
     saveMerkleTree: jest.fn().mockResolvedValue(undefined),
+    stampDatabaseModified: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock("../../lib/hash", () => ({
@@ -26,14 +26,13 @@ jest.mock("utils", () => ({
 
 import { writeAssetStream } from "../../lib/media-file-database";
 import { acquireWriteLock, releaseWriteLock } from "api";
-import { loadMerkleTree, saveMerkleTree } from "../../lib/tree";
-import { updateDatabaseConfig } from "api";
+import { loadMerkleTree, saveMerkleTree, stampDatabaseModified } from "../../lib/tree";
 import { addItem } from "merkle-tree";
 
 const mockAcquireWriteLock = acquireWriteLock as jest.MockedFunction<typeof acquireWriteLock>;
 const mockLoadMerkleTree = loadMerkleTree as jest.MockedFunction<typeof loadMerkleTree>;
 const mockSaveMerkleTree = saveMerkleTree as jest.MockedFunction<typeof saveMerkleTree>;
-const mockUpdateDatabaseConfig = updateDatabaseConfig as jest.MockedFunction<typeof updateDatabaseConfig>;
+const mockStampDatabaseModified = stampDatabaseModified as jest.MockedFunction<typeof stampDatabaseModified>;
 const mockAddItem = addItem as jest.MockedFunction<typeof addItem>;
 const mockReleaseWriteLock = releaseWriteLock as jest.MockedFunction<typeof releaseWriteLock>;
 
@@ -121,15 +120,13 @@ describe("writeAssetStream", () => {
         expect(tree.databaseMetadata.filesImported).toBe(0);
     });
 
-    test("calls updateDatabaseConfig after writing", async () => {
+    test("stamps the database as modified after writing", async () => {
         const storage = makeStorage(fakeInfo);
+        const rawStorage = makeRawStorage();
 
-        await writeAssetStream(storage, makeRawStorage(), "session-1", "t1", "thumb", "image/jpeg", fakeStream, 4);
+        await writeAssetStream(storage, rawStorage, "session-1", "t1", "thumb", "image/jpeg", fakeStream, 4);
 
-        expect(mockUpdateDatabaseConfig).toHaveBeenCalledWith(
-            expect.anything(),
-            expect.objectContaining({ lastModifiedAt: expect.any(String) })
-        );
+        expect(mockStampDatabaseModified).toHaveBeenCalledWith(storage, rawStorage);
     });
 
     test("throws when the write lock cannot be acquired", async () => {

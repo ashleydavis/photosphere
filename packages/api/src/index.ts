@@ -5,6 +5,7 @@ export * from "./lib/load-assets";
 export * from "./lib/load-assets.types";
 export * from "./lib/save-assets.types";
 export * from "./lib/database-config";
+export * from "./lib/database-state";
 export * from "./lib/database-descriptor";
 export * from "./lib/asset";
 export * from "./lib/op";

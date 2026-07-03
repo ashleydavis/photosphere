@@ -30,11 +30,10 @@ jest.mock("../../lib/tree", () => ({
 jest.mock("api", () => ({
     ...jest.requireActual("api"),
     loadDatabaseConfig: jest.fn().mockResolvedValue({ origin: "/fake/origin" }),
-    updateDatabaseConfig: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock("../../lib/sync", () => ({
-    syncDatabases: jest.fn().mockResolvedValue(undefined),
+    syncDatabases: jest.fn().mockResolvedValue({ synced: true }),
 }));
 
 jest.mock("utils", () => ({
@@ -42,13 +41,11 @@ jest.mock("utils", () => ({
 }));
 
 import { createStorage } from "storage";
-import { updateDatabaseConfig } from "api";
 import { merkleTreeExists } from "../../lib/tree";
 import { syncDatabases } from "../../lib/sync";
 import { syncDatabaseHandler } from "../../lib/sync-database.worker";
 
 const mockCreateStorage = createStorage as jest.MockedFunction<typeof createStorage>;
-const mockUpdateDatabaseConfig = updateDatabaseConfig as jest.MockedFunction<typeof updateDatabaseConfig>;
 const mockMerkleTreeExists = merkleTreeExists as jest.MockedFunction<typeof merkleTreeExists>;
 const mockSyncDatabases = syncDatabases as jest.MockedFunction<typeof syncDatabases>;
 
@@ -99,24 +96,18 @@ describe("syncDatabaseHandler", () => {
             });
     });
 
-    test("stamps lastSyncedAt on both local and origin storage with the same value", async () => {
+    test("syncs the local database against its origin", async () => {
         await syncDatabaseHandler(makeData(), makeContext());
 
-        expect(mockUpdateDatabaseConfig).toHaveBeenCalledTimes(2);
+        expect(mockSyncDatabases).toHaveBeenCalledTimes(1);
 
-        const firstCall = mockUpdateDatabaseConfig.mock.calls[0];
-        const secondCall = mockUpdateDatabaseConfig.mock.calls[1];
-
-        const firstStorage = firstCall[0] as any;
-        const secondStorage = secondCall[0] as any;
-        expect(firstStorage.__label).toBe("local-raw");
-        expect(secondStorage.__label).toBe("origin-raw");
-
-        const firstPartial = firstCall[1] as { lastSyncedAt: string };
-        const secondPartial = secondCall[1] as { lastSyncedAt: string };
-        expect(firstPartial.lastSyncedAt).toBeDefined();
-        expect(typeof firstPartial.lastSyncedAt).toBe("string");
-        expect(firstPartial.lastSyncedAt).toBe(secondPartial.lastSyncedAt);
+        // syncDatabases(sourceAssetStorage, sourceRawStorage, sourceBson, targetAssetStorage, targetRawStorage, ...)
+        // Source is the local database, target is the origin.
+        const call = mockSyncDatabases.mock.calls[0];
+        const sourceRawStorage = call[1] as any;
+        const targetRawStorage = call[4] as any;
+        expect(sourceRawStorage.__label).toBe("local-raw");
+        expect(targetRawStorage.__label).toBe("origin-raw");
     });
 
     test("skips sync when the origin storage has no merkle tree", async () => {
@@ -125,6 +116,5 @@ describe("syncDatabaseHandler", () => {
         await syncDatabaseHandler(makeData(), makeContext());
 
         expect(mockSyncDatabases).not.toHaveBeenCalled();
-        expect(mockUpdateDatabaseConfig).not.toHaveBeenCalled();
     });
 });

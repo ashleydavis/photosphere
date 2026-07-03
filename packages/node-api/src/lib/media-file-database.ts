@@ -1,5 +1,5 @@
 import { BsonDatabase, IBsonDatabase, IBsonCollection, getDatabaseRootHash } from "bdb";
-import { loadDatabaseConfig, saveDatabaseConfig, updateDatabaseConfig } from "api";
+import { loadDatabaseConfig, saveDatabaseConfig } from "api";
 import { createStorage, IStorage, IS3Credentials, IStorageOptions, loadEncryptionKeysFromPem, pathJoin, StoragePrefixWrapper } from "storage";
 import { resolveStorageCredentials } from "./resolve-storage-credentials";
 import { LazyOriginStorage } from "./lazy-origin-storage";
@@ -17,7 +17,7 @@ import { IResolution } from "./image";
 import _ from "lodash";
 import { acquireWriteLock, refreshWriteLock, releaseWriteLock } from "api";
 import { computeAssetHash } from "./hash";
-import { loadMerkleTree, merkleTreeExists, saveMerkleTree } from "./tree";
+import { loadMerkleTree, merkleTreeExists, saveMerkleTree, stampDatabaseModified } from "./tree";
 import { addItem, createTree, deleteItem, combineHashes, IMerkleTree } from "merkle-tree";
 
 //
@@ -407,7 +407,7 @@ export async function writeAsset(
         }
 
         await retry(() => saveMerkleTree(merkleTree, assetStorage));
-        await updateDatabaseConfig(rawStorage, { lastModifiedAt: new Date().toISOString() });
+        await stampDatabaseModified(assetStorage, rawStorage);
     }
     catch (err: any) {
         log.exception(`Failed to add asset "${assetPath}" from buffer`, err);
@@ -471,7 +471,7 @@ export async function writeAssetStream(
         }
 
         await retry(() => saveMerkleTree(merkleTree, assetStorage));
-        await updateDatabaseConfig(rawStorage, { lastModifiedAt: new Date().toISOString() });
+        await stampDatabaseModified(assetStorage, rawStorage);
     }
     catch (err: any) {
         log.exception(`Failed to add asset "${assetPath}" from stream`, err);
@@ -598,9 +598,9 @@ export async function removeAsset(
         await assetStorage.deleteFile(pathJoin("thumb", assetId));
 
         //
-        // Update config.json.
+        // Record the modification in the state file.
         //
-        await updateDatabaseConfig(rawStorage, { lastModifiedAt: new Date().toISOString() });
+        await stampDatabaseModified(assetStorage, rawStorage);
     }
     finally {
         await releaseWriteLock(rawStorage);

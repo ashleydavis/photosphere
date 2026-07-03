@@ -54542,6 +54542,16 @@ ${JSON.stringify(b, null, 2)}`);
     const treeFilePath = pathJoin(bsonDbPath, "db.dat");
     await storage2.deleteFile(treeFilePath);
   }
+  async function getDatabaseRootHash(storage2, bsonDbPath) {
+    const tree = await loadDatabaseMerkleTree(storage2, bsonDbPath);
+    if (!tree) {
+      return;
+    }
+    if (!tree.merkle) {
+      return;
+    }
+    return tree.merkle.hash;
+  }
 
   // ../bdb/src/lib/merkle-tree-ref.ts
   class MerkleRef {
@@ -55386,6 +55396,62 @@ ${JSON.stringify(b, null, 2)}`);
     const merged = { ...existing ?? {}, ...partial };
     await saveDatabaseConfig(rawStorage, merged);
   }
+  // ../api/src/lib/database-state.ts
+  var STATE_PATH = ".db/state.dat";
+  var STATE_TYPE_CODE = "DBST";
+  var STATE_VERSION = 1;
+  function serializeDatabaseState(state, serializer) {
+    serializer.writeBuffer(state.contentHash ?? Buffer.alloc(0));
+    serializer.writeString(state.lastModifiedAt ?? "");
+    serializer.writeString(state.lastSyncedAt ?? "");
+    serializer.writeString(state.lastReplicatedAt ?? "");
+  }
+  function deserializeDatabaseState(deserializer) {
+    const contentHash = deserializer.readBuffer();
+    const lastModifiedAt = deserializer.readString();
+    const lastSyncedAt = deserializer.readString();
+    const lastReplicatedAt = deserializer.readString();
+    const state = {};
+    if (contentHash.length > 0) {
+      state.contentHash = contentHash;
+    }
+    if (lastModifiedAt.length > 0) {
+      state.lastModifiedAt = lastModifiedAt;
+    }
+    if (lastSyncedAt.length > 0) {
+      state.lastSyncedAt = lastSyncedAt;
+    }
+    if (lastReplicatedAt.length > 0) {
+      state.lastReplicatedAt = lastReplicatedAt;
+    }
+    return state;
+  }
+  async function loadDatabaseState(rawStorage) {
+    try {
+      const state = await load(rawStorage, STATE_PATH, STATE_TYPE_CODE, { [STATE_VERSION]: deserializeDatabaseState }, undefined, STATE_VERSION);
+      return state ?? undefined;
+    } catch {
+      return;
+    }
+  }
+  async function saveDatabaseState(rawStorage, state) {
+    await save(rawStorage, STATE_PATH, state, STATE_VERSION, STATE_TYPE_CODE, serializeDatabaseState);
+  }
+  async function mergeDatabaseState(rawStorage, partial) {
+    const existing = await loadDatabaseState(rawStorage);
+    const merged = { ...existing ?? {}, ...partial };
+    await saveDatabaseState(rawStorage, merged);
+  }
+  async function updateDatabaseStateLocked(rawStorage, sessionId, partial) {
+    if (!await acquireWriteLock(rawStorage, sessionId)) {
+      return;
+    }
+    try {
+      await mergeDatabaseState(rawStorage, partial);
+    } finally {
+      await releaseWriteLock(rawStorage);
+    }
+  }
   // ../api/src/lib/asset-query.ts
   init_node_path();
   init_node_fs();
@@ -55788,6 +55854,38 @@ ${JSON.stringify(b, null, 2)}`);
   async function loadMerkleTree(assetStorage) {
     return await loadTree(FILES_TREE_PATH, assetStorage);
   }
+  async function getFilesRootHash(assetStorage) {
+    const tree = await loadMerkleTree(assetStorage);
+    return tree?.merkle?.hash;
+  }
+  var BSON_DB_PATH = ".db/bson";
+  async function getDatabaseContentHash(assetStorage) {
+    const filesRootHash = await getFilesRootHash(assetStorage);
+    if (!filesRootHash) {
+      return;
+    }
+    const bsonRootHash = await getDatabaseRootHash(assetStorage, BSON_DB_PATH);
+    if (!bsonRootHash) {
+      return;
+    }
+    return combineHashes(filesRootHash, bsonRootHash);
+  }
+  async function stampDatabaseModified(assetStorage, rawStorage) {
+    const contentHash = await getDatabaseContentHash(assetStorage);
+    const partial = { lastModifiedAt: new Date().toISOString() };
+    if (contentHash) {
+      partial.contentHash = contentHash;
+    }
+    await mergeDatabaseState(rawStorage, partial);
+  }
+  async function stampDatabaseStateLocked(assetStorage, rawStorage, sessionId, extra) {
+    const contentHash = await getDatabaseContentHash(assetStorage);
+    const partial = { ...extra };
+    if (contentHash) {
+      partial.contentHash = contentHash;
+    }
+    await updateDatabaseStateLocked(rawStorage, sessionId, partial);
+  }
   async function loadCollectionMerkleTree2(storage2, collectionName) {
     return loadCollectionMerkleTree(storage2, ".db/bson", collectionName);
   }
@@ -55873,7 +55971,7 @@ ${JSON.stringify(b, null, 2)}`);
         merkleTree.databaseMetadata.filesImported++;
       }
       await retry(() => saveMerkleTree(merkleTree, assetStorage));
-      await updateDatabaseConfig(rawStorage, { lastModifiedAt: new Date().toISOString() });
+      await stampDatabaseModified(assetStorage, rawStorage);
     } catch (err2) {
       log.exception(`Failed to add asset "${assetPath}" from stream`, err2);
       await retry(() => assetStorage.deleteFile(assetPath));
@@ -55935,7 +56033,7 @@ ${JSON.stringify(b, null, 2)}`);
       await assetStorage.deleteFile(pathJoin("asset", assetId));
       await assetStorage.deleteFile(pathJoin("display", assetId));
       await assetStorage.deleteFile(pathJoin("thumb", assetId));
-      await updateDatabaseConfig(rawStorage, { lastModifiedAt: new Date().toISOString() });
+      await stampDatabaseModified(assetStorage, rawStorage);
     } finally {
       await releaseWriteLock(rawStorage);
     }
@@ -56351,7 +56449,9 @@ Copied hash: ${copiedHash.toString("hex")}
       await replicateBsonDatabase(sourceBsonDatabase, destDb.bsonDatabase, sourceAssetStorage, destAssetStorage, progressCallback, result);
     }
     await updateDatabaseConfig(destRawAssetStorage, {
-      origin: sourcePath,
+      origin: sourcePath
+    });
+    await stampDatabaseStateLocked(destAssetStorage, destRawAssetStorage, "replicate", {
       lastReplicatedAt: sourceTimestampProvider.dateNow().toISOString()
     });
     return result;
@@ -56545,7 +56645,7 @@ Copied hash: ${copiedHash.toString("hex")}
       try {
         await applyMetadataDatabaseOps(database2.metadataCollection, pathOps);
         await database2.bsonDatabase.commit();
-        await updateDatabaseConfig(rawStorage, { lastModifiedAt: new Date().toISOString() });
+        await stampDatabaseModified(assetStorage, rawStorage);
       } finally {
         await releaseWriteLock(rawStorage);
       }

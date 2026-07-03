@@ -4,10 +4,18 @@ import type { ISyncChange } from "api";
 import { deleteItem, findMerkleTreeDifferences, getItemInfo, IMerkleTree, MerkleNode, upsertItem, buildMerkleTree } from "merkle-tree";
 import { IStorage, pathJoin } from "storage";
 import { IDatabaseMetadata } from "./media-file-database";
-import { acquireWriteLock, releaseWriteLock } from "api";
-import { loadMerkleTree, saveMerkleTree } from "./tree";
+import { acquireWriteLock, releaseWriteLock, loadDatabaseState } from "api";
+import { loadMerkleTree, saveMerkleTree, stampDatabaseState } from "./tree";
 import { retry, log, FatalError } from "utils";
 import { computeHash } from "./hash";
+
+//
+// Result of a sync operation.
+//
+export interface ISyncResult {
+    // True if a sync ran; false if the databases were already identical and the sync was skipped.
+    synced: boolean;
+}
 
 //
 // Syncs between source and target databases.
@@ -21,7 +29,23 @@ export async function syncDatabases(
     targetBsonDatabase: IBsonDatabase,
     sessionId: string,
     onLocalChange?: (change: ISyncChange) => void
-): Promise<void> {
+): Promise<ISyncResult> {
+
+    //
+    // Fast early-out: if both databases report the same content hash they are identical, so there is
+    // nothing to sync. Reading the two small state files avoids acquiring the remote write lock and
+    // downloading the remote merkle trees when there are no differences.
+    //
+    const sourceState = await loadDatabaseState(sourceRawStorage);
+    const targetState = await loadDatabaseState(targetRawStorage);
+    if (sourceState?.contentHash && targetState?.contentHash
+        && sourceState.contentHash.equals(targetState.contentHash)) {
+        log.verbose("Databases have identical content hashes, skipping sync.");
+        return { synced: false };
+    }
+
+    // The timestamp both sides record as their last successful sync.
+    const syncedAt = new Date().toISOString();
 
     //
     // Pull incoming files.
@@ -40,6 +64,10 @@ export async function syncDatabases(
         const sourceDeletedIds = new Set(sourceMerkleTree?.databaseMetadata?.deletedAssetIds || []);
         await syncDatabase(targetBsonDatabase, sourceBsonDatabase, sourceDeletedIds, onLocalChange);
         await sourceBsonDatabase.commit();
+
+        // Refresh the source state file under the write lock we already hold (records the new content
+        // hash and sync time), avoiding a second lock acquisition after the block.
+        await stampDatabaseState(sourceAssetStorage, sourceRawStorage, { lastSyncedAt: syncedAt });
     }
     finally {
         await releaseWriteLock(sourceRawStorage);
@@ -62,10 +90,16 @@ export async function syncDatabases(
         const targetDeletedIds = new Set(targetMerkleTree?.databaseMetadata?.deletedAssetIds || []);
         await syncDatabase(sourceBsonDatabase, targetBsonDatabase, targetDeletedIds);
         await targetBsonDatabase.commit();
+
+        // Refresh the target state file under the write lock we already hold. Both sides now hold the
+        // same (merged) content, so their content hashes match and the next sync can early-out.
+        await stampDatabaseState(targetAssetStorage, targetRawStorage, { lastSyncedAt: syncedAt });
     }
     finally {
         await releaseWriteLock(targetRawStorage);
     }
+
+    return { synced: true };
 }
 
 //

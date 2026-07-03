@@ -3,7 +3,7 @@ import { getDirectoryForCommand } from "../lib/directory-picker";
 import { log } from "utils";
 import pc from "picocolors";
 import { exit } from "node-utils";
-import { loadDatabaseConfig, updateDatabaseConfig } from "api";
+import { loadDatabaseConfig } from "api";
 import { syncDatabases, merkleTreeExists, isDatabaseEncrypted } from "node-api";
 import { loadEncryptionKeysFromPem } from "storage";
 import { createStorageForPath } from "../lib/storage-helper";
@@ -121,13 +121,15 @@ export async function syncCommand(context: ICommandContext, options: ISyncComman
     };
     const { assetStorage: targetAssetStorage, rawAssetStorage: targetRawAssetStorage, bsonDatabase: targetBsonDatabase } = await loadDatabase(targetOptions.db, targetOptions, uuidGenerator, timestampProvider, sessionId);
 
-    await syncDatabases(sourceAssetStorage, sourceRawAssetStorage, sourceBsonDatabase, targetAssetStorage, targetRawAssetStorage, targetBsonDatabase, sessionId);
+    // syncDatabases records lastSyncedAt and the content hash in both state files when it runs.
+    const result = await syncDatabases(sourceAssetStorage, sourceRawAssetStorage, sourceBsonDatabase, targetAssetStorage, targetRawAssetStorage, targetBsonDatabase, sessionId);
 
-    const lastSyncedAt = new Date().toISOString();
-    await updateDatabaseConfig(sourceRawAssetStorage, { lastSyncedAt });
-    await updateDatabaseConfig(targetRawAssetStorage, { lastSyncedAt });
-
-    log.info("Sync completed successfully!");
+    if (result.synced) {
+        log.info("Sync completed successfully!");
+    }
+    else {
+        log.info("Databases already in sync, nothing to do.");
+    }
 
     await exit(0);
 }

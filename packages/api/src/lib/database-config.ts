@@ -1,6 +1,8 @@
 //
 // Database config stored at .db/config.json.
-// Created on init/upgrade; holds origin, lastReplicatedAt, lastSyncedAt, lastModifiedAt.
+// Created on init/upgrade; holds configuration only (currently origin).
+// Runtime values (lastModifiedAt, lastSyncedAt, lastReplicatedAt, contentHash) live in the state
+// file (.db/state.dat, see database-state.ts).
 //
 
 import { IStorage } from "storage";
@@ -11,12 +13,6 @@ const CONFIG_PATH = ".db/config.json";
 export interface IDatabaseConfig {
     /** Path or URI of the database this copy was replicated from. */
     origin?: string;
-    /** ISO date-time when the database was last replicated (replica side). */
-    lastReplicatedAt?: string;
-    /** ISO date-time when the database was last synchronized. */
-    lastSyncedAt?: string;
-    /** ISO date-time when the database was last modified locally (add, remove, edit metadata). */
-    lastModifiedAt?: string;
 }
 
 //

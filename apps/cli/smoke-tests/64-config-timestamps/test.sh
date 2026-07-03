@@ -1,27 +1,55 @@
 #!/bin/bash
-DESCRIPTION="Database config tracks lastModifiedAt and lastSyncedAt across add/sync/repair"
+DESCRIPTION="Database state tracks lastModifiedAt and lastSyncedAt across add/sync/repair and syncs early-out when identical"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
 trap cleanup_and_show_summary EXIT
 
 #
-# Read a top-level string field from a database config.json.
-# Echoes the field value or an empty string if the field or file is missing.
+# Reads a string field from a database's binary state file (.db/state.dat).
+# The file layout is [version 4][type 4 "DBST"][payload][checksum 32]; the payload is a
+# length-prefixed content-hash buffer followed by three length-prefixed UTF-8 strings
+# (lastModifiedAt, lastSyncedAt, lastReplicatedAt). Echoes the field value or an empty string
+# if the field or file is missing.
 #
-read_config_field() {
-    local config_path="$1"
+read_state_field() {
+    local db_dir="$1"
     local field_name="$2"
-
-    if [ ! -f "$config_path" ]; then
-        echo ""
-        return 0
-    fi
 
     bun -e "
         const fs = require('node:fs');
-        const data = JSON.parse(fs.readFileSync('$config_path', 'utf8'));
-        process.stdout.write(typeof data['$field_name'] === 'string' ? data['$field_name'] : '');
+        const statePath = '$db_dir/.db/state.dat';
+        let out = '';
+        if (fs.existsSync(statePath)) {
+            const buffer = fs.readFileSync(statePath);
+            if (buffer.length >= 40 && buffer.subarray(4, 8).toString('ascii') === 'DBST') {
+                let position = 8;
+                const readBuffer = () => {
+                    const length = buffer.readUInt32LE(position);
+                    position += 4;
+                    const bytes = buffer.subarray(position, position + length);
+                    position += length;
+                    return bytes;
+                };
+                const readString = () => {
+                    const length = buffer.readUInt32LE(position);
+                    position += 4;
+                    const text = buffer.toString('utf8', position, position + length);
+                    position += length;
+                    return text;
+                };
+                const fields = {};
+                fields.contentHash = readBuffer();
+                fields.lastModifiedAt = readString();
+                fields.lastSyncedAt = readString();
+                fields.lastReplicatedAt = readString();
+                const value = fields['$field_name'];
+                if (typeof value === 'string') {
+                    out = value;
+                }
+            }
+        }
+        process.stdout.write(out);
     "
 }
 
@@ -50,7 +78,7 @@ expect_valid_iso_date() {
 
 test_config_timestamps() {
     local test_number="$1"
-    print_test_header "$test_number" "DATABASE CONFIG TIMESTAMPS"
+    print_test_header "$test_number" "DATABASE STATE TIMESTAMPS"
 
     local test_dir=$(get_test_dir "$test_number")
     mkdir -p "$test_dir"
@@ -60,9 +88,7 @@ test_config_timestamps() {
     rm -rf "$db_dir"
     invoke_command "Initialize database" "$(get_cli_command) init --db $db_dir --yes"
 
-    local config_path="$db_dir/.db/config.json"
-    check_exists "$config_path" "Initial config file"
-    local before_modified=$(read_config_field "$config_path" "lastModifiedAt")
+    local before_modified=$(read_state_field "$db_dir" "lastModifiedAt")
     if [ -n "$before_modified" ]; then
         log_error "Fresh database should not have lastModifiedAt set, got: $before_modified"
         exit 1
@@ -71,7 +97,7 @@ test_config_timestamps() {
 
     invoke_command "Add PNG file" "$(get_cli_command) add --db $db_dir $TEST_FILES_DIR/test.png --yes"
 
-    local after_add_modified=$(read_config_field "$config_path" "lastModifiedAt")
+    local after_add_modified=$(read_state_field "$db_dir" "lastModifiedAt")
     expect_valid_iso_date "$after_add_modified" "lastModifiedAt set after add"
 
     # ── 2. sync stamps both sides with the same lastSyncedAt ─────────────────
@@ -83,14 +109,25 @@ test_config_timestamps() {
     invoke_command "Add file to sync source" "$(get_cli_command) add --db $source_dir $TEST_FILES_DIR/test.jpg --yes"
     invoke_command "Replicate to create sync target" "$(get_cli_command) replicate --db $source_dir --dest $replica_dir --yes --force"
 
+    # After replication the two databases are identical. Add another file to the source so the
+    # databases differ and the following sync actually has work to do (and stamps lastSyncedAt).
+    invoke_command "Add another file to sync source" "$(get_cli_command) add --db $source_dir $TEST_FILES_DIR/test.png --yes"
+
     invoke_command "Sync source and replica" "$(get_cli_command) sync --db $source_dir --dest $replica_dir --yes"
 
-    local source_synced=$(read_config_field "$source_dir/.db/config.json" "lastSyncedAt")
-    local replica_synced=$(read_config_field "$replica_dir/.db/config.json" "lastSyncedAt")
+    local source_synced=$(read_state_field "$source_dir" "lastSyncedAt")
+    local replica_synced=$(read_state_field "$replica_dir" "lastSyncedAt")
 
     expect_valid_iso_date "$source_synced" "Source database lastSyncedAt"
     expect_valid_iso_date "$replica_synced" "Replica database lastSyncedAt"
     expect_value "$source_synced" "$replica_synced" "Source and replica lastSyncedAt match"
+
+    # ── 2b. a second sync early-outs because the databases are now identical ──
+    # The early-out does no work, so lastSyncedAt must be unchanged from the first sync.
+    invoke_command "Sync again (should early-out)" "$(get_cli_command) sync --db $source_dir --dest $replica_dir --yes"
+
+    local source_synced_again=$(read_state_field "$source_dir" "lastSyncedAt")
+    expect_value "$source_synced_again" "$source_synced" "Second identical sync early-outs (lastSyncedAt unchanged)"
 
     # ── 3. repair bumps lastModifiedAt when records need repair ──────────────
     local repair_db_dir="$test_dir/db-repair"
@@ -101,8 +138,8 @@ test_config_timestamps() {
     invoke_command "Add file to repair source" "$(get_cli_command) add --db $repair_source_dir $TEST_FILES_DIR/test.png --yes"
     invoke_command "Replicate to create repair target" "$(get_cli_command) replicate --db $repair_source_dir --dest $repair_db_dir --yes --force"
 
-    # Capture pre-repair lastModifiedAt (from the replicate process the target may have its own value).
-    local before_repair_modified=$(read_config_field "$repair_db_dir/.db/config.json" "lastModifiedAt")
+    # Capture pre-repair lastModifiedAt (the replicated target may not have one yet).
+    local before_repair_modified=$(read_state_field "$repair_db_dir" "lastModifiedAt")
 
     # Damage the target by deleting an asset file so repair has work to do.
     local file_to_delete=$(find "$repair_db_dir/asset" -type f | head -1)
@@ -118,7 +155,7 @@ test_config_timestamps() {
 
     invoke_command "Repair damaged database" "$(get_cli_command) repair --db $repair_db_dir --source $repair_source_dir --yes" 0
 
-    local after_repair_modified=$(read_config_field "$repair_db_dir/.db/config.json" "lastModifiedAt")
+    local after_repair_modified=$(read_state_field "$repair_db_dir" "lastModifiedAt")
     expect_valid_iso_date "$after_repair_modified" "lastModifiedAt set after repair"
 
     if [ -n "$before_repair_modified" ]; then

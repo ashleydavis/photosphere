@@ -12,8 +12,7 @@ import { BsonDatabase } from "bdb";
 import { addItem, BufferSet } from "merkle-tree";
 import throttle from "lodash/throttle";
 import { acquireWriteLock, releaseWriteLock } from "api";
-import { loadMerkleTree, saveMerkleTree } from "./tree";
-import { updateDatabaseConfig } from "api";
+import { loadMerkleTree, saveMerkleTree, stampDatabaseModified } from "./tree";
 import { HashCache } from "./hash-cache";
 import { scanPaths } from "./file-scanner";
 import { IHashFileData, IHashFileResult } from "./hash-file.worker";
@@ -152,7 +151,7 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
             if (!dryRun) {
                 await retry(() => saveMerkleTree(merkleTree, storage));
                 await bsonDatabase.commit();
-                await updateDatabaseConfig(rawStorage, { lastModifiedAt: new Date().toISOString() });
+                await stampDatabaseModified(storage, rawStorage);
             }
 
             return true;

@@ -6,7 +6,7 @@ import { MockTimestampProvider } from "utils";
 import { addItem } from "merkle-tree";
 import { createMediaFileDatabase, createDatabase } from "../../lib/media-file-database";
 import { loadMerkleTree, saveMerkleTree } from "../../lib/tree";
-import { loadDatabaseConfig } from "api";
+import { loadDatabaseState } from "api";
 import { computeHash } from "../../lib/hash";
 import { repair } from "../../lib/repair";
 
@@ -56,10 +56,10 @@ describe("repair", () => {
 
             expect(result.recordsRepaired).toContain(assetFileName);
 
-            const config = await loadDatabaseConfig(rawStorage);
-            expect(config?.lastModifiedAt).toBeDefined();
-            expect(typeof config?.lastModifiedAt).toBe("string");
-            expect(Date.parse(config!.lastModifiedAt!)).not.toBeNaN();
+            const state = await loadDatabaseState(rawStorage);
+            expect(state?.lastModifiedAt).toBeDefined();
+            expect(typeof state?.lastModifiedAt).toBe("string");
+            expect(Date.parse(state!.lastModifiedAt!)).not.toBeNaN();
         }
         finally {
             fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -75,7 +75,7 @@ describe("repair", () => {
             const { bsonDatabase, metadataCollection } = createMediaFileDatabase(assetStorage, uuidGenerator, timestampProvider);
             await createDatabase(assetStorage, rawStorage, uuidGenerator, metadataCollection);
 
-            const before = await loadDatabaseConfig(rawStorage);
+            const before = await loadDatabaseState(rawStorage);
             expect(before?.lastModifiedAt).toBeUndefined();
 
             const result = await repair(assetStorage, rawStorage, assetStorage, bsonDatabase, metadataCollection, {
@@ -85,7 +85,7 @@ describe("repair", () => {
             expect(result.recordsRepaired).toEqual([]);
             expect(result.repaired).toEqual([]);
 
-            const after = await loadDatabaseConfig(rawStorage);
+            const after = await loadDatabaseState(rawStorage);
             expect(after?.lastModifiedAt).toBeUndefined();
         }
         finally {

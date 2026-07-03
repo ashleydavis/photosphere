@@ -7,7 +7,7 @@ import { IDatabaseMetadata, ProgressCallback, createMediaFileDatabase, loadSortI
 import { updateDatabaseConfig } from "api";
 import { BsonDatabase } from "bdb";
 import { findDifferingNodes, findMerkleTreeDifferences, getItemInfo, IMerkleTree, MerkleNode, pruneTree, upsertItem } from "merkle-tree";
-import { loadMerkleTree, merkleTreeExists, saveMerkleTree } from "./tree";
+import { loadMerkleTree, merkleTreeExists, saveMerkleTree, stampDatabaseStateLocked } from "./tree";
 import { loadCollectionMerkleTree, loadShardMerkleTree } from "./tree";
 import { loadDatabaseMerkleTree } from "bdb";
 
@@ -607,10 +607,16 @@ export async function replicate(
     }
 
     //
-    // Generate or update config.json in the destination database.
+    // Generate or update config.json in the destination database (configuration only).
     //
     await updateDatabaseConfig(destRawAssetStorage, {
         origin: sourcePath,
+    });
+
+    //
+    // Record the replication time and refresh the content hash in the destination state file.
+    //
+    await stampDatabaseStateLocked(destAssetStorage, destRawAssetStorage, "replicate", {
         lastReplicatedAt: sourceTimestampProvider.dateNow().toISOString(),
     });
 

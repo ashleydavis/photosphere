@@ -9,6 +9,7 @@ jest.mock("api", () => ({
 jest.mock("../../lib/tree", () => ({
     loadMerkleTree: jest.fn().mockResolvedValue({ databaseMetadata: { filesImported: 0 } }),
     saveMerkleTree: jest.fn().mockResolvedValue(undefined),
+    stampDatabaseModified: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock("../../lib/hash", () => ({

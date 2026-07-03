@@ -2,7 +2,7 @@ import type { ITaskContext } from "task-queue";
 import { createMediaFileDatabase } from "./media-file-database";
 import { openStorage } from "./open-storage";
 import { merkleTreeExists } from "./tree";
-import { loadDatabaseConfig, updateDatabaseConfig } from "api";
+import { loadDatabaseConfig } from "api";
 import { syncDatabases } from "./sync";
 import type { ISyncDatabaseData, ISyncChange, ISyncBatchMessage } from "api";
 import type { IAsset } from "api";
@@ -104,7 +104,8 @@ export async function syncDatabaseHandler(
         // source = local, target = origin.
         // syncDatabases pulls target → source then pushes source → target.
         // So local receives origin changes, then origin receives local changes.
-        await syncDatabases(
+        // syncDatabases records lastSyncedAt and the content hash in both state files when it runs.
+        const result = await syncDatabases(
             localStorage,
             localRawStorage,
             localDb.bsonDatabase,
@@ -118,11 +119,12 @@ export async function syncDatabaseHandler(
         // Flush any remaining changes that didn't fill a full batch.
         flushBatch();
 
-        const lastSyncedAt = new Date().toISOString();
-        await updateDatabaseConfig(localRawStorage, { lastSyncedAt });
-        await updateDatabaseConfig(originRawStorage, { lastSyncedAt });
-
-        log.info(`Sync completed for "${data.databasePath}"`);
+        if (result.synced) {
+            log.info(`Sync completed for "${data.databasePath}"`);
+        }
+        else {
+            log.info(`Sync skipped for "${data.databasePath}": databases already identical`);
+        }
 
         context.sendMessage({ type: "sync-completed", databasePath: data.databasePath });
     }

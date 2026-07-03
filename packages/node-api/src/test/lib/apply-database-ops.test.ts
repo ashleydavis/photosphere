@@ -8,7 +8,7 @@ import { TestUuidGenerator, getProcessTmpDir } from "node-utils";
 import { MockTimestampProvider } from "utils";
 import { applyDatabaseOps, applyMetadataDatabaseOps, groupOpsByDatabaseId } from "../../lib/apply-database-ops";
 import { createMediaFileDatabase, createDatabase, loadSortIndexes } from "../../lib/media-file-database";
-import { loadDatabaseConfig } from "api";
+import { loadDatabaseState } from "api";
 
 //
 // Valid BSON document id (16-byte hex) for tests that hit the real collection implementation.
@@ -254,7 +254,7 @@ describe("applyDatabaseOps", () => {
         }
     });
 
-    test("stamps lastModifiedAt on the database config after applying ops", async () => {
+    test("stamps lastModifiedAt on the database state after applying ops", async () => {
         const tmpDir = fs.mkdtempSync(path.join(getProcessTmpDir(), "apply-database-ops-stamp-"));
         try {
             const { storage: assetStorage, rawStorage } = createStorage(tmpDir, undefined, undefined);
@@ -281,19 +281,19 @@ describe("applyDatabaseOps", () => {
             await applyDatabaseOps(uuidGenerator, timestampProvider, sessionId, ops);
             const after = new Date().toISOString();
 
-            const config = await loadDatabaseConfig(rawStorage);
-            expect(config?.lastModifiedAt).toBeDefined();
-            expect(typeof config?.lastModifiedAt).toBe("string");
-            expect(Date.parse(config!.lastModifiedAt!)).not.toBeNaN();
-            expect(before <= config!.lastModifiedAt!).toBe(true);
-            expect(config!.lastModifiedAt! <= after).toBe(true);
+            const state = await loadDatabaseState(rawStorage);
+            expect(state?.lastModifiedAt).toBeDefined();
+            expect(typeof state?.lastModifiedAt).toBe("string");
+            expect(Date.parse(state!.lastModifiedAt!)).not.toBeNaN();
+            expect(before <= state!.lastModifiedAt!).toBe(true);
+            expect(state!.lastModifiedAt! <= after).toBe(true);
         }
         finally {
             fs.rmSync(tmpDir, { recursive: true, force: true });
         }
     });
 
-    test("writes config separately for each database group", async () => {
+    test("writes state separately for each database group", async () => {
         const tmpDirA = fs.mkdtempSync(path.join(getProcessTmpDir(), "apply-database-ops-stamp-a-"));
         const tmpDirB = fs.mkdtempSync(path.join(getProcessTmpDir(), "apply-database-ops-stamp-b-"));
         try {
@@ -333,10 +333,10 @@ describe("applyDatabaseOps", () => {
 
             await applyDatabaseOps(uuidGenerator, timestampProvider, sessionId, ops);
 
-            const configA = await loadDatabaseConfig(rawStorageA);
-            const configB = await loadDatabaseConfig(rawStorageB);
-            expect(configA?.lastModifiedAt).toBeDefined();
-            expect(configB?.lastModifiedAt).toBeDefined();
+            const stateA = await loadDatabaseState(rawStorageA);
+            const stateB = await loadDatabaseState(rawStorageB);
+            expect(stateA?.lastModifiedAt).toBeDefined();
+            expect(stateB?.lastModifiedAt).toBeDefined();
         }
         finally {
             fs.rmSync(tmpDirA, { recursive: true, force: true });

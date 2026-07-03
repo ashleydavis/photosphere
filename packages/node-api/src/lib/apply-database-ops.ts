@@ -5,7 +5,7 @@ import type { IUuidGenerator, ITimestampProvider } from "utils";
 import { createStorage } from "storage";
 import { acquireWriteLock, releaseWriteLock } from "api";
 import { createLazyDatabaseStorage, createMediaFileDatabase, loadSortIndexes } from "./media-file-database";
-import { updateDatabaseConfig } from "api";
+import { stampDatabaseModified } from "./tree";
 
 //
 // Groups operations by target database path (databaseId on each op).
@@ -89,7 +89,7 @@ export async function applyDatabaseOps(uuidGenerator: IUuidGenerator, timestampP
         try {
             await applyMetadataDatabaseOps(database.metadataCollection, pathOps);
             await database.bsonDatabase.commit();
-            await updateDatabaseConfig(rawStorage, { lastModifiedAt: new Date().toISOString() });
+            await stampDatabaseModified(assetStorage, rawStorage);
         }
         finally {
             await releaseWriteLock(rawStorage);

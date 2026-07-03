@@ -3,10 +3,9 @@ import { IDatabaseMetadata, ProgressCallback, getDatabaseSummary } from "./media
 import { computeHash, computeAssetHash } from "./hash";
 import { log, retry } from "utils";
 import { IMerkleTree, SortNode, traverseTreeAsync } from "merkle-tree";
-import { loadMerkleTree } from "./tree";
+import { loadMerkleTree, stampDatabaseStateLocked } from "./tree";
 import type { IBsonCollection, IBsonDatabase } from "bdb";
 import type { IAsset } from "api";
-import { updateDatabaseConfig } from "api";
 
 //
 // Options for repairing the media file database.
@@ -313,7 +312,7 @@ export async function repair(
     await bsonDatabase.commit();
 
     if (result.recordsRepaired.length > 0 || result.repaired.length > 0) {
-        await updateDatabaseConfig(rawStorage, { lastModifiedAt: new Date().toISOString() });
+        await stampDatabaseStateLocked(assetStorage, rawStorage, "repair", { lastModifiedAt: new Date().toISOString() });
     }
 
     return result;
