@@ -77,6 +77,7 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 - Put `else` and `catch` blocks on a new line.
 - Tests should go under the directory src/test in each package.
 - Use `test(` not `it(` in Jest test files.
+- Do not write unit tests for React components, contexts, or hooks. Do not use `@testing-library/react`, `renderHook`, or any component/hook rendering in tests. A React component/context/hook must be a thin shell. Only significant logic is worth extracting and testing: if a component/context/hook contains non-trivial logic, factor that logic out into a plain function under a `lib/` directory and unit-test the plain function. Do not extract or test trivial logic (for example a one-line string or URL builder) just to gain a test; leave it inline in the component and untested.
 - Refrain from using the `any` type in normal code, although it's ok sometimes in test code.
 - Never use anonymous object types inline (e.g. `Promise<{ foo: number }>`). Always define a named interface instead, unless specifically asked to use an anonymous type.
 - Never use IIFE async generator pattern (`(async function* () { ... })()`). Extract to a named `async function*` instead.
@@ -88,7 +89,7 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 - All tests should pass after making changes.
 - Prefer to minimize the size of code changes.
 - Prefer not to update test code unless needed.
-- Add new tests for new code. Every function that is new, that you edit, or that the user asks you about should have unit tests.
+- Add new tests for new code. Every function that is new, that you edit, or that the user asks you about should have unit tests. The exception is React components, contexts, and hooks, which are not unit tested (extract any testable logic into a `lib/` function and test that instead).
 - Backward compatibility is not required.
 - Use imports instead of requires.
 - All imports should be at the top of the file and not inside any functions.
