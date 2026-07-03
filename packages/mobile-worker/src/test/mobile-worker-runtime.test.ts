@@ -43,6 +43,9 @@ function createMockHost(sessionId: string): IMockHost {
         tcpWrite: () => null,
         tcpClose: () => null,
         tcpStopListening: () => null,
+        imageMagick: () => JSON.stringify({ exitCode: 0, output: "" }),
+        ffmpeg: () => JSON.stringify({ exitCode: 0, output: "" }),
+        ffprobe: () => JSON.stringify({ exitCode: 0, output: "" }),
     };
 
     return mockHost;

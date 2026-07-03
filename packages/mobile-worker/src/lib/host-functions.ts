@@ -7,7 +7,7 @@ export type HostPlatform = "ios" | "android";
 
 //
 // A native host function exposed on the host bridge. Different host functions
-// have different signatures, so the generic stub machinery treats them as a
+// have different signatures, so the generic machinery treats them as a
 // permissive callable.
 //
 export type HostFunction = (...args: any[]) => any;
@@ -71,11 +71,20 @@ export interface IHost {
 
     // Closes a TCP listener so it accepts no further connections.
     tcpStopListening: (listenerId: string) => string | null;
+
+    // Runs an in-process ImageMagick argv (JSON-encoded string[]); returns a JSON string { exitCode, output }.
+    imageMagick: (argvJson: string) => string;
+
+    // Runs an in-process ffmpeg argv (JSON-encoded string[]); returns a JSON string { exitCode, output }.
+    ffmpeg: (argvJson: string) => string;
+
+    // Runs an in-process ffprobe argv (JSON-encoded string[]); returns a JSON string { exitCode, output }.
+    ffprobe: (argvJson: string) => string;
 }
 
 //
 // The host functions the bundle expects the native side to install. Any name in
-// this list that native did not install is replaced by a stub that throws the
+// this list that native did not install gets a function that throws the
 // NOT IMPLEMENTED error, so a missing native function fails loudly instead of
 // surfacing as `undefined`. This list is the single place to extend as later
 // steps add more host functions (the `fs.*` and media functions).
@@ -97,6 +106,9 @@ export const EXPECTED_HOST_FUNCTIONS: string[] = [
     "tcpWrite",
     "tcpClose",
     "tcpStopListening",
+    "imageMagick",
+    "ffmpeg",
+    "ffprobe",
 ];
 
 //
@@ -108,8 +120,8 @@ export function notImplementedMessage(name: string, platform: HostPlatform): str
 
 //
 // Resolves a single expected host function: returns the native function bound to
-// the host if it was installed, otherwise a stub that throws the NOT IMPLEMENTED
-// error when called.
+// the host if it was installed, otherwise a function that throws the NOT IMPLEMENTED
+// error when called (for a native function the platform has not implemented yet).
 //
 function resolveHostFunction(rawHost: IHost, name: string, platform: HostPlatform): HostFunction {
     const candidate = (rawHost as any)[name];
@@ -124,7 +136,7 @@ function resolveHostFunction(rawHost: IHost, name: string, platform: HostPlatfor
 
 //
 // Builds the effective host object from the raw native-installed host. Every
-// expected host function is replaced by either the native function or a stub
+// expected host function is set to either the native function or a function
 // that throws the NOT IMPLEMENTED error, so any host method native did not
 // install fails loudly the moment it is called.
 //

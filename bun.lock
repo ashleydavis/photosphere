@@ -420,6 +420,7 @@
         "node-api": "workspace:*",
         "pako": "^2.1.0",
         "task-queue": "workspace:*",
+        "tools": "workspace:*",
         "utils": "workspace:*",
       },
       "devDependencies": {

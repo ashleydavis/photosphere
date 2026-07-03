@@ -24,9 +24,9 @@ declare global {
 
 //
 // Reads the native-installed host bridge and wraps it so every expected host
-// function is either the native function or a NOT IMPLEMENTED stub. The wrapped
-// host is written back to `globalThis.host` so any code that reads the global
-// (for example the storage shims) also sees the stubs.
+// function is either the native function or a function that throws NOT IMPLEMENTED.
+// The wrapped host is written back to `globalThis.host` so any code that reads the
+// global (for example the storage shims) also sees the wrapped functions.
 //
 function getEffectiveHost(): IHost {
     const rawHost = globalThis.host;

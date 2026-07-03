@@ -216,7 +216,8 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
     }, []);
 
     const checkTools = useCallback(async (): Promise<IToolsStatus> => {
-        // All tools reported available so tool checks do not block the UI on mobile.
+        // magick/ffprobe/ffmpeg are bundled natively in the mobile apps (in-process ImageMagick and
+        // ffmpeg reached through the host bridge), so they are genuinely available and reported as such.
         return {
             magick: { available: true },
             ffprobe: { available: true },

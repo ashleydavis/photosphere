@@ -1,9 +1,9 @@
 //
-// Build-time stub for `@aws-sdk/client-s3` in the mobile worker bundle.
+// The `@aws-sdk/client-s3` module for the mobile worker bundle.
 //
 // `createStorage` statically imports CloudStorage, which imports the AWS SDK. The mobile read path
 // only ever opens local (fs:) databases, never s3:, so bundling the real SDK into the embedded
-// engine would add a large, engine-incompatible dependency for code that never runs. This stub
+// engine would add a large, engine-incompatible dependency for code that never runs. This module
 // satisfies the imports; any actual S3 use throws the loud NOT IMPLEMENTED error. S3 support on
 // mobile is a later layer (see plan-mobile-storage-options.md).
 //
@@ -16,8 +16,8 @@ function notImplemented(name: string): Error {
 }
 
 //
-// Stub S3 client; constructing it is harmless, using it is not (CloudStorage only constructs it for
-// s3: paths, which the mobile read path never opens).
+// S3 client for the mobile worker; constructing it is harmless, using it is not (CloudStorage only
+// constructs it for s3: paths, which the mobile read path never opens).
 //
 export class S3Client {
     //
@@ -29,7 +29,7 @@ export class S3Client {
 }
 
 //
-// Marker command stubs. They are only ever instantiated to pass to S3Client.send (which throws).
+// Marker command classes. They are only ever instantiated to pass to S3Client.send (which throws).
 //
 export class ListObjectsV2Command {}
 
@@ -64,6 +64,6 @@ export class DeleteObjectsCommand {}
 export class CopyObjectCommand {}
 
 //
-// Type-only placeholder kept as a value export so a mixed value/type import resolves.
+// Kept as a value export so a mixed value/type import resolves.
 //
 export class ListObjectsV2CommandOutput {}

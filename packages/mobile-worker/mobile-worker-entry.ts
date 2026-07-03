@@ -19,8 +19,8 @@ import { installWorkerGlobal } from "./src/index";
 // handlers and exposes `globalThis.__photosphereWorker.runTask` so native code can
 // dispatch tasks into the engine.
 //
-// The build (see build-bundle.ts) redirects Node built-ins (`fs`, `path`, `os`, `stream`,
-// `crypto`, `child_process`) to the mobile shims in `src/shims`, and stubs the native-only
+// The build (see bundle.ts) redirects Node built-ins (`fs`, `path`, `os`, `stream`,
+// `crypto`, `child_process`) to the mobile shims in `src/shims`, and redirects the native-only
 // packages (`@aws-sdk/*`, `vault`, `tools`) that the load-assets module graph imports but the
 // read path never calls. This lets the real `load-assets` handler run unchanged: it reads the
 // database through `FileStorage` over the native `host.fs*` functions.

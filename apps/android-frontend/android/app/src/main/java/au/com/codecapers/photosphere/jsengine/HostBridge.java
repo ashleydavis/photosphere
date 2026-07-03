@@ -211,9 +211,62 @@ public final class HostBridge {
     }
 
     //
+    // The ImageMagick runner (host.imageMagick), created lazily. The storage root doubles as the
+    // writable cache dir for the per-call stdout capture file.
+    //
+    private ImageMagickRunner imageMagickRunner;
+
+    //
+    // The FFmpegKit runner (host.ffmpeg / host.ffprobe), created lazily.
+    //
+    private FfmpegKitRunner ffmpegKitRunner;
+
+    //
+    // Returns the shared ImageMagick runner, creating it on first use.
+    //
+    private synchronized ImageMagickRunner imageMagickRunner() {
+        if (imageMagickRunner == null) {
+            imageMagickRunner = new ImageMagickRunner(storageRoot);
+        }
+        return imageMagickRunner;
+    }
+
+    //
+    // Returns the shared FFmpegKit runner, creating it on first use.
+    //
+    private synchronized FfmpegKitRunner ffmpegKitRunner() {
+        if (ffmpegKitRunner == null) {
+            ffmpegKitRunner = new FfmpegKitRunner();
+        }
+        return ffmpegKitRunner;
+    }
+
+    //
+    // host.imageMagick(argvJson): runs a magick argv in-process (all ImageMagick operations) and
+    // returns the JSON string { exitCode, output } (or an @@HOSTERR@@ envelope on failure).
+    //
+    public String imageMagick(String argvJson) {
+        return HostFunctions.runMediaTool(storageRoot, imageMagickRunner(), 0, argvJson);
+    }
+
+    //
+    // host.ffmpeg(argvJson): runs an ffmpeg argv in-process (e.g. the screenshot extraction).
+    //
+    public String ffmpeg(String argvJson) {
+        return HostFunctions.runMediaTool(storageRoot, ffmpegKitRunner(), 1, argvJson);
+    }
+
+    //
+    // host.ffprobe(argvJson): runs an ffprobe argv in-process (container/stream metadata JSON).
+    //
+    public String ffprobe(String argvJson) {
+        return HostFunctions.runMediaTool(storageRoot, ffmpegKitRunner(), 2, argvJson);
+    }
+
+    //
     // The unknown-method path. Any host function the bundle expects that native did not
     // install must surface as a loud, verbatim NOT IMPLEMENTED failure. The JS side installs
-    // throwing stubs for missing methods, and this helper is available for any native host
+    // throwing functions for missing methods, and this helper is available for any native host
     // method that is declared but not finished to throw the identical message from its body.
     //
     public Object notImplemented(String name) {

@@ -1,27 +1,28 @@
 //
-// Builds the embedded worker bundle (`worker.bundle.js`) for the mobile JS engine.
+// Bundles the embedded worker (`worker.bundle.js`) for the mobile JS engine using Bun's bundler.
 //
-// The bundle target is the bare embedded engine (QuickJS on Android, JavaScriptCore on iOS), which
-// has no Node runtime. So this build redirects Node built-in imports to the mobile shims in
-// `src/shims` (fs backed by the native host bridge; pure-JS path/os/stream/crypto), and stubs the
-// native-only packages the load-assets module graph imports but the read path never calls
-// (`@aws-sdk/*`, `vault`, `tools`). The output is a single IIFE that installs
-// `globalThis.__photosphereWorker.runTask`.
+// The target is the bare embedded engine (QuickJS on Android, JavaScriptCore on iOS), which has no
+// Node runtime. Node built-in imports are redirected to the mobile shims in `src/shims` (fs backed by
+// the native host bridge; pure-JS path/os/stream/crypto), and the native-only packages the
+// load-assets module graph imports (`@aws-sdk/*`, `vault`, `tools`) are redirected to their mobile
+// shims. These redirects must apply to imports made deep inside the other workspace packages
+// (node-api/node-utils/storage/vault), so they run as a Bun `onResolve` plugin over the whole graph
+// (a package.json `browser` field or tsconfig `paths` only affect the owning package's own files).
 //
-// Run with: bun build-bundle.ts  (wired as the `build:bundle` script).
+// Run with: bun bundle.ts  (wired as the `build:bundle` script).
 //
 
 import { join } from "node:path";
 
 //
-// The directory containing this build script (packages/mobile-worker).
+// The directory containing this script (packages/mobile-worker).
 //
 const scriptDir = import.meta.dir;
 
 //
-// Maps a module specifier to the shim/stub file (relative to this script) it should resolve to.
-// Node built-ins are listed without the `node:` prefix; the resolver strips that prefix before
-// looking up the map, so both `fs` and `node:fs` resolve to the same shim.
+// Maps a module specifier to the shim file (relative to this script) it should resolve to. Node
+// built-ins are listed without the `node:` prefix; the resolver strips that prefix before looking up
+// the map, so both `fs` and `node:fs` resolve to the same shim.
 //
 const aliasMap: Record<string, string> = {
     "fs/promises": "src/shims/node-fs-promises.ts",
@@ -36,15 +37,15 @@ const aliasMap: Record<string, string> = {
     "util": "src/shims/node-util.ts",
     "http": "src/shims/node-http.ts",
     "net": "src/shims/node-net.ts",
-    "@aws-sdk/client-s3": "src/shims/stub-aws-s3.ts",
-    "@aws-sdk/lib-storage": "src/shims/stub-aws-lib-storage.ts",
-    "vault": "src/shims/stub-vault.ts",
-    "tools": "src/shims/stub-tools.ts",
+    "@aws-sdk/client-s3": "src/shims/aws-s3.ts",
+    "@aws-sdk/lib-storage": "src/shims/aws-lib-storage.ts",
+    "vault": "src/shims/vault.ts",
+    "tools": "src/shims/mobile-tools.ts",
 };
 
 //
-// A Bun bundler plugin that redirects the aliased specifiers to their shim/stub files. It matches
-// the exact specifier (after stripping a leading `node:`), so unrelated imports resolve normally.
+// A Bun bundler plugin that redirects the aliased specifiers to their shim files. It matches the
+// exact specifier (after stripping a leading `node:`), so unrelated imports resolve normally.
 //
 const aliasPlugin: import("bun").BunPlugin = {
     name: "mobile-worker-aliases",

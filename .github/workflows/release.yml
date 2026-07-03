@@ -1329,3 +1329,6 @@ jobs:
             - **Linux**: `.deb` package or `.zip`
             - **Windows**: `.exe` installer or `.zip`
             - **macOS**: `.dmg` disk image or `.zip`
+
+            ## Bundled tools and licences
+            The mobile apps bundle in-process builds of ImageMagick (ImageMagick licence, an Apache-2.0-style licence) and ffmpeg (LGPL-2.1+), along with ImageMagick's libjpeg, libpng, and zlib delegates. The desktop and CLI builds use ImageMagick and ffmpeg installed on the host system. Full attribution and licences are in [THIRD-PARTY-NOTICES.md](https://github.com/ashleydavis/photosphere/blob/main/THIRD-PARTY-NOTICES.md).

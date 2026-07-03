@@ -350,6 +350,144 @@ public final class HostFunctions {
     }
 
     //
+    // Runs a media tool (host.imageMagick / host.ffmpeg / host.ffprobe): decodes the JSON-encoded
+    // argv, sandbox-resolves its path tokens to absolute paths, runs the given runner method, and
+    // returns the JSON string { exitCode, output }. On any failure (bad JSON, a path that escapes the
+    // sandbox) it returns an @@HOSTERR@@ envelope string rather than throwing across the engine bridge.
+    // The runner method is selected by kind: 0 = imagemagick, 1 = ffmpeg, 2 = ffprobe.
+    //
+    public static String runMediaTool(File storageRoot, MediaToolRunner runner, int kind, String argvJson) {
+        try {
+            String[] rawArgv = parseJsonStringArray(argvJson);
+            String[] resolvedArgv = new String[rawArgv.length];
+            for (int index = 0; index < rawArgv.length; index++) {
+                resolvedArgv[index] = resolveMediaToken(storageRoot, rawArgv[index]);
+            }
+
+            ToolResult result;
+            if (kind == 0) {
+                result = runner.imagemagick(resolvedArgv);
+            }
+            else if (kind == 1) {
+                result = runner.ffmpeg(resolvedArgv);
+            }
+            else {
+                result = runner.ffprobe(resolvedArgv);
+            }
+
+            return "{\"exitCode\":" + result.exitCode + ",\"output\":\"" + jsonEscape(result.output) + "\"}";
+        }
+        catch (Throwable error) {
+            return hostErrorEnvelope(error);
+        }
+    }
+
+    //
+    // Resolves a single argv token. A token that names a sandbox-relative path (it contains a path
+    // separator, optionally after an ImageMagick "encoder:" prefix like "jpeg:tmp/out.jpg") is
+    // resolved to its absolute path under the storage root via PathSandbox, so the native tool reads
+    // and writes real files; the sandbox rejects absolute paths and `..` traversal. Non-path tokens
+    // (flags, geometry, "info:", "histogram:info:") are returned unchanged.
+    //
+    static String resolveMediaToken(File storageRoot, String token) {
+        String prefix = "";
+        String pathPart = token;
+        int colon = token.indexOf(':');
+        if (colon >= 0 && token.indexOf('/', colon) > colon) {
+            prefix = token.substring(0, colon + 1);
+            pathPart = token.substring(colon + 1);
+        }
+
+        if (pathPart.indexOf('/') < 0) {
+            return token;
+        }
+
+        File resolved = PathSandbox.resolveWithin(storageRoot, pathPart);
+        return prefix + resolved.getAbsolutePath();
+    }
+
+    //
+    // Parses a JSON array of strings (the media argv) into a String[]. Hand-rolled (no org.json) so it
+    // is unit-testable on a plain JVM, matching the rest of this class. Handles the standard JSON
+    // string escapes. Throws when the input is not a JSON array of strings.
+    //
+    static String[] parseJsonStringArray(String json) {
+        java.util.List<String> items = new java.util.ArrayList<>();
+        int index = 0;
+        int length = json.length();
+        while (index < length && Character.isWhitespace(json.charAt(index))) {
+            index++;
+        }
+        if (index >= length || json.charAt(index) != '[') {
+            throw new RuntimeException("media argv: expected '['");
+        }
+        index++;
+
+        while (true) {
+            while (index < length && Character.isWhitespace(json.charAt(index))) {
+                index++;
+            }
+            if (index >= length) {
+                throw new RuntimeException("media argv: unterminated array");
+            }
+            char current = json.charAt(index);
+            if (current == ']') {
+                index++;
+                break;
+            }
+            if (current == ',') {
+                index++;
+                continue;
+            }
+            if (current != '"') {
+                throw new RuntimeException("media argv: expected string element");
+            }
+
+            index++;
+            StringBuilder builder = new StringBuilder();
+            while (index < length) {
+                char character = json.charAt(index);
+                if (character == '"') {
+                    index++;
+                    break;
+                }
+                if (character == '\\') {
+                    index++;
+                    if (index >= length) {
+                        throw new RuntimeException("media argv: dangling escape");
+                    }
+                    char escape = json.charAt(index);
+                    switch (escape) {
+                        case '"': builder.append('"'); break;
+                        case '\\': builder.append('\\'); break;
+                        case '/': builder.append('/'); break;
+                        case 'n': builder.append('\n'); break;
+                        case 'r': builder.append('\r'); break;
+                        case 't': builder.append('\t'); break;
+                        case 'b': builder.append('\b'); break;
+                        case 'f': builder.append('\f'); break;
+                        case 'u':
+                            String hex = json.substring(index + 1, index + 5);
+                            builder.append((char) Integer.parseInt(hex, 16));
+                            index += 4;
+                            break;
+                        default:
+                            throw new RuntimeException("media argv: bad escape \\" + escape);
+                    }
+                    index++;
+                }
+                else {
+                    builder.append(character);
+                    index++;
+                }
+            }
+            items.add(builder.toString());
+        }
+
+        return items.toArray(new String[0]);
+    }
+
+    //
     // Builds the base64 decode reverse-lookup table (ASCII code -> 6-bit value, -1 otherwise).
     //
     private static int[] buildBase64Reverse() {

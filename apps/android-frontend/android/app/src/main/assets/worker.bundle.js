@@ -44346,7 +44346,7 @@ ${stack}`);
       sessionId: context.sessionId
     };
   }
-  // src/shims/stub-aws-s3.ts
+  // src/shims/aws-s3.ts
   function notImplemented(name) {
     return new Error(`NOT IMPLEMENTED: S3 ("${name}") is not available in the mobile worker. Implement it ASAP.`);
   }
@@ -44458,7 +44458,7 @@ ${stack}`);
     }
   }
 
-  // src/shims/stub-aws-lib-storage.ts
+  // src/shims/aws-lib-storage.ts
   class Upload {
     constructor() {
       throw new Error(`NOT IMPLEMENTED: S3 ("Upload") is not available in the mobile worker. Implement it ASAP.`);
@@ -55392,7 +55392,7 @@ ${JSON.stringify(b, null, 2)}`);
   // ../api/src/lan-share/lan-share-resolve.ts
   init_node_crypto();
 
-  // src/shims/stub-vault.ts
+  // src/shims/vault.ts
   class EmptyVault {
     async get(_key) {
       return;
@@ -55733,6 +55733,17 @@ ${JSON.stringify(b, null, 2)}`);
   // ../node-api/src/lib/hash.ts
   init_node_crypto();
   init_node_fs();
+
+  // src/shims/mobile-tools.ts
+  init_node_path();
+
+  // src/shims/media-access.ts
+  init_host_access();
+
+  // src/shims/mobile-tools.ts
+  init_host_access();
+
+  // ../node-api/src/lib/hash.ts
   function computeHash(inputStream) {
     return new Promise((resolve2, reject) => {
       const hash = createHash("sha256");
@@ -56707,7 +56718,10 @@ Copied hash: ${copiedHash.toString("hex")}
     "tcpListen",
     "tcpWrite",
     "tcpClose",
-    "tcpStopListening"
+    "tcpStopListening",
+    "imageMagick",
+    "ffmpeg",
+    "ffprobe"
   ];
   function notImplementedMessage(name, platform) {
     return `NOT IMPLEMENTED: native host function "${name}" is not implemented yet on ${platform}. Implement it ASAP.`;

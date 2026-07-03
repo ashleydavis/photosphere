@@ -7,7 +7,7 @@ import { createServer } from "../../shims/node-http";
 import { installMockTcpHost, uninstallMockTcpHost, roundTripRequest } from "./tcp-mock-host";
 
 //
-// The seeded asset bytes the stub core serves, keyed by `${type}/${id}`.
+// The seeded asset bytes the test core serves, keyed by `${type}/${id}`.
 //
 const SEEDED_ASSETS: Record<string, Buffer> = {
     "thumb/asset-1": Buffer.from("thumb-bytes-1"),
@@ -36,7 +36,7 @@ describe("asset server over the shimmed http", () => {
     let applyDatabaseOps: jest.Mock;
 
     //
-    // Builds an express app with the asset routes attached over a stub core, served by the http shim.
+    // Builds an express app with the asset routes attached over a test core, served by the http shim.
     //
     function startServer(): void {
         writeAsset = jest.fn().mockResolvedValue(undefined);

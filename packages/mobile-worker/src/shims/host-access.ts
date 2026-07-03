@@ -2,8 +2,8 @@
 // Shared access to the native host bridge for the fs shims.
 //
 // The native plugin installs `globalThis.host` before any task runs, and the worker runtime
-// rewrites it with NOT IMPLEMENTED stubs. The fs shims read the host lazily (at call time, not
-// import time) so they always see the installed/wrapped host.
+// rewrites it so missing functions throw NOT IMPLEMENTED. The fs shims read the host lazily (at call
+// time, not import time) so they always see the installed/wrapped host.
 //
 
 import { Buffer } from "buffer";

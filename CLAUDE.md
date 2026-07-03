@@ -56,6 +56,8 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 ## Guides
 
 - [Background tasks](docs/background-tasks.md) - How to add a new background task type (worker handler, registration, frontend consumption)
+- [Mobile native media tools](docs/mobile-native-media.md) - How the bundled mobile ImageMagick/ffmpeg are wired and activated (iOS/Android)
+- [Updating mobile ImageMagick/ffmpeg](docs/updating-mobile-imagemagick-ffmpeg.md) - How to update the bundled versions (see also `scripts/update-mobile-media-tools.sh`)
 
 ## Code Style
 - **Types**: Use interfaces with PascalCase (`IStorage`) for types, explicit return types

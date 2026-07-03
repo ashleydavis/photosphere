@@ -47,6 +47,10 @@ To move assets from Google Photos:
 - Use Google Takeout to export all your assets to a series of large zip files.
 - Then use `psi add` on the directory containing the zip files (it can unpack zip files for you).
 
+## Bundled tools and licences
+
+The desktop and CLI builds use ImageMagick and ffmpeg installed on the host system. The mobile apps (iOS and Android) instead bundle in-process builds of ImageMagick (ImageMagick licence) and ffmpeg (LGPL-2.1+), together with ImageMagick's libjpeg, libpng, and zlib delegates, so image and video processing works without system binaries. Full attribution and licences are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Photosphere's own code is MIT licensed (see [LICENSE](LICENSE)). To update the bundled versions, see [docs/updating-mobile-imagemagick-ffmpeg.md](docs/updating-mobile-imagemagick-ffmpeg.md) and `scripts/update-mobile-media-tools.sh`.
+
 ## Project layout
 
 - photosphere/

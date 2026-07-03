@@ -1,12 +1,13 @@
 //
-// Build-time stub for `@aws-sdk/lib-storage` in the mobile worker bundle.
+// The `@aws-sdk/lib-storage` module for the mobile worker bundle.
 //
 // CloudStorage imports `Upload` for multipart S3 uploads. The mobile read path never uploads to S3,
-// so this stub satisfies the import; constructing or using it throws the loud NOT IMPLEMENTED error.
+// so this module satisfies the import; constructing or using it throws the loud NOT IMPLEMENTED
+// error.
 //
 
 //
-// Stub multipart upload helper. Any use throws because S3 is unavailable on mobile.
+// Multipart upload helper for the mobile worker. Any use throws because S3 is unavailable on mobile.
 //
 export class Upload {
     //

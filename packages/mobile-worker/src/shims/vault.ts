@@ -1,11 +1,11 @@
 //
-// Build-time stub for the `vault` package in the mobile worker bundle.
+// The `vault` module for the mobile worker bundle.
 //
 // `resolveStorageCredentials` calls `getVault(getDefaultVaultType())` while opening any database.
 // The real vault implementations use OS keychains via `child_process`, none of which exists in the
-// embedded engine. Opening a plain, unencrypted local database never reads a secret, so this stub
-// provides an empty vault: `get` returns undefined (no secret configured) and the mutating methods
-// throw the loud NOT IMPLEMENTED error. Secret storage on mobile is a later layer.
+// embedded engine. Opening a plain, unencrypted local database never reads a secret, so this
+// provides an empty vault: `get` returns undefined (no secret configured). Secret storage on mobile
+// is a later layer.
 //
 
 //

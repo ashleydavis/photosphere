@@ -16,7 +16,7 @@ import { Buffer } from "buffer";
 import { callHost } from "./host-access";
 
 //
-// Placeholder for the `AddressInfo` type used only in type position by find-available-port.
+// The `AddressInfo` type, used only in type position by find-available-port.
 //
 export class AddressInfo {}
 

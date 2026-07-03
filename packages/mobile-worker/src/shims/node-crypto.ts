@@ -52,12 +52,12 @@ function notImplemented(name: string): never {
 }
 
 //
-// Placeholder for the crypto KeyObject type, used only in type position by the bundled code.
+// The crypto KeyObject type, used only in type position by the bundled code.
 //
 export class KeyObject {}
 
 //
-// Placeholder for the crypto Decipher type, used only in type position by the bundled code.
+// The crypto Decipher type, used only in type position by the bundled code.
 //
 export class Decipher {}
 

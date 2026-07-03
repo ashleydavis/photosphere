@@ -322,7 +322,95 @@ final class HostBridge {
         }
         host.setValue(JSValue(object: tcpStopListening, in: context), forProperty: "tcpStopListening")
 
+        // The media host functions (imageMagick/ffmpeg/ffprobe) never raise a JS exception across the
+        // bridge: they take a JSON-encoded argv string, run the in-process tool, and return the JSON
+        // string { exitCode, output } (or an @@HOSTERR@@ envelope on failure) that the mobile
+        // runMediaTool helper decodes. Path tokens in the argv are sandbox-resolved to absolute paths
+        // (mirroring the fs functions) before the tool runs.
+
+        // imageMagick(argvJson): runs a magick argv in-process (all ImageMagick operations).
+        let imageMagick: @convention(block) (String) -> JSValue = { [weak self] argvJson in
+            guard let self = self else { return JSValue(nullIn: context) }
+            return JSValue(object: self.runMediaTool(argvJson: argvJson) { self.imageMagickRunner.imagemagick($0) }, in: context)
+        }
+        host.setValue(JSValue(object: imageMagick, in: context), forProperty: "imageMagick")
+
+        // ffmpeg(argvJson): runs an ffmpeg argv in-process (e.g. the screenshot extraction).
+        let ffmpeg: @convention(block) (String) -> JSValue = { [weak self] argvJson in
+            guard let self = self else { return JSValue(nullIn: context) }
+            return JSValue(object: self.runMediaTool(argvJson: argvJson) { self.ffmpegKitRunner.ffmpeg($0) }, in: context)
+        }
+        host.setValue(JSValue(object: ffmpeg, in: context), forProperty: "ffmpeg")
+
+        // ffprobe(argvJson): runs an ffprobe argv in-process (container/stream metadata JSON).
+        let ffprobe: @convention(block) (String) -> JSValue = { [weak self] argvJson in
+            guard let self = self else { return JSValue(nullIn: context) }
+            return JSValue(object: self.runMediaTool(argvJson: argvJson) { self.ffmpegKitRunner.ffprobe($0) }, in: context)
+        }
+        host.setValue(JSValue(object: ffprobe, in: context), forProperty: "ffprobe")
+
         context.globalObject.setValue(host, forProperty: "host")
+    }
+
+    //
+    // The ImageMagick runner (host.imageMagick). Stateless; safe to share across contexts.
+    //
+    private let imageMagickRunner = ImageMagickRunner()
+
+    //
+    // The FFmpegKit runner (host.ffmpeg / host.ffprobe). Stateless; safe to share across contexts.
+    //
+    private let ffmpegKitRunner = FfmpegKitRunner()
+
+    //
+    // Decodes a JSON-encoded argv string, sandbox-resolves its path tokens to absolute paths, runs the
+    // given tool, and returns the JSON string { exitCode, output }. On any failure (bad JSON, a path
+    // that escapes the sandbox) it returns an @@HOSTERR@@ envelope string rather than throwing across
+    // the bridge, matching the fs functions.
+    //
+    private func runMediaTool(argvJson: String, run: ([String]) -> ToolResult) -> String {
+        do {
+            guard let data = argvJson.data(using: .utf8),
+                  let rawArgv = try JSONSerialization.jsonObject(with: data) as? [String] else {
+                throw HostFsError.message("media tool: invalid argv JSON")
+            }
+
+            let resolvedArgv = try rawArgv.map { try HostBridge.resolveMediaToken(root: self.storageRoot, token: $0) }
+            let result = run(resolvedArgv)
+            let output = HostBridge.jsonEscape(result.output)
+            return "{\"exitCode\":\(result.exitCode),\"output\":\"\(output)\"}"
+        }
+        catch {
+            return HostBridge.hostErrorEnvelope(error)
+        }
+    }
+
+    //
+    // Resolves a single argv token. A token that names a sandbox-relative path (it contains a path
+    // separator, optionally after an ImageMagick "encoder:" prefix like "jpeg:tmp/out.jpg") is
+    // resolved to its absolute path under the storage root via PathSandbox, so the native tool reads
+    // and writes real files; the sandbox rejects absolute paths and `..` traversal. Non-path tokens
+    // (flags, geometry, "info:", "histogram:info:") are returned unchanged.
+    //
+    static func resolveMediaToken(root: URL, token: String) throws -> String {
+        // Split an optional "encoder:" prefix, keeping it only when a real path (with a separator)
+        // follows it, so "info:" / "histogram:info:" are left untouched.
+        var prefix = ""
+        var pathPart = token
+        if let colon = token.firstIndex(of: ":") {
+            let after = token.index(after: colon)
+            if token[after...].contains("/") {
+                prefix = String(token[...colon])
+                pathPart = String(token[after...])
+            }
+        }
+
+        if !pathPart.contains("/") {
+            return token
+        }
+
+        let resolved = try PathSandbox.resolveWithin(root: root, candidate: pathPart)
+        return prefix + resolved.path
     }
 
     //
