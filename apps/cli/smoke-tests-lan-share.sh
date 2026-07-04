@@ -53,11 +53,24 @@ log_fail() {
     TESTS_FAILED=$((TESTS_FAILED + 1))
 }
 
-# Kill a process reliably.
+# Recursively kill a process and all of its descendants (children first).
+# `bun run start` runs the actual CLI in a child process that owns the UDP broadcast and HTTPS
+# server. Killing only the top-level PID (especially SIGKILL, which the wrapper cannot forward)
+# orphans that child, which keeps broadcasting its pairing code and gets picked up by the next
+# test's sender, corrupting it. Killing the whole tree prevents the orphan.
+kill_tree() {
+    local pid="$1"
+    local child
+    for child in $(pgrep -P "$pid" 2>/dev/null); do
+        kill_tree "$child"
+    done
+    kill -9 "$pid" 2>/dev/null || true
+}
+
+# Kill a process and its descendants reliably.
 kill_proc() {
     local pid="$1"
-    kill "$pid" 2>/dev/null || true
-    kill -9 "$pid" 2>/dev/null || true
+    kill_tree "$pid"
     wait "$pid" 2>/dev/null || true
 }
 
