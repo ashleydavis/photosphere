@@ -251,6 +251,22 @@ export function doDrop(dataId: string, paths: string[]): void {
 }
 
 //
+// Window event name used to stage picked file paths for the mobile native photo picker in tests.
+//
+export const TEST_PICK_FILES_EVENT = "photosphere-test:pick-files";
+
+//
+// Stages the given sandbox-relative paths as the result of the next native photo pick by dispatching
+// a window event the mobile platform provider listens for. The smoke test calls this before clicking
+// the "Import files" button, so the button's platform.pickFiles resolves with these paths instead of
+// opening the (non-automatable) native picker dialog. Mirrors how doDrop injects paths on desktop.
+//
+export function doPickFiles(paths: string[]): void {
+    console.log(`test-pick-files: staging ${paths.length} path(s) for the next picker`);
+    window.dispatchEvent(new CustomEvent(TEST_PICK_FILES_EVENT, { detail: paths }));
+}
+
+//
 // Reads the current value of the element with the given `data-id`, preferring its input
 // value and falling back to its text content. Returns an empty string when not found.
 //
@@ -395,6 +411,9 @@ export function installTestDriver(transport: ITestTransport): void {
                 return undefined;
             case 'drop':
                 doDrop(payload.dataId!, payload.paths!);
+                return undefined;
+            case 'pick-files':
+                doPickFiles(payload.paths!);
                 return undefined;
             case 'get-value':
                 return getValue(payload.dataId!);

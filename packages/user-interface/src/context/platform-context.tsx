@@ -402,6 +402,13 @@ export interface IPlatformContext {
     getPathForFile: (file: File) => string | undefined;
 
     //
+    // Whether this platform supports drag-and-drop file/folder import. True on desktop (Electron) and
+    // web (browser drag-and-drop); false on mobile, where the import page hides the drop zone and
+    // folder button and offers the native photo picker instead.
+    //
+    supportsDragAndDropImport: boolean;
+
+    //
     // Checks whether ImageMagick and FFmpeg are available on PATH.
     // On web (no-op platform), returns allAvailable: true.
     //

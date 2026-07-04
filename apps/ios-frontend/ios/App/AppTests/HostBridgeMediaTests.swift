@@ -58,7 +58,8 @@ final class HostBridgeMediaTests: XCTestCase {
         let bridge = HostBridge(sessionId: "test-session",
                                 storageRoot: URL(fileURLWithPath: NSTemporaryDirectory()),
                                 isCancelledProvider: { _ in false },
-                                messageSink: { _, _ in })
+                                messageSink: { _, _ in },
+                                queueTaskSink: { _, _, _, _, _ in })
         bridge.install(into: context)
 
         for name in ["imageMagick", "ffmpeg", "ffprobe"] {

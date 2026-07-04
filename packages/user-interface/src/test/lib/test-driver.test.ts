@@ -7,6 +7,8 @@ import {
     doLongPressClick,
     doType,
     doDrop,
+    doPickFiles,
+    TEST_PICK_FILES_EVENT,
     getValue,
     doNavigate,
     doMenu,
@@ -119,6 +121,24 @@ describe("doDrop", () => {
     });
 });
 
+describe("doPickFiles", () => {
+
+    test("dispatches the pick-files event carrying the staged paths", () => {
+        const received: string[][] = [];
+        const listener = (event: Event) => {
+            received.push((event as CustomEvent<string[]>).detail);
+        };
+        window.addEventListener(TEST_PICK_FILES_EVENT, listener);
+        try {
+            doPickFiles([".import-tmp/a.jpg", ".import-tmp/b.png"]);
+            expect(received).toEqual([[".import-tmp/a.jpg", ".import-tmp/b.png"]]);
+        }
+        finally {
+            window.removeEventListener(TEST_PICK_FILES_EVENT, listener);
+        }
+    });
+});
+
 describe("getValue", () => {
 
     test("returns the input value when present", () => {
@@ -184,6 +204,23 @@ describe("installTestDriver", () => {
         installTestDriver(transport);
         const value = await invoke("get-value", { dataId: "field" });
         expect(value).toBe("xyz");
+    });
+
+    test("routes a pick-files command to the pick-files window event", async () => {
+        const received: string[][] = [];
+        const listener = (event: Event) => {
+            received.push((event as CustomEvent<string[]>).detail);
+        };
+        window.addEventListener(TEST_PICK_FILES_EVENT, listener);
+        try {
+            const { transport, invoke } = makeTransport();
+            installTestDriver(transport);
+            await invoke("pick-files", { paths: [".import-tmp/x.jpg"] });
+            expect(received).toEqual([[".import-tmp/x.jpg"]]);
+        }
+        finally {
+            window.removeEventListener(TEST_PICK_FILES_EVENT, listener);
+        }
     });
 
     test("rejects an unknown command", async () => {

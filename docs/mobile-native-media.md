@@ -2,9 +2,13 @@
 
 The mobile apps run image/video asset operations in-process through three `host.*` bridge functions: `host.imageMagick`, `host.ffmpeg`, `host.ffprobe`. The shared TypeScript builds the argv (see `packages/mobile-worker/src/lib/media-commands.ts`) and the native side runs it against bundled ImageMagick and ffmpeg. Desktop and CLI are unchanged and keep using system-installed binaries.
 
-The native source and wiring are committed and compile without the native binaries: the runners report "not linked" until the libraries are vendored and activated. The steps below activate them and must be run on the appropriate toolchain (they cannot run in a Linux CI without Xcode / the Android NDK and network access to fetch the binaries).
+No third-party ImageMagick binaries, source, or headers are committed. The repo carries only Photosphere's own shim/build source (`run_magick.c`, `CMakeLists.txt`, the runners, the `build.gradle` native wiring) plus `scripts/fetch-mobile-media-tools.sh`. That script pulls ImageMagick from downstream and builds what is needed into **git-ignored** locations at build time — the same model on both platforms. ffmpeg needs no fetch: FFmpegKit is a Maven (Android) / SPM (iOS) dependency the platform build resolves.
 
-## iOS (Phase B)
+On **Android** the fetch runs automatically as part of `bun run sync` (via the `fetch:media` script), so `bun run build:android` / `bun run test:android` link ImageMagick with no manual step. It: downloads the prebuilt `MolotovCherry/Android-ImageMagick7` `.so` from the GitHub release into `app/src/main/jniLibs/<abi>/`; downloads the matching ImageMagick source for the API headers into `app/src/main/cpp/imagemagick/include`; and runs ImageMagick's `configure` with the NDK once per ABI to generate the per-ABI config headers into `app/src/main/cpp/imagemagick/configs/<abi>`. It is idempotent (skips when the artifacts are already present) and needs the Android NDK `25.1.8937393`. All of it is git-ignored.
+
+On **iOS** `scripts/fetch-mobile-media-tools.sh ios` runs `ios/build-imagemagick.sh`, which builds the static libraries from source into the git-ignored `vendor/im` tree; the App target then links them with the `IMAGEMAGICK_LINKED` build flag. Until that runs (macOS/Xcode), the iOS runners report "not linked".
+
+## iOS (build locally, then activate)
 
 Files: `apps/ios-frontend/ios/App/App/JsEngine/{run_magick.c,run_magick.h,MediaToolRunner.swift,ImageMagickRunner.swift,FfmpegKitRunner.swift}`, the bridge installs in `HostBridge.swift`, the bridging header `App/App-Bridging-Header.h`, and the build script `ios/build-imagemagick.sh`.
 
@@ -14,14 +18,16 @@ Files: `apps/ios-frontend/ios/App/App/JsEngine/{run_magick.c,run_magick.h,MediaT
 2. In the App target build settings, point `HEADER_SEARCH_PATHS` and `LIBRARY_SEARCH_PATHS` at the matching `vendor/im` slice, add `OTHER_LDFLAGS = -lMagickWand-7.Q8HDRI -lMagickCore-7.Q8HDRI -ljpeg -lpng16 -lz`, and add `IMAGEMAGICK_LINKED` to `SWIFT_ACTIVE_COMPILATION_CONDITIONS`.
 3. Add the FFmpegKit SPM package `ffmpeg-kit-full-spm` (full variant, for the `mjpeg` screenshot encoder) and its "Embed Frameworks" run-script phase. `FfmpegKitRunner` activates automatically via `#if canImport(ffmpegkit)`.
 
-## Android (Phase C)
+## Android (fetched from downstream, nothing committed)
 
-Files: `apps/android-frontend/android/app/src/main/cpp/{run_magick.c,CMakeLists.txt}`, the runners and bridge in `.../jsengine/`.
+Committed source: `apps/android-frontend/android/app/src/main/cpp/{run_magick.c,CMakeLists.txt}`, the runners and bridge in `.../jsengine/`, and the `build.gradle` native wiring. The ImageMagick libs/headers are fetched (not committed) by `scripts/fetch-mobile-media-tools.sh android`, which `bun run sync` invokes. What it produces and what the build uses:
 
-1. Vendor the prebuilt `MolotovCherry/Android-ImageMagick7` shared libs (`libmagickcore-7.so`, `libmagickwand-7.so`, `libc++_shared.so`, and `libomp.so` if present) into `app/src/main/jniLibs/<abi>/` for `arm64-v8a` (release) and `x86_64` (emulator/CI), and the ImageMagick headers + per-ABI config overlays under `app/src/main/cpp/imagemagick/`.
-2. In `app/build.gradle`: wire `externalNativeBuild` (CMake 3.22.1, `cpp/CMakeLists.txt`), `ndkVersion "25.1.8937393"`, `-DANDROID_STL=c++_shared`, `abiFilters 'x86_64', 'arm64-v8a'`, and `packagingOptions.jniLibs.pickFirsts += ['**/libc++_shared.so']`. `ImageMagickRunner` loads the libs at runtime.
-3. Add `implementation 'com.moizhassan.ffmpeg:ffmpeg-kit-16kb:6.1.1'`. `FfmpegKitRunner` reaches the API by reflection, so it activates once the dependency is on the classpath.
-4. In `variables.gradle`, ensure `minSdkVersion >= 24` and the Android Gradle Plugin supports 16KB-aligned libs.
+1. Prebuilt `MolotovCherry/Android-ImageMagick7` shared libs (`libmagickcore-7.so`, `libmagickwand-7.so`, `libc++_shared.so`, `libomp.so`) are downloaded from the GitHub release into the git-ignored `app/src/main/jniLibs/<abi>/` for `arm64-v8a` and `x86_64`. The ImageMagick API headers come from the matching source into git-ignored `cpp/imagemagick/include`, and the per-ABI `magick-baseconfig.h`/`version.h` are generated by `configure` (NDK, Q16 HDRI) into git-ignored `cpp/imagemagick/configs/<abi>`.
+2. `app/build.gradle` wires `externalNativeBuild` (CMake 3.22.1, `cpp/CMakeLists.txt`), `ndkVersion "25.1.8937393"`, `-DANDROID_STL=c++_shared`, `abiFilters 'x86_64', 'arm64-v8a'`, and `packagingOptions.jniLibs.pickFirsts += ['**/libc++_shared.so']`. `ImageMagickRunner` loads the libs at runtime.
+3. `app/build.gradle` declares `implementation 'com.moizhassan.ffmpeg:ffmpeg-kit-16kb:6.1.1'` — Gradle pulls it from Maven; `FfmpegKitRunner` reaches it by reflection. The Android Gradle Plugin is pinned to `8.1.4` (`android/build.gradle`) because AGP 8.0's D8 crashes while dexing this FFmpegKit AAR.
+4. `variables.gradle` sets `minSdkVersion 24` (required for the 16KB-page-aligned libs).
+
+To move to newer ImageMagick, bump `IM_VERSION` in `scripts/fetch-mobile-media-tools.sh` (and the ffmpeg version in `build.gradle`); see "Updating the bundled versions" below.
 
 ## Updating the bundled versions
 

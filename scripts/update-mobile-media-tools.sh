@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 # Updates the bundled mobile ImageMagick and ffmpeg. Each step is opt-in via a flag, so you can
 # update one tool/platform at a time. See docs/updating-mobile-imagemagick-ffmpeg.md for the full
-# background. This script edits checked-in config, builds iOS ImageMagick from source, and places
-# Android prebuilt binaries you provide; the Xcode SPM update is printed as guidance (Xcode owns it).
+# background.
+#
+# Note: no third-party binaries/headers are committed. Android ImageMagick is normally pulled from
+# downstream by scripts/fetch-mobile-media-tools.sh (bump IM_VERSION there to change versions); the
+# --android-so-dir / --android-headers-dir flow here remains only for dropping in a build you made
+# yourself, and it writes into the git-ignored jniLibs/cpp-imagemagick that the fetch script owns.
+# This script still handles the iOS from-source ImageMagick build and the ffmpeg version bumps; the
+# Xcode SPM update is printed as guidance (Xcode owns it).
 #
 # Examples:
 #   scripts/update-mobile-media-tools.sh --imagemagick-version 7.1.1-45 --build-ios

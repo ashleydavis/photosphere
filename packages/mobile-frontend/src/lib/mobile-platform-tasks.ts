@@ -55,3 +55,35 @@ export function subscribeMobileTaskComplete(handler: (taskId: string, result: Re
         void handlePromise.then(handle => handle.remove());
     };
 }
+
+//
+// Test-only injection: sandbox-relative paths a smoke test has staged (via the pick-files command)
+// for the next pickMobileFiles call to return in place of opening the native picker. Undefined in
+// production so the real native picker runs. Consumed once.
+//
+let injectedPickedFiles: string[] | undefined;
+
+//
+// Test-only: sets the paths the next pickMobileFiles call returns instead of opening the native
+// picker. Called by the mobile provider when it receives the pick-files smoke-test window event.
+//
+export function setInjectedPickedFiles(paths: string[]): void {
+    injectedPickedFiles = paths;
+}
+
+//
+// Opens the native multi-select photo picker and returns the sandbox-relative paths of the copied
+// picked files, or undefined when the user picked nothing (matching the "cancelled" contract the
+// import context expects). In test mode, returns paths staged via setInjectedPickedFiles instead of
+// opening the real picker, consuming them once.
+//
+export async function pickMobileFiles(title: string, plugin: IJsEnginePlugin = JsEngine): Promise<string[] | undefined> {
+    if (injectedPickedFiles !== undefined) {
+        const paths = injectedPickedFiles;
+        injectedPickedFiles = undefined;
+        return paths.length > 0 ? paths : undefined;
+    }
+
+    const result = await plugin.pickFiles({ title });
+    return result.paths.length > 0 ? result.paths : undefined;
+}

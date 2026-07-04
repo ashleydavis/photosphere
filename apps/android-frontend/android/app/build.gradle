@@ -15,7 +15,39 @@ android {
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
+
+        // We ship native ImageMagick (.so in jniLibs) only for these ABIs, and the FFmpegKit fork
+        // covers them too, so restrict the build to match.
+        ndk {
+            abiFilters 'x86_64', 'arm64-v8a'
+        }
+
+        // The run_magick C shim that calls ImageMagick's in-process dispatcher.
+        externalNativeBuild {
+            cmake {
+                arguments "-DANDROID_STL=c++_shared"
+            }
+        }
     }
+
+    // Build the run_magick shim with the NDK installed alongside the SDK.
+    ndkVersion "25.1.8937393"
+
+    externalNativeBuild {
+        cmake {
+            path "src/main/cpp/CMakeLists.txt"
+            version "3.22.1"
+        }
+    }
+
+    // The FFmpegKit AAR and the ImageMagick jniLibs each bundle libc++_shared.so; keep the first to
+    // avoid a duplicate-path packaging error.
+    packagingOptions {
+        jniLibs {
+            pickFirsts += ['**/libc++_shared.so']
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
@@ -42,11 +74,31 @@ dependencies {
     // (so it runs on both devices and the emulator). Resolves from Maven Central.
     implementation 'wang.harlon.quickjs:wrapper-android:3.2.0'
 
+    // ffmpeg/ffprobe in-process via FFmpegKit. 16KB-page-aligned Maven fork (works on Android 15/16,
+    // API 35/36); same com.arthenica.* API FfmpegKitRunner reaches by reflection. Pulled from Maven —
+    // no vendored binaries.
+    implementation 'com.moizhassan.ffmpeg:ffmpeg-kit-16kb:6.1.1'
+
     // Plain-JVM unit tests (the engine pool dispatcher and path sandbox) run under app/src/test.
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
+}
+
+// Print failing/skipped tests and a run/passed/failed summary line so `bun run test:android:unit`
+// output shows what actually ran, instead of only "BUILD SUCCESSFUL".
+tasks.withType(Test).configureEach {
+    testLogging {
+        events "failed", "skipped"
+        exceptionFormat "full"
+    }
+    afterSuite { desc, result ->
+        if (desc.parent == null) {
+            println "Unit tests: ${result.testCount} run, ${result.successfulTestCount} passed, " +
+                "${result.failedTestCount} failed, ${result.skippedTestCount} skipped"
+        }
+    }
 }
 
 apply from: 'capacitor.build.gradle'

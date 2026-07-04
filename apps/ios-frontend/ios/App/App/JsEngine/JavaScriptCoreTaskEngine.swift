@@ -205,6 +205,10 @@ final class JavaScriptCoreTaskEngine: TaskEngine {
                 return
             }
 
+            // Point the host bridge at the running task so host.queueTask knows which task is the
+            // parent when the handler enqueues a child task.
+            self.hostBridge.currentTaskId = task.taskId
+
             // Reset the per-task exception handler so an uncaught synchronous throw inside runTask is
             // captured and turned into a task failure rather than silently swallowed.
             var syncException: JSValue?
@@ -265,6 +269,25 @@ final class JavaScriptCoreTaskEngine: TaskEngine {
                 let outputsJson = promise?.toString() ?? "null"
                 callbacks.onTaskSucceeded(task, outputsJson: outputsJson)
             }
+        }
+    }
+
+    //
+    // Delivers a child-task event from the pool into this engine's context by invoking
+    // globalThis.__childEvent on the engine queue, so an orchestrator handler awaiting its subtasks
+    // resolves. JavaScriptCore is event-driven (it pumps the microtask queue after the call), so no
+    // idle-timeout run loop is needed here, unlike the Android QuickJS engine. `terminal` is accepted
+    // for protocol parity; iOS needs no outstanding-children liveness tracking.
+    //
+    func deliverChildEvent(_ eventJson: String, terminal: Bool) {
+        engineQueue.async { [weak self] in
+            guard let self = self, let context = self.context else {
+                return
+            }
+            guard let childEventFunction = context.globalObject.objectForKeyedSubscript("__childEvent"), !childEventFunction.isUndefined else {
+                return
+            }
+            childEventFunction.call(withArguments: [eventJson])
         }
     }
 

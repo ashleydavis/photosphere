@@ -1,5 +1,7 @@
 import Foundation
 import Capacitor
+import PhotosUI
+import UniformTypeIdentifiers
 
 //
 // The "JsEngine" Capacitor plugin: the native owner of the embedded-engine pool on iOS. It exposes
@@ -17,6 +19,12 @@ public class JsEnginePlugin: CAPPlugin, EnginePoolDelegate {
     // spin up when background work is actually dispatched.
     //
     private var pool: EnginePool?
+
+    //
+    // The in-flight pickFiles call awaiting the photo picker's result. Held so the PHPicker delegate
+    // can resolve it once the user finishes picking. Only one pick runs at a time.
+    //
+    private var pendingPickCall: CAPPluginCall?
 
     //
     // Guards the lazy pool creation and the event buffer / listener-registered flags, so the plugin's
@@ -120,6 +128,56 @@ public class JsEnginePlugin: CAPPlugin, EnginePoolDelegate {
 
         currentPool?.cancelTasks(source: source)
         call.resolve()
+    }
+
+    //
+    // pickFiles: presents the native multi-select photo picker for images and videos. Held call is
+    // resolved by the PHPicker delegate once the user finishes; each chosen item is copied into the
+    // sandbox import temp directory and its sandbox-relative path is returned.
+    //
+    @objc func pickFiles(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            self.pendingPickCall = call
+
+            var configuration = PHPickerConfiguration()
+            configuration.selectionLimit = 0
+            configuration.filter = .any(of: [.images, .videos])
+
+            let picker = PHPickerViewController(configuration: configuration)
+            picker.delegate = self
+
+            guard let presenter = self.bridge?.viewController else {
+                self.pendingPickCall = nil
+                call.reject("pickFiles: no view controller available to present the picker")
+                return
+            }
+            presenter.present(picker, animated: true)
+        }
+    }
+
+    //
+    // Copies one picked file (a temporary URL vended by PHPickerResult.loadFileRepresentation) into
+    // the sandbox import temp directory under a fresh uuid name, returning its sandbox-relative path.
+    //
+    fileprivate func copyPickedFile(from url: URL, suggestedName: String?) throws -> String {
+        let relativePath = ImportPicker.buildRelativePath(
+            uuid: UUID().uuidString,
+            displayName: suggestedName,
+            fileExtension: url.pathExtension
+        )
+
+        let destination = storageRoot().appendingPathComponent(relativePath)
+        let parent = destination.deletingLastPathComponent()
+        let fileManager = FileManager.default
+        if !fileManager.fileExists(atPath: parent.path) {
+            try fileManager.createDirectory(at: parent, withIntermediateDirectories: true)
+        }
+        if fileManager.fileExists(atPath: destination.path) {
+            try fileManager.removeItem(at: destination)
+        }
+        try fileManager.copyItem(at: url, to: destination)
+
+        return relativePath
     }
 
     //
@@ -289,5 +347,58 @@ public class JsEnginePlugin: CAPPlugin, EnginePoolDelegate {
     //
     func poolDidEmitMessage(_ task: PooledTask, messageJson: String) {
         emitTaskMessage(taskId: task.taskId, payload: ["taskId": task.taskId, "message": parseJson(messageJson)])
+    }
+}
+
+//
+// PHPicker delegate: copies each picked item into the sandbox and resolves the held pickFiles call
+// with the copied files' sandbox-relative paths (empty when the user cancelled). Kept in this file so
+// the fileprivate copyPickedFile and private storageRoot remain accessible.
+//
+extension JsEnginePlugin: PHPickerViewControllerDelegate {
+
+    //
+    // Handles the picker finishing: dismisses it, loads each result's file representation into the
+    // sandbox off the main thread, and resolves the held call once every copy has finished.
+    //
+    public func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+        picker.dismiss(animated: true)
+
+        guard let call = pendingPickCall else {
+            return
+        }
+        pendingPickCall = nil
+
+        if results.isEmpty {
+            call.resolve(["paths": []])
+            return
+        }
+
+        let group = DispatchGroup()
+        let pathsLock = NSLock()
+        var paths: [String] = []
+
+        for result in results {
+            group.enter()
+            let provider = result.itemProvider
+            let typeIdentifier = provider.registeredTypeIdentifiers.first ?? UTType.data.identifier
+            provider.loadFileRepresentation(forTypeIdentifier: typeIdentifier) { [weak self] url, _ in
+                defer {
+                    group.leave()
+                }
+                guard let self = self, let url = url else {
+                    return
+                }
+                if let relativePath = try? self.copyPickedFile(from: url, suggestedName: provider.suggestedName) {
+                    pathsLock.lock()
+                    paths.append(relativePath)
+                    pathsLock.unlock()
+                }
+            }
+        }
+
+        group.notify(queue: .main) {
+            call.resolve(["paths": paths])
+        }
     }
 }

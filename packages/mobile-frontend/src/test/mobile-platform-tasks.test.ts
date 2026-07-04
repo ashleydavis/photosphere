@@ -1,4 +1,4 @@
-import { cancelMobileTasks, subscribeMobileTaskMessage, subscribeMobileTaskComplete } from "../lib/mobile-platform-tasks";
+import { cancelMobileTasks, subscribeMobileTaskMessage, subscribeMobileTaskComplete, pickMobileFiles, setInjectedPickedFiles } from "../lib/mobile-platform-tasks";
 import type { IJsEnginePlugin } from "../lib/js-engine-plugin";
 
 //
@@ -12,6 +12,7 @@ function makeMockPlugin() {
         addTask: jest.fn().mockResolvedValue(undefined),
         cancelTasks: jest.fn().mockResolvedValue(undefined),
         shutdown: jest.fn().mockResolvedValue(undefined),
+        pickFiles: jest.fn().mockResolvedValue({ paths: [] }),
         addListener: jest.fn().mockImplementation(async (eventName: string, listenerFunc: (event: any) => void) => {
             const existing = listeners.get(eventName) ?? [];
             existing.push(listenerFunc);
@@ -77,5 +78,40 @@ describe("mobile platform task bindings", () => {
         expect(received).toHaveLength(1);
         expect(received[0].taskId).toBe("task-1");
         expect(received[0].result.status).toBe("succeeded");
+    });
+
+    test("pickMobileFiles returns the plugin's picked paths", async () => {
+        const plugin = makeMockPlugin();
+        (plugin.pickFiles as jest.Mock).mockResolvedValue({ paths: [".import-tmp/a.jpg", ".import-tmp/b.png"] });
+
+        const paths = await pickMobileFiles("Import photos", plugin);
+
+        expect(plugin.pickFiles).toHaveBeenCalledWith({ title: "Import photos" });
+        expect(paths).toEqual([".import-tmp/a.jpg", ".import-tmp/b.png"]);
+    });
+
+    test("pickMobileFiles returns undefined when the user picked nothing", async () => {
+        const plugin = makeMockPlugin();
+        (plugin.pickFiles as jest.Mock).mockResolvedValue({ paths: [] });
+
+        const paths = await pickMobileFiles("Import photos", plugin);
+
+        expect(paths).toBeUndefined();
+    });
+
+    test("pickMobileFiles returns injected test paths without calling the plugin", async () => {
+        const plugin = makeMockPlugin();
+        setInjectedPickedFiles([".import-tmp/seeded-1.jpeg", ".import-tmp/seeded-2.png"]);
+
+        const paths = await pickMobileFiles("Import photos", plugin);
+
+        expect(plugin.pickFiles).not.toHaveBeenCalled();
+        expect(paths).toEqual([".import-tmp/seeded-1.jpeg", ".import-tmp/seeded-2.png"]);
+
+        // Injection is consumed once: the next call falls through to the plugin.
+        (plugin.pickFiles as jest.Mock).mockResolvedValue({ paths: [] });
+        const second = await pickMobileFiles("Import photos", plugin);
+        expect(plugin.pickFiles).toHaveBeenCalledTimes(1);
+        expect(second).toBeUndefined();
     });
 });

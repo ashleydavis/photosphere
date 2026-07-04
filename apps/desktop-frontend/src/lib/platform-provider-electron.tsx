@@ -526,6 +526,7 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         onPlatformEvent,
         onNavigate,
         getPathForFile,
+        supportsDragAndDropImport: true,
         checkTools,
         checkDatabaseExists,
         onTaskMessage,

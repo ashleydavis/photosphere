@@ -1,9 +1,9 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
 import eruda from "eruda";
 import { Network } from "@capacitor/network";
-import { PlatformContextProvider, ConfigContextProvider, createConfig, useLanShareTasks, readBrowserNetworkStatus, subscribeBrowserNetworkStatus, TEST_MENU_EVENT, TEST_OPEN_DATABASE_EVENT, TEST_SEED_DATABASES_EVENT, TEST_SEED_SECRETS_EVENT, TEST_SEED_RECENT_EVENT, TEST_SEED_NEWS_EVENT, TEST_RESET_CONFIG_EVENT, type IPlatformContext, type IPlatformEvent, type INetworkStatus, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions } from "user-interface";
+import { PlatformContextProvider, ConfigContextProvider, createConfig, useLanShareTasks, readBrowserNetworkStatus, subscribeBrowserNetworkStatus, TEST_MENU_EVENT, TEST_OPEN_DATABASE_EVENT, TEST_SEED_DATABASES_EVENT, TEST_SEED_SECRETS_EVENT, TEST_SEED_RECENT_EVENT, TEST_SEED_NEWS_EVENT, TEST_RESET_CONFIG_EVENT, TEST_PICK_FILES_EVENT, type IPlatformContext, type IPlatformEvent, type INetworkStatus, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions } from "user-interface";
 import { log } from "utils";
-import { cancelMobileTasks, subscribeMobileTaskMessage, subscribeMobileTaskComplete } from "./mobile-platform-tasks";
+import { cancelMobileTasks, subscribeMobileTaskMessage, subscribeMobileTaskComplete, pickMobileFiles, setInjectedPickedFiles } from "./mobile-platform-tasks";
 import * as configStore from "./mobile-config-store";
 
 // Whether the in-page Eruda console has been initialised and whether it is currently visible.
@@ -139,12 +139,19 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         const handleResetConfig = () => {
             configStore.resetConfig(persistentStore);
         };
+        // Test setup: stage picked file paths so the next pickFiles resolves with them instead of
+        // opening the native picker (which cannot be automated in a smoke test).
+        const handlePickFiles = (event: Event) => {
+            const paths = (event as CustomEvent<string[]>).detail || [];
+            setInjectedPickedFiles(paths);
+        };
         window.addEventListener(TEST_MENU_EVENT, handleMenu);
         window.addEventListener(TEST_OPEN_DATABASE_EVENT, handleOpenDatabase);
         window.addEventListener(TEST_SEED_DATABASES_EVENT, handleSeedDatabases);
         window.addEventListener(TEST_SEED_SECRETS_EVENT, handleSeedSecrets);
         window.addEventListener(TEST_SEED_RECENT_EVENT, handleSeedRecent);
         window.addEventListener(TEST_RESET_CONFIG_EVENT, handleResetConfig);
+        window.addEventListener(TEST_PICK_FILES_EVENT, handlePickFiles);
         return () => {
             window.removeEventListener(TEST_MENU_EVENT, handleMenu);
             window.removeEventListener(TEST_OPEN_DATABASE_EVENT, handleOpenDatabase);
@@ -152,6 +159,7 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
             window.removeEventListener(TEST_SEED_SECRETS_EVENT, handleSeedSecrets);
             window.removeEventListener(TEST_SEED_RECENT_EVENT, handleSeedRecent);
             window.removeEventListener(TEST_RESET_CONFIG_EVENT, handleResetConfig);
+            window.removeEventListener(TEST_PICK_FILES_EVENT, handlePickFiles);
         };
     }, []);
 
@@ -295,8 +303,8 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         return defaultFilename;
     }, []);
 
-    const pickFiles = useCallback(async (_title: string): Promise<string[] | undefined> => {
-        return undefined;
+    const pickFiles = useCallback(async (title: string): Promise<string[] | undefined> => {
+        return pickMobileFiles(title);
     }, []);
 
     const listSecrets = useCallback(async (): Promise<ISharedSecretEntry[]> => {
@@ -417,6 +425,7 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         onPlatformEvent,
         onNavigate,
         getPathForFile,
+        supportsDragAndDropImport: false,
         checkTools,
         checkDatabaseExists,
         onTaskMessage,

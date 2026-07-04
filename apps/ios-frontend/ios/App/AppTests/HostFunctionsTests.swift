@@ -30,7 +30,8 @@ final class HostFunctionsTests: XCTestCase {
             sessionId: "session-1",
             storageRoot: storageRoot,
             isCancelledProvider: { _ in false },
-            messageSink: { _, _ in }
+            messageSink: { _, _ in },
+            queueTaskSink: { _, _, _, _, _ in }
         )
     }
 

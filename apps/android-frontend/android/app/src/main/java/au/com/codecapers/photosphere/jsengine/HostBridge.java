@@ -217,6 +217,19 @@ public final class HostBridge {
     }
 
     //
+    // host.queueTask(childTaskId, type, dataJson, source): synchronous native callable invoked when
+    // the running handler enqueues a child task. It hands the child to the pool tagged with the
+    // currently-running (parent) task id so the pool can route the child's outcome back to this
+    // engine. Mirrors the Electron worker posting a "queue-task" message to the main process.
+    //
+    public void queueChildTask(String childTaskId, String type, String dataJson, String source) {
+        PooledTask parent = currentTask;
+        if (parent != null) {
+            callbacks.queueChildTask(parent.taskId, childTaskId, type, dataJson, source);
+        }
+    }
+
+    //
     // host.sha256(path): hashes the file at the sandboxed storage path natively and returns
     // the lowercase hex digest. The path is validated by PathSandbox before any IO.
     //

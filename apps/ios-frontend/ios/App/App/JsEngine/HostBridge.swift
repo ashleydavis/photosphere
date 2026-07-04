@@ -93,6 +93,13 @@ final class HostBridge {
     let storageRoot: URL
 
     //
+    // The id of the task currently running on this engine, set by the engine immediately before it
+    // invokes runTask. host.queueTask reads it as the parent id so the pool can route the child
+    // task's outcome back to this engine. Mirrors the Android HostBridge.setCurrentTask.
+    //
+    var currentTaskId: String?
+
+    //
     // The native TCP socket layer behind the host.tcp* functions. Owned per engine context; the
     // engine drains its inbound event queue on the JSContext thread and delivers each event into the
     // JS net shim via globalThis.__tcpEvent.
@@ -114,18 +121,27 @@ final class HostBridge {
     private let messageSink: (String, String) -> Void
 
     //
+    // Hands a child task the running handler enqueued (via host.queueTask) back to the pool, tagged
+    // with the parent task id, so the pool queues it and later routes its outcome to this engine.
+    // Mirrors the Android HostBridge forwarding to EngineCallbacks.queueChildTask.
+    //
+    private let queueTaskSink: (String, String, String, String, String) -> Void
+
+    //
     // Constructs a host bridge for one engine context. `sessionId` and `storageRoot` come from
-    // the pool; `isCancelledProvider` and `messageSink` route cancellation reads and streamed
-    // messages back to the pool (or to a capturing closure in tests).
+    // the pool; `isCancelledProvider`, `messageSink`, and `queueTaskSink` route cancellation reads,
+    // streamed messages, and child-task enqueues back to the pool (or to capturing closures in tests).
     //
     init(sessionId: String,
          storageRoot: URL,
          isCancelledProvider: @escaping (String) -> Bool,
-         messageSink: @escaping (String, String) -> Void) {
+         messageSink: @escaping (String, String) -> Void,
+         queueTaskSink: @escaping (String, String, String, String, String) -> Void) {
         self.sessionId = sessionId
         self.storageRoot = storageRoot
         self.isCancelledProvider = isCancelledProvider
         self.messageSink = messageSink
+        self.queueTaskSink = queueTaskSink
     }
 
     //
@@ -151,6 +167,17 @@ final class HostBridge {
             return self?.isCancelledProvider(taskId) ?? false
         }
         host.setValue(JSValue(object: isCancelled, in: context), forProperty: "isCancelled")
+
+        // queueTask(childTaskId, type, dataJson, source): synchronous; hands the child task to the pool
+        // tagged with the current (parent) task id so the child's outcome routes back to this engine.
+        // A no-op when no task is current (there is no parent to route back to).
+        let queueTask: @convention(block) (String, String, String, String) -> Void = { [weak self] childTaskId, type, dataJson, source in
+            guard let self = self, let parentTaskId = self.currentTaskId else {
+                return
+            }
+            self.queueTaskSink(parentTaskId, childTaskId, type, dataJson, source)
+        }
+        host.setValue(JSValue(object: queueTask, in: context), forProperty: "queueTask")
 
         // sha256(path): hashing a file is a Node.js crypto capability this infrastructure plan
         // deliberately does not implement natively. It raises the NOT IMPLEMENTED JS exception so

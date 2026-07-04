@@ -40,7 +40,8 @@ final class HostBridgeTests: XCTestCase {
             sessionId: "session-1",
             storageRoot: storageRoot,
             isCancelledProvider: { _ in false },
-            messageSink: { _, _ in }
+            messageSink: { _, _ in },
+            queueTaskSink: { _, _, _, _, _ in }
         )
 
         XCTAssertThrowsError(try bridge.sha256(path: "vector.txt")) { error in
@@ -62,7 +63,8 @@ final class HostBridgeTests: XCTestCase {
             messageSink: { taskId, messageJson in
                 capturedTaskId = taskId
                 capturedMessage = messageJson
-            }
+            },
+            queueTaskSink: { _, _, _, _, _ in }
         )
 
         let context = JSContext()!
@@ -81,7 +83,8 @@ final class HostBridgeTests: XCTestCase {
             sessionId: "session-1",
             storageRoot: storageRoot,
             isCancelledProvider: { taskId in taskId == "cancelled-task" },
-            messageSink: { _, _ in }
+            messageSink: { _, _ in },
+            queueTaskSink: { _, _, _, _, _ in }
         )
 
         let context = JSContext()!
@@ -102,7 +105,8 @@ final class HostBridgeTests: XCTestCase {
             sessionId: "session-xyz",
             storageRoot: storageRoot,
             isCancelledProvider: { _ in false },
-            messageSink: { _, _ in }
+            messageSink: { _, _ in },
+            queueTaskSink: { _, _, _, _, _ in }
         )
 
         let context = JSContext()!

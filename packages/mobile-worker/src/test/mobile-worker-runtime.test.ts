@@ -1,6 +1,25 @@
-import { registerHandler, ITaskContext } from "task-queue";
-import { runTask, installWorkerGlobal } from "../lib/mobile-worker-runtime";
+import { Buffer } from "buffer";
+import { registerHandler, ITaskContext, TaskQueue, TaskStatus } from "task-queue";
+import { RandomUuidGenerator } from "utils";
+import { runTask, installWorkerGlobal, deliverChildEvent } from "../lib/mobile-worker-runtime";
 import { IHost } from "../lib/host-functions";
+
+//
+// A child task queued via host.queueTask, captured by the mock host for assertions.
+//
+interface IQueuedTask {
+    // The child task id.
+    taskId: string;
+
+    // The child handler type.
+    type: string;
+
+    // The JSON-encoded child input data.
+    dataJson: string;
+
+    // The source tag grouping the child task.
+    source: string;
+}
 
 //
 // Builds a mock native host bridge for the tests, capturing calls to
@@ -12,22 +31,30 @@ interface IMockHost extends IHost {
 
     // Records every taskId passed to isCancelled.
     cancelledChecks: string[];
+
+    // Records every child task queued via queueTask.
+    queuedTasks: IQueuedTask[];
 }
 
 function createMockHost(sessionId: string): IMockHost {
     const sentMessages: Array<{ taskId: string; messageJson: string }> = [];
     const cancelledChecks: string[] = [];
+    const queuedTasks: IQueuedTask[] = [];
     const mockHost: IMockHost = {
         platform: "android",
         sessionId,
         sentMessages,
         cancelledChecks,
+        queuedTasks,
         sendMessage: (taskId: string, messageJson: string) => {
             sentMessages.push({ taskId, messageJson });
         },
         isCancelled: (taskId: string) => {
             cancelledChecks.push(taskId);
             return false;
+        },
+        queueTask: (taskId: string, type: string, dataJson: string, source: string) => {
+            queuedTasks.push({ taskId, type, dataJson, source });
         },
         sha256: (path: string) => `sha256(${path})`,
         fsReadFile: () => null,
@@ -132,5 +159,152 @@ describe("mobile worker runTask", () => {
         expect(result.sessionId).toBe("session-install");
 
         globalThis.__photosphereWorker = undefined;
+    });
+});
+
+describe("mobile worker subtask queue backend", () => {
+
+    // installWorkerGlobal installs the process-level worker queue backend once; it is safe to call
+    // repeatedly (guarded internally) so each test can rely on it being present.
+    beforeEach(() => {
+        installWorkerGlobal();
+    });
+
+    afterEach(() => {
+        globalThis.host = undefined;
+    });
+
+    test("a handler enqueuing a child task routes it to host.queueTask", () => {
+        const mockHost = createMockHost("session-queue");
+        globalThis.host = mockHost;
+
+        const queue = new TaskQueue(new RandomUuidGenerator(), "import-source");
+        const childId = queue.addTask("hash-file", { filePath: "cat.jpg" });
+
+        expect(mockHost.queuedTasks).toEqual([
+            { taskId: childId, type: "hash-file", dataJson: JSON.stringify({ filePath: "cat.jpg" }), source: "import-source" },
+        ]);
+
+        queue.shutdown();
+    });
+
+    test("a delivered child completion resolves the awaiting orchestrator", async () => {
+        const mockHost = createMockHost("session-queue");
+        globalThis.host = mockHost;
+
+        const queue = new TaskQueue(new RandomUuidGenerator(), "import-source-2");
+        const childId = queue.addTask("hash-file", { filePath: "dog.jpg" });
+        const resultPromise = queue.awaitTask(childId);
+
+        deliverChildEvent(JSON.stringify({
+            kind: "completed",
+            result: {
+                taskId: childId,
+                status: TaskStatus.Succeeded,
+                type: "hash-file",
+                inputs: { filePath: "dog.jpg" },
+                outputs: { hash: "abc123" },
+            },
+        }));
+
+        const result = await resultPromise;
+        expect(result?.status).toBe(TaskStatus.Succeeded);
+        expect(result?.outputs.hash).toBe("abc123");
+
+        queue.shutdown();
+    });
+
+    test("a delivered child failure reconstructs an Error on the result", async () => {
+        const mockHost = createMockHost("session-queue");
+        globalThis.host = mockHost;
+
+        const queue = new TaskQueue(new RandomUuidGenerator(), "import-source-3");
+        const childId = queue.addTask("hash-file", { filePath: "bad.jpg" });
+        const resultPromise = queue.awaitTask(childId);
+
+        deliverChildEvent(JSON.stringify({
+            kind: "completed",
+            result: {
+                taskId: childId,
+                status: TaskStatus.Failed,
+                type: "hash-file",
+                inputs: { filePath: "bad.jpg" },
+                errorMessage: "hashing failed",
+            },
+        }));
+
+        const result = await resultPromise;
+        expect(result?.status).toBe(TaskStatus.Failed);
+        expect(result?.errorMessage).toBe("hashing failed");
+        expect(result?.error).toBeInstanceOf(Error);
+        expect(result?.error?.message).toBe("hashing failed");
+
+        queue.shutdown();
+    });
+
+    test("binary (Uint8Array) and Date fields survive the bridge round trip", async () => {
+        const mockHost = createMockHost("session-binary");
+        globalThis.host = mockHost;
+
+        // A handler that returns a Uint8Array and a Date (e.g. hash-file's hash + a stat time).
+        registerHandler("test-binary-result", async () => {
+            return { hash: new Uint8Array([1, 2, 3, 255]), when: new Date(1234567890) };
+        });
+
+        // runTask serialises the result; binary/Date must be encoded so plain JSON can carry them.
+        const resultJson = await runTask("bin-task", "test-binary-result", "{}");
+        expect(resultJson).toContain("__u8b64__");
+        expect(resultJson).toContain("__date__");
+
+        // Delivering that result as a child completion must reconstruct a Buffer and a Date so the
+        // orchestrator (which does Buffer.from(hash) and lastModified.getTime()) works.
+        const queue = new TaskQueue(new RandomUuidGenerator(), "bin-source");
+        const childId = queue.addTask("test-binary-result", {});
+        const resultPromise = queue.awaitTask(childId);
+
+        deliverChildEvent(JSON.stringify({
+            kind: "completed",
+            result: {
+                taskId: childId,
+                status: TaskStatus.Succeeded,
+                type: "test-binary-result",
+                inputs: {},
+                outputs: JSON.parse(resultJson),
+            },
+        }));
+
+        const result = await resultPromise;
+        expect(Buffer.isBuffer(result?.outputs.hash)).toBe(true);
+        expect(Array.from(result?.outputs.hash as Buffer)).toEqual([1, 2, 3, 255]);
+        expect(result?.outputs.when instanceof Date).toBe(true);
+        expect((result?.outputs.when as Date).getTime()).toBe(1234567890);
+
+        queue.shutdown();
+    });
+
+    test("a delivered child message fires the orchestrator's message callback", async () => {
+        const mockHost = createMockHost("session-queue");
+        globalThis.host = mockHost;
+
+        const queue = new TaskQueue(new RandomUuidGenerator(), "import-source-4");
+        const childId = queue.addTask("hash-file", { filePath: "cat.jpg" });
+
+        const received: any[] = [];
+        queue.onTaskMessage("progress", ({ message }) => {
+            received.push(message);
+        });
+
+        deliverChildEvent(JSON.stringify({
+            kind: "message",
+            taskId: childId,
+            message: { type: "progress", percent: 50 },
+        }));
+
+        // notifyTaskMessage is async; allow the microtask queue to drain.
+        await Promise.resolve();
+
+        expect(received).toEqual([{ type: "progress", percent: 50 }]);
+
+        queue.shutdown();
     });
 });

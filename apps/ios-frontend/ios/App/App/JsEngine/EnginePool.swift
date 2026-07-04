@@ -98,6 +98,14 @@ final class EnginePool: EngineCallbacks {
     private var cancelledSources: Set<String> = []
 
     //
+    // Map of child taskId -> the engine that spawned it. A child task's outcome is routed back to its
+    // origin engine (so an orchestrator handler awaiting it resolves) instead of to the WebView
+    // delegate. Root tasks queued from the WebView are absent and keep going to the delegate. Mutated
+    // only under the lock. Mirrors the Android EnginePool.childOriginByTaskId.
+    //
+    private var childOriginByTaskId: [String: TaskEngine] = [:]
+
+    //
     // True once shutdown has begun. After this no new tasks are accepted or dispatched.
     //
     private var shuttingDown = false
@@ -129,6 +137,12 @@ final class EnginePool: EngineCallbacks {
                 },
                 messageSink: { [weak self] taskId, messageJson in
                     self?.handleSendMessage(taskId: taskId, messageJson: messageJson)
+                },
+                queueTaskSink: { [weak self] parentTaskId, childTaskId, type, dataJson, source in
+                    self?.queueChildTask(
+                        parentTaskId: parentTaskId,
+                        child: PooledTask(taskId: childTaskId, type: type, dataJson: dataJson, source: source)
+                    )
                 }
             )
             let engine = engineFactory(slotIndex, hostBridge)
@@ -157,15 +171,57 @@ final class EnginePool: EngineCallbacks {
     }
 
     //
+    // Enqueues a child task spawned by a running handler and kicks the dispatcher, tagging it with the
+    // origin engine (the slot running the parent) so the child's outcome routes back to that engine.
+    // Mirrors the Android EnginePool.queueChildTask and the Electron main process handling a worker's
+    // "queue-task" message. A child whose parent is no longer running, or whose source was already
+    // cancelled, is dropped.
+    //
+    func queueChildTask(parentTaskId: String, child: PooledTask) {
+        lock.lock()
+        if shuttingDown {
+            lock.unlock()
+            return
+        }
+        if cancelledSources.contains(child.source) {
+            lock.unlock()
+            return
+        }
+
+        var origin: TaskEngine?
+        for slot in slots {
+            if let running = slot.runningTask, running.taskId == parentTaskId {
+                origin = slot.engine
+                break
+            }
+        }
+        guard let originEngine = origin else {
+            // The parent already finished; there is nothing to deliver the child's result to.
+            lock.unlock()
+            return
+        }
+
+        childOriginByTaskId[child.taskId] = originEngine
+        pending.append(child)
+        lock.unlock()
+
+        dispatch()
+    }
+
+    //
     // Cancels every task that shares the given source: adds the source to the cancelled set (so
-    // host.isCancelled observes it for running tasks) and drops all matching pending tasks from the
-    // FIFO so they never dispatch.
+    // host.isCancelled observes it for running tasks), drops all matching pending tasks from the
+    // FIFO so they never dispatch, and forgets any child-origin mappings for those dropped tasks.
     //
     func cancelTasks(source: String) {
         lock.lock()
         cancelledSources.insert(source)
         pending.removeAll { task in
-            task.source == source
+            if task.source == source {
+                childOriginByTaskId.removeValue(forKey: task.taskId)
+                return true
+            }
+            return false
         }
         lock.unlock()
     }
@@ -269,6 +325,9 @@ final class EnginePool: EngineCallbacks {
         }
         lock.unlock()
 
+        // Task messages (root AND child) go to the WebView delegate, matching Electron: the UI
+        // consumes messages like import-pending (sent by the upload-asset subtask) and import-success
+        // (sent by the import-assets root task). Only child COMPLETIONS route to the origin engine.
         if let task = matched {
             delegate?.poolDidEmitMessage(task, messageJson: messageJson)
         }
@@ -292,6 +351,7 @@ final class EnginePool: EngineCallbacks {
             slot.runningTask = nil
         }
         cancelledSources.removeAll()
+        childOriginByTaskId.removeAll()
         lock.unlock()
 
         for engine in enginesToDispose {
@@ -306,25 +366,76 @@ final class EnginePool: EngineCallbacks {
     // dispatcher to fill the now-idle slot.
     //
     func onTaskSucceeded(_ task: PooledTask, outputsJson: String) {
+        lock.lock()
+        let origin = childOriginByTaskId.removeValue(forKey: task.taskId)
+        lock.unlock()
+
         freeSlot(for: task.taskId)
-        delegate?.poolDidSucceed(task, outputsJson: outputsJson)
+
+        if let origin = origin {
+            origin.deliverChildEvent(EnginePool.buildChildCompletedEvent(task: task, succeeded: true, errorMessage: nil, outputsJson: outputsJson), terminal: true)
+        }
+        else {
+            delegate?.poolDidSucceed(task, outputsJson: outputsJson)
+        }
+
         dispatch()
     }
 
     //
-    // Engine reported failure (including NOT IMPLEMENTED): free the slot, forward the message to the
-    // delegate, then re-run the dispatcher.
+    // Engine reported failure (including NOT IMPLEMENTED): free the slot, route the message to the
+    // origin engine (child) or the delegate (root), then re-run the dispatcher.
     //
     func onTaskFailed(_ task: PooledTask, errorMessage: String) {
+        lock.lock()
+        let origin = childOriginByTaskId.removeValue(forKey: task.taskId)
+        lock.unlock()
+
         freeSlot(for: task.taskId)
-        delegate?.poolDidFail(task, errorMessage: errorMessage)
+
+        if let origin = origin {
+            origin.deliverChildEvent(EnginePool.buildChildCompletedEvent(task: task, succeeded: false, errorMessage: errorMessage, outputsJson: nil), terminal: true)
+        }
+        else {
+            delegate?.poolDidFail(task, errorMessage: errorMessage)
+        }
+
         dispatch()
     }
 
     //
-    // Engine streamed a progress message: forward it to the delegate. The slot stays busy.
+    // Engine streamed a progress message via EngineCallbacks (unused on iOS, where messages flow
+    // through the host bridge messageSink instead): route to the WebView delegate for both root and
+    // child tasks, matching Electron and handleSendMessage. The slot stays busy.
     //
     func onTaskMessage(_ task: PooledTask, messageJson: String) {
         delegate?.poolDidEmitMessage(task, messageJson: messageJson)
     }
+
+    // MARK: Child-event JSON builders
+
+    //
+    // Builds the JSON for a child completion event delivered into the origin engine's
+    // globalThis.__childEvent. The already-valid JSON fragments (the child's inputs and outputs) are
+    // embedded raw; plain string fields are escaped. Mirrors the Android EnginePool.buildChildCompletedEvent.
+    //
+    private static func buildChildCompletedEvent(task: PooledTask, succeeded: Bool, errorMessage: String?, outputsJson: String?) -> String {
+        var builder = "{\"kind\":\"completed\",\"result\":{"
+        builder += "\"taskId\":\"" + HostBridge.jsonEscape(task.taskId) + "\","
+        builder += "\"status\":\"" + (succeeded ? "succeeded" : "failed") + "\","
+        builder += "\"type\":\"" + HostBridge.jsonEscape(task.type) + "\","
+        builder += "\"inputs\":" + (task.dataJson.isEmpty ? "null" : task.dataJson)
+
+        if succeeded {
+            let outputs = (outputsJson == nil || outputsJson!.isEmpty) ? "null" : outputsJson!
+            builder += ",\"outputs\":" + outputs
+        }
+        else {
+            builder += ",\"errorMessage\":\"" + HostBridge.jsonEscape(errorMessage ?? "Unknown error") + "\""
+        }
+
+        builder += "}}"
+        return builder
+    }
+
 }

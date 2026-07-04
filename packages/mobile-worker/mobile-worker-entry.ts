@@ -11,6 +11,9 @@ import { moveAssetsHandler } from "node-api/src/lib/move-assets.worker";
 import { saveAssetHandler } from "node-api/src/lib/save-asset.worker";
 import { saveAssetsBatchHandler } from "node-api/src/lib/save-assets-batch.worker";
 import { assetServerHandler } from "node-api/src/lib/asset-server.worker";
+import { importAssetsHandler } from "node-api/src/lib/import-assets.worker";
+import { hashFileHandler } from "node-api/src/lib/hash-file.worker";
+import { uploadAssetHandler } from "node-api/src/lib/upload-asset.worker";
 import { receiveShareHandler, findReceiverHandler, sendPayloadHandler } from "node-api/src/lib/lan-share.worker";
 import { installWorkerGlobal } from "./src/index";
 
@@ -51,6 +54,13 @@ registerHandler("save-assets-batch", saveAssetsBatchHandler);
 // shimmed http/net (backed by the native TCP host functions) so the WebView loads assets over a
 // real localhost socket, exactly like desktop.
 registerHandler("asset-server", assetServerHandler);
+
+// Register the import handlers. import-assets is the orchestrator: it scans the picked files and
+// spawns hash-file / upload-asset subtasks, which are queued back on the native engine pool (the
+// mobile main-thread queue) and run on other engine slots, exactly like desktop/CLI.
+registerHandler("import-assets", importAssetsHandler);
+registerHandler("hash-file", hashFileHandler);
+registerHandler("upload-asset", uploadAssetHandler);
 
 // Register the real shared LAN-share handlers (the same ones desktop/CLI use). They run unchanged in
 // the embedded engine because the bundle aliases dgram/tls/https/crypto to native-backed shims, so

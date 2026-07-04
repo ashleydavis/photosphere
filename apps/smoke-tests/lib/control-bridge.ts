@@ -377,6 +377,10 @@ export class ControlBridge {
             void this.forward("drop", { dataId: req.body.dataId, paths: req.body.paths }, res);
         });
 
+        this.expressApp.post("/pick-files", (req: Request, res: Response) => {
+            void this.forward("pick-files", { paths: req.body.paths }, res);
+        });
+
         this.expressApp.get("/get-value", (req: Request, res: Response) => {
             void this.forward("get-value", { dataId: req.query.dataId as string }, res);
         });

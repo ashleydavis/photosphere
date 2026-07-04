@@ -375,6 +375,7 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         onPlatformEvent,
         onNavigate,
         getPathForFile,
+        supportsDragAndDropImport: true,
         checkTools,
         checkDatabaseExists,
         onTaskMessage,

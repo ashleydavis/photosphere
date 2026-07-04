@@ -80,6 +80,13 @@ public final class EnginePool {
     private final Map<String, PooledTask> runningTasksById = new HashMap<>();
 
     //
+    // Map of child taskId -> the engine that spawned it. A child task's outcome is routed back to
+    // its origin engine (so an orchestrator handler awaiting it resolves) instead of to the WebView.
+    // Root tasks queued from the WebView are absent from this map and keep going to the poolListener.
+    //
+    private final Map<String, TaskEngine> childOriginByTaskId = new HashMap<>();
+
+    //
     // The set of cancelled source tags. A task whose source is in this set is considered
     // cancelled and is dropped from pending / observed as cancelled while running.
     //
@@ -203,6 +210,36 @@ public final class EnginePool {
     }
 
     //
+    // Enqueues a child task spawned by a running handler and tries to dispatch it, tagging it with
+    // the origin engine (looked up from the parent task id) so its outcome routes back to that
+    // engine. Mirrors the Electron main process handling a worker's "queue-task" message. If the
+    // parent is no longer running, or the child's source was already cancelled, the child is
+    // dropped. Thread-safe.
+    //
+    public void queueChildTask(String parentTaskId, PooledTask child) {
+        synchronized (lock) {
+            if (shuttingDown) {
+                return;
+            }
+
+            if (cancelledSources.contains(child.source)) {
+                return;
+            }
+
+            TaskEngine origin = runningByTaskId.get(parentTaskId);
+            if (origin == null) {
+                // The parent already finished; there is nothing to deliver the child's result to.
+                return;
+            }
+
+            childOriginByTaskId.put(child.taskId, origin);
+            cancellationState.register(child.taskId, false);
+            pendingQueue.addLast(child);
+            dispatchNextLocked();
+        }
+    }
+
+    //
     // Cancels all tasks for a source: records the source, marks every matching task's atomic
     // flag cancelled, and drops still-pending matching tasks from the FIFO so they never
     // dispatch. Running tasks observe cancellation on their next host.isCancelled poll.
@@ -226,6 +263,7 @@ public final class EnginePool {
                 if (pendingTask.source.equals(source)) {
                     cancellationState.setCancelled(pendingTask.taskId);
                     cancellationState.unregister(pendingTask.taskId);
+                    childOriginByTaskId.remove(pendingTask.taskId);
                     iterator.remove();
                 }
             }
@@ -256,6 +294,7 @@ public final class EnginePool {
             idleEngines.clear();
             runningByTaskId.clear();
             runningTasksById.clear();
+            childOriginByTaskId.clear();
             cancelledSources.clear();
             cancellationState.clear();
 
@@ -314,14 +353,19 @@ public final class EnginePool {
 
     //
     // The EngineCallbacks the pool hands every engine. On a terminal callback it frees the
-    // engine (under the lock) and then forwards the outcome to the plugin listener OUTSIDE
-    // the lock, so the notifyListeners hand-off never runs while the dispatcher lock is held.
+    // engine (under the lock) and then forwards the outcome OUTSIDE the lock, so the hand-off
+    // never runs while the dispatcher lock is held. A child task's outcome is routed back to the
+    // engine that spawned it (via deliverChildEvent); a root task's outcome goes to the plugin
+    // listener (the WebView), exactly as Electron keeps child-task results off the renderer.
     //
     private final class PoolEngineCallbacks implements EngineCallbacks {
 
         //
-        // Forwards a streamed progress message straight to the plugin listener. No pool state
-        // changes, so no lock is taken here.
+        // Routes a streamed progress message to the plugin listener (the WebView), for both root and
+        // child tasks. This matches Electron, where a worker's task-message reaches the client/UI, not
+        // the orchestrator that spawned it: the import UI consumes import-pending (sent by the
+        // upload-asset subtask) and import-success (sent by the import-assets root task). Only child
+        // COMPLETIONS route back to the origin engine so the orchestrator's awaitTask resolves.
         //
         @Override
         public void onTaskMessage(PooledTask task, String messageJson) {
@@ -329,25 +373,114 @@ public final class EnginePool {
         }
 
         //
-        // Frees the engine and forwards the success result to the plugin listener.
+        // Frees the engine and routes the success result to the origin engine (child) or the
+        // plugin listener (root).
         //
         @Override
         public void onTaskSucceeded(PooledTask task, String outputsJson) {
+            TaskEngine origin;
             synchronized (lock) {
+                origin = childOriginByTaskId.remove(task.taskId);
                 freeEngineLocked(task);
             }
-            poolListener.onTaskSucceeded(task, outputsJson);
+
+            if (origin != null) {
+                origin.deliverChildEvent(buildChildCompletedEvent(task, true, null, outputsJson), true);
+            }
+            else {
+                poolListener.onTaskSucceeded(task, outputsJson);
+            }
         }
 
         //
-        // Frees the engine and forwards the failure result to the plugin listener.
+        // Frees the engine and routes the failure result to the origin engine (child) or the
+        // plugin listener (root).
         //
         @Override
         public void onTaskFailed(PooledTask task, String errorMessage) {
+            TaskEngine origin;
             synchronized (lock) {
+                origin = childOriginByTaskId.remove(task.taskId);
                 freeEngineLocked(task);
             }
-            poolListener.onTaskFailed(task, errorMessage);
+
+            if (origin != null) {
+                origin.deliverChildEvent(buildChildCompletedEvent(task, false, errorMessage, null), true);
+            }
+            else {
+                poolListener.onTaskFailed(task, errorMessage);
+            }
         }
+
+        //
+        // Queues a child task on the pool's pending FIFO, tagged with its parent so the child's
+        // outcome routes back to the parent's engine.
+        //
+        @Override
+        public void queueChildTask(String parentTaskId, String childTaskId, String type, String dataJson, String source) {
+            EnginePool.this.queueChildTask(parentTaskId, new PooledTask(childTaskId, type, dataJson, source));
+        }
+    }
+
+    //
+    // Builds the JSON for a child completion event delivered into the origin engine's
+    // globalThis.__childEvent. The already-valid JSON fragments (the child's inputs dataJson and
+    // its outputs) are embedded raw; the plain string fields are escaped. This deliberately avoids
+    // org.json so the pool stays unit-testable on a plain JVM (the Android org.json stub throws).
+    //
+    private static String buildChildCompletedEvent(PooledTask task, boolean succeeded, String errorMessage, String outputsJson) {
+        StringBuilder builder = new StringBuilder();
+        builder.append("{\"kind\":\"completed\",\"result\":{");
+        builder.append("\"taskId\":\"").append(jsonEscape(task.taskId)).append("\",");
+        builder.append("\"status\":\"").append(succeeded ? "succeeded" : "failed").append("\",");
+        builder.append("\"type\":\"").append(jsonEscape(task.type)).append("\",");
+        builder.append("\"inputs\":").append(task.dataJson == null ? "null" : task.dataJson);
+
+        if (succeeded) {
+            builder.append(",\"outputs\":").append(outputsJson == null ? "null" : outputsJson);
+        }
+        else {
+            builder.append(",\"errorMessage\":\"").append(jsonEscape(errorMessage == null ? "Unknown error" : errorMessage)).append("\"");
+        }
+
+        builder.append("}}");
+        return builder.toString();
+    }
+
+    //
+    // Escapes a plain string for embedding inside a JSON string literal. Covers the characters that
+    // must be escaped per the JSON spec: backslash, double-quote, and the C0 control range.
+    //
+    private static String jsonEscape(String value) {
+        StringBuilder builder = new StringBuilder(value.length() + 8);
+        for (int index = 0; index < value.length(); index++) {
+            char character = value.charAt(index);
+            switch (character) {
+                case '\\':
+                    builder.append("\\\\");
+                    break;
+                case '"':
+                    builder.append("\\\"");
+                    break;
+                case '\n':
+                    builder.append("\\n");
+                    break;
+                case '\r':
+                    builder.append("\\r");
+                    break;
+                case '\t':
+                    builder.append("\\t");
+                    break;
+                default:
+                    if (character < 0x20) {
+                        builder.append(String.format("\\u%04x", (int) character));
+                    }
+                    else {
+                        builder.append(character);
+                    }
+                    break;
+            }
+        }
+        return builder.toString();
     }
 }

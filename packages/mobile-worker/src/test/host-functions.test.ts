@@ -71,6 +71,17 @@ describe("host bridge NOT IMPLEMENTED guard", () => {
         expect(EXPECTED_HOST_FUNCTIONS).toContain("ffprobe");
     });
 
+    test("the queueTask host function is expected of the native side", () => {
+        expect(EXPECTED_HOST_FUNCTIONS).toContain("queueTask");
+    });
+
+    test("buildHost gives a missing queueTask host function the NOT IMPLEMENTED thrower", () => {
+        const effectiveHost = buildHost(createHostWithoutSha256());
+
+        expect(() => effectiveHost.queueTask("child-1", "hash-file", "{}", "source-1"))
+            .toThrow(notImplementedMessage("queueTask", "android"));
+    });
+
     test("buildHost gives a missing media host function the NOT IMPLEMENTED thrower", () => {
         const effectiveHost = buildHost(createHostWithoutSha256());
 

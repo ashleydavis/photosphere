@@ -19,6 +19,14 @@ protocol TaskEngine: AnyObject {
     func runTask(_ task: PooledTask, callbacks: EngineCallbacks)
 
     //
+    // Delivers a child-task event (a completion or a streamed message) from the pool back into this
+    // engine, so an orchestrator handler running here that is awaiting its subtasks can resolve.
+    // `eventJson` is the JSON the JS side's globalThis.__childEvent expects; `terminal` is true for a
+    // completion. Called from another engine's queue; the implementation delivers on its own queue.
+    //
+    func deliverChildEvent(_ eventJson: String, terminal: Bool)
+
+    //
     // Disposes the engine and releases its underlying JS context. Called once during
     // pool shutdown. After dispose the engine must not be reused.
     //

@@ -3,9 +3,10 @@ project(run_magick C)
 
 # In-process ImageMagick shim. Compiles run_magick.c against the vendored
 # ImageMagick 7 headers and links it to the prebuilt libMagickWand / libMagickCore
-# shared libraries in jniLibs/<abi>. Vendor those (headers under
-# cpp/imagemagick/, .so under jniLibs/<abi>) before enabling externalNativeBuild
-# in build.gradle; see the Android section of README.md.
+# shared libraries in jniLibs/<abi>. Those headers (under cpp/imagemagick/) and the
+# .so (under jniLibs/<abi>) are NOT committed: they are fetched/built from downstream
+# at build time by scripts/fetch-mobile-media-tools.sh (git-ignored). See
+# docs/mobile-native-media.md.
 
 set(IM_DIR ${CMAKE_CURRENT_SOURCE_DIR}/imagemagick)
 

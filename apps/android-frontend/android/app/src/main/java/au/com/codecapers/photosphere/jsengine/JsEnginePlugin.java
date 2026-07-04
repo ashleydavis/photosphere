@@ -1,11 +1,20 @@
 package au.com.codecapers.photosphere.jsengine;
 
+import android.app.Activity;
+import android.content.Intent;
+import android.database.Cursor;
+import android.net.Uri;
+import android.provider.OpenableColumns;
 import android.util.Log;
 
+import androidx.activity.result.ActivityResult;
+
+import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
+import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 import org.json.JSONArray;
@@ -13,12 +22,17 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 //
 // The Android side of the "JsEngine" Capacitor plugin. It owns the engine pool and bridges
@@ -207,6 +221,114 @@ public final class JsEnginePlugin extends Plugin {
 
         ensurePool().cancelTasks(source);
         call.resolve();
+    }
+
+    //
+    // pickFiles: opens the native multi-select photo picker for images and videos. Fire-and-await:
+    // the picked items are copied into the sandbox and their sandbox-relative paths are returned in
+    // the ActivityCallback. Uses ACTION_OPEN_DOCUMENT so the returned content URIs are readable and
+    // multi-selection is supported across supported Android versions.
+    //
+    @PluginMethod
+    public void pickFiles(PluginCall call) {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"image/*", "video/*"});
+        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+
+        startActivityForResult(call, intent, "pickFilesResult");
+    }
+
+    //
+    // Handles the photo picker result: copies each chosen content URI into the sandbox import temp
+    // directory and resolves the call with the copied files' sandbox-relative paths. A cancelled pick
+    // (no data, non-OK result) resolves with an empty list, matching the frontend "cancelled" contract.
+    //
+    @ActivityCallback
+    private void pickFilesResult(PluginCall call, ActivityResult result) {
+        if (call == null) {
+            return;
+        }
+
+        JSArray paths = new JSArray();
+        Intent data = result.getData();
+
+        if (result.getResultCode() != Activity.RESULT_OK || data == null) {
+            JSObject response = new JSObject();
+            response.put("paths", paths);
+            call.resolve(response);
+            return;
+        }
+
+        try {
+            if (data.getClipData() != null) {
+                int count = data.getClipData().getItemCount();
+                for (int index = 0; index < count; index++) {
+                    Uri uri = data.getClipData().getItemAt(index).getUri();
+                    paths.put(copyPickedUri(uri));
+                }
+            }
+            else if (data.getData() != null) {
+                paths.put(copyPickedUri(data.getData()));
+            }
+        }
+        catch (IOException error) {
+            call.reject("Failed to import picked files: " + error.getMessage());
+            return;
+        }
+
+        JSObject response = new JSObject();
+        response.put("paths", paths);
+        call.resolve(response);
+    }
+
+    //
+    // Copies one picked content URI into the sandbox import temp directory under a fresh uuid name and
+    // returns its sandbox-relative path (the value the import task scans). The extension is derived from
+    // the URI's display name or mime type via ImportPicker.
+    //
+    private String copyPickedUri(Uri uri) throws IOException {
+        String displayName = queryDisplayName(uri);
+        String mimeType = getContext().getContentResolver().getType(uri);
+        String relativePath = ImportPicker.buildRelativePath(UUID.randomUUID().toString(), displayName, mimeType);
+
+        File destination = new File(getStorageRoot(), relativePath);
+        File parent = destination.getParentFile();
+        if (parent != null) {
+            parent.mkdirs();
+        }
+
+        try (InputStream input = getContext().getContentResolver().openInputStream(uri);
+             OutputStream output = new FileOutputStream(destination)) {
+            if (input == null) {
+                throw new IOException("could not open picked file stream");
+            }
+            byte[] buffer = new byte[64 * 1024];
+            int bytesRead = input.read(buffer);
+            while (bytesRead != -1) {
+                output.write(buffer, 0, bytesRead);
+                bytesRead = input.read(buffer);
+            }
+        }
+
+        return relativePath;
+    }
+
+    //
+    // Queries the display name for a content URI via the OpenableColumns cursor, or null when it is
+    // not available (in which case the extension falls back to the mime type).
+    //
+    private String queryDisplayName(Uri uri) {
+        try (Cursor cursor = getContext().getContentResolver().query(uri, null, null, null, null)) {
+            if (cursor != null && cursor.moveToFirst()) {
+                int nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+                if (nameIndex >= 0) {
+                    return cursor.getString(nameIndex);
+                }
+            }
+        }
+        return null;
     }
 
     //

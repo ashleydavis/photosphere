@@ -1,5 +1,7 @@
 package au.com.codecapers.photosphere.jsengine;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 //
@@ -38,6 +40,17 @@ public final class StubEngine implements TaskEngine {
     // True once dispose has been called.
     //
     private boolean disposed = false;
+
+    //
+    // The JSON of every child event the pool delivered into this engine, in order. Lets a test
+    // assert a child task's outcome was routed back to the engine that spawned it.
+    //
+    public final List<String> deliveredChildEvents = new ArrayList<>();
+
+    //
+    // Whether each delivered child event was terminal (a completion) or a streamed message, in order.
+    //
+    public final List<Boolean> deliveredChildTerminals = new ArrayList<>();
 
     //
     // Constructs a stub engine sharing the pool-wide concurrency counters.
@@ -118,6 +131,15 @@ public final class StubEngine implements TaskEngine {
     private void clearCurrent() {
         this.currentTask = null;
         this.currentCallbacks = null;
+    }
+
+    //
+    // Records a child event the pool routed back into this engine.
+    //
+    @Override
+    public void deliverChildEvent(String eventJson, boolean terminal) {
+        deliveredChildEvents.add(eventJson);
+        deliveredChildTerminals.add(terminal);
     }
 
     //

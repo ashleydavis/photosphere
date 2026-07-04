@@ -47,7 +47,7 @@
     "tst": "bun run test:stories",
     "test:android": "cd ./apps/smoke-tests && PLATFORM=android ./run.sh",
     "test:ios": "cd ./apps/smoke-tests && PLATFORM=ios ./run.sh",
-    "test:android:unit": "cd ./apps/android-frontend/android && ./gradlew :app:testDebugUnitTest",
+    "test:android:unit": "bash ./scripts/android-gradle.sh :app:testDebugUnitTest --rerun-tasks",
     "test:ios:unit": "cd ./apps/ios-frontend/ios/App && xcodebuild test -workspace App.xcworkspace -scheme App -destination 'platform=iOS Simulator,name=iPhone 15'",
     "build:android": "cd ./apps/android-frontend/android && ./gradlew :app:assembleDebug",
     "build:ios": "cd ./apps/ios-frontend/ios/App && xcodebuild -workspace App.xcworkspace -scheme App -destination 'generic/platform=iOS Simulator' build",

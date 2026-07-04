@@ -28,4 +28,12 @@ public interface EngineCallbacks {
     // handler produced; the pool forwards it as a taskMessage event.
     //
     void onTaskMessage(PooledTask task, String messageJson);
+
+    //
+    // Called when a running handler enqueues a child task via host.queueTask. The pool queues
+    // the child on its pending FIFO (the mobile "main-thread queue") and, when the child finishes,
+    // routes its outcome back to the engine identified by `parentTaskId` rather than to the WebView.
+    // This mirrors Electron routing a worker's "queue-task" message to the main-process pool.
+    //
+    void queueChildTask(String parentTaskId, String childTaskId, String type, String dataJson, String source);
 }

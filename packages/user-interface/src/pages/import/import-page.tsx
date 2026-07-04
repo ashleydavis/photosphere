@@ -275,6 +275,10 @@ export function ImportPage() {
         return <NoDatabaseLoaded />;
     }
 
+    // Drag-and-drop import is only offered on platforms that support it (desktop) and once the media
+    // tools are available. Mobile/web hide the drop zone and offer the native photo picker instead.
+    const allowDragAndDrop = platform.supportsDragAndDropImport && (toolsStatus?.allAvailable ?? false);
+
     const successCount = importItems.filter(item => item.status === 'success').length;
     const skippedCount = importItems.filter(item => item.status === 'skipped').length;
     const failedCount = importItems.filter(item => item.status === 'failure').length;
@@ -324,9 +328,9 @@ export function ImportPage() {
                     <Box
                         data-id="import-drop-zone"
                         className="flex flex-col items-center justify-center flex-grow"
-                        onDragOver={toolsStatus?.allAvailable ? handleDragOver : undefined}
-                        onDragLeave={toolsStatus?.allAvailable ? handleDragLeave : undefined}
-                        onDrop={toolsStatus?.allAvailable ? handleDrop : undefined}
+                        onDragOver={allowDragAndDrop ? handleDragOver : undefined}
+                        onDragLeave={allowDragAndDrop ? handleDragLeave : undefined}
+                        onDrop={allowDragAndDrop ? handleDrop : undefined}
                         sx={{
                             border: isDragOver ? "2px dashed" : "2px dashed transparent",
                             borderColor: isDragOver ? "primary.outlinedBorder" : "transparent",
@@ -348,27 +352,32 @@ export function ImportPage() {
                                 <FileUpload sx={{ fontSize: 64, color: "text.secondary", mb: 2 }} />
                                 <Typography level="h4" sx={{ mb: 1 }}>Import photos</Typography>
                                 <Typography level="body-md" sx={{ mb: 4, color: "text.secondary" }}>
-                                    Drop files or directories here, or use the buttons below.
+                                    {allowDragAndDrop
+                                        ? "Drop files or directories here, or use the buttons below."
+                                        : "Tap to select photos to import."}
                                 </Typography>
                                 <Box className="flex flex-row gap-3 justify-center">
                                     <Button
+                                        data-id="import-files-button"
                                         variant="soft"
                                         color="neutral"
                                         size="lg"
                                         startDecorator={<FileUpload />}
                                         onClick={handleImportFiles}
                                     >
-                                        Import files
+                                        {platform.supportsDragAndDropImport ? "Import files" : "Select photos"}
                                     </Button>
-                                    <Button
-                                        variant="soft"
-                                        color="neutral"
-                                        size="lg"
-                                        startDecorator={<FileUpload />}
-                                        onClick={handleImportDirectories}
-                                    >
-                                        Import directory
-                                    </Button>
+                                    {platform.supportsDragAndDropImport && (
+                                        <Button
+                                            variant="soft"
+                                            color="neutral"
+                                            size="lg"
+                                            startDecorator={<FileUpload />}
+                                            onClick={handleImportDirectories}
+                                        >
+                                            Import directory
+                                        </Button>
+                                    )}
                                 </Box>
                             </Box>
                         )}

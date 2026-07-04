@@ -15,6 +15,23 @@ private final class StubEngine: TaskEngine {
     let coordinator: StubCoordinator
 
     //
+    // The most recent task this engine was handed to run, used by the child-routing test to identify
+    // which engine ran a given task.
+    //
+    private(set) var lastRunTask: PooledTask?
+
+    //
+    // The JSON of every child event the pool delivered into this engine, in order, so the test can
+    // assert a child task's outcome was routed back to the engine that spawned it.
+    //
+    private(set) var deliveredChildEvents: [String] = []
+
+    //
+    // Whether each delivered child event was terminal (a completion) or a streamed message, in order.
+    //
+    private(set) var deliveredChildTerminals: [Bool] = []
+
+    //
     // Constructs the stub engine bound to the shared coordinator.
     //
     init(coordinator: StubCoordinator) {
@@ -26,7 +43,16 @@ private final class StubEngine: TaskEngine {
     // command, simulating a long-running task that keeps its slot busy.
     //
     func runTask(_ task: PooledTask, callbacks: EngineCallbacks) {
+        lastRunTask = task
         coordinator.recordStart(task: task, callbacks: callbacks)
+    }
+
+    //
+    // Records a child event the pool routed back into this engine.
+    //
+    func deliverChildEvent(_ eventJson: String, terminal: Bool) {
+        deliveredChildEvents.append(eventJson)
+        deliveredChildTerminals.append(terminal)
     }
 
     //
@@ -110,6 +136,12 @@ private final class CapturingDelegate: EnginePoolDelegate {
     private(set) var failed: [String] = []
 
     //
+    // Ids of tasks whose streamed messages reached the delegate, in order. A child task's message
+    // must NOT reach the delegate (it routes to the origin engine), so this stays empty for children.
+    //
+    private(set) var messaged: [String] = []
+
+    //
     // Records a success.
     //
     func poolDidSucceed(_ task: PooledTask, outputsJson: String) {
@@ -124,9 +156,10 @@ private final class CapturingDelegate: EnginePoolDelegate {
     }
 
     //
-    // Ignored by these dispatcher tests.
+    // Records a streamed message reaching the delegate (a root task's message).
     //
     func poolDidEmitMessage(_ task: PooledTask, messageJson: String) {
+        messaged.append(task.taskId)
     }
 }
 
@@ -274,5 +307,58 @@ final class EnginePoolTests: XCTestCase {
         pool.addTask(task("t2", source: "db-live"))
 
         XCTAssertEqual(coordinator.startedTaskIds(), ["t2"])
+    }
+
+    //
+    // A child task queued from a running handler dispatches to a free engine, and its successful
+    // completion is routed back to the engine that spawned it (via deliverChildEvent), NOT to the
+    // delegate that feeds the WebView. The parent (root) task's own completion still reaches the delegate.
+    //
+    func testChildSuccessRoutesToOriginEngine() {
+        let delegate = CapturingDelegate()
+        let coordinator = StubCoordinator()
+        var engines: [StubEngine] = []
+        let pool = EnginePool(
+            delegate: delegate,
+            storageRoot: storageRoot,
+            poolSize: 3,
+            engineFactory: { _, _ in
+                let engine = StubEngine(coordinator: coordinator)
+                engines.append(engine)
+                return engine
+            }
+        )
+
+        pool.addTask(task("parent", source: "import"))
+        let parentEngine = engines.first { engine in engine.lastRunTask?.taskId == "parent" }
+        XCTAssertNotNil(parentEngine)
+
+        pool.queueChildTask(parentTaskId: "parent", child: PooledTask(taskId: "child", type: "hash-file", dataJson: "{\"filePath\":\"a.jpg\"}", source: "session"))
+        XCTAssertTrue(coordinator.startedTaskIds().contains("child"))
+
+        coordinator.complete(taskId: "child")
+        XCTAssertEqual(delegate.succeeded, [])
+        XCTAssertEqual(parentEngine?.deliveredChildEvents.count, 1)
+        XCTAssertEqual(parentEngine?.deliveredChildTerminals.first, true)
+        let event = parentEngine?.deliveredChildEvents.first ?? ""
+        XCTAssertTrue(event.contains("\"kind\":\"completed\""))
+        XCTAssertTrue(event.contains("\"taskId\":\"child\""))
+        XCTAssertTrue(event.contains("\"status\":\"succeeded\""))
+
+        coordinator.complete(taskId: "parent")
+        XCTAssertEqual(delegate.succeeded, ["parent"])
+    }
+
+    //
+    // A child whose parent is no longer running is dropped: there is no engine to deliver its result
+    // to, so it never dispatches.
+    //
+    func testChildWithNoRunningParentIsDropped() {
+        let delegate = CapturingDelegate()
+        let coordinator = StubCoordinator()
+        let pool = makePool(size: 3, delegate: delegate, coordinator: coordinator)
+
+        pool.queueChildTask(parentTaskId: "ghost", child: PooledTask(taskId: "child", type: "hash-file", dataJson: "{}", source: "session"))
+        XCTAssertFalse(coordinator.startedTaskIds().contains("child"))
     }
 }

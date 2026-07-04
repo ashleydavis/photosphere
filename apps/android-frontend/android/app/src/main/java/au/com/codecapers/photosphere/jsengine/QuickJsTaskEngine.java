@@ -16,6 +16,8 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
@@ -90,6 +92,46 @@ public final class QuickJsTaskEngine implements TaskEngine {
     private HostBridge hostBridge;
 
     //
+    // A child-task event (completion or streamed message) queued by the pool for delivery into this
+    // engine's run loop. `terminal` marks a completion so the engine can stop treating that child
+    // as outstanding.
+    //
+    private static final class PendingChildEvent {
+
+        //
+        // The JSON delivered into globalThis.__childEvent.
+        //
+        final String json;
+
+        //
+        // True for a child completion, false for a streamed message.
+        //
+        final boolean terminal;
+
+        //
+        // Constructs a pending child event.
+        //
+        PendingChildEvent(String json, boolean terminal) {
+            this.json = json;
+            this.terminal = terminal;
+        }
+    }
+
+    //
+    // Inbound child-task events from the pool, awaiting delivery into this engine's run loop. Filled
+    // from other engines' worker threads (deliverChildEvent), drained on this engine's worker thread.
+    //
+    private final LinkedBlockingQueue<PendingChildEvent> childEvents = new LinkedBlockingQueue<>();
+
+    //
+    // Count of child tasks this engine's current handler has spawned and not yet seen complete. While
+    // it is positive the task is long-running (an orchestrator awaiting its subtasks), so the run loop
+    // parks for the next child event instead of counting toward the idle timeout. Touched only on the
+    // worker thread (incremented in host.queueTask, decremented when a terminal child event is drained).
+    //
+    private int outstandingChildren;
+
+    //
     // Constructs an engine. The QuickJS context is not created until the first task runs.
     //
     public QuickJsTaskEngine(Context androidContext, CancellationState cancellationState, String sessionId, File storageRoot) {
@@ -110,6 +152,30 @@ public final class QuickJsTaskEngine implements TaskEngine {
     }
 
     //
+    // Queues a child-task event from the pool for delivery into this engine's run loop. Called from
+    // another engine's worker thread when a child task this engine spawned completes or streams a
+    // message; the LinkedBlockingQueue is thread-safe and the parked run loop wakes to drain it.
+    //
+    @Override
+    public void deliverChildEvent(String eventJson, boolean terminal) {
+        childEvents.offer(new PendingChildEvent(eventJson, terminal));
+    }
+
+    //
+    // Polls the child-event queue up to the given timeout, returning null on timeout. Restores the
+    // interrupt flag and returns null if interrupted so the run loop keeps its checked-exception-free shape.
+    //
+    private PendingChildEvent pollChildEvent(long timeoutMillis) {
+        try {
+            return childEvents.poll(timeoutMillis, TimeUnit.MILLISECONDS);
+        }
+        catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            return null;
+        }
+    }
+
+    //
     // The body that runs on the dedicated worker thread: ensures the context exists, points the
     // host bridge at the current task, drives the embedded runTask, drains the returned promise
     // to a JSON result string, and reports it. Any thrown error becomes an onTaskFailed callback
@@ -119,6 +185,11 @@ public final class QuickJsTaskEngine implements TaskEngine {
         try {
             ensureContext(callbacks);
             hostBridge.setCurrentTask(task);
+
+            // Reset per-task subtask state: this engine context is reused across tasks, so clear any
+            // stray child events and the outstanding-children count from a previous (e.g. cancelled) run.
+            outstandingChildren = 0;
+            childEvents.clear();
 
             JSObject globalObject = context.getGlobalObject();
             globalObject.setProperty("__ptId", task.taskId);
@@ -180,6 +251,19 @@ public final class QuickJsTaskEngine implements TaskEngine {
                     tlsEvent = hostBridge.tls.pollInboundEvent();
                 }
 
+                // Deliver inbound child-task events (subtask completions / messages) into the JS
+                // worker backend so an orchestrator handler awaiting its subtasks can resolve. A
+                // terminal (completion) event decrements the outstanding-children count.
+                PendingChildEvent childEvent = childEvents.poll();
+                while (childEvent != null) {
+                    deliverInboundEvent(globalObject, "__childEvent", childEvent.json);
+                    if (childEvent.terminal) {
+                        outstandingChildren--;
+                    }
+                    deliveredEvent = true;
+                    childEvent = childEvents.poll();
+                }
+
                 // Drain any remaining QuickJS jobs (promise callbacks). Evaluating drains the whole
                 // microtask queue to empty.
                 context.evaluate("void 0;");
@@ -228,6 +312,22 @@ public final class QuickJsTaskEngine implements TaskEngine {
                             }
                         }
                         if (waited != null) {
+                            context.evaluate("void 0;");
+                        }
+                    }
+                    idleAttempts = 0;
+                }
+                else if (outstandingChildren > 0) {
+                    // An orchestrator handler is awaiting its subtasks: the task is long-running, so
+                    // park for the next child event (up to 50ms) instead of counting toward the idle
+                    // timeout. The children run on other engine slots and deliver back via deliverChildEvent.
+                    if (!deliveredEvent) {
+                        PendingChildEvent waited = pollChildEvent(50);
+                        if (waited != null) {
+                            deliverInboundEvent(globalObject, "__childEvent", waited.json);
+                            if (waited.terminal) {
+                                outstandingChildren--;
+                            }
                             context.evaluate("void 0;");
                         }
                     }
@@ -297,6 +397,14 @@ public final class QuickJsTaskEngine implements TaskEngine {
             return null;
         });
         host.setProperty("isCancelled", (JSCallFunction) args -> hostBridge.isCancelled((String) args[0]));
+        // host.queueTask(childTaskId, type, dataJson, source): enqueue a child task back on the native
+        // pool (the mobile "main-thread queue"). Increment the outstanding-children count on this
+        // worker thread only after the pool has accepted the child, so the run loop keeps the engine
+        // alive while the handler awaits its subtasks.
+        host.setProperty("queueTask", (JSCallFunction) args -> safeVoid(() -> {
+            hostBridge.queueChildTask((String) args[0], (String) args[1], (String) args[2], (String) args[3]);
+            outstandingChildren++;
+        }));
         // A native host function must NEVER let a Java exception escape into QuickJS: the wrapper does
         // not convert a thrown Java exception into a JS exception and the process would crash. Every
         // host function below is wrapped so an exception is returned as an error-envelope string the
@@ -338,6 +446,18 @@ public final class QuickJsTaskEngine implements TaskEngine {
             hostBridge.tcpClose((String) args[0])));
         host.setProperty("tcpStopListening", (JSCallFunction) args -> safeString(() ->
             hostBridge.tcpStopListening((String) args[0])));
+
+        // Native-backed media tools (host.imageMagick / host.ffmpeg / host.ffprobe): the import,
+        // thumbnail, and transcode paths build a JSON argv string and run the bundled tool in-process,
+        // getting back a { exitCode, output } JSON string. HostBridge already implements these (added
+        // with the native media tools); they are exposed here so the embedded worker can reach them,
+        // exactly as the iOS HostBridge installs them.
+        host.setProperty("imageMagick", (JSCallFunction) args -> safeString(() ->
+            hostBridge.imageMagick((String) args[0])));
+        host.setProperty("ffmpeg", (JSCallFunction) args -> safeString(() ->
+            hostBridge.ffmpeg((String) args[0])));
+        host.setProperty("ffprobe", (JSCallFunction) args -> safeString(() ->
+            hostBridge.ffprobe((String) args[0])));
 
         // Native-backed UDP functions: LAN-share discovery binds a datagram socket and broadcasts /
         // receives through these. Inbound datagrams are pushed into the engine via globalThis.__udpEvent.

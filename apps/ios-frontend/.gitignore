@@ -15,3 +15,7 @@ ios/App/App/capacitor.config.json
 ios/App/App/config.xml
 ios/DerivedData/
 ios/build/
+
+# Vendored native media (ImageMagick static libs + headers). Built at build time by
+# scripts/fetch-mobile-media-tools.sh (ios/build-imagemagick.sh) — never committed.
+ios/App/vendor/

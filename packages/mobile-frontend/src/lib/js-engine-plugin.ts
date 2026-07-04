@@ -38,6 +38,27 @@ export interface ICancelTasksOptions {
 }
 
 //
+// Options for opening the native photo picker.
+//
+export interface IPickFilesOptions {
+    //
+    // The picker dialog title (advisory; some platforms ignore it).
+    //
+    title: string;
+}
+
+//
+// Result of a native photo pick. The picker copies each chosen item into the app sandbox and
+// returns its sandbox-relative path, so the import task can read it through the fs host functions.
+//
+export interface IPickFilesResult {
+    //
+    // Sandbox-relative paths of the copied picked files (empty when the user cancelled).
+    //
+    paths: string[];
+}
+
+//
 // Result payload carried by a `taskCompleted` event. This is the JSON-safe subset
 // of ITaskResult: native cannot marshal a live Error object across the bridge, so it
 // sends `errorMessage` and the backend reconstructs an Error for the result.
@@ -121,6 +142,12 @@ export interface IJsEnginePlugin {
     // Cancels every task (pending and running) that shares the given source.
     //
     cancelTasks(options: ICancelTasksOptions): Promise<void>;
+
+    //
+    // Opens the native multi-select photo picker, copies each chosen item into the app sandbox, and
+    // resolves with their sandbox-relative paths (empty when cancelled).
+    //
+    pickFiles(options: IPickFilesOptions): Promise<IPickFilesResult>;
 
     //
     // Tears down the engine pool and releases native resources.

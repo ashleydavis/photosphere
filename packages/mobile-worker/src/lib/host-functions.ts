@@ -30,6 +30,11 @@ export interface IHost {
     // Returns true if the task with this id has been cancelled and should stop as soon as possible.
     isCancelled: (taskId: string) => boolean;
 
+    // Queues a child task back on the native engine pool (the "main-thread queue"), tagged so its
+    // completion routes back to the engine that spawned it. Mirrors the Electron worker posting a
+    // "queue-task" message to the main process. dataJson is the JSON-encoded task input.
+    queueTask: (taskId: string, type: string, dataJson: string, source: string) => void;
+
     // Hashes the file at the given storage path natively. First-slice demonstrator (real native impl lands later).
     sha256: (path: string) => string;
 
@@ -122,6 +127,7 @@ export interface IHost {
 export const EXPECTED_HOST_FUNCTIONS: string[] = [
     "sendMessage",
     "isCancelled",
+    "queueTask",
     "sha256",
     "fsReadFile",
     "fsAccess",
