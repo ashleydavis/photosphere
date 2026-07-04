@@ -990,6 +990,16 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y imagemagick ffmpeg
 
+      # The native ImageMagick build (run_magick shim via CMake) and scripts/fetch-mobile-media-tools.sh
+      # both require this exact NDK, which bun run test:android pulls in via bun run sync.
+      - name: Install Android NDK
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;25.1.8937393" > /dev/null
+
+      # Android native (JVM) unit tests: engine-pool dispatcher, subtask routing, picker/path helpers,
+      # host functions. No emulator needed; runs on the pre-installed SDK plus the JDK 17 set up above.
+      - name: Run Android native unit tests
+        run: bun run test:android:unit
+
       # Allow the hardware-accelerated emulator to use KVM on the runner.
       - name: Enable KVM
         run: |
@@ -1033,6 +1043,11 @@ jobs:
       # ImageMagick/ffmpeg are needed by the CLI that builds the per-test database fixtures.
       - name: Install media processing tools
         run: brew install imagemagick ffmpeg
+
+      # iOS native (XCTest) unit tests: host bridge, engine pool, subtask routing, path sandbox, media
+      # host functions. Runs xcodebuild test against a simulator on the macOS runner.
+      - name: Run iOS native unit tests
+        run: bun run test:ios:unit
 
       # run.sh boots an iOS simulator and builds/installs the app via xcrun/xcodebuild.
       - name: Run iOS smoke tests
