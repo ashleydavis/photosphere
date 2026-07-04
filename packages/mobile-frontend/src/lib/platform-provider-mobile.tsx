@@ -1,6 +1,7 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
 import eruda from "eruda";
-import { PlatformContextProvider, ConfigContextProvider, createConfig, useLanShareTasks, TEST_MENU_EVENT, TEST_OPEN_DATABASE_EVENT, TEST_SEED_DATABASES_EVENT, TEST_SEED_SECRETS_EVENT, TEST_SEED_RECENT_EVENT, TEST_SEED_NEWS_EVENT, TEST_RESET_CONFIG_EVENT, type IPlatformContext, type IPlatformEvent, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions } from "user-interface";
+import { Network } from "@capacitor/network";
+import { PlatformContextProvider, ConfigContextProvider, createConfig, useLanShareTasks, readBrowserNetworkStatus, subscribeBrowserNetworkStatus, TEST_MENU_EVENT, TEST_OPEN_DATABASE_EVENT, TEST_SEED_DATABASES_EVENT, TEST_SEED_SECRETS_EVENT, TEST_SEED_RECENT_EVENT, TEST_SEED_NEWS_EVENT, TEST_RESET_CONFIG_EVENT, type IPlatformContext, type IPlatformEvent, type INetworkStatus, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions } from "user-interface";
 import { log } from "utils";
 import { cancelMobileTasks, subscribeMobileTaskMessage, subscribeMobileTaskComplete } from "./mobile-platform-tasks";
 import * as configStore from "./mobile-config-store";
@@ -8,6 +9,10 @@ import * as configStore from "./mobile-config-store";
 // Whether the in-page Eruda console has been initialised and whether it is currently visible.
 let erudaInitialised = false;
 let erudaVisible = false;
+
+// The last sync-gate decision pushed by the shared SyncContext. Mobile has no
+// sync scheduler yet, so this is retained for a future mobile scheduler to read.
+let lastSyncAllowed = false;
 
 //
 // Shows or hides the in-page Eruda developer console, the only inspector
@@ -347,6 +352,53 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         toggleEruda();
     }, []);
 
+    //
+    // Reports online state and connection type. Tries the WebView's Network
+    // Information API first; when it is inconclusive (connectionType "unknown",
+    // e.g. on iOS WKWebView which does not expose `type`), falls back to the
+    // native @capacitor/network plugin, which reports the real type on both iOS
+    // and Android.
+    //
+    const getNetworkStatus = useCallback(async (): Promise<INetworkStatus> => {
+        const browserStatus = readBrowserNetworkStatus();
+        if (browserStatus.connectionType !== "unknown") {
+            return browserStatus;
+        }
+        const nativeStatus = await Network.getStatus();
+        return { connected: nativeStatus.connected, connectionType: nativeStatus.connectionType };
+    }, []);
+
+    //
+    // Fires the callback when the connection changes, from either the browser
+    // events or the native plugin listener. Each change re-resolves the best
+    // available status (browser first, native fallback). Returns an unsubscribe.
+    //
+    const onNetworkStatusChange = useCallback((callback: (status: INetworkStatus) => void): (() => void) => {
+        let cancelled = false;
+        const emit = () => {
+            getNetworkStatus().then(status => {
+                if (!cancelled) {
+                    callback(status);
+                }
+            });
+        };
+        const unsubscribeBrowser = subscribeBrowserNetworkStatus(() => emit());
+        const nativeHandle = Network.addListener("networkStatusChange", () => emit());
+        return () => {
+            cancelled = true;
+            unsubscribeBrowser();
+            nativeHandle.then(handle => handle.remove());
+        };
+    }, [getNetworkStatus]);
+
+    //
+    // Stores the shared sync gate's decision. Mobile has no sync scheduler yet,
+    // so the value is retained for a future mobile scheduler to honour.
+    //
+    const setSyncAllowed = useCallback((allowed: boolean): void => {
+        lastSyncAllowed = allowed;
+    }, []);
+
     const platformContext: IPlatformContext = {
         openDatabase,
         onDatabaseOpened,
@@ -397,6 +449,9 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         markUpdateAsShown,
         markNewsAsShown,
         toggleDevTools,
+        getNetworkStatus,
+        onNetworkStatusChange,
+        setSyncAllowed,
     };
 
     // Generic config persisted to WebView localStorage so settings (developer mode, theme, etc.)

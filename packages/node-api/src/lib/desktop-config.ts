@@ -45,6 +45,16 @@ export interface IDesktopConfig {
     // Whether the developer tools (native inspector) should be open. Reopened on startup when true. Defaults to false when unset.
     //
     devToolsOpen?: boolean;
+
+    //
+    // Whether automatic syncing is enabled. Defaults to true when unset (applied by the UI).
+    //
+    syncEnabled?: boolean;
+
+    //
+    // Whether automatic syncing is restricted to Wi-Fi. Defaults to true when unset (applied by the UI).
+    //
+    syncOnlyOnWifi?: boolean;
 }
 
 //
@@ -74,6 +84,12 @@ interface ITomlDesktopConfig {
 
     // Whether the developer tools should be open, reopened on startup.
     dev_tools_open?: boolean;
+
+    // Whether automatic syncing is enabled.
+    sync_enabled?: boolean;
+
+    // Whether automatic syncing is restricted to Wi-Fi.
+    sync_only_on_wifi?: boolean;
 }
 
 const CONFIG_DIR = process.env.PHOTOSPHERE_CONFIG_DIR || path.join(os.homedir(), ".config", "photosphere");
@@ -110,6 +126,12 @@ function tomlToDesktopConfig(toml: ITomlDesktopConfig): IDesktopConfig {
     if (toml.dev_tools_open !== undefined) {
         config.devToolsOpen = toml.dev_tools_open;
     }
+    if (toml.sync_enabled !== undefined) {
+        config.syncEnabled = toml.sync_enabled;
+    }
+    if (toml.sync_only_on_wifi !== undefined) {
+        config.syncOnlyOnWifi = toml.sync_only_on_wifi;
+    }
     return config;
 }
 
@@ -141,6 +163,12 @@ function desktopConfigToToml(config: IDesktopConfig): ITomlDesktopConfig {
     }
     if (config.devToolsOpen !== undefined) {
         toml.dev_tools_open = config.devToolsOpen;
+    }
+    if (config.syncEnabled !== undefined) {
+        toml.sync_enabled = config.syncEnabled;
+    }
+    if (config.syncOnlyOnWifi !== undefined) {
+        toml.sync_only_on_wifi = config.syncOnlyOnWifi;
     }
     return toml;
 }

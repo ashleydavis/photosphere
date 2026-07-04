@@ -1,7 +1,7 @@
 import React from "react";
 import { HashRouter, Route, Routes } from "react-router-dom";
 import {
-    AppContextProvider, DeveloperContextProvider, Main,
+    AppContextProvider, DeveloperContextProvider, SyncContextProvider, Main,
     GalleryContextProvider,
     AssetDatabaseProvider,
     GalleryLayoutContextProvider,
@@ -84,7 +84,9 @@ export function App() {
                                                     <SearchContextProvider>
                                                         <GalleryLayoutContextProvider>
                                                             <DeveloperContextProvider>
-                                                                <Main initialTheme={initialTheme} />
+                                                                <SyncContextProvider>
+                                                                    <Main initialTheme={initialTheme} />
+                                                                </SyncContextProvider>
                                                             </DeveloperContextProvider>
                                                         </GalleryLayoutContextProvider>
                                                     </SearchContextProvider>

@@ -1,6 +1,6 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
 import eruda from "eruda";
-import { PlatformContextProvider, ConfigContextProvider, createConfig, type IPlatformContext, type IPlatformEvent, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions, convertToPng } from "user-interface";
+import { PlatformContextProvider, ConfigContextProvider, createConfig, readBrowserNetworkStatus, subscribeBrowserNetworkStatus, type IPlatformContext, type IPlatformEvent, type INetworkStatus, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions, convertToPng } from "user-interface";
 
 const restApiUrl = "http://localhost:3001";
 
@@ -333,6 +333,30 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         toggleEruda();
     }, []);
 
+    //
+    // Reports online state and connection type from the browser's Network
+    // Information API (navigator.connection). connectionType is "wifi"/"cellular"
+    // where the browser exposes it (well supported in Chromium), else "unknown".
+    //
+    const getNetworkStatus = useCallback(async (): Promise<INetworkStatus> => {
+        return readBrowserNetworkStatus();
+    }, []);
+
+    //
+    // Fires the callback when the browser reports going online/offline or the
+    // connection type changes.
+    //
+    const onNetworkStatusChange = useCallback((callback: (status: INetworkStatus) => void): (() => void) => {
+        return subscribeBrowserNetworkStatus(callback);
+    }, []);
+
+    //
+    // Pushes the shared sync gate's decision to the dev-server over WebSocket.
+    //
+    const setSyncAllowed = useCallback((allowed: boolean): void => {
+        ws.send(JSON.stringify({ type: "set-sync-allowed", allowed }));
+    }, [ws]);
+
     const platformContext: IPlatformContext = {
         openDatabase,
         onDatabaseOpened,
@@ -383,6 +407,9 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         markUpdateAsShown,
         markNewsAsShown,
         toggleDevTools,
+        getNetworkStatus,
+        onNetworkStatusChange,
+        setSyncAllowed,
     };
 
     //

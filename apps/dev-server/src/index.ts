@@ -75,13 +75,21 @@ interface IConnectionSyncState {
     // True while a sync task is queued or running; prevents concurrent syncs.
     //
     isSyncRunning: boolean;
+
+    //
+    // Whether the renderer's sync gate currently permits automatic syncing.
+    // Starts closed and opens once the renderer pushes its computed decision.
+    //
+    syncAllowed: boolean;
 }
 
 //
 // Queues a sync-database task if a database is open and no sync is already running.
 //
 function enqueueSyncTask(state: IConnectionSyncState): void {
-    if (!state.currentDatabasePath || state.isSyncRunning) {
+    // Gate: never auto-sync unless the renderer's sync gate permits it (sync
+    // enabled, online, and Wi-Fi restriction satisfied).
+    if (!state.syncAllowed || !state.currentDatabasePath || state.isSyncRunning) {
         return;
     }
     state.isSyncRunning = true;
@@ -158,6 +166,7 @@ wss.on("connection", (ws: WebSocket) => {
         syncDebounceTimer: null,
         syncPeriodicTimer: null,
         isSyncRunning: false,
+        syncAllowed: false,
     };
 
     startPeriodicSync(syncState);
@@ -233,6 +242,13 @@ wss.on("connection", (ws: WebSocket) => {
             }
             else if (messageData.type === "notify-database-edited") {
                 scheduleSync(syncState);
+            }
+            else if (messageData.type === "set-sync-allowed") {
+                syncState.syncAllowed = messageData.allowed === true;
+                // Catch up a pending sync as soon as the gate opens.
+                if (syncState.syncAllowed) {
+                    scheduleSync(syncState);
+                }
             }
             else if (messageData.type === "get-config") {
                 await handleGetConfig(ws, messageData.key, messageData.requestId);

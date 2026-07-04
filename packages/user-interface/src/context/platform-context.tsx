@@ -1,5 +1,23 @@
 import React, { ReactNode, createContext, useContext } from "react";
 import type { IConflictResolution } from "api";
+import type { NetworkConnectionType } from "../lib/sync-gate";
+
+//
+// The current network state reported by a platform. Combines whether the device
+// is online with the connection type so the shared sync gate can apply the
+// Wi-Fi-only restriction.
+//
+export interface INetworkStatus {
+    //
+    // True when the device currently has a network connection.
+    //
+    connected: boolean;
+
+    //
+    // The connection type; "unknown" on platforms that cannot detect it.
+    //
+    connectionType: NetworkConnectionType;
+}
 
 //
 // Unsubscribe function type for event listeners.
@@ -569,6 +587,27 @@ export interface IPlatformContext {
     // which inspector is used.
     //
     toggleDevTools: () => void;
+
+    //
+    // Returns the current network status (online state and connection type).
+    // Desktop and web report connectionType "unknown"; mobile reports the real
+    // type once native network detection is wired up.
+    //
+    getNetworkStatus: () => Promise<INetworkStatus>;
+
+    //
+    // Subscribes to network status changes. The callback fires whenever the
+    // device goes online/offline (or, on mobile, the connection type changes).
+    // Returns an unsubscribe function.
+    //
+    onNetworkStatusChange: (callback: (status: INetworkStatus) => void) => Unsubscribe;
+
+    //
+    // Pushes the shared sync gate's decision to the host scheduler. When false
+    // the host must not enqueue automatic syncs. Computed by the shared
+    // SyncContext from the user toggles and the current network status.
+    //
+    setSyncAllowed: (allowed: boolean) => void;
 }
 
 const PlatformContext = createContext<IPlatformContext | undefined>(undefined);

@@ -65,6 +65,10 @@ let syncPeriodicTimer: NodeJS.Timeout | null = null;
 // Prevents concurrent sync tasks; set by enqueueSyncTask(), cleared by syncStopped().
 let isSyncRunning: boolean = false;
 
+// Whether the renderer's sync gate currently permits automatic syncing. Starts
+// closed and is opened once the renderer pushes its computed decision on mount.
+let syncAllowed: boolean = false;
+
 // File logger for writing logs to files
 let fileLogger: FileLoggerElectron | null = null;
 
@@ -402,6 +406,16 @@ if (process.env.FPS_LOGGING === '1') {
 //
 // Request payload for the add-task IPC channel.
 //
+// A structured main-command payload: a named action plus its arguments. Some
+// commands (for example toggle-devtools) are sent as a bare string instead.
+interface IMainCommand {
+    // The action name to dispatch.
+    command: string;
+
+    // For set-sync-allowed: whether the renderer's sync gate permits syncing.
+    allowed?: boolean;
+}
+
 interface IAddTaskRequest {
     // The task type identifier.
     taskType: string;
@@ -437,14 +451,23 @@ ipcMain.on('cancel-tasks', (_event, source: string) => {
 
 // Generic channel that lets the renderer trigger named actions in the main
 // process. Add new actions to the switch as the need arises.
-ipcMain.on('main-command', (_event, command: string) => {
-    if (!mainWindow) {
-        return;
-    }
+ipcMain.on('main-command', (_event, payload: string | IMainCommand) => {
+    const command = typeof payload === "string" ? payload : payload.command;
 
     switch (command) {
         case 'toggle-devtools':
-            mainWindow.webContents.toggleDevTools();
+            if (mainWindow) {
+                mainWindow.webContents.toggleDevTools();
+            }
+            break;
+
+        case 'set-sync-allowed':
+            syncAllowed = typeof payload === "object" && payload.allowed === true;
+            log.info(`Sync gate set to ${syncAllowed}`);
+            // Catch up a pending sync as soon as the gate opens.
+            if (syncAllowed) {
+                scheduleSync();
+            }
             break;
 
         default:
@@ -961,7 +984,9 @@ function initWorkers() {
 // Connectivity checking and sync-started/sync-completed messages are the worker's responsibility.
 //
 function enqueueSyncTask(): void {
-    if (!currentDatabasePath || !workerPool || isSyncRunning) {
+    // Gate: never auto-sync unless the renderer's sync gate permits it (sync
+    // enabled, online, and Wi-Fi restriction satisfied).
+    if (!syncAllowed || !currentDatabasePath || !workerPool || isSyncRunning) {
         return;
     }
     isSyncRunning = true;

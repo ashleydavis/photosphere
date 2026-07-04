@@ -218,6 +218,38 @@ describe('devToolsOpen config round-trip', () => {
     });
 });
 
+describe('sync settings config round-trip', () => {
+    beforeEach(() => jest.clearAllMocks());
+
+    test('loadDesktopConfig reads sync_enabled and sync_only_on_wifi from toml', async () => {
+        mockPathExists.mockImplementation((filePath: string) => filePath.endsWith('.toml'));
+        mockReadToml.mockResolvedValue({ sync_enabled: false, sync_only_on_wifi: false });
+
+        const config = await loadDesktopConfig();
+
+        expect(config.syncEnabled).toBe(false);
+        expect(config.syncOnlyOnWifi).toBe(false);
+    });
+
+    test('saveDesktopConfig writes sync settings to snake_case toml keys', async () => {
+        await saveDesktopConfig({ syncEnabled: true, syncOnlyOnWifi: false });
+
+        const tomlArg = mockWriteToml.mock.calls[0][1];
+        expect(tomlArg.sync_enabled).toBe(true);
+        expect(tomlArg.sync_only_on_wifi).toBe(false);
+    });
+
+    test('loadDesktopConfig leaves sync settings undefined when absent so the UI applies defaults', async () => {
+        mockPathExists.mockImplementation((filePath: string) => filePath.endsWith('.toml'));
+        mockReadToml.mockResolvedValue({});
+
+        const config = await loadDesktopConfig();
+
+        expect(config.syncEnabled).toBeUndefined();
+        expect(config.syncOnlyOnWifi).toBeUndefined();
+    });
+});
+
 describe('updateLastDownloadFolder', () => {
     beforeEach(() => jest.clearAllMocks());
 

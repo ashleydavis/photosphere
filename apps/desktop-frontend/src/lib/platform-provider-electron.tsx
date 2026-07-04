@@ -1,5 +1,5 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
-import { PlatformContextProvider, ConfigContextProvider, createConfig, useLanShareTasks, type IPlatformContext, type IPlatformEvent, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, convertToPng, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions } from "user-interface";
+import { PlatformContextProvider, ConfigContextProvider, createConfig, useLanShareTasks, readBrowserNetworkStatus, subscribeBrowserNetworkStatus, type IPlatformContext, type IPlatformEvent, type INetworkStatus, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, convertToPng, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions } from "user-interface";
 import type { IElectronAPI } from "./electron-ipc";
 import type { IConflictResolution } from "api";
 import type { ISecret } from "vault";
@@ -482,6 +482,32 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         electronAPI.send('main-command', 'toggle-devtools');
     }, [electronAPI]);
 
+    //
+    // Reports online state and connection type from Chromium's Network
+    // Information API (navigator.connection). Electron exposes this in the
+    // renderer; connectionType is "cellular" only on the rare metered desktop
+    // (SIM/USB-tether), otherwise "wifi"/"ethernet" or "unknown".
+    //
+    const getNetworkStatus = useCallback(async (): Promise<INetworkStatus> => {
+        return readBrowserNetworkStatus();
+    }, []);
+
+    //
+    // Fires the callback when the renderer reports going online/offline or the
+    // connection type changes.
+    //
+    const onNetworkStatusChange = useCallback((callback: (status: INetworkStatus) => void): (() => void) => {
+        return subscribeBrowserNetworkStatus(callback);
+    }, []);
+
+    //
+    // Pushes the shared sync gate's decision to the main process via the generic
+    // main-command channel, so no sync-specific IPC channel is needed.
+    //
+    const setSyncAllowed = useCallback((allowed: boolean): void => {
+        electronAPI.send('main-command', { command: 'set-sync-allowed', allowed });
+    }, [electronAPI]);
+
     const platformContext: IPlatformContext = {
         openDatabase,
         onDatabaseOpened,
@@ -532,6 +558,9 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         markUpdateAsShown,
         markNewsAsShown,
         toggleDevTools,
+        getNetworkStatus,
+        onNetworkStatusChange,
+        setSyncAllowed,
     };
 
     const config = createConfig(

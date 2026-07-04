@@ -21,6 +21,7 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "@capacitor/core": "^5.7.4",
+    "@capacitor/network": "^5.0.0",
     "eruda": "^3.0.0"
   },
   "devDependencies": {

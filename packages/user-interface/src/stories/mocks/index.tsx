@@ -224,6 +224,9 @@ export function mockPlatform(): IPlatformContext {
         markUpdateAsShown: async () => {},
         markNewsAsShown: async () => {},
         toggleDevTools: () => {},
+        getNetworkStatus: async () => ({ connected: true, connectionType: "unknown" }),
+        onNetworkStatusChange: () => noUnsubscribe,
+        setSyncAllowed: () => {},
     };
 }
 

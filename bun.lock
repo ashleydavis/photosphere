@@ -11,6 +11,7 @@
       "dependencies": {
         "@capacitor/android": "^5.7.4",
         "@capacitor/core": "^5.7.4",
+        "@capacitor/network": "^5.0.0",
         "mobile-frontend": "workspace:*",
         "react": "^18.2.0",
         "react-dom": "^18.2.0",
@@ -213,6 +214,7 @@
       "dependencies": {
         "@capacitor/core": "^5.7.4",
         "@capacitor/ios": "^5.7.4",
+        "@capacitor/network": "^5.0.0",
         "mobile-frontend": "workspace:*",
         "react": "^18.2.0",
         "react-dom": "^18.2.0",
@@ -396,6 +398,7 @@
       "version": "1.0.0",
       "dependencies": {
         "@capacitor/core": "^5.7.4",
+        "@capacitor/network": "^5.0.0",
         "eruda": "^3.0.0",
         "react": "^18.2.0",
         "react-dom": "^18.2.0",
@@ -848,6 +851,8 @@
     "@capacitor/core": ["@capacitor/core@5.7.8", "", { "dependencies": { "tslib": "^2.1.0" } }, "sha512-rrZcm/2vJM0WdWRQup1TUidbjQV9PfIadSkV4rAGLD7R6PuzZSMPGT0gmoZzCRlXkqrazrWWDkurei3ozU02FA=="],
 
     "@capacitor/ios": ["@capacitor/ios@5.7.8", "", { "peerDependencies": { "@capacitor/core": "^5.7.0" } }, "sha512-XhGrziBnlRmCJ97LdPXOJquHPpYTwSJZIxYSXuPl7SDDuAEve8vs2wY76gLdaaFH2Z6ctdugUX+jR6VNu+ds+w=="],
+
+    "@capacitor/network": ["@capacitor/network@5.0.8", "", { "peerDependencies": { "@capacitor/core": "^5.0.0" } }, "sha512-memV4MSSxDtdss42gF6FZbNuCwGXiovQ5Ppw51cU5Rw1mt+/itJTkrrlqhKcVWLGNsUrBarAKLyMpvSQT5v1bg=="],
 
     "@develar/schema-utils": ["@develar/schema-utils@2.6.5", "", { "dependencies": { "ajv": "^6.12.0", "ajv-keywords": "^3.4.1" } }, "sha512-0cp4PsWQ/9avqTVMCtZ+GirikIA36ikvjtHweU4/j8yLtgObI0+JUPhYFScgwlteveGB1rt3Cm8UhN04XayDig=="],
 
