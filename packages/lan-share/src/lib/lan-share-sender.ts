@@ -55,6 +55,18 @@ export class LanShareSender {
         return new Promise<IReceiverEndpoint | null>((resolve) => {
             this.udpSocket = createSocket({ type: "udp4", reuseAddr: true });
 
+            // Discovery is best-effort. Ignore transient UDP socket errors (for example an
+            // ECONNREFUSED surfaced from an ICMP port-unreachable) so listening for the
+            // receiver's broadcast is not aborted by a stray socket error. Without this handler
+            // an unhandled socket error becomes an uncaught exception and the sender exits.
+            //
+            // Required as of Bun 1.3.12: on Linux, sending a UDP packet to an unreachable port
+            // used to silently close the socket; it now surfaces ICMP errors through this
+            // `error` handler instead. See https://bun.com/blog/bun-v1.3.12
+            this.udpSocket.on("error", () => {
+                // Ignore transient UDP discovery errors.
+            });
+
             const timeoutTimer = setTimeout(() => {
                 this.cleanupUdp();
                 resolve(null);

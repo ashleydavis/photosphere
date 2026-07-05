@@ -346,6 +346,21 @@ export class LanShareReceiver {
 
         // Start UDP broadcast
         this.udpSocket = createSocket("udp4");
+
+        // Discovery is best-effort. A failed broadcast or loopback send (for example an
+        // ECONNREFUSED surfaced from an ICMP port-unreachable when no sender is listening on
+        // 127.0.0.1 yet) must not crash the receiver, which still serves the transfer over its
+        // HTTPS server. Without this handler an unhandled socket error becomes an uncaught
+        // exception and the receiver exits immediately.
+        //
+        // Required as of Bun 1.3.12: on Linux, sending a UDP packet to an unreachable port used
+        // to silently close the socket; it now surfaces ICMP errors (port/host unreachable, TTL
+        // exceeded, etc.) through this `error` handler instead. Before 1.3.12 this handler was
+        // not needed and its absence went unnoticed. See https://bun.com/blog/bun-v1.3.12
+        this.udpSocket.on("error", () => {
+            // Ignore transient UDP discovery errors.
+        });
+
         this.udpSocket.bind(() => {
             this.udpSocket!.setBroadcast(true);
             const message = Buffer.from(`PSIE_RECV:${port}:${selfSigned.fingerprint}`);
