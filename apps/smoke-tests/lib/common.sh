@@ -137,23 +137,37 @@ start_app() {
 }
 
 #
-# Polls GET /ready until the app is ready or the timeout is reached.
-# Usage: wait_for_ready <port> [timeout_secs]
+# Polls GET /ready until the app is ready or the timeout is reached, relaunching the app between
+# attempts. On a cold CI emulator/simulator the app's WebView occasionally never connects to the
+# control bridge (observed as a "No app connected to control bridge" stall); force-stopping and
+# relaunching recovers it. This runs before any test actions, so a relaunch is always safe.
+# Usage: wait_for_ready <port> [timeout_secs] [max_attempts]
 #
 wait_for_ready() {
     local port="$1"
     local timeout="${2:-60}"
-    local elapsed=0
+    local max_attempts="${3:-2}"
+    local attempt=1
     log_info "Waiting for app to be ready on port $port..."
-    while [ "$elapsed" -lt "$timeout" ]; do
-        if curl -sf "http://localhost:$port/ready" > /dev/null 2>&1; then
-            log_info "App is ready"
-            return 0
+    while [ "$attempt" -le "$max_attempts" ]; do
+        local elapsed=0
+        while [ "$elapsed" -lt "$timeout" ]; do
+            if curl -sf "http://localhost:$port/ready" > /dev/null 2>&1; then
+                log_info "App is ready"
+                return 0
+            fi
+            sleep 1
+            elapsed=$((elapsed + 1))
+        done
+        log_error "Timed out waiting for app to be ready after ${timeout}s (attempt $attempt of $max_attempts)"
+        if [ "$attempt" -lt "$max_attempts" ]; then
+            log_info "Relaunching app on port $port and retrying..."
+            "${PLATFORM}_stop" "$port" || true
+            "${PLATFORM}_launch" "$port"
         fi
-        sleep 1
-        elapsed=$((elapsed + 1))
+        attempt=$((attempt + 1))
     done
-    log_error "Timed out waiting for app to be ready after ${timeout}s"
+    log_error "App failed to become ready after $max_attempts launch attempts"
     return 1
 }
 

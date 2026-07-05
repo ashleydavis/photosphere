@@ -1030,6 +1030,96 @@ jobs:
       - name: Run CLI<->Desktop LAN share smoke tests
         run: xvfb-run -a ./cli-desktop-lan-share-smoke-tests.sh
 
+  # Android native (JVM) unit tests, split into their own job so they run independently of the slow
+  # emulator smoke job. No emulator needed.
+  android-unit-tests:
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install
+
+      # AGP 8 requires JDK 17 (the Android build fails on the JDK 21 the runner defaults to).
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # ImageMagick/ffmpeg are needed by the CLI that builds the per-test database fixtures.
+      - name: Install media processing tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y imagemagick ffmpeg
+
+      # The native ImageMagick build (run_magick shim via CMake) and scripts/fetch-mobile-media-tools.sh
+      # both require this exact NDK, which the android-frontend sync (run by test:android:unit) pulls in.
+      - name: Install Android NDK
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;25.1.8937393" > /dev/null
+
+      # Engine-pool dispatcher, subtask routing, picker/path helpers, host functions.
+      - name: Run Android native unit tests
+        run: bun run test:android:unit
+
+  # iOS native (XCTest) unit tests, split into their own job so they run independently of the slow
+  # simulator smoke job.
+  ios-unit-tests:
+    timeout-minutes: 30
+    runs-on: macos-14
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install
+
+      # ImageMagick/ffmpeg are needed by the CLI that builds the per-test database fixtures.
+      - name: Install media processing tools
+        run: brew install imagemagick ffmpeg
+
+      # Host bridge, engine pool, subtask routing, path sandbox, media host functions.
+      - name: Run iOS native unit tests
+        run: bun run test:ios:unit
+
   android-smoke-tests:
     timeout-minutes: 45
     runs-on: ubuntu-latest
@@ -1075,11 +1165,6 @@ jobs:
       # both require this exact NDK, which bun run test:android pulls in via bun run sync.
       - name: Install Android NDK
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;25.1.8937393" > /dev/null
-
-      # Android native (JVM) unit tests: engine-pool dispatcher, subtask routing, picker/path helpers,
-      # host functions. No emulator needed; runs on the pre-installed SDK plus the JDK 17 set up above.
-      - name: Run Android native unit tests
-        run: bun run test:android:unit
 
       # Allow the hardware-accelerated emulator to use KVM on the runner.
       - name: Enable KVM
@@ -1129,11 +1214,6 @@ jobs:
       # ImageMagick/ffmpeg are needed by the CLI that builds the per-test database fixtures.
       - name: Install media processing tools
         run: brew install imagemagick ffmpeg
-
-      # iOS native (XCTest) unit tests: host bridge, engine pool, subtask routing, path sandbox, media
-      # host functions. Runs xcodebuild test against a simulator on the macOS runner.
-      - name: Run iOS native unit tests
-        run: bun run test:ios:unit
 
       # run.sh boots an iOS simulator and builds/installs the app via xcrun/xcodebuild.
       - name: Run iOS smoke tests
@@ -1273,7 +1353,7 @@ jobs:
 
   create-release:
     timeout-minutes: 20
-    needs: [prepare-tag, compile, unit-tests, perf-tests, build-linux, build-windows, build-windows-baseline, build-macos-x64, build-macos-arm64, build-desktop, smoke-test, smoke-test-encrypted, write-lock-tests, sync-tests, lan-share-smoke-test, electron-smoke-tests, cli-desktop-lan-share-smoke-tests, android-smoke-tests, ios-smoke-tests]
+    needs: [prepare-tag, compile, unit-tests, perf-tests, build-linux, build-windows, build-windows-baseline, build-macos-x64, build-macos-arm64, build-desktop, smoke-test, smoke-test-encrypted, write-lock-tests, sync-tests, lan-share-smoke-test, electron-smoke-tests, cli-desktop-lan-share-smoke-tests, android-unit-tests, ios-unit-tests, android-smoke-tests, ios-smoke-tests]
     runs-on: ubuntu-latest
     permissions:
       contents: write
