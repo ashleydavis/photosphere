@@ -25,7 +25,10 @@ create_database "$TMP_DIR/test-db" "$REPO_DIR/test/multiple-files/test-1.jpeg"
 "${PLATFORM}_seed_database" "$TMP_DIR/test-db" "test-db"
 
 send_command "$APP_PORT" open-database '{"path":"test-db"}' || exit 1
-wait_for_log "$TMP_DIR" "Load assets task completed: 1 assets loaded" 20
+# Assets load incrementally: the streamed asset messages render the gallery and the load-assets task
+# completes in either order, so a sequential wait for one then the other is racy. Wait for the gallery
+# to render the item (the signal needed to click the thumbnail); the asset having loaded is verified by
+# the download succeeding below.
 wait_for_log "$TMP_DIR" "Gallery items rendered" 20
 
 send_command "$APP_PORT" long-press-click '{"dataId":"gallery-thumb"}' || exit 1

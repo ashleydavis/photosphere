@@ -56,12 +56,18 @@ ios_prepare() {
 ios_build() {
     log_info "Building iOS app..."
     (cd "$IOS_FRONTEND_DIR" && bun run sync)
+
+    # Build for the concrete booted simulator (not the generic destination) so xcodebuild builds a
+    # single arch matching the simulator (x86_64 on Intel hosts, arm64 on Apple Silicon). The bundled
+    # native media static libraries (vendor/im) are single-arch per host, so a universal simulator
+    # build would fail to link the non-host slice.
     xcodebuild \
         -workspace "$IOS_FRONTEND_DIR/ios/App/App.xcworkspace" \
         -scheme App \
         -sdk iphonesimulator \
         -configuration Debug \
         -derivedDataPath "$IOS_DERIVED_DATA" \
+        -destination "id=$IOS_SIMULATOR_UDID" \
         build
 }
 

@@ -2,6 +2,15 @@ import Foundation
 import JavaScriptCore
 
 //
+// Upper bound (in real milliseconds) on how long the timer pump waits between firing virtual-clock
+// timers. Pacing the pump by the virtual time a timer advanced keeps the virtual clock tracking real
+// time (so a fast interval cannot race a real-time timeout guard ahead), while this cap keeps a
+// newly-armed short timer from waiting a full long interval and bounds an idle long-running task's
+// re-check latency.
+//
+let TIMER_PUMP_MAX_DELAY_MS = 200
+
+//
 // Errors raised while standing up or running a JavaScriptCore engine. These become the task's
 // "failed" result message when they occur before or during a task.
 //
@@ -77,6 +86,30 @@ final class JavaScriptCoreTaskEngine: TaskEngine {
     private var disposed = false
 
     //
+    // False while the current task's promise is unsettled. The embedded engine has no real timer loop,
+    // so the virtual-clock timers backing setTimeout/setInterval (install-globals.ts) only fire when
+    // the native side calls globalThis.__pumpTimers. While a task is unsettled the engine pumps those
+    // timers so setTimeout/sleep-based code makes progress (the import write-batch wait loop, retry
+    // backoff, the asset-server cancellation poll); without it such code hangs forever. Only ever
+    // read/written on engineQueue.
+    //
+    private var runningTaskSettled = true
+
+    //
+    // The monotonic time (uptime nanoseconds) the timer pump last ran. Each pump advances the engine's
+    // virtual clock by the real time elapsed since this, so setTimeout/setInterval fire at real-time
+    // rate and a large timeout guard never fires prematurely. Reset when a task starts. Only touched on
+    // engineQueue.
+    //
+    private var lastPumpUptimeNs: UInt64 = 0
+
+    //
+    // True while a timer pump is already queued on the engine queue, so concurrent triggers (task
+    // start, child events, TCP events) do not stack multiple pump chains. Only touched on engineQueue.
+    //
+    private var timerPumpScheduled = false
+
+    //
     // Constructs an engine for one pool slot. `label` names the engine's serial queue; `hostBridge`
     // is the host installed into its context.
     //
@@ -150,6 +183,20 @@ final class JavaScriptCoreTaskEngine: TaskEngine {
             }
         }
 
+        // The same drain-on-the-engine-queue wiring for the UDP and TLS layers: LAN-share discovery
+        // (UDP) and its TLS server/client push inbound events that must be delivered into the JS shims on
+        // the JSContext thread via globalThis.__udpEvent / globalThis.__tlsEvent.
+        hostBridge.udp.onEventAvailable = { [weak self] in
+            self?.engineQueue.async {
+                self?.drainUdpEvents()
+            }
+        }
+        hostBridge.tls.onEventAvailable = { [weak self] in
+            self?.engineQueue.async {
+                self?.drainTlsEvents()
+            }
+        }
+
         var evaluationException: JSValue?
         newContext.exceptionHandler = { _, exception in
             evaluationException = exception
@@ -219,12 +266,18 @@ final class JavaScriptCoreTaskEngine: TaskEngine {
             // Track whether a terminal callback has already fired so a settled promise reports once.
             var settled = false
 
+            // The task's promise is now in flight; let the timer pump advance setTimeout/setInterval
+            // until it settles. Reset the pump's real-time baseline so the first advance is measured from now.
+            self.runningTaskSettled = false
+            self.lastPumpUptimeNs = DispatchTime.now().uptimeNanoseconds
+
             // onFulfilled receives the resolved JSON string (the handler outputs) and reports success.
             let onFulfilled: @convention(block) (JSValue) -> Void = { resolved in
                 if settled {
                     return
                 }
                 settled = true
+                self.runningTaskSettled = true
                 let outputsJson = resolved.isUndefined || resolved.isNull ? "null" : (resolved.toString() ?? "null")
                 callbacks.onTaskSucceeded(task, outputsJson: outputsJson)
             }
@@ -235,6 +288,7 @@ final class JavaScriptCoreTaskEngine: TaskEngine {
                     return
                 }
                 settled = true
+                self.runningTaskSettled = true
                 let message = self.errorMessage(from: reason)
                 NSLog("%@", message)
                 callbacks.onTaskFailed(task, errorMessage: message)
@@ -250,6 +304,7 @@ final class JavaScriptCoreTaskEngine: TaskEngine {
             if let exception = syncException {
                 if !settled {
                     settled = true
+                    self.runningTaskSettled = true
                     let message = self.errorMessage(from: exception)
                     NSLog("%@", message)
                     callbacks.onTaskFailed(task, errorMessage: message)
@@ -261,14 +316,94 @@ final class JavaScriptCoreTaskEngine: TaskEngine {
             // queue on this thread, so the settle callback fires once the handler promise resolves.
             if let promise = promise, promise.hasProperty("then") {
                 promise.invokeMethod("then", withArguments: [fulfilledValue, rejectedValue])
+
+                // The handler is now awaiting; start pumping its virtual-clock timers so setTimeout /
+                // sleep based progress happens (the promise is otherwise driven only by microtasks and
+                // native events).
+                self.scheduleTimerPump()
             }
             else if !settled {
                 // runTask should always return a promise; if it returned a plain value, treat it as the
                 // resolved outputs so the task still completes rather than hanging.
                 settled = true
+                self.runningTaskSettled = true
                 let outputsJson = promise?.toString() ?? "null"
                 callbacks.onTaskSucceeded(task, outputsJson: outputsJson)
             }
+        }
+    }
+
+    //
+    // Advances the embedded engine's virtual-clock timers while the current task is unsettled. The
+    // engine has no real timer loop, so setTimeout/setInterval callbacks are queued in JS and only run
+    // when globalThis.__pumpTimers is invoked. This fires the earliest pending timer, lets JavaScriptCore
+    // drain the microtasks it schedules, then re-queues itself until the task settles or no timer remains.
+    //
+    // The next pump is delayed by the virtual milliseconds the fired timer advanced (capped), so the
+    // virtual clock roughly tracks real time. Without this a fast interval (e.g. a LAN-share 1s broadcast)
+    // would fire back-to-back and race the virtual clock far ahead of real time, tripping a real-time
+    // timeout guard (e.g. the 60s share timeout) seconds into a transfer that has not actually stalled.
+    // The cap keeps a newly-armed timer from waiting a full long interval, and bounds how long an idle
+    // long-running task waits before re-checking. Runs only on engineQueue, so the JSContext stays
+    // single-threaded.
+    //
+    private func scheduleTimerPump(afterMs: Int = 0) {
+        if timerPumpScheduled || runningTaskSettled || disposed {
+            return
+        }
+        timerPumpScheduled = true
+
+        let delay: DispatchTimeInterval = afterMs <= 0 ? .microseconds(0) : .milliseconds(afterMs)
+        engineQueue.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self = self else {
+                return
+            }
+            self.timerPumpScheduled = false
+            if self.runningTaskSettled || self.disposed {
+                return
+            }
+            guard let context = self.context else {
+                return
+            }
+
+            // Advance the virtual clock by the real time elapsed since the last pump, firing every timer
+            // that is now due (JavaScriptCore drains the microtasks each fired timer queues before the
+            // evaluate returns). Bounding the advance to real elapsed time keeps the virtual clock from
+            // racing ahead: a large timeout guard (a 90-minute retry timeout, a 60s share timeout) only
+            // fires once that much real time has actually passed, never mid-operation.
+            let now = DispatchTime.now().uptimeNanoseconds
+            var budgetMs = Int((now &- self.lastPumpUptimeNs) / 1_000_000)
+            self.lastPumpUptimeNs = now
+            if budgetMs < 0 {
+                budgetMs = 0
+            }
+
+            var nextTimerMs = -1
+            while true {
+                let fired = context.evaluateScript("(typeof globalThis.__pumpTimers === 'function') ? globalThis.__pumpTimers(\(budgetMs)) : false")
+                if self.runningTaskSettled || self.disposed {
+                    return
+                }
+                nextTimerMs = Int(context.objectForKeyedSubscript("__nextTimerMs")?.toInt32() ?? -1)
+                if fired?.toBool() ?? false {
+                    // A timer fired; it consumed part of the budget. Keep firing timers still due within
+                    // the remaining budget.
+                    let advanced = Int(context.objectForKeyedSubscript("__lastTimerAdvanceMs")?.toInt32() ?? 0)
+                    budgetMs -= max(advanced, 0)
+                    if budgetMs <= 0 {
+                        break
+                    }
+                }
+                else {
+                    // Nothing was due within the budget (the clock advanced by the whole budget).
+                    break
+                }
+            }
+
+            // Schedule the next pump when the next timer is due (in real time), capped so a newly-armed
+            // timer is still caught promptly and an idle long-running task re-checks at a bounded rate.
+            let nextDelay = nextTimerMs >= 0 ? min(nextTimerMs, TIMER_PUMP_MAX_DELAY_MS) : TIMER_PUMP_MAX_DELAY_MS
+            self.scheduleTimerPump(afterMs: nextDelay)
         }
     }
 
@@ -288,6 +423,10 @@ final class JavaScriptCoreTaskEngine: TaskEngine {
                 return
             }
             childEventFunction.call(withArguments: [eventJson])
+
+            // Delivering the event may have armed a timer or unblocked timer-driven code, so resume the
+            // pump (a no-op if one is already queued or the task has settled).
+            self.scheduleTimerPump()
         }
     }
 
@@ -307,6 +446,45 @@ final class JavaScriptCoreTaskEngine: TaskEngine {
         while let eventJson = self.hostBridge.tcp.pollInboundEvent() {
             tcpEventFunction.call(withArguments: [eventJson])
         }
+
+        // Handling a request may have armed a timer or unblocked timer-driven code, so resume the pump.
+        self.scheduleTimerPump()
+    }
+
+    //
+    // Drains the native UDP inbound event queue, delivering each event JSON into the JS dgram shim via
+    // globalThis.__udpEvent. Runs on the engine queue (dispatched from the UdpHost callback), so the
+    // JSContext is only ever touched from its owning thread.
+    //
+    private func drainUdpEvents() {
+        guard let context = self.context else {
+            return
+        }
+        guard let udpEventFunction = context.globalObject.objectForKeyedSubscript("__udpEvent"), !udpEventFunction.isUndefined else {
+            return
+        }
+        while let eventJson = self.hostBridge.udp.pollInboundEvent() {
+            udpEventFunction.call(withArguments: [eventJson])
+        }
+        self.scheduleTimerPump()
+    }
+
+    //
+    // Drains the native TLS inbound event queue, delivering each event JSON into the JS tls shim via
+    // globalThis.__tlsEvent. Runs on the engine queue (dispatched from the TlsHost callback), so the
+    // JSContext is only ever touched from its owning thread.
+    //
+    private func drainTlsEvents() {
+        guard let context = self.context else {
+            return
+        }
+        guard let tlsEventFunction = context.globalObject.objectForKeyedSubscript("__tlsEvent"), !tlsEventFunction.isUndefined else {
+            return
+        }
+        while let eventJson = self.hostBridge.tls.pollInboundEvent() {
+            tlsEventFunction.call(withArguments: [eventJson])
+        }
+        self.scheduleTimerPump()
     }
 
     //

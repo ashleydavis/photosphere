@@ -105,11 +105,19 @@ export function installTimers(globalScope: any): void {
         removeTimer(id);
     };
 
-    // Advances the virtual clock to the earliest pending timer and fires it. A one-shot is removed; an
-    // interval is re-armed to its period. Returns true when a timer was run, so the native pump knows
-    // whether progress is still possible. Called only when otherwise idle.
-    globalScope.__pumpTimers = (): boolean => {
+    // Advances the virtual clock and fires the earliest pending timer if it is due. An optional
+    // `maxAdvanceMs` bounds how far the clock may advance this call: when the earliest timer is further
+    // out than the budget, the clock advances by the budget and no timer fires. A native pump passes the
+    // real milliseconds elapsed since its last call as the budget, so the virtual clock tracks real time
+    // and a large timeout guard (e.g. a 90-minute retry timeout) never fires prematurely and aborts an
+    // in-flight operation. When called with no budget (the Android pump) it fires the earliest timer
+    // regardless, preserving the original behaviour. Records the virtual ms advanced in
+    // globalThis.__lastTimerAdvanceMs and the next timer's remaining ms in globalThis.__nextTimerMs (-1
+    // when none), so the native pump can pace and schedule its next call. Returns true when a timer fired.
+    globalScope.__pumpTimers = (maxAdvanceMs?: number): boolean => {
         if (timers.length === 0) {
+            globalScope.__lastTimerAdvanceMs = 0;
+            globalScope.__nextTimerMs = -1;
             return false;
         }
 
@@ -120,7 +128,29 @@ export function installTimers(globalScope: any): void {
             }
         }
 
-        const advance = timers[earliestIndex].remaining;
+        const earliest = timers[earliestIndex].remaining;
+
+        // The earliest timer is not yet due within the real-time budget: advance the clock by the
+        // budget and fire nothing, so timers count down at real-time rate.
+        if (maxAdvanceMs !== undefined && maxAdvanceMs !== null && earliest > maxAdvanceMs) {
+            if (maxAdvanceMs > 0) {
+                for (const timer of timers) {
+                    timer.remaining -= maxAdvanceMs;
+                }
+            }
+            globalScope.__lastTimerAdvanceMs = maxAdvanceMs;
+            let nextRemaining = timers[0].remaining;
+            for (let index = 1; index < timers.length; index++) {
+                if (timers[index].remaining < nextRemaining) {
+                    nextRemaining = timers[index].remaining;
+                }
+            }
+            globalScope.__nextTimerMs = nextRemaining;
+            return false;
+        }
+
+        const advance = earliest;
+        globalScope.__lastTimerAdvanceMs = advance;
         if (advance > 0) {
             for (const timer of timers) {
                 timer.remaining -= advance;
@@ -135,6 +165,14 @@ export function installTimers(globalScope: any): void {
             timers.splice(earliestIndex, 1);
         }
         timer.callback(...timer.args);
+
+        let nextRemaining = -1;
+        for (const pending of timers) {
+            if (nextRemaining < 0 || pending.remaining < nextRemaining) {
+                nextRemaining = pending.remaining;
+            }
+        }
+        globalScope.__nextTimerMs = nextRemaining;
         return true;
     };
 }

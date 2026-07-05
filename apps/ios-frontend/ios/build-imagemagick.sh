@@ -21,6 +21,9 @@ WORK="${TMPDIR:-/tmp}/photosphere-im-build"
 IM_VERSION="7.1.1-43"
 JPEG_URL="http://www.ijg.org/files/jpegsrc.v9e.tar.gz"
 PNG_URL="https://download.sourceforge.net/libpng/libpng-1.6.43.tar.gz"
+# zlib must be built from source for the target so ImageMagick's configure enables ZLIB_DELEGATE (and
+# therefore PNG_DELEGATE): without a target zlib in the prefix the PNG coder is silently disabled.
+ZLIB_URL="https://github.com/madler/zlib/releases/download/v1.3.1/zlib-1.3.1.tar.gz"
 IM_URL="https://github.com/ImageMagick/ImageMagick/archive/refs/tags/${IM_VERSION}.tar.gz"
 MINVER=13.0
 
@@ -47,9 +50,17 @@ build_slice() {
   cd "$work"
 
   echo "==== [$slice] downloading sources ===="
+  curl -fL --retry 3 -o zlib.tar.gz "$ZLIB_URL"
   curl -fL --retry 3 -o jpeg.tar.gz "$JPEG_URL"
   curl -fL --retry 3 -o png.tar.gz  "$PNG_URL"
   curl -fL --retry 3 -o im.tar.gz   "$IM_URL"
+
+  # zlib first: libpng and ImageMagick's PNG/ZLIB delegates link against the target zlib in the prefix.
+  # zlib uses its own (non-autoconf) configure driven by CC/CFLAGS/CHOST from the exported environment.
+  echo "==== [$slice] zlib ===="
+  mkdir -p zlib && tar xzf zlib.tar.gz -C zlib --strip-components=1
+  ( cd zlib && CHOST="$host" ./configure --prefix="$prefix" --static >/dev/null
+    make -j2 >/dev/null && make install >/dev/null )
 
   echo "==== [$slice] libjpeg ===="
   mkdir -p jpeg && tar xzf jpeg.tar.gz -C jpeg --strip-components=1
@@ -86,7 +97,15 @@ build_slice() {
 
 # Device slice: arm64 for real hardware (required for release).
 build_slice device arm64 iphoneos arm-apple-darwin "-miphoneos-version-min=$MINVER"
-# Simulator slice: arm64 sim on Apple Silicon Macs (use x86_64 host triple on an Intel Mac).
-build_slice sim arm64 iphonesimulator arm-apple-darwin "-mios-simulator-version-min=$MINVER"
+# Simulator slice: match the host arch so the built libs link into the simulator app running on this
+# machine (arm64 sim on Apple Silicon, x86_64 sim on Intel). The host triple must match the arch or
+# ImageMagick's configure cross-compile detection produces the wrong slice.
+SIM_ARCH="$(uname -m)"
+if [ "$SIM_ARCH" = "x86_64" ]; then
+  SIM_HOST="x86_64-apple-darwin"
+else
+  SIM_HOST="arm-apple-darwin"
+fi
+build_slice sim "$SIM_ARCH" iphonesimulator "$SIM_HOST" "-mios-simulator-version-min=$MINVER"
 
 echo "==== ALL SLICES DONE ===="

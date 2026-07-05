@@ -137,6 +137,10 @@ public class JsEnginePlugin: CAPPlugin, EnginePoolDelegate {
     //
     @objc func pickFiles(_ call: CAPPluginCall) {
         DispatchQueue.main.async {
+            guard #available(iOS 14.0, *) else {
+                call.reject("pickFiles: the photo picker requires iOS 14 or newer")
+                return
+            }
             self.pendingPickCall = call
 
             var configuration = PHPickerConfiguration()
@@ -355,6 +359,7 @@ public class JsEnginePlugin: CAPPlugin, EnginePoolDelegate {
 // with the copied files' sandbox-relative paths (empty when the user cancelled). Kept in this file so
 // the fileprivate copyPickedFile and private storageRoot remain accessible.
 //
+@available(iOS 14.0, *)
 extension JsEnginePlugin: PHPickerViewControllerDelegate {
 
     //

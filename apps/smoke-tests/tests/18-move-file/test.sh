@@ -29,7 +29,9 @@ create_database "$TMP_DIR/dest-db"
 send_command "$APP_PORT" seed-databases '{"databases":[{"name":"source-db","path":"source-db"},{"name":"dest-db","path":"dest-db"}]}' || exit 1
 
 send_command "$APP_PORT" open-database '{"path":"source-db"}' || exit 1
-wait_for_log "$TMP_DIR" "Load assets task completed: 1 assets loaded" 20
+# Assets load incrementally: the streamed asset messages render the gallery and the load-assets task
+# completes in either order, so a sequential wait for one then the other is racy. Wait for the gallery
+# to render the item (the signal needed to select it below).
 wait_for_log "$TMP_DIR" "Gallery items rendered" 20
 
 send_command "$APP_PORT" click '{"dataId":"gallery-item-checkbox"}' || exit 1

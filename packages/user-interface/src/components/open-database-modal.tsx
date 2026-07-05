@@ -44,12 +44,20 @@ export function OpenDatabaseModal({ open, onClose }: IOpenDatabaseModalProps) {
     // Whether a refresh is in progress (drives the spin animation).
     const [refreshing, setRefreshing] = useState(false);
 
+    // Whether the configured databases have finished loading for the current open session. Drives the
+    // "Open database dialog opened" log so it only fires once the list has rendered (test automation
+    // waits for that log before clicking a list item).
+    const [loaded, setLoaded] = useState(false);
+
     //
     // Loads the list of configured databases from the platform.
     //
     function loadDatabases(): void {
         platform.getDatabases()
-            .then(entries => setDatabases(entries))
+            .then(entries => {
+                setDatabases(entries);
+                setLoaded(true);
+            })
             .catch(err => log.exception('Failed to load databases:', err as Error));
     }
 
@@ -67,10 +75,20 @@ export function OpenDatabaseModal({ open, onClose }: IOpenDatabaseModalProps) {
 
     useEffect(() => {
         if (open) {
+            setLoaded(false);
             loadDatabases();
-            log.info('Open database dialog opened');
         }
     }, [open, platform]);
+
+    //
+    // Logs the "opened" signal only after the databases have loaded and the list has committed to the
+    // DOM, so test automation that waits for this log reliably finds the rendered list items.
+    //
+    useEffect(() => {
+        if (open && loaded) {
+            log.info('Open database dialog opened');
+        }
+    }, [open, loaded]);
 
     //
     // Navigates to the databases management page and closes the modal.

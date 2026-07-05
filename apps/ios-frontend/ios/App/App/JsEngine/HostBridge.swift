@@ -107,6 +107,19 @@ final class HostBridge {
     let tcp = TcpHost()
 
     //
+    // The native UDP layer behind host.udp*. LAN-share discovery broadcasts/receives datagrams through
+    // it; inbound "message" events are drained on the JSContext thread and delivered via globalThis.__udpEvent.
+    //
+    let udp = UdpHost()
+
+    //
+    // The native TLS layer behind host.tls*. LAN-share's receiver runs a TLS server and its sender a
+    // cert-pinning TLS client through it; inbound events are delivered via globalThis.__tlsEvent. Built on
+    // Network.framework (iOS 13+), matching the app deployment target.
+    //
+    let tls = TlsHost()
+
+    //
     // Returns true when the task with the given id has been cancelled. Reads an atomic/volatile
     // flag WITHOUT taking the pool lock, so a running handler can poll cancellation cheaply from
     // inside a tight loop without contending with the dispatcher.
@@ -348,6 +361,90 @@ final class HostBridge {
             return JSValue(nullIn: context)
         }
         host.setValue(JSValue(object: tcpStopListening, in: context), forProperty: "tcpStopListening")
+
+        // Native-backed UDP datagram functions: LAN-share discovery binds a broadcast socket and
+        // sends/receives datagrams through these. Inbound datagrams are pushed back into the engine via
+        // globalThis.__udpEvent. udpBind returns the socket JSON (or an error envelope); udpSend/udpClose
+        // return JS null on success or an error envelope.
+        let udpBind: @convention(block) (String, Int, Bool) -> JSValue = { [weak self] host, port, broadcast in
+            guard let self = self else { return JSValue(nullIn: context) }
+            return JSValue(object: self.udp.udpBind(host: host, port: port, broadcast: broadcast), in: context)
+        }
+        host.setValue(JSValue(object: udpBind, in: context), forProperty: "udpBind")
+
+        let udpSend: @convention(block) (String, String, String, Int) -> JSValue = { [weak self] socketId, base64, host, port in
+            guard let self = self else { return JSValue(nullIn: context) }
+            if let envelope = self.udp.udpSend(socketId: socketId, base64: base64, host: host, port: port) {
+                return JSValue(object: envelope, in: context)
+            }
+            return JSValue(nullIn: context)
+        }
+        host.setValue(JSValue(object: udpSend, in: context), forProperty: "udpSend")
+
+        let udpClose: @convention(block) (String) -> JSValue = { [weak self] socketId in
+            guard let self = self else { return JSValue(nullIn: context) }
+            if let envelope = self.udp.udpClose(socketId: socketId) {
+                return JSValue(object: envelope, in: context)
+            }
+            return JSValue(nullIn: context)
+        }
+        host.setValue(JSValue(object: udpClose, in: context), forProperty: "udpClose")
+
+        // Native-backed TLS functions: LAN-share's receiver runs a TLS server (from the PEM cert/key the
+        // TypeScript generates) and its sender a cert-pinning TLS client. Inbound connection/data/close
+        // events are pushed back via globalThis.__tlsEvent. tlsListen/tlsConnect return JSON (or an error
+        // envelope); the others return JS null on success or an error envelope.
+        let tlsListen: @convention(block) (String, Int, String, String) -> JSValue = { [weak self] host, port, certPem, keyPem in
+            guard let self = self else { return JSValue(nullIn: context) }
+            return JSValue(object: self.tls.tlsListen(host: host, port: port, certPem: certPem, keyPem: keyPem), in: context)
+        }
+        host.setValue(JSValue(object: tlsListen, in: context), forProperty: "tlsListen")
+
+        let tlsConnect: @convention(block) (String, Int) -> JSValue = { [weak self] host, port in
+            guard let self = self else { return JSValue(nullIn: context) }
+            return JSValue(object: self.tls.tlsConnect(host: host, port: port), in: context)
+        }
+        host.setValue(JSValue(object: tlsConnect, in: context), forProperty: "tlsConnect")
+
+        let tlsWrite: @convention(block) (String, String) -> JSValue = { [weak self] connectionId, base64 in
+            guard let self = self else { return JSValue(nullIn: context) }
+            if let envelope = self.tls.tlsWrite(connectionId: connectionId, base64: base64) {
+                return JSValue(object: envelope, in: context)
+            }
+            return JSValue(nullIn: context)
+        }
+        host.setValue(JSValue(object: tlsWrite, in: context), forProperty: "tlsWrite")
+
+        let tlsClose: @convention(block) (String) -> JSValue = { [weak self] connectionId in
+            guard let self = self else { return JSValue(nullIn: context) }
+            if let envelope = self.tls.tlsClose(connectionId: connectionId) {
+                return JSValue(object: envelope, in: context)
+            }
+            return JSValue(nullIn: context)
+        }
+        host.setValue(JSValue(object: tlsClose, in: context), forProperty: "tlsClose")
+
+        let tlsStopListening: @convention(block) (String) -> JSValue = { [weak self] listenerId in
+            guard let self = self else { return JSValue(nullIn: context) }
+            if let envelope = self.tls.tlsStopListening(listenerId: listenerId) {
+                return JSValue(object: envelope, in: context)
+            }
+            return JSValue(nullIn: context)
+        }
+        host.setValue(JSValue(object: tlsStopListening, in: context), forProperty: "tlsStopListening")
+
+        // Native RSA crypto (host.crypto*): LAN-share's receiver generates an RSA key pair and self-signs
+        // its TLS certificate, then signs with the private key. Both return the result string directly, or
+        // an @@HOSTERR@@ envelope the JS crypto shim decodes into a thrown error.
+        let cryptoGenerateRsaKeyPair: @convention(block) (Int) -> JSValue = { modulusLength in
+            return JSValue(object: CryptoHost.cryptoGenerateRsaKeyPair(modulusLength: modulusLength), in: context)
+        }
+        host.setValue(JSValue(object: cryptoGenerateRsaKeyPair, in: context), forProperty: "cryptoGenerateRsaKeyPair")
+
+        let cryptoSignSha256: @convention(block) (String, String) -> JSValue = { privateKeyPem, dataBase64 in
+            return JSValue(object: CryptoHost.cryptoSignSha256(privateKeyPem: privateKeyPem, dataBase64: dataBase64), in: context)
+        }
+        host.setValue(JSValue(object: cryptoSignSha256, in: context), forProperty: "cryptoSignSha256")
 
         // The media host functions (imageMagick/ffmpeg/ffprobe) never raise a JS exception across the
         // bridge: they take a JSON-encoded argv string, run the in-process tool, and return the JSON

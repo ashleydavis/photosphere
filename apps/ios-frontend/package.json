@@ -9,7 +9,8 @@
     "bundle": "vite build",
     "bundle:worker": "bun --filter=mobile-worker build:bundle && bun --filter=mobile-worker copy:bundle",
     "clean": "rm -rf dist build tsconfig.tsbuildinfo",
-    "sync": "bun run bundle:worker && vite build && cap sync ios",
+    "fetch:media": "bash ../../scripts/fetch-mobile-media-tools.sh ios",
+    "sync": "bun run fetch:media && bun run bundle:worker && vite build && cap sync ios",
     "open": "bun run sync && cap open ios",
     "launch": "bun run bundle:worker && vite build && cap run ios"
   },

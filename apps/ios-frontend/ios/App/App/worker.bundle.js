@@ -52743,8 +52743,10 @@ __p += '`;
     globalScope.clearInterval = (id) => {
       removeTimer(id);
     };
-    globalScope.__pumpTimers = () => {
+    globalScope.__pumpTimers = (maxAdvanceMs) => {
       if (timers.length === 0) {
+        globalScope.__lastTimerAdvanceMs = 0;
+        globalScope.__nextTimerMs = -1;
         return false;
       }
       let earliestIndex = 0;
@@ -52753,7 +52755,25 @@ __p += '`;
           earliestIndex = index;
         }
       }
-      const advance = timers[earliestIndex].remaining;
+      const earliest = timers[earliestIndex].remaining;
+      if (maxAdvanceMs !== undefined && maxAdvanceMs !== null && earliest > maxAdvanceMs) {
+        if (maxAdvanceMs > 0) {
+          for (const timer2 of timers) {
+            timer2.remaining -= maxAdvanceMs;
+          }
+        }
+        globalScope.__lastTimerAdvanceMs = maxAdvanceMs;
+        let nextRemaining2 = timers[0].remaining;
+        for (let index = 1;index < timers.length; index++) {
+          if (timers[index].remaining < nextRemaining2) {
+            nextRemaining2 = timers[index].remaining;
+          }
+        }
+        globalScope.__nextTimerMs = nextRemaining2;
+        return false;
+      }
+      const advance = earliest;
+      globalScope.__lastTimerAdvanceMs = advance;
       if (advance > 0) {
         for (const timer2 of timers) {
           timer2.remaining -= advance;
@@ -52766,6 +52786,13 @@ __p += '`;
         timers.splice(earliestIndex, 1);
       }
       timer.callback(...timer.args);
+      let nextRemaining = -1;
+      for (const pending of timers) {
+        if (nextRemaining < 0 || pending.remaining < nextRemaining) {
+          nextRemaining = pending.remaining;
+        }
+      }
+      globalScope.__nextTimerMs = nextRemaining;
       return true;
     };
   }

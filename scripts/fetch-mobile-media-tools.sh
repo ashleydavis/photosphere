@@ -150,12 +150,26 @@ fetch_android() {
     log "Android ImageMagick ready (jniLibs + headers populated, all git-ignored)."
 }
 
-# Builds the iOS ImageMagick static libraries from source into the git-ignored vendor tree.
+# True when the iOS ImageMagick static libraries are already built for both slices, so the (slow,
+# from-source) build is skipped on reruns. Mirrors android_already_fetched.
+ios_already_fetched() {
+    local vendor="$REPO_ROOT/apps/ios-frontend/ios/App/vendor/im"
+    [ -f "$vendor/device/lib/libMagickWand-7.Q8HDRI.a" ] || return 1
+    [ -f "$vendor/sim/lib/libMagickWand-7.Q8HDRI.a" ] || return 1
+    return 0
+}
+
+# Builds the iOS ImageMagick static libraries from source into the git-ignored vendor tree. Idempotent:
+# skips the (slow) build when both slices are already present.
 fetch_ios() {
     local script="$REPO_ROOT/apps/ios-frontend/ios/build-imagemagick.sh"
     if [ ! -f "$script" ]; then
         echo "ERROR: $script not found." >&2
         return 1
+    fi
+    if ios_already_fetched; then
+        log "iOS ImageMagick already built (vendor/im present); skipping."
+        return 0
     fi
     log "Building iOS ImageMagick from source (macOS/Xcode required)..."
     bash "$script"

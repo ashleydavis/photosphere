@@ -1,0 +1,13 @@
+{
+  "pins" : [
+    {
+      "identity" : "ffmpeg-kit-full-spm",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/wanqing19954/ffmpeg-kit-full-spm",
+      "state" : {
+        "revision" : "f45f47a11de0a83b3813161c40afa7ee7de0cdfc"
+      }
+    }
+  ],
+  "version" : 2
+}

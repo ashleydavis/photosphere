@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		05483FE31349F306D45026C0 /* HostBridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 941F7016C52F6B991858BFD4 /* HostBridgeTests.swift */; };
 		A1B2C3D4E5F600000000FF01 /* HostFunctionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600000000FF02 /* HostFunctionsTests.swift */; };
+		A1B2C3D4E5F600000000FF11 /* CryptoHostTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600000000FF12 /* CryptoHostTests.swift */; };
 		A1B2C3D4E5F600000000FF04 /* HostBridgeMediaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600000000FF03 /* HostBridgeMediaTests.swift */; };
 		13E4EC3C45DA72EF0950953D /* WorkerBundleParityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B36CD9CADF6F132C9A9BAAE5 /* WorkerBundleParityTests.swift */; };
 		251E965ABC2E507BDAF37ED5 /* Pods_AppTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 17ABBD4539EDBE292DFB23E7 /* Pods_AppTests.framework */; };
@@ -33,6 +34,11 @@
 		D000000000000000000000B5 /* JsEnginePlugin.m in Sources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000A5 /* JsEnginePlugin.m */; };
 		D000000000000000000000B6 /* JsEnginePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000A6 /* JsEnginePlugin.swift */; };
 		D000000000000000000000B7 /* PathSandbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000A7 /* PathSandbox.swift */; };
+		D000000000000000000000BB /* ImportPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000AB /* ImportPicker.swift */; };
+		D000000000000000000000BC /* CryptoHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000AC /* CryptoHost.swift */; };
+		D000000000000000000000BD /* UdpHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000AD /* UdpHost.swift */; };
+		D000000000000000000000BE /* TlsHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000AE /* TlsHost.swift */; };
+		FFEE0000000000000000B001 /* FFmpegKitFullSPM in Frameworks */ = {isa = PBXBuildFile; productRef = FFEE0000000000000000A001 /* FFmpegKitFullSPM */; };
 		D000000000000000000000B8 /* PooledTask.swift in Sources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000A8 /* PooledTask.swift */; };
 		D000000000000000000000B9 /* TaskEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000A9 /* TaskEngine.swift */; };
 		D000000000000000000000BA /* TcpHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000AA /* TcpHost.swift */; };
@@ -75,6 +81,7 @@
 		83151A04F7CCCA92455397D7 /* Pods-AppTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-AppTests.debug.xcconfig"; path = "Pods/Target Support Files/Pods-AppTests/Pods-AppTests.debug.xcconfig"; sourceTree = "<group>"; };
 		941F7016C52F6B991858BFD4 /* HostBridgeTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HostBridgeTests.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F600000000FF02 /* HostFunctionsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HostFunctionsTests.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F600000000FF12 /* CryptoHostTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CryptoHostTests.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F600000000FF03 /* HostBridgeMediaTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HostBridgeMediaTests.swift; sourceTree = "<group>"; };
 		AF277DCFFFF123FFC6DF26C7 /* Pods_App.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_App.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		AF51FD2D460BCFE21FA515B2 /* Pods-App.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-App.release.xcconfig"; path = "Pods/Target Support Files/Pods-App/Pods-App.release.xcconfig"; sourceTree = "<group>"; };
@@ -88,6 +95,10 @@
 		D000000000000000000000A5 /* JsEnginePlugin.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = JsEnginePlugin.m; sourceTree = "<group>"; };
 		D000000000000000000000A6 /* JsEnginePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JsEnginePlugin.swift; sourceTree = "<group>"; };
 		D000000000000000000000A7 /* PathSandbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PathSandbox.swift; sourceTree = "<group>"; };
+		D000000000000000000000AB /* ImportPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportPicker.swift; sourceTree = "<group>"; };
+		D000000000000000000000AC /* CryptoHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CryptoHost.swift; sourceTree = "<group>"; };
+		D000000000000000000000AD /* UdpHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UdpHost.swift; sourceTree = "<group>"; };
+		D000000000000000000000AE /* TlsHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TlsHost.swift; sourceTree = "<group>"; };
 		D000000000000000000000A8 /* PooledTask.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PooledTask.swift; sourceTree = "<group>"; };
 		D000000000000000000000A9 /* TaskEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskEngine.swift; sourceTree = "<group>"; };
 		D000000000000000000000AA /* TcpHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TcpHost.swift; sourceTree = "<group>"; };
@@ -106,6 +117,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FFEE0000000000000000B001 /* FFmpegKitFullSPM in Frameworks */,
 				A084ECDBA7D38E1E42DFC39D /* Pods_App.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -196,6 +208,7 @@
 				79D28BB3B7D9903A032E51CC /* EnginePoolTests.swift */,
 				941F7016C52F6B991858BFD4 /* HostBridgeTests.swift */,
 				A1B2C3D4E5F600000000FF02 /* HostFunctionsTests.swift */,
+				A1B2C3D4E5F600000000FF12 /* CryptoHostTests.swift */,
 				A1B2C3D4E5F600000000FF03 /* HostBridgeMediaTests.swift */,
 				07855680FE24064B7769CBB4 /* NotImplementedTests.swift */,
 				7FBA8F4FD583EAFC5EFEC48E /* PathSandboxTests.swift */,
@@ -217,6 +230,10 @@
 				D000000000000000000000A5 /* JsEnginePlugin.m */,
 				D000000000000000000000A6 /* JsEnginePlugin.swift */,
 				D000000000000000000000A7 /* PathSandbox.swift */,
+				D000000000000000000000AB /* ImportPicker.swift */,
+				D000000000000000000000AC /* CryptoHost.swift */,
+				D000000000000000000000AD /* UdpHost.swift */,
+				D000000000000000000000AE /* TlsHost.swift */,
 				D000000000000000000000A8 /* PooledTask.swift */,
 				D000000000000000000000A9 /* TaskEngine.swift */,
 				D000000000000000000000AA /* TcpHost.swift */,
@@ -247,6 +264,9 @@
 			dependencies = (
 			);
 			name = App;
+			packageProductDependencies = (
+				FFEE0000000000000000A001 /* FFmpegKitFullSPM */,
+			);
 			productName = App;
 			productReference = 504EC3041FED79650016851F /* App.app */;
 			productType = "com.apple.product-type.application";
@@ -295,6 +315,9 @@
 				Base,
 			);
 			mainGroup = 504EC2FB1FED79650016851F;
+			packageReferences = (
+				FFEE0000000000000000C001 /* XCRemoteSwiftPackageReference "ffmpeg-kit-full-spm" */,
+			);
 			productRefGroup = 504EC3051FED79650016851F /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -395,6 +418,7 @@
 				8108CF91E144FF97BA5C7390 /* EnginePoolTests.swift in Sources */,
 				05483FE31349F306D45026C0 /* HostBridgeTests.swift in Sources */,
 				A1B2C3D4E5F600000000FF01 /* HostFunctionsTests.swift in Sources */,
+				A1B2C3D4E5F600000000FF11 /* CryptoHostTests.swift in Sources */,
 				A1B2C3D4E5F600000000FF04 /* HostBridgeMediaTests.swift in Sources */,
 				73F80B325942FD7BAAC99376 /* NotImplementedTests.swift in Sources */,
 				6EB04D6B0DEC313136AB77A5 /* PathSandboxTests.swift in Sources */,
@@ -417,6 +441,10 @@
 				D000000000000000000000B5 /* JsEnginePlugin.m in Sources */,
 				D000000000000000000000B6 /* JsEnginePlugin.swift in Sources */,
 				D000000000000000000000B7 /* PathSandbox.swift in Sources */,
+				D000000000000000000000BB /* ImportPicker.swift in Sources */,
+				D000000000000000000000BC /* CryptoHost.swift in Sources */,
+				D000000000000000000000BD /* UdpHost.swift in Sources */,
+				D000000000000000000000BE /* TlsHost.swift in Sources */,
 				D000000000000000000000B8 /* PooledTask.swift in Sources */,
 				D000000000000000000000B9 /* TaskEngine.swift in Sources */,
 				D000000000000000000000BA /* TcpHost.swift in Sources */,
@@ -596,10 +624,26 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				MARKETING_VERSION = 1.0;
+				"HEADER_SEARCH_PATHS[sdk=iphoneos*]" = (
+					"$(SRCROOT)/vendor/im/device/include",
+					"$(SRCROOT)/vendor/im/device/include/ImageMagick-7",
+				);
+				"HEADER_SEARCH_PATHS[sdk=iphonesimulator*]" = (
+					"$(SRCROOT)/vendor/im/sim/include",
+					"$(SRCROOT)/vendor/im/sim/include/ImageMagick-7",
+				);
+				"LIBRARY_SEARCH_PATHS[sdk=iphoneos*]" = "$(SRCROOT)/vendor/im/device/lib";
+				"LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*]" = "$(SRCROOT)/vendor/im/sim/lib";
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"MAGICKCORE_HDRI_ENABLE=1",
+					"MAGICKCORE_QUANTUM_DEPTH=8",
+				);
+				OTHER_LDFLAGS = "$(inherited) -lMagickWand-7.Q8HDRI -lMagickCore-7.Q8HDRI -ljpeg -lpng16 -lz";
 				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" \"-DDEBUG\"";
 				PRODUCT_BUNDLE_IDENTIFIER = au.com.codecapers.photosphere;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG IMAGEMAGICK_LINKED";
 				SWIFT_OBJC_BRIDGING_HEADER = "App/App-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -617,9 +661,25 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				MARKETING_VERSION = 1.0;
+				"HEADER_SEARCH_PATHS[sdk=iphoneos*]" = (
+					"$(SRCROOT)/vendor/im/device/include",
+					"$(SRCROOT)/vendor/im/device/include/ImageMagick-7",
+				);
+				"HEADER_SEARCH_PATHS[sdk=iphonesimulator*]" = (
+					"$(SRCROOT)/vendor/im/sim/include",
+					"$(SRCROOT)/vendor/im/sim/include/ImageMagick-7",
+				);
+				"LIBRARY_SEARCH_PATHS[sdk=iphoneos*]" = "$(SRCROOT)/vendor/im/device/lib";
+				"LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*]" = "$(SRCROOT)/vendor/im/sim/lib";
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"MAGICKCORE_HDRI_ENABLE=1",
+					"MAGICKCORE_QUANTUM_DEPTH=8",
+				);
+				OTHER_LDFLAGS = "$(inherited) -lMagickWand-7.Q8HDRI -lMagickCore-7.Q8HDRI -ljpeg -lpng16 -lz";
 				PRODUCT_BUNDLE_IDENTIFIER = au.com.codecapers.photosphere;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = IMAGEMAGICK_LINKED;
 				SWIFT_OBJC_BRIDGING_HEADER = "App/App-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -678,6 +738,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		FFEE0000000000000000C001 /* XCRemoteSwiftPackageReference "ffmpeg-kit-full-spm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/wanqing19954/ffmpeg-kit-full-spm";
+			requirement = {
+				kind = revision;
+				revision = f45f47a11de0a83b3813161c40afa7ee7de0cdfc;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		FFEE0000000000000000A001 /* FFmpegKitFullSPM */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FFEE0000000000000000C001 /* XCRemoteSwiftPackageReference "ffmpeg-kit-full-spm" */;
+			productName = FFmpegKitFullSPM;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 504EC2FC1FED79650016851F /* Project object */;
 }

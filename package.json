@@ -48,7 +48,7 @@
     "test:android": "cd ./apps/smoke-tests && PLATFORM=android ./run.sh",
     "test:ios": "cd ./apps/smoke-tests && PLATFORM=ios ./run.sh",
     "test:android:unit": "bun --filter=android-frontend sync && bash ./scripts/android-gradle.sh :app:testDebugUnitTest --rerun-tasks",
-    "test:ios:unit": "bun --filter=ios-frontend sync && cd ./apps/ios-frontend/ios/App && xcodebuild test -workspace App.xcworkspace -scheme App -destination 'platform=iOS Simulator,name=iPhone 15'",
+    "test:ios:unit": "bun --filter=ios-frontend sync && bash ./apps/ios-frontend/ios/run-unit-tests.sh",
     "build:android": "cd ./apps/android-frontend/android && ./gradlew :app:assembleDebug",
     "build:ios": "cd ./apps/ios-frontend/ios/App && xcodebuild -workspace App.xcworkspace -scheme App -destination 'generic/platform=iOS Simulator' build",
     "vendor:imagemagick:ios": "bash ./apps/ios-frontend/ios/build-imagemagick.sh",
