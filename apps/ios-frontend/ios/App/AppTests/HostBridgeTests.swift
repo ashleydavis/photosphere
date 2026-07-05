@@ -115,4 +115,51 @@ final class HostBridgeTests: XCTestCase {
         XCTAssertEqual(context.evaluateScript("host.platform")?.toString(), "ios")
         XCTAssertEqual(context.evaluateScript("host.sessionId")?.toString(), "session-xyz")
     }
+
+    //
+    // queueTask installed in a JSContext must forward the child to the sink tagged with the current
+    // (parent) task id when a task is running on the engine.
+    //
+    func testQueueTaskForwardsTaggedWithParentIdWhenTaskIsCurrent() {
+        var captured: [String] = []
+
+        let bridge = HostBridge(
+            sessionId: "session-1",
+            storageRoot: storageRoot,
+            isCancelledProvider: { _ in false },
+            messageSink: { _, _ in },
+            queueTaskSink: { parentTaskId, childTaskId, type, dataJson, source in
+                captured = [parentTaskId, childTaskId, type, dataJson, source]
+            }
+        )
+        bridge.currentTaskId = "parent-1"
+
+        let context = JSContext()!
+        bridge.install(into: context)
+        context.evaluateScript("host.queueTask('child-1', 'childType', '{}', 'src')")
+
+        XCTAssertEqual(captured, ["parent-1", "child-1", "childType", "{}", "src"])
+    }
+
+    //
+    // queueTask must be a no-op when no task is current, because there is no parent to route the
+    // child's outcome back to.
+    //
+    func testQueueTaskIsIgnoredWithoutACurrentTask() {
+        var called = false
+
+        let bridge = HostBridge(
+            sessionId: "session-1",
+            storageRoot: storageRoot,
+            isCancelledProvider: { _ in false },
+            messageSink: { _, _ in },
+            queueTaskSink: { _, _, _, _, _ in called = true }
+        )
+
+        let context = JSContext()!
+        bridge.install(into: context)
+        context.evaluateScript("host.queueTask('child-1', 'childType', '{}', 'src')")
+
+        XCTAssertFalse(called)
+    }
 }

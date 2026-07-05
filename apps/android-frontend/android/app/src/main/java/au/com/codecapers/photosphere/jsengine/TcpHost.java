@@ -1,14 +1,12 @@
 package au.com.codecapers.photosphere.jsengine;
 
-import android.util.Base64;
-import android.util.Log;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.Arrays;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -119,7 +117,7 @@ public final class TcpHost {
             InputStream input = socket.getInputStream();
             int bytesRead = input.read(buffer);
             while (bytesRead != -1) {
-                String base64 = Base64.encodeToString(buffer, 0, bytesRead, Base64.NO_WRAP);
+                String base64 = HostFunctions.base64Encode(Arrays.copyOf(buffer, bytesRead));
                 enqueue("{\"kind\":\"data\",\"connectionId\":\"" + connectionId + "\",\"base64\":\"" + base64 + "\"}");
                 bytesRead = input.read(buffer);
             }
@@ -143,7 +141,7 @@ public final class TcpHost {
         }
         try {
             OutputStream output = socket.getOutputStream();
-            output.write(Base64.decode(base64, Base64.NO_WRAP));
+            output.write(HostFunctions.base64Decode(base64));
             output.flush();
             return null;
         }
