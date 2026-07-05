@@ -86,7 +86,7 @@ The desktop and CLI builds use ImageMagick and ffmpeg installed on the host syst
 
 ### Pre-reqs
 
-You need [Bun](https://bun.sh/docs/installation) installed to run this code. Tested against Bun v1.3.10 on Ubuntu Linux, Windows 10/11 and MacOS.
+You need [Bun](https://bun.sh/docs/installation) installed to run this code. Tested against Bun v1.3.14 on Ubuntu Linux, Windows 10/11 and MacOS.
 
 ### Setup
 
