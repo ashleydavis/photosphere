@@ -29,12 +29,16 @@ ios_prepare() {
         return 1
     fi
 
+    # The `|| true` on each lookup is required: under `set -euo pipefail` (set by run.sh) a `grep` that
+    # matches nothing exits non-zero, which pipefail propagates and errexit would turn into a silent
+    # abort. On CI no simulator is booted, so the booted lookup finds nothing and must fall through to
+    # the available one rather than killing the run.
     local udid="${IOS_SIMULATOR_UDID:-}"
     if [ -z "$udid" ]; then
-        udid=$(xcrun simctl list devices booted 2>/dev/null | grep -oE "$IOS_UDID_REGEX" | head -1)
+        udid=$(xcrun simctl list devices booted 2>/dev/null | grep -oE "$IOS_UDID_REGEX" | head -1 || true)
     fi
     if [ -z "$udid" ]; then
-        udid=$(xcrun simctl list devices available 2>/dev/null | grep -i 'iPhone' | grep -oE "$IOS_UDID_REGEX" | head -1)
+        udid=$(xcrun simctl list devices available 2>/dev/null | grep -i 'iPhone' | grep -oE "$IOS_UDID_REGEX" | head -1 || true)
     fi
     if [ -z "$udid" ]; then
         log_error "No iOS simulator found. Create one in Xcode (Window > Devices and Simulators)."

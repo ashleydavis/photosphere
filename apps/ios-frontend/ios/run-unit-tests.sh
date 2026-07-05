@@ -8,14 +8,17 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-UDID_REGEX="[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}"
+UDID_REGEX="[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}"
 
+# The `|| true` on each lookup is required: under `set -euo pipefail` a `grep` that matches nothing
+# exits non-zero, which pipefail propagates and errexit would turn into a silent script abort. On CI no
+# simulator is booted, so the booted lookup finds nothing and must fall through to the available one.
 udid="${IOS_SIMULATOR_UDID:-}"
 if [ -z "$udid" ]; then
-    udid=$(xcrun simctl list devices booted 2>/dev/null | grep -oE "$UDID_REGEX" | head -1)
+    udid=$(xcrun simctl list devices booted 2>/dev/null | grep -oE "$UDID_REGEX" | head -1 || true)
 fi
 if [ -z "$udid" ]; then
-    udid=$(xcrun simctl list devices available 2>/dev/null | grep -i 'iPhone' | grep -oE "$UDID_REGEX" | head -1)
+    udid=$(xcrun simctl list devices available 2>/dev/null | grep -i 'iPhone' | grep -oE "$UDID_REGEX" | head -1 || true)
 fi
 if [ -z "$udid" ]; then
     echo "No iOS simulator found. Create an iPhone simulator in Xcode (Window > Devices and Simulators)." >&2
