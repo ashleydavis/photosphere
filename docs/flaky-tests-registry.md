@@ -18,17 +18,18 @@ A repo-wide record of every known intermittent (flaky) failure mode across the t
 
 ### BRIDGE-START-BIND
 
-- [ ] Fixed and verified (10x clean)
+- [x] Fixed and verified (10x clean)
 - Suite: mobile smoke tests (`bun run test:android` / `bun run test:ios`)
 - Pattern: `Control bridge did not start on port \d+ within \d+s`
 - Cascade symptom (same mode, not a new entry): `Timed out waiting for app to be ready after \d+s`
-- Fix commit: none yet
+- Fix commit: apps/smoke-tests/lib/control-bridge.ts, `start()` retries `listen()` on a transient `EADDRINUSE` instead of letting the process die (uncommitted working change; record the commit hash here once committed).
 - First seen: 2026-07-06, local 10x loop, run 10 of 10, test 3 (open-database). Runs 1 to 9 passed.
 - Recurrences:
   - 2026-07-06, skill loop iteration 7 of 100 (`bun run test:android`), failed on run 10 of 10 with `Control bridge did not start on port N within 20s`.
   - 2026-07-07, skill loop iteration 15 of 100 (`bun run test:android`), failed on run 7 of 10 with the same bridge bind failure.
   - 2026-07-07, skill loop iteration 18 of 100 (`bun run test:android`), failed on run 2 of 10 with the same bridge bind failure.
   - 2026-07-07, skill loop iteration 21 of 100 (`bun run test:android`), failed on run 7 of 10 with the same bridge bind failure.
+- Verified: 2026-07-09, 0 recurrences of the bridge bind failure across 40 consecutive runs after the fix; accepted as fixed by the user. Short of the 100-run target because the runner kept aborting early on OPEN-DB-LIST-ITEM-NOT-RENDERED.
 - Root cause: the host control-bridge Bun process fails to bind its assigned port, so the app has nothing to connect to and never becomes ready. Three compounding factors: (a) leaked bridge processes from a previously failed test keep holding ports (a live leaked process, PID 106755, was observed still running after the loop stopped); (b) `find_free_port` binds port 0, closes the probe socket, then prints the port, leaving a reuse window in which another process can take it; (c) `ControlBridge.start()` wires only the `listening` callback and no `error` handler, so a bind collision hangs silently until `wait_for_bridge` times out at 20s instead of failing fast.
 - Evidence: `Control bridge did not start on port 43227 within 20s` then two `Timed out waiting for app to be ready after 60s` attempts, then `1 of 25 tests failed`; `pgrep control-bridge-main` showed leaked PID 106755 still alive.
 

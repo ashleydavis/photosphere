@@ -213,15 +213,40 @@ export class ControlBridge {
     // Starts listening for HTTP commands and WebSocket connections. Resolves once listening.
     //
     start(): Promise<void> {
-        return new Promise<void>((resolve) => {
+        return new Promise<void>((resolve, reject) => {
             //
-            // Bind to loopback only. This is a test-control server driven from the same machine (the
-            // iOS simulator and Android emulator both reach the host loopback interface), so it must
-            // never be exposed on the LAN.
+            // The chosen port is free when the harness picks it, but on a busy machine another
+            // process can transiently grab it during the ~1s window before this server binds,
+            // producing EADDRINUSE. Without an error handler the server emits an unhandled error
+            // and the process dies, so the bridge never comes up. Retry the bind on that transient
+            // collision (the grabbing socket is short-lived) until the port frees, so a random port
+            // race does not fail the whole test run.
             //
-            this.httpServer.listen(this.options.port, "127.0.0.1", () => {
-                resolve();
-            });
+            const retryDelayMs = 100;
+            const maxAttempts = 150;
+            let attempts = 0;
+            const attemptListen = (): void => {
+                const onError = (error: NodeJS.ErrnoException): void => {
+                    if (error.code === "EADDRINUSE" && attempts < maxAttempts) {
+                        attempts += 1;
+                        setTimeout(attemptListen, retryDelayMs);
+                    }
+                    else {
+                        reject(error);
+                    }
+                };
+                this.httpServer.once("error", onError);
+                //
+                // Bind to loopback only. This is a test-control server driven from the same machine (the
+                // iOS simulator and Android emulator both reach the host loopback interface), so it must
+                // never be exposed on the LAN.
+                //
+                this.httpServer.listen(this.options.port, "127.0.0.1", () => {
+                    this.httpServer.removeListener("error", onError);
+                    resolve();
+                });
+            };
+            attemptListen();
         });
     }
 
