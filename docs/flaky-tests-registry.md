@@ -35,11 +35,11 @@ A repo-wide record of every known intermittent (flaky) failure mode across the t
 
 ### OPEN-DB-LIST-ITEM-NOT-RENDERED
 
-- [ ] Fixed and verified (10x clean)
+- [x] Fixed and verified (10x clean)
 - Suite: mobile smoke tests (`bun run test:android` / `bun run test:ios`), seen via `bun run test:android`
 - Pattern: `test-click: element not found data-id="database-list-item-\d+"`
 - Cascade symptom (same mode, not a new entry): `Timed out waiting for log pattern: Database opened`
-- Fix commit: none yet
+- Fix commit: packages/user-interface/src/lib/test-driver.ts, the `click` command now `await`s a new `waitForElement()` (bounded DOM poll) before clicking, so a click waits for an asynchronously rendered target instead of firing once and silently missing (uncommitted working change; record the commit hash here once committed).
 - First seen: 2026-07-06, local 10x loop, run 5 of 10, test 3 (open-database). Runs 1 to 4 passed; within run 5 tests 0 to 2 passed before test 3 failed.
 - Recurrences:
   - 2026-07-06, local 10x loop (`bun run test:android`), recurred on run 5 of 10, test 3 (open-database). Runs 1 to 4 passed; within run 5 tests 0 to 2 passed before the click for `database-list-item-0` found no element and `Database opened` never logged.
@@ -60,5 +60,18 @@ A repo-wide record of every known intermittent (flaky) failure mode across the t
   - 2026-07-07, skill loop iteration 23 of 100 (`bun run test:android`), recurred on run 9 of 10; same missing-list-item click.
   - 2026-07-07, skill loop iteration 25 of 100 (`bun run test:android`), recurred on run 9 of 10; same missing-list-item click.
   - 2026-07-07, skill loop iteration 28 of 100 (`bun run test:android`), recurred on run 4 of 10; same missing-list-item click.
+  - 2026-07-09, single script run (`bun run test:android`), recurred on run 3 of 10, test 3 (open-database); same missing-list-item click.
+- Verified: 2026-07-09, 0 recurrences across 30 consecutive runs (3 full clean 10-run executions) after the fix; no other mode surfaced either.
 - Root cause: race in the open-database test. The bridge starts and the app becomes ready fine (not a BRIDGE-START-BIND failure). The "Open database dialog opened" step succeeds, but the dialog's database list is populated asynchronously and the test dispatches its click for `database-list-item-0` before that list item has rendered. `test-click` finds no matching element and silently does nothing, so no database is opened and the `Database opened` log line is never emitted, so the wait-for-log-pattern step times out. The click step needs to wait for the list item to appear (or retry) instead of firing once.
 - Evidence: `[INFO] Found: Open database dialog opened (line 5)`, then `[INFO] Waiting for log pattern: Database opened (after line 5)`, then `[WARN] test-click: element not found data-id="database-list-item-0" nth=0`, then `[FAIL] Timed out waiting for log pattern: Database opened` and `FAIL  3-open-database`, ending `1 of 25 tests failed`.
+
+### ASSET-SERVER-THUMB-HTTP-000
+
+- [ ] Fixed and verified (10x clean)
+- Suite: mobile smoke tests (`bun run test:android`), test 1 (load-fixture)
+- Pattern: `Asset server returned HTTP 000 for thumbnail [0-9a-f-]+`
+- Fix commit: none yet
+- First seen: 2026-07-09, single script run (`bun run test:android`), failed on run 5 of 10, test 1 (load-fixture). Runs 1 to 4 passed (each served the thumbnail fine).
+- Recurrences: none
+- Root cause: not yet fully investigated; leading hypothesis is a logcat-staleness / asset-server-startup race in the load-fixture test's host-side thumbnail probe. The test reads the asset server port with `adb logcat -d | grep 'Asset server task listening on http://127.0.0.1:<port>' | tail -1`, then curls it. `adb logcat -d` dumps the whole buffer, which accumulates listening lines from every prior run's app instance in the same suite invocation. If the current run's asset server has not yet logged its listening line when the test greps, `tail -1` yields a previous run's now-dead port, and the curl to it fails to connect, which curl reports as HTTP 000 (the app itself is fine: the DB opened and 50 assets loaded). Needs confirmation, and likely a fix that scopes the port read to the current run (clear logcat at test start, or match the current app instance) or waits for the current run's listening line before probing.
+- Evidence: runs 1 to 4 each logged `[PASS] Asset server served a JPEG thumbnail over localhost:<port>`; run 5 logged `[FAIL] Asset server returned HTTP 000 for thumbnail 63e9c637-9164-6376-13e9-ef3200000000` then `FAIL  1-load-fixture`, ending `1 of 25 tests failed`. The snapshotted app.log for that run shows `Load assets task completed: 50 assets loaded` and `Gallery loaded: 50 assets`, so only the host-side asset-server probe failed, not the app.

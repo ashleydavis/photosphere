@@ -4,6 +4,7 @@
 
 import {
     doClick,
+    waitForElement,
     doLongPressClick,
     doType,
     doDrop,
@@ -57,6 +58,41 @@ describe("doClick", () => {
     test("does nothing when the element is missing", () => {
         document.body.innerHTML = ``;
         expect(() => doClick("missing")).not.toThrow();
+    });
+});
+
+describe("waitForElement", () => {
+
+    test("resolves when the element is already present", async () => {
+        document.body.innerHTML = `<button data-id="go">go</button>`;
+        await waitForElement("go", 0, 1000);
+        expect(document.querySelector(`[data-id="go"]`)).not.toBeNull();
+    });
+
+    test("resolves once an element that renders later appears", async () => {
+        document.body.innerHTML = ``;
+        setTimeout(() => {
+            document.body.innerHTML = `<button data-id="late">late</button>`;
+        }, 100);
+        await waitForElement("late", 0, 2000);
+        expect(document.querySelector(`[data-id="late"]`)).not.toBeNull();
+    });
+
+    test("resolves after the timeout when the element never appears", async () => {
+        document.body.innerHTML = ``;
+        await waitForElement("missing", 0, 100);
+        expect(document.querySelector(`[data-id="missing"]`)).toBeNull();
+    });
+
+    test("waits for the nth element when several share a data-id", async () => {
+        document.body.innerHTML = `<div data-id="row">0</div>`;
+        setTimeout(() => {
+            document.body.innerHTML = `
+                <div data-id="row">0</div>
+                <div data-id="row">1</div>`;
+        }, 100);
+        await waitForElement("row", 1, 2000);
+        expect(document.querySelectorAll(`[data-id="row"]`)).toHaveLength(2);
     });
 });
 

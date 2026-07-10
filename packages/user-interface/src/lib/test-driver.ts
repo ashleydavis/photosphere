@@ -170,6 +170,28 @@ export interface ITestTransport {
 }
 
 //
+// Waits up to `timeoutMs` for the element with the given `data-id` (the `nth` one) to exist in the
+// DOM, polling briefly. Test targets that render asynchronously (for example a database list item
+// populated after its dialog opens) may not be present the instant the command arrives; without
+// this a click fires before the element exists, finds nothing, and silently does nothing, which
+// surfaces as a flaky failure. Resolves as soon as the element appears, or after the timeout if it
+// never does; the caller then handles the found/not-found case as usual.
+//
+export async function waitForElement(dataId: string, nth: number, timeoutMs: number): Promise<void> {
+    const intervalMs = 50;
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        const elements = document.querySelectorAll(`[data-id="${dataId}"]`);
+        if (elements[nth]) {
+            return;
+        }
+        await new Promise<void>((resolve) => {
+            setTimeout(resolve, intervalMs);
+        });
+    }
+}
+
+//
 // Clicks the element with the given `data-id`. When several elements share the id, `nth`
 // selects which one (defaults to the first).
 //
@@ -401,6 +423,7 @@ export function installTestDriver(transport: ITestTransport): void {
     transport.onCommand(async (command: string, payload: ITestCommandPayload): Promise<string | undefined> => {
         switch (command) {
             case 'click':
+                await waitForElement(payload.dataId!, payload.nth ?? 0, 5000);
                 doClick(payload.dataId!, payload.nth);
                 return undefined;
             case 'long-press-click':
