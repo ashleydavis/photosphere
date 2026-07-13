@@ -4,7 +4,9 @@ A minimal, Storybook-like browser that mounts every page, modal, dialog, and com
 
 ## Why it exists
 
-The stories browser lets developers view, exercise, and visually compare each UI surface without launching the full application or seeding a real database. A jsdom registry test mounts every registered story to catch render-time crashes on every unit-test run, and the story player (`bun run stories`, see below) cycles the live app through every story on any platform, dwelling at each one and capturing a screenshot.
+The stories browser lets developers view, exercise, and visually compare each UI surface without launching the full application or seeding a real database. The story player (`bun run stories`, see below) cycles the live app through every story on any platform, dwelling at each one, capturing a screenshot, and failing on any story that crashes while rendering.
+
+Playing the stories is the only thing that catches a broken story. There is no unit test that mounts them: the project does not unit-test React components, so a story that throws (say, a dialog whose context provider is missing from the mocks) will not fail `bun run test`. Play the stories after changing a page, component, or the mock provider stack.
 
 Because the same stories render in the web, Electron, Android, and iOS builds, running them on a phone-sized screen is the quickest way to find pages that do not fit on mobile.
 
@@ -58,7 +60,7 @@ Options are passed after `--`, e.g. `bun run stories:android -- --open`:
 | Option | Meaning |
 |---|---|
 | `--platform <electron\|android\|ios>` | Which shell to run on. The `stories:*` scripts set this for you. |
-| `--duration <ms>` | Dwell per story. This is only a fallback: the player advances as soon as it has captured the screenshot. It must outlast one capture, so it defaults to 1000ms on Electron and 4000ms on mobile (adb/simctl capture is slow). |
+| `--duration <ms>` | Dwell per story. This is only a fallback and does not pace a normal run: the player advances as soon as it has captured the screenshot. It must comfortably outlast a single capture, because if it expires mid-capture the app advances underneath the screenshot and the wrong image is saved under that story's name. Defaults to 5000ms on Electron and 30000ms on mobile, where `adb`/`simctl` capture can take seconds. |
 | `--screenshots <dir>` | Where the PNGs go. Defaults to `stories-screenshots/<platform>/`. |
 | `--no-screenshots` | Play the stories without capturing anything (a pure crash check). |
 | `--open` | Open the generated index in a browser when the run finishes. |
@@ -95,4 +97,4 @@ Story `id` values must be globally unique. The convention is `<component-file-na
 
 ## Comprehensive coverage
 
-Every page, modal, dialog, and component shipped from `user-interface` must have at least one story. The `registry.test.ts` test reads the source directory at test time and fails when a new component or page is added without a matching story prefix. The same test mounts every registered story to catch render-time crashes.
+Every page, modal, dialog, and component shipped from `user-interface` must have at least one story. Nothing enforces this automatically today, so add the story when you add the component, and play the stories to confirm it renders.

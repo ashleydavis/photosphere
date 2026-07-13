@@ -514,9 +514,15 @@ function StoriesCycle({ stories: cycleStories, durationMs }: IStoriesCycleProps)
     }
 
     const current = steps[index].story;
+    //
+    // Lay the cycle out as a column so the story fills exactly the space the toolbar leaves. Without
+    // this the story sits in an unconstrained block below the toolbar, so a full-height story (the
+    // map and gallery pages) renders taller than the viewport and its bottom is pushed off screen,
+    // which looks like a layout bug in the page when it is really an artifact of the harness.
+    //
     return (
-        <div className="h-screen w-screen" style={{ background: "var(--joy-palette-background-body)", color: "var(--joy-palette-text-primary)" }}>
-            <div className="p-2 text-xs flex items-center gap-3">
+        <div className="h-screen w-screen flex flex-col" style={{ background: "var(--joy-palette-background-body)", color: "var(--joy-palette-text-primary)" }}>
+            <div className="p-2 text-xs flex items-center gap-3 flex-shrink-0">
                 <button
                     type="button"
                     onClick={() => setSearchParams({})}
@@ -529,7 +535,7 @@ function StoriesCycle({ stories: cycleStories, durationMs }: IStoriesCycleProps)
                 </button>
                 <span style={{ opacity: 0.7 }}>{`${index + 1}/${steps.length} — ${steps[index].theme} — ${current.id}`}</span>
             </div>
-            <div className="p-6">
+            <div className="flex-1 min-h-0 overflow-auto p-2">
                 <StoryErrorBoundary key={index} storyId={current.id}>
                     {current.render()}
                 </StoryErrorBoundary>

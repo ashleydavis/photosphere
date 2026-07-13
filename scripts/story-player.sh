@@ -40,12 +40,14 @@ REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 #
 # The dwell timer is only a fallback: the capture loop advances the cycle as soon as it has taken
-# the screenshot. It has to outlast a single capture, though, or the cycle advances underneath the
-# screenshot and the shots drift one story behind. Electron captures in-process (fast); the mobile
-# platforms shell out to adb/simctl (slow), so they get a longer fallback.
+# the screenshot, so the dwell never paces a normal run. It MUST comfortably outlast a single
+# capture: if it expires first the app advances on its own while the screenshot is still being
+# taken, and the capture lands on a later story, silently writing the wrong image under the story's
+# name. Screenshotting shells out to adb/simctl on mobile and is occasionally slow (seconds), so
+# the fallback there is generous. It only ever costs wall-clock if a capture dies outright.
 #
-DEFAULT_DURATION_ELECTRON_MS=1000
-DEFAULT_DURATION_MOBILE_MS=4000
+DEFAULT_DURATION_ELECTRON_MS=5000
+DEFAULT_DURATION_MOBILE_MS=30000
 
 PLATFORM_NAME="electron"
 DURATION_MS=""
@@ -116,6 +118,17 @@ if [ -z "$DURATION_MS" ]; then
     else
         DURATION_MS="$DEFAULT_DURATION_MOBILE_MS"
     fi
+fi
+
+#
+# Seconds to wait after a story reports READY before grabbing the screen. Only the mobile platforms
+# need it: they capture the device framebuffer from outside the app, so the compositor can still be
+# showing the previous story. See the capture loop for the failure this prevents.
+#
+if [ "$PLATFORM_NAME" = "electron" ]; then
+    CAPTURE_SETTLE_SECS=0
+else
+    CAPTURE_SETTLE_SECS=1
 fi
 
 #
@@ -222,6 +235,19 @@ capture_loop() {
                 continue
             fi
             last_id="$dedup_key"
+
+            #
+            # Let the device repaint before capturing. The app emits READY as soon as React has
+            # rendered the story, but on a device the screen is captured from OUTSIDE the app
+            # (adb/simctl grab the framebuffer), and the compositor can still be showing the
+            # previous story's frame at that moment. Without this wait the capture silently saves
+            # the PREVIOUS story's screen under this story's name, which is worse than no
+            # screenshot because it looks real. Electron screenshots from inside the renderer, so
+            # it needs no wait.
+            #
+            if [ "$CAPTURE_SETTLE_SECS" != "0" ]; then
+                sleep "$CAPTURE_SETTLE_SECS"
+            fi
 
             #
             # Hit 127.0.0.1 directly rather than `localhost`: both harnesses bind loopback IPv4,
