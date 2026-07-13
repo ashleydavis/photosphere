@@ -31,6 +31,7 @@ import { GalleryContextProvider, useGallery } from "../../context/gallery-contex
 import { DeleteConfirmationContextProvider } from "../../context/delete-confirmation-context";
 import { SearchContextProvider } from "../../context/search-context";
 import { GalleryLayoutContextProvider } from "../../context/gallery-layout-context";
+import { SyncContextProvider } from "../../context/sync-context";
 import type { IAsset } from "api";
 
 //
@@ -521,7 +522,9 @@ export function MockProviders({
                                                     <SearchContextProvider>
                                                         <GalleryLayoutContextProvider>
                                                             <DeveloperContextProvider>
-                                                                {children}
+                                                                <SyncContextProvider>
+                                                                    {children}
+                                                                </SyncContextProvider>
                                                             </DeveloperContextProvider>
                                                         </GalleryLayoutContextProvider>
                                                     </SearchContextProvider>
@@ -678,7 +681,9 @@ export function RealDatabaseProviders({ children }: IRealDatabaseProvidersProps)
                                                     <GalleryLayoutContextProvider>
                                                         <OpenTestDatabase>
                                                             <DeveloperContextProvider>
-                                                                {children}
+                                                                <SyncContextProvider>
+                                                                    {children}
+                                                                </SyncContextProvider>
                                                             </DeveloperContextProvider>
                                                         </OpenTestDatabase>
                                                     </GalleryLayoutContextProvider>
