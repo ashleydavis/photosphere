@@ -1221,6 +1221,172 @@ jobs:
       - name: Run iOS smoke tests
         run: bun run test:ios
 
+  # The three story-player jobs below play every UI story on each shell and publish the screenshots
+  # (light and dark, plus a generated index.html pairing them) as an artifact, so every release run
+  # has a browsable record of how each page, modal, dialog, and component actually looked. Download
+  # the artifact and open index.html.
+  #
+  # A story that crashes while rendering fails its job, so a broken UI surface is visible in the
+  # run, but these jobs are deliberately NOT in the release gate: they are a visual record, not a
+  # release blocker. The screenshots upload even when a story crashes (if: always()), because the
+  # screenshots are how you see what broke.
+  stories-electron:
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb imagemagick ffmpeg
+
+      # --headless runs the Electron window under xvfb; the player shows the window by default.
+      - name: Play the stories
+        run: bun run stories -- --headless
+
+      - name: Upload story screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stories-electron
+          path: ./stories-screenshots/electron
+
+  stories-android:
+    timeout-minutes: 45
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install
+
+      # AGP 8 requires JDK 17 (the Android build fails on the JDK 21 the runner defaults to).
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install media processing tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y imagemagick ffmpeg
+
+      # The native ImageMagick build (run_magick shim via CMake) and scripts/fetch-mobile-media-tools.sh
+      # both require this exact NDK, which the android build pulls in via bun run sync.
+      - name: Install Android NDK
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;25.1.8937393" > /dev/null
+
+      # Allow the hardware-accelerated emulator to use KVM on the runner.
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      # The emulator-runner boots an AVD, then the player detects the booted device and
+      # builds/installs the app via Gradle/adb before playing the stories on it.
+      - name: Play the stories
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 33
+          arch: x86_64
+          target: google_apis
+          script: bun run stories:android
+
+      - name: Upload story screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stories-android
+          path: ./stories-screenshots/android
+
+  stories-ios:
+    # Higher than the other story jobs because the iOS build compiles ImageMagick from source
+    # (vendor/im) and resolves the FFmpegKit Swift Package on a clean checkout.
+    timeout-minutes: 90
+    runs-on: macos-14
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Install media processing tools
+        run: brew install imagemagick ffmpeg
+
+      # The player boots an iOS simulator and builds/installs the app via xcrun/xcodebuild.
+      - name: Play the stories
+        run: bun run stories:ios
+
+      - name: Upload story screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stories-ios
+          path: ./stories-screenshots/ios
+
   build-desktop:
     timeout-minutes: 60
     needs: prepare-tag
