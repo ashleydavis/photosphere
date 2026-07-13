@@ -4,17 +4,12 @@ Manual and automated test documentation for Photosphere.
 
 ## Running tests
 
-Run all CLI smoke tests (from repo root):
+All commands are run from the repo root.
+
+Run everything (unit tests plus all smoke tests):
 
 ```bash
-bun run test:cli
-```
-
-Run a single CLI smoke test by number or name:
-
-```bash
-bun run test:cli -- 43
-bun run test:cli -- replicate-partial
+bun run test:all
 ```
 
 Run all unit tests:
@@ -29,6 +24,43 @@ Run a single unit test by name or pattern:
 bun run test -- <test-name-or-pattern>
 ```
 
+Run unit tests in watch mode:
+
+```bash
+bun run test:watch
+```
+
+Run the Electron smoke tests. This builds the Electron app and runs the smoke tests against it:
+
+```bash
+bun run test:electron
+```
+
+Run all CLI smoke tests:
+
+```bash
+bun run test:cli
+```
+
+Run a single CLI smoke test by number or name:
+
+```bash
+bun run test:cli -- 43
+bun run test:cli -- replicate-partial
+```
+
+Run the encrypted CLI smoke tests:
+
+```bash
+bun run test:cli:encrypted
+```
+
+Run every test across the monorepo via the shell script, which prints a summary of results. It does not run the tests in parallel, which makes it easier to see where a failure originates:
+
+```bash
+./run-tests.sh
+```
+
 Run performance benchmarks:
 
 ```bash
@@ -40,6 +72,28 @@ Capture desktop app screenshots headlessly (for UX review / docs):
 ```bash
 bun run screenshots
 ```
+
+## UI stories
+
+The stories browser mounts every page, modal, dialog, and component in isolation with mock data, so each UI surface can be checked without seeding a real database. It is the main tool for reviewing how the UI looks, including how it fits on a small screen.
+
+The story player cycles the live app through every story (in light and then dark), captures a screenshot of each, and fails if any story crashes while rendering:
+
+```bash
+bun run stories            # Electron desktop
+bun run stories:android    # Android emulator or attached device
+bun run stories:ios        # iOS simulator
+```
+
+The web build has no scripted runner: start it with `bun run dev:web`, open `http://localhost:3000/#/stories`, and click **▶ Play on automatic** to cycle the stories by hand.
+
+Screenshots go to `stories-screenshots/<platform>/`, with an `index.html` showing each story's light and dark shots side by side. Add `-- --open` to open it when the run finishes.
+
+Running the stories on Android or iOS renders every page at phone resolution, which is the quickest way to catch a page that does not fit on mobile (content pushed off-screen, buttons out of reach, text clipped).
+
+These runs are long, so they are excluded from `bun run test:all`.
+
+See [the stories README](../../packages/user-interface/src/stories/README.md) for the full reference: entry points on each platform, all runner options, how the cycle works, and how to add a new story.
 
 ## Manual testing
 
@@ -98,3 +152,4 @@ With an isolated config dir you start with no databases registered, so create or
 
 - [e2e/](e2e/) - End-to-end manual test scripts covering full user workflows
 - [screenshots.md](screenshots.md) - Capturing desktop app screenshots via the test control server
+- [stories README](../../packages/user-interface/src/stories/README.md) - The stories browser and the cross-platform story player

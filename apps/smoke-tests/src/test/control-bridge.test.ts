@@ -106,6 +106,16 @@ describe("control bridge", () => {
         expect(received[0].payload).toEqual({ page: "/cloud" });
     });
 
+    test("forwards a cycle-advance command", async () => {
+        await fetch(`${baseUrl}/cycle-advance`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({}),
+        });
+        expect(received[0].command).toBe("cycle-advance");
+        expect(received[0].payload).toEqual({});
+    });
+
     test("returns the value from a get-value reply", async () => {
         nextReply = { ok: true, value: "hello world" };
         const response = await fetch(`${baseUrl}/get-value?dataId=field`);

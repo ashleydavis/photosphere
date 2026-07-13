@@ -450,6 +450,14 @@ export class ControlBridge {
             void this.forward("reset-config", {}, res);
         });
 
+        //
+        // Advances the stories cycle to the next story. Mirrors the Electron test-control-server's
+        // /cycle-advance route so the shared stories runner drives every platform identically.
+        //
+        this.expressApp.post("/cycle-advance", (_req: Request, res: Response) => {
+            void this.forward("cycle-advance", {}, res);
+        });
+
         this.expressApp.post("/screenshot", (req: Request, res: Response) => {
             void this.handleScreenshot(req.body.outputPath, res);
         });

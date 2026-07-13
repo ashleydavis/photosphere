@@ -40,7 +40,7 @@ The same variable works for the smoke tests:
 ```
 PHOTOSPHERE_THEME=dark bun run test:electron
 PHOTOSPHERE_THEME=light bun run test:android
-PHOTOSPHERE_THEME=dark bun run test:stories
+PHOTOSPHERE_THEME=dark bun run stories
 ```
 
-The stories screenshot smoke test (`bun run test:stories`) rebuilds once per theme and captures every story in both light and dark; see `packages/user-interface/src/stories/README.md`.
+The story player (`bun run stories`) switches theme at runtime and captures every story in both light and dark, so it needs no theme override; see `packages/user-interface/src/stories/README.md`.

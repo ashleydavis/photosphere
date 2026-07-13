@@ -4,14 +4,18 @@ A minimal, Storybook-like browser that mounts every page, modal, dialog, and com
 
 ## Why it exists
 
-The stories browser lets developers view, exercise, and visually compare each UI surface without launching the full application or seeding a real database. A jsdom registry test mounts every registered story to catch render-time crashes on every unit-test run, and a separate Electron-based shell smoke test cycles the live app through every story dwelling at each one.
+The stories browser lets developers view, exercise, and visually compare each UI surface without launching the full application or seeding a real database. A jsdom registry test mounts every registered story to catch render-time crashes on every unit-test run, and the story player (`bun run stories`, see below) cycles the live app through every story on any platform, dwelling at each one and capturing a screenshot.
+
+Because the same stories render in the web, Electron, Android, and iOS builds, running them on a phone-sized screen is the quickest way to find pages that do not fit on mobile.
 
 ## Entry points
 
-The browser is deliberately not exposed to end users. There are exactly two ways in:
+The browser is deliberately not exposed to end users. The ways in:
 
 - **Web (dev-frontend):** type `#/stories` directly into the address bar. Default dev URL: `http://localhost:3000/#/stories`. To open a specific story, append `?id=<story-id>` after the hash route, e.g. `http://localhost:3000/#/stories?id=spinner/visible`.
 - **Electron desktop app:** open the **Developer** menu and click **Stories**. The Developer menu already groups developer-facing actions (Reload / Force Reload / Toggle Developer Tools); ordinary users rarely open it. There is no keyboard shortcut, no sidebar link, and no toolbar button.
+- **Android / iOS app:** open the hidden **Developer** screen and tap **Stories**. There is no other in-app affordance.
+- **Any platform, automated:** the story player drives the live app through the whole registry from the command line. See [Running the stories](#running-the-stories).
 
 A **Back to app** link in the sidebar navigates back to `/`.
 
@@ -25,15 +29,55 @@ The browser has a **light/dark toggle button** (top-right, left of the dev-tools
 
 The initial color mode is controlled by the `PHOTOSPHERE_THEME` build-time env var (`light`, `dark`, or `system`), the same mechanism used app-wide (see `docs/theme-override.md`). When set, it is applied on startup over the saved theme and is never written to the config file; when unset the stories page uses the system theme. There is no theme query param.
 
-## Light and dark screenshots
+## Running the stories
 
-The screenshot smoke test captures every story in both themes by rebuilding the frontend once per theme (with `PHOTOSPHERE_THEME` set) and cycling each:
+### Web
 
-- `bun run test:stories -- --screenshots <dir>` runs two passes (light then dark) and writes them to `<dir>/light/...` and `<dir>/dark/...`. Screenshots are on by default, so `bun run test:stories` alone also captures both into `apps/desktop/stories-screenshots/`.
-- `bun run test:stories -- --theme light` (or `--theme dark`) captures a single theme.
-- `--duration <ms>` sets the dwell per story; `--open` opens the generated index when done.
+The web build has no scripted player (a plain browser has no test-mode harness for the player to drive), so run it by hand. Start the dev server and web frontend:
 
-When both themes are captured, an `index.html` is generated at the root of the screenshots directory showing each story's light and dark shots **side by side**, with a search box that filters by story id. Open it in a browser to review every story in both themes at once.
+```bash
+bun run dev:web
+```
+
+Then open `http://localhost:3000/#/stories` and either browse the stories from the ☰ menu, or click **▶ Play on automatic** to cycle every story. To start the cycle straight from the address bar, open `http://localhost:3000/#/stories?cycle=1`.
+
+### Electron, Android, and iOS
+
+`scripts/story-player.sh` is the story player. It builds the app, launches it in test mode, navigates it to `#/stories?cycle=1`, walks every story in light and then dark, captures a screenshot of each, and fails the run if any story crashes while rendering:
+
+```bash
+bun run stories            # Electron desktop (default)
+bun run stories:android    # Android emulator or attached device
+bun run stories:ios        # iOS simulator
+```
+
+On Android the player boots an emulator if no device is attached, builds and installs the APK, and needs a JDK 17 (`ANDROID_HOME` is auto-detected). On iOS it needs the simulator and Xcode.
+
+Options are passed after `--`, e.g. `bun run stories:android -- --open`:
+
+| Option | Meaning |
+|---|---|
+| `--platform <electron\|android\|ios>` | Which shell to run on. The `stories:*` scripts set this for you. |
+| `--duration <ms>` | Dwell per story. This is only a fallback: the player advances as soon as it has captured the screenshot. It must outlast one capture, so it defaults to 1000ms on Electron and 4000ms on mobile (adb/simctl capture is slow). |
+| `--screenshots <dir>` | Where the PNGs go. Defaults to `stories-screenshots/<platform>/`. |
+| `--no-screenshots` | Play the stories without capturing anything (a pure crash check). |
+| `--open` | Open the generated index in a browser when the run finishes. |
+| `--headless` | Electron only: hide the window and run under `xvfb` (for CI). |
+
+The app is **visible by default** so you can watch the stories cycle: the Electron window opens, and the Android emulator / iOS simulator is on screen anyway. Pass `--headless` when you do not want the Electron window (the smoke tests, by contrast, are headless by default).
+
+Screenshots land in `<dir>/<theme>/<category>/<story-id>.png`, and an `index.html` is generated at the root of the screenshots directory showing each story's light and dark shots **side by side**, with a search box that filters by story id. Open it to review every story in both themes at once. Output directories are gitignored.
+
+Because Android and iOS run at phone resolution, `bun run stories:android` is the fastest way to catch a page that overflows a small screen (content pushed off-screen, buttons out of reach, text clipped).
+
+### How it works on each platform
+
+The three shells differ only in how the app is built, launched, and screenshotted. Each already has a test harness exposing the same HTTP command surface (`/ready`, `/navigate`, `/screenshot`, `/cycle-advance`, `/quit`), so the player drives them identically:
+
+- **Electron** uses the in-app test control server (`apps/desktop/src/lib/test-control-server.ts`) and the desktop smoke-test helpers (`apps/desktop/smoke-tests/lib/common.sh`). Screenshots come from Electron itself. On Linux it runs headless under `xvfb-run` unless `SHOW_UI=1`.
+- **Android / iOS** have no in-process server, so they use the host control bridge (`apps/smoke-tests/lib/control-bridge.ts`) and the mobile helpers (`apps/smoke-tests/lib/common.sh`). The bridge relays commands to the app over a WebSocket and captures the screen host-side with `adb exec-out screencap` (Android) or `xcrun simctl io screenshot` (iOS). The player boots the emulator/simulator, builds, and installs the app first.
+
+The cycle itself lives in `stories-page.tsx` (`StoriesCycle`): it renders each story, emits `STORIES CYCLE READY: <theme>|<category>|<id>` once the story has settled, and advances when the player posts `/cycle-advance` (or when the dwell timer expires). It ends with `STORIES CYCLE COMPLETE: N passed, M failed`, which is what the player reports.
 
 ## Outside the provider stack
 

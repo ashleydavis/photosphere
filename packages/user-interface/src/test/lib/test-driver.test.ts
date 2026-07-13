@@ -259,6 +259,21 @@ describe("installTestDriver", () => {
         }
     });
 
+    test("routes a cycle-advance command to the cycle-advance window event", async () => {
+        const { transport, invoke } = makeTransport();
+        installTestDriver(transport);
+        let received = 0;
+        const listener = () => { received += 1; };
+        window.addEventListener("cycle-advance", listener);
+        try {
+            await invoke("cycle-advance", {});
+        }
+        finally {
+            window.removeEventListener("cycle-advance", listener);
+        }
+        expect(received).toBe(1);
+    });
+
     test("rejects an unknown command", async () => {
         const { transport, invoke } = makeTransport();
         installTestDriver(transport);

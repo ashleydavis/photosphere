@@ -43,7 +43,10 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 - `bun run test:cli` - Run CLI smoke tests
 - `bun run test:cli -- <number|name>` - Run a single CLI smoke test by number or name
 - `bun run test:electron` - Build and run Electron smoke tests
-- `bun run test:stories` - Run the long-running Electron cycle-stories smoke test (excluded from `test:all`)
+- `bun run stories` - Cycle the Electron app through every UI story, capturing screenshots (long-running, excluded from `test:all`)
+- `bun run stories:android` - Same stories cycle on the Android emulator/device. Renders every page at phone resolution, so this is how to check pages fit on mobile
+- `bun run stories:ios` - Same stories cycle on the iOS simulator
+- Story player options (pass after `--`): `--duration <ms>`, `--screenshots <dir>`, `--no-screenshots`, `--open`. Screenshots go to `stories-screenshots/<platform>/` with an `index.html` pairing light and dark. See `packages/user-interface/src/stories/README.md`
 - `bun run start -- <command> [db-path]` - Run CLI commands locally (from `apps/cli`)
 - `bun run perf` - Run performance benchmarks for all packages
 
@@ -56,6 +59,9 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 
 ## Guides
 
+- [Development](docs/development.md) - The day-to-day dev loop and an index of the other guides
+- [UI stories](packages/user-interface/src/stories/README.md) - The stories browser (every page/modal/dialog/component in isolation) and the cross-platform story player. Run the stories on Android/iOS to check pages fit on a phone screen
+- [Testing](docs/testing/README.md) - How to run the automated tests, the manual e2e scripts, and the UI stories
 - [Background tasks](docs/background-tasks.md) - How to add a new background task type (worker handler, registration, frontend consumption)
 - [Mobile native media tools](docs/mobile-native-media.md) - How the bundled mobile ImageMagick/ffmpeg are wired and activated (iOS/Android)
 - [Updating mobile ImageMagick/ffmpeg](docs/updating-mobile-imagemagick-ffmpeg.md) - How to update the bundled versions (see also `scripts/update-mobile-media-tools.sh`)

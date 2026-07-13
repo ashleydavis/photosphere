@@ -414,6 +414,19 @@ export function doResetConfig(): void {
 }
 
 //
+// Advances the stories cycle to the next story by dispatching the "cycle-advance" event the
+// stories page listens for. The Electron shell dispatches that event straight into the renderer;
+// on mobile it arrives here as a test command, so the stories runner drives every platform the
+// same way. The stories runner calls this once it has captured a screenshot of the current story,
+// so the cycle proceeds as fast as capture allows instead of waiting out the dwell timer. A no-op
+// when the stories cycle is not mounted.
+//
+export function doCycleAdvance(): void {
+    console.log(`test-cycle-advance: advancing the stories cycle`);
+    window.dispatchEvent(new Event("cycle-advance"));
+}
+
+//
 // Installs the shared DOM test driver onto the given transport. Each command received over
 // the transport is dispatched to the matching DOM action; get-value returns the element's
 // value, the rest resolve undefined. Unknown commands reject with a clear message so a
@@ -463,6 +476,9 @@ export function installTestDriver(transport: ITestTransport): void {
                 return undefined;
             case 'reset-config':
                 doResetConfig();
+                return undefined;
+            case 'cycle-advance':
+                doCycleAdvance();
                 return undefined;
             case 'lan-share-roundtrip':
                 return await runLanShareRoundtrip();
