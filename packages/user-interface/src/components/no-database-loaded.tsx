@@ -51,7 +51,9 @@ export function NoDatabaseLoaded() {
                     <Typography level="body-md" sx={{ mb: 4, maxWidth: 400, mx: 'auto' }}>
                         Create a new database or open an existing one.
                     </Typography>
-                    <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
+                    {/* The three buttons do not fit one row at phone width, where they would be
+                        clipped by both screen edges, so they wrap instead. */}
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, justifyContent: 'center' }}>
                         <Button
                             variant="soft"
                             color="neutral"

@@ -258,12 +258,11 @@ export function SecretsPage() {
 
     return (
         <Box sx={{ p: 3 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 2 }}>
                 <Typography level="h3">Manage Secrets</Typography>
                 <Box sx={{ flexGrow: 1 }} />
                 <IconButton
                     variant="outlined"
-                    sx={{ mr: 1 }}
                     disabled={refreshing}
                     title="Refresh"
                     onClick={() => handleRefresh().catch(err => log.exception('Failed to refresh secrets:', err as Error))}
@@ -281,7 +280,6 @@ export function SecretsPage() {
                 <Button
                     data-id="add-secret-button"
                     startDecorator={<Add />}
-                    sx={{ mr: 1 }}
                     onClick={openAddDialog}
                 >
                     Add secret

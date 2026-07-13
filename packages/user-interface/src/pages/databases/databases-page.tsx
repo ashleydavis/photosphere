@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { usePlatform, type IDatabaseEntry } from '../../context/platform-context';
 import { useApp } from '../../context/app-context';
 import { useAssetDatabase } from '../../context/asset-database-source';
+import { useIsMobile } from '../../lib/use-is-mobile';
 import { CreateDatabaseModal } from '../../components/create-database-modal';
 import { AddDatabaseModal } from '../../components/add-database-modal';
 import { EditDatabaseModal } from '../../components/edit-database-modal';
@@ -27,6 +28,11 @@ export function DatabasesPage() {
     const { dbs: databases, secrets, refresh } = useApp();
     const { openDatabase } = useAssetDatabase();
     const navigate = useNavigate();
+
+    // On a phone-width screen there is no room for the secondary columns (description, path,
+    // origin), so the table shows just the name and the actions. The full detail is still one tap
+    // away in the view-database dialog.
+    const isMobile = useIsMobile();
 
     // Shared secrets grouped by type, derived from the context's combined list.
     const s3Secrets = secrets.filter(secret => secret.type === 's3-credentials');
@@ -114,12 +120,11 @@ export function DatabasesPage() {
 
     return (
         <Box sx={{ p: 3 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 2 }}>
                 <Typography level="h3">Manage Databases</Typography>
                 <Box sx={{ flexGrow: 1 }} />
                 <IconButton
                     variant="outlined"
-                    sx={{ mr: 1 }}
                     disabled={refreshing}
                     title="Refresh"
                     onClick={() => handleRefresh().catch(err => log.exception('Failed to refresh data:', err as Error))}
@@ -136,7 +141,6 @@ export function DatabasesPage() {
                 </IconButton>
                 <Button
                     startDecorator={<Add />}
-                    sx={{ mr: 1 }}
                     onClick={() => setCreateModalOpen(true)}
                 >
                     New database
@@ -144,7 +148,6 @@ export function DatabasesPage() {
                 <Button
                     data-id="add-database-button"
                     variant="outlined"
-                    sx={{ mr: 1 }}
                     onClick={() => setAddModalOpen(true)}
                 >
                     Add database
@@ -162,16 +165,16 @@ export function DatabasesPage() {
                 <thead>
                     <tr>
                         <th>Name</th>
-                        <th>Description</th>
-                        <th>Path</th>
-                        <th>Origin</th>
+                        {!isMobile && <th>Description</th>}
+                        {!isMobile && <th>Path</th>}
+                        {!isMobile && <th>Origin</th>}
                         <th style={{ width: '170px', whiteSpace: 'nowrap' }}>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     {databases.length === 0 && (
                         <tr>
-                            <td colSpan={5}>
+                            <td colSpan={isMobile ? 2 : 5}>
                                 <p className="pt-2 text-gray-500">No databases yet. Click New database to create one, Add database to register an existing one, or Receive database to import one from another device.</p>
                             </td>
                         </tr>
@@ -179,9 +182,9 @@ export function DatabasesPage() {
                     {databases.map(entry => (
                         <tr key={entry.name}>
                             <td data-id={`database-row-name-${entry.name}`}>{entry.name}</td>
-                            <td>{entry.description}</td>
-                            <td>{entry.path}</td>
-                            <td>{entry.origin ?? ''}</td>
+                            {!isMobile && <td>{entry.description}</td>}
+                            {!isMobile && <td>{entry.path}</td>}
+                            {!isMobile && <td>{entry.origin ?? ''}</td>}
                             <td style={{ whiteSpace: 'nowrap' }}>
                                 <IconButton
                                     data-id="view-database-button"

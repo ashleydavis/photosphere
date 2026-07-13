@@ -132,7 +132,9 @@ export function OpenDatabaseModal({ open, onClose }: IOpenDatabaseModalProps) {
                             )
                         }
                     </DialogContent>
-                    <DialogActions>
+                    {/* The four actions do not fit one row at phone width, so they wrap instead of
+                        squeezing until their labels break mid-button. */}
+                    <DialogActions sx={{ flexWrap: 'wrap' }}>
                         <Button variant="plain" onClick={onClose}>Cancel</Button>
                         <IconButton
                             variant="outlined"
@@ -152,12 +154,14 @@ export function OpenDatabaseModal({ open, onClose }: IOpenDatabaseModalProps) {
                         </IconButton>
                         <Button
                             variant="outlined"
+                            sx={{ whiteSpace: 'nowrap' }}
                             onClick={() => setAddModalOpen(true)}
                         >
                             Add database
                         </Button>
                         <Button
                             variant="outlined"
+                            sx={{ whiteSpace: 'nowrap' }}
                             onClick={handleManageDatabases}
                         >
                             Manage databases

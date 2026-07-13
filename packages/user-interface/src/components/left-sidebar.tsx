@@ -131,8 +131,15 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
     }, [platform]);
 
     return (
+        //
+        // Fills its container (the drawer) rather than forcing a full viewport height, and scrolls
+        // when the content is taller than that. With a fixed 100vh height the sidebar overflows any
+        // container shorter than the viewport, and with no scrolling the items pinned to its bottom
+        // (About, Manage Databases, Manage Secrets) fall off the bottom edge and cannot be reached
+        // once enough recent databases are listed.
+        //
         <div
-            className="flex flex-col h-screen"
+            className="flex flex-col h-full overflow-y-auto"
             style={{
                 color: theme.palette.text.primary,
             }}
