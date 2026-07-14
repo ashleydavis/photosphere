@@ -18,9 +18,12 @@ import FormControl from '@mui/joy/FormControl';
 import FormLabel from '@mui/joy/FormLabel';
 import Select from '@mui/joy/Select';
 import Option from '@mui/joy/Option';
-import { Edit, Delete, Add, Refresh, IosShare, Visibility } from '@mui/icons-material';
+import { Edit, Delete, Add, Refresh, IosShare, Visibility, Download, Key } from '@mui/icons-material';
 import { usePlatform, type ISharedSecretEntry, type IDatabaseEntry } from '../../context/platform-context';
 import { useApp } from '../../context/app-context';
+import { useIsMobile } from '../../lib/use-is-mobile';
+import { MobilePageHeader } from '../../components/mobile-page-header';
+import { EntityCard, type IEntityCardAction } from '../../components/entity-card';
 import { ShareSecretDialog } from '../../components/share-secret-dialog';
 import { ReceiveSecretDialog } from '../../components/receive-secret-dialog';
 import { ViewSecretDialog } from '../../components/view-secret-dialog';
@@ -38,6 +41,9 @@ const SECRET_TYPES = ['s3-credentials', 'encryption-key', 'api-key'] as const;
 export function SecretsPage() {
     const platform = usePlatform();
     const { secrets, dbs, refresh, addSecret, updateSecret, deleteSecret } = useApp();
+
+    // On a phone the secrets are shown as cards rather than as a table.
+    const isMobile = useIsMobile();
 
     // Whether the add/edit dialog is open.
     const [dialogOpen, setDialogOpen] = useState(false);
@@ -256,44 +262,94 @@ export function SecretsPage() {
         );
     }
 
-    return (
-        <Box sx={{ p: 3 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 2 }}>
-                <Typography level="h3">Manage Secrets</Typography>
-                <Box sx={{ flexGrow: 1 }} />
-                <IconButton
-                    variant="outlined"
-                    disabled={refreshing}
-                    title="Refresh"
-                    onClick={() => handleRefresh().catch(err => log.exception('Failed to refresh secrets:', err as Error))}
-                >
-                    <Refresh
-                        sx={refreshing ? {
-                            animation: 'spin 0.8s linear infinite',
-                            '@keyframes spin': {
-                                from: { transform: 'rotate(0deg)' },
-                                to: { transform: 'rotate(360deg)' },
-                            },
-                        } : undefined}
-                    />
-                </IconButton>
-                <Button
-                    data-id="add-secret-button"
-                    startDecorator={<Add />}
-                    onClick={openAddDialog}
-                >
-                    Add secret
-                </Button>
-                <Button
-                    data-id="receive-secret-button"
-                    variant="outlined"
-                    onClick={() => setReceiveDialogOpen(true)}
-                >
-                    Receive secret
-                </Button>
-            </Box>
+    //
+    // The actions offered for a single secret, in the order they appear in a card's ⋮ menu. Viewing
+    // is the card's tap action, so it is not repeated in the menu on mobile.
+    //
+    function secretActions(secret: ISharedSecretEntry): IEntityCardAction[] {
+        return [
+            {
+                label: 'Share',
+                icon: <IosShare fontSize="small" />,
+                dataId: 'share-secret-button',
+                onClick: () => setSharingSecret(secret),
+            },
+            {
+                label: 'Edit',
+                icon: <Edit fontSize="small" />,
+                dataId: 'edit-secret-button',
+                onClick: () => openEditDialog(secret).catch(err => log.exception('Failed to open edit dialog:', err as Error)),
+            },
+            {
+                label: 'Delete',
+                icon: <Delete fontSize="small" />,
+                danger: true,
+                onClick: () => promptDelete(secret),
+            },
+        ];
+    }
 
-            <Table>
+    return (
+        <Box sx={{ p: isMobile ? 2 : 3 }}>
+            <MobilePageHeader
+                title="Manage Secrets"
+                subtitle={secrets.length === 1 ? '1 secret' : `${secrets.length} secrets`}
+                refreshing={refreshing}
+                onRefresh={() => handleRefresh().catch(err => log.exception('Failed to refresh secrets:', err as Error))}
+                primaryAction={{
+                    label: 'Add secret',
+                    icon: <Add />,
+                    dataId: 'add-secret-button',
+                    onClick: openAddDialog,
+                }}
+                secondaryActions={[
+                    {
+                        label: 'Receive secret',
+                        icon: <Download fontSize="small" />,
+                        dataId: 'receive-secret-button',
+                        onClick: () => setReceiveDialogOpen(true),
+                    },
+                ]}
+                />
+
+            {secrets.length === 0
+                && <Box
+                    sx={{
+                        textAlign: 'center',
+                        py: 6,
+                        px: 2,
+                        borderRadius: 'lg',
+                        backgroundColor: 'background.level1',
+                    }}
+                    >
+                    <Key sx={{ fontSize: 48, color: 'text.tertiary', mb: 1 }} />
+                    <Typography level="title-md" sx={{ mb: 0.5 }}>No secrets yet</Typography>
+                    <Typography level="body-sm" sx={{ color: 'text.tertiary' }}>
+                        Add a secret, or receive one from another device.
+                    </Typography>
+                </Box>
+            }
+
+            {/* Cards on a phone (name across the full width, actions in the ⋮ menu), the table on a
+                wide screen where the columns are worth having. */}
+            {secrets.length > 0 && isMobile
+                && <Box>
+                    {secrets.map(secret => (
+                        <EntityCard
+                            key={secret.name}
+                            title={secret.name}
+                            titleDataId={`secret-row-name-${secret.name}`}
+                            subtitle={secret.type}
+                            icon={<Key />}
+                            onClick={() => { log.info('View secret dialog opened'); setViewingSecret(secret); }}
+                            actions={secretActions(secret)}
+                            />
+                    ))}
+                </Box>
+            }
+
+            {secrets.length > 0 && !isMobile
+                && <Table>
                 <thead>
                     <tr>
                         <th>Name</th>
@@ -302,13 +358,6 @@ export function SecretsPage() {
                     </tr>
                 </thead>
                 <tbody>
-                    {secrets.length === 0 && (
-                        <tr>
-                            <td colSpan={3}>
-                               <p className="pt-2 text-gray-500">No secrets yet. Click Add secret to create one, or Receive secret to import one from another device.</p>
-                            </td>
-                        </tr>
-                    )}
                     {secrets.map(secret => (
                         <tr key={secret.name}>
                             <td data-id={`secret-row-name-${secret.name}`}>{secret.name}</td>
@@ -354,7 +403,8 @@ export function SecretsPage() {
                         </tr>
                     ))}
                 </tbody>
-            </Table>
+                </Table>
+            }
 
             {/* Add / Edit dialog */}
             <Modal open={dialogOpen} onClose={() => setDialogOpen(false)}>

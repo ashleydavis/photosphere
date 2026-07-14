@@ -32,6 +32,7 @@ import { DeleteConfirmationContextProvider } from "../../context/delete-confirma
 import { SearchContextProvider } from "../../context/search-context";
 import { GalleryLayoutContextProvider } from "../../context/gallery-layout-context";
 import { SyncContextProvider } from "../../context/sync-context";
+import { useAssetServer } from "../../lib/use-asset-server";
 import type { IAsset } from "api";
 
 //
@@ -561,16 +562,6 @@ const testDatabaseCandidates = [
 const probeAssetId = "63e9c637-9164-6376-13e9-ef3200000000";
 
 //
-// Resolves the REST API base url for stories. The Electron shell passes
-// restApiUrl as a query parameter (same as the real app); the dev web
-// frontend talks to the fixed dev-server url.
-//
-function storyRestApiUrl(): string {
-    const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get("restApiUrl") || "http://localhost:3001";
-}
-
-//
 // Props for OpenTestDatabase.
 //
 interface IOpenTestDatabaseProps {
@@ -590,6 +581,14 @@ function OpenTestDatabase({ children }: IOpenTestDatabaseProps) {
     const { openDatabase } = useAssetDatabase();
     const [probeFailed, setProbeFailed] = useState<boolean>(false);
 
+    // The url of the asset server, reported by the asset-server task once it has bound its port.
+    const restApiUrl = useAssetServer();
+
+    //
+    // Re-runs whenever the asset server reports a new url. The hook returns a placeholder url until
+    // the asset-server task has bound its port, so a probe that only ran on mount would always run
+    // against the placeholder, fail, and never try again once the real url arrived.
+    //
     useEffect(() => {
         let disposed = false;
 
@@ -598,13 +597,17 @@ function OpenTestDatabase({ children }: IOpenTestDatabaseProps) {
         // asset from, then opens it the same way the app opens any database.
         //
         async function locateAndOpenDatabase(): Promise<void> {
-            const restApiUrl = storyRestApiUrl();
+            if (!restApiUrl) {
+                // The asset server has not reported its port yet; this effect re-runs when it does.
+                return;
+            }
             for (const candidatePath of testDatabaseCandidates) {
                 const probeUrl = `${restApiUrl}/asset?id=${encodeURIComponent(probeAssetId)}&type=thumb&db=${encodeURIComponent(candidatePath)}`;
                 try {
                     const response = await fetch(probeUrl);
                     if (response.ok) {
                         if (!disposed) {
+                            setProbeFailed(false);
                             await openDatabase(candidatePath);
                         }
                         return;
@@ -625,7 +628,7 @@ function OpenTestDatabase({ children }: IOpenTestDatabaseProps) {
         return () => {
             disposed = true;
         };
-    }, []);
+    }, [restApiUrl]);
 
     if (probeFailed) {
         return (
@@ -665,6 +668,13 @@ export function RealDatabaseProviders({ children }: IRealDatabaseProvidersProps)
     const [uuidGeneratorValue] = useState<IUuidGenerator>(() => new RandomUuidGenerator());
     const [config] = useState(() => createInMemoryConfig());
 
+    // The url of the asset server, reported by the asset-server task once it has bound its port.
+    const restApiUrl = useAssetServer();
+
+    if (!restApiUrl) {
+        return <div className="p-4">Starting the asset server…</div>;
+    }
+
     return (
         <>
             <UuidGeneratorProvider value={uuidGeneratorValue}>
@@ -673,7 +683,7 @@ export function RealDatabaseProviders({ children }: IRealDatabaseProvidersProps)
                     <ConfigContextProvider value={config}>
                         <AppContextProvider>
                             <ToastContextProvider>
-                                <AssetDatabaseProvider queueBackend={getQueueBackend()} restApiUrl={storyRestApiUrl()}>
+                                <AssetDatabaseProvider queueBackend={getQueueBackend()} restApiUrl={restApiUrl}>
                                     <ImportContextProvider>
                                         <GalleryContextProvider>
                                             <DeleteConfirmationContextProvider>

@@ -5,12 +5,14 @@ import Typography from '@mui/joy/Typography';
 import Button from '@mui/joy/Button';
 import Table from '@mui/joy/Table';
 import IconButton from '@mui/joy/IconButton';
-import { Edit, Delete, Refresh, FolderOpen, IosShare, Visibility, FileCopy, Add } from '@mui/icons-material';
+import { Edit, Delete, Refresh, FolderOpen, IosShare, Visibility, FileCopy, Add, NoteAdd, Download, Storage } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { usePlatform, type IDatabaseEntry } from '../../context/platform-context';
 import { useApp } from '../../context/app-context';
 import { useAssetDatabase } from '../../context/asset-database-source';
 import { useIsMobile } from '../../lib/use-is-mobile';
+import { MobilePageHeader } from '../../components/mobile-page-header';
+import { EntityCard, type IEntityCardAction } from '../../components/entity-card';
 import { CreateDatabaseModal } from '../../components/create-database-modal';
 import { AddDatabaseModal } from '../../components/add-database-modal';
 import { EditDatabaseModal } from '../../components/edit-database-modal';
@@ -118,133 +120,190 @@ export function DatabasesPage() {
         navigate('/');
     }
 
-    return (
-        <Box sx={{ p: 3 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 2 }}>
-                <Typography level="h3">Manage Databases</Typography>
-                <Box sx={{ flexGrow: 1 }} />
-                <IconButton
-                    variant="outlined"
-                    disabled={refreshing}
-                    title="Refresh"
-                    onClick={() => handleRefresh().catch(err => log.exception('Failed to refresh data:', err as Error))}
-                >
-                    <Refresh
-                        sx={refreshing ? {
-                            animation: 'spin 0.8s linear infinite',
-                            '@keyframes spin': {
-                                from: { transform: 'rotate(0deg)' },
-                                to: { transform: 'rotate(360deg)' },
-                            },
-                        } : undefined}
-                    />
-                </IconButton>
-                <Button
-                    startDecorator={<Add />}
-                    onClick={() => setCreateModalOpen(true)}
-                >
-                    New database
-                </Button>
-                <Button
-                    data-id="add-database-button"
-                    variant="outlined"
-                    onClick={() => setAddModalOpen(true)}
-                >
-                    Add database
-                </Button>
-                <Button
-                    data-id="receive-database-button"
-                    variant="outlined"
-                    onClick={() => setReceiveDbDialogOpen(true)}
-                >
-                    Receive database
-                </Button>
-            </Box>
+    //
+    // The actions offered for a single database, in the order they appear in a card's ⋮ menu.
+    // Opening the database is the card's tap action, so it is not repeated here on mobile.
+    //
+    function databaseActions(entry: IDatabaseEntry): IEntityCardAction[] {
+        return [
+            {
+                label: 'View details',
+                icon: <Visibility fontSize="small" />,
+                dataId: 'view-database-button',
+                onClick: () => { log.info('View database dialog opened'); setViewingEntry(entry); },
+            },
+            {
+                label: 'Share',
+                icon: <IosShare fontSize="small" />,
+                dataId: 'share-database-button',
+                onClick: () => setSharingEntry(entry),
+            },
+            {
+                label: 'Replicate',
+                icon: <FileCopy fontSize="small" />,
+                dataId: 'replicate-database-button',
+                onClick: () => { log.info('Replicate database dialog opened'); setReplicatingEntry(entry); },
+            },
+            {
+                label: 'Edit',
+                icon: <Edit fontSize="small" />,
+                dataId: 'edit-database-button',
+                onClick: () => openEditDialog(entry),
+            },
+            {
+                label: 'Remove',
+                icon: <Delete fontSize="small" />,
+                danger: true,
+                onClick: () => promptRemove(entry),
+            },
+        ];
+    }
 
-            <Table>
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        {!isMobile && <th>Description</th>}
-                        {!isMobile && <th>Path</th>}
-                        {!isMobile && <th>Origin</th>}
-                        <th style={{ width: '170px', whiteSpace: 'nowrap' }}>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {databases.length === 0 && (
-                        <tr>
-                            <td colSpan={isMobile ? 2 : 5}>
-                                <p className="pt-2 text-gray-500">No databases yet. Click New database to create one, Add database to register an existing one, or Receive database to import one from another device.</p>
-                            </td>
-                        </tr>
-                    )}
+    return (
+        <Box sx={{ p: isMobile ? 2 : 3 }}>
+            <MobilePageHeader
+                title="Manage Databases"
+                subtitle={databases.length === 1 ? '1 database' : `${databases.length} databases`}
+                refreshing={refreshing}
+                onRefresh={() => handleRefresh().catch(err => log.exception('Failed to refresh data:', err as Error))}
+                primaryAction={{
+                    label: 'New database',
+                    icon: <Add />,
+                    onClick: () => setCreateModalOpen(true),
+                }}
+                secondaryActions={[
+                    {
+                        label: 'Add database',
+                        icon: <NoteAdd fontSize="small" />,
+                        dataId: 'add-database-button',
+                        onClick: () => setAddModalOpen(true),
+                    },
+                    {
+                        label: 'Receive database',
+                        icon: <Download fontSize="small" />,
+                        dataId: 'receive-database-button',
+                        onClick: () => setReceiveDbDialogOpen(true),
+                    },
+                ]}
+                />
+
+            {databases.length === 0
+                && <Box
+                    sx={{
+                        textAlign: 'center',
+                        py: 6,
+                        px: 2,
+                        borderRadius: 'lg',
+                        backgroundColor: 'background.level1',
+                    }}
+                    >
+                    <Storage sx={{ fontSize: 48, color: 'text.tertiary', mb: 1 }} />
+                    <Typography level="title-md" sx={{ mb: 0.5 }}>No databases yet</Typography>
+                    <Typography level="body-sm" sx={{ color: 'text.tertiary' }}>
+                        Create a new database, add an existing one, or receive one from another device.
+                    </Typography>
+                </Box>
+            }
+
+            {/* A phone gets a list of cards: the name has the whole width, the supporting detail is
+                stacked under it, and the six per-row actions live in the card's ⋮ menu. The table is
+                kept for wide screens, where the columns fit and are worth having. */}
+            {databases.length > 0 && isMobile
+                && <Box>
                     {databases.map(entry => (
-                        <tr key={entry.name}>
-                            <td data-id={`database-row-name-${entry.name}`}>{entry.name}</td>
-                            {!isMobile && <td>{entry.description}</td>}
-                            {!isMobile && <td>{entry.path}</td>}
-                            {!isMobile && <td>{entry.origin ?? ''}</td>}
-                            <td style={{ whiteSpace: 'nowrap' }}>
-                                <IconButton
-                                    data-id="view-database-button"
-                                    size="sm"
-                                    variant="plain"
-                                    title="View database"
-                                    onClick={() => { log.info('View database dialog opened'); setViewingEntry(entry); }}
-                                >
-                                    <Visibility fontSize="small" />
-                                </IconButton>
-                                <IconButton
-                                    data-id="open-database-button"
-                                    size="sm"
-                                    variant="plain"
-                                    title="Open database"
-                                    onClick={() => handleOpen(entry).catch(err => log.exception('Open database error:', err as Error))}
-                                >
-                                    <FolderOpen fontSize="small" />
-                                </IconButton>
-                                <IconButton
-                                    data-id="share-database-button"
-                                    size="sm"
-                                    variant="plain"
-                                    title="Share database"
-                                    onClick={() => setSharingEntry(entry)}
-                                >
-                                    <IosShare fontSize="small" />
-                                </IconButton>
-                                <IconButton
-                                    data-id="replicate-database-button"
-                                    size="sm"
-                                    variant="plain"
-                                    title="Replicate database"
-                                    onClick={() => { log.info('Replicate database dialog opened'); setReplicatingEntry(entry); }}
-                                >
-                                    <FileCopy fontSize="small" />
-                                </IconButton>
-                                <IconButton
-                                    data-id="edit-database-button"
-                                    size="sm"
-                                    variant="plain"
-                                    title="Edit database"
-                                    onClick={() => openEditDialog(entry)}
-                                >
-                                    <Edit fontSize="small" />
-                                </IconButton>
-                                <IconButton
-                                    size="sm"
-                                    variant="plain"
-                                    color="danger"
-                                    title="Remove database"
-                                    onClick={() => promptRemove(entry)}
-                                >
-                                    <Delete fontSize="small" />
-                                </IconButton>
-                            </td>
-                        </tr>
+                        <EntityCard
+                            key={entry.name}
+                            title={entry.name}
+                            titleDataId={`database-row-name-${entry.name}`}
+                            subtitle={entry.description}
+                            detail={entry.path}
+                            icon={<Storage />}
+                            onClick={() => handleOpen(entry).catch(err => log.exception('Open database error:', err as Error))}
+                            actions={databaseActions(entry)}
+                            />
                     ))}
-                </tbody>
-            </Table>
+                </Box>
+            }
+
+            {databases.length > 0 && !isMobile
+                && <Table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Description</th>
+                            <th>Path</th>
+                            <th>Origin</th>
+                            <th style={{ width: '170px', whiteSpace: 'nowrap' }}>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {databases.map(entry => (
+                            <tr key={entry.name}>
+                                <td data-id={`database-row-name-${entry.name}`}>{entry.name}</td>
+                                <td>{entry.description}</td>
+                                <td>{entry.path}</td>
+                                <td>{entry.origin ?? ''}</td>
+                                <td style={{ whiteSpace: 'nowrap' }}>
+                                    <IconButton
+                                        data-id="view-database-button"
+                                        size="sm"
+                                        variant="plain"
+                                        title="View database"
+                                        onClick={() => { log.info('View database dialog opened'); setViewingEntry(entry); }}
+                                    >
+                                        <Visibility fontSize="small" />
+                                    </IconButton>
+                                    <IconButton
+                                        data-id="open-database-button"
+                                        size="sm"
+                                        variant="plain"
+                                        title="Open database"
+                                        onClick={() => handleOpen(entry).catch(err => log.exception('Open database error:', err as Error))}
+                                    >
+                                        <FolderOpen fontSize="small" />
+                                    </IconButton>
+                                    <IconButton
+                                        data-id="share-database-button"
+                                        size="sm"
+                                        variant="plain"
+                                        title="Share database"
+                                        onClick={() => setSharingEntry(entry)}
+                                    >
+                                        <IosShare fontSize="small" />
+                                    </IconButton>
+                                    <IconButton
+                                        data-id="replicate-database-button"
+                                        size="sm"
+                                        variant="plain"
+                                        title="Replicate database"
+                                        onClick={() => { log.info('Replicate database dialog opened'); setReplicatingEntry(entry); }}
+                                    >
+                                        <FileCopy fontSize="small" />
+                                    </IconButton>
+                                    <IconButton
+                                        data-id="edit-database-button"
+                                        size="sm"
+                                        variant="plain"
+                                        title="Edit database"
+                                        onClick={() => openEditDialog(entry)}
+                                    >
+                                        <Edit fontSize="small" />
+                                    </IconButton>
+                                    <IconButton
+                                        size="sm"
+                                        variant="plain"
+                                        color="danger"
+                                        title="Remove database"
+                                        onClick={() => promptRemove(entry)}
+                                    >
+                                        <Delete fontSize="small" />
+                                    </IconButton>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </Table>
+            }
 
             <EditDatabaseModal
                 open={dialogOpen}

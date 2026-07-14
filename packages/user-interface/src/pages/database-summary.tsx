@@ -1,7 +1,13 @@
 import React, { useEffect, useRef, useState } from "react";
 import { TaskQueue, TaskStatus } from "task-queue";
+import Box from "@mui/joy/Box";
+import Card from "@mui/joy/Card";
+import Typography from "@mui/joy/Typography";
+import CircularProgress from "@mui/joy/CircularProgress";
+import { Storage, Photo, Folder, Save } from "@mui/icons-material";
 import { useAssetDatabase } from "../context/asset-database-source";
 import { useUuidGenerator } from "../context/uuid-generator-context";
+import { useIsMobile } from "../lib/use-is-mobile";
 import type { IDatabaseSummary } from "node-api";
 import type { IGetDatabaseSummaryData } from "node-api";
 
@@ -32,7 +38,45 @@ function getStorageType(databasePath: string): string {
 }
 
 //
-// Props for a single labelled row in the summary table.
+// Props for a single headline statistic.
+//
+interface IStatTileProps {
+    // The statistic's name.
+    label: string;
+
+    // The statistic's value, already formatted for display.
+    value: string;
+
+    // Icon identifying the statistic at a glance.
+    icon: React.ReactNode;
+}
+
+//
+// A single headline statistic, shown as a tile with the number given real size. On a phone this is
+// what the page is for: the numbers should be readable at arm's length, not buried in a label/value
+// table built for a wide screen.
+//
+function StatTile({ label, value, icon }: IStatTileProps) {
+    return (
+        <Card
+            variant="soft"
+            sx={{ borderRadius: 'lg', p: 2, gap: 0.5, flex: '1 1 140px', minWidth: 140 }}
+            >
+            <Box sx={{ color: 'text.tertiary', display: 'flex' }}>
+                {icon}
+            </Box>
+            <Typography level="h2" sx={{ fontSize: '1.6rem', lineHeight: 1.1 }}>
+                {value}
+            </Typography>
+            <Typography level="body-sm" sx={{ color: 'text.tertiary' }}>
+                {label}
+            </Typography>
+        </Card>
+    );
+}
+
+//
+// Props for a single labelled row of detail.
 //
 interface ISummaryRowProps {
     // Label for the row.
@@ -43,14 +87,43 @@ interface ISummaryRowProps {
 }
 
 //
-// Renders a single labelled row in the summary.
+// A labelled row of detail. The label sits above the value rather than beside it, because a
+// side-by-side row leaves a phone with a 48px-wide column for a value that is often a long path or
+// a 64-character hash.
 //
 function SummaryRow({ label, value }: ISummaryRowProps) {
     return (
-        <div className="flex flex-row py-2 border-b border-gray-200 dark:border-gray-700">
-            <span className="w-48 font-medium text-gray-500 dark:text-gray-400 shrink-0">{label}</span>
-            <span className="font-mono break-all">{value}</span>
-        </div>
+        <Box sx={{ py: 1.25, borderBottom: '1px solid', borderColor: 'divider' }}>
+            <Typography level="body-xs" sx={{ color: 'text.tertiary', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                {label}
+            </Typography>
+            <Typography level="body-sm" sx={{ fontFamily: 'monospace', wordBreak: 'break-all', mt: 0.25 }}>
+                {value}
+            </Typography>
+        </Box>
+    );
+}
+
+//
+// Props for a titled group of detail rows.
+//
+interface ISummarySectionProps {
+    // The group's heading.
+    title: string;
+
+    // The rows in the group.
+    children: React.ReactNode | React.ReactNode[];
+}
+
+//
+// A titled group of detail rows, presented as a card.
+//
+function SummarySection({ title, children }: ISummarySectionProps) {
+    return (
+        <Card variant="outlined" sx={{ borderRadius: 'lg', p: 2, mt: 2, gap: 0 }}>
+            <Typography level="title-md" sx={{ mb: 0.5 }}>{title}</Typography>
+            {children}
+        </Card>
     );
 }
 
@@ -60,6 +133,7 @@ function SummaryRow({ label, value }: ISummaryRowProps) {
 export function DatabaseSummaryPage() {
     const { databasePath } = useAssetDatabase();
     const uuidGenerator = useUuidGenerator();
+    const isMobile = useIsMobile();
 
     //
     // The loaded summary data, or undefined while loading.
@@ -120,55 +194,79 @@ export function DatabaseSummaryPage() {
     }, [databasePath, uuidGenerator]);
 
     return (
-        <div className="w-full h-full p-4 overflow-y-auto pb-32">
-            <div className="m-auto" style={{ maxWidth: "800px" }}>
-                <h1 className="mt-6 text-3xl">Summary</h1>
+        <Box sx={{ width: '100%', height: '100%', overflowY: 'auto', p: isMobile ? 2 : 4, pb: 16 }}>
+            <Box sx={{ mx: 'auto', maxWidth: 800 }}>
+                <Typography level="h2" sx={{ fontSize: isMobile ? '1.75rem' : '2rem', mb: 2 }}>
+                    Summary
+                </Typography>
 
-                {!databasePath && (
-                    <p className="pt-4 text-gray-500">No database is currently open.</p>
-                )}
+                {!databasePath
+                    && <Typography level="body-md" sx={{ color: 'text.tertiary' }}>
+                        No database is currently open.
+                    </Typography>
+                }
 
-                {databasePath && (
-                    <>
-                        <div className="pt-6">
-                            <h2 className="text-xl font-semibold mb-3">Location</h2>
+                {databasePath
+                    && <>
+                        {isLoading
+                            && <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 3 }}>
+                                <CircularProgress size="sm" />
+                                <Typography level="body-md" sx={{ color: 'text.tertiary' }}>
+                                    Loading summary...
+                                </Typography>
+                            </Box>
+                        }
+
+                        {error
+                            && <Card variant="soft" color="danger" sx={{ borderRadius: 'lg', p: 2 }}>
+                                <Typography level="body-md" color="danger">{error}</Typography>
+                            </Card>
+                        }
+
+                        {summary
+                            && <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
+                                <StatTile
+                                    label="Photos and videos"
+                                    value={summary.totalImports.toLocaleString()}
+                                    icon={<Photo />}
+                                    />
+                                <StatTile
+                                    label="Files"
+                                    value={summary.totalFiles.toLocaleString()}
+                                    icon={<Folder />}
+                                    />
+                                <StatTile
+                                    label="Total size"
+                                    value={formatBytes(summary.totalSize)}
+                                    icon={<Save />}
+                                    />
+                                <StatTile
+                                    label="Database version"
+                                    value={summary.databaseVersion.toString()}
+                                    icon={<Storage />}
+                                    />
+                            </Box>
+                        }
+
+                        <SummarySection title="Location">
                             <SummaryRow label="Path" value={databasePath} />
                             <SummaryRow label="Storage type" value={getStorageType(databasePath)} />
-                        </div>
+                        </SummarySection>
 
-                        {isLoading && (
-                            <p className="pt-6 text-gray-500">Loading summary...</p>
-                        )}
-
-                        {error && (
-                            <p className="pt-6 text-red-500">{error}</p>
-                        )}
-
-                        {summary && (
-                            <>
-                                <div className="pt-6">
-                                    <h2 className="text-xl font-semibold mb-3">Statistics</h2>
-                                    <SummaryRow label="Files imported" value={summary.totalImports.toLocaleString()} />
-                                    <SummaryRow label="Total files" value={summary.totalFiles.toLocaleString()} />
-                                    <SummaryRow label="Total size" value={formatBytes(summary.totalSize)} />
-                                    <SummaryRow label="Database version" value={summary.databaseVersion.toString()} />
-                                </div>
-
-                                <div className="pt-6">
-                                    <h2 className="text-xl font-semibold mb-3">Integrity</h2>
-                                    {summary.filesHash && (
-                                        <SummaryRow label="Files hash" value={summary.filesHash} />
-                                    )}
-                                    {summary.databaseHash && (
-                                        <SummaryRow label="Database hash" value={summary.databaseHash} />
-                                    )}
-                                    <SummaryRow label="Full hash" value={summary.fullHash} />
-                                </div>
-                            </>
-                        )}
+                        {summary
+                            && <SummarySection title="Integrity">
+                                {summary.filesHash
+                                    && <SummaryRow label="Files hash" value={summary.filesHash} />
+                                }
+                                {summary.databaseHash
+                                    && <SummaryRow label="Database hash" value={summary.databaseHash} />
+                                }
+                                <SummaryRow label="Full hash" value={summary.fullHash} />
+                            </SummarySection>
+                        }
                     </>
-                )}
-            </div>
-        </div>
+                }
+            </Box>
+        </Box>
     );
 }

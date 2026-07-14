@@ -38,6 +38,7 @@ import { stories as assetViewStories } from "./components/asset-view.stories";
 import { stories as carouselStories } from "./components/carousel.stories";
 import { stories as collapsibleSectionStories } from "./components/collapsible-section.stories";
 import { stories as emptyDatabaseStories } from "./components/empty-database.stories";
+import { stories as entityCardStories } from "./components/entity-card.stories";
 import { stories as filmStripStories } from "./components/film-strip.stories";
 import { stories as fullImageStories } from "./components/full-image.stories";
 import { stories as fullScreenSpinnerStories } from "./components/full-screen-spinner.stories";
@@ -48,6 +49,7 @@ import { stories as galleryPreviewStories } from "./components/gallery-preview.s
 import { stories as galleryScrollbarStories } from "./components/gallery-scrollbar.stories";
 import { stories as leftSidebarStories } from "./components/left-sidebar.stories";
 import { stories as mapViewStories } from "./components/map-view.stories";
+import { stories as mobilePageHeaderStories } from "./components/mobile-page-header.stories";
 import { stories as navbarStories } from "./components/navbar.stories";
 import { stories as noDatabaseLoadedStories } from "./components/no-database-loaded.stories";
 import { stories as rightSidebarStories } from "./components/right-sidebar.stories";
@@ -99,6 +101,7 @@ export const stories: IStory[] = [
     ...carouselStories,
     ...collapsibleSectionStories,
     ...emptyDatabaseStories,
+    ...entityCardStories,
     ...filmStripStories,
     ...fullImageStories,
     ...fullScreenSpinnerStories,
@@ -109,6 +112,7 @@ export const stories: IStory[] = [
     ...galleryScrollbarStories,
     ...leftSidebarStories,
     ...mapViewStories,
+    ...mobilePageHeaderStories,
     ...navbarStories,
     ...noDatabaseLoadedStories,
     ...rightSidebarStories,

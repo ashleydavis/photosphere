@@ -6,10 +6,15 @@ import MoreVert from '@mui/icons-material/MoreVert';
 import Star from "@mui/icons-material/Star";
 import StarBorder from "@mui/icons-material/StarBorder";
 import FileUpload from "@mui/icons-material/FileUpload";
+import Menu from "@mui/icons-material/Menu";
+import Search from "@mui/icons-material/Search";
+import PhotoLibrary from "@mui/icons-material/PhotoLibrary";
+import Map from "@mui/icons-material/Map";
 import Input from "@mui/joy/Input/Input";
 import { useTheme } from "@mui/joy/styles/ThemeProvider";
 import classNames from "classnames";
 import { useSearch } from "../context/search-context";
+import { useIsMobile } from "../lib/use-is-mobile";
 import { useDebounce } from "../lib/use-debounce";
 import { useGallery } from "../context/gallery-context";
 import { useAssetDatabase } from "../context/asset-database-source";
@@ -51,6 +56,20 @@ export function Navbar({
 }: INavbarProps) {
     const theme = useTheme();
     const { openSearch, setOpenSearch, searchInput, onCommitSearch, onCloseSearch, savedSearches, saveSearch, unsaveSearch } = useSearch();
+
+    //
+    // Drives the phone layout of the bar: icon-only controls, sized and spaced for a thumb.
+    //
+    const isMobile = useIsMobile();
+
+    //
+    // Sizing shared by every control in the bar. On a phone each one is a 44px square, which is the
+    // smallest comfortable touch target; on desktop the buttons keep their natural size and their
+    // labels, so the bar is unchanged there.
+    //
+    const navButtonSx = isMobile
+        ? { minWidth: 44, minHeight: 44, borderRadius: 'md' }
+        : { borderRadius: 'md' };
 
     //
     // Local input state so keystrokes don't re-render all context consumers.
@@ -129,76 +148,95 @@ export function Navbar({
             }}
         >
             <div className="flex flex-col">
-                <div className="flex flex-row items-center pl-4 pt-3 pb-2">
-                    <button
+                {/* The bar's controls are 44px targets with real gaps between them on a phone. The
+                    old bar packed four ~32px icons together with a 4px gap and pushed the right-hand
+                    buttons against the screen edge, which is fine with a mouse and awful with a
+                    thumb. Labels still appear from the `sm` breakpoint up. */}
+                <div className={classNames("flex flex-row items-center pt-2 pb-2", isMobile ? "pl-2 pr-2 gap-1" : "pl-4")}>
+                    <IconButton
                         data-id="sidebar-toggle-button"
+                        variant="plain"
+                        color="neutral"
+                        size={isMobile ? "lg" : "md"}
                         title="Toggle sidebar"
                         onClick={() => setSidebarOpen(!sidebarOpen)}
+                        sx={navButtonSx}
                     >
-                        <i className="fa-solid fa-bars"></i>
-                    </button>
+                        <Menu />
+                    </IconButton>
 
-                    <h1 className="ml-3 sm:ml-4">Photosphere</h1>
+                    {!isMobile && <h1 className="ml-3 sm:ml-4">Photosphere</h1>}
 
-                    <button
-                        className="ml-4 mr-1 sm:ml-8 sm:mr-3"
+                    <IconButton
+                        variant="plain"
+                        color="neutral"
+                        size={isMobile ? "lg" : "md"}
                         title="Search"
                         onClick={event => {
                             navigate("/gallery");
                             setOpenSearch(true);
                         }}
+                        sx={{ ...navButtonSx, ml: isMobile ? 0 : 3 }}
                     >
-                        <div className="flex flex-row items-center">
-                            <i className="w-5 text-center fa-solid fa-search"></i>
-                            <div className="hidden sm:block ml-2">Search</div>
-                        </div>
-                    </button>
+                        <Search />
+                        {!isMobile && <span className="hidden sm:block ml-2">Search</span>}
+                    </IconButton>
 
-                    <NavLink
-                        className={({ isActive }) => "mr-1 sm:mr-3" + (isActive ? " font-semibold text-sky-500" : "")}
-                        to="/gallery"
-                        title="Gallery"
-                    >
-                        <div className="flex flex-row items-center">
-                            <i className="w-5 text-center fa-solid fa-images"></i>
-                            <div className="hidden sm:block ml-2">Gallery</div>
-                        </div>
+                    <NavLink to="/gallery" title="Gallery">
+                        {({ isActive }) => (
+                            <IconButton
+                                variant={isActive && isMobile ? "soft" : "plain"}
+                                color={isActive ? "primary" : "neutral"}
+                                size={isMobile ? "lg" : "md"}
+                                sx={navButtonSx}
+                                >
+                                <PhotoLibrary />
+                                {!isMobile && <span className="hidden sm:block ml-2">Gallery</span>}
+                            </IconButton>
+                        )}
                     </NavLink>
 
-                    <NavLink
-                        className={({ isActive }) => "mr-1 sm:mr-3" + (isActive ? " font-semibold text-sky-500" : "")}
-                        to="/map"
-                        title="Map"
-                    >
-                        <div className="flex flex-row items-center">
-                            <i className="w-5 text-center fa-solid fa-map"></i>
-                            <div className="hidden sm:block ml-2">Map</div>
-                        </div>
+                    <NavLink to="/map" title="Map">
+                        {({ isActive }) => (
+                            <IconButton
+                                variant={isActive && isMobile ? "soft" : "plain"}
+                                color={isActive ? "primary" : "neutral"}
+                                size={isMobile ? "lg" : "md"}
+                                sx={navButtonSx}
+                                >
+                                <Map />
+                                {!isMobile && <span className="hidden sm:block ml-2">Map</span>}
+                            </IconButton>
+                        )}
                     </NavLink>
 
                     {databasePath && (
-                        <NavLink
-                            className={({ isActive }) => "mr-1 sm:mr-3" + (isActive ? " font-semibold text-sky-500" : "")}
-                            to="/import"
-                            title="Import"
-                        >
-                            <div className="flex flex-row items-center">
-                                <FileUpload fontSize="small" />
-                                <div className="hidden sm:block ml-2">Import</div>
-                            </div>
+                        <NavLink to="/import" title="Import">
+                            {({ isActive }) => (
+                                <IconButton
+                                    variant={isActive && isMobile ? "soft" : "plain"}
+                                    color={isActive ? "primary" : "neutral"}
+                                    size={isMobile ? "lg" : "md"}
+                                    sx={navButtonSx}
+                                    >
+                                    <FileUpload />
+                                    {!isMobile && <span className="hidden sm:block ml-2">Import</span>}
+                                </IconButton>
+                            )}
                         </NavLink>
                     )}
 
                     {temporaryNavPage && TemporaryNavPageIcon && (
-                        <NavLink
-                            className="mr-1 sm:mr-3 font-semibold text-sky-500"
-                            to={temporaryNavPage.path}
-                            title={temporaryNavPage.label}
-                        >
-                            <div className="flex flex-row items-center">
-                                <TemporaryNavPageIcon fontSize="small" />
-                                <div className="hidden sm:block ml-2">{temporaryNavPage.label}</div>
-                            </div>
+                        <NavLink to={temporaryNavPage.path} title={temporaryNavPage.label}>
+                            <IconButton
+                                variant={isMobile ? "soft" : "plain"}
+                                color="primary"
+                                size={isMobile ? "lg" : "md"}
+                                sx={navButtonSx}
+                                >
+                                <TemporaryNavPageIcon />
+                                {!isMobile && <span className="hidden sm:block ml-2">{temporaryNavPage.label}</span>}
+                            </IconButton>
                         </NavLink>
                     )}
 
@@ -269,9 +307,10 @@ export function Navbar({
 
                     <IconButton
                         data-id="right-sidebar-button"
-                        sx={{ mr: 1 }}
+                        sx={navButtonSx}
                         variant="soft"
                         color="neutral"
+                        size={isMobile ? "lg" : "md"}
                         title="Open menu"
                         onClick={() => setRightSidebarOpen(true)}
                     >

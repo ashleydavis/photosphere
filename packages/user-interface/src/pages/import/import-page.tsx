@@ -5,9 +5,11 @@ import { usePlatform, type IToolsStatus } from "../../context/platform-context";
 import { log } from "utils";
 import Box from "@mui/joy/Box";
 import Button from "@mui/joy/Button";
+import Chip from "@mui/joy/Chip";
 import CircularProgress from "@mui/joy/CircularProgress";
 import Typography from "@mui/joy/Typography";
 import { FileUpload, CheckCircle, Cancel, HourglassEmpty, RemoveCircle } from "@mui/icons-material";
+import { useIsMobile } from "../../lib/use-is-mobile";
 import type { IImportItem } from "../../context/import-context";
 
 //
@@ -176,6 +178,9 @@ export function ImportPage() {
     const { databasePath } = useAssetDatabase();
     const platform = usePlatform();
     const { status, importItems, startImportDirectories, startImportFiles, cancelImport, clearImport } = useImport();
+
+    // Drives the phone layout: stacked full-width import buttons, chips for the summary.
+    const isMobile = useIsMobile();
 
     // Tool check state: undefined = checking, null = check not run yet (but we auto-run on mount)
     const [toolsStatus, setToolsStatus] = useState<IToolsStatus | null>(null);
@@ -348,22 +353,49 @@ export function ImportPage() {
                         )}
 
                         {!isCheckingTools && toolsStatus !== null && toolsStatus.allAvailable && (
-                            <Box sx={{ textAlign: "center" }}>
-                                <FileUpload sx={{ fontSize: 64, color: "text.secondary", mb: 2 }} />
-                                <Typography level="h4" sx={{ mb: 1 }}>Import photos</Typography>
+                            // On a phone the import buttons stack and run the full width of the
+                            // screen: a row of two "lg" buttons is what clipped this page's actions
+                            // at the edges before, and a single obvious target beats two small ones.
+                            <Box sx={{ textAlign: "center", width: "100%", px: isMobile ? 3 : 0 }}>
+                                <Box
+                                    sx={{
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        width: isMobile ? 96 : 80,
+                                        height: isMobile ? 96 : 80,
+                                        borderRadius: "50%",
+                                        backgroundColor: "background.level2",
+                                        mb: 2,
+                                    }}
+                                    >
+                                    <FileUpload sx={{ fontSize: isMobile ? 48 : 40, color: "text.secondary" }} />
+                                </Box>
+                                <Typography level={isMobile ? "h3" : "h4"} sx={{ mb: 1 }}>Import photos</Typography>
                                 <Typography level="body-md" sx={{ mb: 4, color: "text.secondary" }}>
                                     {allowDragAndDrop
                                         ? "Drop files or directories here, or use the buttons below."
-                                        : "Tap to select photos to import."}
+                                        : "Choose photos and videos from your device."}
                                 </Typography>
-                                <Box className="flex flex-row gap-3 justify-center">
+                                <Box
+                                    sx={{
+                                        display: "flex",
+                                        flexDirection: isMobile ? "column" : "row",
+                                        gap: 1.5,
+                                        justifyContent: "center",
+                                        width: "100%",
+                                        maxWidth: isMobile ? 420 : undefined,
+                                        mx: "auto",
+                                    }}
+                                    >
                                     <Button
                                         data-id="import-files-button"
-                                        variant="soft"
-                                        color="neutral"
+                                        variant={isMobile ? "solid" : "soft"}
+                                        color={isMobile ? "primary" : "neutral"}
                                         size="lg"
                                         startDecorator={<FileUpload />}
                                         onClick={handleImportFiles}
+                                        sx={{ minHeight: isMobile ? 52 : undefined, borderRadius: isMobile ? "md" : undefined }}
                                     >
                                         {platform.supportsDragAndDropImport ? "Import files" : "Select photos"}
                                     </Button>
@@ -374,6 +406,7 @@ export function ImportPage() {
                                             size="lg"
                                             startDecorator={<FileUpload />}
                                             onClick={handleImportDirectories}
+                                            sx={{ minHeight: isMobile ? 52 : undefined }}
                                         >
                                             Import directory
                                         </Button>
@@ -392,17 +425,32 @@ export function ImportPage() {
                 {(status === 'running' || status === 'completed' || status === 'cancelled') && (
                     <Box className="flex flex-col flex-grow overflow-hidden">
 
-                        {/* Summary (only when done) */}
+                        {/* Summary (only when done). Chips in a wrapping row, so the outcome reads at
+                            a glance on a phone instead of as four stacked lines of small text. */}
                         {(status === 'completed' || status === 'cancelled') && (
                             <Box
-                                className="px-4 py-3"
-                                sx={{ borderBottom: "1px solid", borderColor: "divider", flexShrink: 0 }}
+                                sx={{
+                                    display: "flex",
+                                    flexWrap: "wrap",
+                                    gap: 1,
+                                    px: 2,
+                                    py: 1.5,
+                                    borderBottom: "1px solid",
+                                    borderColor: "divider",
+                                    flexShrink: 0,
+                                }}
                             >
-                                <Typography level="body-sm">Added: {successCount}</Typography>
-                                <Typography level="body-sm">Skipped: {skippedCount}</Typography>
-                                <Typography level="body-sm">Failed: {failedCount}</Typography>
+                                <Chip variant="soft" color="success" size="lg">{`${successCount} added`}</Chip>
+                                <Chip variant="soft" color="neutral" size="lg">{`${skippedCount} skipped`}</Chip>
+                                <Chip
+                                    variant="soft"
+                                    color={failedCount > 0 ? "danger" : "neutral"}
+                                    size="lg"
+                                    >
+                                    {`${failedCount} failed`}
+                                </Chip>
                                 {pendingCount > 0 && (
-                                    <Typography level="body-sm">Still pending: {pendingCount}</Typography>
+                                    <Chip variant="soft" color="warning" size="lg">{`${pendingCount} pending`}</Chip>
                                 )}
                             </Box>
                         )}
@@ -417,13 +465,26 @@ export function ImportPage() {
                             ))}
                         </Box>
 
-                        {/* Clear button */}
+                        {/* Clear button. Full width at the bottom of a phone screen, under the thumb. */}
                         {(status === 'completed' || status === 'cancelled') && (
                             <Box
-                                className="flex flex-row justify-end px-4 py-3"
-                                sx={{ borderTop: "1px solid", borderColor: "divider", flexShrink: 0 }}
+                                sx={{
+                                    display: "flex",
+                                    justifyContent: isMobile ? "stretch" : "flex-end",
+                                    px: 2,
+                                    py: 1.5,
+                                    borderTop: "1px solid",
+                                    borderColor: "divider",
+                                    flexShrink: 0,
+                                }}
                             >
-                                <Button variant="soft" color="neutral" onClick={clearImport}>
+                                <Button
+                                    variant="soft"
+                                    color="neutral"
+                                    size={isMobile ? "lg" : "md"}
+                                    onClick={clearImport}
+                                    sx={{ width: isMobile ? "100%" : undefined, minHeight: isMobile ? 48 : undefined }}
+                                    >
                                     Clear
                                 </Button>
                             </Box>

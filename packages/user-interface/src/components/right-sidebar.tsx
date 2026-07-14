@@ -6,7 +6,8 @@ import { useTheme } from '@mui/joy/styles/ThemeProvider';
 import List from '@mui/joy/List/List';
 import ListItem from '@mui/joy/ListItem/ListItem';
 import ListItemDecorator from '@mui/joy/ListItemDecorator/ListItemDecorator';
-import { CalendarMonth, Category, DateRange, Delete, Event, ExitToApp, Flag, Home, KeyboardArrowRight, Label, Map, MoreHoriz, Navigation, People, Place, Search, Star, StarBorder, History } from '@mui/icons-material';
+import { ArrowForward, CalendarMonth, Category, DateRange, Delete, Event, ExitToApp, Flag, Home, KeyboardArrowRight, Label, Map, MoreHoriz, Navigation, People, Place, Search, Star, StarBorder, History } from '@mui/icons-material';
+import { useIsMobile } from '../lib/use-is-mobile';
 import { CollapsibleSection } from './collapsible-section';
 import ListItemContent from '@mui/joy/ListItemContent/ListItemContent';
 import ListItemButton from '@mui/joy/ListItemButton/ListItemButton';
@@ -216,6 +217,27 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
     const { setOpenSearch, recentSearches, removeRecentSearch, savedSearches, saveSearch, unsaveSearch } = useSearch();
     const { dbs } = useApp();
     const theme = useTheme();
+
+    //
+    // Drives the phone layout of the menu: taller rows and larger buttons, because every row here is
+    // a thumb target rather than a mouse target.
+    //
+    const isMobile = useIsMobile();
+
+    //
+    // Row sizing shared by every list in the menu. 48px is the smallest comfortable touch target.
+    //
+    const listSx = isMobile
+        ? { '--ListItem-minHeight': '48px' }
+        : undefined;
+
+    //
+    // Sizing for the small buttons that hang off the end of a search row (save, remove). At 32px
+    // they are half a thumb wide and sit next to each other, which makes them easy to mis-hit.
+    //
+    const endActionSx = isMobile
+        ? { minHeight: '40px', minWidth: '40px' }
+        : { minHeight: '32px', minWidth: '32px' };
     const { databasePath, closeDatabase, downloadAssets } = useAssetDatabase();
     const { search, setSortBy, isLoading, onReset, onNewItems, selectedItems, clearMultiSelection, moveSelectedToDatabase, getItemById } = useGallery();
     const { scrollTo, layout } = useGalleryLayout();
@@ -341,28 +363,36 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
 
     return (
         <>
+            {/* Fills the drawer rather than forcing a full viewport height, and scrolls when the
+                sections (selection, searches, content, close database) run past the bottom. With a
+                fixed 100vh and no scrolling, the lower sections were unreachable on a phone. */}
             <div
-                className="flex flex-col h-screen"
+                className="flex flex-col h-full overflow-y-auto"
                 style={{
                     color: theme.palette.text.primary,
                 }}
                 >
-                <div className="flex flex-row items-center mt-4" style={{ paddingLeft: "15px" }}>
-                    <button
-                        className="ml-3 text-xl"
-                        title="Close menu"
-                        onClick={() => setSidebarOpen(!sidebarOpen)}
-                        >
-                        <i className="fa-solid fa-arrow-right"></i>
-                    </button>
+                <div className="flex flex-row items-center" style={{ paddingLeft: "15px", paddingRight: "8px", paddingTop: "8px" }}>
+                    <Typography level="title-lg">Menu</Typography>
                     <div className="flex-grow" />
+                    <IconButton
+                        variant="plain"
+                        color="neutral"
+                        size={isMobile ? "lg" : "md"}
+                        title="Close menu"
+                        aria-label="Close menu"
+                        onClick={() => setSidebarOpen(!sidebarOpen)}
+                        sx={{ minWidth: isMobile ? 44 : undefined, minHeight: isMobile ? 44 : undefined }}
+                        >
+                        <ArrowForward />
+                    </IconButton>
                 </div>
 
                 {databasePath && selectedItemsCount > 0 &&
                     <div className="flex flex-col">
                         <Divider />
                         <CollapsibleSection configKey="right-sidebar-collapsed-selection" label="Selection" style={{ paddingLeft: "15px" }}>
-                            <List>
+                            <List sx={listSx}>
                                 {dbs.map(dbEntry => {
                                     if (dbEntry.path === databasePath) {
                                         return null;
@@ -435,7 +465,7 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
                 <div className="flex flex-col">
                     <Divider />
                     <CollapsibleSection configKey="right-sidebar-collapsed-quickSearches" label="Quick Searches" style={{ paddingLeft: "15px" }}>
-                        <List>
+                        <List sx={listSx}>
                             <ListItem
                                 onClick={() => {
                                     search(".labels=starred");
@@ -467,7 +497,7 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
                     <div className="flex flex-col">
                         <Divider />
                         <CollapsibleSection configKey="sidebar-collapsed-savedSearches" label="Saved Searches" style={{ paddingLeft: "15px" }}>
-                            <List>
+                            <List sx={listSx}>
                                 {savedSearches.map(savedSearch => (
                                     <ListItem
                                         key={savedSearch}
@@ -481,7 +511,7 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
                                                     e.stopPropagation();
                                                     await unsaveSearch(savedSearch);
                                                 }}
-                                                sx={{ minHeight: '32px', minWidth: '32px' }}
+                                                sx={endActionSx}
                                             >
                                                 <Star fontSize="small" sx={{ color: "gold" }} />
                                             </IconButton>
@@ -507,7 +537,7 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
                     <div className="flex flex-col">
                         <Divider />
                         <CollapsibleSection configKey="right-sidebar-collapsed-recentSearches" label="Recent Searches" style={{ paddingLeft: "15px" }}>
-                            <List>
+                            <List sx={listSx}>
                                 {recentSearches.map(recentSearch => (
                                     <ListItem
                                         key={recentSearch}
@@ -527,7 +557,7 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
                                                             await saveSearch(recentSearch);
                                                         }
                                                     }}
-                                                    sx={{ minHeight: '32px', minWidth: '32px' }}
+                                                    sx={endActionSx}
                                                 >
                                                     {savedSearches.includes(recentSearch)
                                                         ? <Star fontSize="small" />
@@ -543,7 +573,7 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
                                                         e.stopPropagation();
                                                         await removeRecentSearch(recentSearch);
                                                     }}
-                                                    sx={{ minHeight: '32px', minWidth: '32px' }}
+                                                    sx={endActionSx}
                                                 >
                                                     <Delete fontSize="small" />
                                                 </IconButton>
@@ -613,7 +643,7 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
                                 </Breadcrumbs>
                             }
 
-                            <List>
+                            <List sx={listSx}>
                                 {curMenu.map((menuItem, index) => {
                                     return (
                                         <ListItem
@@ -654,7 +684,7 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
                 {databasePath &&
                     <div className="flex flex-col">
                         <Divider />
-                        <List sx={{ pl: "15px" }}>
+                        <List sx={{ pl: "15px", ...listSx }}>
                             <ListItem
                                 onClick={async () => {
                                     setSidebarOpen(false);

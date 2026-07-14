@@ -13,11 +13,13 @@ import {
     ApiContextProvider,
     axiosApi,
     StoriesPage,
+    useAssetServer,
+    FullscreenSpinner,
     resolveInitialTheme, themeOverrideFromEnv,
 } from "user-interface";
 import { setQueueBackend } from "task-queue";
 import { RandomUuidGenerator } from "utils";
-import { EmbeddedJsQueueBackend, PlatformProviderMobile, useMobileAssetServer } from "mobile-frontend";
+import { EmbeddedJsQueueBackend, PlatformProviderMobile } from "mobile-frontend";
 
 //
 // UUID generator used for task ids on mobile.
@@ -53,8 +55,9 @@ export async function bootstrapMobileBackend(): Promise<void> {
 export function App() {
     // Start the asset-server background task (in the embedded engine) and use its bound localhost
     // port as the restApiUrl, so the gallery loads thumbnails/images/video over the same URL model
-    // as desktop. Falls back to the default URL until the task reports its port.
-    const restApiUrl = useMobileAssetServer();
+    // as desktop. Undefined until the task reports the port it bound: there is nothing to load
+    // assets from until then, so the app waits rather than building urls against a guessed port.
+    const restApiUrl = useAssetServer();
     // Startup theme: PHOTOSPHERE_THEME env override if set, otherwise system. See user-interface env-theme.ts.
     const initialTheme = resolveInitialTheme(themeOverrideFromEnv(), "system");
 
@@ -72,7 +75,9 @@ export function App() {
                     </PlatformProviderMobile>
                 } />
                 <Route path="*" element={
-                    <UuidGeneratorProvider value={uuidGenerator}>
+                    !restApiUrl
+                        ? <FullscreenSpinner />
+                        : <UuidGeneratorProvider value={uuidGenerator}>
                         <PlatformProviderMobile>
                             <ApiContextProvider value={axiosApi}>
                             <AppContextProvider>
