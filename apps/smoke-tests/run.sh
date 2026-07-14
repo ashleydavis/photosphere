@@ -27,6 +27,10 @@ main() {
     "${PLATFORM}_build"
     "${PLATFORM}_install"
 
+    # Clear the app's data from the device however the run ends, so the databases the tests seed and
+    # import into do not pile up until the device runs out of storage.
+    trap "${PLATFORM}_cleanup" EXIT
+
     local tests=()
     while IFS= read -r test_path; do
         tests+=("$test_path")

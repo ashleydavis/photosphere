@@ -108,7 +108,7 @@ export function MobilePageHeader({ title, subtitle, primaryAction, secondaryActi
                     <Dropdown>
                         <MenuButton
                             slots={{ root: IconButton }}
-                            slotProps={{ root: { variant: 'plain', size: 'lg' } }}
+                            slotProps={{ root: { variant: 'plain', size: 'lg', 'data-id': 'page-actions-menu' } }}
                             aria-label="More actions"
                             >
                             <MoreVert />

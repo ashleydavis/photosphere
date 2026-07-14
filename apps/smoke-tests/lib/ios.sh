@@ -156,3 +156,21 @@ ios_reset_path() {
     fi
     rm -rf "$container/Documents/$rel" 2>/dev/null || true
 }
+
+#
+# Removes everything a run leaves in the app's container: the databases seeded into its storage
+# sandbox (Documents) and whatever the run imported into them. The app stays installed, so the next
+# run does not pay for a reinstall.
+#
+# Without this the seeded fixtures and imported assets accumulate run after run and fill the
+# simulator's disk.
+#
+ios_cleanup() {
+    local container
+    container="$(ios_app_container)"
+    if [ -z "$container" ]; then
+        return 0
+    fi
+    rm -rf "$container/Documents/"* 2>/dev/null || true
+    log_info "Cleared the app's data from the simulator"
+}

@@ -269,6 +269,12 @@ export function SecretsPage() {
     function secretActions(secret: ISharedSecretEntry): IEntityCardAction[] {
         return [
             {
+                label: 'View',
+                icon: <Visibility fontSize="small" />,
+                dataId: 'view-secret-button',
+                onClick: () => { log.info('View secret dialog opened'); setViewingSecret(secret); },
+            },
+            {
                 label: 'Share',
                 icon: <IosShare fontSize="small" />,
                 dataId: 'share-secret-button',

@@ -192,7 +192,9 @@ android_seed_database() {
     adb shell rm -rf "$tmp_remote" >/dev/null 2>&1 || true
     adb push "$host_src" /data/local/tmp/ >/dev/null
     adb shell run-as "$APP_ID" rm -rf "files/$rel_dest"
-    adb shell run-as "$APP_ID" mkdir -p files
+    # Make the destination's parents, not just files/: a nested destination (test/dbs/50-assets)
+    # otherwise fails the copy with "No such file or directory".
+    adb shell run-as "$APP_ID" mkdir -p "files/$(dirname "$rel_dest")"
     adb shell run-as "$APP_ID" cp -r "$tmp_remote" "files/$rel_dest"
     adb shell rm -rf "$tmp_remote" >/dev/null 2>&1 || true
     log_info "Seeded database fixture '$base' into app sandbox at files/$rel_dest"
@@ -206,4 +208,18 @@ android_seed_database() {
 android_reset_path() {
     local rel="$1"
     adb shell run-as "$APP_ID" rm -rf "files/$rel" >/dev/null 2>&1 || true
+}
+
+#
+# Removes everything a run leaves on the device: the databases seeded into the app's storage sandbox
+# and whatever the run imported into them, plus the fixture copies pushed through the shared temp
+# directory. The app stays installed, so the next run does not pay for a reinstall.
+#
+# Without this the seeded fixtures and imported assets accumulate run after run until the device is
+# out of storage and the next install fails with INSTALL_FAILED_INSUFFICIENT_STORAGE.
+#
+android_cleanup() {
+    adb shell run-as "$APP_ID" rm -rf files >/dev/null 2>&1 || true
+    adb shell rm -rf /data/local/tmp/50-assets >/dev/null 2>&1 || true
+    log_info "Cleared the app's data from the device"
 }

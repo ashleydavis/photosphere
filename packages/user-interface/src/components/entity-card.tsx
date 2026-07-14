@@ -138,7 +138,7 @@ export function EntityCard({ title, subtitle, detail, icon, onClick, actions, ti
             <Dropdown>
                 <MenuButton
                     slots={{ root: IconButton }}
-                    slotProps={{ root: { variant: 'plain', size: 'lg' } }}
+                    slotProps={{ root: { variant: 'plain', size: 'lg', 'data-id': 'entity-actions-menu' } }}
                     aria-label={`Actions for ${title}`}
                     >
                     <MoreVert />

@@ -172,6 +172,15 @@ build_app() {
     "${PLATFORM_NAME}_prepare" || return 1
     "${PLATFORM_NAME}_build" || return 1
     "${PLATFORM_NAME}_install" || return 1
+
+    #
+    # Seed the 50-assets fixture into the app sandbox, exactly as the mobile smoke tests seed their
+    # own fixtures. The stories that show real media open `test/dbs/50-assets` through the REST API;
+    # on a device that database only exists if it is copied there first. Without this the app has no
+    # such database to serve and those stories report the REST API as unreachable.
+    #
+    log_info "Seeding the 50-assets fixture into the app sandbox..."
+    "${PLATFORM_NAME}_seed_database" "$REPO_DIR/test/dbs/50-assets" "test/dbs/50-assets" || return 1
 }
 
 #
@@ -451,6 +460,14 @@ cleanup() {
         CAPTURE_PID=""
     fi
     stop_app "$APP_PORT" "$TMP_DIR" || true
+
+    #
+    # Clear the app's data from the device. A mobile run seeds the 50-assets fixture into the app's
+    # storage sandbox; left there, run after run, it fills the device until the next install fails.
+    #
+    if [ "$PLATFORM_NAME" != "electron" ]; then
+        "${PLATFORM_NAME}_cleanup" || true
+    fi
 }
 
 #
@@ -542,7 +559,12 @@ if [ -n "$SCREENSHOTS_DIR" ] && [ "$OPEN_INDEX" = true ] && [ -n "$index_path" ]
     open_index "$index_path"
 fi
 
-stop_app "$APP_PORT" "$TMP_DIR"
+#
+# The same teardown the traps use: stop the app and clear its data from the device. Calling cleanup
+# here (rather than just stop_app) is what makes a successful run leave the device as it found it;
+# the trap is then removed so it does not run a second time.
+#
+cleanup
 trap - EXIT
 
 exit 0

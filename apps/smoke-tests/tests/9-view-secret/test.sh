@@ -29,6 +29,7 @@ send_command "$APP_PORT" type '{"dataId":"secret-name-input","text":"smoke-secre
 send_command "$APP_PORT" click '{"dataId":"add-secret-confirm"}' || exit 1
 wait_for_log "$TMP_DIR" "Secret added" 20
 
+send_command "$APP_PORT" click '{"dataId":"entity-actions-menu"}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"view-secret-button"}' || exit 1
 wait_for_log "$TMP_DIR" "View secret dialog opened" 20
 

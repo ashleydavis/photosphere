@@ -28,6 +28,7 @@ create_database "$TMP_DIR/test-db"
 send_command "$APP_PORT" navigate '{"page":"databases"}' || exit 1
 wait_for_log "$TMP_DIR" "Databases page loaded" 20
 
+send_command "$APP_PORT" click '{"dataId":"page-actions-menu"}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"add-database-button"}' || exit 1
 wait_for_log "$TMP_DIR" "Add database dialog opened" 20
 send_command "$APP_PORT" type '{"dataId":"database-name-input","text":"My Test DB"}' || exit 1
@@ -37,6 +38,7 @@ wait_for_log "$TMP_DIR" "Database entry added" 20
 
 send_command "$APP_PORT" navigate '{"page":"databases"}' || exit 1
 wait_for_log "$TMP_DIR" "Databases page loaded" 20
+send_command "$APP_PORT" click '{"dataId":"entity-actions-menu"}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"edit-database-button"}' || exit 1
 wait_for_log "$TMP_DIR" "Edit database dialog opened" 20
 

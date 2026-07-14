@@ -30,6 +30,7 @@ create_database "$TMP_DIR/source-db"
 send_command "$APP_PORT" navigate '{"page":"databases"}' || exit 1
 wait_for_log "$TMP_DIR" "Databases page loaded" 20
 
+send_command "$APP_PORT" click '{"dataId":"page-actions-menu"}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"add-database-button"}' || exit 1
 wait_for_log "$TMP_DIR" "Add database dialog opened" 20
 
@@ -41,6 +42,7 @@ wait_for_log "$TMP_DIR" "Database entry added" 20
 send_command "$APP_PORT" navigate '{"page":"databases"}' || exit 1
 wait_for_log "$TMP_DIR" "Databases page loaded" 20
 
+send_command "$APP_PORT" click '{"dataId":"entity-actions-menu"}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"replicate-database-button"}' || exit 1
 wait_for_log "$TMP_DIR" "Replicate database dialog opened" 20
 

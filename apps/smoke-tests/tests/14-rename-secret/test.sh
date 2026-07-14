@@ -24,6 +24,7 @@ send_command "$APP_PORT" seed-secrets '{"secrets":[{"entry":{"name":"old-name","
 send_command "$APP_PORT" navigate '{"page":"secrets"}' || exit 1
 wait_for_log "$TMP_DIR" "Secrets page loaded" 20
 
+send_command "$APP_PORT" click '{"dataId":"entity-actions-menu"}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"edit-secret-button"}' || exit 1
 wait_for_log "$TMP_DIR" "Edit secret dialog opened" 20
 
