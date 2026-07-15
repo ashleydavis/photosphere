@@ -8,7 +8,6 @@ import type { IQueueBackend, ITaskMessageData } from 'task-queue';
 import { TaskStatus, setQueueBackend } from 'task-queue';
 import { WorkerPoolElectronMain } from './lib/worker-pool-electron-main';
 import { RandomUuidGenerator, TimestampProvider, logExceptions, log, noLogDetails } from 'utils';
-import { findAvailablePort } from 'node-utils';
 import { loadDatabaseConfig, updateDatabaseConfig } from 'api';
 import type { IReplicateDatabaseData } from 'api';
 import { loadDesktopConfig, saveDesktopConfig, updateLastFolder, updateLastDownloadFolder, getTheme, setTheme, getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry, getRecentDatabases, markDatabaseOpened, removeRecentDatabaseName, findDatabase, fetchNews, getShownNewsIds, addShownNewsIds, getLastShownUpdateVersion, setLastShownUpdateVersion, checkConnectivity } from 'node-api';
@@ -1142,14 +1141,11 @@ function handleWorkerLogMessage(message: any, source: string): void {
 // Initializes the REST API server in a utility process and sets up message handlers.
 //
 async function initRestApi(): Promise<void> {
-    // Find an available port only if we don't already have one
-    // This ensures the browser window doesn't break if the worker restarts
-    if (restApiPort === null) {
-        const port = await findAvailablePort();
-        restApiPort = port;
-        console.log(`Using REST API port: ${port}`);
-    }
-
+    // On first start, ask the worker to bind an OS-assigned free port (0) rather than pre-picking a
+    // port number here and having the worker bind it later: that gap lets a parallel process (for
+    // example a concurrent Android smoke run) grab the number first. The worker reports the actual
+    // bound port back in its server-ready message. On a worker restart, restApiPort is already set,
+    // so it is reused to keep the browser window's REST API URL valid.
     const serverPath = join(app.getAppPath(), 'bundle/rest-api-worker.js');
 
     // Set up environment for the utility process.
@@ -1195,6 +1191,8 @@ async function initRestApi(): Promise<void> {
                 clearTimeout(timeout);
                 restApiWorker?.off('message', messageHandler);
                 restApiWorker?.off('spawn', spawnHandler);
+                // Adopt the port the worker actually bound (OS-assigned on first start).
+                restApiPort = message.port;
                 console.log(`REST API initialized in utility process on port ${restApiPort}`);
                 resolve();
             }
@@ -1216,12 +1214,12 @@ async function initRestApi(): Promise<void> {
 
         const spawnHandler = () => {
             console.log('REST API utility process spawned');
-            // Send start message to the utility process with the port
-            // restApiPort should never be null here since we set it above
-            if (restApiWorker && restApiPort !== null) {
-                const startMessage: IRestApiWorkerStartMessage = { 
-                    type: 'start', 
-                    port: restApiPort,
+            // First start: request an OS-assigned free port (0). Restart: reuse the already-resolved
+            // port so the browser window's REST API URL stays valid.
+            if (restApiWorker) {
+                const startMessage: IRestApiWorkerStartMessage = {
+                    type: 'start',
+                    port: restApiPort ?? 0,
                 };
                 restApiWorker.postMessage(startMessage);
             }

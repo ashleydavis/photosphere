@@ -10,7 +10,6 @@ CLI_DIR="$REPO_DIR/apps/cli"
 print_test_header 16 "remove-recent-database"
 
 TMP_DIR="$TEST_DIR/tmp"
-APP_PORT=$(find_free_port)
 
 cleanup() {
     if [ -f "$TMP_DIR/app.pid" ]; then
@@ -44,7 +43,7 @@ description = ""
 path = "$TMP_DIR/test-db-b"
 EOF
 
-start_app "$APP_PORT" "$TMP_DIR"
+start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
 log_info "Opening the left sidebar..."

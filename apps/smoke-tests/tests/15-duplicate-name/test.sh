@@ -10,11 +10,10 @@ source "$TEST_DIR/../../lib/common.sh"
 print_test_header 15 "duplicate-name"
 
 TMP_DIR="$TEST_DIR/tmp"
-APP_PORT=$(find_free_port)
 
 trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 
-start_app "$APP_PORT" "$TMP_DIR"
+start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
 # Seed the conflicting secret so adding one of the same name triggers the duplicate-name guard.

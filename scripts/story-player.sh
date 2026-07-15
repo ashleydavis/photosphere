@@ -100,7 +100,7 @@ esac
 
 #
 # Load the platform's test harness. Both harnesses define the same helpers with the same
-# signatures (start_app, wait_for_ready, send_command, wait_for_log, stop_app, find_free_port),
+# signatures (start_app, wait_for_ready, send_command, wait_for_log, stop_app),
 # which is what lets the rest of this script be platform-neutral.
 #
 if [ "$PLATFORM_NAME" = "electron" ]; then
@@ -450,7 +450,6 @@ build_app || exit 1
 
 rm -rf "$TMP_DIR"
 mkdir -p "$TMP_DIR"
-APP_PORT=$(find_free_port)
 
 CAPTURE_PID=""
 
@@ -483,7 +482,7 @@ if [ -n "$SCREENSHOTS_DIR" ]; then
     mkdir -p "$SCREENSHOTS_DIR"
 fi
 
-start_app "$APP_PORT" "$TMP_DIR"
+start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
 #

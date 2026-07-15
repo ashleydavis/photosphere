@@ -15,14 +15,13 @@ source "$TEST_DIR/../../lib/common.sh"
 print_test_header 1 "load-fixture"
 
 TMP_DIR="$TEST_DIR/tmp"
-APP_PORT=$(find_free_port)
 
 # The fixture's sandbox-relative name (under the app's private files directory).
 DB_NAME="50-assets"
 
 trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 
-start_app "$APP_PORT" "$TMP_DIR"
+start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
 # Seed the fixture into the app sandbox before opening it.
@@ -48,8 +47,9 @@ if [ "$PLATFORM" = "android" ]; then
         log_error "Asset server did not report a bound port"
         exit 1
     fi
-    HOST_PORT="$(find_free_port)"
-    adb forward "tcp:$HOST_PORT" "tcp:$SERVER_PORT" >/dev/null
+    # Let adb pick and bind the host port atomically (tcp:0 prints the assigned port), rather than
+    # pre-picking one that a parallel run could grab in the gap before the forward is set.
+    HOST_PORT="$(adb forward tcp:0 "tcp:$SERVER_PORT")"
     THUMB_OUT="$TMP_DIR/served-thumb.bin"
     HTTP_CODE="$(curl -s -o "$THUMB_OUT" -w '%{http_code}' --max-time 10 "http://localhost:$HOST_PORT/asset?id=$ASSET_ID&type=thumb&db=$DB_NAME")"
     adb forward --remove "tcp:$HOST_PORT" >/dev/null 2>&1 || true

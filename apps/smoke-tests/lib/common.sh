@@ -55,20 +55,6 @@ print_test_header() {
 }
 
 #
-# Finds a free TCP port using Python.
-#
-find_free_port() {
-    python3 -c "
-import socket
-s = socket.socket()
-s.bind(('', 0))
-port = s.getsockname()[1]
-s.close()
-print(port)
-"
-}
-
-#
 # Selects and sources the platform launcher for the current PLATFORM (android or ios).
 #
 load_platform() {
@@ -84,6 +70,28 @@ load_platform() {
             return 1
             ;;
     esac
+}
+
+#
+# Waits for the bridge to publish the port it actually bound and prints it. The bridge may bind a
+# port other than the one requested (it falls back to an OS-assigned port if the requested port was
+# taken by a parallel run), so the real port has to be read back rather than assumed.
+# Usage: wait_for_bridge_port <port_file> [timeout_secs]
+#
+wait_for_bridge_port() {
+    local port_file="$1"
+    local timeout="${2:-20}"
+    local elapsed=0
+    while [ "$elapsed" -lt "$timeout" ]; do
+        if [ -s "$port_file" ]; then
+            cat "$port_file"
+            return 0
+        fi
+        sleep 1
+        elapsed=$((elapsed + 1))
+    done
+    log_error "Control bridge did not report a listening port within ${timeout}s"
+    return 1
 }
 
 #
@@ -107,15 +115,19 @@ wait_for_bridge() {
 
 #
 # Starts the control bridge (Bun process) writing to $tmp_dir/app.log, then launches the app
-# on the selected platform wired to the bridge.
-# Usage: start_app <port> <tmp_dir>
+# on the selected platform wired to the bridge. The bridge binds an OS-assigned free port (never a
+# pre-picked number, which could collide with a parallel run); this reads that port back and
+# publishes it as APP_PORT (the global every test uses) so the app launch and all later commands
+# target it.
+# Usage: start_app <tmp_dir>
 #
 start_app() {
-    local port="$1"
-    local tmp_dir="$2"
+    local tmp_dir="$1"
     mkdir -p "$tmp_dir"
+    # Clear any stale port file from a previous run so wait_for_bridge_port reads this run's port.
+    rm -f "$tmp_dir/bridge.port"
 
-    PHOTOSPHERE_TEST_PORT="$port" \
+    PHOTOSPHERE_TEST_PORT="0" \
     PHOTOSPHERE_LOG_DIR="$tmp_dir" \
     PHOTOSPHERE_TEST_PLATFORM="$PLATFORM" \
     PHOTOSPHERE_TEST_APP_ID="$APP_ID" \
@@ -127,13 +139,17 @@ start_app() {
     # asynchronous "Terminated: 15" job-control notice. It is still stopped explicitly by PID.
     disown "$bridge_pid"
     echo "$bridge_pid" > "$tmp_dir/bridge.pid"
-    log_info "Control bridge started (PID $bridge_pid, port $port)"
 
-    wait_for_bridge "$port"
+    local actual_port
+    actual_port=$(wait_for_bridge_port "$tmp_dir/bridge.port") || return 1
+    APP_PORT="$actual_port"
+    log_info "Control bridge started (PID $bridge_pid, port $actual_port)"
+
+    wait_for_bridge "$actual_port"
 
     # The platform launcher installs and launches the app pointed at the bridge port.
-    "${PLATFORM}_launch" "$port"
-    log_info "App launched on $PLATFORM (port $port)"
+    "${PLATFORM}_launch" "$actual_port"
+    log_info "App launched on $PLATFORM (port $actual_port)"
 }
 
 #

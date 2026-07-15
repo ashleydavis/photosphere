@@ -154,13 +154,13 @@ TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DESKTOP_DIR="$TEST_DIR/../.."
 source "$TEST_DIR/../lib/common.sh"
 
-PORT=$(find_free_port)
 TMP_DIR="$TEST_DIR/tmp"
 rm -rf "$TMP_DIR"
 
 trap 'stop_app "$PORT" "$TMP_DIR"' EXIT
 
-start_app "$PORT" "$TMP_DIR"
+# start_app binds an OS-assigned free port and prints it; capture it for the commands below.
+PORT=$(start_app "$TMP_DIR")
 wait_for_ready "$PORT"
 
 # ... send commands and assert outcomes ...

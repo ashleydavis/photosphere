@@ -20,7 +20,6 @@ REPO_DIR="$(cd "$DESKTOP_DIR/../.." && pwd)"
 OUT_DIR="${OUT_DIR:-$REPO_DIR/ux-review/screenshots}"
 TMP_DIR="$TEST_DIR/tmp"
 FIXTURE_DB="$REPO_DIR/test/dbs/50-assets"
-APP_PORT=$(find_free_port)
 
 rm -rf "$TMP_DIR" "$OUT_DIR"
 mkdir -p "$OUT_DIR"
@@ -51,7 +50,7 @@ nav_shot() {
     shot "$name" "$settle"
 }
 
-start_app "$APP_PORT" "$TMP_DIR"
+start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
 # 1. First-run experience: no database loaded.

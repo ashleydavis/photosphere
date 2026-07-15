@@ -8,7 +8,6 @@ DESKTOP_DIR="$(cd "$TEST_DIR/../.." && native_pwd)"
 print_test_header 17 "news-notifications"
 
 TMP_DIR="$TEST_DIR/tmp"
-APP_PORT=$(find_free_port)
 
 cleanup() {
     if [ -f "$TMP_DIR/app.pid" ]; then
@@ -45,7 +44,7 @@ export PHOTOSPHERE_NEWS_URL="file://$TMP_DIR/news.yaml"
 # First startup: should show smoke-test-001 only, and NOT persist until dismissed
 # ============================================================================
 log_info "First startup..."
-start_app "$APP_PORT" "$TMP_DIR"
+start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
 wait_for_log "$TMP_DIR" "Showed news notification: smoke-test-001"
@@ -87,7 +86,7 @@ stop_app "$APP_PORT" "$TMP_DIR"
 log_info "Second startup..."
 # start_app truncates app.log, so reset the wait_for_log cursor.
 rm -f "$TMP_DIR/.log-cursor"
-start_app "$APP_PORT" "$TMP_DIR"
+start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
 wait_for_log "$TMP_DIR" "Showed news notification: smoke-test-002"
@@ -125,7 +124,7 @@ stop_app "$APP_PORT" "$TMP_DIR"
 # ============================================================================
 log_info "Third startup..."
 rm -f "$TMP_DIR/.log-cursor"
-start_app "$APP_PORT" "$TMP_DIR"
+start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
 sleep 3

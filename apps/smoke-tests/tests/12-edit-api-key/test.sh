@@ -10,11 +10,10 @@ source "$TEST_DIR/../../lib/common.sh"
 print_test_header 12 "edit-api-key"
 
 TMP_DIR="$TEST_DIR/tmp"
-APP_PORT=$(find_free_port)
 
 trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 
-start_app "$APP_PORT" "$TMP_DIR"
+start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
 # Seed one api-key secret to edit (the value is the raw API key string).

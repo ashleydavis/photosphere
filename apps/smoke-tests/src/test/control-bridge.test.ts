@@ -161,3 +161,28 @@ describe("control bridge", () => {
         expect(body.ok).toBe(true);
     });
 });
+
+describe("control bridge OS-assigned port", () => {
+
+    test("binds a distinct OS-assigned port for each bridge", async () => {
+        //
+        // The bridge always binds an OS-assigned free port (port 0) so two concurrent runs never
+        // pick the same number. Start two bridges and confirm each gets a real, distinct port.
+        //
+        const logDirA = fs.mkdtempSync(path.join(os.tmpdir(), "control-bridge-a-"));
+        const logDirB = fs.mkdtempSync(path.join(os.tmpdir(), "control-bridge-b-"));
+        const bridgeA = new ControlBridge({ port: 0, logDir: logDirA });
+        const bridgeB = new ControlBridge({ port: 0, logDir: logDirB });
+        await bridgeA.start();
+        await bridgeB.start();
+
+        expect(bridgeA.port).toBeGreaterThan(0);
+        expect(bridgeB.port).toBeGreaterThan(0);
+        expect(bridgeA.port).not.toBe(bridgeB.port);
+
+        await bridgeA.stop();
+        await bridgeB.stop();
+        fs.rmSync(logDirA, { recursive: true, force: true });
+        fs.rmSync(logDirB, { recursive: true, force: true });
+    });
+});

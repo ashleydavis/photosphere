@@ -6,14 +6,13 @@ source "$TEST_DIR/../../lib/common.sh"
 print_test_header 1 "launch-and-navigate"
 
 TMP_DIR="$TEST_DIR/tmp"
-APP_PORT=$(find_free_port)
 
 cleanup() {
     stop_app "$APP_PORT" "$TMP_DIR" 2>/dev/null || true
 }
 trap cleanup EXIT
 
-start_app "$APP_PORT" "$TMP_DIR"
+start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
 # Navigate and confirm the command round-tripped through the bridge to the shared driver.

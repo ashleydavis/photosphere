@@ -8,7 +8,6 @@ DESKTOP_DIR="$(cd "$TEST_DIR/../.." && native_pwd)"
 print_test_header 9 "view-secret"
 
 TMP_DIR="$TEST_DIR/tmp"
-APP_PORT=$(find_free_port)
 
 cleanup() {
     if [ -f "$TMP_DIR/app.pid" ]; then
@@ -21,7 +20,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-start_app "$APP_PORT" "$TMP_DIR"
+start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
 send_command "$APP_PORT" navigate '{"page":"secrets"}'

@@ -8,7 +8,6 @@ DESKTOP_DIR="$(cd "$TEST_DIR/../.." && native_pwd)"
 print_test_header 15 "duplicate-name"
 
 TMP_DIR="$TEST_DIR/tmp"
-APP_PORT=$(find_free_port)
 
 cleanup() {
     if [ -f "$TMP_DIR/app.pid" ]; then
@@ -36,7 +35,7 @@ with open('$TMP_DIR/vault/dup-secret.json', 'w') as f:
 # the duplicate-add does not overwrite it.
 ORIG_MTIME=$(python3 -c "import os; print(os.path.getmtime('$TMP_DIR/vault/dup-secret.json'))")
 
-start_app "$APP_PORT" "$TMP_DIR"
+start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
 send_command "$APP_PORT" navigate '{"page":"secrets"}'

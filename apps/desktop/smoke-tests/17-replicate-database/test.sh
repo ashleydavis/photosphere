@@ -11,7 +11,6 @@ IMAGES_DIR="$REPO_DIR/test/multiple-files"
 print_test_header 17 "replicate-database"
 
 TMP_DIR="$TEST_DIR/tmp"
-APP_PORT=$(find_free_port)
 
 cleanup() {
     if [ -f "$TMP_DIR/app.pid" ]; then
@@ -33,7 +32,7 @@ cd "$CLI_DIR" && bun run start -- init --db "$SOURCE_DB" --yes
 cd "$CLI_DIR" && bun run start -- add "$IMAGES_DIR/test-1.jpeg" --db "$SOURCE_DB" --yes
 cd "$DESKTOP_DIR"
 
-start_app "$APP_PORT" "$TMP_DIR"
+start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
 send_command "$APP_PORT" navigate '{"page":"databases"}'

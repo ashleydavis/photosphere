@@ -8,8 +8,6 @@ DESKTOP_DIR="$(cd "$TEST_DIR/../.." && native_pwd)"
 print_test_header 7 "share-secret"
 
 TMP_DIR="$TEST_DIR/tmp"
-SENDER_PORT=$(find_free_port)
-RECEIVER_PORT=$(find_free_port)
 
 cleanup() {
     if [ -f "$TMP_DIR/sender/app.pid" ]; then
@@ -37,7 +35,8 @@ cat > "$TMP_DIR/sender/vault/test-secret.json" << 'EOF'
 EOF
 
 # Start sender app
-start_app "$SENDER_PORT" "$TMP_DIR/sender" 0
+start_app "$TMP_DIR/sender" 0
+SENDER_PORT="$APP_PORT"
 wait_for_ready "$SENDER_PORT"
 
 send_command "$SENDER_PORT" navigate '{"page":"secrets"}'
@@ -67,7 +66,8 @@ fi
 log_info "Pairing code: $code"
 
 # Start receiver app
-start_app "$RECEIVER_PORT" "$TMP_DIR/receiver" 960
+start_app "$TMP_DIR/receiver" 960
+RECEIVER_PORT="$APP_PORT"
 wait_for_ready "$RECEIVER_PORT"
 
 send_command "$RECEIVER_PORT" navigate '{"page":"secrets"}'

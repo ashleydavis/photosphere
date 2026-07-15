@@ -34,20 +34,6 @@ print_test_header() {
 }
 
 #
-# Finds a free TCP port using Python.
-#
-find_free_port() {
-    python3 -c "
-import socket
-s = socket.socket()
-s.bind(('', 0))
-port = s.getsockname()[1]
-s.close()
-print(port)
-"
-}
-
-#
 # Returns the current directory as a native OS path.
 # On Windows (Git Bash), pwd returns POSIX paths (/d/a/...) which native
 # Windows processes like Electron cannot resolve correctly. pwd -W returns
@@ -109,18 +95,45 @@ get_release_binary() {
 }
 
 #
-# Launches the Electron app in test mode as a background process.
-# Usage: start_app <port> <tmp_dir> [x_position]
+# Waits for the app to publish the OS-assigned port its test control server bound and prints it.
+# The app binds port 0 and writes the actual port to $tmp_dir/test-control.port. Diagnostics go to
+# stderr so callers can capture the port from stdout.
+# Usage: wait_for_test_port <port_file> [timeout_secs]
+#
+wait_for_test_port() {
+    local port_file="$1"
+    local timeout="${2:-60}"
+    local elapsed=0
+    while [ "$elapsed" -lt "$timeout" ]; do
+        if [ -s "$port_file" ]; then
+            cat "$port_file"
+            return 0
+        fi
+        sleep 1
+        elapsed=$((elapsed + 1))
+    done
+    log_error "Test control server did not report a listening port within ${timeout}s" >&2
+    return 1
+}
+
+#
+# Launches the Electron app in test mode as a background process. The app's test control server
+# binds an OS-assigned free port (never a pre-picked number, which could collide with a parallel
+# run) and writes it to $tmp_dir/test-control.port; this reads it back and publishes it as the
+# APP_PORT global that callers use. For a second concurrent instance, copy APP_PORT into your own
+# variable right after the call (see the share tests).
+# Usage: start_app <tmp_dir> [x_position]
 #
 # On Linux the app runs headlessly via xvfb-run by default. Set SHOW_UI=1 to
 # show the window instead (useful for debugging a failing test). xvfb-run is
 # Linux-only; on macOS/Windows the UI is always shown.
 #
 start_app() {
-    local port="$1"
-    local tmp_dir="$2"
-    local x_pos="${3:-0}"
+    local tmp_dir="$1"
+    local x_pos="${2:-0}"
     mkdir -p "$tmp_dir"
+    # Clear any stale port file from a previous launch so wait_for_test_port reads this launch's port.
+    rm -f "$tmp_dir/test-control.port"
     local launch_args=()
     if [ "${USE_BINARY:-false}" = "true" ]; then
         launch_args+=("$(get_release_binary)")
@@ -142,7 +155,6 @@ start_app() {
     fi
 
     PHOTOSPHERE_TEST_MODE=1 \
-    PHOTOSPHERE_TEST_PORT="$port" \
     PHOTOSPHERE_CONFIG_DIR="$tmp_dir/config" \
     PHOTOSPHERE_VAULT_DIR="$tmp_dir/vault" \
     PHOTOSPHERE_VAULT_TYPE=plaintext \
@@ -152,7 +164,11 @@ start_app() {
     NODE_ENV=testing \
     "${wrapper[@]}" "${launch_args[@]}" --no-sandbox --disable-gpu -geometry "${PHOTOSPHERE_TEST_GEOMETRY:-960x800+${x_pos}+0}" > "$tmp_dir/app.log" 2>&1 &
     echo $! > "$tmp_dir/app.pid"
-    log_info "App started (PID $(cat "$tmp_dir/app.pid"), port $port)"
+
+    local actual_port
+    actual_port=$(wait_for_test_port "$tmp_dir/test-control.port") || return 1
+    APP_PORT="$actual_port"
+    log_info "App started (PID $(cat "$tmp_dir/app.pid"), port $actual_port)"
 }
 
 #

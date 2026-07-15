@@ -10,7 +10,6 @@ CLI_DIR="$REPO_DIR/apps/cli"
 print_test_header 3 "open-database"
 
 TMP_DIR="$TEST_DIR/tmp"
-APP_PORT=$(find_free_port)
 
 trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 
@@ -27,7 +26,7 @@ description = ""
 path = "$TMP_DIR/test-db"
 EOF
 
-start_app "$APP_PORT" "$TMP_DIR"
+start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
 send_command "$APP_PORT" menu '{"itemId":"open-database"}'

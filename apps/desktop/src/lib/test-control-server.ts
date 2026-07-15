@@ -1,6 +1,7 @@
 import express from 'express';
 import type { Express } from 'express';
 import http from 'http';
+import type { AddressInfo } from 'net';
 import fs from 'fs';
 import path from 'path';
 import { app, BrowserWindow, ipcMain } from 'electron';
@@ -21,7 +22,8 @@ export interface ITestControlServer {
 
 //
 // HTTP test control server that allows shell scripts to drive the Electron app programmatically.
-// Only started when PHOTOSPHERE_TEST_MODE=1. Listens on the port given by PHOTOSPHERE_TEST_PORT.
+// Only started when PHOTOSPHERE_TEST_MODE=1. Binds an OS-assigned free port and writes it to
+// $PHOTOSPHERE_LOG_DIR/test-control.port so the harness can read back the actual port.
 //
 export class TestControlServer implements ITestControlServer {
     //
@@ -186,15 +188,17 @@ export class TestControlServer implements ITestControlServer {
     }
 
     //
-    // Starts the HTTP server on the port given by PHOTOSPHERE_TEST_PORT.
+    // Starts the HTTP server on an OS-assigned free port (bind 0), then writes the actual port to
+    // $PHOTOSPHERE_LOG_DIR/test-control.port. Binding an OS-assigned port is atomic and cannot
+    // collide with a parallel run, unlike pre-picking a port number and binding it later.
     //
     start(): void {
-        const portStr = process.env.PHOTOSPHERE_TEST_PORT;
-        if (!portStr) {
-            throw new Error('PHOTOSPHERE_TEST_PORT environment variable is not set');
-        }
-        const port = parseInt(portStr, 10);
-        this.server.listen(port, '127.0.0.1', () => {
+        this.server.listen(0, '127.0.0.1', () => {
+            const port = (this.server.address() as AddressInfo).port;
+            const logDir = process.env.PHOTOSPHERE_LOG_DIR;
+            if (logDir) {
+                fs.writeFileSync(path.join(logDir, 'test-control.port'), String(port));
+            }
             log.info(`Test control server listening on port ${port}`);
         });
     }

@@ -15,7 +15,6 @@ DESKTOP_DIR="$(cd "$TEST_DIR/../.." && native_pwd)"
 print_test_header 24 "sync-settings"
 
 TMP_DIR="$TEST_DIR/tmp"
-APP_PORT=$(find_free_port)
 CONFIG_TOML="$TMP_DIR/config/desktop.toml"
 
 cleanup() {
@@ -71,7 +70,7 @@ wait_for_toml() {
     exit 1
 }
 
-start_app "$APP_PORT" "$TMP_DIR"
+start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
 # On startup the SyncContext mounts and pushes its computed gate to the host. With the

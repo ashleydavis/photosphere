@@ -11,7 +11,6 @@ source "$TEST_DIR/../../lib/common.sh"
 print_test_header 21 "import-video"
 
 TMP_DIR="$TEST_DIR/tmp"
-APP_PORT=$(find_free_port)
 
 # The empty target database (seeded from the checked-in no-assets fixture) and its sandbox-relative name.
 DB_NAME="import-target"
@@ -25,7 +24,7 @@ trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 mkdir -p "$STAGE_DIR"
 cp "$VIDEO_SRC/test.mp4" "$STAGE_DIR/"
 
-start_app "$APP_PORT" "$TMP_DIR"
+start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
 # Deterministic start, then seed the empty database, the video into the sandbox import temp dir, and

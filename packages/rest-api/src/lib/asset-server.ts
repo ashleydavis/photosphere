@@ -1,6 +1,7 @@
 import express from "express";
 import type { Application } from "express";
 import { createServer, type Server } from "http";
+import type { AddressInfo } from "net";
 import { createAssetServerCore, attachAssetServerRoutes } from "node-api";
 import { type IUuidGenerator, type ITimestampProvider, log } from "utils";
 
@@ -71,8 +72,9 @@ export async function createAssetServer(options: IAssetServerOptions): Promise<I
         };
     }
 
-    // Create HTTP server from Express app
-    if (!port) {
+    // Create HTTP server from Express app. Port 0 is allowed and means "let the OS assign a free
+    // port" (read the actual port back from server.address()); only an absent port is an error.
+    if (port === undefined) {
         throw new Error("Port is required when creating a new server");
     }
 
@@ -81,7 +83,8 @@ export async function createAssetServer(options: IAssetServerOptions): Promise<I
     // Start server
     await new Promise<void>((resolve) => {
         server.listen(port, "127.0.0.1", () => {
-            log.info(`Asset server running on http://localhost:${port}`);
+            const boundPort = (server.address() as AddressInfo).port;
+            log.info(`Asset server running on http://localhost:${boundPort}`);
             resolve();
         });
     });

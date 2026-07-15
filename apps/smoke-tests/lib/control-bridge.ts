@@ -214,39 +214,23 @@ export class ControlBridge {
     //
     start(): Promise<void> {
         return new Promise<void>((resolve, reject) => {
-            //
-            // The chosen port is free when the harness picks it, but on a busy machine another
-            // process can transiently grab it during the ~1s window before this server binds,
-            // producing EADDRINUSE. Without an error handler the server emits an unhandled error
-            // and the process dies, so the bridge never comes up. Retry the bind on that transient
-            // collision (the grabbing socket is short-lived) until the port frees, so a random port
-            // race does not fail the whole test run.
-            //
-            const retryDelayMs = 100;
-            const maxAttempts = 150;
-            let attempts = 0;
-            const attemptListen = (): void => {
-                const onError = (error: NodeJS.ErrnoException): void => {
-                    if (error.code === "EADDRINUSE" && attempts < maxAttempts) {
-                        attempts += 1;
-                        setTimeout(attemptListen, retryDelayMs);
-                    }
-                    else {
-                        reject(error);
-                    }
-                };
-                this.httpServer.once("error", onError);
-                //
-                // Bind to loopback only. This is a test-control server driven from the same machine (the
-                // iOS simulator and Android emulator both reach the host loopback interface), so it must
-                // never be exposed on the LAN.
-                //
-                this.httpServer.listen(this.options.port, "127.0.0.1", () => {
-                    this.httpServer.removeListener("error", onError);
-                    resolve();
-                });
+            const onError = (error: NodeJS.ErrnoException): void => {
+                reject(error);
             };
-            attemptListen();
+            this.httpServer.once("error", onError);
+            //
+            // Bind an OS-assigned free port (options.port is 0) on loopback only. Letting the OS
+            // assign the port is atomic and cannot collide with a parallel run (for example an
+            // Electron smoke test): there is no pre-picked port number to lose in the window before
+            // this Bun process binds. The harness reads the actually-bound port back (see the `port`
+            // getter and control-bridge-main). Loopback only because this test-control server is
+            // driven from the same machine (the iOS simulator and Android emulator both reach the
+            // host loopback interface), so it must never be exposed on the LAN.
+            //
+            this.httpServer.listen(this.options.port, "127.0.0.1", () => {
+                this.httpServer.removeListener("error", onError);
+                resolve();
+            });
         });
     }
 

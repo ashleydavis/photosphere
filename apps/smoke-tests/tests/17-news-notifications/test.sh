@@ -12,11 +12,10 @@ source "$TEST_DIR/../../lib/common.sh"
 print_test_header 17 "news-notifications"
 
 TMP_DIR="$TEST_DIR/tmp"
-APP_PORT=$(find_free_port)
 
 trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 
-start_app "$APP_PORT" "$TMP_DIR"
+start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
 # Seed a news item (desktop feeds news.yaml via PHOTOSPHERE_NEWS_URL; on mobile the news feed is

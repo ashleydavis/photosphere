@@ -27,7 +27,6 @@ IMAGES_DIR="$REPO_DIR/test/multiple-files"
 print_test_header 20 "download-multiple-assets"
 
 TMP_DIR="$TEST_DIR/tmp"
-APP_PORT=$(find_free_port)
 SOURCE_DB="$TMP_DIR/test-db"
 DOWNLOAD_DIR="$TMP_DIR/downloads"
 
@@ -54,7 +53,7 @@ mkdir -p "$DOWNLOAD_DIR"
 # directly into this folder.
 export PHOTOSPHERE_TEST_DOWNLOAD_FOLDER="$DOWNLOAD_DIR"
 
-start_app "$APP_PORT" "$TMP_DIR"
+start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
 log_info "Opening database..."

@@ -10,11 +10,10 @@ source "$TEST_DIR/../../lib/common.sh"
 print_test_header 5 "add-secret"
 
 TMP_DIR="$TEST_DIR/tmp"
-APP_PORT=$(find_free_port)
 
 trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 
-start_app "$APP_PORT" "$TMP_DIR"
+start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
 # Clean slate so the secret name is not seen as a duplicate from a previous run.

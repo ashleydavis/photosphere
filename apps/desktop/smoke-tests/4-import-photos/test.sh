@@ -11,7 +11,6 @@ IMAGES_DIR="$REPO_DIR/test/multiple-files"
 print_test_header 4 "import-photos"
 
 TMP_DIR="$TEST_DIR/tmp"
-APP_PORT=$(find_free_port)
 
 trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 
@@ -28,7 +27,7 @@ description = ""
 path = "$TMP_DIR/test-db"
 EOF
 
-start_app "$APP_PORT" "$TMP_DIR"
+start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
 send_command "$APP_PORT" menu '{"itemId":"open-database"}'

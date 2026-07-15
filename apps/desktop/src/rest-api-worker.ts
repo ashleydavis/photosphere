@@ -5,6 +5,7 @@
 import { createAssetServer } from 'rest-api';
 import { RandomUuidGenerator, TimestampProvider, setLog, log } from 'utils';
 import type { Server } from 'http';
+import type { AddressInfo } from 'net';
 import { createWorkerLog } from './lib/worker-log-electron';
 
 //
@@ -31,6 +32,9 @@ export type IRestApiWorkerMessage = IRestApiWorkerStartMessage | IRestApiWorkerS
 
 export interface IRestApiWorkerServerReadyMessage {
     type: "server-ready";
+    // The port the server actually bound. The worker is asked to bind port 0 (OS-assigned) on the
+    // first start, so the main process learns the real port from this message.
+    port: number;
 }
 
 export interface IRestApiWorkerServerStoppedMessage {
@@ -112,10 +116,13 @@ async function startServer(port: number): Promise<void> {
     });
 
     server = result.server;
+    // Read the actually-bound port (the requested port may be 0, meaning OS-assigned) and report it
+    // back so the main process can build the frontend's REST API URL.
+    const boundPort = server ? (server.address() as AddressInfo).port : port;
     log.info('Asset server initialized in utility process');
 
     // Send ready message to main thread
-    const readyMessage: IRestApiWorkerServerReadyMessage = { type: "server-ready" };
+    const readyMessage: IRestApiWorkerServerReadyMessage = { type: "server-ready", port: boundPort };
     parentPort.postMessage(readyMessage);
 }
 
@@ -145,7 +152,8 @@ parentPort.on('message', async (event: { data: IRestApiWorkerMessage }) => {
 
     if (message.type === 'start') {
         const port = message.port;
-        if (!port) {
+        // Port 0 is valid (OS-assigned); only an absent port is an error.
+        if (port === undefined || port === null) {
             log.error('Port is required to start the server');
             const errorMessage: IRestApiWorkerServerErrorMessage = { type: "server-error", error: "Port is required" };
             parentPort.postMessage(errorMessage);

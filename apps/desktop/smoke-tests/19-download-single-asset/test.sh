@@ -27,7 +27,6 @@ IMAGES_DIR="$REPO_DIR/test/multiple-files"
 print_test_header 19 "download-single-asset"
 
 TMP_DIR="$TEST_DIR/tmp"
-APP_PORT=$(find_free_port)
 SOURCE_DB="$TMP_DIR/test-db"
 DOWNLOAD_DIR="$TMP_DIR/downloads"
 DOWNLOAD_FILE="$DOWNLOAD_DIR/test-1.jpeg"
@@ -54,7 +53,7 @@ mkdir -p "$DOWNLOAD_DIR"
 # and use this path directly for the next save-asset call.
 export PHOTOSPHERE_TEST_PICK_FILE_PATH="$DOWNLOAD_FILE"
 
-start_app "$APP_PORT" "$TMP_DIR"
+start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
 log_info "Opening database..."

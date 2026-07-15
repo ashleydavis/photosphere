@@ -12,11 +12,10 @@ source "$TEST_DIR/../../lib/common.sh"
 print_test_header 18 "move-file"
 
 TMP_DIR="$TEST_DIR/tmp"
-APP_PORT=$(find_free_port)
 
 trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 
-start_app "$APP_PORT" "$TMP_DIR"
+start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
 # Create a source database with one asset and an empty destination database (under tmp), copy both

@@ -11,7 +11,6 @@ IMAGES_DIR="$REPO_DIR/test/multiple-files"
 print_test_header 18 "move-file"
 
 TMP_DIR="$TEST_DIR/tmp"
-APP_PORT=$(find_free_port)
 
 trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 
@@ -40,7 +39,7 @@ description = ""
 path = "$DEST_DB"
 EOF
 
-start_app "$APP_PORT" "$TMP_DIR"
+start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
 log_info "Opening source database..."

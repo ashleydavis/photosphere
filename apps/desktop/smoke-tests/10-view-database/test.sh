@@ -10,7 +10,6 @@ CLI_DIR="$REPO_DIR/apps/cli"
 print_test_header 10 "view-database"
 
 TMP_DIR="$TEST_DIR/tmp"
-APP_PORT=$(find_free_port)
 
 cleanup() {
     if [ -f "$TMP_DIR/app.pid" ]; then
@@ -33,7 +32,7 @@ PHOTOSPHERE_VAULT_TYPE=plaintext \
 bun run start -- secrets add --yes --type api-key --name smoke-geocoding --value "fake-geocoding-key"
 cd "$DESKTOP_DIR"
 
-start_app "$APP_PORT" "$TMP_DIR"
+start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
 send_command "$APP_PORT" navigate '{"page":"databases"}'
