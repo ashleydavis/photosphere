@@ -1,8 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { log } from 'utils';
-import Modal from '@mui/joy/Modal';
-import ModalDialog from '@mui/joy/ModalDialog';
-import { responsiveModalSx } from '../lib/modal-styles';
+import { ResponsiveDialog } from './responsive-dialog';
 import DialogTitle from '@mui/joy/DialogTitle';
 import DialogContent from '@mui/joy/DialogContent';
 import DialogActions from '@mui/joy/DialogActions';
@@ -159,8 +157,13 @@ export function ViewSecretDialog({ open, secret, onClose, getSecretValue }: IVie
     }
 
     return (
-        <Modal open={open} onClose={onClose}>
-            <ModalDialog onKeyDown={createDialogKeyHandler(handleConfirm, loading)} sx={{ ...responsiveModalSx(480, 680) }}>
+        <ResponsiveDialog
+            open={open}
+            onClose={onClose}
+            minWidth={480}
+            maxWidth={680}
+            onKeyDown={createDialogKeyHandler(handleConfirm, loading)}
+            >
                 <DialogTitle>View Secret</DialogTitle>
                 <DialogContent>
                     <Typography level="body-md" sx={{ mb: 1 }}>
@@ -191,7 +194,6 @@ export function ViewSecretDialog({ open, secret, onClose, getSecretValue }: IVie
                         </Button>
                     )}
                 </DialogActions>
-            </ModalDialog>
-        </Modal>
+        </ResponsiveDialog>
     );
 }

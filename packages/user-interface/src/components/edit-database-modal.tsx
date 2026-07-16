@@ -3,10 +3,8 @@ import { log, logExceptions } from 'utils';
 import Box from '@mui/joy/Box';
 import Typography from '@mui/joy/Typography';
 import Button from '@mui/joy/Button';
-import Modal from '@mui/joy/Modal';
 import ModalClose from '@mui/joy/ModalClose';
-import ModalDialog from '@mui/joy/ModalDialog';
-import { responsiveModalSx } from '../lib/modal-styles';
+import { ResponsiveDialog } from './responsive-dialog';
 import DialogTitle from '@mui/joy/DialogTitle';
 import DialogContent from '@mui/joy/DialogContent';
 import DialogActions from '@mui/joy/DialogActions';
@@ -212,10 +210,12 @@ export function EditDatabaseModal({
 
     return (
         <>
-            <Modal open={open} onClose={onClose}>
-                <ModalDialog
-                    onKeyDown={createDialogKeyHandler(handleSave, false)}
-                    sx={{ ...responsiveModalSx(500, 700) }}
+            <ResponsiveDialog
+                open={open}
+                onClose={onClose}
+                minWidth={500}
+                maxWidth={700}
+                onKeyDown={createDialogKeyHandler(handleSave, false)}
                 >
                     <ModalClose />
                     <DialogTitle>{entry ? 'Edit Database' : 'Add Database'}</DialogTitle>
@@ -288,8 +288,7 @@ export function EditDatabaseModal({
                             Save
                         </Button>
                     </DialogActions>
-                </ModalDialog>
-            </Modal>
+            </ResponsiveDialog>
 
             <ConfigureSecretsModal
                 open={secretsModalOpen}

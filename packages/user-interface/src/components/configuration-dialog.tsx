@@ -6,10 +6,8 @@ import ToggleButtonGroup from "@mui/joy/ToggleButtonGroup/ToggleButtonGroup";
 import Button from "@mui/joy/Button/Button";
 import Slider from "@mui/joy/Slider/Slider";
 import Switch from "@mui/joy/Switch";
-import Modal from "@mui/joy/Modal";
 import ModalClose from "@mui/joy/ModalClose";
-import ModalDialog from "@mui/joy/ModalDialog";
-import { responsiveModalSx } from "../lib/modal-styles";
+import { ResponsiveDialog } from "./responsive-dialog";
 import DialogTitle from "@mui/joy/DialogTitle";
 import DialogContent from "@mui/joy/DialogContent";
 import { useConfig } from "../context/config-context";
@@ -39,8 +37,14 @@ export function ConfigurationDialog({ open, onClose }: IConfigurationDialogProps
     const { syncEnabled, toggleSyncEnabled, syncOnlyOnWifi, toggleSyncOnlyOnWifi } = useSync();
 
     return (
-        <Modal open={open} onClose={onClose}>
-            <ModalDialog data-id="configuration-dialog" onKeyDown={createDialogKeyHandler(onClose, false)} sx={{ ...responsiveModalSx(300, 440) }}>
+        <ResponsiveDialog
+            open={open}
+            onClose={onClose}
+            minWidth={300}
+            maxWidth={440}
+            dataId="configuration-dialog"
+            onKeyDown={createDialogKeyHandler(onClose, false)}
+            >
                 <ModalClose />
                 <DialogTitle>Configuration</DialogTitle>
                 <DialogContent>
@@ -101,7 +105,6 @@ export function ConfigurationDialog({ open, onClose }: IConfigurationDialogProps
                         </Stack>
                     </Stack>
                 </DialogContent>
-            </ModalDialog>
-        </Modal>
+        </ResponsiveDialog>
     );
 }

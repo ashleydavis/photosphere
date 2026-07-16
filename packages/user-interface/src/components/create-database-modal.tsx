@@ -1,9 +1,6 @@
 import React, { useState } from 'react';
 import { log } from 'utils';
 import Box from '@mui/joy/Box';
-import Modal from '@mui/joy/Modal';
-import ModalDialog from '@mui/joy/ModalDialog';
-import { responsiveModalSx } from '../lib/modal-styles';
 import DialogTitle from '@mui/joy/DialogTitle';
 import DialogContent from '@mui/joy/DialogContent';
 import DialogActions from '@mui/joy/DialogActions';
@@ -21,6 +18,7 @@ import { useAssetDatabase } from '../context/asset-database-source';
 import { SelectSecretModal } from './select-secret-modal';
 import { S3BrowserModal } from './s3-browser-modal';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
+import { ResponsiveDialog } from './responsive-dialog';
 
 export interface ICreateDatabaseModalProps {
     // Whether the modal is visible.
@@ -209,96 +207,97 @@ export function CreateDatabaseModal({ open, onClose }: ICreateDatabaseModalProps
 
     return (
         <>
-            <Modal open={open} onClose={onClose}>
-                <ModalDialog
-                    onKeyDown={createDialogKeyHandler(handleCreate, !form.path || nameError !== undefined)}
-                    sx={{ ...responsiveModalSx(520, 700) }}
+            <ResponsiveDialog
+                open={open}
+                onClose={onClose}
+                minWidth={520}
+                maxWidth={700}
+                onKeyDown={createDialogKeyHandler(handleCreate, !form.path || nameError !== undefined)}
                 >
-                    <DialogTitle>New Database</DialogTitle>
-                    <DialogContent>
-                        <FormControl sx={{ mb: 1 }} error={nameError !== undefined}>
-                            <FormLabel>Name</FormLabel>
-                            <Input
-                                data-id="database-name-input"
-                                value={form.name}
-                                onChange={event => {
-                                    setForm(prev => ({ ...prev, name: event.target.value }));
-                                    setNameError(undefined);
-                                }}
-                            />
-                            {nameError && (
-                                <Typography level="body-sm" color="danger" sx={{ mt: 0.5 }}>
-                                    {nameError}
-                                </Typography>
-                            )}
-                        </FormControl>
+                <DialogTitle>New Database</DialogTitle>
+                <DialogContent>
+                    <FormControl sx={{ mb: 1 }} error={nameError !== undefined}>
+                        <FormLabel>Name</FormLabel>
+                        <Input
+                            data-id="database-name-input"
+                            value={form.name}
+                            onChange={event => {
+                                setForm(prev => ({ ...prev, name: event.target.value }));
+                                setNameError(undefined);
+                            }}
+                        />
+                        {nameError && (
+                            <Typography level="body-sm" color="danger" sx={{ mt: 0.5 }}>
+                                {nameError}
+                            </Typography>
+                        )}
+                    </FormControl>
 
-                        <FormControl sx={{ mb: 1 }}>
-                            <FormLabel>Description</FormLabel>
-                            <Input
-                                value={form.description}
-                                onChange={event => setForm(prev => ({ ...prev, description: event.target.value }))}
-                            />
-                        </FormControl>
+                    <FormControl sx={{ mb: 1 }}>
+                        <FormLabel>Description</FormLabel>
+                        <Input
+                            value={form.description}
+                            onChange={event => setForm(prev => ({ ...prev, description: event.target.value }))}
+                        />
+                    </FormControl>
 
-                        <FormControl sx={{ mb: 2 }}>
-                            <FormLabel>Type</FormLabel>
-                            <Select
-                                value={form.storageType}
-                                onChange={(_event, value) => setForm(prev => ({ ...prev, storageType: value as StorageType, path: '', s3Key: undefined }))}
-                            >
-                                <Option value="filesystem">File system</Option>
-                                <Option value="s3">S3</Option>
-                            </Select>
-                        </FormControl>
-
-                        {form.storageType === 's3' && renderSecretButton('S3 Credentials', 's3-credentials', s3SecretName)}
-
-                        <FormControl sx={{ mb: 2 }}>
-                            <FormLabel>Path</FormLabel>
-                            <Box sx={{ display: 'flex', gap: 1 }}>
-                                <Input
-                                    data-id="database-path-input"
-                                    sx={{ flexGrow: 1 }}
-                                    value={form.path}
-                                    onChange={event => setForm(prev => ({ ...prev, path: event.target.value }))}
-                                />
-                                <Button
-                                    variant="outlined"
-                                    disabled={browseDisabled}
-                                    onClick={() => handleBrowse().catch(err => log.exception('Browse error:', err as Error))}
-                                >
-                                    {form.storageType === 's3' ? 'Browse S3' : 'Browse'}
-                                </Button>
-                            </Box>
-                        </FormControl>
-
-                        <FormControl sx={{ mb: 2 }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Switch
-                                    checked={form.encrypted}
-                                    onChange={event => setForm(prev => ({ ...prev, encrypted: event.target.checked, encryptionKey: undefined }))}
-                                />
-                                <FormLabel>Encrypted</FormLabel>
-                            </Box>
-                        </FormControl>
-
-                        {form.encrypted && renderSecretButton('Encryption Key', 'encryption-key', encryptionSecretName)}
-
-                        {renderSecretButton('Geocoding API Key (optional)', 'api-key', geocodingSecretName)}
-                    </DialogContent>
-                    <DialogActions>
-                        <Button variant="plain" onClick={onClose}>Cancel</Button>
-                        <Button
-                            data-id="create-database-confirm"
-                            disabled={!form.path || nameError !== undefined}
-                            onClick={() => handleCreate().catch(err => log.exception('Create database error:', err as Error))}
+                    <FormControl sx={{ mb: 2 }}>
+                        <FormLabel>Type</FormLabel>
+                        <Select
+                            value={form.storageType}
+                            onChange={(_event, value) => setForm(prev => ({ ...prev, storageType: value as StorageType, path: '', s3Key: undefined }))}
                         >
-                            Create
-                        </Button>
-                    </DialogActions>
-                </ModalDialog>
-            </Modal>
+                            <Option value="filesystem">File system</Option>
+                            <Option value="s3">S3</Option>
+                        </Select>
+                    </FormControl>
+
+                    {form.storageType === 's3' && renderSecretButton('S3 Credentials', 's3-credentials', s3SecretName)}
+
+                    <FormControl sx={{ mb: 2 }}>
+                        <FormLabel>Path</FormLabel>
+                        <Box sx={{ display: 'flex', gap: 1 }}>
+                            <Input
+                                data-id="database-path-input"
+                                sx={{ flexGrow: 1 }}
+                                value={form.path}
+                                onChange={event => setForm(prev => ({ ...prev, path: event.target.value }))}
+                            />
+                            <Button
+                                variant="outlined"
+                                disabled={browseDisabled}
+                                onClick={() => handleBrowse().catch(err => log.exception('Browse error:', err as Error))}
+                            >
+                                {form.storageType === 's3' ? 'Browse S3' : 'Browse'}
+                            </Button>
+                        </Box>
+                    </FormControl>
+
+                    <FormControl sx={{ mb: 2 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Switch
+                                checked={form.encrypted}
+                                onChange={event => setForm(prev => ({ ...prev, encrypted: event.target.checked, encryptionKey: undefined }))}
+                            />
+                            <FormLabel>Encrypted</FormLabel>
+                        </Box>
+                    </FormControl>
+
+                    {form.encrypted && renderSecretButton('Encryption Key', 'encryption-key', encryptionSecretName)}
+
+                    {renderSecretButton('Geocoding API Key (optional)', 'api-key', geocodingSecretName)}
+                </DialogContent>
+                <DialogActions>
+                    <Button variant="plain" onClick={onClose}>Cancel</Button>
+                    <Button
+                        data-id="create-database-confirm"
+                        disabled={!form.path || nameError !== undefined}
+                        onClick={() => handleCreate().catch(err => log.exception('Create database error:', err as Error))}
+                    >
+                        Create
+                    </Button>
+                </DialogActions>
+            </ResponsiveDialog>
 
             {selectSecretType !== undefined && (
                 <SelectSecretModal

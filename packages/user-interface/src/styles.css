@@ -228,6 +228,47 @@ body.mobile #navbar {
     width: auto !important;
 }
 
+/* Dialog animation.
+
+   Joy's Modal has no transition of its own, so a centred dialog and its backdrop would otherwise
+   appear instantly. They are animated here rather than through an `sx` prop so that every dialog
+   picks it up, including the few that do not use `desktopDialogSx`.
+
+   This covers the desktop form only. On a phone a dialog is a Joy Drawer, which slides itself;
+   see `mobileSheetDrawerSx`. There is no matching exit animation because Joy's Modal unmounts the
+   moment it closes, leaving nothing to animate out. */
+
+@keyframes modal-backdrop-enter {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+@keyframes modal-dialog-enter {
+    /* Joy centres its dialog with a translate, so the animation has to carry that translate or the
+       dialog lurches out of the centre for the length of it. */
+    from { transform: translate(-50%, -50%) scale(0.96); opacity: 0; }
+    to   { transform: translate(-50%, -50%) scale(1);    opacity: 1; }
+}
+
+.MuiModal-backdrop {
+    animation: modal-backdrop-enter 0.15s ease-out;
+}
+
+.MuiModalDialog-root {
+    animation: modal-dialog-enter 0.15s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .MuiModal-backdrop,
+    .MuiModalDialog-root {
+        animation: none;
+    }
+
+    .MuiDrawer-root {
+        --Drawer-transitionDuration: 0s;
+    }
+}
+
 /* Info page */
 
 #info-area {

@@ -1,7 +1,4 @@
 import React, { useState } from 'react';
-import Modal from '@mui/joy/Modal';
-import ModalDialog from '@mui/joy/ModalDialog';
-import { responsiveModalSx } from '../lib/modal-styles';
 import DialogTitle from '@mui/joy/DialogTitle';
 import DialogContent from '@mui/joy/DialogContent';
 import DialogActions from '@mui/joy/DialogActions';
@@ -16,6 +13,7 @@ import ListItem from '@mui/joy/ListItem';
 import ListItemButton from '@mui/joy/ListItemButton';
 import { usePlatform } from '../context/platform-context';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
+import { ResponsiveDialog } from './responsive-dialog';
 
 export interface IS3BrowserModalProps {
     // Whether the modal is visible.
@@ -137,55 +135,59 @@ export function S3BrowserModal({ open, s3Key, onClose, onSelect }: IS3BrowserMod
     }
 
     return (
-        <Modal open={open} onClose={onClose}>
-            <ModalDialog onKeyDown={createDialogKeyHandler(handleSelectLocation, !bucket)} sx={{ ...responsiveModalSx(520, 740) }}>
-                <DialogTitle>Browse S3</DialogTitle>
-                <DialogContent>
-                    <FormControl sx={{ mb: 2 }}>
-                        <FormLabel>Bucket</FormLabel>
-                        <Input
-                            value={bucket}
-                            onChange={event => handleBucketChange(event.target.value)}
-                            placeholder="my-bucket-name"
-                        />
-                    </FormControl>
+        <ResponsiveDialog
+            open={open}
+            onClose={onClose}
+            minWidth={520}
+            maxWidth={740}
+            onKeyDown={createDialogKeyHandler(handleSelectLocation, !bucket)}
+            >
+            <DialogTitle>Browse S3</DialogTitle>
+            <DialogContent>
+                <FormControl sx={{ mb: 2 }}>
+                    <FormLabel>Bucket</FormLabel>
+                    <Input
+                        value={bucket}
+                        onChange={event => handleBucketChange(event.target.value)}
+                        placeholder="my-bucket-name"
+                    />
+                </FormControl>
 
-                    {bucket && renderBreadcrumbs()}
+                {bucket && renderBreadcrumbs()}
 
-                    {listError && (
-                        <Typography level="body-sm" color="danger" sx={{ mb: 1 }}>
-                            {listError}
-                        </Typography>
-                    )}
+                {listError && (
+                    <Typography level="body-sm" color="danger" sx={{ mb: 1 }}>
+                        {listError}
+                    </Typography>
+                )}
 
-                    {entries.length > 0 && (
-                        <List size="sm" sx={{ maxHeight: 300, overflowY: 'auto' }}>
-                            {entries.map(dirName => (
-                                <ListItem key={dirName}>
-                                    <ListItemButton onClick={() => handleNavigate(dirName)}>
-                                        {dirName}/
-                                    </ListItemButton>
-                                </ListItem>
-                            ))}
-                        </List>
-                    )}
+                {entries.length > 0 && (
+                    <List size="sm" sx={{ maxHeight: 300, overflowY: 'auto' }}>
+                        {entries.map(dirName => (
+                            <ListItem key={dirName}>
+                                <ListItemButton onClick={() => handleNavigate(dirName)}>
+                                    {dirName}/
+                                </ListItemButton>
+                            </ListItem>
+                        ))}
+                    </List>
+                )}
 
-                    {bucket && entries.length === 0 && !listError && (
-                        <Typography level="body-sm" sx={{ mt: 1 }}>
-                            No sub-directories found here.
-                        </Typography>
-                    )}
-                </DialogContent>
-                <DialogActions>
-                    <Button variant="plain" onClick={onClose}>Cancel</Button>
-                    <Button
-                        disabled={!bucket}
-                        onClick={handleSelectLocation}
-                    >
-                        Select this location
-                    </Button>
-                </DialogActions>
-            </ModalDialog>
-        </Modal>
+                {bucket && entries.length === 0 && !listError && (
+                    <Typography level="body-sm" sx={{ mt: 1 }}>
+                        No sub-directories found here.
+                    </Typography>
+                )}
+            </DialogContent>
+            <DialogActions>
+                <Button variant="plain" onClick={onClose}>Cancel</Button>
+                <Button
+                    disabled={!bucket}
+                    onClick={handleSelectLocation}
+                >
+                    Select this location
+                </Button>
+            </DialogActions>
+        </ResponsiveDialog>
     );
 }

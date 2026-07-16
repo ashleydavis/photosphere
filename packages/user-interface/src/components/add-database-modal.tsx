@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
 import { log } from 'utils';
 import Box from '@mui/joy/Box';
-import Modal from '@mui/joy/Modal';
-import ModalDialog from '@mui/joy/ModalDialog';
-import { responsiveModalSx } from '../lib/modal-styles';
+import { ResponsiveDialog } from './responsive-dialog';
 import DialogTitle from '@mui/joy/DialogTitle';
 import DialogContent from '@mui/joy/DialogContent';
 import DialogActions from '@mui/joy/DialogActions';
@@ -210,10 +208,12 @@ export function AddDatabaseModal({ open, onClose }: IAddDatabaseModalProps) {
 
     return (
         <>
-            <Modal open={open} onClose={onClose}>
-                <ModalDialog
-                    onKeyDown={createDialogKeyHandler(handleAdd, !form.path)}
-                    sx={{ ...responsiveModalSx(520, 700) }}
+            <ResponsiveDialog
+                open={open}
+                onClose={onClose}
+                minWidth={520}
+                maxWidth={700}
+                onKeyDown={createDialogKeyHandler(handleAdd, !form.path)}
                 >
                     <DialogTitle>Add Database</DialogTitle>
                     <DialogContent>
@@ -290,8 +290,7 @@ export function AddDatabaseModal({ open, onClose }: IAddDatabaseModalProps) {
                             Add
                         </Button>
                     </DialogActions>
-                </ModalDialog>
-            </Modal>
+            </ResponsiveDialog>
 
             {selectSecretType !== undefined && (
                 <SelectSecretModal

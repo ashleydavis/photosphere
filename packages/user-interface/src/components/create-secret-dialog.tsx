@@ -1,8 +1,5 @@
 import { log } from "utils";
 import React, { useState } from 'react';
-import Modal from '@mui/joy/Modal';
-import ModalDialog from '@mui/joy/ModalDialog';
-import { responsiveModalSx } from '../lib/modal-styles';
 import DialogTitle from '@mui/joy/DialogTitle';
 import DialogContent from '@mui/joy/DialogContent';
 import DialogActions from '@mui/joy/DialogActions';
@@ -15,6 +12,7 @@ import { type ISharedSecretEntry } from '../context/platform-context';
 import { useApp } from '../context/app-context';
 import { buildValueJson, emptyFormState, type ISecretFormState } from '../lib/secrets-form';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
+import { ResponsiveDialog } from './responsive-dialog';
 
 export interface ICreateSecretDialogProps {
     // Whether the dialog is open.
@@ -130,27 +128,28 @@ export function CreateSecretDialog({ open, secretType, defaultName, onClose, onS
     }
 
     return (
-        <Modal open={open} onClose={onClose}>
-            <ModalDialog
-                onKeyDown={createDialogKeyHandler(handleSave, false)}
-                sx={{ ...responsiveModalSx(480, 640) }}
+        <ResponsiveDialog
+            open={open}
+            onClose={onClose}
+            minWidth={480}
+            maxWidth={640}
+            onKeyDown={createDialogKeyHandler(handleSave, false)}
             >
-                <DialogTitle>New {secretType} Secret</DialogTitle>
-                <DialogContent>
-                    <FormControl sx={{ mb: 2 }}>
-                        <FormLabel>Name</FormLabel>
-                        <Input
-                            value={form.name}
-                            onChange={event => setForm(prev => ({ ...prev, name: event.target.value }))}
-                        />
-                    </FormControl>
-                    {renderTypeFields()}
-                </DialogContent>
-                <DialogActions>
-                    <Button variant="plain" onClick={onClose}>Cancel</Button>
-                    <Button onClick={() => handleSave().catch(err => log.exception('Create secret error:', err as Error))}>Create</Button>
-                </DialogActions>
-            </ModalDialog>
-        </Modal>
+            <DialogTitle>New {secretType} Secret</DialogTitle>
+            <DialogContent>
+                <FormControl sx={{ mb: 2 }}>
+                    <FormLabel>Name</FormLabel>
+                    <Input
+                        value={form.name}
+                        onChange={event => setForm(prev => ({ ...prev, name: event.target.value }))}
+                    />
+                </FormControl>
+                {renderTypeFields()}
+            </DialogContent>
+            <DialogActions>
+                <Button variant="plain" onClick={onClose}>Cancel</Button>
+                <Button onClick={() => handleSave().catch(err => log.exception('Create secret error:', err as Error))}>Create</Button>
+            </DialogActions>
+        </ResponsiveDialog>
     );
 }

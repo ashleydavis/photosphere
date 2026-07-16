@@ -1,8 +1,5 @@
 import { log } from "utils";
 import React, { useState, useEffect, useCallback } from 'react';
-import Modal from '@mui/joy/Modal';
-import ModalDialog from '@mui/joy/ModalDialog';
-import { responsiveModalSx } from '../lib/modal-styles';
 import DialogTitle from '@mui/joy/DialogTitle';
 import DialogContent from '@mui/joy/DialogContent';
 import DialogActions from '@mui/joy/DialogActions';
@@ -18,6 +15,7 @@ import Box from '@mui/joy/Box';
 import { usePlatform, type IDatabaseEntry } from '../context/platform-context';
 import type { IDatabaseSharePayload, IShareS3Credentials, IShareEncryptionKey, IShareGeocodingKey } from 'api';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
+import { ResponsiveDialog } from './responsive-dialog';
 
 export interface IShareDatabaseDialogProps {
     // Whether the dialog is visible.
@@ -192,125 +190,129 @@ export function ShareDatabaseDialog({ open, entry, onClose }: IShareDatabaseDial
     const dialogConfirmDisabled = step === "searching" || step === "showing-code";
 
     return (
-        <Modal open={open} onClose={handleCancel}>
-            <ModalDialog onKeyDown={createDialogKeyHandler(handleDialogConfirm, dialogConfirmDisabled)} sx={{ ...responsiveModalSx(480, 600) }}>
-                <DialogTitle>Share Database</DialogTitle>
-                <DialogContent>
-                    <Alert color="warning" sx={{ mb: 2 }}>
-                        Both devices must be on the same local network (wired or Wi-Fi). This does not work over the internet.
+        <ResponsiveDialog
+            open={open}
+            onClose={handleCancel}
+            minWidth={480}
+            maxWidth={600}
+            onKeyDown={createDialogKeyHandler(handleDialogConfirm, dialogConfirmDisabled)}
+            >
+            <DialogTitle>Share Database</DialogTitle>
+            <DialogContent>
+                <Alert color="warning" sx={{ mb: 2 }}>
+                    Both devices must be on the same local network (wired or Wi-Fi). This does not work over the internet.
+                </Alert>
+
+                <Typography level="body-sm" sx={{ mb: 2 }} color="neutral">
+                    Click Receive Database on another device to receive this database.
+                </Typography>
+
+                {step === "review" && (
+                    <>
+                        <FormControl sx={{ mb: 1 }}>
+                            <FormLabel>Name</FormLabel>
+                            <Input
+                                value={form.name}
+                                onChange={event => setForm(prev => ({ ...prev, name: event.target.value }))}
+                            />
+                        </FormControl>
+
+                        <FormControl sx={{ mb: 1 }}>
+                            <FormLabel>Description</FormLabel>
+                            <Input
+                                value={form.description}
+                                onChange={event => setForm(prev => ({ ...prev, description: event.target.value }))}
+                            />
+                        </FormControl>
+
+                        <FormControl sx={{ mb: 2 }}>
+                            <FormLabel>Path</FormLabel>
+                            <Input
+                                value={form.path}
+                                onChange={event => setForm(prev => ({ ...prev, path: event.target.value }))}
+                            />
+                        </FormControl>
+
+                        {entry.s3Key && (
+                            <Checkbox
+                                label="Include S3 credentials"
+                                checked={form.includeS3}
+                                onChange={event => setForm(prev => ({ ...prev, includeS3: event.target.checked }))}
+                                sx={{ mb: 1 }}
+                            />
+                        )}
+
+                        {entry.encryptionKey && (
+                            <Checkbox
+                                label="Include encryption key"
+                                checked={form.includeEncryption}
+                                onChange={event => setForm(prev => ({ ...prev, includeEncryption: event.target.checked }))}
+                                sx={{ mb: 1 }}
+                            />
+                        )}
+
+                        {entry.geocodingKey && (
+                            <Checkbox
+                                label="Include geocoding key"
+                                checked={form.includeGeocoding}
+                                onChange={event => setForm(prev => ({ ...prev, includeGeocoding: event.target.checked }))}
+                                sx={{ mb: 1 }}
+                            />
+                        )}
+                    </>
+                )}
+
+                {step === "searching" && (
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 2, py: 3, justifyContent: "center" }}>
+                        <CircularProgress size="sm" />
+                        <Typography>Searching for receiver on the local network...</Typography>
+                    </Box>
+                )}
+
+                {step === "showing-code" && (
+                    <Box sx={{ textAlign: "center", py: 3 }}>
+                        <Typography level="body-lg" sx={{ mb: 1 }}>Pairing Code</Typography>
+                        <Typography data-id="share-pairing-code" level="h2" sx={{ fontFamily: "monospace", letterSpacing: "0.3em", mb: 2 }}>
+                            {pairingCode}
+                        </Typography>
+                        <Typography level="body-sm">Tell the receiver to enter this code.</Typography>
+                    </Box>
+                )}
+
+                {step === "success" && (
+                    <Alert color="success">
+                        Database sent successfully!
                     </Alert>
+                )}
 
-                    <Typography level="body-sm" sx={{ mb: 2 }} color="neutral">
-                        Click Receive Database on another device to receive this database.
-                    </Typography>
-
-                    {step === "review" && (
-                        <>
-                            <FormControl sx={{ mb: 1 }}>
-                                <FormLabel>Name</FormLabel>
-                                <Input
-                                    value={form.name}
-                                    onChange={event => setForm(prev => ({ ...prev, name: event.target.value }))}
-                                />
-                            </FormControl>
-
-                            <FormControl sx={{ mb: 1 }}>
-                                <FormLabel>Description</FormLabel>
-                                <Input
-                                    value={form.description}
-                                    onChange={event => setForm(prev => ({ ...prev, description: event.target.value }))}
-                                />
-                            </FormControl>
-
-                            <FormControl sx={{ mb: 2 }}>
-                                <FormLabel>Path</FormLabel>
-                                <Input
-                                    value={form.path}
-                                    onChange={event => setForm(prev => ({ ...prev, path: event.target.value }))}
-                                />
-                            </FormControl>
-
-                            {entry.s3Key && (
-                                <Checkbox
-                                    label="Include S3 credentials"
-                                    checked={form.includeS3}
-                                    onChange={event => setForm(prev => ({ ...prev, includeS3: event.target.checked }))}
-                                    sx={{ mb: 1 }}
-                                />
-                            )}
-
-                            {entry.encryptionKey && (
-                                <Checkbox
-                                    label="Include encryption key"
-                                    checked={form.includeEncryption}
-                                    onChange={event => setForm(prev => ({ ...prev, includeEncryption: event.target.checked }))}
-                                    sx={{ mb: 1 }}
-                                />
-                            )}
-
-                            {entry.geocodingKey && (
-                                <Checkbox
-                                    label="Include geocoding key"
-                                    checked={form.includeGeocoding}
-                                    onChange={event => setForm(prev => ({ ...prev, includeGeocoding: event.target.checked }))}
-                                    sx={{ mb: 1 }}
-                                />
-                            )}
-                        </>
-                    )}
-
-                    {step === "searching" && (
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 2, py: 3, justifyContent: "center" }}>
-                            <CircularProgress size="sm" />
-                            <Typography>Searching for receiver on the local network...</Typography>
-                        </Box>
-                    )}
-
-                    {step === "showing-code" && (
-                        <Box sx={{ textAlign: "center", py: 3 }}>
-                            <Typography level="body-lg" sx={{ mb: 1 }}>Pairing Code</Typography>
-                            <Typography data-id="share-pairing-code" level="h2" sx={{ fontFamily: "monospace", letterSpacing: "0.3em", mb: 2 }}>
-                                {pairingCode}
-                            </Typography>
-                            <Typography level="body-sm">Tell the receiver to enter this code.</Typography>
-                        </Box>
-                    )}
-
-                    {step === "success" && (
-                        <Alert color="success">
-                            Database sent successfully!
-                        </Alert>
-                    )}
-
-                    {step === "error" && (
-                        <Alert color="danger">
-                            {errorMessage}
-                        </Alert>
-                    )}
-                </DialogContent>
-                <DialogActions>
-                    {step === "review" && (
-                        <>
-                            <Button variant="plain" onClick={handleCancel}>Cancel</Button>
-                            <Button data-id="share-database-send-button" onClick={() => { handleStartSend().catch(err => log.exception("Share error:", err as Error)); }}>
-                                Send
-                            </Button>
-                        </>
-                    )}
-
-                    {step === "searching" && (
+                {step === "error" && (
+                    <Alert color="danger">
+                        {errorMessage}
+                    </Alert>
+                )}
+            </DialogContent>
+            <DialogActions>
+                {step === "review" && (
+                    <>
                         <Button variant="plain" onClick={handleCancel}>Cancel</Button>
-                    )}
+                        <Button data-id="share-database-send-button" onClick={() => { handleStartSend().catch(err => log.exception("Share error:", err as Error)); }}>
+                            Send
+                        </Button>
+                    </>
+                )}
 
-                    {step === "showing-code" && (
-                        <Button variant="plain" onClick={handleCancel}>Cancel</Button>
-                    )}
+                {step === "searching" && (
+                    <Button variant="plain" onClick={handleCancel}>Cancel</Button>
+                )}
 
-                    {(step === "success" || step === "error") && (
-                        <Button onClick={onClose}>Close</Button>
-                    )}
-                </DialogActions>
-            </ModalDialog>
-        </Modal>
+                {step === "showing-code" && (
+                    <Button variant="plain" onClick={handleCancel}>Cancel</Button>
+                )}
+
+                {(step === "success" || step === "error") && (
+                    <Button onClick={onClose}>Close</Button>
+                )}
+            </DialogActions>
+        </ResponsiveDialog>
     );
 }

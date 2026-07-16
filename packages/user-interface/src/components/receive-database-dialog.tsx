@@ -1,8 +1,6 @@
 import { log } from "utils";
 import React, { useState, useEffect, useCallback } from 'react';
-import Modal from '@mui/joy/Modal';
-import ModalDialog from '@mui/joy/ModalDialog';
-import { responsiveModalSx } from '../lib/modal-styles';
+import { ResponsiveDialog } from './responsive-dialog';
 import DialogTitle from '@mui/joy/DialogTitle';
 import DialogContent from '@mui/joy/DialogContent';
 import DialogActions from '@mui/joy/DialogActions';
@@ -361,8 +359,13 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
         || step === "waiting";
 
     return (
-        <Modal open={open} onClose={handleCancel}>
-            <ModalDialog onKeyDown={createDialogKeyHandler(handleDialogConfirm, dialogConfirmDisabled)} sx={{ ...responsiveModalSx(480, 600) }}>
+        <ResponsiveDialog
+            open={open}
+            onClose={handleCancel}
+            minWidth={480}
+            maxWidth={600}
+            onKeyDown={createDialogKeyHandler(handleDialogConfirm, dialogConfirmDisabled)}
+            >
                 <DialogTitle>Receive Database</DialogTitle>
                 <DialogContent>
                     <Typography level="body-sm" sx={{ mb: 2 }} color="neutral">
@@ -590,7 +593,6 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
                         <Button data-id="receive-database-close-button" onClick={onClose}>Close</Button>
                     )}
                 </DialogActions>
-            </ModalDialog>
-        </Modal>
+        </ResponsiveDialog>
     );
 }

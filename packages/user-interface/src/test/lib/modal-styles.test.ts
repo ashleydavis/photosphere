@@ -1,33 +1,32 @@
-import { responsiveModalSx, MOBILE_SHEET_MEDIA_QUERY, type IMobileSheetSx } from "../../lib/modal-styles";
-import { MOBILE_BREAKPOINT_PX } from "../../lib/use-is-mobile";
+import { desktopDialogSx, mobileSheetDrawerSx, type IMobileSheetContentSx } from "../../lib/modal-styles";
 
 //
-// Reads the mobile sheet block out of the responsive sx. It is keyed by the media query, so it is
-// pulled out by that key and narrowed to the sheet shape for the assertions below.
+// Reads the sheet panel's styles out of the drawer sx. They are keyed by the Joy content slot's
+// class, so they are pulled out by that key for the assertions below.
 //
-function sheetOf(minWidth: number, maxWidth: number): IMobileSheetSx {
-    return responsiveModalSx(minWidth, maxWidth)[MOBILE_SHEET_MEDIA_QUERY] as IMobileSheetSx;
+function sheetContent(): IMobileSheetContentSx {
+    return mobileSheetDrawerSx()["& .MuiDrawer-content"];
 }
 
-describe("responsiveModalSx", () => {
+describe("desktopDialogSx", () => {
 
     test("clamps the minimum width to the viewport", () => {
-        const sx = responsiveModalSx(520, 700);
+        const sx = desktopDialogSx(520, 700);
         expect(sx.minWidth).toBe("min(520px, calc(100vw - 32px))");
     });
 
     test("clamps the maximum width to the viewport", () => {
-        const sx = responsiveModalSx(520, 700);
+        const sx = desktopDialogSx(520, 700);
         expect(sx.maxWidth).toBe("min(700px, calc(100vw - 32px))");
     });
 
     test("caps the height within the viewport accounting for safe-area insets", () => {
-        const sx = responsiveModalSx(480, 640);
+        const sx = desktopDialogSx(480, 640);
         expect(sx.maxHeight).toBe("calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 32px)");
     });
 
     test("scrolls vertically and never horizontally", () => {
-        const sx = responsiveModalSx(340, 340);
+        const sx = desktopDialogSx(340, 340);
         expect(sx.overflowY).toBe("auto");
         expect(sx.overflowX).toBe("hidden");
     });
@@ -35,62 +34,48 @@ describe("responsiveModalSx", () => {
 
 describe("the mobile sheet treatment", () => {
 
-    test("applies below the same breakpoint that useIsMobile uses", () => {
-        expect(MOBILE_SHEET_MEDIA_QUERY).toBe(`@media (max-width: ${MOBILE_BREAKPOINT_PX - 1}px)`);
+    test("slides quickly enough that the sheet is not something the user waits for", () => {
+        const sx = mobileSheetDrawerSx();
+        expect(sx["--Drawer-transitionDuration"]).toBe("0.2s");
+        expect(sx["--Drawer-transitionFunction"]).toBe("cubic-bezier(0.32, 0.72, 0, 1)");
     });
 
-    test("is included in the responsive sx", () => {
-        const sx = responsiveModalSx(520, 700);
-        expect(sx[MOBILE_SHEET_MEDIA_QUERY]).toBeDefined();
+    test("matches the close button's inset to the sheet's own corner radius", () => {
+        expect(mobileSheetDrawerSx()["--Drawer-contentRadius"]).toBe("20px");
     });
 
-    test("anchors the dialog to the bottom edge of the screen", () => {
-        const sheet = sheetOf(520, 700);
-        expect(sheet.position).toBe("fixed");
-        expect(sheet.top).toBe("auto");
-        expect(sheet.bottom).toBe("0px");
-        expect(sheet.left).toBe("0px");
-        expect(sheet.right).toBe("0px");
-    });
-
-    test("undoes the centring transform Joy applies to a centred dialog", () => {
-        expect(sheetOf(520, 700).transform).toBe("none");
-    });
-
-    test("overrides the desktop widths so the sheet spans the screen", () => {
-        const sheet = sheetOf(520, 700);
-        expect(sheet.width).toBe("100vw");
-        expect(sheet.minWidth).toBe("100vw");
-        expect(sheet.maxWidth).toBe("100vw");
+    test("hugs its content instead of taking Joy's fixed fraction of the screen", () => {
+        expect(sheetContent().height).toBe("auto");
     });
 
     test("leaves the screen behind the sheet partly visible and clears the status bar", () => {
-        expect(sheetOf(520, 700).maxHeight).toBe("calc(92vh - env(safe-area-inset-top))");
+        expect(sheetContent().maxHeight).toBe("calc(92vh - env(safe-area-inset-top))");
     });
 
     test("rounds only the top corners, because the bottom edge runs off the screen", () => {
-        expect(sheetOf(520, 700).borderRadius).toBe("20px 20px 0px 0px");
+        expect(sheetContent().borderRadius).toBe("20px 20px 0px 0px");
     });
 
     test("clears the system navigation bar with its bottom padding", () => {
-        expect(sheetOf(520, 700).paddingBottom).toBe("calc(20px + env(safe-area-inset-bottom))");
+        expect(sheetContent().paddingBottom).toBe("calc(20px + env(safe-area-inset-bottom))");
     });
 
-    test("draws a grab handle above the title", () => {
-        const handle = sheetOf(520, 700)["&::before"];
+    test("draws a grab handle above the title that is not squashed by a tall body", () => {
+        const handle = sheetContent()["&::before"];
         expect(handle.content).toBe('""');
         expect(handle.width).toBe("36px");
         expect(handle.height).toBe("4px");
+        expect(handle.flexShrink).toBe(0);
     });
 
     test("pins the title so it stays visible while the sheet body scrolls", () => {
-        const title = sheetOf(520, 700)["& .MuiDialogTitle-root"];
+        const title = sheetContent()["& .MuiDialogTitle-root"];
         expect(title.position).toBe("sticky");
         expect(title.top).toBe("0px");
     });
 
     test("stacks the actions full width, at a tappable height", () => {
-        const actions = sheetOf(520, 700)["& .MuiDialogActions-root"];
+        const actions = sheetContent()["& .MuiDialogActions-root"];
         expect(actions.flexDirection).toBe("column-reverse");
         expect(actions.width).toBe("100%");
         expect(actions["& > *"].width).toBe("100%");

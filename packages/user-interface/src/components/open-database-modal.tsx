@@ -1,9 +1,7 @@
 import { useEffect, useState } from 'react';
 import React from 'react';
 import { log } from 'utils';
-import Modal from '@mui/joy/Modal';
-import ModalDialog from '@mui/joy/ModalDialog';
-import { responsiveModalSx } from '../lib/modal-styles';
+import { ResponsiveDialog } from './responsive-dialog';
 import DialogTitle from '@mui/joy/DialogTitle';
 import DialogContent from '@mui/joy/DialogContent';
 import DialogActions from '@mui/joy/DialogActions';
@@ -100,8 +98,12 @@ export function OpenDatabaseModal({ open, onClose }: IOpenDatabaseModalProps) {
 
     return (
         <>
-            <Modal open={open} onClose={onClose}>
-                <ModalDialog sx={{ ...responsiveModalSx(560, 800) }}>
+            <ResponsiveDialog
+                open={open}
+                onClose={onClose}
+                minWidth={560}
+                maxWidth={800}
+                >
                     <DialogTitle>Open Database</DialogTitle>
                     <DialogContent>
                         {databases.length === 0
@@ -167,8 +169,7 @@ export function OpenDatabaseModal({ open, onClose }: IOpenDatabaseModalProps) {
                             Manage databases
                         </Button>
                     </DialogActions>
-                </ModalDialog>
-            </Modal>
+            </ResponsiveDialog>
 
             <AddDatabaseModal
                 open={addModalOpen}

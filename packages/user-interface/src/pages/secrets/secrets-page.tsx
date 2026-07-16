@@ -8,7 +8,7 @@ import IconButton from '@mui/joy/IconButton';
 import Modal from '@mui/joy/Modal';
 import ModalClose from '@mui/joy/ModalClose';
 import ModalDialog from '@mui/joy/ModalDialog';
-import { responsiveModalSx } from '../../lib/modal-styles';
+import { ResponsiveDialog } from '../../components/responsive-dialog';
 import DialogTitle from '@mui/joy/DialogTitle';
 import DialogContent from '@mui/joy/DialogContent';
 import DialogActions from '@mui/joy/DialogActions';
@@ -413,49 +413,50 @@ export function SecretsPage() {
             }
 
             {/* Add / Edit dialog */}
-            <Modal open={dialogOpen} onClose={() => setDialogOpen(false)}>
-                <ModalDialog
-                    onKeyDown={createDialogKeyHandler(handleSave, false)}
-                    sx={{ ...responsiveModalSx(500, 700) }}
+            <ResponsiveDialog
+                open={dialogOpen}
+                onClose={() => setDialogOpen(false)}
+                minWidth={500}
+                maxWidth={700}
+                onKeyDown={createDialogKeyHandler(handleSave, false)}
                 >
-                    <ModalClose />
-                    <DialogTitle>{editingSecret ? 'Edit Secret' : 'Add Secret'}</DialogTitle>
-                    <DialogContent>
-                        <FormControl sx={{ mb: 1 }}>
-                            <FormLabel>Name</FormLabel>
-                            <Input
-                                data-id="secret-name-input"
-                                value={form.name}
-                                onChange={event => setForm(prev => ({ ...prev, name: event.target.value }))}
-                            />
-                        </FormControl>
+                <ModalClose />
+                <DialogTitle>{editingSecret ? 'Edit Secret' : 'Add Secret'}</DialogTitle>
+                <DialogContent>
+                    <FormControl sx={{ mb: 1 }}>
+                        <FormLabel>Name</FormLabel>
+                        <Input
+                            data-id="secret-name-input"
+                            value={form.name}
+                            onChange={event => setForm(prev => ({ ...prev, name: event.target.value }))}
+                        />
+                    </FormControl>
 
-                        <FormControl sx={{ mb: 2 }}>
-                            <FormLabel>Type</FormLabel>
-                            <Select
-                                value={form.type}
-                                onChange={(_event, value) => setForm(prev => ({ ...prev, type: value as string }))}
-                                disabled={!!editingSecret}
-                            >
-                                {SECRET_TYPES.map(secretType => (
-                                    <Option key={secretType} value={secretType}>{secretType}</Option>
-                                ))}
-                            </Select>
-                        </FormControl>
-
-                        {renderTypeFields()}
-                    </DialogContent>
-                    <DialogActions>
-                        <Button variant="plain" onClick={() => setDialogOpen(false)}>Cancel</Button>
-                        <Button
-                            data-id="add-secret-confirm"
-                            onClick={() => handleSave().catch(err => log.exception('Save error:', err as Error))}
+                    <FormControl sx={{ mb: 2 }}>
+                        <FormLabel>Type</FormLabel>
+                        <Select
+                            value={form.type}
+                            onChange={(_event, value) => setForm(prev => ({ ...prev, type: value as string }))}
+                            disabled={!!editingSecret}
                         >
-                            Save
-                        </Button>
-                    </DialogActions>
-                </ModalDialog>
-            </Modal>
+                            {SECRET_TYPES.map(secretType => (
+                                <Option key={secretType} value={secretType}>{secretType}</Option>
+                            ))}
+                        </Select>
+                    </FormControl>
+
+                    {renderTypeFields()}
+                </DialogContent>
+                <DialogActions>
+                    <Button variant="plain" onClick={() => setDialogOpen(false)}>Cancel</Button>
+                    <Button
+                        data-id="add-secret-confirm"
+                        onClick={() => handleSave().catch(err => log.exception('Save error:', err as Error))}
+                    >
+                        Save
+                    </Button>
+                </DialogActions>
+            </ResponsiveDialog>
 
             {/* First delete confirmation */}
             <Modal open={confirmDeleteOpen} onClose={() => setConfirmDeleteOpen(false)}>

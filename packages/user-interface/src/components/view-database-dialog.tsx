@@ -1,9 +1,6 @@
 import React, { useState } from 'react';
 import { log } from 'utils';
-import Modal from '@mui/joy/Modal';
 import ModalClose from '@mui/joy/ModalClose';
-import ModalDialog from '@mui/joy/ModalDialog';
-import { responsiveModalSx } from '../lib/modal-styles';
 import DialogTitle from '@mui/joy/DialogTitle';
 import DialogContent from '@mui/joy/DialogContent';
 import DialogActions from '@mui/joy/DialogActions';
@@ -13,6 +10,7 @@ import Box from '@mui/joy/Box';
 import { type IDatabaseEntry, type ISharedSecretEntry } from '../context/platform-context';
 import { ViewSecretDialog } from './view-secret-dialog';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
+import { ResponsiveDialog } from './responsive-dialog';
 
 //
 // Props for ViewDatabaseDialog.
@@ -86,27 +84,31 @@ export function ViewDatabaseDialog({ open, entry, allSecrets, onClose, getSecret
 
     return (
         <>
-            <Modal open={open} onClose={onClose}>
-                <ModalDialog onKeyDown={createDialogKeyHandler(onClose, false)} sx={{ ...responsiveModalSx(480, 680) }}>
-                    <ModalClose />
-                    <DialogTitle>View Database</DialogTitle>
-                    <DialogContent>
-                        <InfoRow label="Name" value={entry.name} />
-                        <InfoRow label="Description" value={entry.description} />
-                        <InfoRow label="Path" value={entry.path} />
-                        <InfoRow label="Origin" value={entry.origin ?? ''} />
+            <ResponsiveDialog
+                open={open}
+                onClose={onClose}
+                minWidth={480}
+                maxWidth={680}
+                onKeyDown={createDialogKeyHandler(onClose, false)}
+                >
+                <ModalClose />
+                <DialogTitle>View Database</DialogTitle>
+                <DialogContent>
+                    <InfoRow label="Name" value={entry.name} />
+                    <InfoRow label="Description" value={entry.description} />
+                    <InfoRow label="Path" value={entry.path} />
+                    <InfoRow label="Origin" value={entry.origin ?? ''} />
 
-                        <Typography level="title-sm" sx={{ mt: 2, mb: 1 }}>Linked Secrets</Typography>
+                    <Typography level="title-sm" sx={{ mt: 2, mb: 1 }}>Linked Secrets</Typography>
 
-                        {renderLinkedSecret('S3 Credentials', entry.s3Key, 'view-secret-s3-button')}
-                        {renderLinkedSecret('Encryption Key', entry.encryptionKey, 'view-secret-encryption-button')}
-                        {renderLinkedSecret('Geocoding API Key', entry.geocodingKey, 'view-secret-geocoding-button')}
-                    </DialogContent>
-                    <DialogActions>
-                        <Button variant="plain" onClick={onClose}>Close</Button>
-                    </DialogActions>
-                </ModalDialog>
-            </Modal>
+                    {renderLinkedSecret('S3 Credentials', entry.s3Key, 'view-secret-s3-button')}
+                    {renderLinkedSecret('Encryption Key', entry.encryptionKey, 'view-secret-encryption-button')}
+                    {renderLinkedSecret('Geocoding API Key', entry.geocodingKey, 'view-secret-geocoding-button')}
+                </DialogContent>
+                <DialogActions>
+                    <Button variant="plain" onClick={onClose}>Close</Button>
+                </DialogActions>
+            </ResponsiveDialog>
 
             {viewingSecret !== undefined && (
                 <ViewSecretDialog

@@ -3,9 +3,7 @@ import { log } from 'utils';
 import { useUuidGenerator } from '../context/uuid-generator-context';
 import { replicateDatabase } from 'node-api/src/lib/replicate-database';
 import type { IReplicateDatabaseData } from 'api/src/lib/replicate-database.types';
-import Modal from '@mui/joy/Modal';
-import ModalDialog from '@mui/joy/ModalDialog';
-import { responsiveModalSx } from '../lib/modal-styles';
+import { ResponsiveDialog } from './responsive-dialog';
 import DialogTitle from '@mui/joy/DialogTitle';
 import DialogContent from '@mui/joy/DialogContent';
 import DialogActions from '@mui/joy/DialogActions';
@@ -205,149 +203,154 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
 
     return (
         <>
-        <Modal open={open} onClose={step === "running" ? undefined : onClose}>
-            <ModalDialog data-id="replicate-database-dialog" onKeyDown={createDialogKeyHandler(handleDialogConfirm, dialogConfirmDisabled)} sx={{ ...responsiveModalSx(520, 720) }}>
-                <DialogTitle>Replicate Database</DialogTitle>
-                <DialogContent sx={{ overflowX: 'hidden' }}>
-                    {step === "configure" && (
-                        <>
-                            <Typography level="body-md" sx={{ mb: 1 }}>
-                                <strong>Source:</strong> {sourceEntry.name}
-                            </Typography>
-                            <Typography level="body-sm" color="neutral" sx={{ mb: 2 }}>
-                                {sourceEntry.path}
-                            </Typography>
+        <ResponsiveDialog
+            open={open}
+            onClose={step === "running" ? undefined : onClose}
+            minWidth={520}
+            maxWidth={720}
+            dataId="replicate-database-dialog"
+            onKeyDown={createDialogKeyHandler(handleDialogConfirm, dialogConfirmDisabled)}
+            >
+            <DialogTitle>Replicate Database</DialogTitle>
+            <DialogContent sx={{ overflowX: 'hidden' }}>
+                {step === "configure" && (
+                    <>
+                        <Typography level="body-md" sx={{ mb: 1 }}>
+                            <strong>Source:</strong> {sourceEntry.name}
+                        </Typography>
+                        <Typography level="body-sm" color="neutral" sx={{ mb: 2 }}>
+                            {sourceEntry.path}
+                        </Typography>
 
-                            <FormControl sx={{ mb: 2 }}>
-                                <FormLabel>Destination type</FormLabel>
-                                <Select
-                                    value={form.storageType}
-                                    onChange={(_event, value) => setForm(prev => ({
-                                        ...prev,
-                                        storageType: (value as StorageType) ?? 'filesystem',
-                                        destPath: '',
-                                    }))}
-                                >
-                                    <Option value="filesystem">File system</Option>
-                                    <Option value="s3">S3</Option>
-                                </Select>
-                            </FormControl>
-
-                            <FormControl sx={{ mb: 2 }}>
-                                <FormLabel>Destination secrets</FormLabel>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    <Typography level="body-sm" sx={{ flexGrow: 1 }} color="neutral">
-                                        {summariseDestSecrets()}
-                                    </Typography>
-                                    <Button
-                                        data-id="replicate-configure-secrets-button"
-                                        variant="outlined"
-                                        size="sm"
-                                        onClick={() => setSecretsModalOpen(true)}
-                                    >
-                                        Configure secrets…
-                                    </Button>
-                                </Box>
-                            </FormControl>
-
-                            <FormControl sx={{ mb: 2 }}>
-                                <FormLabel>Destination path</FormLabel>
-                                <Box sx={{ display: 'flex', gap: 1 }}>
-                                    <Input
-                                        data-id="replicate-dest-path-input"
-                                        sx={{ flexGrow: 1 }}
-                                        value={form.destPath}
-                                        onChange={event => setForm(prev => ({ ...prev, destPath: event.target.value }))}
-                                    />
-                                    <Button
-                                        data-id="replicate-dest-browse-button"
-                                        variant="outlined"
-                                        disabled={browseDisabled}
-                                        onClick={() => handleBrowse().catch(err => log.exception('Browse error:', err as Error))}
-                                    >
-                                        {isS3Dest ? 'Browse S3' : 'Browse'}
-                                    </Button>
-                                </Box>
-                            </FormControl>
-
-                            <FormControl sx={{ mb: 2 }}>
-                                <FormLabel>Mode</FormLabel>
-                                <RadioGroup
-                                    value={form.mode}
-                                    onChange={event => setForm(prev => ({ ...prev, mode: event.target.value as ReplicateMode }))}
-                                >
-                                    <Radio
-                                        data-id="replicate-mode-partial"
-                                        value="partial"
-                                        label="Partial"
-                                    />
-                                    <Typography level="body-xs" color="neutral" sx={{ ml: 4, mb: 1 }}>
-                                        Copies only metadata and structure. Original photos and videos are fetched on demand from the source. Choose this when you want a small, browsable replica.
-                                    </Typography>
-                                    <Radio
-                                        data-id="replicate-mode-full"
-                                        value="full"
-                                        label="Full"
-                                    />
-                                    <Typography level="body-xs" color="neutral" sx={{ ml: 4 }}>
-                                        Copies everything — every original, display, and thumbnail file. Choose this when you want a complete, standalone copy that does not depend on the source.
-                                    </Typography>
-                                </RadioGroup>
-                            </FormControl>
-
-                            <Typography level="body-xs" color="neutral" sx={{ mt: 2 }}>
-                                To replicate to an existing encrypted database, register it on this page first and the replica will inherit its credentials.
-                            </Typography>
-                        </>
-                    )}
-
-                    {step === "running" && (
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 3 }}>
-                            <CircularProgress size="sm" />
-                            <Typography>{progress}</Typography>
-                        </Box>
-                    )}
-
-                    {step === "success" && (
-                        <Alert color="success">
-                            Replication completed. The replica has been added to your databases at {form.destPath}.
-                        </Alert>
-                    )}
-
-                    {step === "error" && (
-                        <Alert color="danger">
-                            {errorMessage}
-                        </Alert>
-                    )}
-                </DialogContent>
-                <DialogActions>
-                    {step === "configure" && (
-                        <>
-                            <Button
-                                data-id="replicate-cancel-button"
-                                variant="plain"
-                                onClick={onClose}
+                        <FormControl sx={{ mb: 2 }}>
+                            <FormLabel>Destination type</FormLabel>
+                            <Select
+                                value={form.storageType}
+                                onChange={(_event, value) => setForm(prev => ({
+                                    ...prev,
+                                    storageType: (value as StorageType) ?? 'filesystem',
+                                    destPath: '',
+                                }))}
                             >
-                                Cancel
-                            </Button>
-                            <Button
-                                data-id="replicate-start-button"
-                                disabled={startDisabled}
-                                onClick={() => {
-                                    handleStart().catch(err => log.exception('Start replication error:', err as Error));
-                                }}
-                            >
-                                Start replication
-                            </Button>
-                        </>
-                    )}
+                                <Option value="filesystem">File system</Option>
+                                <Option value="s3">S3</Option>
+                            </Select>
+                        </FormControl>
 
-                    {(step === "success" || step === "error") && (
-                        <Button data-id="replicate-close-button" onClick={onClose}>Close</Button>
-                    )}
-                </DialogActions>
-            </ModalDialog>
-        </Modal>
+                        <FormControl sx={{ mb: 2 }}>
+                            <FormLabel>Destination secrets</FormLabel>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Typography level="body-sm" sx={{ flexGrow: 1 }} color="neutral">
+                                    {summariseDestSecrets()}
+                                </Typography>
+                                <Button
+                                    data-id="replicate-configure-secrets-button"
+                                    variant="outlined"
+                                    size="sm"
+                                    onClick={() => setSecretsModalOpen(true)}
+                                >
+                                    Configure secrets…
+                                </Button>
+                            </Box>
+                        </FormControl>
+
+                        <FormControl sx={{ mb: 2 }}>
+                            <FormLabel>Destination path</FormLabel>
+                            <Box sx={{ display: 'flex', gap: 1 }}>
+                                <Input
+                                    data-id="replicate-dest-path-input"
+                                    sx={{ flexGrow: 1 }}
+                                    value={form.destPath}
+                                    onChange={event => setForm(prev => ({ ...prev, destPath: event.target.value }))}
+                                />
+                                <Button
+                                    data-id="replicate-dest-browse-button"
+                                    variant="outlined"
+                                    disabled={browseDisabled}
+                                    onClick={() => handleBrowse().catch(err => log.exception('Browse error:', err as Error))}
+                                >
+                                    {isS3Dest ? 'Browse S3' : 'Browse'}
+                                </Button>
+                            </Box>
+                        </FormControl>
+
+                        <FormControl sx={{ mb: 2 }}>
+                            <FormLabel>Mode</FormLabel>
+                            <RadioGroup
+                                value={form.mode}
+                                onChange={event => setForm(prev => ({ ...prev, mode: event.target.value as ReplicateMode }))}
+                            >
+                                <Radio
+                                    data-id="replicate-mode-partial"
+                                    value="partial"
+                                    label="Partial"
+                                />
+                                <Typography level="body-xs" color="neutral" sx={{ ml: 4, mb: 1 }}>
+                                    Copies only metadata and structure. Original photos and videos are fetched on demand from the source. Choose this when you want a small, browsable replica.
+                                </Typography>
+                                <Radio
+                                    data-id="replicate-mode-full"
+                                    value="full"
+                                    label="Full"
+                                />
+                                <Typography level="body-xs" color="neutral" sx={{ ml: 4 }}>
+                                    Copies everything — every original, display, and thumbnail file. Choose this when you want a complete, standalone copy that does not depend on the source.
+                                </Typography>
+                            </RadioGroup>
+                        </FormControl>
+
+                        <Typography level="body-xs" color="neutral" sx={{ mt: 2 }}>
+                            To replicate to an existing encrypted database, register it on this page first and the replica will inherit its credentials.
+                        </Typography>
+                    </>
+                )}
+
+                {step === "running" && (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 3 }}>
+                        <CircularProgress size="sm" />
+                        <Typography>{progress}</Typography>
+                    </Box>
+                )}
+
+                {step === "success" && (
+                    <Alert color="success">
+                        Replication completed. The replica has been added to your databases at {form.destPath}.
+                    </Alert>
+                )}
+
+                {step === "error" && (
+                    <Alert color="danger">
+                        {errorMessage}
+                    </Alert>
+                )}
+            </DialogContent>
+            <DialogActions>
+                {step === "configure" && (
+                    <>
+                        <Button
+                            data-id="replicate-cancel-button"
+                            variant="plain"
+                            onClick={onClose}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            data-id="replicate-start-button"
+                            disabled={startDisabled}
+                            onClick={() => {
+                                handleStart().catch(err => log.exception('Start replication error:', err as Error));
+                            }}
+                        >
+                            Start replication
+                        </Button>
+                    </>
+                )}
+
+                {(step === "success" || step === "error") && (
+                    <Button data-id="replicate-close-button" onClick={onClose}>Close</Button>
+                )}
+            </DialogActions>
+        </ResponsiveDialog>
         {s3BrowserOpen && form.secrets.s3Key && (
             <S3BrowserModal
                 open={true}

@@ -1,8 +1,6 @@
 import { log } from "utils";
 import React, { useState, useEffect, useCallback } from 'react';
-import Modal from '@mui/joy/Modal';
-import ModalDialog from '@mui/joy/ModalDialog';
-import { responsiveModalSx } from '../lib/modal-styles';
+import { ResponsiveDialog } from './responsive-dialog';
 import DialogTitle from '@mui/joy/DialogTitle';
 import DialogContent from '@mui/joy/DialogContent';
 import DialogActions from '@mui/joy/DialogActions';
@@ -144,8 +142,13 @@ export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps
         || step === "waiting";
 
     return (
-        <Modal open={open} onClose={handleCancel}>
-            <ModalDialog onKeyDown={createDialogKeyHandler(handleDialogConfirm, dialogConfirmDisabled)} sx={{ ...responsiveModalSx(420, 520) }}>
+        <ResponsiveDialog
+            open={open}
+            onClose={handleCancel}
+            minWidth={420}
+            maxWidth={520}
+            onKeyDown={createDialogKeyHandler(handleDialogConfirm, dialogConfirmDisabled)}
+            >
                 <DialogTitle>Receive Secret</DialogTitle>
                 <DialogContent>
                     <Typography level="body-sm" sx={{ mb: 2 }} color="neutral">
@@ -236,7 +239,6 @@ export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps
                         <Button data-id="receive-secret-close-button" onClick={onClose}>Close</Button>
                     )}
                 </DialogActions>
-            </ModalDialog>
-        </Modal>
+        </ResponsiveDialog>
     );
 }

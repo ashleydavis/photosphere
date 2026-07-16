@@ -1,8 +1,6 @@
 import { log } from "utils";
 import React, { useEffect, useState } from 'react';
-import Modal from '@mui/joy/Modal';
-import ModalDialog from '@mui/joy/ModalDialog';
-import { responsiveModalSx } from '../lib/modal-styles';
+import { ResponsiveDialog } from './responsive-dialog';
 import DialogTitle from '@mui/joy/DialogTitle';
 import DialogContent from '@mui/joy/DialogContent';
 import DialogActions from '@mui/joy/DialogActions';
@@ -77,72 +75,76 @@ export function SelectSecretModal({ open, secretType, onClose, onSelect }: ISele
 
     return (
         <>
-            <Modal open={open} onClose={onClose}>
-                <ModalDialog onKeyDown={createDialogKeyHandler(handleSelect, selectedName === undefined)} sx={{ ...responsiveModalSx(480, 700) }}>
-                    <DialogTitle>Select {secretType}</DialogTitle>
-                    <DialogContent>
-                        {secrets.length === 0
-                            ? (
-                                <Typography level="body-sm">
-                                    No {secretType} secrets configured yet.
-                                </Typography>
-                            )
-                            : (
-                                <Table>
-                                    <thead>
-                                        <tr>
-                                            <th>Name</th>
-                                            <th style={{ width: '80px' }}></th>
+            <ResponsiveDialog
+                open={open}
+                onClose={onClose}
+                minWidth={480}
+                maxWidth={700}
+                onKeyDown={createDialogKeyHandler(handleSelect, selectedName === undefined)}
+                >
+                <DialogTitle>Select {secretType}</DialogTitle>
+                <DialogContent>
+                    {secrets.length === 0
+                        ? (
+                            <Typography level="body-sm">
+                                No {secretType} secrets configured yet.
+                            </Typography>
+                        )
+                        : (
+                            <Table>
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th style={{ width: '80px' }}></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {secrets.map(secret => (
+                                        <tr
+                                            key={secret.name}
+                                            onClick={() => setSelectedName(secret.name)}
+                                            style={{
+                                                cursor: 'pointer',
+                                                backgroundColor: secret.name === selectedName ? 'rgba(0,0,0,0.08)' : undefined,
+                                            }}
+                                        >
+                                            <td>{secret.name}</td>
+                                            <td>
+                                                <Button
+                                                    data-id="secret-select-button"
+                                                    size="sm"
+                                                    variant="plain"
+                                                    onClick={() => {
+                                                        setSelectedName(secret.name);
+                                                        onSelect(secret);
+                                                    }}
+                                                >
+                                                    Select
+                                                </Button>
+                                            </td>
                                         </tr>
-                                    </thead>
-                                    <tbody>
-                                        {secrets.map(secret => (
-                                            <tr
-                                                key={secret.name}
-                                                onClick={() => setSelectedName(secret.name)}
-                                                style={{
-                                                    cursor: 'pointer',
-                                                    backgroundColor: secret.name === selectedName ? 'rgba(0,0,0,0.08)' : undefined,
-                                                }}
-                                            >
-                                                <td>{secret.name}</td>
-                                                <td>
-                                                    <Button
-                                                        data-id="secret-select-button"
-                                                        size="sm"
-                                                        variant="plain"
-                                                        onClick={() => {
-                                                            setSelectedName(secret.name);
-                                                            onSelect(secret);
-                                                        }}
-                                                    >
-                                                        Select
-                                                    </Button>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </Table>
-                            )
-                        }
-                    </DialogContent>
-                    <DialogActions>
-                        <Button variant="plain" onClick={onClose}>Cancel</Button>
-                        <Button
-                            variant="outlined"
-                            onClick={() => setCreateDialogOpen(true)}
-                        >
-                            Create new
-                        </Button>
-                        <Button
-                            disabled={selectedName === undefined}
-                            onClick={handleSelect}
-                        >
-                            Select
-                        </Button>
-                    </DialogActions>
-                </ModalDialog>
-            </Modal>
+                                    ))}
+                                </tbody>
+                            </Table>
+                        )
+                    }
+                </DialogContent>
+                <DialogActions>
+                    <Button variant="plain" onClick={onClose}>Cancel</Button>
+                    <Button
+                        variant="outlined"
+                        onClick={() => setCreateDialogOpen(true)}
+                    >
+                        Create new
+                    </Button>
+                    <Button
+                        disabled={selectedName === undefined}
+                        onClick={handleSelect}
+                    >
+                        Select
+                    </Button>
+                </DialogActions>
+            </ResponsiveDialog>
 
             {createDialogOpen && (
                 <CreateSecretDialog
