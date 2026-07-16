@@ -53768,17 +53768,6 @@ ${stack}`);
     }
     return await handler(data, context);
   }
-  // src/lib/hello-world-handler.ts
-  async function helloWorldHandler(data, context) {
-    context.sendMessage({ type: "hello-progress", text: "saying hello" });
-    const name = data && typeof data.name === "string" ? data.name : "World";
-    const platform = globalThis.host ? globalThis.host.platform : "unknown";
-    return {
-      message: `Hello, ${name}!`,
-      platform,
-      sessionId: context.sessionId
-    };
-  }
   // src/shims/aws-s3.ts
   function notImplemented(name) {
     return new Error(`NOT IMPLEMENTED: S3 ("${name}") is not available in the mobile worker. Implement it ASAP.`);
@@ -70312,7 +70301,6 @@ ${lines.join(`
     globalThis.__childEvent = deliverChildEvent;
   }
   // mobile-worker-entry.ts
-  registerHandler("hello-world", helloWorldHandler);
   registerHandler("load-assets", loadAssetsHandler);
   registerHandler("create-database", createDatabaseHandler);
   registerHandler("replicate-database", replicateDatabaseHandler);

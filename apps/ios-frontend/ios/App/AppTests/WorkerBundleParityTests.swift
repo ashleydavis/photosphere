@@ -105,6 +105,6 @@ final class WorkerBundleParityTests: XCTestCase {
 
         let errorText = result?.objectForKeyedSubscript("error")?.toString() ?? ""
         XCTAssertTrue(errorText.contains("No handler registered for task type: no-such-handler"), "got: \(errorText)")
-        XCTAssertTrue(errorText.contains("hello-world"), "registered handler list should include hello-world; got: \(errorText)")
+        XCTAssertTrue(errorText.contains("load-assets"), "registered handler list should include load-assets; got: \(errorText)")
     }
 }

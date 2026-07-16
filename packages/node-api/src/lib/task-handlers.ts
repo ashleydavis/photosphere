@@ -1,5 +1,4 @@
 import { registerHandler } from "task-queue";
-import { helloWorldHandler } from "./hello-world.worker";
 import { verifyFileHandler } from "./verify.worker";
 import { checkFileHandler } from "./check.worker";
 import { loadAssetsHandler } from "./load-assets.worker";
@@ -22,7 +21,6 @@ import { receiveShareHandler, findReceiverHandler, sendPayloadHandler } from "./
 // This has to be called from the worker thread.
 //
 export function initTaskHandlers(): void {
-    registerHandler("hello-world", helloWorldHandler);
     registerHandler("verify-file", verifyFileHandler);
     registerHandler("check-file", checkFileHandler);
     registerHandler("load-assets", loadAssetsHandler);

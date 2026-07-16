@@ -3,7 +3,6 @@
 import "./src/lib/install-globals";
 
 import { registerHandler } from "task-queue";
-import { helloWorldHandler } from "./src/lib/hello-world-handler";
 import { loadAssetsHandler } from "node-api/src/lib/load-assets.worker";
 import { createDatabaseHandler } from "node-api/src/lib/create-database.worker";
 import { replicateDatabaseHandler } from "node-api/src/lib/replicate-database.worker";
@@ -29,9 +28,6 @@ import { installWorkerGlobal } from "./src/index";
 // read path never calls. This lets the real `load-assets` handler run unchanged: it reads the
 // database through `FileStorage` over the native `host.fs*` functions.
 //
-
-// Register the Hello World demonstrator handler.
-registerHandler("hello-world", helloWorldHandler);
 
 // Register the real load-assets handler: it opens a database via storage (native-backed fs) and
 // streams asset pages back to the gallery.
