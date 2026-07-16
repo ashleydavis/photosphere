@@ -5,7 +5,7 @@
 # captures the screen with `adb exec-out screencap`.
 #
 # android_prepare sets up the toolchain automatically (detects ANDROID_HOME, puts adb/emulator
-# on PATH, finds a JDK 17, and boots an emulator if none is attached), so `bun run test:android`
+# on PATH, finds a JDK 17, and boots an emulator if none is attached), so `bun run test:and`
 # works without manual environment setup. The only prerequisite that cannot be auto-installed is
 # a JDK 17 (AGP 8.0 fails on the JDK 21 Android Studio bundles); see ensure_jdk17.
 
@@ -54,7 +54,7 @@ ensure_jdk17() {
 }
 
 #
-# Sets up the Android toolchain environment so `bun run test:android` works without manual
+# Sets up the Android toolchain environment so `bun run test:and` works without manual
 # exports: detects the SDK (ANDROID_HOME), puts platform-tools and emulator on PATH, and selects
 # a JDK 17. Honors values already set in the environment.
 #

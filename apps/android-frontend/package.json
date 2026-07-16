@@ -12,7 +12,8 @@
     "clean": "rm -rf dist build tsconfig.tsbuildinfo",
     "sync": "bun run fetch:media && bun run bundle:worker && vite build && cap sync android",
     "open": "bun run sync && cap open android",
-    "launch": "bun run bundle:worker && vite build && cap run android"
+    "run": "bun run sync && bash ./scripts/run-android.sh",
+    "test:unit": "bun run sync && bash ./scripts/android-gradle.sh :app:testDebugUnitTest --rerun-tasks"
   },
   "dependencies": {
     "user-interface": "workspace:*",

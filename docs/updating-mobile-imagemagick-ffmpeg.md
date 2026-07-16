@@ -45,9 +45,9 @@ Note: this AAR needs a recent D8 — the Android Gradle Plugin is pinned to `8.1
 ## Verify after updating
 
 - `bun run test` — mobile-worker argv/marshalling suite still green.
-- `bun run test:android:unit` and `bun run build:android` — Android wiring compiles.
+- `bun run test:and:unit` and `bun run build:and` — Android wiring compiles.
 - `bun run test:ios:unit` and `bun run build:ios` — iOS wiring compiles and the AppTests pass.
-- `bun run test:android` / `bun run test:ios` — the on-emulator/simulator asset-processing smoke run (imports a sample image/video and checks the derivatives), which is the real end-to-end proof that the new binaries work.
+- `bun run test:and` / `bun run test:ios` — the on-emulator/simulator asset-processing smoke run (imports a sample image/video and checks the derivatives), which is the real end-to-end proof that the new binaries work.
 
 ## Update the licence notices
 

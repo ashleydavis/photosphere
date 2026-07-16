@@ -81,7 +81,7 @@ The story player cycles the live app through every story (in light and then dark
 
 ```bash
 bun run stories            # Electron desktop
-bun run stories:android    # Android emulator or attached device
+bun run stories:and    # Android emulator or attached device
 bun run stories:ios        # iOS simulator
 ```
 

@@ -39,7 +39,7 @@ The same variable works for the smoke tests:
 
 ```
 PHOTOSPHERE_THEME=dark bun run test:electron
-PHOTOSPHERE_THEME=light bun run test:android
+PHOTOSPHERE_THEME=light bun run test:and
 PHOTOSPHERE_THEME=dark bun run stories
 ```
 

@@ -80,7 +80,7 @@ On Electron, Android, and iOS the story player does it from the command line: it
 
 ```bash
 bun run stories            # Electron desktop
-bun run stories:android    # Android emulator or attached device
+bun run stories:and    # Android emulator or attached device
 bun run stories:ios        # iOS simulator
 ```
 

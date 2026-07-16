@@ -1,6 +1,6 @@
 ---
 description: Run a test command 10x via the fixed flaky-tests runner; on the first failure, categorize it against the flaky-tests registry and update it.
-argument-hint: <command> (e.g. bun run test:android)
+argument-hint: <command> (e.g. bun run test:and)
 ---
 
 Check a test suite for flaky failures and keep the flaky-tests registry honest.
@@ -44,7 +44,7 @@ Always invoke the checked-in script. Do not improvise a loop of your own; the sc
 bash scripts/check-flaky-tests.sh $ARGUMENTS
 ```
 
-The runner executes the command through a shell (`mise exec -- bash -c "$*"`), so it does not matter whether you pass it as separate words (`bun run test:android`) or as one quoted string (`"bun run test:android"`); both run identically. Do not hand-split the command to work around exec errors.
+The runner executes the command through a shell (`mise exec -- bash -c "$*"`), so it does not matter whether you pass it as separate words (`bun run test:and`) or as one quoted string (`"bun run test:and"`); both run identically. Do not hand-split the command to work around exec errors.
 
 The script captures all output to a durable log under the repo's gitignored `.flaky-check/` dir (never the system temp dir) and prints its path on the last stdout line as `LOG=<path>`. It exits 0 if all 10 runs passed, 1 if a run failed. Each full run can take several minutes, so all 10 can take a while, so run it in the background (or with an extended timeout) rather than a short foreground call.
 

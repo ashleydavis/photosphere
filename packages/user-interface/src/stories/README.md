@@ -49,13 +49,13 @@ Then open `http://localhost:3000/#/stories` and either browse the stories from t
 
 ```bash
 bun run stories            # Electron desktop (default)
-bun run stories:android    # Android emulator or attached device
+bun run stories:and    # Android emulator or attached device
 bun run stories:ios        # iOS simulator
 ```
 
 On Android the player boots an emulator if no device is attached, builds and installs the APK, and needs a JDK 17 (`ANDROID_HOME` is auto-detected). On iOS it needs the simulator and Xcode.
 
-Options are passed after `--`, e.g. `bun run stories:android -- --open`:
+Options are passed after `--`, e.g. `bun run stories:and -- --open`:
 
 | Option | Meaning |
 |---|---|
@@ -70,7 +70,7 @@ The app is **visible by default** so you can watch the stories cycle: the Electr
 
 Screenshots land in `<dir>/<theme>/<category>/<story-id>.png`, and an `index.html` is generated at the root of the screenshots directory showing each story's light and dark shots **side by side**, with a search box that filters by story id. Open it to review every story in both themes at once. Output directories are gitignored.
 
-Because Android and iOS run at phone resolution, `bun run stories:android` is the fastest way to catch a page that overflows a small screen (content pushed off-screen, buttons out of reach, text clipped).
+Because Android and iOS run at phone resolution, `bun run stories:and` is the fastest way to catch a page that overflows a small screen (content pushed off-screen, buttons out of reach, text clipped).
 
 ### How it works on each platform
 

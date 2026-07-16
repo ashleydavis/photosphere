@@ -43,7 +43,7 @@ The mobile smoke tests drive the app from the host over a WebSocket: a host-side
 
 15. Add/confirm an Electron run of the shared suite. Ensure `bun run test:electron` (now the shared harness, `PLATFORM=electron`) runs `apps/smoke-tests/tests/*` headlessly and passes for every scenario that passed under the old desktop harness. Requirement: all migrated scenarios pass under electron.
 
-16. Confirm parity and unaffected mobile. Compare the electron pass set against the pre-migration desktop pass set (should match). Re-run `bun run test:android` and confirm its pass/fail set is unchanged by the shared-suite refactor (the `seed_*` mobile stubs keep seeding-dependent tests failing for the same real reasons). Requirement: no regressions.
+16. Confirm parity and unaffected mobile. Compare the electron pass set against the pre-migration desktop pass set (should match). Re-run `bun run test:and` and confirm its pass/fail set is unchanged by the shared-suite refactor (the `seed_*` mobile stubs keep seeding-dependent tests failing for the same real reasons). Requirement: no regressions.
 
 ## Unit Tests
 - `installTestDriver` (test-driver.ts): platform handler for `screenshot` is invoked and its return value is propagated; platform handler for `quit` is invoked; unknown command without a platform handler throws "not implemented".
@@ -60,7 +60,7 @@ The mobile smoke tests drive the app from the host over a WebSocket: a host-side
 - `bun run compile` passes for all packages (desktop, desktop-frontend, user-interface, smoke-tests, mobile-frontend).
 - `bun run test` passes, including the updated `test-driver`, `test-driver-ws`, and `control-bridge` unit tests.
 - `bun run test:electron` (shared harness, `PLATFORM=electron`) runs the full `apps/smoke-tests/tests` suite headlessly and every scenario that passed under the old desktop harness passes now (parity).
-- `bun run test:android` shows an unchanged pass/fail set.
+- `bun run test:and` shows an unchanged pass/fail set.
 - `grep -rn "TestControlServer" apps packages` returns nothing; `apps/desktop/smoke-tests` and `apps/desktop/smoke-tests.sh` no longer exist.
 - `bun run test:all` passes (electron suite is headless, so it can be included; confirm it is wired in).
 

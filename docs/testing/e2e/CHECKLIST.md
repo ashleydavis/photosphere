@@ -23,7 +23,7 @@ Run a basic manual test of the CLI and desktop app on each platform.
 
 ### UI stories
 
-Run the story player and check every story cycles through without failures, then review the generated screenshot index for pages that look wrong or do not fit the screen. `bun run stories` (Electron), `bun run stories:android`, `bun run stories:ios`. See [the stories README](../../../packages/user-interface/src/stories/README.md).
+Run the story player and check every story cycles through without failures, then review the generated screenshot index for pages that look wrong or do not fit the screen. `bun run stories` (Electron), `bun run stories:and`, `bun run stories:ios`. See [the stories README](../../../packages/user-interface/src/stories/README.md).
 
 - [?] Linux
 - [ ] macOS

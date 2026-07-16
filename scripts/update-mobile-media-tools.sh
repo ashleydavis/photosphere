@@ -155,13 +155,13 @@ place_android_headers() {
 run_verify() {
     log "Verifying: mobile-worker unit tests + native compile checks"
     ( cd "$REPO_ROOT" && bun run --filter=mobile-worker test )
-    ( cd "$REPO_ROOT" && bun run build:android ) || warn "build:android failed or Android toolchain unavailable"
+    ( cd "$REPO_ROOT" && bun run build:and ) || warn "build:and failed or Android toolchain unavailable"
     if command -v xcrun >/dev/null 2>&1; then
         ( cd "$REPO_ROOT" && bun run test:ios:unit ) || warn "test:ios:unit failed (check the simulator destination)"
     else
         warn "Skipping iOS checks (not on macOS)."
     fi
-    log "For the real end-to-end proof run: bun run test:android  and  bun run test:ios  (needs vendored binaries + emulator/simulator)."
+    log "For the real end-to-end proof run: bun run test:and  and  bun run test:ios  (needs vendored binaries + emulator/simulator)."
 }
 
 main() {

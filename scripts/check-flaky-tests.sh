@@ -16,7 +16,7 @@
 #
 # Usage:
 #   scripts/check-flaky-tests.sh --list        print the repo's test/smoke suite targets, one per line
-#   scripts/check-flaky-tests.sh <command...>   run <command> repeatedly, e.g. `bun run test:android`
+#   scripts/check-flaky-tests.sh <command...>   run <command> repeatedly, e.g. `bun run test:and`
 #
 # Environment:
 #   RUNS  how many times to run before declaring it non-flaky (default 10)
@@ -40,7 +40,7 @@ fi
 RUNS="${RUNS:-10}"
 
 if [ "$#" -eq 0 ]; then
-    echo "usage: scripts/check-flaky-tests.sh <command...>   (e.g. bun run test:android)" >&2
+    echo "usage: scripts/check-flaky-tests.sh <command...>   (e.g. bun run test:and)" >&2
     echo "       scripts/check-flaky-tests.sh --list         (list the repo's test suites)" >&2
     exit 2
 fi

@@ -1074,13 +1074,13 @@ jobs:
           sudo apt-get install -y imagemagick ffmpeg
 
       # The native ImageMagick build (run_magick shim via CMake) and scripts/fetch-mobile-media-tools.sh
-      # both require this exact NDK, which the android-frontend sync (run by test:android:unit) pulls in.
+      # both require this exact NDK, which the android-frontend sync (run by test:and:unit) pulls in.
       - name: Install Android NDK
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;25.1.8937393" > /dev/null
 
       # Engine-pool dispatcher, subtask routing, picker/path helpers, host functions.
       - name: Run Android native unit tests
-        run: bun run test:android:unit
+        run: bun run test:and:unit
 
   # iOS native (XCTest) unit tests, split into their own job so they run independently of the slow
   # simulator smoke job.
@@ -1162,7 +1162,7 @@ jobs:
           sudo apt-get install -y imagemagick ffmpeg
 
       # The native ImageMagick build (run_magick shim via CMake) and scripts/fetch-mobile-media-tools.sh
-      # both require this exact NDK, which bun run test:android pulls in via bun run sync.
+      # both require this exact NDK, which bun run test:and pulls in via bun run sync.
       - name: Install Android NDK
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;25.1.8937393" > /dev/null
 
@@ -1181,7 +1181,7 @@ jobs:
           api-level: 33
           arch: x86_64
           target: google_apis
-          script: bun run test:android
+          script: bun run test:and
 
   ios-smoke-tests:
     # Higher than the other mobile jobs because `bun run test:ios` builds ImageMagick from source
@@ -1334,7 +1334,7 @@ jobs:
           api-level: 33
           arch: x86_64
           target: google_apis
-          script: bun run stories:android
+          script: bun run stories:and
 
       - name: Upload story screenshots
         if: always()

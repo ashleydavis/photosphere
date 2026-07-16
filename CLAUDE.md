@@ -44,7 +44,7 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 - `bun run test:cli -- <number|name>` - Run a single CLI smoke test by number or name
 - `bun run test:electron` - Build and run Electron smoke tests
 - `bun run stories` - Cycle the Electron app through every UI story, capturing screenshots (long-running, excluded from `test:all`)
-- `bun run stories:android` - Same stories cycle on the Android emulator/device. Renders every page at phone resolution, so this is how to check pages fit on mobile
+- `bun run stories:and` - Same stories cycle on the Android emulator/device. Renders every page at phone resolution, so this is how to check pages fit on mobile
 - `bun run stories:ios` - Same stories cycle on the iOS simulator
 - Story player options (pass after `--`): `--duration <ms>`, `--screenshots <dir>`, `--no-screenshots`, `--open`. Screenshots go to `stories-screenshots/<platform>/` with an `index.html` pairing light and dark. See `packages/user-interface/src/stories/README.md`
 - `bun run start -- <command> [db-path]` - Run CLI commands locally (from `apps/cli`)

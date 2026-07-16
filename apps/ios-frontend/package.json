@@ -12,7 +12,7 @@
     "fetch:media": "bash ../../scripts/fetch-mobile-media-tools.sh ios",
     "sync": "bun run fetch:media && bun run bundle:worker && vite build && cap sync ios",
     "open": "bun run sync && cap open ios",
-    "launch": "bun run bundle:worker && vite build && cap run ios"
+    "run": "bun run sync && cap run ios"
   },
   "dependencies": {
     "user-interface": "workspace:*",

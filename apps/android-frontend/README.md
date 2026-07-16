@@ -10,7 +10,7 @@ The frontend lives in `src/` and is built with [Vite](https://vitejs.dev/). The 
 
 - [Bun](https://bun.sh).
 - For Android: [Android Studio](https://developer.android.com/studio) (includes the Android SDK and a device emulator).
-- JDK 17. AGP fails on JDK 21; set `JAVA_HOME` to a JDK 17 (`bun run test:android:unit` will also auto-detect one).
+- JDK 17. AGP fails on JDK 21; set `JAVA_HOME` to a JDK 17 (`bun run test:and:unit` will also auto-detect one).
 - Android NDK `25.1.8937393`. Builds the native ImageMagick shim; install it from Android Studio's SDK Manager or with `sdkmanager "ndk;25.1.8937393"`.
 
 ## Setup
