@@ -1,7 +1,7 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
 import eruda from "eruda";
 import { Network } from "@capacitor/network";
-import { PlatformContextProvider, ConfigContextProvider, createConfig, useLanShareTasks, readBrowserNetworkStatus, subscribeBrowserNetworkStatus, TEST_MENU_EVENT, TEST_OPEN_DATABASE_EVENT, TEST_SEED_DATABASES_EVENT, TEST_SEED_SECRETS_EVENT, TEST_SEED_RECENT_EVENT, TEST_SEED_NEWS_EVENT, TEST_RESET_CONFIG_EVENT, TEST_PICK_FILES_EVENT, type IPlatformContext, type IPlatformEvent, type INetworkStatus, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions } from "user-interface";
+import { PlatformContextProvider, ConfigContextProvider, createConfig, useLanShareTasks, readBrowserNetworkStatus, subscribeBrowserNetworkStatus, signalTestAppReady, TEST_MENU_EVENT, TEST_OPEN_DATABASE_EVENT, TEST_SEED_DATABASES_EVENT, TEST_SEED_SECRETS_EVENT, TEST_SEED_RECENT_EVENT, TEST_SEED_NEWS_EVENT, TEST_RESET_CONFIG_EVENT, TEST_PICK_FILES_EVENT, type IPlatformContext, type IPlatformEvent, type INetworkStatus, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions } from "user-interface";
 import { log } from "utils";
 import { cancelMobileTasks, subscribeMobileTaskMessage, subscribeMobileTaskComplete, pickMobileFiles, setInjectedPickedFiles } from "./mobile-platform-tasks";
 import * as configStore from "./mobile-config-store";
@@ -152,6 +152,11 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         window.addEventListener(TEST_SEED_RECENT_EVENT, handleSeedRecent);
         window.addEventListener(TEST_RESET_CONFIG_EVENT, handleResetConfig);
         window.addEventListener(TEST_PICK_FILES_EVENT, handlePickFiles);
+        // The test-command listeners are now registered, so it is safe to tell the host bridge the
+        // app is ready. Signaling earlier (the WebSocket sends "ready" on connect) let a command
+        // fired right after /ready dispatch its one-shot CustomEvent before these listeners existed,
+        // dropping it (observed as the create-database dialog never opening under concurrent load).
+        signalTestAppReady();
         return () => {
             window.removeEventListener(TEST_MENU_EVENT, handleMenu);
             window.removeEventListener(TEST_OPEN_DATABASE_EVENT, handleOpenDatabase);

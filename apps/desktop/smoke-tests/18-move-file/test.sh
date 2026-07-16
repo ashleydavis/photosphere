@@ -44,10 +44,10 @@ wait_for_ready "$APP_PORT"
 
 log_info "Opening source database..."
 send_command "$APP_PORT" open-database "{\"path\":\"$SOURCE_DB\"}"
-wait_for_log "$TMP_DIR" "Load assets task completed: 1 assets loaded" 60
+wait_for_log "$TMP_DIR" "Load assets task completed: 1 assets loaded"
 log_success "Source database opened with 1 asset"
 
-wait_for_log "$TMP_DIR" "Gallery items rendered" 30
+wait_for_log "$TMP_DIR" "Gallery items rendered"
 log_success "Gallery items are in the DOM"
 
 log_info "Selecting the first gallery item..."
@@ -59,17 +59,17 @@ send_command "$APP_PORT" click '{"dataId":"right-sidebar-button"}'
 log_info "Clicking Move to dest-db..."
 send_command "$APP_PORT" click '{"dataId":"move-to-database-dest-db"}'
 
-wait_for_log "$TMP_DIR" "Move to database completed: 1 asset moved" 30
+wait_for_log "$TMP_DIR" "Move to database completed: 1 asset moved"
 log_success "Move to database completed"
 
 log_info "Opening destination database to verify..."
 send_command "$APP_PORT" open-database "{\"path\":\"$DEST_DB\"}"
-wait_for_log "$TMP_DIR" "Load assets task completed: 1 assets loaded" 60
+wait_for_log "$TMP_DIR" "Load assets task completed: 1 assets loaded"
 log_success "Destination database has 1 asset"
 
 log_info "Opening source database to verify it is empty..."
 send_command "$APP_PORT" open-database "{\"path\":\"$SOURCE_DB\"}"
-wait_for_log "$TMP_DIR" "Load assets task completed: 0 assets loaded" 60
+wait_for_log "$TMP_DIR" "Load assets task completed: 0 assets loaded"
 log_success "Source database is empty after move"
 
 check_no_errors "$TMP_DIR"

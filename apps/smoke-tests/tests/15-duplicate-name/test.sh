@@ -21,13 +21,13 @@ send_command "$APP_PORT" reset-config '{}' || exit 1
 send_command "$APP_PORT" seed-secrets '{"secrets":[{"entry":{"name":"dup-secret","type":"api-key"},"value":"existing"}]}' || exit 1
 
 send_command "$APP_PORT" navigate '{"page":"secrets"}' || exit 1
-wait_for_log "$TMP_DIR" "Secrets page loaded" 20
+wait_for_log "$TMP_DIR" "Secrets page loaded"
 
 send_command "$APP_PORT" click '{"dataId":"add-secret-button"}' || exit 1
-wait_for_log "$TMP_DIR" "Add secret dialog opened" 20
+wait_for_log "$TMP_DIR" "Add secret dialog opened"
 
 send_command "$APP_PORT" type '{"dataId":"secret-name-input","text":"dup-secret"}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"add-secret-confirm"}' || exit 1
-wait_for_log "$TMP_DIR" "A secret named 'dup-secret' already exists" 20
+wait_for_log "$TMP_DIR" "A secret named 'dup-secret' already exists"
 
 log_success "Test 15 passed: duplicate-name"

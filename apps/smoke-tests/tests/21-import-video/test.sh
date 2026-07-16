@@ -36,25 +36,25 @@ send_command "$APP_PORT" seed-databases "{\"databases\":[{\"name\":\"$DB_NAME\",
 
 # Open the seeded database.
 send_command "$APP_PORT" menu '{"itemId":"open-database"}' || exit 1
-wait_for_log "$TMP_DIR" "Open database dialog opened" 20
+wait_for_log "$TMP_DIR" "Open database dialog opened"
 
 send_command "$APP_PORT" click '{"dataId":"database-list-item-0"}' || exit 1
-wait_for_log "$TMP_DIR" "Database opened" 20
-wait_for_log "$TMP_DIR" "Load assets task completed: 0 assets loaded" 20
+wait_for_log "$TMP_DIR" "Database opened"
+wait_for_log "$TMP_DIR" "Load assets task completed: 0 assets loaded"
 
 # Go to the import page.
 send_command "$APP_PORT" click '{"dataId":"import-button"}' || exit 1
-wait_for_log "$TMP_DIR" "Import page ready" 20
+wait_for_log "$TMP_DIR" "Import page ready"
 
 # Stage the picked video path, then click the picker button so the import-assets task runs. The
 # upload-asset subtask calls ffprobe (metadata) and ffmpeg (screenshot thumbnail) via FFmpegKit.
 send_command "$APP_PORT" pick-files "{\"paths\":[\".import-tmp/test.mp4\"]}" || exit 1
 send_command "$APP_PORT" click '{"dataId":"import-files-button"}' || exit 1
-wait_for_log "$TMP_DIR" "1 assets imported" 90
+wait_for_log "$TMP_DIR" "1 assets imported"
 
 # The gallery must now show the imported video asset.
 send_command "$APP_PORT" navigate '{"page":"/"}' || exit 1
-wait_for_log "$TMP_DIR" "Gallery loaded: 1 assets" 30
+wait_for_log "$TMP_DIR" "Gallery loaded: 1 assets"
 
 # Thumbnail fetches for the freshly imported asset go through the asset-serving layer; ignore only those.
 check_no_errors "$TMP_DIR" 'Failed to load asset: thumb:|Network Error' || exit 1

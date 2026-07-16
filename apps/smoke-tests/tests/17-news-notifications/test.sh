@@ -23,10 +23,10 @@ wait_for_ready "$APP_PORT"
 send_command "$APP_PORT" reset-config '{}' || exit 1
 send_command "$APP_PORT" seed-news '{"news":[{"id":"smoke-news-001","message":"Smoke test news item"}]}' || exit 1
 
-wait_for_log "$TMP_DIR" "Showed news notification:" 20
+wait_for_log "$TMP_DIR" "Showed news notification:"
 
 send_command "$APP_PORT" click '{"dataId":"toast-dismiss"}' || exit 1
-wait_for_log "$TMP_DIR" "Marked news notification as shown:" 20
+wait_for_log "$TMP_DIR" "Marked news notification as shown:"
 
 check_no_errors "$TMP_DIR"
 

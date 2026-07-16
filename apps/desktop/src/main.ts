@@ -307,7 +307,9 @@ app.whenReady().then(async () => {
     // Initialize REST API before creating main window
     await initRestApi();
 
-    // Install MCP IPC handlers and start the embedded MCP utility process.
+    // Install MCP IPC handlers and start the embedded MCP utility process. In test mode the server
+    // binds an OS-assigned port (see main-bridge) so the two app instances the runner launches in
+    // parallel do not collide on the fixed MCP port.
     installMcpHandlers({
         getMainWindow: () => mainWindow,
         isShuttingDown: () => isShuttingDown,

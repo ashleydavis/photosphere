@@ -43,25 +43,25 @@ send_command "$APP_PORT" seed-databases "{\"databases\":[{\"name\":\"$DB_NAME\",
 
 # Open the seeded database.
 send_command "$APP_PORT" menu '{"itemId":"open-database"}' || exit 1
-wait_for_log "$TMP_DIR" "Open database dialog opened" 20
+wait_for_log "$TMP_DIR" "Open database dialog opened"
 
 send_command "$APP_PORT" click '{"dataId":"database-list-item-0"}' || exit 1
-wait_for_log "$TMP_DIR" "Database opened" 20
-wait_for_log "$TMP_DIR" "Load assets task completed: 0 assets loaded" 20
+wait_for_log "$TMP_DIR" "Database opened"
+wait_for_log "$TMP_DIR" "Load assets task completed: 0 assets loaded"
 
 # Go to the import page.
 send_command "$APP_PORT" click '{"dataId":"import-button"}' || exit 1
-wait_for_log "$TMP_DIR" "Import page ready" 20
+wait_for_log "$TMP_DIR" "Import page ready"
 
 # Stage the picked paths, then click the picker button so pickFiles resolves with them and the
 # import-assets task runs (spawning hash-file / upload-asset subtasks through the engine pool).
 send_command "$APP_PORT" pick-files "{\"paths\":[\".import-tmp/test-1.jpeg\",\".import-tmp/test-2.png\"]}" || exit 1
 send_command "$APP_PORT" click '{"dataId":"import-files-button"}' || exit 1
-wait_for_log "$TMP_DIR" "2 assets imported" 60
+wait_for_log "$TMP_DIR" "2 assets imported"
 
 # The gallery must now show the two imported assets.
 send_command "$APP_PORT" navigate '{"page":"/"}' || exit 1
-wait_for_log "$TMP_DIR" "Gallery loaded: 2 assets" 30
+wait_for_log "$TMP_DIR" "Gallery loaded: 2 assets"
 
 # Thumbnail fetches for freshly imported assets go through the asset-serving layer; ignore only those.
 check_no_errors "$TMP_DIR" 'Failed to load asset: thumb:|Network Error' || exit 1

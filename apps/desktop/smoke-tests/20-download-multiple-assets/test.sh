@@ -58,10 +58,10 @@ wait_for_ready "$APP_PORT"
 
 log_info "Opening database..."
 send_command "$APP_PORT" open-database "{\"path\":\"$SOURCE_DB\"}"
-wait_for_log "$TMP_DIR" "Load assets task completed: 2 assets loaded" 60
+wait_for_log "$TMP_DIR" "Load assets task completed: 2 assets loaded"
 log_success "Database opened with 2 assets"
 
-wait_for_log "$TMP_DIR" "Gallery items rendered" 30
+wait_for_log "$TMP_DIR" "Gallery items rendered"
 log_success "Gallery items are in the DOM"
 
 log_info "Selecting both gallery items..."
@@ -76,7 +76,7 @@ send_command "$APP_PORT" click '{"dataId":"right-sidebar-button"}'
 log_info "Clicking Download N assets..."
 send_command "$APP_PORT" click '{"dataId":"download-selected-button"}'
 
-wait_for_log "$TMP_DIR" "Download to folder completed: 2 assets downloaded" 60
+wait_for_log "$TMP_DIR" "Download to folder completed: 2 assets downloaded"
 log_success "Download to folder completed"
 
 log_info "Verifying both downloaded files exist on disk..."

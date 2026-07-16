@@ -21,15 +21,15 @@ send_command "$APP_PORT" reset-config '{}' || exit 1
 send_command "$APP_PORT" seed-secrets '{"secrets":[{"entry":{"name":"s3-cred","type":"s3-credentials"},"value":"{\"region\":\"us-east-1\",\"accessKeyId\":\"AKIAEXAMPLE\",\"secretAccessKey\":\"secretvalue\"}"}]}' || exit 1
 
 send_command "$APP_PORT" navigate '{"page":"secrets"}' || exit 1
-wait_for_log "$TMP_DIR" "Secrets page loaded" 20
+wait_for_log "$TMP_DIR" "Secrets page loaded"
 
 send_command "$APP_PORT" click '{"dataId":"entity-actions-menu"}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"edit-secret-button"}' || exit 1
-wait_for_log "$TMP_DIR" "Edit secret dialog opened" 20
+wait_for_log "$TMP_DIR" "Edit secret dialog opened"
 
 send_command "$APP_PORT" type '{"dataId":"secret-s3-region-input","text":"eu-west-1"}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"add-secret-confirm"}' || exit 1
-wait_for_log "$TMP_DIR" "Secret updated" 20
+wait_for_log "$TMP_DIR" "Secret updated"
 
 check_no_errors "$TMP_DIR"
 

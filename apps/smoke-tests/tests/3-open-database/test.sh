@@ -24,10 +24,10 @@ send_command "$APP_PORT" reset-config '{}' || exit 1
 send_command "$APP_PORT" seed-databases "{\"databases\":[{\"name\":\"$DB_NAME\",\"path\":\"$DB_NAME\"}]}" || exit 1
 
 send_command "$APP_PORT" menu '{"itemId":"open-database"}' || exit 1
-wait_for_log "$TMP_DIR" "Open database dialog opened" 20
+wait_for_log "$TMP_DIR" "Open database dialog opened"
 
 send_command "$APP_PORT" click '{"dataId":"database-list-item-0"}' || exit 1
-wait_for_log "$TMP_DIR" "Database opened" 20
+wait_for_log "$TMP_DIR" "Database opened"
 
 # Thumbnail fetches require the not-yet-built mobile asset-serving layer; ignore only those errors.
 check_no_errors "$TMP_DIR" 'Failed to load asset: thumb:|Network Error' || exit 1

@@ -28,13 +28,13 @@ send_command "$APP_PORT" open-database '{"path":"test-db"}' || exit 1
 # completes in either order, so a sequential wait for one then the other is racy. Wait for the gallery
 # to render the items (the signal needed to interact with them); the assets having loaded is verified by
 # the download succeeding below.
-wait_for_log "$TMP_DIR" "Gallery items rendered" 20
+wait_for_log "$TMP_DIR" "Gallery items rendered"
 
 send_command "$APP_PORT" click '{"dataId":"gallery-item-checkbox","nth":0}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"gallery-item-checkbox","nth":1}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"right-sidebar-button"}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"download-selected-button"}' || exit 1
-wait_for_log "$TMP_DIR" "Download to folder completed: 2 assets downloaded" 20
+wait_for_log "$TMP_DIR" "Download to folder completed: 2 assets downloaded"
 
 # Thumbnail fetches need the not-yet-built asset-serving layer; ignore only those errors.
 check_no_errors "$TMP_DIR" 'Failed to load asset: thumb:|Network Error' || exit 1

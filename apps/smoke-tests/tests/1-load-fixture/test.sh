@@ -29,7 +29,7 @@ wait_for_ready "$APP_PORT"
 
 send_command "$APP_PORT" open-database "{\"path\":\"$DB_NAME\"}" || exit 1
 
-wait_for_log "$TMP_DIR" "Gallery loaded: 50 assets" 30
+wait_for_log "$TMP_DIR" "Gallery loaded: 50 assets"
 
 # The gallery renders the 50 assets from the loaded metadata and upgrades each tile from its embedded
 # micro-thumbnail to a full thumbnail, fetched over the embedded asset server (plan-mobile-serving-options.md):

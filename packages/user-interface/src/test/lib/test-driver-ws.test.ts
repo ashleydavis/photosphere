@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 
-import { connectTestDriverWebSocket } from "../../lib/test-driver-ws";
+import { connectTestDriverWebSocket, signalTestAppReady, resetTestReadyGateForTests } from "../../lib/test-driver-ws";
 
 //
 // A minimal fake WebSocket that records sent messages and lets tests fire events.
@@ -78,6 +78,7 @@ describe("connectTestDriverWebSocket", () => {
     beforeEach(() => {
         FakeWebSocket.instances = [];
         (globalThis as any).WebSocket = FakeWebSocket;
+        resetTestReadyGateForTests();
     });
 
     afterEach(() => {
@@ -87,12 +88,25 @@ describe("connectTestDriverWebSocket", () => {
         console.error = originalConsoleError;
     });
 
-    test("sends ready when the socket opens", () => {
+    test("withholds ready until the app signals mounted, then sends it", () => {
         connectTestDriverWebSocket("ws://localhost:1234");
         const socket = FakeWebSocket.instances[0];
         socket.emit("open", {});
-        const messages = socket.sent.map((raw) => JSON.parse(raw));
-        expect(messages).toContainEqual({ type: "ready" });
+
+        // Ready must not be sent yet: the app's command listeners are not mounted, so a command
+        // arriving now would be dropped.
+        expect(socket.sent.map((raw) => JSON.parse(raw))).not.toContainEqual({ type: "ready" });
+
+        signalTestAppReady();
+        expect(socket.sent.map((raw) => JSON.parse(raw))).toContainEqual({ type: "ready" });
+    });
+
+    test("sends ready immediately when the app mounted before the socket opened", () => {
+        signalTestAppReady();
+        connectTestDriverWebSocket("ws://localhost:1234");
+        const socket = FakeWebSocket.instances[0];
+        socket.emit("open", {});
+        expect(socket.sent.map((raw) => JSON.parse(raw))).toContainEqual({ type: "ready" });
     });
 
     test("dispatches a command to the driver and replies with the matching id", async () => {

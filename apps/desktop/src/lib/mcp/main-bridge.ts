@@ -115,7 +115,7 @@ export async function initMcpServer(): Promise<void> {
                 clearTimeout(timeout);
                 mcpWorker?.off("message", messageHandler);
                 mcpWorker?.off("spawn", spawnHandler);
-                console.log(`MCP server initialized in utility process on port ${MCP_PORT}`);
+                console.log(`MCP server initialized in utility process on port ${message.port ?? MCP_PORT}`);
                 resolve();
             }
             else if (message.type === "server-error") {
@@ -130,7 +130,12 @@ export async function initMcpServer(): Promise<void> {
         const spawnHandler = () => {
             console.log("MCP utility process spawned");
             if (mcpWorker) {
-                const startMessage: IMcpWorkerStartMessage = { type: "start", port: MCP_PORT };
+                // In test mode two app instances run in parallel, so bind an OS-assigned free port
+                // (0) instead of the fixed MCP_PORT to avoid an EADDRINUSE collision; the worker
+                // reports the actual bound port back in server-ready. Production keeps the fixed port
+                // so a single MCP client configuration keeps working.
+                const requestedPort = process.env.PHOTOSPHERE_TEST_MODE === "1" ? 0 : MCP_PORT;
+                const startMessage: IMcpWorkerStartMessage = { type: "start", port: requestedPort };
                 mcpWorker.postMessage(startMessage);
             }
         };

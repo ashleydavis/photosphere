@@ -10,6 +10,17 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
+# Default seconds a wait tolerates before failing, doubled from the standalone value so a concurrent
+# suite run sharing the machine (which slows everything) does not trip a spurious timeout.
+DEFAULT_WAIT_TIMEOUT=120
+
+# Clean up the app even when a run is interrupted (Ctrl-C) or the runner's timeout kills a slow test
+# (SIGTERM), not only on a normal exit. A bash EXIT trap does not fire on an uncaught signal, so turn
+# those signals into an exit here: that runs the per-test EXIT trap (stop_app), leaving nothing
+# orphaned. (A hard SIGKILL still cannot be caught, but that is not the normal path.)
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
 log_info() {
     echo -e "${BLUE}[INFO]${NC} $1"
 }
@@ -98,13 +109,12 @@ get_release_binary() {
 # Waits for the app to publish the OS-assigned port its test control server bound and prints it.
 # The app binds port 0 and writes the actual port to $tmp_dir/test-control.port. Diagnostics go to
 # stderr so callers can capture the port from stdout.
-# Usage: wait_for_test_port <port_file> [timeout_secs]
+# Usage: wait_for_test_port <port_file>
 #
 wait_for_test_port() {
     local port_file="$1"
-    local timeout="${2:-60}"
     local elapsed=0
-    while [ "$elapsed" -lt "$timeout" ]; do
+    while [ "$elapsed" -lt "$DEFAULT_WAIT_TIMEOUT" ]; do
         if [ -s "$port_file" ]; then
             cat "$port_file"
             return 0
@@ -112,7 +122,7 @@ wait_for_test_port() {
         sleep 1
         elapsed=$((elapsed + 1))
     done
-    log_error "Test control server did not report a listening port within ${timeout}s" >&2
+    log_error "Test control server did not report a listening port within ${DEFAULT_WAIT_TIMEOUT}s" >&2
     return 1
 }
 
@@ -168,27 +178,59 @@ start_app() {
     local actual_port
     actual_port=$(wait_for_test_port "$tmp_dir/test-control.port") || return 1
     APP_PORT="$actual_port"
+    # Remember how to relaunch this instance so wait_for_ready can recover a startup that binds its
+    # control server but never reaches /ready (a rare Electron wedge under concurrent load).
+    APP_TMP_DIR="$tmp_dir"
+    APP_X_POS="$x_pos"
     log_info "App started (PID $(cat "$tmp_dir/app.pid"), port $actual_port)"
 }
 
+# Kills the app process recorded in <tmp_dir>/app.pid. Used by the wait_for_ready relaunch path.
+_kill_app() {
+    local tmp_dir="$1"
+    local pid_file="$tmp_dir/app.pid"
+    if [ -f "$pid_file" ]; then
+        local pid
+        pid=$(cat "$pid_file")
+        if kill -0 "$pid" 2>/dev/null; then
+            kill "$pid" 2>/dev/null || true
+            sleep 1
+            kill -9 "$pid" 2>/dev/null || true
+        fi
+    fi
+}
+
 #
-# Polls GET /ready until the app is ready or the timeout is reached.
-# Usage: wait_for_ready <port> [timeout_secs]
+# Polls GET /ready until the app is ready. On a timeout it relaunches the app and retries: under
+# heavy concurrent load an Electron instance occasionally comes up (its control server binds) but
+# never reaches /ready, and a fresh launch recovers it. Relaunch uses the globals start_app set
+# (APP_PORT/APP_TMP_DIR/APP_X_POS), so this must be called right after the matching start_app. The
+# <port> argument is accepted for call compatibility but the live port is always APP_PORT.
+# Usage: wait_for_ready <port>
 #
 wait_for_ready() {
-    local port="$1"
-    local timeout="${2:-60}"
-    local elapsed=0
-    log_info "Waiting for app to be ready on port $port..."
-    while [ "$elapsed" -lt "$timeout" ]; do
-        if curl -sf "http://localhost:$port/ready" > /dev/null 2>&1; then
-            log_info "App is ready"
-            return 0
+    local max_attempts=2
+    local attempt=1
+    log_info "Waiting for app to be ready on port $APP_PORT..."
+    while [ "$attempt" -le "$max_attempts" ]; do
+        local elapsed=0
+        while [ "$elapsed" -lt "$DEFAULT_WAIT_TIMEOUT" ]; do
+            if curl -sf "http://localhost:$APP_PORT/ready" > /dev/null 2>&1; then
+                log_info "App is ready"
+                return 0
+            fi
+            sleep 1
+            elapsed=$((elapsed + 1))
+        done
+        log_error "Timed out waiting for app to be ready after ${DEFAULT_WAIT_TIMEOUT}s (attempt $attempt of $max_attempts)"
+        if [ "$attempt" -lt "$max_attempts" ]; then
+            log_info "Relaunching app and retrying..."
+            _kill_app "$APP_TMP_DIR"
+            start_app "$APP_TMP_DIR" "$APP_X_POS"
         fi
-        sleep 1
-        elapsed=$((elapsed + 1))
+        attempt=$((attempt + 1))
     done
-    log_error "Timed out waiting for app to be ready after ${timeout}s"
+    log_error "App failed to become ready after $max_attempts launch attempts"
     return 1
 }
 
@@ -198,12 +240,11 @@ wait_for_ready() {
 # logged after the previous successful match. This avoids races where a repeated
 # pattern (e.g. "Databases page loaded" on a re-navigation) matches a stale
 # occurrence and returns before the new event has actually fired.
-# Usage: wait_for_log <tmp_dir> <pattern> [timeout_secs]
+# Usage: wait_for_log <tmp_dir> <pattern>
 #
 wait_for_log() {
     local tmp_dir="$1"
     local pattern="$2"
-    local timeout="${3:-60}"
     local elapsed=0
     local cursor_file="$tmp_dir/.log-cursor"
     local start_line=0
@@ -211,7 +252,7 @@ wait_for_log() {
         start_line=$(cat "$cursor_file")
     fi
     log_info "Waiting for log pattern: $pattern (after line $start_line)"
-    while [ "$elapsed" -lt "$timeout" ]; do
+    while [ "$elapsed" -lt "$DEFAULT_WAIT_TIMEOUT" ]; do
         if [ -f "$tmp_dir/app.log" ]; then
             local matched_line
             matched_line=$(awk -v start="$start_line" -v pat="$pattern" '

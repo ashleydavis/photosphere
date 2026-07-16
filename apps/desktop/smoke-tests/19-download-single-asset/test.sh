@@ -58,21 +58,21 @@ wait_for_ready "$APP_PORT"
 
 log_info "Opening database..."
 send_command "$APP_PORT" open-database "{\"path\":\"$SOURCE_DB\"}"
-wait_for_log "$TMP_DIR" "Load assets task completed: 1 assets loaded" 60
+wait_for_log "$TMP_DIR" "Load assets task completed: 1 assets loaded"
 log_success "Database opened with 1 asset"
 
-wait_for_log "$TMP_DIR" "Gallery items rendered" 30
+wait_for_log "$TMP_DIR" "Gallery items rendered"
 log_success "Gallery items are in the DOM"
 
 log_info "Opening AssetView via long-press click on the first gallery thumb..."
 send_command "$APP_PORT" long-press-click '{"dataId":"gallery-thumb"}'
-wait_for_log "$TMP_DIR" "AssetView opened" 15
+wait_for_log "$TMP_DIR" "AssetView opened"
 log_success "AssetView is open"
 
 log_info "Clicking the Download icon in AssetView..."
 send_command "$APP_PORT" click '{"dataId":"download-asset-button"}'
 
-wait_for_log "$TMP_DIR" "Download completed: test-1.jpeg" 30
+wait_for_log "$TMP_DIR" "Download completed: test-1.jpeg"
 log_success "Download completed event logged"
 
 log_info "Verifying downloaded file exists on disk..."

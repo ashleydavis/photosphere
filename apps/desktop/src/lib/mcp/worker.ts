@@ -6,6 +6,7 @@
 import express from "express";
 import type { Request, Response } from "express";
 import type { Server } from "node:http";
+import type { AddressInfo } from "node:net";
 import { randomUUID } from "node:crypto";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createMcpServer } from "./server";
@@ -117,7 +118,10 @@ async function startServer(port: number): Promise<void> {
 
     await new Promise<void>((resolve, reject) => {
         httpServer = app.listen(port, "127.0.0.1", () => {
-            parentPort.postMessage({ type: "server-ready", port });
+            // Report the actually-bound port (the requested port may be 0, meaning OS-assigned, in
+            // test mode) so the main process knows where the server is.
+            const boundPort = (httpServer!.address() as AddressInfo).port;
+            parentPort.postMessage({ type: "server-ready", port: boundPort });
             resolve();
         });
         httpServer.on("error", error => {

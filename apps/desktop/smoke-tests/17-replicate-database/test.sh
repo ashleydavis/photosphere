@@ -58,7 +58,7 @@ send_command "$APP_PORT" type "{\"dataId\":\"replicate-dest-path-input\",\"text\
 send_command "$APP_PORT" click '{"dataId":"replicate-mode-partial"}'
 send_command "$APP_PORT" click '{"dataId":"replicate-start-button"}'
 
-wait_for_log "$TMP_DIR" "Replication completed for" 120
+wait_for_log "$TMP_DIR" "Replication completed for"
 
 if [ ! -f "$DEST_PARTIAL/.db/files.dat" ]; then
     log_error "Partial replication did not produce $DEST_PARTIAL/.db/files.dat"
@@ -94,7 +94,7 @@ send_command "$APP_PORT" click '{"dataId":"replicate-close-button"}'
 # Open the partial replica and confirm its gallery loads with the same number of assets
 # the source has (1, set above via the fixture import).
 send_command "$APP_PORT" open-database "{\"path\":\"$DEST_PARTIAL\"}"
-wait_for_log "$TMP_DIR" "Load assets task completed: 1 assets loaded" 60
+wait_for_log "$TMP_DIR" "Load assets task completed: 1 assets loaded"
 log_success "Partial replica opened with 1 asset"
 
 # Full replication. Navigate away and back to force the databases page to remount
@@ -110,7 +110,7 @@ send_command "$APP_PORT" type "{\"dataId\":\"replicate-dest-path-input\",\"text\
 send_command "$APP_PORT" click '{"dataId":"replicate-mode-full"}'
 send_command "$APP_PORT" click '{"dataId":"replicate-start-button"}'
 
-wait_for_log "$TMP_DIR" "Replication completed for" 120
+wait_for_log "$TMP_DIR" "Replication completed for"
 
 if [ ! -f "$DEST_FULL/.db/files.dat" ]; then
     log_error "Full replication did not produce $DEST_FULL/.db/files.dat"
@@ -126,7 +126,7 @@ send_command "$APP_PORT" click '{"dataId":"replicate-close-button"}'
 
 # Open the full replica and confirm its gallery loads with the same number of assets.
 send_command "$APP_PORT" open-database "{\"path\":\"$DEST_FULL\"}"
-wait_for_log "$TMP_DIR" "Load assets task completed: 1 assets loaded" 60
+wait_for_log "$TMP_DIR" "Load assets task completed: 1 assets loaded"
 log_success "Full replica opened with 1 asset"
 
 check_no_errors "$TMP_DIR"

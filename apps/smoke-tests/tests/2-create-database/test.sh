@@ -23,13 +23,13 @@ send_command "$APP_PORT" reset-config '{}' || exit 1
 "${PLATFORM}_reset_path" "test-db"
 
 send_command "$APP_PORT" menu '{"itemId":"new-database"}' || exit 1
-wait_for_log "$TMP_DIR" "Create database dialog opened" 20
+wait_for_log "$TMP_DIR" "Create database dialog opened"
 
 send_command "$APP_PORT" type '{"dataId":"database-name-input","text":"test-db"}' || exit 1
 send_command "$APP_PORT" type '{"dataId":"database-path-input","text":"test-db"}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"create-database-confirm"}' || exit 1
 
-wait_for_log "$TMP_DIR" "Database created" 20
+wait_for_log "$TMP_DIR" "Database created"
 
 check_no_errors "$TMP_DIR"
 

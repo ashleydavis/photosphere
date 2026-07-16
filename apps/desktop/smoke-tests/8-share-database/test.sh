@@ -102,7 +102,7 @@ wait_for_log "$TMP_DIR/receiver" "Receive database dialog opened"
 
 send_command "$RECEIVER_PORT" type "{\"dataId\":\"receive-database-code-input\",\"text\":\"$code\"}"
 send_command "$RECEIVER_PORT" click '{"dataId":"receive-database-start-button"}'
-wait_for_log "$TMP_DIR/receiver" "Database review step" 120
+wait_for_log "$TMP_DIR/receiver" "Database review step"
 
 send_command "$RECEIVER_PORT" click '{"dataId":"receive-database-save-button"}'
 wait_for_log "$TMP_DIR/receiver" "Database imported"

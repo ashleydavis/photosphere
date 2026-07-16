@@ -78,7 +78,7 @@ wait_for_log "$TMP_DIR/receiver" "Receive secret dialog opened"
 
 send_command "$RECEIVER_PORT" type "{\"dataId\":\"receive-secret-code-input\",\"text\":\"$code\"}"
 send_command "$RECEIVER_PORT" click '{"dataId":"receive-secret-start-button"}'
-wait_for_log "$TMP_DIR/receiver" "Secret review step" 120
+wait_for_log "$TMP_DIR/receiver" "Secret review step"
 
 send_command "$RECEIVER_PORT" click '{"dataId":"receive-secret-save-button"}'
 wait_for_log "$TMP_DIR/receiver" "Secret saved"

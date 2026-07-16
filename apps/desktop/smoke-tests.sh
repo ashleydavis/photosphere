@@ -10,6 +10,12 @@ NC='\033[0m'
 
 USE_BINARY=false
 
+# Hard wall-clock limit per test. Generous because a concurrent Android suite run oversubscribes
+# the machine: an Electron app can be slow to reach /ready, and wait_for_ready relaunches once on a
+# timeout (up to two DEFAULT_WAIT_TIMEOUT waits), which must fit inside this cap plus the test's own
+# actions. A standalone run finishes each test in well under this.
+PER_TEST_TIMEOUT=300
+
 # Record start time for total duration reporting
 SMOKE_TESTS_START_TIME=$SECONDS
 
@@ -115,7 +121,7 @@ run_one() {
     mkdir -p "$dir/tmp"
     printf "${BLUE}RUN ${NC}  %2s  %s\n" "$num" "$name"
     local test_start=$SECONDS
-    if timeout 120 bash "$test_sh" >"$log_file" 2>&1; then
+    if timeout "$PER_TEST_TIMEOUT" bash "$test_sh" >"$log_file" 2>&1; then
         local test_duration
         test_duration=$(format_duration $((SECONDS - test_start)))
         printf "${GREEN}PASS${NC}  %2s  %-30s  %s\n" "$num" "$name" "$test_duration"
@@ -176,7 +182,7 @@ run_parallel_batch() {
             printf "${BLUE}RUN ${NC}  %2s  %s\n" "$num" "$name"
             (
                 local_start=$SECONDS
-                timeout 120 bash "$t" >"$log_file" 2>&1
+                timeout "$PER_TEST_TIMEOUT" bash "$t" >"$log_file" 2>&1
                 local_exit=$?
                 echo $((SECONDS - local_start)) > "$dir/tmp/test-duration.txt"
                 exit $local_exit

@@ -34,7 +34,10 @@ send_command "$APP_PORT" menu '{"itemId":"open-database"}'
 wait_for_log "$TMP_DIR" "Open database dialog opened"
 
 send_command "$APP_PORT" click '{"dataId":"database-list-item-0"}'
-wait_for_log "$TMP_DIR" "Database opened"
+# "Load assets task completed" only fires after the database opens, so it confirms the open on its
+# own. Do not also wait for the main-process "Database opened" event first: it is written to app.log
+# on a different path than the IPC-forwarded renderer logs, so under load it can land after this
+# line, advancing wait_for_log's cursor past it and causing a spurious timeout.
 wait_for_log "$TMP_DIR" "Load assets task completed: 0 assets loaded"
 
 send_command "$APP_PORT" click '{"dataId":"import-button"}'
@@ -42,10 +45,10 @@ wait_for_log "$TMP_DIR" "Import page ready"
 
 send_command "$APP_PORT" drop "{\"dataId\":\"import-drop-zone\",\"paths\":[\"$IMAGES_DIR/test-1.jpeg\",\"$IMAGES_DIR/test-2.png\"]}"
 
-wait_for_log "$TMP_DIR" "2 assets imported" 60
+wait_for_log "$TMP_DIR" "2 assets imported"
 
 send_command "$APP_PORT" navigate '{"page":"/"}'
-wait_for_log "$TMP_DIR" "Gallery loaded: 2 assets" 30
+wait_for_log "$TMP_DIR" "Gallery loaded: 2 assets"
 
 check_no_errors "$TMP_DIR"
 

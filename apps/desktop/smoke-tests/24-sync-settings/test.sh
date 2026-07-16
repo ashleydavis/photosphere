@@ -75,7 +75,7 @@ wait_for_ready "$APP_PORT"
 
 # On startup the SyncContext mounts and pushes its computed gate to the host. With the
 # defaults (syncing enabled, online) the gate opens.
-wait_for_log "$TMP_DIR" "Sync gate set to true" 30
+wait_for_log "$TMP_DIR" "Sync gate set to true"
 
 # Open the Configuration dialog and confirm the sync settings rendered.
 send_command "$APP_PORT" menu '{"itemId":"open-configuration"}'
@@ -83,18 +83,18 @@ wait_for_value "$APP_PORT" "configuration-dialog" "Syncing"
 
 # Turning off "Enable syncing" closes the gate and persists syncEnabled=false.
 send_command "$APP_PORT" click '{"dataId":"sync-enabled-toggle"}'
-wait_for_log "$TMP_DIR" "Sync gate set to false" 30
+wait_for_log "$TMP_DIR" "Sync gate set to false"
 wait_for_toml "$CONFIG_TOML" "sync_enabled[[:space:]]*=[[:space:]]*false"
 
 # Turning it back on reopens the gate and persists syncEnabled=true.
 send_command "$APP_PORT" click '{"dataId":"sync-enabled-toggle"}'
-wait_for_log "$TMP_DIR" "Sync gate set to true" 30
+wait_for_log "$TMP_DIR" "Sync gate set to true"
 wait_for_toml "$CONFIG_TOML" "sync_enabled[[:space:]]*=[[:space:]]*true"
 
 # Turning off "Only sync over Wi-Fi" persists the flag. On desktop the connection type is
 # "unknown", so the gate stays open (the toggle only restricts cellular on mobile).
 send_command "$APP_PORT" click '{"dataId":"sync-wifi-only-toggle"}'
-wait_for_log "$TMP_DIR" "Sync gate set to true" 30
+wait_for_log "$TMP_DIR" "Sync gate set to true"
 wait_for_toml "$CONFIG_TOML" "sync_only_on_wifi[[:space:]]*=[[:space:]]*false"
 
 check_no_errors "$TMP_DIR"

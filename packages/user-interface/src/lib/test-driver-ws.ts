@@ -71,8 +71,44 @@ interface ITestGlobal {
 }
 
 //
+// Whether the app has signaled that its test-command window listeners are mounted. "ready" is
+// withheld from the host bridge until this is true so a command dispatched the instant the host
+// sees /ready always finds its listener registered (the driver dispatches one-shot CustomEvents,
+// which are silently dropped when no listener exists yet).
+//
+let testAppMounted = false;
+
+//
+// A deferred "send ready", set when the socket opens before the app has mounted. Invoked by
+// signalTestAppReady once the app reports mounted.
+//
+let deferredSendReady: (() => void) | null = null;
+
+//
+// Called by the app (the mobile platform provider) once it has registered its test-command window
+// listeners. Releases the withheld "ready" to the host bridge if the socket is already open.
+//
+export function signalTestAppReady(): void {
+    testAppMounted = true;
+    if (deferredSendReady) {
+        const send = deferredSendReady;
+        deferredSendReady = null;
+        send();
+    }
+}
+
+//
+// Test-only: resets the ready-gating state so each unit test starts from a clean slate.
+//
+export function resetTestReadyGateForTests(): void {
+    testAppMounted = false;
+    deferredSendReady = null;
+}
+
+//
 // Opens a WebSocket to the host control bridge at the given URL, wires it to the shared DOM
-// test driver, forwards console output as log messages, and sends "ready" once connected.
+// test driver, forwards console output as log messages, and sends "ready" once connected and the
+// app has mounted its test-command listeners.
 //
 export function connectTestDriverWebSocket(url: string): void {
     const socket = new WebSocket(url);
@@ -105,7 +141,20 @@ export function connectTestDriverWebSocket(url: string): void {
     patchConsole(transport);
 
     socket.addEventListener("open", () => {
-        sendMessage({ type: "ready" });
+        //
+        // Withhold "ready" until the app has mounted its test-command window listeners. If it has
+        // already mounted, send immediately; otherwise defer so a command issued the instant the
+        // host sees /ready is never dropped for lack of a listener.
+        //
+        const sendReady = (): void => {
+            sendMessage({ type: "ready" });
+        };
+        if (testAppMounted) {
+            sendReady();
+        }
+        else {
+            deferredSendReady = sendReady;
+        }
     });
 
     // Surface connection failures: without these the socket fails silently, which is hard to

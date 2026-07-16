@@ -21,14 +21,14 @@ send_command "$APP_PORT" reset-config '{}' || exit 1
 send_command "$APP_PORT" seed-secrets '{"secrets":[{"entry":{"name":"api-key","type":"api-key"},"value":"the-api-key-value"}]}' || exit 1
 
 send_command "$APP_PORT" navigate '{"page":"secrets"}' || exit 1
-wait_for_log "$TMP_DIR" "Secrets page loaded" 20
+wait_for_log "$TMP_DIR" "Secrets page loaded"
 
 send_command "$APP_PORT" click '{"dataId":"entity-actions-menu"}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"edit-secret-button"}' || exit 1
-wait_for_log "$TMP_DIR" "Edit secret dialog opened" 20
+wait_for_log "$TMP_DIR" "Edit secret dialog opened"
 
 send_command "$APP_PORT" click '{"dataId":"add-secret-confirm"}' || exit 1
-wait_for_log "$TMP_DIR" "Secret updated" 20
+wait_for_log "$TMP_DIR" "Secret updated"
 
 check_no_errors "$TMP_DIR"
 

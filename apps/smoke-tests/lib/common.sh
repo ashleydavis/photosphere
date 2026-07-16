@@ -31,6 +31,20 @@ IOS_FRONTEND_DIR="$REPO_DIR/apps/ios-frontend"
 APP_ID="au.com.codecapers.photosphere"
 BUNDLE_ID="au.com.codecapers.photosphere"
 
+# Default seconds a wait tolerates before failing, doubled from the standalone value so a concurrent
+# suite run sharing the machine (which slows everything) does not trip a spurious timeout.
+DEFAULT_WAIT_TIMEOUT=120
+
+# Shorter default (also doubled) for the bridge startup waits.
+DEFAULT_BRIDGE_TIMEOUT=40
+
+# Clean up the app/bridge even when a run is interrupted (Ctrl-C) or the runner's timeout kills a
+# slow test (SIGTERM), not only on a normal exit. A bash EXIT trap does not fire on an uncaught
+# signal, so turn those signals into an exit here: that runs the per-test EXIT trap (stop_app),
+# leaving nothing orphaned. (A hard SIGKILL still cannot be caught, but that is not the normal path.)
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
 log_info() {
     echo -e "${BLUE}[INFO]${NC} $1"
 }
@@ -76,13 +90,12 @@ load_platform() {
 # Waits for the bridge to publish the port it actually bound and prints it. The bridge may bind a
 # port other than the one requested (it falls back to an OS-assigned port if the requested port was
 # taken by a parallel run), so the real port has to be read back rather than assumed.
-# Usage: wait_for_bridge_port <port_file> [timeout_secs]
+# Usage: wait_for_bridge_port <port_file>
 #
 wait_for_bridge_port() {
     local port_file="$1"
-    local timeout="${2:-20}"
     local elapsed=0
-    while [ "$elapsed" -lt "$timeout" ]; do
+    while [ "$elapsed" -lt "$DEFAULT_BRIDGE_TIMEOUT" ]; do
         if [ -s "$port_file" ]; then
             cat "$port_file"
             return 0
@@ -90,7 +103,7 @@ wait_for_bridge_port() {
         sleep 1
         elapsed=$((elapsed + 1))
     done
-    log_error "Control bridge did not report a listening port within ${timeout}s"
+    log_error "Control bridge did not report a listening port within ${DEFAULT_BRIDGE_TIMEOUT}s"
     return 1
 }
 
@@ -100,16 +113,15 @@ wait_for_bridge_port() {
 #
 wait_for_bridge() {
     local port="$1"
-    local timeout="${2:-20}"
     local elapsed=0
-    while [ "$elapsed" -lt "$timeout" ]; do
+    while [ "$elapsed" -lt "$DEFAULT_BRIDGE_TIMEOUT" ]; do
         if curl -s -o /dev/null "http://localhost:$port/ready" 2>/dev/null; then
             return 0
         fi
         sleep 1
         elapsed=$((elapsed + 1))
     done
-    log_error "Control bridge did not start on port $port within ${timeout}s"
+    log_error "Control bridge did not start on port $port within ${DEFAULT_BRIDGE_TIMEOUT}s"
     return 1
 }
 
@@ -157,17 +169,16 @@ start_app() {
 # attempts. On a cold CI emulator/simulator the app's WebView occasionally never connects to the
 # control bridge (observed as a "No app connected to control bridge" stall); force-stopping and
 # relaunching recovers it. This runs before any test actions, so a relaunch is always safe.
-# Usage: wait_for_ready <port> [timeout_secs] [max_attempts]
+# Usage: wait_for_ready <port> [max_attempts]
 #
 wait_for_ready() {
     local port="$1"
-    local timeout="${2:-60}"
-    local max_attempts="${3:-2}"
+    local max_attempts="${2:-2}"
     local attempt=1
     log_info "Waiting for app to be ready on port $port..."
     while [ "$attempt" -le "$max_attempts" ]; do
         local elapsed=0
-        while [ "$elapsed" -lt "$timeout" ]; do
+        while [ "$elapsed" -lt "$DEFAULT_WAIT_TIMEOUT" ]; do
             if curl -sf "http://localhost:$port/ready" > /dev/null 2>&1; then
                 log_info "App is ready"
                 return 0
@@ -175,7 +186,7 @@ wait_for_ready() {
             sleep 1
             elapsed=$((elapsed + 1))
         done
-        log_error "Timed out waiting for app to be ready after ${timeout}s (attempt $attempt of $max_attempts)"
+        log_error "Timed out waiting for app to be ready after ${DEFAULT_WAIT_TIMEOUT}s (attempt $attempt of $max_attempts)"
         if [ "$attempt" -lt "$max_attempts" ]; then
             log_info "Relaunching app on port $port and retrying..."
             "${PLATFORM}_stop" "$port" || true
@@ -191,12 +202,11 @@ wait_for_ready() {
 # Polls app.log until pattern matches or the timeout is reached.
 # Tracks a per-log cursor (in $tmp_dir/.log-cursor) so each call only sees lines logged after
 # the previous successful match.
-# Usage: wait_for_log <tmp_dir> <pattern> [timeout_secs]
+# Usage: wait_for_log <tmp_dir> <pattern>
 #
 wait_for_log() {
     local tmp_dir="$1"
     local pattern="$2"
-    local timeout="${3:-60}"
     local elapsed=0
     local cursor_file="$tmp_dir/.log-cursor"
     local start_line=0
@@ -204,7 +214,7 @@ wait_for_log() {
         start_line=$(cat "$cursor_file")
     fi
     log_info "Waiting for log pattern: $pattern (after line $start_line)"
-    while [ "$elapsed" -lt "$timeout" ]; do
+    while [ "$elapsed" -lt "$DEFAULT_WAIT_TIMEOUT" ]; do
         if [ -f "$tmp_dir/app.log" ]; then
             local matched_line
             matched_line=$(awk -v start="$start_line" -v pat="$pattern" '
