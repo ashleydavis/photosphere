@@ -3,7 +3,7 @@
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$TEST_DIR/../../lib/common.sh"
 
-print_test_header 1 "launch-and-navigate"
+print_test_header 0 "launch-and-navigate"
 
 TMP_DIR="$TEST_DIR/tmp"
 

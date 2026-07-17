@@ -30,7 +30,11 @@ send_command "$APP_PORT" open-database '{"path":"test-db"}' || exit 1
 # the download succeeding below.
 wait_for_log "$TMP_DIR" "Gallery items rendered"
 
-send_command "$APP_PORT" click '{"dataId":"gallery-item-checkbox","nth":0}' || exit 1
+# Select two assets the phone way. A long press on the first item turns on selecting mode and adds
+# it (gallery-image.tsx useLongPress.onLongPress). Selecting mode reveals every item's checkbox
+# (display:none until then, with no hover on a phone to reveal it), so the second asset is added by
+# clicking its now-visible checkbox.
+send_command "$APP_PORT" long-press '{"dataId":"gallery-thumb","nth":0}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"gallery-item-checkbox","nth":1}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"right-sidebar-button"}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"download-selected-button"}' || exit 1

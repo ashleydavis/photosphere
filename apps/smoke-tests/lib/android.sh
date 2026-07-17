@@ -142,20 +142,47 @@ android_install() {
 }
 
 #
+# Prints the address the emulator/device uses to reach this host.
+#
+# A bridge-attached emulator (the LAN sharing setup, apps/android-frontend/scripts/emulator-lan-bridge.sh)
+# has a 192.168.55.x address on wlan0 and reaches the host at 192.168.55.1, where the 10.0.2.2 NAT
+# alias is dead (the guest has no default route to it). A plain user-mode NAT emulator reaches the
+# host at 10.0.2.2. Auto-detect from the guest's wlan0 address, overridable with
+# PHOTOSPHERE_ANDROID_TEST_HOST (for example 127.0.0.1 for a physical device over `adb reverse`).
+#
+android_host_address() {
+    if [ -n "${PHOTOSPHERE_ANDROID_TEST_HOST:-}" ]; then
+        echo "$PHOTOSPHERE_ANDROID_TEST_HOST"
+        return 0
+    fi
+    if adb shell ip addr show wlan0 2>/dev/null | tr -d '\r' | grep -q 'inet 192\.168\.55\.'; then
+        echo "192.168.55.1"
+    else
+        echo "10.0.2.2"
+    fi
+}
+
+#
 # Launches the app in test mode pointing at the host control bridge.
 # Usage: android_launch <port>
 #
-# The emulator reaches the host via the 10.0.2.2 alias (the reliable route; `adb reverse` to
-# localhost is not dependable on the emulator's WebView network stack). `adb reverse` is still
-# set so a physical device (which has no 10.0.2.2) can be targeted by passing localhost via
-# PHOTOSPHERE_ANDROID_TEST_HOST.
+# The host address depends on how the emulator is networked (see android_host_address). The control
+# bridge binds 0.0.0.0 so either address reaches it (see control-bridge.ts). `adb reverse` is still
+# set for a physical device targeted via PHOTOSPHERE_ANDROID_TEST_HOST=127.0.0.1.
 #
 android_launch() {
     local port="$1"
     adb reverse "tcp:$port" "tcp:$port"
+
+    local host
+    host="$(android_host_address)"
+    if [ "$host" = "192.168.55.1" ]; then
+        log_info "Emulator is on the LAN bridge; pointing the app at the host at $host."
+    fi
+
     adb shell am start -n "$APP_ID/.MainActivity" \
         --ez photosphereTestMode true \
-        --es photosphereTestHost "${PHOTOSPHERE_ANDROID_TEST_HOST:-10.0.2.2}" \
+        --es photosphereTestHost "$host" \
         --ei photosphereTestPort "$port"
 }
 

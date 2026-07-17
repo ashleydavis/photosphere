@@ -219,15 +219,16 @@ export class ControlBridge {
             };
             this.httpServer.once("error", onError);
             //
-            // Bind an OS-assigned free port (options.port is 0) on loopback only. Letting the OS
-            // assign the port is atomic and cannot collide with a parallel run (for example an
-            // Electron smoke test): there is no pre-picked port number to lose in the window before
-            // this Bun process binds. The harness reads the actually-bound port back (see the `port`
-            // getter and control-bridge-main). Loopback only because this test-control server is
-            // driven from the same machine (the iOS simulator and Android emulator both reach the
-            // host loopback interface), so it must never be exposed on the LAN.
+            // Bind an OS-assigned free port (options.port is 0). Letting the OS assign the port is
+            // atomic and cannot collide with a parallel run. The harness reads the actually-bound
+            // port back (see the `port` getter and control-bridge-main).
             //
-            this.httpServer.listen(this.options.port, "127.0.0.1", () => {
+            // Bind all interfaces (0.0.0.0), not just loopback: a bridge-attached Android emulator
+            // reaches the host over the LAN-bridge segment (192.168.55.1), where the 10.0.2.2 NAT
+            // alias is dead, so the app can only reach the bridge if it listens on that interface.
+            // 0.0.0.0 covers both that and the host-side test scripts on 127.0.0.1.
+            //
+            this.httpServer.listen(this.options.port, "0.0.0.0", () => {
                 this.httpServer.removeListener("error", onError);
                 resolve();
             });
@@ -376,6 +377,10 @@ export class ControlBridge {
 
         this.expressApp.post("/long-press-click", (req: Request, res: Response) => {
             void this.forward("long-press-click", { dataId: req.body.dataId, nth: req.body.nth }, res);
+        });
+
+        this.expressApp.post("/long-press", (req: Request, res: Response) => {
+            void this.forward("long-press", { dataId: req.body.dataId, nth: req.body.nth }, res);
         });
 
         this.expressApp.post("/type", (req: Request, res: Response) => {

@@ -170,19 +170,74 @@ export interface ITestTransport {
 }
 
 //
-// Waits up to `timeoutMs` for the element with the given `data-id` (the `nth` one) to exist in the
-// DOM, polling briefly. Test targets that render asynchronously (for example a database list item
-// populated after its dialog opens) may not be present the instant the command arrives; without
-// this a click fires before the element exists, finds nothing, and silently does nothing, which
-// surfaces as a flaky failure. Resolves as soon as the element appears, or after the timeout if it
-// never does; the caller then handles the found/not-found case as usual.
+// Reports whether an element is visible to a user, so the driver only ever acts on what is on
+// screen. It walks ancestors rather than trusting the element's own style: `visibility` is
+// inherited (a child of a hidden container computes to hidden already) but `display` is not (a child
+// of a `display:none` parent still computes its own display), so both have to be checked up the tree.
+//
+// This matters on mobile because ResponsiveDialog renders a Joy Drawer, and a closed Drawer does not
+// unmount: it stays in the DOM with `visibility:hidden` so it can animate. Several dialogs are also
+// mounted from more than one place, so a `data-id` inside one can match several elements at once,
+// all but one of them in a closed (hidden) drawer. querySelector returns the first in DOM order,
+// which is whichever mounted first, not the one on screen. That is how the create-database test
+// typed into an invisible form and left the visible one empty, disabling its Create button.
+//
+// Only visibility and display are checked, never layout/bounding boxes: jsdom (where the unit tests
+// run) has no layout, so measuring one would report every element as invisible there.
+//
+export function isElementVisible(element: Element): boolean {
+    let current: Element | null = element;
+    while (current) {
+        const style = window.getComputedStyle(current);
+        if (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse') {
+            return false;
+        }
+        current = current.parentElement;
+    }
+    return true;
+}
+
+//
+// The visible elements carrying the given `data-id`, in DOM order.
+//
+function visibleElements(dataId: string): HTMLElement[] {
+    return (Array.from(document.querySelectorAll(`[data-id="${dataId}"]`)) as HTMLElement[]).filter(isElementVisible);
+}
+
+//
+// The nth visible element carrying the given `data-id`, or undefined.
+//
+function findElement(dataId: string, nth: number): HTMLElement | undefined {
+    return visibleElements(dataId)[nth];
+}
+
+//
+// The input nested under the first visible element carrying the given `data-id`, or undefined. Joy's
+// Input puts the `data-id` on its wrapper and the real input inside it, so the action targets a node
+// the `data-id` lookup alone does not reach.
+//
+function findNestedInput(dataId: string): HTMLInputElement | undefined {
+    for (const wrapper of visibleElements(dataId)) {
+        const input = wrapper.querySelector('input');
+        if (input && isElementVisible(input)) {
+            return input as HTMLInputElement;
+        }
+    }
+    return undefined;
+}
+
+//
+// Waits up to `timeoutMs` for the `nth` VISIBLE element with the given `data-id` to exist, polling
+// briefly. Test targets that render asynchronously (for example a database list item populated after
+// its dialog opens) may not be present the instant the command arrives; without this a click fires
+// before the element exists, finds nothing, and silently does nothing, which surfaces as a flaky
+// failure. Resolves as soon as a visible match appears, or after the timeout if it never does.
 //
 export async function waitForElement(dataId: string, nth: number, timeoutMs: number): Promise<void> {
     const intervalMs = 50;
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
-        const elements = document.querySelectorAll(`[data-id="${dataId}"]`);
-        if (elements[nth]) {
+        if (findElement(dataId, nth)) {
             return;
         }
         await new Promise<void>((resolve) => {
@@ -196,9 +251,8 @@ export async function waitForElement(dataId: string, nth: number, timeoutMs: num
 // selects which one (defaults to the first).
 //
 export function doClick(dataId: string, nth?: number): void {
-    const elements = document.querySelectorAll(`[data-id="${dataId}"]`);
     const index = nth ?? 0;
-    const element = elements[index] as HTMLElement | undefined;
+    const element = findElement(dataId, index);
     if (element) {
         console.log(`test-click: clicking element data-id="${dataId}" nth=${index}`);
         element.click();
@@ -213,9 +267,8 @@ export function doClick(dataId: string, nth?: number): void {
 // so components using a long-press gesture treat it as a normal short click.
 //
 export function doLongPressClick(dataId: string, nth?: number): void {
-    const elements = document.querySelectorAll(`[data-id="${dataId}"]`);
     const index = nth ?? 0;
-    const element = elements[index] as HTMLElement | undefined;
+    const element = findElement(dataId, index);
     if (!element) {
         console.warn(`test-long-press-click: element not found data-id="${dataId}" nth=${index}`);
         return;
@@ -229,12 +282,44 @@ export function doLongPressClick(dataId: string, nth?: number): void {
     element.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, button: 0, clientX, clientY }));
 }
 
+// How long a real long press holds the button down for. useLongPress starts its own timer on
+// mousedown and fires onLongPress when it elapses; the gallery leaves that delay unset (so it is
+// effectively immediate), but holding well past any reasonable delay keeps this robust.
+const LONG_PRESS_HOLD_MS = 700;
+
+//
+// Performs a real long press on the element with the given `data-id`: presses, holds past the
+// gesture's delay so useLongPress fires onLongPress, then releases.
+//
+// This is not doLongPressClick, which releases immediately so a long-press component treats it as a
+// short click. It is the opposite gesture, and it is the only way to drive selection mode on a
+// phone: the gallery reveals its selection checkboxes only once a long press has turned selecting on
+// (gallery-image.tsx), or on hover, which a phone does not have.
+//
+export async function doLongPress(dataId: string, nth?: number): Promise<void> {
+    const index = nth ?? 0;
+    const element = findElement(dataId, index);
+    if (!element) {
+        console.warn(`test-long-press: element not found data-id="${dataId}" nth=${index}`);
+        return;
+    }
+    console.log(`test-long-press: long pressing element data-id="${dataId}" nth=${index}`);
+    const rect = element.getBoundingClientRect();
+    const clientX = rect.left + rect.width / 2;
+    const clientY = rect.top + rect.height / 2;
+    element.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0, clientX, clientY }));
+    await new Promise<void>((resolve) => {
+        setTimeout(resolve, LONG_PRESS_HOLD_MS);
+    });
+    element.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, button: 0, clientX, clientY }));
+}
+
 //
 // Types text into the input nested under the element with the given `data-id`, using the
 // native value setter so React's controlled inputs observe the change.
 //
 export function doType(dataId: string, text: string): void {
-    const element = document.querySelector(`[data-id="${dataId}"] input`) as HTMLInputElement | null;
+    const element = findNestedInput(dataId);
     if (element) {
         console.log(`test-type: typing into element data-id="${dataId}"`);
         const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
@@ -255,7 +340,7 @@ export function doType(dataId: string, text: string): void {
 // (the renderer cannot construct real File paths in test mode).
 //
 export function doDrop(dataId: string, paths: string[]): void {
-    const element = document.querySelector(`[data-id="${dataId}"]`) as HTMLElement | null;
+    const element = findElement(dataId, 0);
     if (!element) {
         console.warn(`test-drop: element not found data-id="${dataId}"`);
         return;
@@ -293,12 +378,23 @@ export function doPickFiles(paths: string[]): void {
 // value and falling back to its text content. Returns an empty string when not found.
 //
 export function getValue(dataId: string): string {
-    const element = document.querySelector(`[data-id="${dataId}"]`) as HTMLElement | null;
+    // The visible one: on mobile a closed drawer keeps its content in the DOM, so reading the first
+    // raw match could report a stale value from a dialog that is not on screen.
+    const element = findElement(dataId, 0);
     if (!element) {
         return '';
     }
     const inputValue = (element as HTMLInputElement).value;
-    return inputValue || element.textContent || '';
+    if (inputValue) {
+        return inputValue;
+    }
+    // Joy's Input carries the data-id on its wrapper and the value on the input nested inside it,
+    // so fall back to that before text content.
+    const nestedInput = element.querySelector('input');
+    if (nestedInput && nestedInput.value) {
+        return nestedInput.value;
+    }
+    return element.textContent || '';
 }
 
 //
@@ -441,6 +537,10 @@ export function installTestDriver(transport: ITestTransport): void {
                 return undefined;
             case 'long-press-click':
                 doLongPressClick(payload.dataId!, payload.nth);
+                return undefined;
+            case 'long-press':
+                await waitForElement(payload.dataId!, payload.nth ?? 0, 5000);
+                await doLongPress(payload.dataId!, payload.nth);
                 return undefined;
             case 'type':
                 doType(payload.dataId!, payload.text!);

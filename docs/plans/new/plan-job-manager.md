@@ -4,222 +4,257 @@
 
 The following background activities will be surfaced through the Job Manager:
 
-- **Import Assets** — registered from the import context when a new import session starts; cancellable. Progress is reported as *"N of M files"* as the worker processes each asset.
-- **Load Assets** — registered from `AssetDatabaseSource` when a database starts loading; cancellable. Progress is reported as *"N assets loaded"* (indeterminate unless the merkle tree provides a total).
-- **Replicate Database** — registered from the Replicate dialog when replication starts; cancellable. Progress is reported as the per-file status string emitted by the replicate worker. The dialog becomes dismissable mid-task via a *Run in background* button.
-- **Sync Database** — registered when `platform.onSyncStarted()` fires; not cancellable in v1. Progress is indeterminate.
-- **Verify Database** (future) — to be registered when the Verify flow is implemented, following the same pattern (see Step 9 and the Notes section).
+- **Import Assets** — the import worker tasks carry job metadata; cancellable. Progress is reported as *"N of M files"* as the worker processes each asset.
+- **Load Assets** — the load-assets worker tasks carry job metadata; cancellable. Progress is reported as *"N assets loaded"* (indeterminate unless the merkle tree provides a total).
+- **Replicate Database** — the replicate worker tasks carry job metadata; cancellable. Progress is reported as the per-file status string emitted by the replicate worker. The dialog becomes dismissable mid-task via a *Run in background* button.
+- **Sync Database** — the sync worker tasks carry job metadata; not cancellable in v1. Progress is indeterminate.
+- **Verify Database** (future) — to be registered when the Verify flow is implemented, following the same pattern (see the Notes section).
 
 ## Overview
 
-Today the app surfaces background work in scattered, ad-hoc ways: the Import context owns the import session, `AssetDatabaseSource` owns the load-assets queue, the Replicate dialog locks itself open until completion, and sync runs silently. There is no app-level concept of "a piece of background work the user can see and cancel". This plan introduces a centralised **Job Manager** that models each user-visible background activity as an `IJob`, exposes it through a React context, and renders it in two UI surfaces: a compact indicator in the right of the navbar (single job name + spinner, or *"N jobs running"* when multiple) and a list in the right sidebar (per-job progress + Cancel). The existing flows (Import Assets, Load Assets, Replicate Database) are converted to register jobs through this manager; a future Verify Database flow can adopt the same pattern with no further plumbing.
+Today the app surfaces background work in scattered, ad-hoc ways: the Import context owns the import session, `AssetDatabaseSource` owns the load-assets queue, the Replicate dialog locks itself open until completion, and sync runs silently. There is no app-level concept of "a piece of background work the user can see and cancel". This plan introduces a centralised **Job Manager**.
+
+The source of truth for job state lives in the **backend**: the process that owns the real worker pool (Electron main, the CLI process, the dev-server, the mobile embedded-JS-engine host) — the same place `setQueueBackend(realPool)` is called. That is where tasks actually start, stream progress, complete, and cancel, so that is where jobs are derived and owned. A `JobRegistry` there aggregates tasks by their `source` into jobs, and **automatically**: registers a job when the first task of a source starts, updates it from worker progress messages, and completes it when the last task of that source finishes. Every change is pushed to the frontend as a job event over the existing platform push transport.
+
+The frontend keeps a thin **jobs context** that is a pure mirror of what the backend broadcasts. `main.tsx` subscribes to job events and applies them to the context. Two UI surfaces read the context: a compact indicator in the right of the navbar (single job name + spinner, or *"N jobs running"* when multiple) and a list in the right sidebar (per-job progress + Cancel). Cancel routes through the existing `platform.cancelTasks(sourceTag)`.
+
+The flows (Import, Load Assets, Replicate, Sync) do **not** call any register/update/complete methods. They only attach a job descriptor (name + cancellable) to the tasks they already queue; the backend does the rest. This is the core difference from the previous design (see Issues).
 
 ## Terminology
 - **Task**: a single unit of work with a `type` (for example `hash-file`, `load-assets`, `import-assets`) and input `data`, dispatched through the task queue and run by a registered handler. A task returns a result, can stream progress messages, can be cancelled, and is tagged with a `source` string that groups related tasks. Defined in `packages/task-queue`.
 - **Background task**: a task, emphasising that it runs off the UI/main thread in a worker. In this codebase every task is a background task; the terms are used interchangeably for the worker-level unit of work.
-- **Task queue** (`TaskQueue` / `IQueueBackend`, `packages/task-queue`): the mechanism that accepts tasks (`addTask`), dispatches them to a backend, and returns results and streamed messages (`awaitTask`, `onTaskComplete`, `onTaskMessage`). `TaskQueue` is the caller-facing API; `IQueueBackend` is the pluggable executor/transport behind it.
-- **Worker pool**: an `IQueueBackend` implementation that owns a set of workers (OS threads, processes, or embedded JS engine instances) and runs task handlers across them in parallel (for example `WorkerPoolBun` on CLI, `WorkerPoolElectronMain` on desktop). The Job Manager does not talk to the pool directly; it works through `TaskQueue` and `platform.cancelTasks`.
-- **Background job** (`IJob`, defined by this plan): a user-visible background activity shown in the navbar indicator and sidebar list with a name, progress, and optional Cancel. A job is higher-level than a task: it is what the user sees, and it may aggregate one or more underlying tasks that share a `source`/`sourceTag`. Cancelling a job cancels those tasks via `platform.cancelTasks(sourceTag)`. This plan is about surfacing and controlling background jobs; the background tasks beneath them are owned by the task queue and worker pool.
+- **Task queue** (`TaskQueue` / `IQueueBackend`, `packages/task-queue`): the mechanism that accepts tasks (`addTask`), dispatches them to a backend, and returns results and streamed messages (`awaitTask`, `onTaskComplete`, `onTaskMessage`). `TaskQueue` is the caller-facing API; `IQueueBackend` is the pluggable executor/transport behind it. The **real** backend (the worker pool) runs in the host process; a **proxy** backend (IPC/WebSocket/host-bridge) runs in the frontend and forwards to it.
+- **Worker pool**: an `IQueueBackend` implementation that owns a set of workers and runs task handlers across them in parallel (for example `WorkerPoolBun` on CLI, `WorkerPoolElectronMain` on desktop). This is "the backend" that owns job state.
+- **Background job** (`IJob`): a user-visible background activity shown in the navbar indicator and sidebar list with a name, progress, and optional Cancel. A job maps 1:1 to a task `source`: it is the aggregate of all in-flight tasks sharing that source. Cancelling a job cancels those tasks via `platform.cancelTasks(source)`.
+- **Job event**: a message pushed from the backend to the frontend describing a job upsert (register/update) or completion. The frontend applies these to the jobs context; it never mutates job state itself.
 
-## Issues
-<!-- populated later by plan:check -->
+## Architecture
+
+Event flow (Electron shown; mobile/CLI/dev-server are analogous, differing only in transport):
+
+```
+flow (frontend)                 backend host (main process)              frontend
+  queue.addTask(type, data,       WorkerPoolElectronMain
+    { job: { name, cancellable }})   -> JobRegistry.onTaskAdded(source, jobInfo)
+        |  add-task IPC  ------------>       creates job for source (first task)
+        |                                    emits job-event {kind:"upsert", job}
+        |                             <------ webContents.send('platform-event',
+        |                                       { type:"job-event", ... })
+        |                                                                  main.tsx onJobEvent
+        |                                                                    -> jobs context upsert
+  worker emits {type:"job-update",  JobRegistry.onAnyTaskMessage
+    progress, progressMessage}  --->   applies to job, emits job-event upsert  -> context update
+  last task of source completes    JobRegistry.onTaskComplete
+                                     in-flight count for source hits 0
+                                     emits job-event {kind:"complete", id}      -> context remove
+  Cancel button -> platform.cancelTasks(source)  ->  pool cancels tasks -> registry completes job
+```
+
+Where each piece lives:
+
+- **`JobRegistry`**: new class in `packages/task-queue`. Constructed in each host that owns a real pool, given the pool and a `sendJobEvent` callback. Holds the authoritative job map.
+- **Job event transport**: the existing generic push channel per platform. Electron reuses `platform-event` (no new action-specific IPC channel, per the CLAUDE.md rule); mobile uses the host bridge; dev-server uses the WebSocket. A new `platform.onJobEvent(cb)` hook on `IPlatform` exposes the stream to the frontend uniformly.
+- **`JobsContextProvider`**: unchanged shape, but its state is driven only by applied job events. `cancelJob(id)` still calls `platform.cancelTasks(job.sourceTag)`.
+- **`main.tsx`**: subscribes to `platform.onJobEvent` and applies upserts/completions to the context.
 
 ## Steps
 
-### 1. Define the job model
+### 1. Define the job model and job-event types
 
-**1a. New file `packages/user-interface/src/context/jobs-context.tsx`.**
+**File:** `packages/task-queue/src/lib/types.ts` (shared so backend and frontend agree).
 
 Define and export:
 
-- `IJob` interface:
-  - `id: string` — stable job id, used as React key and lookup key. Reuse the existing tag where possible: `sessionId` for import, the database path for load-assets / sync, the source path for replicate.
-  - `name: string` — human-readable label, e.g. *"Importing 124 photos"*, *"Loading database 'Family'"*, *"Replicating to /backups/photos"*.
-  - `sourceTag: string` — the value to pass to `platform.cancelTasks(sourceTag)` to terminate this job's worker tasks. Often equal to `id`; kept as a separate field so jobs that don't map 1:1 to a task source can still cancel correctly.
-  - `progress: number | undefined` — fractional progress in `0..1`. Undefined means indeterminate (show a spinner instead of a bar).
-  - `progressMessage: string | undefined` — short human-readable detail (e.g. *"Copying display.jpg"* for replicate, *"123 of 500"* for import).
-  - `cancellable: boolean` — whether the Cancel button is rendered for this job.
-  - `startedAt: number` — `Date.now()` at registration; used to sort the sidebar list.
+- `IJobInfo` — the descriptor a flow attaches to its tasks:
+  - `name: string` — human-readable label, e.g. *"Importing 124 photos"*.
+  - `cancellable: boolean` — whether the Cancel button is rendered.
+- `IJob` — the full job as broadcast to the frontend:
+  - `id: string` — equals the task `source`; stable React key.
+  - `sourceTag: string` — value passed to `platform.cancelTasks(sourceTag)`; equals `id` in v1 but kept separate for flexibility.
+  - `name: string`, `cancellable: boolean` — from `IJobInfo`, `name` refinable via `job-update`.
+  - `progress: number | undefined` — fractional `0..1`, undefined means indeterminate.
+  - `progressMessage: string | undefined` — short detail (e.g. *"Copying display.jpg"*).
+  - `startedAt: number` — timestamp at registration; used to sort the sidebar list.
+- `IJobUpdateMessage` — the task-message payload a worker emits to update its job: `{ type: "job-update"; name?: string; progress?: number; progressMessage?: string }`.
+- `IJobEvent` — pushed backend→frontend: a discriminated union of `{ kind: "upsert"; job: IJob }` and `{ kind: "complete"; id: string }`.
 
-- `IJobsContext` interface (provided to consumers via a React context):
-  - `jobs: IJob[]` — current jobs in registration order.
-  - `registerJob(job: IJob): void` — add or replace a job (idempotent on `id`).
-  - `updateJob(id: string, patch: Partial<Omit<IJob, "id">>): void` — merge a partial update into a registered job; no-op if the id is unknown.
-  - `completeJob(id: string): void` — remove the job from the list.
-  - `cancelJob(id: string): void` — calls `platform.cancelTasks(job.sourceTag)` and immediately removes the job.
+### 2. Attach job metadata to tasks
 
-- `JobsContextProvider({ children })` component:
-  - Holds `jobs` state (array of `IJob`, ordered by `startedAt`).
-  - Provides the four methods above. Implementations operate on the array using stable referential updates.
-  - Reads `platform` from `usePlatform()` so `cancelJob` can route through `platform.cancelTasks`.
+The mechanism that makes registration automatic: a flow declares job info once for its `source`, and the backend derives the job from it.
 
-- `useJobs(): IJobsContext` hook with the standard "throw if no provider" guard.
+**File:** `packages/task-queue/src/lib/queue-backend.ts` and `task-queue.ts`.
 
-### 2. Mount the provider at app level
+- Extend `IQueueBackend.addTask` and `TaskQueue.addTask` with an optional trailing `jobInfo?: IJobInfo`. When present, it is forwarded to the real backend in the add-task payload.
+- The `JobRegistry` uses the first non-undefined `jobInfo` seen for a `source` to create the job. Tasks added for a source that already has a job ignore their `jobInfo` (the job already exists). Tasks with no `jobInfo` (e.g. internal `hash-file` children) never create a visible job on their own.
+- Forward `jobInfo` through the proxy backends: `ElectronRendererQueueBackend` (in the `add-task` IPC payload), `WorkerQueueBackend` (in the `queue-task` message), `WebSocketQueueBackend`, and the mobile `EmbeddedJsQueueBackend`.
+
+### 3. The JobRegistry (backend source of truth)
+
+**File:** `packages/task-queue/src/lib/job-registry.ts` (new).
+
+- `JobRegistry` constructor takes the real `IQueueBackend` (the pool) and a `sendJobEvent: (event: IJobEvent) => void` callback.
+- Internal state: `Map<string, IJob>` keyed by `source`, plus a `Map<string, number>` of in-flight task counts per source.
+- Wire to the pool:
+  - On a task added with a `source` and `jobInfo`: increment the source's in-flight count. If the source has no job yet, create `IJob` from `jobInfo` (progress/message undefined, `startedAt` from the timestamp provider) and `sendJobEvent({ kind: "upsert", job })`. This requires a global task-added observation on the real pool. Add a small `onAnyTaskAdded(cb: (taskId, source, jobInfo) => void)` to the real pools (`WorkerPoolBun`, `WorkerPoolElectronMain`, `WorkerPoolInline`, mobile runtime); the registry is the only consumer.
+  - On `onAnyTaskMessage`, if the message is `IJobUpdateMessage`, merge `name`/`progress`/`progressMessage` into the source's job and emit an `upsert`.
+  - On `onTaskComplete`, decrement the source's in-flight count. When it reaches zero, delete the job and `sendJobEvent({ kind: "complete", id: source })`.
+  - On `onTasksCancelled(source)` (cancellation), drop the job immediately and emit `complete` so the row disappears without waiting for the tasks to settle.
+- **Completion must be idempotent.** Both natural completion and `onTasksCancelled` can fire for the same source (e.g. the `replicateDatabase` wrapper calls `shutdown()` → `cancelTasks(source)` right after the task already completed). Completing an already-removed source must be a silent no-op: only emit `complete` if the job still exists, and clear the in-flight count for that source.
+- Unit-testable in isolation with a fake backend and a captured `sendJobEvent`.
+
+### 4. Construct the registry in each host and forward job events
+
+Each host that calls `setQueueBackend(realPool)` also constructs a `JobRegistry(realPool, sendJobEvent)` where `sendJobEvent` uses that host's push transport.
+
+- **Electron:** `apps/desktop/src/main.ts` `initWorkers()`. `sendJobEvent` = `mainWindow?.webContents.send('platform-event', { type: "job-event", event })`. Reuse the existing `platform-event` channel; do not add a new IPC channel.
+- **Mobile:** the embedded-JS-engine host (`packages/mobile-worker/src/lib/mobile-worker-runtime.ts` and the native bridge). `sendJobEvent` posts a job event over the host bridge alongside task messages; `PlatformProviderMobile` surfaces it (see Step 5).
+- **Dev-server / web:** `apps/dev-server`. `sendJobEvent` broadcasts a job event over the WebSocket; `WebSocketQueueBackend` / `platform-provider-web` receive it.
+- **CLI:** `apps/cli`. No frontend, so `sendJobEvent` is a no-op (or logs). The registry still runs harmlessly.
+
+### 5. Expose job events to the frontend uniformly
+
+**File:** `packages/user-interface/src/context/platform-context.tsx` and each platform provider.
+
+- Add `onJobEvent(callback: (event: IJobEvent) => Unsubscribe)` to `IPlatform`, alongside `onSyncStarted`/`onSyncCompleted`.
+- Implement it in each provider by subscribing to that platform's job-event push:
+  - `platform-provider-electron.tsx`: filter `platform-event` messages of `type === "job-event"`.
+  - `platform-provider-mobile.tsx`: subscribe to the host-bridge job-event stream.
+  - `platform-provider-web.tsx`: subscribe to the WebSocket job-event stream.
+  - stories/mock provider: a no-op or a stub that lets stories push fake job events.
+
+### 6. Jobs context (mirror only)
+
+**File:** `packages/user-interface/src/context/jobs-context.tsx` (new).
+
+Keep the good shape, but strip the lifecycle-owning methods:
+
+- `IJob` re-exported from `task-queue` types (single definition).
+- `IJobsContext`:
+  - `jobs: IJob[]` — current jobs, sorted by `startedAt`.
+  - `applyJobEvent(event: IJobEvent): void` — upsert or remove; the *only* mutator, called by `main.tsx`. Not intended for flows.
+  - `cancelJob(id: string): void` — looks up the job, calls `platform.cancelTasks(job.sourceTag)`. Does not remove the row; the backend will emit `complete` in response to cancellation (Step 3). This keeps the frontend from guessing.
+- `JobsContextProvider({ children })` — holds the `jobs` array, provides `applyJobEvent` and `cancelJob`, reads `platform` via `usePlatform()`.
+- `useJobs(): IJobsContext` with the standard "throw if no provider" guard.
+- Removed vs. the previous design: `registerJob`, `updateJob`, `completeJob`. Flows no longer touch the context.
+
+Extract the array-apply logic (`applyJobEvent` upsert/remove/sort) into a plain function under `lib/` (e.g. `apply-job-event.ts`) and unit-test that; keep the provider a thin shell.
+
+### 7. Mount the provider and wire the subscription in main.tsx
 
 **File:** `packages/user-interface/src/main.tsx`.
 
-- Wrap the existing top-level component tree (inside any `PlatformContextProvider`, since `JobsContextProvider` uses `usePlatform`) in `<JobsContextProvider>`. Placement: outside `AssetDatabaseProvider` and the gallery/import contexts so all flows see the same instance.
+- Wrap the tree in `<JobsContextProvider>` (inside `PlatformContextProvider`, outside `AssetDatabaseProvider` and the gallery/import contexts).
+- Add a `useEffect` that subscribes to `platform.onJobEvent` and calls `applyJobEvent(event)`. Clean up on unmount. This is the single frontend entry point for job state.
+- Add the `photosphere:show-jobs` window-event listener that opens the right sidebar (see Step 9).
 
-### 3. Navbar job indicator
+### 8. Navbar job indicator
 
-**3a. New file `packages/user-interface/src/components/navbar-jobs-indicator.tsx`.**
+**File:** `packages/user-interface/src/components/navbar-jobs-indicator.tsx` (new) and `navbar.tsx`.
 
-- React component, no props, reads `useJobs()`.
-- Render rules:
-  - When `jobs.length === 0`: render `null`.
-  - When `jobs.length === 1`: render a `<Box>` with a `<CircularProgress size="sm" />` (determinate when `progress !== undefined`, indeterminate otherwise) and the job's `name`. If `progress !== undefined`, render the percentage in small grey text after the name.
-  - When `jobs.length > 1`: render `<CircularProgress size="sm" />` and the text *"N background jobs running"*. The aggregated progress should be the mean of jobs that have a numeric `progress`; ignore indeterminate jobs in the aggregate.
-- Clicking the indicator dispatches a custom DOM event `photosphere:show-jobs` that the layout listens for (see Step 4b). Avoid coupling this component directly to sidebar state.
-- Use a `data-id="navbar-jobs-indicator"` attribute on the root for smoke-test selection.
+- Reads `useJobs()`. Render rules:
+  - `jobs.length === 0`: render `null`.
+  - `jobs.length === 1`: `<CircularProgress size="sm" />` (determinate when `progress !== undefined`) + the job's `name`, with a small grey percentage when `progress` is numeric.
+  - `jobs.length > 1`: `<CircularProgress size="sm" />` + *"N background jobs running"*, aggregate progress = mean of numeric `progress` values (indeterminate jobs ignored).
+- Clicking dispatches `photosphere:show-jobs`. `data-id="navbar-jobs-indicator"`.
+- Mount in the navbar's right cluster before the existing right-side controls.
 
-**3b. Mount in the navbar.**
+### 9. Right sidebar jobs list
 
-**File:** `packages/user-interface/src/components/navbar.tsx`.
+**File:** `packages/user-interface/src/components/sidebar-jobs-list.tsx` (new) and `right-sidebar.tsx`.
 
-- Import `NavbarJobsIndicator` and render it in the right-hand region of the navbar, immediately before any existing right-side controls (e.g. the update-available pill, upload button). Use the same `Box` flex layout the navbar uses for its right cluster.
+- Reads `useJobs()`. `jobs.length === 0` renders `null`.
+- Otherwise a `<Typography level="title-sm">Background jobs</Typography>` header, then one row per job with: `name`, `progressMessage` in small grey text when present, a determinate `<LinearProgress determinate value={progress*100} />` (or indeterminate when `progress` is undefined), and — when `cancellable` — an icon-only cancel `<IconButton size="sm" variant="plain" color="danger" aria-label="Cancel job" title="Cancel">` (Font Awesome `fa-xmark`/`fa-circle-xmark`, matching the existing icon mechanism) calling `cancelJob(job.id)`.
+- `data-id`: `sidebar-jobs-list`, `sidebar-job-row-{job.id}`, `sidebar-job-cancel-{job.id}`.
+- Mount as the first section in the right sidebar with `Divider` spacing.
 
-### 4. Right sidebar jobs list
+### 10. Flows: attach job metadata only
 
-**4a. New file `packages/user-interface/src/components/sidebar-jobs-list.tsx`.**
+No flow calls register/update/complete. Each flow attaches `jobInfo` to the tasks it queues, and (where progress is known) its worker emits `job-update` messages.
 
-- Component reads `useJobs()`.
-- When `jobs.length === 0`: render `null` (no empty heading).
-- Otherwise render:
-  - A section header `<Typography level="title-sm">Background jobs</Typography>`.
-  - For each job: a row containing
-    - the `name`,
-    - `progressMessage` underneath in small grey text when present,
-    - a determinate `<LinearProgress determinate value={progress*100} />` when `progress` is defined, otherwise an indeterminate `<LinearProgress />`,
-    - an icon-only `<IconButton size="sm" variant="plain" color="danger" aria-label="Cancel job" title="Cancel">` containing a cancel icon (e.g. a Font Awesome `fa-xmark` or `fa-circle-xmark` via the same icon mechanism used elsewhere in the app — match the existing pattern, do not introduce a new icon library) and calling `cancelJob(job.id)` when `job.cancellable` is true. No text label; the icon plus `aria-label`/`title` carries the meaning.
-  - `data-id` attributes: `sidebar-jobs-list`, `sidebar-job-row-{job.id}`, `sidebar-job-cancel-{job.id}`.
+- **Import** (`packages/user-interface/src/context/import-context.tsx`): pass `{ name: "Importing assets", cancellable: true }` as `jobInfo` on the existing `queue.addTask("import-assets", ...)` call (source = `sessionId`). The import worker should emit `{ type: "job-update", progress, progressMessage: \`${processed} of ${total} files\`, name: \`Importing ${total} files\` }` as it processes assets. **Note (new work):** today the import worker emits only per-asset messages (`import-success`/`import-skipped`/`import-failed`/`scan-progress`) and no running total — the reverted design computed `processed`/`total` in the frontend from its own `importItems` array. To keep progress backend-driven, the worker must maintain its own processed/total counters (total known after the scan phase) and emit `job-update`. This is the one non-trivial worker addition in this plan.
+- **Load Assets** (`packages/user-interface/src/context/asset-database-source.tsx`): pass `{ name: \`Loading database "${name}"\`, cancellable: true }` as `jobInfo` when queueing `load-assets` (source = `dbPath`). The load-assets worker emits `job-update` with `progressMessage: \`${count} assets loaded\`` (and `progress` if a total is known). No total is known up front, so it stays indeterminate.
+- **Replicate**: replicate does not queue its own task inline — the frontend and CLI both go through the shared wrapper `replicateDatabase(uuidGenerator, data, onProgress)` in `packages/node-api/src/lib/replicate-database.ts`, which does the `TaskQueue` dance (`addTask("replicate-database", data)`, `awaitTask`, then `shutdown()`). Attach `{ name: \`Replicating to ${destPath}\`, cancellable: true }` as `jobInfo` on that wrapper's `addTask`. The replicate worker emits `job-update` from its existing progress callback. In `replicate-database-dialog.tsx`, make the dialog dismissable (`<Modal onClose={onClose}>`) with a *Run in background* button (`data-id="replicate-run-in-background-button"`) that just calls `onClose`; it no longer owns running state. **Gotcha:** `replicateDatabase` calls `queue.shutdown()` after completion, and `shutdown()` calls `backend.cancelTasks(source)`. So the registry sees a `cancelTasks` for the source even on a successful run, right after the task already completed. Job completion must therefore be idempotent (see Step 3) so the trailing cancel does not double-fire or error.
+- **Sync**: sync is **queued in the backend, not from a frontend flow** — `apps/desktop/src/main.ts` (`workerPool.addTask("sync-database", ...)`), `apps/dev-server/src/index.ts`, and the mobile host. Attach `{ name: \`Syncing database "${name}"\`, cancellable: false }` as `jobInfo` at those backend call sites. Sync therefore needs **zero** frontend flow changes: no `onSyncStarted`/`onSyncCompleted` bookkeeping, no `syncJobIdRef`, no stale-path ref. Sync progress stays indeterminate in v1.
 
-**4b. Mount in the right sidebar.**
+### 11. Replicate worker: honour cancellation
 
-**File:** `packages/user-interface/src/components/right-sidebar.tsx`.
+**File:** `packages/node-api/src/lib/replicate.ts` (and its worker).
 
-- Import `SidebarJobsList` and render it as the first section above existing content, with appropriate `Divider` spacing.
+- The replicate loops must early-out when cancelled so the Cancel button actually interrupts an in-flight copy. Add `context.isCancelled()` checks at the per-file and per-merkle-node loop boundaries; on cancel, stop cleanly and let the worker surface `TaskStatus.Failed`. (This is the only worker-side cancellation change: import and load-assets workers already early-out; sync is non-cancellable in v1.)
 
-**4c. (Optional but recommended) Auto-open the right sidebar when the navbar indicator is clicked.**
+### 12. Docs
 
-**File:** `packages/user-interface/src/main.tsx` (the layout component holding the right-sidebar open state).
+- **File:** `CLAUDE.md`. Update the Job Manager rule to reflect the new contract:
 
-- Add a `useEffect` that subscribes to the `photosphere:show-jobs` window event and opens the right sidebar. Clean up the listener on unmount.
+  > User-visible background activities register as jobs *automatically*: attach an `IJobInfo` (`name`, `cancellable`) to the tasks you queue for a `source`, and emit `job-update` task messages for progress. The backend `JobRegistry` (in the process that owns the worker pool) owns job state and pushes job events to the frontend; the jobs context is a read-only mirror. Do not call register/update/complete from the frontend, and do not create flow-specific progress UI — rely on the shared navbar indicator and sidebar list.
 
-### 5. Refactor Import flow to register a job
-
-**File:** `packages/user-interface/src/context/import-context.tsx`.
-
-- Read `useJobs()`.
-- When an import session starts (after `platform.importAssets(...)` returns `IImportSession`), call `registerJob({ id: session.sessionId, name: "Importing assets", sourceTag: session.sessionId, progress: undefined, progressMessage: undefined, cancellable: true, startedAt: Date.now() })`.
-- In the existing `onTaskMessage` handler that processes `import-success` / `import-failed` / `import-skipped` / `import-pending`, also call `updateJob(session.sessionId, { progressMessage: \`${processed} of ${pending + processed} files\` })`. Compute a numeric `progress` when both numerator and denominator are known.
-- When the `importAssetsTaskId` task completes (success, fail, or cancel), call `completeJob(session.sessionId)`.
-- Refine the job `name` once the scan phase reports a final total, e.g. *"Importing 248 files"*.
-
-### 6. Refactor Load Assets flow to register a job
-
-**File:** `packages/user-interface/src/context/asset-database-source.tsx`.
-
-- Use `useJobs()`.
-- In the loader that calls `loadAssetsApi(queue, dbPath)`:
-  - Right before queueing the task, `registerJob({ id: dbPath, name: \`Loading database "${name}"\`, sourceTag: dbPath, progress: undefined, progressMessage: undefined, cancellable: true, startedAt: Date.now() })`. Use the database name when available (look up from the platform databases list or pass it in); fall back to `basename(dbPath)`.
-  - In the existing `asset-page` message subscriber, accumulate the count of received assets and call `updateJob(dbPath, { progressMessage: \`${count} assets loaded\` })`. If the merkle tree or metadata provides a total, compute and pass `progress`. Otherwise leave it indeterminate.
-  - In the `onTaskComplete` handler that flips `isLoading` to false, call `completeJob(dbPath)`.
-- In `cancelDatabaseLoad(dbPath)`, also call `completeJob(dbPath)` so a user-driven cancel removes the row immediately rather than waiting for the queue to settle.
-
-### 7. Refactor Replicate flow to register a job
-
-The dialog should no longer be the owner of the running state — the Job Manager is.
-
-**7a. Allow the dialog to close while the task is running.**
-
-**File:** `packages/user-interface/src/components/replicate-database-dialog.tsx`.
-
-- Change `<Modal onClose={step === "running" ? undefined : onClose}>` to `<Modal onClose={onClose}>`. The dialog is dismissable at any time.
-- Replace the *Running* DialogActions with a single `<Button data-id="replicate-run-in-background-button">Run in background</Button>` that calls `onClose`. Drop the spinner-only progress step.
-
-**7b. Register a job from the dialog's `handleStart`.**
-
-- Use `useJobs()`.
-- Just before calling `replicateDatabase(...)`, `registerJob({ id: taskData.sourcePath, name: \`Replicating to ${taskData.destPath}\`, sourceTag: taskData.sourcePath, progress: undefined, progressMessage: undefined, cancellable: true, startedAt: Date.now() })`.
-- Convert the existing `setProgress` callback so it *also* writes to the job: `updateJob(id, { progressMessage: progress })`. The dialog can keep its inline progress display for as long as the user keeps the dialog open.
-- On success, call `completeJob(id)`; on error, call `completeJob(id)` *before* surfacing the failure toast/inline alert.
-
-**7c. Make the replicate worker honour cancellation.**
-
-**File:** `packages/api/src/lib/replicate.ts`.
-
-- Add `context.isCancelled()` checks at the natural loop boundaries inside `replicate()` and its helpers (per-file copy loop, per-merkle-node loop). When cancelled, abort cleanly and let the worker handler surface `TaskStatus.Failed`.
-- **File:** `packages/api/src/lib/replicate-database.worker.ts` already returns from `replicate()` — no further change needed beyond the inner cancellation checks.
-
-### 8. Refactor Sync flow to register a job
-
-**File:** `packages/user-interface/src/context/asset-database-source.tsx` (the sync-started/sync-completed subscriptions live here).
-
-- On `platform.onSyncStarted()`: `registerJob({ id: \`sync:${currentDatabasePath}\`, name: \`Syncing database "${name}"\`, sourceTag: currentDatabasePath!, progress: undefined, progressMessage: undefined, cancellable: false, startedAt: Date.now() })`. (Cancellation of sync is out of scope; mark `cancellable: false`.)
-- On `platform.onSyncCompleted()`: `completeJob(\`sync:${currentDatabasePath}\`)`.
-
-### 9. Provide a hook for future flows (Verify, etc.)
-
-No code change. Document the pattern at the top of `jobs-context.tsx`:
-
-> Adding a new background job: call `registerJob()` when work starts, `updateJob()` from any progress callback, and `completeJob()` from both success and failure paths. Set `sourceTag` to whatever string the worker handler tagged its tasks with so `cancelJob()` can route through `platform.cancelTasks()`.
-
-### 10. Update CLAUDE.md
-
-**File:** `CLAUDE.md`.
-
-- Add a one-line rule under *Architecture* or a new *UI* section:
-
-> User-visible background activities (Import, Load Assets, Replicate, Sync, Verify) must register themselves with the Job Manager via `useJobs().registerJob()` so they appear in the navbar indicator and sidebar list. Do not create flow-specific progress UI in components — update the job and rely on the shared indicator/list.
+- **File:** `docs/background-tasks.md`. Add a short section: "Surfacing a task as a job" describing `jobInfo` + `job-update`.
 
 ## Unit Tests
 
-- **`jobs-context.test.tsx`** (new): render `JobsContextProvider` wrapping a test consumer; assert
-  - `registerJob` adds a job, repeated registration with the same id replaces in place;
-  - `updateJob` merges fields and is a no-op for unknown ids;
-  - `completeJob` removes by id;
-  - `cancelJob` invokes `platform.cancelTasks(sourceTag)` (mock the platform) and removes the job.
-- **`navbar-jobs-indicator.test.tsx`** (new): render the component within a stubbed `JobsContext` value; assert
-  - renders nothing for 0 jobs,
-  - renders job name for 1 job,
-  - renders *"N background jobs running"* for >1 jobs,
-  - aggregate progress is the mean of numeric `progress` values.
-- **`sidebar-jobs-list.test.tsx`** (new): render with stubbed jobs; assert
-  - empty state renders nothing,
-  - one row per job,
-  - the cancel icon button calls `cancelJob(job.id)` and is not rendered when `cancellable === false`,
-  - determinate vs. indeterminate `<LinearProgress />` based on `progress`.
-- Extend existing import-context / asset-database-source tests (if any) so they don't regress when the new `useJobs()` call is added; if no existing test covers the new call paths, add one in `packages/user-interface/src/test/context/`.
-- Extend `replicate-database-dialog` tests (if any sibling tests exist; check `packages/user-interface/src/test/components/`) to assert the running-step now exposes the *Run in background* button.
+- **`job-registry.test.ts`** (new, `packages/task-queue`): drive a fake backend; assert
+  - first task with `jobInfo` for a source emits an `upsert`; subsequent tasks for the same source do not re-create it but bump the in-flight count;
+  - a `job-update` message merges `name`/`progress`/`progressMessage` and emits an `upsert`;
+  - the job completes (emits `complete`) only when the *last* in-flight task for the source finishes, not the first;
+  - cancellation for a source emits `complete` immediately.
+- **`apply-job-event.test.ts`** (new, `packages/user-interface`): the plain array-apply function; assert upsert adds/replaces by id, `complete` removes by id, ordering by `startedAt`, no-op on completing an unknown id.
+- **`navbar-jobs-indicator.test.tsx`** — do not unit test the component. Extract the aggregate-progress calculation into a `lib/` function and test that (mean of numeric progress, ignore indeterminate).
+- **`sidebar-jobs-list`** — same rule: any non-trivial logic goes into a `lib/` function with tests; the component stays a thin shell.
+- Extend the queue-backend / proxy-backend tests so `jobInfo` is forwarded through each transport.
 
 ## Smoke Tests
 
-No new smoke-test directory is added for the Job Manager itself. The Job Manager is plumbing for existing flows; the way to know it has not regressed any flow is that each flow's existing smoke test still passes end-to-end after the refactor. Confirm coverage of each managed job below and update tests only where a behaviour they previously relied on has actually changed:
+The Job Manager is plumbing for existing flows; the way to know it has not regressed any flow is that each flow's existing smoke test still passes end-to-end after the refactor.
 
-- **Load Assets** — covered by [3-open-database](apps/desktop/smoke-tests/3-open-database/) and any test that opens a pre-existing database (e.g. [10-view-database](apps/desktop/smoke-tests/10-view-database/)). No test edits required; the flow's observable outcome (database content loads) is unchanged.
-- **Import Assets** — covered by [4-import-photos](apps/desktop/smoke-tests/4-import-photos/). No test edits required; the import still completes the same way and the cancel path is exercised by the existing test if present.
-- **Replicate Database** — covered by [17-replicate-database](apps/desktop/smoke-tests/17-replicate-database/). One required edit: the *Running* `DialogActions` now expose a `data-id="replicate-run-in-background-button"` instead of being blocked-open. Update the test so that whatever it currently does to wait for replication to finish still works (the `Replication completed for` log line still fires). If the test previously asserted that the dialog *cannot* be closed mid-task, remove that assertion.
-- **Sync Database** — there is no dedicated sync smoke test in the suite today, and this plan does not add one (sync is non-cancellable and has no user-driven trigger). Existing tests that incidentally trigger a sync will continue to do so without observable change.
+- **Load Assets** — [3-open-database](apps/desktop/smoke-tests/3-open-database/), [10-view-database](apps/desktop/smoke-tests/10-view-database/). No edits expected.
+- **Import Assets** — [4-import-photos](apps/desktop/smoke-tests/4-import-photos/). No edits expected.
+- **Replicate Database** — [17-replicate-database](apps/desktop/smoke-tests/17-replicate-database/). Required edit: the *Running* actions now expose `data-id="replicate-run-in-background-button"` instead of being blocked-open. Update the wait logic; remove any assertion that the dialog cannot be closed mid-task.
+- **Sync Database** — no dedicated smoke test; existing tests that incidentally trigger a sync continue unchanged.
 
-Verification rule: after the refactor, `bun run test:electron` must pass with no edits beyond the single `17-replicate-database` update above.
+Verification rule: after the refactor, `bun run test:electron` must pass with no edits beyond the single `17-replicate-database` update.
 
 ## Verify
 
 1. `bun run compile` from repo root — clean.
-2. `bun run test:all` from repo root — full unit and smoke suites green, including the new jobs-context/indicator/sidebar unit tests and the updated `17-replicate-database` smoke test.
+2. `bun run test:all` from repo root — full unit and smoke suites green, including the new `job-registry` / `apply-job-event` unit tests and the updated `17-replicate-database` smoke test.
+3. `bun run stories:and` — confirm the navbar indicator and sidebar list fit at phone resolution.
 
 ## Notes
 
-- **Why a context rather than a singleton store?** All consumers are React components, the data is UI-bound, and there are no headless callers. Context is the lighter primitive and keeps SSR/test setup simple.
-- **Why `sourceTag` separate from `id`?** The renderer keys jobs by what's most natural to the *user-visible* concept (e.g. database path), but the worker tasks are tagged by what's most natural to the *worker* (e.g. sessionId for import). Decoupling lets the two co-exist without contortions.
-- **Aggregated progress in the navbar.** Mean of numeric `progress` ignoring indeterminate jobs is a reasonable default. If the jobs are heterogeneous (one large, one small) this is inaccurate, but the alternative (weighted by job magnitude) needs a `weight` field that we'd have to populate for every flow — not worth it for the navbar's compact summary.
-- **Replicate cancellation is the only worker-side code change.** Import and load-assets workers already honour `context.isCancelled()`. Sync is intentionally non-cancellable in v1. Verify (future) will need the same care when added.
-- **The dialog keeps its own progress display** so users who *don't* dismiss it still see what's happening. The Job Manager is additive — flows can update both the dialog and the job in lockstep.
-- **What this plan does not change.**
-  - The `platform.cancelTasks` IPC is unchanged.
-  - The `TaskQueue` API is unchanged.
-  - The toast notification system is unchanged — toasts on completion/failure still fire from main.
-  - The Sync trigger logic (debounce, periodic timer) is unchanged.
-- **Future:** when Verify Database is implemented, it should register a job with `id = \`verify:${databasePath}\`` and `sourceTag = databasePath`, and the worker should honour cancellation the same way replicate does.
-- **Mobile compatibility:** this plan is platform-agnostic and needs no change to run on mobile. It depends only on `TaskQueue` task-message streaming and `platform.cancelTasks(sourceTag)`, both of which the mobile embedded-JS-engine backend honours. The one requirement lives in `plan-mobile-background-tasks-options.md`: `PlatformProviderMobile` must wire `cancelTasks` and the task callbacks to the `JsEngine` plugin (they are no-op stubs today), or the Cancel button does nothing on mobile.
+- **Why backend-owned job state?** The backend already sees every task start, message, completion, and cancellation for every source. Deriving jobs there makes registration and completion automatic and impossible to forget, removes per-flow bookkeeping, and keeps the frontend a pure renderer. This is the central change from the reverted design (see Issues 1-4).
+- **Why one job per `source`?** `source` already groups related tasks and is already the cancellation key. A job is exactly "the in-flight tasks for a source", so the mapping is free and cancellation routes through the existing `platform.cancelTasks(source)`.
+- **Why reuse `platform-event` on Electron?** The CLAUDE.md rule forbids new action-specific IPC channels. Job events ride the existing generic push channel as `{ type: "job-event", ... }`.
+- **Cancel does not optimistically remove the row.** `cancelJob` calls `platform.cancelTasks` and waits for the backend's `complete` event. The backend is the source of truth, so the row disappears when the backend says the job is gone, avoiding divergence.
+- **Progress lives with the worker.** Progress strings/fractions are computed by the worker (which knows the real counts) and emitted as `job-update` messages, not recomputed in the frontend. This keeps job data flowing from the one place that has it.
+- **Replicate cancellation is the only worker-side code change.** Import and load-assets already honour `context.isCancelled()`. Sync is non-cancellable in v1. Verify (future) will need the same care.
+- **Mobile requirement.** `PlatformProviderMobile` must wire `cancelTasks` and the task/job callbacks to the `JsEngine` plugin (no-op stubs today), and the mobile host must construct a `JobRegistry` and forward job events over the host bridge, or Cancel does nothing and jobs never appear on mobile. This depends on the mobile-background-tasks work.
+- **Future (Verify).** When Verify Database is implemented, attach `{ name: \`Verifying "${db}"\`, cancellable: true }` to its tasks (source = database path) and have its worker emit `job-update` and honour cancellation like replicate. No Job Manager changes required.
+- **What this plan does not change.** The `platform.cancelTasks` IPC contract, the `TaskQueue` public API (beyond the optional `jobInfo` arg), the toast system, and the sync trigger logic (debounce/timer) are unchanged.
+
+## Implementation notes from the reverted attempt
+
+Salvaged from the `job-manager` worktree before it was reverted. These speed up a re-implementation; they are observations, not new requirements.
+
+**Reuse these (they were already right):**
+
+- The reverted `jobs-context.tsx` had already factored all logic into plain exported functions with non-rendering unit tests: `registerJobInList`, `updateJobInList`, `removeJobFromList`, `aggregateJobsProgress`, `describeJobsIndicator`, `describeJobRow`, plus the view interfaces `IJobsIndicatorView` and `IJobRowView`. These map cleanly onto the new design: `describeJobsIndicator`/`aggregateJobsProgress` become the navbar indicator's `lib/` logic, `describeJobRow` becomes the sidebar row's, and `registerJobInList`/`removeJobFromList` become the `applyJobEvent` upsert/remove helpers. Copy them across; do not re-derive.
+- The tests lived under `src/test/components/` but only imported and tested the extracted functions (no React rendering), which satisfies the "no component tests" rule. Keep that arrangement.
+- The provider mirrored `jobs` into a `jobsRef` so `cancelJob` could be a stable `useCallback` that reads the current list without depending on it. Keep this pattern for `cancelJob`.
+
+**Change these (they are what the Issues call out):**
+
+- The reverted `cancelJobInList` optimistically removed the row locally and swallowed cancel errors. In the new design `cancelJob` only calls `platform.cancelTasks(sourceTag)` and lets the backend's `complete` event remove the row. Do not remove locally.
+- `registerJob`/`updateJob`/`completeJob` were public context methods called by flows. They are gone; only `applyJobEvent` (driven by `main.tsx`) and `cancelJob` remain.
+
+**Gotchas that will bite the re-implementation:**
+
+- `onTaskAdded` and `onTasksCancelled` fire *locally in the frontend proxy backends* (`ElectronRendererQueueBackend`, `WorkerQueueBackend`), not from the real pool. So the renderer-side `TaskQueue` in-flight counting is renderer-local and is not a source of truth. The `JobRegistry` must observe the **real** pool. The real pools expose `onTaskComplete` and `onAnyTaskMessage` globally, but `onTaskAdded(source, cb)` is **per-source** — there is no global "any task added" hook today. Adding `onAnyTaskAdded(cb)` to the real pools (Step 3) is the key enabling change; without it the registry cannot learn of new sources.
+- `platform.cancelTasks(source)` returns `Promise<void>` (it is async); handle rejection where you call it.
+- Frontend integration surface touched by the reverted attempt (expect to touch the same files): `main.tsx` (mount + the single subscription), `index.tsx` (re-exports), `stories/mocks/index.tsx` (the mock platform needs an `onJobEvent` stub so stories can push fake job events), and each `app.tsx` (`apps/desktop-frontend`, `apps/dev-frontend`, mobile) where the platform provider is assembled.
+- The reverted replicate cancellation added a `throwIfCancelled(isCancelled)` helper called at three loop boundaries in `packages/node-api/src/lib/replicate.ts` (per-file copy loop and per-merkle-node loops), with the worker passing `() => context.isCancelled()`. That approach is sound; keep it (Step 11).
+
+**Design-relevant discoveries (now folded into the Steps, flagged here so they are not missed):**
+
+- Sync is queued in the **backend** (`apps/desktop/src/main.ts`, `apps/dev-server/src/index.ts`, mobile host), not from a frontend flow, so its `jobInfo` attaches there and sync needs no frontend changes at all (Step 10, Sync).
+- Replicate is queued through the shared `replicateDatabase()` wrapper in `packages/node-api/src/lib/replicate-database.ts`, which calls `shutdown()` → `cancelTasks(source)` after completion — hence the idempotent-completion requirement (Step 3, Step 10 Replicate).
+- Import's numeric progress was computed in the frontend from its own `importItems` array; the import worker emits no running total today, so making progress backend-driven needs new counter/`job-update` logic in the worker (Step 10, Import). This is the only non-trivial worker addition.
