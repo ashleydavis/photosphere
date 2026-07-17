@@ -5,7 +5,9 @@
 import {
     doClick,
     waitForElement,
+    isElementVisible,
     doLongPressClick,
+    doLongPress,
     doType,
     doDrop,
     doPickFiles,
@@ -29,6 +31,73 @@ import {
     TEST_RESET_CONFIG_EVENT,
 } from "../../lib/test-driver";
 import type { ITestTransport, ITestCommandPayload } from "../../lib/test-driver";
+
+//
+// Regression guard for the create-database smoke-test failure caused by commit fa673c6b (mobile
+// dialogs became Joy Drawers). A closed Joy Drawer stays in the DOM with visibility:hidden, and a
+// dialog mounted in several places matches its data-id several times, all but one hidden. The driver
+// must act only on the visible one; before this it took the first in DOM order (a hidden drawer), so
+// it typed into an invisible form and the visible one stayed empty.
+//
+describe("hidden elements are not actionable", () => {
+
+    // A hidden wrapper (a closed drawer) followed by a visible one, both carrying the same data-id.
+    function twoWrappers(): void {
+        document.body.innerHTML = `
+            <div id="closed" style="visibility: hidden;">
+                <div data-id="field"><input type="text" /></div>
+                <button data-id="confirm">Confirm</button>
+            </div>
+            <div id="open">
+                <div data-id="field"><input type="text" /></div>
+                <button data-id="confirm">Confirm</button>
+            </div>`;
+    }
+
+    test("isElementVisible reports a visibility:hidden subtree as not visible", () => {
+        document.body.innerHTML = `<div style="visibility: hidden;"><span data-id="x">x</span></div>`;
+        expect(isElementVisible(document.querySelector(`[data-id="x"]`)!)).toBe(false);
+    });
+
+    test("isElementVisible reports a display:none subtree as not visible", () => {
+        document.body.innerHTML = `<div style="display: none;"><span data-id="x">x</span></div>`;
+        expect(isElementVisible(document.querySelector(`[data-id="x"]`)!)).toBe(false);
+    });
+
+    test("isElementVisible reports a plain element as visible", () => {
+        document.body.innerHTML = `<span data-id="x">x</span>`;
+        expect(isElementVisible(document.querySelector(`[data-id="x"]`)!)).toBe(true);
+    });
+
+    test("doType types into the visible input, not the hidden one that comes first", () => {
+        twoWrappers();
+        const hiddenInput = document.querySelector(`#closed [data-id="field"] input`) as HTMLInputElement;
+        const visibleInput = document.querySelector(`#open [data-id="field"] input`) as HTMLInputElement;
+        doType("field", "typed-value");
+        expect(visibleInput.value).toBe("typed-value");
+        expect(hiddenInput.value).toBe("");
+    });
+
+    test("doClick clicks the visible element, not the hidden one that comes first", () => {
+        twoWrappers();
+        let hiddenClicks = 0;
+        let visibleClicks = 0;
+        (document.querySelector(`#closed [data-id="confirm"]`) as HTMLElement).addEventListener("click", () => { hiddenClicks += 1; });
+        (document.querySelector(`#open [data-id="confirm"]`) as HTMLElement).addEventListener("click", () => { visibleClicks += 1; });
+        doClick("confirm");
+        expect(visibleClicks).toBe(1);
+        expect(hiddenClicks).toBe(0);
+    });
+
+    test("waitForElement ignores a hidden match and waits for a visible one", async () => {
+        document.body.innerHTML = `<div style="visibility: hidden;"><span data-id="late">x</span></div>`;
+        setTimeout(() => {
+            document.body.innerHTML += `<span data-id="late">x</span>`;
+        }, 80);
+        await waitForElement("late", 0, 2000);
+        expect(document.querySelectorAll(`[data-id="late"]`).length).toBe(2);
+    });
+});
 
 describe("doClick", () => {
 
@@ -94,6 +163,48 @@ describe("waitForElement", () => {
         await waitForElement("row", 1, 2000);
         expect(document.querySelectorAll(`[data-id="row"]`)).toHaveLength(2);
     });
+});
+
+//
+// The gesture that drives mobile selection mode. Unlike doLongPressClick (immediate release = short
+// click), doLongPress holds the button down past the gesture's delay, so a useLongPress-style
+// handler's onLongPress fires. This is what test 18 uses to select a gallery item, whose selection
+// checkbox is display:none until selecting mode turns on.
+//
+describe("doLongPress", () => {
+
+    test("holds past the gesture delay so a long-press handler fires (and a short click would not)", async () => {
+        document.body.innerHTML = `<div data-id="item">item</div>`;
+        const element = document.querySelector(`[data-id="item"]`) as HTMLElement;
+        let longPressed = false;
+        let clicked = false;
+        let timer: NodeJS.Timeout | undefined;
+        // Mirror useLongPress: mousedown starts a timer, mouseup fires onClick only if it has not
+        // yet elapsed. The gallery leaves the delay effectively immediate; 100ms here is well under
+        // doLongPress's 700ms hold so onLongPress fires.
+        element.addEventListener("mousedown", () => { timer = setTimeout(() => { longPressed = true; }, 100); });
+        element.addEventListener("mouseup", () => {
+            if (!longPressed && timer) {
+                clearTimeout(timer);
+                clicked = true;
+            }
+        });
+        await doLongPress("item");
+        expect(longPressed).toBe(true);
+        expect(clicked).toBe(false);
+    }, 5000);
+
+    test("acts on the visible element, not a hidden duplicate", async () => {
+        document.body.innerHTML = `
+            <div id="closed" style="visibility: hidden;"><div data-id="item">hidden</div></div>
+            <div id="open"><div data-id="item">visible</div></div>`;
+        let pressedText = "";
+        document.querySelectorAll(`[data-id="item"]`).forEach(el => {
+            el.addEventListener("mousedown", () => { pressedText = el.textContent ?? ""; });
+        });
+        await doLongPress("item");
+        expect(pressedText).toBe("visible");
+    }, 5000);
 });
 
 describe("doLongPressClick", () => {

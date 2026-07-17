@@ -33,7 +33,11 @@ send_command "$APP_PORT" open-database '{"path":"source-db"}' || exit 1
 # to render the item (the signal needed to select it below).
 wait_for_log "$TMP_DIR" "Gallery items rendered"
 
-send_command "$APP_PORT" click '{"dataId":"gallery-item-checkbox"}' || exit 1
+# Select the asset the way a phone user does: a long press on the gallery item, which turns on
+# selecting mode and adds the item to the selection (gallery-image.tsx useLongPress.onLongPress).
+# The selection checkbox is display:none on a phone until then (no hover to reveal it), so clicking
+# it directly cannot work; a real long press is the gesture that selects.
+send_command "$APP_PORT" long-press '{"dataId":"gallery-thumb"}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"right-sidebar-button"}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"move-to-database-dest-db"}' || exit 1
 wait_for_log "$TMP_DIR" "Move to database completed: 1 asset moved"

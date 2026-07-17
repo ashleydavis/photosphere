@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug-only network security config. It overlays (replaces) the src/main one for the debug variant,
+  which is the build the smoke tests use.
+
+  The smoke tests drive the app over a cleartext ws:// connection to a host control bridge whose
+  address depends on how the emulator is networked: 10.0.2.2 for a plain NAT emulator, 192.168.55.1
+  for a bridge-attached emulator (the LAN-sharing setup), or localhost for a physical device reached
+  via `adb reverse`. Permitting all cleartext in debug covers every case without hardcoding any host,
+  and it never ships: release builds use the strict src/main config.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>
