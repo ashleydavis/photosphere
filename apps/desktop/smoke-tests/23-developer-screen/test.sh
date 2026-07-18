@@ -90,6 +90,8 @@ wait_for_value "$APP_PORT" "developer-tool-stories" "Stories"
 send_command "$APP_PORT" click '{"dataId":"developer-tool-stories"}'
 wait_for_value "$APP_PORT" "stories-page" "story"
 send_command "$APP_PORT" click '{"dataId":"stories-back-link"}'
+# Stories unmounts Main; wait until it is gone so the next navigate targets a remounted shell.
+wait_for_value_gone "$APP_PORT" "stories-page" "story"
 
 # Return to the developer screen (developer mode is persisted).
 send_command "$APP_PORT" navigate '{"page":"/developer"}'

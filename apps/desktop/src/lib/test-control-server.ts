@@ -69,9 +69,15 @@ export class TestControlServer implements ITestControlServer {
             }
         });
 
-        expressApp.post('/navigate', (req, res) => {
+        expressApp.post('/navigate', async (req, res) => {
             const page: string = req.body.page.startsWith('/') ? req.body.page : `/${req.body.page}`;
-            this.mainWindow.webContents.send('navigate', page);
+            // HashRouter listens to hash changes globally, so this works even when Main is
+            // unmounted (for example while the top-level Stories route is showing). Sending
+            // only the IPC navigate event would be dropped in that window because Main is the
+            // sole onNavigate subscriber.
+            await this.mainWindow.webContents.executeJavaScript(
+                `window.location.hash = ${JSON.stringify(page)};`
+            );
             log.info(`Navigated to ${page}`);
             res.json({ ok: true });
         });
