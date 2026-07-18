@@ -146,7 +146,7 @@ export PHOTOSPHERE_VAULT_DIR="$TEST_DIR/vault"
 export PHOTOSPHERE_VAULT_TYPE=plaintext
 ```
 
-With an isolated config dir you start with no databases registered, so create or open one from the UI (or pre-create one with the CLI) as the test directs. This is the same isolation pattern the Electron smoke tests use (`apps/desktop/smoke-tests/lib/common.sh`).
+With an isolated config dir you start with no databases registered, so create or open one from the UI (or pre-create one with the CLI) as the test directs. This is the same isolation pattern the Electron smoke tests use (`apps/smoke-tests/lib/common.sh` with `PLATFORM=electron`).
 
 ## Structure
 
