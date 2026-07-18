@@ -18,6 +18,25 @@ import { replicateDatabase } from "node-api/src/lib/replicate-database";
 const mockReplicateDatabase = replicateDatabase as jest.MockedFunction<typeof replicateDatabase>;
 
 //
+// ResponsiveDialog reads window.matchMedia via useIsMobile; jsdom does not provide it.
+//
+beforeAll(() => {
+    Object.defineProperty(window, "matchMedia", {
+        writable: true,
+        value: jest.fn().mockImplementation((query: string) => ({
+            matches: false,
+            media: query,
+            onchange: null,
+            addListener: jest.fn(),
+            removeListener: jest.fn(),
+            addEventListener: jest.fn(),
+            removeEventListener: jest.fn(),
+            dispatchEvent: jest.fn(),
+        })),
+    });
+});
+
+//
 // Builds a stub jobs context.
 //
 function stubJobs(): IJobsContext {
