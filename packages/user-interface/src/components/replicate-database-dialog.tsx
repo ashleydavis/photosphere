@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { log } from 'utils';
 import { useUuidGenerator } from '../context/uuid-generator-context';
 import { replicateDatabase } from 'node-api/src/lib/replicate-database';
@@ -20,6 +20,7 @@ import Box from '@mui/joy/Box';
 import Alert from '@mui/joy/Alert';
 import CircularProgress from '@mui/joy/CircularProgress';
 import { usePlatform, type IDatabaseEntry, type ISharedSecretEntry } from '../context/platform-context';
+import { useJobs } from '../context/jobs-context';
 import { S3BrowserModal } from './s3-browser-modal';
 import { ConfigureSecretsModal, type IDatabaseSecretsSelection } from './configure-secrets-modal';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
@@ -95,12 +96,13 @@ function emptyFormState(): IReplicateFormState {
 // Dialog for replicating a database to a new destination via the worker pool.
 // Lets the user pick a destination path, choose between Partial and Full mode,
 // and select destination encryption and (when applicable) S3 credentials.
-// Cancellation while running is intentionally out of scope for v1; the dialog only
-// shows a progress view once the task starts.
+// While running, the dialog can be dismissed via "Run in background"; progress
+// continues in the Job Manager.
 //
 export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, s3Secrets, geocodingSecrets, onClose }: IReplicateDatabaseDialogProps) {
     const platform = usePlatform();
     const uuidGenerator = useUuidGenerator();
+    const { registerJob, updateJob, completeJob } = useJobs();
 
     const [step, setStep] = useState<ReplicateStep>("configure");
     const [form, setForm] = useState<IReplicateFormState>(emptyFormState());
@@ -108,6 +110,15 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
     const [errorMessage, setErrorMessage] = useState<string>("");
     const [s3BrowserOpen, setS3BrowserOpen] = useState(false);
     const [secretsModalOpen, setSecretsModalOpen] = useState(false);
+
+    //
+    // Tracks whether the dialog is still open so async completion does not setState after dismiss.
+    //
+    const isOpenRef = useRef(open);
+
+    useEffect(() => {
+        isOpenRef.current = open;
+    }, [open]);
 
     useEffect(() => {
         if (open) {
@@ -154,8 +165,8 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
     }, [platform, form.storageType]);
 
     //
-    // Calls the shared replicateDatabase wrapper, which queues the task and waits for completion.
-    // Cancellation while running is intentionally out of scope for v1.
+    // Registers a Job Manager entry, queues replication, and updates both the dialog and the job
+    // as progress arrives. The dialog may be dismissed mid-run via "Run in background".
     //
     const handleStart = useCallback(async () => {
         setStep("running");
@@ -170,20 +181,40 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
             force: false,
         };
 
+        const jobId = taskData.sourcePath;
+        registerJob({
+            id: jobId,
+            name: `Replicating to ${taskData.destPath}`,
+            sourceTag: taskData.sourcePath,
+            progress: undefined,
+            progressMessage: undefined,
+            cancellable: true,
+            startedAt: Date.now(),
+        });
+
         try {
-            await replicateDatabase(uuidGenerator, taskData, setProgress);
+            await replicateDatabase(uuidGenerator, taskData, (progressText) => {
+                setProgress(progressText);
+                updateJob(jobId, { progressMessage: progressText });
+            });
             // Log completion so it is observable on every platform (the desktop main process logs the
             // same line for its own path); the smoke test waits for it.
             const destName = taskData.destPath.split(/[\\/]/).filter(Boolean).pop() ?? taskData.destPath;
             log.info(`Replication completed for "${destName}"`);
-            setStep("success");
+            completeJob(jobId);
+            if (isOpenRef.current) {
+                setStep("success");
+            }
         }
         catch (err) {
+            completeJob(jobId);
             log.exception('Replication error:', err as Error);
-            setErrorMessage(err instanceof Error ? err.message : String(err));
-            setStep("error");
+            if (isOpenRef.current) {
+                setErrorMessage(err instanceof Error ? err.message : String(err));
+                setStep("error");
+            }
         }
-    }, [sourceEntry, form, uuidGenerator]);
+    }, [sourceEntry, form, uuidGenerator, registerJob, updateJob, completeJob]);
 
     //
     // The primary action for the current step: start replication while configuring,
@@ -205,7 +236,7 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
         <>
         <ResponsiveDialog
             open={open}
-            onClose={step === "running" ? undefined : onClose}
+            onClose={onClose}
             minWidth={520}
             maxWidth={720}
             dataId="replicate-database-dialog"
@@ -344,6 +375,15 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
                             Start replication
                         </Button>
                     </>
+                )}
+
+                {step === "running" && (
+                    <Button
+                        data-id="replicate-run-in-background-button"
+                        onClick={onClose}
+                    >
+                        Run in background
+                    </Button>
                 )}
 
                 {(step === "success" || step === "error") && (

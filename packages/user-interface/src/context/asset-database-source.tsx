@@ -16,6 +16,8 @@ import { useApi } from "./api-context";
 import type { IDownloadAssetItem } from "./platform-context";
 import { useToast } from "./toast-context";
 import { useUuidGenerator } from "./uuid-generator-context";
+import { useJobs } from "./jobs-context";
+import { useApp } from "./app-context";
 
 //
 // Adds "asset database" specific functionality to the gallery source.
@@ -91,11 +93,25 @@ export interface IAssetDatabaseProviderProps {
     restApiUrl: string;
 }
 
+//
+// Returns the last path segment of a filesystem or s3 path for display fallbacks.
+//
+function databasePathBasename(dbPath: string): string {
+    const normalized = dbPath.replace(/\\/g, "/");
+    const segments = normalized.split("/").filter(segment => segment.length > 0);
+    if (segments.length === 0) {
+        return dbPath;
+    }
+    return segments[segments.length - 1];
+}
+
 export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IAssetDatabaseProviderProps) {
     const platform = usePlatform();
     const api = useApi();
     const uuidGenerator = useUuidGenerator();
     const { addToast } = useToast();
+    const { registerJob, updateJob, completeJob } = useJobs();
+    const { dbs } = useApp();
 
     //
     // Set to true while loading assets.
@@ -579,7 +595,7 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
     //
     // Cancels an in-progress database load and cleans up its subscriptions.
     //
-    function cancelDatabaseLoad(_dbPath: string): void {
+    function cancelDatabaseLoad(dbPath: string): void {
         if (currentLoadQueue.current) {
             currentLoadQueue.current.shutdown();
             currentLoadQueue.current = undefined;
@@ -588,6 +604,7 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
             unsubscribeCurrentLoad.current();
             unsubscribeCurrentLoad.current = undefined;
         }
+        completeJob(dbPath);
     }
 
     //
@@ -614,6 +631,18 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
         loadingDatabasePath.current = dbPath;
         setIsLoading(true);
 
+        const databaseEntry = dbs.find(entry => entry.path === dbPath);
+        const databaseName = databaseEntry?.name ?? databasePathBasename(dbPath);
+        registerJob({
+            id: dbPath,
+            name: `Loading database "${databaseName}"`,
+            sourceTag: dbPath,
+            progress: undefined,
+            progressMessage: undefined,
+            cancellable: true,
+            startedAt: Date.now(),
+        });
+
         //
         // Start with no assets.
         // This clears out any existing database of assets.
@@ -632,6 +661,7 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
 
         // Store the database path at the time the load started
         const currentDatabasePath = dbPath;
+        let loadedAssetCount = 0;
 
         // Set up listener for task completion before queuing the task
         const unsubscribeComplete = queue.onTaskComplete<ILoadAssetsData, ILoadAssetsResult>((result) => {
@@ -646,9 +676,11 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
                 if (result.inputs?.databasePath === currentDatabasePath) {
                     loadingDatabasePath.current = undefined;
                     setIsLoading(false);
+                    completeJob(currentDatabasePath);
 
                     if (result.status !== TaskStatus.Succeeded) {
                         // Loading failed — cancel pending tasks and unsubscribe.
+                        // completeJob is idempotent; cancelDatabaseLoad also completes the job.
                         cancelDatabaseLoad(currentDatabasePath);
                     }
                     else {
@@ -672,6 +704,10 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
 
             // Message is guaranteed to be an asset-page due to the filter
             if (data.message.batch && data.message.batch.length > 0) {
+                loadedAssetCount += data.message.batch.length;
+                updateJob(currentDatabasePath, {
+                    progressMessage: `${loadedAssetCount} assets loaded`,
+                });
                 _onNewItems(data.message.batch);
             }
         });
@@ -712,22 +748,48 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
     }, [platform]);
 
     //
+    // Keep latest database path / names for sync job registration without resubscribing.
+    //
+    const databasePathRef = useRef(databasePath);
+    const dbsRef = useRef(dbs);
+    databasePathRef.current = databasePath;
+    dbsRef.current = dbs;
+
+    //
     // Subscribe to sync-started and sync-completed events from the platform.
     //
     useEffect(() => {
         const unsubscribeStarted = platform.onSyncStarted(() => {
             setIsSyncing(true);
+            const currentDatabasePath = databasePathRef.current;
+            if (currentDatabasePath) {
+                const databaseEntry = dbsRef.current.find(entry => entry.path === currentDatabasePath);
+                const databaseName = databaseEntry?.name ?? databasePathBasename(currentDatabasePath);
+                registerJob({
+                    id: `sync:${currentDatabasePath}`,
+                    name: `Syncing database "${databaseName}"`,
+                    sourceTag: currentDatabasePath,
+                    progress: undefined,
+                    progressMessage: undefined,
+                    cancellable: false,
+                    startedAt: Date.now(),
+                });
+            }
         });
 
         const unsubscribeCompleted = platform.onSyncCompleted(() => {
             setIsSyncing(false);
+            const currentDatabasePath = databasePathRef.current;
+            if (currentDatabasePath) {
+                completeJob(`sync:${currentDatabasePath}`);
+            }
         });
 
         return () => {
             unsubscribeStarted();
             unsubscribeCompleted();
         };
-    }, [platform]);
+    }, [platform, registerJob, completeJob]);
 
     //
     // Subscribe to incremental sync-batch task messages and apply changes live to the gallery.

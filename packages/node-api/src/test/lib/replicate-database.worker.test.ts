@@ -118,6 +118,16 @@ describe("replicateDatabaseHandler", () => {
         expect(options?.pathFilter).toBe("subdir/");
     });
 
+    test("forwards context.isCancelled into replicate() options", async () => {
+        const isCancelled = jest.fn().mockReturnValue(false);
+        await replicateDatabaseHandler(makeData(), makeContext({ isCancelled }));
+
+        const options = mockReplicate.mock.calls[0][7];
+        expect(options?.isCancelled).toBeDefined();
+        expect(options!.isCancelled!()).toBe(false);
+        expect(isCancelled).toHaveBeenCalled();
+    });
+
     test("emits a replicate-progress task message for each progress callback fired by replicate()", async () => {
         const context = makeContext();
 

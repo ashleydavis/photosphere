@@ -16,6 +16,7 @@ import { AppContextProvider } from "../../context/app-context";
 import { DeveloperContextProvider } from "../../context/developer-context";
 import { ApiContextProvider, axiosApi, type IApi } from "../../context/api-context";
 import { ToastContextProvider } from "../../context/toast-context";
+import { JobsContextProvider } from "../../context/jobs-context";
 import { ConfigContextProvider, createConfig } from "../../context/config-context";
 import {
     AssetDatabaseContext,
@@ -515,25 +516,27 @@ export function MockProviders({
                     <ConfigContextProvider value={config}>
                         <AppContextProvider>
                             <ToastContextProvider>
-                                <AssetDatabaseContext.Provider value={databaseValue}>
-                                    <GallerySourceContext.Provider value={databaseValue}>
-                                        {withImportContext(
-                                            <GalleryContextProvider>
-                                                <DeleteConfirmationContextProvider>
-                                                    <SearchContextProvider>
-                                                        <GalleryLayoutContextProvider>
-                                                            <DeveloperContextProvider>
-                                                                <SyncContextProvider>
-                                                                    {children}
-                                                                </SyncContextProvider>
-                                                            </DeveloperContextProvider>
-                                                        </GalleryLayoutContextProvider>
-                                                    </SearchContextProvider>
-                                                </DeleteConfirmationContextProvider>
-                                            </GalleryContextProvider>
-                                        )}
-                                    </GallerySourceContext.Provider>
-                                </AssetDatabaseContext.Provider>
+                                <JobsContextProvider>
+                                    <AssetDatabaseContext.Provider value={databaseValue}>
+                                        <GallerySourceContext.Provider value={databaseValue}>
+                                            {withImportContext(
+                                                <GalleryContextProvider>
+                                                    <DeleteConfirmationContextProvider>
+                                                        <SearchContextProvider>
+                                                            <GalleryLayoutContextProvider>
+                                                                <DeveloperContextProvider>
+                                                                    <SyncContextProvider>
+                                                                        {children}
+                                                                    </SyncContextProvider>
+                                                                </DeveloperContextProvider>
+                                                            </GalleryLayoutContextProvider>
+                                                        </SearchContextProvider>
+                                                    </DeleteConfirmationContextProvider>
+                                                </GalleryContextProvider>
+                                            )}
+                                        </GallerySourceContext.Provider>
+                                    </AssetDatabaseContext.Provider>
+                                </JobsContextProvider>
                             </ToastContextProvider>
                         </AppContextProvider>
                     </ConfigContextProvider>
@@ -683,25 +686,27 @@ export function RealDatabaseProviders({ children }: IRealDatabaseProvidersProps)
                     <ConfigContextProvider value={config}>
                         <AppContextProvider>
                             <ToastContextProvider>
-                                <AssetDatabaseProvider queueBackend={getQueueBackend()} restApiUrl={restApiUrl}>
-                                    <ImportContextProvider>
-                                        <GalleryContextProvider>
-                                            <DeleteConfirmationContextProvider>
-                                                <SearchContextProvider>
-                                                    <GalleryLayoutContextProvider>
-                                                        <OpenTestDatabase>
-                                                            <DeveloperContextProvider>
-                                                                <SyncContextProvider>
-                                                                    {children}
-                                                                </SyncContextProvider>
-                                                            </DeveloperContextProvider>
-                                                        </OpenTestDatabase>
-                                                    </GalleryLayoutContextProvider>
-                                                </SearchContextProvider>
-                                            </DeleteConfirmationContextProvider>
-                                        </GalleryContextProvider>
-                                    </ImportContextProvider>
-                                </AssetDatabaseProvider>
+                                <JobsContextProvider>
+                                    <AssetDatabaseProvider queueBackend={getQueueBackend()} restApiUrl={restApiUrl}>
+                                        <ImportContextProvider>
+                                            <GalleryContextProvider>
+                                                <DeleteConfirmationContextProvider>
+                                                    <SearchContextProvider>
+                                                        <GalleryLayoutContextProvider>
+                                                            <OpenTestDatabase>
+                                                                <DeveloperContextProvider>
+                                                                    <SyncContextProvider>
+                                                                        {children}
+                                                                    </SyncContextProvider>
+                                                                </DeveloperContextProvider>
+                                                            </OpenTestDatabase>
+                                                        </GalleryLayoutContextProvider>
+                                                    </SearchContextProvider>
+                                                </DeleteConfirmationContextProvider>
+                                            </GalleryContextProvider>
+                                        </ImportContextProvider>
+                                    </AssetDatabaseProvider>
+                                </JobsContextProvider>
                             </ToastContextProvider>
                         </AppContextProvider>
                     </ConfigContextProvider>
