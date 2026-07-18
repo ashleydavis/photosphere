@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Zork — Play in your browser</title>
+    <meta
+      name="description"
+      content="Play the original Zork I, II, and III in your browser. MIT-licensed Infocom source on a TypeScript Z-machine."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Yeseva+One&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <div class="atmosphere" aria-hidden="true"></div>
+
+    <main id="landing" class="landing">
+      <section class="hero">
+        <p class="eyebrow">Infocom classic · MIT licensed</p>
+        <h1 class="brand">ZORK</h1>
+        <p class="tagline">
+          West of a white house, a mailbox waits. The Great Underground Empire
+          is open in your browser.
+        </p>
+        <div class="cta-row">
+          <button class="cta primary" type="button" data-game="zork1">
+            Play Zork I
+          </button>
+          <a class="cta ghost" href="#titles">Choose a title</a>
+        </div>
+      </section>
+
+      <section id="titles" class="titles">
+        <h2>The trilogy</h2>
+        <p class="section-copy">
+          Original Infocom story files, opened by Microsoft under the MIT
+          License, running on a TypeScript Z-machine.
+        </p>
+        <div class="card-grid">
+          <button class="game-card" type="button" data-game="zork1">
+            <span class="game-card-kicker">Release I</span>
+            <span class="game-card-title">Zork I</span>
+            <span class="game-card-sub">The Great Underground Empire</span>
+          </button>
+          <button class="game-card" type="button" data-game="zork2">
+            <span class="game-card-kicker">Release II</span>
+            <span class="game-card-title">Zork II</span>
+            <span class="game-card-sub">The Wizard of Frobozz</span>
+          </button>
+          <button class="game-card" type="button" data-game="zork3">
+            <span class="game-card-kicker">Release III</span>
+            <span class="game-card-title">Zork III</span>
+            <span class="game-card-sub">The Dungeon Master</span>
+          </button>
+        </div>
+      </section>
+
+      <footer class="site-footer">
+        <p>
+          Source: Infocom / Activision / Microsoft MIT release via
+          <a href="https://github.com/historicalsource/zork1" rel="noreferrer"
+            >historicalsource</a
+          >. ZORK is a trademark of its respective owners; this project is for
+          education and preservation.
+        </p>
+      </footer>
+    </main>
+
+    <section id="play" class="play" hidden>
+      <header class="play-header">
+        <button id="back-home" class="text-button" type="button">Home</button>
+        <h1 id="play-title">Zork</h1>
+      </header>
+      <div id="status" class="status" aria-live="polite"></div>
+      <div id="output" class="output" aria-live="polite"></div>
+      <form class="input-row" action="#" onsubmit="return false;">
+        <label class="sr-only" for="input">Command</label>
+        <span class="prompt">&gt;</span>
+        <input
+          id="input"
+          class="command"
+          type="text"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="Enter a command"
+        />
+      </form>
+    </section>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

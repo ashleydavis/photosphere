@@ -1,0 +1,45 @@
+{
+  "name": "zork",
+  "version": "1.0.0",
+  "description": "Play the original Zork I, II, and III in the browser. Powered by Microsoft's MIT-licensed Infocom source, running on a TypeScript Z-machine.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "c": "bun run compile",
+    "cw": "bun run compile:watch",
+    "compile": "tsc -p tsconfig.json --noEmit",
+    "compile:watch": "tsc -p tsconfig.json --noEmit --watch --preserveWatchOutput",
+    "clean": "rm -rf build dist coverage tsconfig.tsbuildinfo",
+    "play": "bun run src/cli.ts",
+    "play:1": "bun run src/cli.ts zork1",
+    "play:2": "bun run src/cli.ts zork2",
+    "play:3": "bun run src/cli.ts zork3",
+    "dev": "vite",
+    "d": "bun run dev",
+    "start": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "t": "bun run test",
+    "tw": "bun run test:watch",
+    "test": "bun test src/test",
+    "test:watch": "bun test --watch src/test"
+  },
+  "keywords": [
+    "zork",
+    "infocom",
+    "z-machine",
+    "interactive-fiction",
+    "typescript"
+  ],
+  "author": "ashley@codecapers.com.au",
+  "license": "MIT",
+  "dependencies": {
+    "zmachine": "^0.3.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/node": "^22.9.1",
+    "typescript": "^5.6.3",
+    "vite": "^5.1.6"
+  }
+}
