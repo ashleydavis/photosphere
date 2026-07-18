@@ -1,7 +1,6 @@
 #!/bin/bash
 
-# Mobile port of desktop 9-view-secret. Adds a secret then views and reveals it. Exercises the
-# secrets add + view + reveal flow on mobile.
+# Adds a secret then views and reveals it.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$TEST_DIR/../../lib/common.sh"
@@ -15,8 +14,9 @@ trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
-# Clean slate so the secret name is unique.
-send_command "$APP_PORT" reset-config '{}' || exit 1
+if [ "$PLATFORM" != "electron" ]; then
+    send_command "$APP_PORT" reset-config '{}' || exit 1
+fi
 
 send_command "$APP_PORT" navigate '{"page":"secrets"}' || exit 1
 wait_for_log "$TMP_DIR" "Secrets page loaded"
@@ -28,7 +28,9 @@ send_command "$APP_PORT" type '{"dataId":"secret-name-input","text":"smoke-secre
 send_command "$APP_PORT" click '{"dataId":"add-secret-confirm"}' || exit 1
 wait_for_log "$TMP_DIR" "Secret added"
 
-send_command "$APP_PORT" click '{"dataId":"entity-actions-menu"}' || exit 1
+if [ "$PLATFORM" != "electron" ]; then
+    send_command "$APP_PORT" click '{"dataId":"entity-actions-menu"}' || exit 1
+fi
 send_command "$APP_PORT" click '{"dataId":"view-secret-button"}' || exit 1
 wait_for_log "$TMP_DIR" "View secret dialog opened"
 

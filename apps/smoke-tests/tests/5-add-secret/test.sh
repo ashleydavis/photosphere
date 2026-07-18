@@ -1,8 +1,6 @@
 #!/bin/bash
 
-# Mobile port of desktop 5-add-secret. Navigates to the Secrets page and adds a secret. Uses
-# only navigate/click/type, so it exercises how far the secrets flow gets on mobile before the
-# vault write (platform provider) is missing.
+# Navigates to the Secrets page and adds a secret.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$TEST_DIR/../../lib/common.sh"
@@ -16,8 +14,9 @@ trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
-# Clean slate so the secret name is not seen as a duplicate from a previous run.
-send_command "$APP_PORT" reset-config '{}' || exit 1
+if [ "$PLATFORM" != "electron" ]; then
+    send_command "$APP_PORT" reset-config '{}' || exit 1
+fi
 
 send_command "$APP_PORT" navigate '{"page":"secrets"}' || exit 1
 wait_for_log "$TMP_DIR" "Secrets page loaded"
