@@ -91,6 +91,11 @@ export class TestControlServer implements ITestControlServer {
             res.json({ ok: true });
         });
 
+        expressApp.post('/long-press', (req, res) => {
+            this.mainWindow.webContents.send('test-long-press', { dataId: req.body.dataId, nth: req.body.nth });
+            res.json({ ok: true });
+        });
+
         expressApp.post('/type', (req, res) => {
             this.mainWindow.webContents.send('test-type', { dataId: req.body.dataId, text: req.body.text });
             res.json({ ok: true });
