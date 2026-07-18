@@ -30,6 +30,7 @@ import { OpenDatabaseModal } from "./components/open-database-modal";
 import { CreateDatabaseModal } from "./components/create-database-modal";
 import { AddDatabaseModal } from "./components/add-database-modal";
 import { openBugReport } from "./lib/bug-report";
+import { SHOW_JOBS_EVENT } from "./components/navbar-jobs-indicator";
 
 export interface IMainProps {
     //
@@ -238,6 +239,20 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
             navigate(page);
         });
     }, [platform, navigate]);
+
+    //
+    // Open the right sidebar when the navbar jobs indicator is clicked.
+    //
+    useEffect(() => {
+        function handleShowJobs(): void {
+            setRightSidebarOpen(true);
+        }
+
+        window.addEventListener(SHOW_JOBS_EVENT, handleShowJobs);
+        return () => {
+            window.removeEventListener(SHOW_JOBS_EVENT, handleShowJobs);
+        };
+    }, []);
 
     //
     // Adds mobile or desktop class to body based on isMobile prop.

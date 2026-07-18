@@ -58,6 +58,7 @@ wait_for_log "$TMP_DIR" "Replicate database dialog opened"
 send_command "$APP_PORT" type "{\"dataId\":\"replicate-dest-path-input\",\"text\":\"$DEST_PARTIAL\"}"
 send_command "$APP_PORT" click '{"dataId":"replicate-mode-partial"}'
 send_command "$APP_PORT" click '{"dataId":"replicate-start-button"}'
+send_command "$APP_PORT" click '{"dataId":"replicate-run-in-background-button"}'
 
 wait_for_log "$TMP_DIR" "Replication completed for" 120
 
@@ -89,9 +90,6 @@ fi
 
 log_success "Partial replication produced expected files"
 
-# Close the success dialog before opening the replica.
-send_command "$APP_PORT" click '{"dataId":"replicate-close-button"}'
-
 # Open the partial replica and confirm its gallery loads with the same number of assets
 # the source has (1, set above via the fixture import).
 send_command "$APP_PORT" open-database "{\"path\":\"$DEST_PARTIAL\"}"
@@ -110,6 +108,7 @@ wait_for_log "$TMP_DIR" "Replicate database dialog opened"
 send_command "$APP_PORT" type "{\"dataId\":\"replicate-dest-path-input\",\"text\":\"$DEST_FULL\"}"
 send_command "$APP_PORT" click '{"dataId":"replicate-mode-full"}'
 send_command "$APP_PORT" click '{"dataId":"replicate-start-button"}'
+send_command "$APP_PORT" click '{"dataId":"replicate-run-in-background-button"}'
 
 wait_for_log "$TMP_DIR" "Replication completed for" 120
 
@@ -122,8 +121,6 @@ if [ ! -s "$DEST_FULL/.db/files.dat" ]; then
     exit 1
 fi
 log_success "Full replication produced expected files"
-
-send_command "$APP_PORT" click '{"dataId":"replicate-close-button"}'
 
 # Open the full replica and confirm its gallery loads with the same number of assets.
 send_command "$APP_PORT" open-database "{\"path\":\"$DEST_FULL\"}"

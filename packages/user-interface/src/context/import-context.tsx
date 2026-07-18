@@ -5,6 +5,7 @@ import { usePlatform } from "./platform-context";
 import type { IImportSession, IPlatformContext } from "./platform-context";
 import { useAssetDatabase } from "./asset-database-source";
 import { useUuidGenerator } from "./uuid-generator-context";
+import { useJobs } from "./jobs-context";
 
 //
 // Dependencies required by the standalone import-orchestration helpers below.
@@ -158,6 +159,7 @@ export function ImportContextProvider({ children }: IImportContextProviderProps)
     const platform = usePlatform();
     const { databasePath } = useAssetDatabase();
     const uuidGenerator = useUuidGenerator();
+    const { registerJob, updateJob, completeJob } = useJobs();
 
     // Current lifecycle status of the import session.
     const [status, setStatus] = useState<ImportStatus>('idle');
@@ -180,6 +182,44 @@ export function ImportContextProvider({ children }: IImportContextProviderProps)
     useEffect(() => {
         statusRef.current = status;
     }, [status]);
+
+    //
+    // Completes the Job Manager entry when the import session finishes or is cancelled.
+    //
+    useEffect(() => {
+        if ((status === 'completed' || status === 'cancelled') && sessionRef.current) {
+            completeJob(sessionRef.current.sessionId);
+        }
+    }, [status, completeJob]);
+
+    //
+    // Pushes import progress into the Job Manager as items arrive and resolve.
+    //
+    useEffect(() => {
+        if (status !== 'running' || !sessionRef.current) {
+            return;
+        }
+
+        const sessionId = sessionRef.current.sessionId;
+        const processed = importItems.filter(item => item.status !== 'pending').length;
+        const pending = importItems.filter(item => item.status === 'pending').length;
+        const total = processed + pending;
+
+        if (total === 0) {
+            return;
+        }
+
+        const progress = addPathsDoneRef.current ? processed / total : undefined;
+        const name = addPathsDoneRef.current
+            ? `Importing ${total} files`
+            : "Importing assets";
+
+        updateJob(sessionId, {
+            name,
+            progress,
+            progressMessage: `${processed} of ${total} files`,
+        });
+    }, [importItems, status, updateJob]);
 
     //
     // Checks whether all items are resolved and scanning is done, then marks the import complete.
@@ -258,12 +298,19 @@ export function ImportContextProvider({ children }: IImportContextProviderProps)
             }
         });
 
-        const unsubscribeComplete = platform.onTaskComplete((taskId, _result) => {
+        const unsubscribeComplete = platform.onTaskComplete((taskId, result) => {
             if (statusRef.current !== 'running') {
                 return;
             }
 
             if (sessionRef.current && taskId === sessionRef.current.importAssetsTaskId) {
+                const taskStatus = typeof result.status === 'string' ? result.status : undefined;
+                if (taskStatus === 'failed') {
+                    setStatus('cancelled');
+                    statusRef.current = 'cancelled';
+                    return;
+                }
+
                 addPathsDoneRef.current = true;
 
                 // Use the functional updater to access the latest items for the completion check.
@@ -295,6 +342,15 @@ export function ImportContextProvider({ children }: IImportContextProviderProps)
         setImportItems([]);
         setStatus('running');
         statusRef.current = 'running';
+        registerJob({
+            id: session.sessionId,
+            name: "Importing assets",
+            sourceTag: session.sessionId,
+            progress: undefined,
+            progressMessage: undefined,
+            cancellable: true,
+            startedAt: Date.now(),
+        });
         return true;
     }
 

@@ -15,6 +15,7 @@ import {
 import { AppContextProvider } from "../../context/app-context";
 import { ApiContextProvider, axiosApi, type IApi } from "../../context/api-context";
 import { ToastContextProvider } from "../../context/toast-context";
+import { JobsContextProvider } from "../../context/jobs-context";
 import { ConfigContextProvider, createConfig } from "../../context/config-context";
 import {
     AssetDatabaseContext,
@@ -499,21 +500,23 @@ export function MockProviders({
                     <ConfigContextProvider value={config}>
                         <AppContextProvider>
                             <ToastContextProvider>
-                                <AssetDatabaseContext.Provider value={databaseValue}>
-                                    <GallerySourceContext.Provider value={databaseValue}>
-                                        {withImportContext(
-                                            <GalleryContextProvider>
-                                                <DeleteConfirmationContextProvider>
-                                                    <SearchContextProvider>
-                                                        <GalleryLayoutContextProvider>
-                                                            {children}
-                                                        </GalleryLayoutContextProvider>
-                                                    </SearchContextProvider>
-                                                </DeleteConfirmationContextProvider>
-                                            </GalleryContextProvider>
-                                        )}
-                                    </GallerySourceContext.Provider>
-                                </AssetDatabaseContext.Provider>
+                                <JobsContextProvider>
+                                    <AssetDatabaseContext.Provider value={databaseValue}>
+                                        <GallerySourceContext.Provider value={databaseValue}>
+                                            {withImportContext(
+                                                <GalleryContextProvider>
+                                                    <DeleteConfirmationContextProvider>
+                                                        <SearchContextProvider>
+                                                            <GalleryLayoutContextProvider>
+                                                                {children}
+                                                            </GalleryLayoutContextProvider>
+                                                        </SearchContextProvider>
+                                                    </DeleteConfirmationContextProvider>
+                                                </GalleryContextProvider>
+                                            )}
+                                        </GallerySourceContext.Provider>
+                                    </AssetDatabaseContext.Provider>
+                                </JobsContextProvider>
                             </ToastContextProvider>
                         </AppContextProvider>
                     </ConfigContextProvider>
@@ -654,21 +657,23 @@ export function RealDatabaseProviders({ children }: IRealDatabaseProvidersProps)
                     <ConfigContextProvider value={config}>
                         <AppContextProvider>
                             <ToastContextProvider>
-                                <AssetDatabaseProvider queueBackend={getQueueBackend()} restApiUrl={storyRestApiUrl()}>
-                                    <ImportContextProvider>
-                                        <GalleryContextProvider>
-                                            <DeleteConfirmationContextProvider>
-                                                <SearchContextProvider>
-                                                    <GalleryLayoutContextProvider>
-                                                        <OpenTestDatabase>
-                                                            {children}
-                                                        </OpenTestDatabase>
-                                                    </GalleryLayoutContextProvider>
-                                                </SearchContextProvider>
-                                            </DeleteConfirmationContextProvider>
-                                        </GalleryContextProvider>
-                                    </ImportContextProvider>
-                                </AssetDatabaseProvider>
+                                <JobsContextProvider>
+                                    <AssetDatabaseProvider queueBackend={getQueueBackend()} restApiUrl={storyRestApiUrl()}>
+                                        <ImportContextProvider>
+                                            <GalleryContextProvider>
+                                                <DeleteConfirmationContextProvider>
+                                                    <SearchContextProvider>
+                                                        <GalleryLayoutContextProvider>
+                                                            <OpenTestDatabase>
+                                                                {children}
+                                                            </OpenTestDatabase>
+                                                        </GalleryLayoutContextProvider>
+                                                    </SearchContextProvider>
+                                                </DeleteConfirmationContextProvider>
+                                            </GalleryContextProvider>
+                                        </ImportContextProvider>
+                                    </AssetDatabaseProvider>
+                                </JobsContextProvider>
                             </ToastContextProvider>
                         </AppContextProvider>
                     </ConfigContextProvider>

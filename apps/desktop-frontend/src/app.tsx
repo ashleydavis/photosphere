@@ -9,6 +9,7 @@ import {
     DeleteConfirmationContextProvider,
     ImportContextProvider,
     ToastContextProvider,
+    JobsContextProvider,
     UuidGeneratorProvider,
     ApiContextProvider,
     axiosApi,
@@ -70,21 +71,23 @@ export function App({ electronAPI }: IAppProps) {
                             <ApiContextProvider value={axiosApi}>
                             <AppContextProvider>
                                 <ToastContextProvider>
-                                    <AssetDatabaseProvider queueBackend={queueBackend} restApiUrl={restApiUrl}>
-                                        <ImportContextProvider>
-                                            <GalleryContextProvider>
-                                                <DeleteConfirmationContextProvider>
-                                                    <SearchContextProvider>
-                                                        <GalleryLayoutContextProvider>
-                                                            <McpToolHandler />
-                                                            <PreviewBanner />
-                                                            <Main isMobile={false} initialTheme={initialTheme} />
-                                                        </GalleryLayoutContextProvider>
-                                                    </SearchContextProvider>
-                                                </DeleteConfirmationContextProvider>
-                                            </GalleryContextProvider>
-                                        </ImportContextProvider>
-                                    </AssetDatabaseProvider>
+                                    <JobsContextProvider>
+                                        <AssetDatabaseProvider queueBackend={queueBackend} restApiUrl={restApiUrl}>
+                                            <ImportContextProvider>
+                                                <GalleryContextProvider>
+                                                    <DeleteConfirmationContextProvider>
+                                                        <SearchContextProvider>
+                                                            <GalleryLayoutContextProvider>
+                                                                <McpToolHandler />
+                                                                <PreviewBanner />
+                                                                <Main isMobile={false} initialTheme={initialTheme} />
+                                                            </GalleryLayoutContextProvider>
+                                                        </SearchContextProvider>
+                                                    </DeleteConfirmationContextProvider>
+                                                </GalleryContextProvider>
+                                            </ImportContextProvider>
+                                        </AssetDatabaseProvider>
+                                    </JobsContextProvider>
                                 </ToastContextProvider>
                             </AppContextProvider>
                             </ApiContextProvider>
