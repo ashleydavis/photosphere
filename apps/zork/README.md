@@ -68,10 +68,12 @@ bun run preview
 
 ```bash
 cd apps/zork
-bun run test       # unit + story smoke tests
+bun run test       # catalog unit tests + trilogy smoke playthroughs
 bun run compile    # TypeScript check
 bun run build      # production web bundle
 ```
+
+Smoke tests script real commands through Zork I (house, cellar, troll, painting), Zork II (barrow, wizard), and Zork III (endless stair, junction) and assert on game text.
 
 ## Layout
 
