@@ -191,6 +191,11 @@ android_launch() {
 
     local host
     host="$(android_host_address)"
+    # Some software-emulated guests cannot reach the classic 10.0.2.2 host alias ("Network is
+    # unreachable"). Fall back to 127.0.0.1 and rely on the adb reverse above.
+    if [ "$host" = "10.0.2.2" ]; then
+        host="127.0.0.1"
+    fi
     if [ "$host" = "192.168.55.1" ]; then
         log_info "Emulator is on the LAN bridge; pointing the app at the host at $host."
     fi

@@ -2,7 +2,12 @@
  * @jest-environment jsdom
  */
 
-import { connectTestDriverWebSocket, signalTestAppReady, resetTestReadyGateForTests } from "../../lib/test-driver-ws";
+import {
+    connectTestDriverWebSocket,
+    signalTestAppReady,
+    resetTestReadyGateForTests,
+    startTestDriverFromGlobal,
+} from "../../lib/test-driver-ws";
 
 //
 // A minimal fake WebSocket that records sent messages and lets tests fire events.
@@ -146,5 +151,42 @@ describe("connectTestDriverWebSocket", () => {
         console.log("hello from app");
         const logMessage = socket.sent.map((raw) => JSON.parse(raw)).find((message) => message.type === "log");
         expect(logMessage).toEqual({ type: "log", level: "info", message: "hello from app" });
+    });
+});
+
+describe("startTestDriverFromGlobal", () => {
+
+    const originalWebSocket = (globalThis as any).WebSocket;
+
+    beforeEach(() => {
+        FakeWebSocket.instances = [];
+        (globalThis as any).WebSocket = FakeWebSocket;
+        delete (globalThis as any).__PHOTOSPHERE_TEST__;
+        jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+        (globalThis as any).WebSocket = originalWebSocket;
+        delete (globalThis as any).__PHOTOSPHERE_TEST__;
+        jest.useRealTimers();
+    });
+
+    test("connects immediately when the injected config is already present", () => {
+        (globalThis as any).__PHOTOSPHERE_TEST__ = { host: "127.0.0.1", port: 4242 };
+        startTestDriverFromGlobal();
+        jest.advanceTimersByTime(0);
+        expect(FakeWebSocket.instances).toHaveLength(1);
+        expect(FakeWebSocket.instances[0].url).toBe("ws://127.0.0.1:4242");
+    });
+
+    test("keeps polling until a late native injection arrives", () => {
+        startTestDriverFromGlobal();
+        jest.advanceTimersByTime(30_000);
+        expect(FakeWebSocket.instances).toHaveLength(0);
+
+        (globalThis as any).__PHOTOSPHERE_TEST__ = { host: "127.0.0.1", port: 9999 };
+        jest.advanceTimersByTime(200);
+        expect(FakeWebSocket.instances).toHaveLength(1);
+        expect(FakeWebSocket.instances[0].url).toBe("ws://127.0.0.1:9999");
     });
 });
