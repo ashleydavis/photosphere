@@ -298,6 +298,22 @@ describe("getValue", () => {
         expect(getValue("label")).toBe("the label");
     });
 
+    test("prefers container text content over a nested switch input value", () => {
+        // Mirrors developer-page / configuration-dialog: a page root with a Switch inside.
+        document.body.innerHTML = `
+            <div data-id="developer-page">
+                <h2>Developer</h2>
+                <input type="checkbox" value="on" />
+            </div>
+        `;
+        expect(getValue("developer-page")).toContain("Developer");
+    });
+
+    test("reads a nested input when the wrapper itself has no text", () => {
+        document.body.innerHTML = `<div data-id="joy-input"><input value="typed" /></div>`;
+        expect(getValue("joy-input")).toBe("typed");
+    });
+
     test("returns an empty string when the element is missing", () => {
         document.body.innerHTML = ``;
         expect(getValue("nope")).toBe("");

@@ -396,17 +396,24 @@ export function getValue(dataId: string): string {
     if (!element) {
         return '';
     }
-    const inputValue = (element as HTMLInputElement).value;
-    if (inputValue) {
-        return inputValue;
+    // Prefer the element's own value only when it is a form control. Nested inputs (for example a
+    // Switch inside a page root) must not steal the text content of a container such as
+    // developer-page or configuration-dialog — that matches the former Electron TestControlServer
+    // get-value behaviour (`el.value || el.textContent`).
+    if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement) {
+        return element.value;
+    }
+    const text = element.textContent || '';
+    if (text.trim().length > 0) {
+        return text;
     }
     // Joy's Input carries the data-id on its wrapper and the value on the input nested inside it,
-    // so fall back to that before text content.
+    // so fall back to that when the wrapper has no text of its own.
     const nestedInput = element.querySelector('input');
     if (nestedInput && nestedInput.value) {
         return nestedInput.value;
     }
-    return element.textContent || '';
+    return '';
 }
 
 //

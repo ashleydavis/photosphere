@@ -49,8 +49,10 @@ EOF
     wait_for_log "$TMP_DIR" "Gallery items rendered"
     log_success "Gallery items are in the DOM"
 
-    log_info "Selecting the first gallery item..."
-    send_command "$APP_PORT" click '{"dataId":"gallery-item-checkbox"}' || exit 1
+    # Long-press selects the asset and enters selection mode (checkboxes are
+    # display:none until hover or isSelecting; the shared driver only clicks visible nodes).
+    log_info "Selecting the first gallery item via long-press..."
+    send_command "$APP_PORT" long-press '{"dataId":"gallery-thumb"}' || exit 1
 
     log_info "Opening right sidebar..."
     send_command "$APP_PORT" click '{"dataId":"right-sidebar-button"}' || exit 1

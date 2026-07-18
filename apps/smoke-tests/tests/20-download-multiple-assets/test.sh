@@ -44,8 +44,10 @@ EOF
     wait_for_log "$TMP_DIR" "Gallery items rendered"
     log_success "Gallery items are in the DOM"
 
+    # Long-press selects the first asset and enters selection mode so checkboxes
+    # become visible for the second asset (they are display:none until then).
     log_info "Selecting both gallery items..."
-    send_command "$APP_PORT" click '{"dataId":"gallery-item-checkbox","nth":0}' || exit 1
+    send_command "$APP_PORT" long-press '{"dataId":"gallery-thumb","nth":0}' || exit 1
     send_command "$APP_PORT" click '{"dataId":"gallery-item-checkbox","nth":1}' || exit 1
 
     log_info "Opening right sidebar..."
