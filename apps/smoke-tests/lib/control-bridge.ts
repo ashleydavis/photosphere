@@ -457,7 +457,8 @@ export class ControlBridge {
     }
 
     //
-    // Captures a screenshot host-side using the platform's screen-capture tool.
+    // Captures a screenshot: host-side for android/ios, or via the app over the WebSocket for
+    // Electron (renderer asks main for capturePage and returns base64 PNG bytes).
     //
     private async handleScreenshot(outputPath: string, res: Response): Promise<void> {
         try {
@@ -468,6 +469,13 @@ export class ControlBridge {
             }
             else if (this.options.platform === "ios") {
                 await runCommand("xcrun", ["simctl", "io", this.options.iosUdid || "booted", "screenshot", outputPath]);
+            }
+            else if (this.options.platform === "electron") {
+                const reply = await this.sendCommand("screenshot", {});
+                if (!reply.ok || reply.value === undefined) {
+                    throw new Error(reply.error || "Screenshot failed");
+                }
+                await fs.promises.writeFile(outputPath, Buffer.from(reply.value, "base64"));
             }
             else {
                 res.status(500).json({ ok: false, error: `Screenshot not supported for platform: ${this.options.platform}` });
@@ -481,7 +489,8 @@ export class ControlBridge {
     }
 
     //
-    // Stops the app host-side using the platform's stop command.
+    // Stops the app: host-side for android/ios, or via the app over the WebSocket for Electron
+    // (renderer asks main to app.quit).
     //
     private async handleQuit(res: Response): Promise<void> {
         try {
@@ -490,6 +499,9 @@ export class ControlBridge {
             }
             else if (this.options.platform === "ios" && this.options.bundleId) {
                 await runCommand("xcrun", ["simctl", "terminate", this.options.iosUdid || "booted", this.options.bundleId]);
+            }
+            else if (this.options.platform === "electron") {
+                await this.sendCommand("quit", {});
             }
             res.json({ ok: true });
         }

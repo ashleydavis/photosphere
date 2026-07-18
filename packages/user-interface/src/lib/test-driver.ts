@@ -170,6 +170,18 @@ export interface ITestTransport {
 }
 
 //
+// Optional shell-native handlers for commands the shared DOM driver cannot implement itself
+// (for example Electron screenshot via capturePage, or quit via app.quit). Keys are command
+// names; handlers return a string value for the bridge reply (screenshot base64) or undefined.
+//
+export interface ITestPlatformHandlers {
+    //
+    // Handler keyed by test command name (e.g. "screenshot", "quit").
+    //
+    [command: string]: ((payload: ITestCommandPayload) => Promise<string | undefined>) | undefined;
+}
+
+//
 // Reports whether an element is visible to a user, so the driver only ever acts on what is on
 // screen. It walks ancestors rather than trusting the element's own style: `visibility` is
 // inherited (a child of a hidden container computes to hidden already) but `display` is not (a child
@@ -525,10 +537,11 @@ export function doCycleAdvance(): void {
 //
 // Installs the shared DOM test driver onto the given transport. Each command received over
 // the transport is dispatched to the matching DOM action; get-value returns the element's
-// value, the rest resolve undefined. Unknown commands reject with a clear message so a
-// shell that has not yet implemented a capability reports it rather than silently passing.
+// value, the rest resolve undefined. Unknown commands consult platformHandlers when provided,
+// otherwise reject with a clear message so a shell that has not yet implemented a capability
+// reports it rather than silently passing.
 //
-export function installTestDriver(transport: ITestTransport): void {
+export function installTestDriver(transport: ITestTransport, platformHandlers?: ITestPlatformHandlers): void {
     transport.onCommand(async (command: string, payload: ITestCommandPayload): Promise<string | undefined> => {
         switch (command) {
             case 'click':
@@ -582,8 +595,13 @@ export function installTestDriver(transport: ITestTransport): void {
                 return undefined;
             case 'lan-share-roundtrip':
                 return await runLanShareRoundtrip();
-            default:
+            default: {
+                const platformHandler = platformHandlers?.[command];
+                if (platformHandler) {
+                    return await platformHandler(payload);
+                }
                 throw new Error(`Test command not implemented on this platform: ${command}`);
+            }
         }
     });
 }

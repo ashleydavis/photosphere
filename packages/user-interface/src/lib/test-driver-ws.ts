@@ -8,7 +8,7 @@
 //
 
 import { installTestDriver } from "./test-driver";
-import type { ITestTransport, ITestCommandPayload } from "./test-driver";
+import type { ITestTransport, ITestCommandPayload, ITestPlatformHandlers } from "./test-driver";
 
 //
 // A command message sent from the host bridge to the app.
@@ -108,9 +108,10 @@ export function resetTestReadyGateForTests(): void {
 //
 // Opens a WebSocket to the host control bridge at the given URL, wires it to the shared DOM
 // test driver, forwards console output as log messages, and sends "ready" once connected and the
-// app has mounted its test-command listeners.
+// app has mounted its test-command listeners. Optional platformHandlers cover shell-native
+// commands (Electron screenshot/quit) the shared DOM driver cannot implement alone.
 //
-export function connectTestDriverWebSocket(url: string): void {
+export function connectTestDriverWebSocket(url: string, platformHandlers?: ITestPlatformHandlers): void {
     const socket = new WebSocket(url);
 
     //
@@ -136,7 +137,7 @@ export function connectTestDriverWebSocket(url: string): void {
         },
     };
 
-    installTestDriver(transport);
+    installTestDriver(transport, platformHandlers);
 
     patchConsole(transport);
 

@@ -391,6 +391,42 @@ describe("installTestDriver", () => {
         await expect(invoke("create-database", {})).rejects.toThrow("not implemented");
     });
 
+    test("invokes a platform screenshot handler and returns its value", async () => {
+        const { transport, invoke } = makeTransport();
+        let called = 0;
+        installTestDriver(transport, {
+            screenshot: async () => {
+                called += 1;
+                return "base64png";
+            },
+        });
+        const value = await invoke("screenshot", {});
+        expect(called).toBe(1);
+        expect(value).toBe("base64png");
+    });
+
+    test("invokes a platform quit handler", async () => {
+        const { transport, invoke } = makeTransport();
+        let called = 0;
+        installTestDriver(transport, {
+            quit: async () => {
+                called += 1;
+                return undefined;
+            },
+        });
+        const value = await invoke("quit", {});
+        expect(called).toBe(1);
+        expect(value).toBeUndefined();
+    });
+
+    test("rejects an unknown command when no platform handler is provided", async () => {
+        const { transport, invoke } = makeTransport();
+        installTestDriver(transport, {
+            screenshot: async () => "x",
+        });
+        await expect(invoke("not-a-real-command", {})).rejects.toThrow("not implemented");
+    });
+
     test("routes a menu command to a window event", async () => {
         const { transport, invoke } = makeTransport();
         installTestDriver(transport);

@@ -10,11 +10,9 @@
 # COMPLETE". Any "STORIES CYCLE FAILED:" line (a story that crashed while rendering) fails the run.
 #
 # The three platforms differ only in how the app is built, launched, and screenshotted. Each one
-# already has a test harness that exposes the same HTTP command surface (/ready, /navigate,
-# /screenshot, /cycle-advance, /quit), so this script drives them all the same way:
-#   electron -> apps/desktop/smoke-tests/lib/common.sh  (in-app test control server)
-#   android  -> apps/smoke-tests/lib/common.sh          (host control bridge, adb)
-#   ios      -> apps/smoke-tests/lib/common.sh          (host control bridge, simctl)
+# uses the shared host control bridge harness (apps/smoke-tests/lib/common.sh) that exposes the
+# same HTTP command surface (/ready, /navigate, /screenshot, /cycle-advance, /quit):
+#   electron / android / ios -> PLATFORM=<name> apps/smoke-tests/lib/common.sh
 #
 # Usage:
 #   ./scripts/story-player.sh                              # electron (default)
@@ -99,18 +97,11 @@ case "$PLATFORM_NAME" in
 esac
 
 #
-# Load the platform's test harness. Both harnesses define the same helpers with the same
-# signatures (start_app, wait_for_ready, send_command, wait_for_log, stop_app),
-# which is what lets the rest of this script be platform-neutral.
+# Load the shared test harness. PLATFORM selects electron.sh / android.sh / ios.sh.
 #
-if [ "$PLATFORM_NAME" = "electron" ]; then
-    DESKTOP_DIR="$REPO_DIR/apps/desktop"
-    source "$DESKTOP_DIR/smoke-tests/lib/common.sh"
-else
-    # common.sh reads PLATFORM to pick its launcher (android.sh or ios.sh).
-    export PLATFORM="$PLATFORM_NAME"
-    source "$REPO_DIR/apps/smoke-tests/lib/common.sh"
-fi
+DESKTOP_DIR="$REPO_DIR/apps/desktop"
+export PLATFORM="$PLATFORM_NAME"
+source "$REPO_DIR/apps/smoke-tests/lib/common.sh"
 
 if [ -z "$DURATION_MS" ]; then
     if [ "$PLATFORM_NAME" = "electron" ]; then
@@ -157,30 +148,18 @@ TMP_DIR="$REPO_DIR/stories-tmp/$PLATFORM_NAME"
 # it. The cycle switches theme at runtime, so one build covers both light and dark.
 #
 build_app() {
-    if [ "$PLATFORM_NAME" = "electron" ]; then
-        # A packaged binary (USE_BINARY=true) is already built, so there is nothing to bundle.
-        if [ "${USE_BINARY:-false}" = "true" ]; then
-            return 0
-        fi
-        log_info "Bundling desktop-frontend..."
-        (cd "$REPO_DIR/apps/desktop-frontend" && bun run bundle) || return 1
-        log_info "Bundling desktop main..."
-        (cd "$DESKTOP_DIR" && bun run bundle) || return 1
-        return 0
+    "${PLATFORM}_prepare" || return 1
+    "${PLATFORM}_build" || return 1
+    "${PLATFORM}_install" || return 1
+
+    #
+    # Seed the 50-assets fixture into the app sandbox on mobile. Electron opens host paths
+    # directly, so no seed is required there.
+    #
+    if [ "$PLATFORM" != "electron" ]; then
+        log_info "Seeding the 50-assets fixture into the app sandbox..."
+        "${PLATFORM}_seed_database" "$REPO_DIR/test/dbs/50-assets" "test/dbs/50-assets" || return 1
     fi
-
-    "${PLATFORM_NAME}_prepare" || return 1
-    "${PLATFORM_NAME}_build" || return 1
-    "${PLATFORM_NAME}_install" || return 1
-
-    #
-    # Seed the 50-assets fixture into the app sandbox, exactly as the mobile smoke tests seed their
-    # own fixtures. The stories that show real media open `test/dbs/50-assets` through the REST API;
-    # on a device that database only exists if it is copied there first. Without this the app has no
-    # such database to serve and those stories report the REST API as unreachable.
-    #
-    log_info "Seeding the 50-assets fixture into the app sandbox..."
-    "${PLATFORM_NAME}_seed_database" "$REPO_DIR/test/dbs/50-assets" "test/dbs/50-assets" || return 1
 }
 
 #

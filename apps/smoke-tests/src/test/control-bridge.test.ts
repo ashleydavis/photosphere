@@ -186,3 +186,75 @@ describe("control bridge OS-assigned port", () => {
         fs.rmSync(logDirB, { recursive: true, force: true });
     });
 });
+
+describe("control bridge electron screenshot and quit", () => {
+
+    let bridge: ControlBridge;
+    let client: WsClient;
+    let logDir: string;
+    let baseUrl: string;
+    const received: IReceivedCommand[] = [];
+    let nextReply: IFakeReply = { ok: true };
+
+    beforeAll(async () => {
+        logDir = fs.mkdtempSync(path.join(os.tmpdir(), "control-bridge-electron-"));
+        bridge = new ControlBridge({ port: 0, logDir, platform: "electron" });
+        await bridge.start();
+        baseUrl = `http://localhost:${bridge.port}`;
+
+        client = new WsClient(`ws://localhost:${bridge.port}`);
+        await new Promise<void>((resolve, reject) => {
+            client.on("open", () => resolve());
+            client.on("error", reject);
+        });
+
+        client.on("message", (raw: Buffer) => {
+            const command = JSON.parse(raw.toString()) as IReceivedCommand;
+            received.push(command);
+            client.send(JSON.stringify({ type: "reply", id: command.id, ...nextReply }));
+        });
+
+        await delay(50);
+    });
+
+    afterAll(async () => {
+        client.close();
+        await bridge.stop();
+        fs.rmSync(logDir, { recursive: true, force: true });
+    });
+
+    beforeEach(() => {
+        received.length = 0;
+        nextReply = { ok: true };
+    });
+
+    test("forwards screenshot and writes decoded base64 to the output path", async () => {
+        // "hi" in base64
+        nextReply = { ok: true, value: Buffer.from("hi").toString("base64") };
+        const outputPath = path.join(logDir, "shot.png");
+        const response = await fetch(`${baseUrl}/screenshot`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ outputPath }),
+        });
+        const body = await response.json();
+        expect(response.status).toBe(200);
+        expect(body.ok).toBe(true);
+        expect(received).toHaveLength(1);
+        expect(received[0].command).toBe("screenshot");
+        expect(fs.readFileSync(outputPath).toString()).toBe("hi");
+    });
+
+    test("forwards quit to the app over the WebSocket", async () => {
+        const response = await fetch(`${baseUrl}/quit`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({}),
+        });
+        const body = await response.json();
+        expect(response.status).toBe(200);
+        expect(body.ok).toBe(true);
+        expect(received).toHaveLength(1);
+        expect(received[0].command).toBe("quit");
+    });
+});
