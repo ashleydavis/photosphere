@@ -47,6 +47,7 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 - **Frontend**: React 18 + TypeScript, Vite, shared UI in `packages/user-interface`.
 - **Mobile**: Capacitor wraps the frontend for iOS/Android.
 - **Desktop**: Electron embeds the frontend via `apps/desktop`.
+- **UI**: User-visible background activities (Import, Load Assets, Replicate, Sync, Verify) must register themselves with the Job Manager via `useJobs().registerJob()` so they appear in the navbar indicator and sidebar list. Do not create flow-specific progress UI in components — update the job and rely on the shared indicator/list.
 
 ## Guides
 

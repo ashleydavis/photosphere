@@ -410,4 +410,29 @@ describe('replicate', () => {
         });
         expect(Array.isArray(result.prunedFiles)).toBe(true);
     });
+
+    test('throws when isCancelled returns true before work starts', async () => {
+        const sourceAsset = new MockStorage();
+        const destAsset = new MockStorage();
+        const sourceBdb = new BsonDatabase(new MockStorage(), "", uuidGenerator, timestampProvider);
+        let sourceTree = createTree<IDatabaseMetadata>(dbId);
+        sourceTree.databaseMetadata = { filesImported: 0 };
+        sourceTree.merkle = buildMerkleTree(sourceTree.sort);
+        sourceTree.dirty = false;
+        await saveTree('.db/files.dat', sourceTree, sourceAsset);
+
+        await expect(
+            replicate(
+                'mock://source',
+                sourceAsset,
+                sourceBdb,
+                uuidGenerator,
+                timestampProvider,
+                destAsset,
+                destAsset,
+                { isCancelled: () => true },
+                undefined
+            )
+        ).rejects.toThrow('Replication was cancelled');
+    });
 });

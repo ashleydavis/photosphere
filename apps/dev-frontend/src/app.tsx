@@ -9,6 +9,7 @@ import {
     DeleteConfirmationContextProvider,
     ImportContextProvider,
     ToastContextProvider,
+    JobsContextProvider,
     UuidGeneratorProvider,
     ApiContextProvider,
     axiosApi,
@@ -58,19 +59,21 @@ export function App() {
                             <ApiContextProvider value={axiosApi}>
                             <AppContextProvider>
                                 <ToastContextProvider>
-                                    <AssetDatabaseProvider queueBackend={queueBackend} restApiUrl="http://localhost:3001">
-                                        <ImportContextProvider>
-                                            <GalleryContextProvider>
-                                                <DeleteConfirmationContextProvider>
-                                                    <SearchContextProvider>
-                                                        <GalleryLayoutContextProvider>
-                                                            <Main isMobile={false} initialTheme={initialTheme} />
-                                                        </GalleryLayoutContextProvider>
-                                                    </SearchContextProvider>
-                                                </DeleteConfirmationContextProvider>
-                                            </GalleryContextProvider>
-                                        </ImportContextProvider>
-                                    </AssetDatabaseProvider>
+                                    <JobsContextProvider>
+                                        <AssetDatabaseProvider queueBackend={queueBackend} restApiUrl="http://localhost:3001">
+                                            <ImportContextProvider>
+                                                <GalleryContextProvider>
+                                                    <DeleteConfirmationContextProvider>
+                                                        <SearchContextProvider>
+                                                            <GalleryLayoutContextProvider>
+                                                                <Main isMobile={false} initialTheme={initialTheme} />
+                                                            </GalleryLayoutContextProvider>
+                                                        </SearchContextProvider>
+                                                    </DeleteConfirmationContextProvider>
+                                                </GalleryContextProvider>
+                                            </ImportContextProvider>
+                                        </AssetDatabaseProvider>
+                                    </JobsContextProvider>
                                 </ToastContextProvider>
                             </AppContextProvider>
                             </ApiContextProvider>

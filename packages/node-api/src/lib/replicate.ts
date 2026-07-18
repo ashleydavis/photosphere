@@ -54,6 +54,20 @@ export interface IReplicateOptions {
     // If true, only copy thumb directory assets. Asset and display files will be lazily copied when needed.
     //
     partial?: boolean;
+
+    //
+    // When provided and returns true, replication aborts at the next loop boundary.
+    //
+    isCancelled?: () => boolean;
+}
+
+//
+// Throws when the optional cancellation callback reports that replication was cancelled.
+//
+function throwIfCancelled(options: IReplicateOptions | undefined): void {
+    if (options?.isCancelled && options.isCancelled()) {
+        throw new Error("Replication was cancelled");
+    }
 }
 
 //
@@ -109,7 +123,8 @@ async function replicateFiles(
     // But only when necessary.
     //
     const copyAsset = async (fileName: string, sourceHash: Buffer): Promise<void> => {
-        
+        throwIfCancelled(options);
+
         // Check if file already exists in destination tree with matching hash.
         const destFileInfo = getItemInfo(destMerkleTree!, fileName);
         if (destFileInfo && Buffer.compare(destFileInfo.hash, sourceHash) === 0) {
@@ -185,6 +200,8 @@ Copied hash: ${copiedHash.toString("hex")}
     // Process files from MerkleNode differences.
     //
     const processMerkleNode = async (merkleNode: MerkleNode): Promise<void> => {
+        throwIfCancelled(options);
+
         if (!merkleNode.left && !merkleNode.right) {
             // Leaf node - process the file directly
             if (merkleNode.name && merkleNode.hash) {
@@ -224,6 +241,7 @@ Copied hash: ${copiedHash.toString("hex")}
         //
 
         for (const nodeToProcess of nodesToProcess) {
+            throwIfCancelled(options);
             await processMerkleNode(nodeToProcess);
         }
 
@@ -382,7 +400,8 @@ async function replicateBsonDatabase(
     sourceAssetStorage: IStorage,
     destAssetStorage: IStorage,
     progressCallback: ProgressCallback | undefined,
-    result: IReplicationResult
+    result: IReplicationResult,
+    options: IReplicateOptions | undefined
 ): Promise<void> {
 
     //
@@ -396,6 +415,7 @@ async function replicateBsonDatabase(
     const toDeleteByCollection = new Map<string, Set<string>>();
 
     for await (const diff of iterateDatabaseDifferences(sourceAssetStorage, destAssetStorage)) {
+        throwIfCancelled(options);
         let set = toCopyByCollection.get(diff.collectionName);
         if (!set) {
             set = new Set<string>();
@@ -405,6 +425,7 @@ async function replicateBsonDatabase(
     }
 
     for await (const diff of iterateDatabaseDifferences(destAssetStorage, sourceAssetStorage)) {
+        throwIfCancelled(options);
         let set = toDeleteByCollection.get(diff.collectionName);
         if (!set) {
             set = new Set<string>();
@@ -416,6 +437,7 @@ async function replicateBsonDatabase(
     const collectionNames = new Set<string>([...toCopyByCollection.keys(), ...toDeleteByCollection.keys()]);
 
     for (const collectionName of collectionNames) {
+        throwIfCancelled(options);
         const sourceColl = sourceBsonDatabase.collection(collectionName);
         const destColl = destBsonDatabase.collection(collectionName);
 
@@ -423,6 +445,7 @@ async function replicateBsonDatabase(
         const toDelete = toDeleteByCollection.get(collectionName) ?? new Set<string>();
 
         for (const recordId of toCopy) {
+            throwIfCancelled(options);
             const shardId = sourceColl.getShardId(recordId);
             const sourceShard = sourceColl.shard(shardId);
             const sourceRecord = await sourceShard.record(recordId);
@@ -434,6 +457,7 @@ async function replicateBsonDatabase(
         }
 
         for (const recordId of toDelete) {
+            throwIfCancelled(options);
             await retry(() => destColl.deleteOne(recordId));
             result.copiedRecords++;
         }
@@ -489,6 +513,8 @@ export async function replicate(
     options?: IReplicateOptions,
     progressCallback?: ProgressCallback
 ): Promise<IReplicationResult> {
+
+    throwIfCancelled(options);
 
     const merkleTree = await retry(() => loadMerkleTree(sourceAssetStorage));
     if (!merkleTree) {
@@ -552,13 +578,17 @@ export async function replicate(
         destMerkleTree.id = merkleTree.id;
     }
     
+    throwIfCancelled(options);
+
     if (options?.partial) {
         //
         // Partial mode: directly copy only the known small set of files rather than
         // traversing the entire merkle tree (which could be 100k+ entries).
         //
         await copyFileIfExists("README.md", sourceAssetStorage, destAssetStorage);
+        throwIfCancelled(options);
         await copyFileIfExists(".db/files.dat", sourceAssetStorage, destAssetStorage);
+        throwIfCancelled(options);
         await copyBsonMerkleTrees(sourceAssetStorage, destAssetStorage);
 
         //
@@ -595,13 +625,16 @@ export async function replicate(
             result
         );
 
+        throwIfCancelled(options);
+
         await replicateBsonDatabase(
             sourceBsonDatabase,
             destDb.bsonDatabase,
             sourceAssetStorage,
             destAssetStorage,
             progressCallback,
-            result
+            result,
+            options
         );
 
     }
