@@ -131,6 +131,8 @@ android_build() {
 
 #
 # Installs (or reinstalls) the debug APK on the device.
+# Retries on transient adb failures (Broken pipe / device busy) that show up when the
+# emulator is under load.
 #
 android_install() {
     if [ ! -f "$ANDROID_APK" ]; then
@@ -138,7 +140,20 @@ android_install() {
         return 1
     fi
     log_info "Installing APK..."
-    adb install -r "$ANDROID_APK"
+    local attempt
+    for attempt in 1 2 3; do
+        if adb install -r "$ANDROID_APK"; then
+            return 0
+        fi
+        log_info "adb install failed (attempt $attempt/3); restarting adb and retrying..."
+        adb kill-server || true
+        sleep 2
+        adb start-server
+        adb wait-for-device
+        sleep 2
+    done
+    log_error "adb install failed after 3 attempts"
+    return 1
 }
 
 #
