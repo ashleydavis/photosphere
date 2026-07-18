@@ -5,6 +5,7 @@ import { PlatformContextProvider, ConfigContextProvider, createConfig, useLanSha
 import { log } from "utils";
 import { cancelMobileTasks, subscribeMobileTaskMessage, subscribeMobileTaskComplete, pickMobileFiles, setInjectedPickedFiles } from "./mobile-platform-tasks";
 import * as configStore from "./mobile-config-store";
+import { logSyncGate } from "./sync-gate-log";
 
 // Whether the in-page Eruda console has been initialised and whether it is currently visible.
 let erudaInitialised = false;
@@ -411,7 +412,7 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
     //
     const setSyncAllowed = useCallback((allowed: boolean): void => {
         lastSyncAllowed = allowed;
-        log.info(`Sync gate set to ${allowed}`);
+        logSyncGate(allowed);
     }, []);
 
     const platformContext: IPlatformContext = {
