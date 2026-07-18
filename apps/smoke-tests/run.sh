@@ -11,7 +11,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
-YELLOW='\033[0;33m'
 NC='\033[0m'
 
 : "${PLATFORM:?PLATFORM must be set to 'android', 'ios', or 'electron'}"
@@ -72,19 +71,16 @@ test_name() {
 }
 
 #
-# Returns 0 if the test should run on the current PLATFORM.
+# Returns 0 if the test belongs on the current PLATFORM.
 # Rules:
 #   - If .platforms exists, PLATFORM must be listed (space/newline separated).
-#   - If .skip-<platform> exists, skip.
-#   - Otherwise run.
+#   - Otherwise the test runs on every platform.
+# Platform-incompatible tests are filtered out of the run entirely (never reported as SKIP).
 #
 platform_allowed() {
     local test_sh="$1"
     local dir
     dir="$(dirname "$test_sh")"
-    if [ -f "$dir/.skip-$PLATFORM" ]; then
-        return 1
-    fi
     if [ -f "$dir/.platforms" ]; then
         grep -qw "$PLATFORM" "$dir/.platforms"
         return $?
@@ -115,10 +111,11 @@ EOF
 
 list_tests() {
     while IFS= read -r t; do
-        local marker=""
         if ! platform_allowed "$t"; then
-            marker=" [skip on $PLATFORM]"
-        elif is_sequential "$t"; then
+            continue
+        fi
+        local marker=""
+        if is_sequential "$t"; then
             marker=" [sequential]"
         fi
         printf "  %2s  %s%s\n" "$(test_number "$t")" "$(test_name "$t")" "$marker"
@@ -160,14 +157,8 @@ run_one() {
 run_sequential() {
     local pass=0
     local fail=0
-    local skip=0
     local t
     for t in "$@"; do
-        if ! platform_allowed "$t"; then
-            printf "${YELLOW}SKIP${NC}  %s-%s\n" "$(test_number "$t")" "$(test_name "$t")"
-            skip=$((skip + 1))
-            continue
-        fi
         if run_one "$t"; then
             pass=$((pass + 1))
         else
@@ -176,7 +167,6 @@ run_sequential() {
     done
     echo "$pass" > "$SCRIPT_DIR/.last-pass-count"
     echo "$fail" > "$SCRIPT_DIR/.last-fail-count"
-    echo "$skip" > "$SCRIPT_DIR/.last-skip-count"
     return $((fail > 0 ? 1 : 0))
 }
 
@@ -185,9 +175,7 @@ run_parallel_batch() {
     shift
     local pass=0
     local fail=0
-    local skip=0
     local -a batch=()
-    local -a batch_names=()
     local t
 
     flush_batch() {
@@ -204,15 +192,9 @@ run_parallel_batch() {
             fi
         done
         batch=()
-        batch_names=()
     }
 
     for t in "$@"; do
-        if ! platform_allowed "$t"; then
-            printf "${YELLOW}SKIP${NC}  %s-%s\n" "$(test_number "$t")" "$(test_name "$t")"
-            skip=$((skip + 1))
-            continue
-        fi
         batch+=("$t")
         if [ "${#batch[@]}" -ge "$n" ]; then
             flush_batch
@@ -223,7 +205,6 @@ run_parallel_batch() {
     fi
     echo "$pass" > "$SCRIPT_DIR/.last-pass-count"
     echo "$fail" > "$SCRIPT_DIR/.last-fail-count"
-    echo "$skip" > "$SCRIPT_DIR/.last-skip-count"
     return $((fail > 0 ? 1 : 0))
 }
 
@@ -241,22 +222,19 @@ run_mixed() {
         fi
     done
 
-    local pass=0 fail=0 skip=0
+    local pass=0 fail=0
     if [ ${#parallel_tests[@]} -gt 0 ]; then
         run_parallel_batch "$n" "${parallel_tests[@]}" || true
         pass=$(cat "$SCRIPT_DIR/.last-pass-count")
         fail=$(cat "$SCRIPT_DIR/.last-fail-count")
-        skip=$(cat "$SCRIPT_DIR/.last-skip-count")
     fi
     if [ ${#sequential_tests[@]} -gt 0 ]; then
         run_sequential "${sequential_tests[@]}" || true
         pass=$((pass + $(cat "$SCRIPT_DIR/.last-pass-count")))
         fail=$((fail + $(cat "$SCRIPT_DIR/.last-fail-count")))
-        skip=$((skip + $(cat "$SCRIPT_DIR/.last-skip-count")))
     fi
     echo "$pass" > "$SCRIPT_DIR/.last-pass-count"
     echo "$fail" > "$SCRIPT_DIR/.last-fail-count"
-    echo "$skip" > "$SCRIPT_DIR/.last-skip-count"
     return $((fail > 0 ? 1 : 0))
 }
 
@@ -325,7 +303,7 @@ main() {
         exit 0
     fi
 
-    local -a selected=()
+    local -a matched=()
     if [ ${#filter[@]} -gt 0 ]; then
         local f t
         for f in "${filter[@]}"; do
@@ -335,16 +313,30 @@ main() {
                 name="$(test_name "$t")"
                 dirbase="$(basename "$(dirname "$t")")"
                 if [ "$f" = "$num" ] || [[ "$dirbase" == *"$f"* ]] || [[ "$name" == *"$f"* ]]; then
-                    selected+=("$t")
+                    matched+=("$t")
                 fi
             done
         done
-        if [ ${#selected[@]} -eq 0 ]; then
+        if [ ${#matched[@]} -eq 0 ]; then
             log_error "No tests matched: ${filter[*]}"
             exit 1
         fi
     else
-        selected=("${all_tests[@]}")
+        matched=("${all_tests[@]}")
+    fi
+
+    # Drop tests that do not belong on this PLATFORM (via .platforms). They are not
+    # part of this platform's suite, so they are never run and never reported as skipped.
+    local -a selected=()
+    local t
+    for t in "${matched[@]}"; do
+        if platform_allowed "$t"; then
+            selected+=("$t")
+        fi
+    done
+    if [ ${#selected[@]} -eq 0 ]; then
+        log_error "No tests for PLATFORM=$PLATFORM matched the selection"
+        exit 1
     fi
 
     # Default mode: electron parallel-mixed; mobile sequential.
@@ -369,20 +361,19 @@ main() {
             ;;
     esac
 
-    local pass fail skip
+    local pass fail
     pass=$(cat "$SCRIPT_DIR/.last-pass-count" 2>/dev/null || echo 0)
     fail=$(cat "$SCRIPT_DIR/.last-fail-count" 2>/dev/null || echo 0)
-    skip=$(cat "$SCRIPT_DIR/.last-skip-count" 2>/dev/null || echo 0)
-    rm -f "$SCRIPT_DIR/.last-pass-count" "$SCRIPT_DIR/.last-fail-count" "$SCRIPT_DIR/.last-skip-count"
+    rm -f "$SCRIPT_DIR/.last-pass-count" "$SCRIPT_DIR/.last-fail-count"
 
     dump_failed_logs
 
     echo ""
     local elapsed=$((SECONDS - SMOKE_TESTS_START_TIME))
     if [ "$fail" -eq 0 ]; then
-        printf "${GREEN}All %d tests passed${NC} (%d skipped) in %s\n" "$pass" "$skip" "$(format_duration "$elapsed")"
+        printf "${GREEN}All %d tests passed${NC} in %s\n" "$pass" "$(format_duration "$elapsed")"
     else
-        printf "${RED}%d of %d tests failed${NC} (%d skipped) in %s\n" "$fail" "$((pass + fail))" "$skip" "$(format_duration "$elapsed")"
+        printf "${RED}%d of %d tests failed${NC} in %s\n" "$fail" "$((pass + fail))" "$(format_duration "$elapsed")"
     fi
     return "$rc"
 }
