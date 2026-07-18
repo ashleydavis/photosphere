@@ -65,6 +65,7 @@ export async function replicateDatabaseHandler(
             force: data.force,
             partial: data.partial,
             pathFilter: data.pathFilter,
+            isCancelled: () => context.isCancelled(),
         },
         progressCallback
     );

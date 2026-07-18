@@ -209,7 +209,9 @@ function patchConsole(transport: ITestTransport): void {
 // mode, so it is safe to call unconditionally on app start.
 //
 export function startTestDriverFromGlobal(): void {
-    const maxAttempts = 50;
+    // Soft Android emulators can take well over a minute before the native layer injects
+    // __PHOTOSPHERE_TEST__ into a live page context; poll long enough to cover that.
+    const maxAttempts = 600;
     let attempts = 0;
 
     function poll(): void {
@@ -221,7 +223,7 @@ export function startTestDriverFromGlobal(): void {
         }
         attempts += 1;
         if (attempts < maxAttempts) {
-            setTimeout(poll, 100);
+            setTimeout(poll, 200);
         }
     }
 

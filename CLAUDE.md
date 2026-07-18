@@ -56,6 +56,7 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 - **Frontend**: React 18 + TypeScript, Vite, shared UI in `packages/user-interface`.
 - **Mobile**: Capacitor wraps the frontend for iOS/Android. Background tasks run in an embedded JS engine (JavaScriptCore on iOS, QuickJS on Android) driven by the native `JsEngine` Capacitor plugin via a `host.*` bridge, off the WebView. Shared TypeScript lives in `packages/mobile-frontend` (the `EmbeddedJsQueueBackend`, the `JsEngine` plugin interface, the mobile platform provider) and `packages/mobile-worker` (the embedded worker runtime, host-bridge machinery, and `worker.bundle.js` build). Node.js APIs are not implemented for the engine: a background task that calls one reports NOT IMPLEMENTED until a later layer supplies the native implementation.
 - **Desktop**: Electron embeds the frontend via `apps/desktop`.
+- **UI**: User-visible background activities (Import, Load Assets, Replicate, Sync, Verify) must register themselves with the Job Manager via `useJobs().registerJob()` so they appear in the navbar indicator and sidebar list. Do not create flow-specific progress UI in components — update the job and rely on the shared indicator/list.
 
 ## Guides
 

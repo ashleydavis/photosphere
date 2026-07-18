@@ -48,6 +48,7 @@ wait_for_log "$TMP_DIR" "Replicate database dialog opened"
 send_command "$APP_PORT" type '{"dataId":"replicate-dest-path-input","text":"dest-partial"}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"replicate-mode-partial"}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"replicate-start-button"}' || exit 1
+send_command "$APP_PORT" click '{"dataId":"replicate-run-in-background-button"}' || exit 1
 wait_for_log "$TMP_DIR" "Replication completed for"
 
 check_no_errors "$TMP_DIR"

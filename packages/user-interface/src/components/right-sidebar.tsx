@@ -26,6 +26,7 @@ import { useGallerySource } from '../context/gallery-source';
 import { SetPhotoDateDialog } from './set-photo-date-dialog';
 import { SetLocationDialog } from './set-location-dialog';
 import Download from '@mui/icons-material/Download';
+import { SidebarJobsList } from './sidebar-jobs-list';
 
 export interface IRightSidebarProps {
     //
@@ -387,6 +388,8 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
                         <ArrowForward />
                     </IconButton>
                 </div>
+
+                <SidebarJobsList />
 
                 {databasePath && selectedItemsCount > 0 &&
                     <div className="flex flex-col">
