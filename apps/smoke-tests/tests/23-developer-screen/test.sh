@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Electron-only: enables developer mode from About, opens Stories, toggles FPS and
-# DevTools, then exits developer mode.
+# Enables developer mode from About, opens Stories, toggles FPS and DevTools, then
+# exits developer mode. Runs on electron, android, and ios.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$TEST_DIR/../../lib/common.sh"
@@ -94,7 +94,8 @@ wait_for_value "$APP_PORT" "fps-indicator" "FPS"
 send_command "$APP_PORT" click '{"dataId":"developer-tool-fps-toggle"}' || exit 1
 wait_for_value_gone "$APP_PORT" "fps-indicator" "FPS"
 
-# The Dev Tools item is a persisted toggle. Assert via the log.
+# The Dev Tools item is a persisted toggle. Assert via the log (Electron opens
+# Chromium DevTools; mobile toggles the in-page Eruda console).
 wait_for_value "$APP_PORT" "developer-tool-devtools" "Developer tools"
 send_command "$APP_PORT" click '{"dataId":"developer-tool-devtools"}' || exit 1
 wait_for_log "$TMP_DIR" "Developer tools opened"

@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Electron-only: exercises sync settings on the Configuration dialog. Verifies each
-# toggle recomputes the sync gate (via "Sync gate set to <bool>" log) and that both
-# values persist to desktop.toml.
+# Exercises sync settings on the Configuration dialog. Verifies each toggle
+# recomputes the sync gate (via "Sync gate set to <bool>" log). On Electron also
+# checks that both values persist to desktop.toml.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$TEST_DIR/../../lib/common.sh"
@@ -69,18 +69,24 @@ wait_for_value "$APP_PORT" "configuration-dialog" "Syncing"
 # Turning off "Enable syncing" closes the gate and persists syncEnabled=false.
 send_command "$APP_PORT" click '{"dataId":"sync-enabled-toggle"}' || exit 1
 wait_for_log "$TMP_DIR" "Sync gate set to false"
-wait_for_toml "$CONFIG_TOML" "sync_enabled[[:space:]]*=[[:space:]]*false"
+if [ "$PLATFORM" = "electron" ]; then
+    wait_for_toml "$CONFIG_TOML" "sync_enabled[[:space:]]*=[[:space:]]*false"
+fi
 
 # Turning it back on reopens the gate and persists syncEnabled=true.
 send_command "$APP_PORT" click '{"dataId":"sync-enabled-toggle"}' || exit 1
 wait_for_log "$TMP_DIR" "Sync gate set to true"
-wait_for_toml "$CONFIG_TOML" "sync_enabled[[:space:]]*=[[:space:]]*true"
+if [ "$PLATFORM" = "electron" ]; then
+    wait_for_toml "$CONFIG_TOML" "sync_enabled[[:space:]]*=[[:space:]]*true"
+fi
 
 # Turning off "Only sync over Wi-Fi" persists the flag. On desktop the connection type is
 # "unknown", so the gate stays open (the toggle only restricts cellular on mobile).
 send_command "$APP_PORT" click '{"dataId":"sync-wifi-only-toggle"}' || exit 1
 wait_for_log "$TMP_DIR" "Sync gate set to true"
-wait_for_toml "$CONFIG_TOML" "sync_only_on_wifi[[:space:]]*=[[:space:]]*false"
+if [ "$PLATFORM" = "electron" ]; then
+    wait_for_toml "$CONFIG_TOML" "sync_only_on_wifi[[:space:]]*=[[:space:]]*false"
+fi
 
 check_no_errors "$TMP_DIR"
 

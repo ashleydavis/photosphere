@@ -20,7 +20,7 @@ Payoff:
 | Runner | `apps/desktop/smoke-tests.sh` (parallel batches of 2, `.sequential` markers, `--binary`, single-test selection) | `apps/smoke-tests/run.sh` (sequential only, android/ios) |
 | In `test:all` | Yes (headless) | No (needs emulator/simulator) |
 
-This document is the single plan of record. It folds in and replaces `docs/plans/new/plan-electron-host-bridge-smoke-tests.md` (the earlier host-bridge draft on `origin/mobile`). That draft's bridge/driver steps and constraints are kept below; this plan corrects outdated seeding assumptions (mobile already seeds), and adds two-app LAN tests, parallel runner behaviour, platform skip markers, and migration of every script that still sources the desktop `common.sh`.
+This document is the single plan of record. It folds in and replaces `docs/plans/new/plan-electron-host-bridge-smoke-tests.md` (the earlier host-bridge draft on `origin/mobile`). That draft's bridge/driver steps and constraints are kept below; this plan corrects outdated seeding assumptions (mobile already seeds), and adds two-app LAN tests, parallel runner behaviour, and migration of every script that still sources the desktop `common.sh`. Every discovered test under `apps/smoke-tests/tests/` runs on every platform (no skip/filter markers).
 
 ## Issues
 
@@ -194,12 +194,11 @@ Launch differences stay in `lib/electron.sh` / `android.sh` / `ios.sh`. Test bod
     Update the `PLATFORM` check to allow `electron`.
     Requirement: `bash -n` clean; step 21 exercises parallel + sequential paths.
 
-13. **Add platform allow/skip markers.**
-    Introduce an optional per-test file (e.g. `.platforms`) listing allowed platforms, or `.skip-<platform>` markers.
-    Defaults: a test with no marker runs on all platforms.
-    Mark mobile-only tests so Electron skips them: `28-host-emulator-comms`, and any scenario that cannot run without a device (`9-share-roundtrip` may run on Electron if `/lan-share-roundtrip` works there; if not, skip on electron).
-    Mark Electron-only full round-trips if a shared body needs a reduced mobile variant: prefer one body with `if [ "$PLATFORM" = "electron" ]` for the receiver half rather than two copies.
-    Requirement: runner prints `SKIP` for excluded platforms; exit code remains success when all non-skipped tests pass.
+13. **No platform filtering — every test runs on every platform.**
+    Do not introduce `.platforms`, `.skip-<platform>`, or runner SKIP reporting.
+    `discover_tests` returns the full set; `run.sh` executes every matched test for `PLATFORM=electron|android|ios`.
+    Adapt formerly platform-specific bodies (`23-developer-screen`, `24-sync-settings`, `28-host-emulator-comms`, and any share round-trips) with `if [ "$PLATFORM" = "…" ]` branches inside the shared body for host-FS or adb-only assertions — never filter them out of the suite.
+    Requirement: listing and a full suite run show the same test count on every platform; zero skips.
 
 ### Phase C — Merge test bodies and retire the desktop harness
 

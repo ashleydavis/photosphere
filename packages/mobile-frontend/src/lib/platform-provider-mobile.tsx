@@ -407,9 +407,11 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
     //
     // Stores the shared sync gate's decision. Mobile has no sync scheduler yet,
     // so the value is retained for a future mobile scheduler to honour.
+    // Matches the desktop main-process log so smoke tests observe the same line.
     //
     const setSyncAllowed = useCallback((allowed: boolean): void => {
         lastSyncAllowed = allowed;
+        log.info(`Sync gate set to ${allowed}`);
     }, []);
 
     const platformContext: IPlatformContext = {

@@ -70,24 +70,6 @@ test_name() {
     basename "$(dirname "$1")" | cut -d'-' -f2-
 }
 
-#
-# Returns 0 if the test belongs on the current PLATFORM.
-# Rules:
-#   - If .platforms exists, PLATFORM must be listed (space/newline separated).
-#   - Otherwise the test runs on every platform.
-# Platform-incompatible tests are filtered out of the run entirely (never reported as SKIP).
-#
-platform_allowed() {
-    local test_sh="$1"
-    local dir
-    dir="$(dirname "$test_sh")"
-    if [ -f "$dir/.platforms" ]; then
-        grep -qw "$PLATFORM" "$dir/.platforms"
-        return $?
-    fi
-    return 0
-}
-
 is_sequential() {
     local test_sh="$1"
     [[ -f "$(dirname "$test_sh")/.sequential" ]]
@@ -111,9 +93,6 @@ EOF
 
 list_tests() {
     while IFS= read -r t; do
-        if ! platform_allowed "$t"; then
-            continue
-        fi
         local marker=""
         if is_sequential "$t"; then
             marker=" [sequential]"
@@ -325,20 +304,6 @@ main() {
         matched=("${all_tests[@]}")
     fi
 
-    # Drop tests that do not belong on this PLATFORM (via .platforms). They are not
-    # part of this platform's suite, so they are never run and never reported as skipped.
-    local -a selected=()
-    local t
-    for t in "${matched[@]}"; do
-        if platform_allowed "$t"; then
-            selected+=("$t")
-        fi
-    done
-    if [ ${#selected[@]} -eq 0 ]; then
-        log_error "No tests for PLATFORM=$PLATFORM matched the selection"
-        exit 1
-    fi
-
     # Default mode: electron parallel-mixed; mobile sequential.
     if [ "$mode" = "default" ]; then
         if [ "$PLATFORM" = "electron" ]; then
@@ -351,13 +316,13 @@ main() {
     local rc=0
     case "$mode" in
         sequential)
-            run_sequential "${selected[@]}" || rc=$?
+            run_sequential "${matched[@]}" || rc=$?
             ;;
         parallel)
-            run_parallel_batch "$parallel_n" "${selected[@]}" || rc=$?
+            run_parallel_batch "$parallel_n" "${matched[@]}" || rc=$?
             ;;
         mixed)
-            run_mixed "$parallel_n" "${selected[@]}" || rc=$?
+            run_mixed "$parallel_n" "${matched[@]}" || rc=$?
             ;;
     esac
 
