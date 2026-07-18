@@ -3,15 +3,13 @@
 # Shared helpers for host-driven UI smoke tests.
 # Source this file from each test.sh:
 #   source "$TEST_DIR/../lib/common.sh"
-# Selects the platform launcher (android.sh or ios.sh today; an electron.sh could be added
-# later) from the PLATFORM env var. The control bridge and these helpers are platform-neutral.
+# Selects the platform launcher (android.sh, ios.sh, or electron.sh) from the PLATFORM env var.
+# The control bridge and these helpers are platform-neutral.
 #
-# Unlike the desktop in-app smoke tests, a mobile app has no in-process control server, so
-# start_app also
-# starts the host control bridge (a Bun process) which presents the same HTTP command surface
-# and relays commands to the app over a WebSocket. The bridge writes app-forwarded log lines to
-# $tmp_dir/app.log in the same [LEVEL] format the desktop app uses, so wait_for_log and
-# check_no_errors below work unchanged.
+# start_app starts the host control bridge (a Bun process) which presents the HTTP command
+# surface and relays commands to the app over a WebSocket. The bridge writes app-forwarded log
+# lines to $tmp_dir/app.log in the same [LEVEL] format the desktop FileLogger console uses, so
+# wait_for_log and check_no_errors work across Electron and mobile.
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -69,18 +67,19 @@ print_test_header() {
 }
 
 #
-# Selects and sources the platform launcher for the current PLATFORM (android or ios).
+# Selects and sources the platform launcher for the current PLATFORM (android, ios, or electron).
 #
 load_platform() {
     if [ -z "${PLATFORM:-}" ]; then
-        log_error "PLATFORM env var must be set to 'android' or 'ios'"
+        log_error "PLATFORM env var must be set to 'android', 'ios', or 'electron'"
         return 1
     fi
     case "$PLATFORM" in
-        android) source "$LIB_DIR/android.sh" ;;
-        ios)     source "$LIB_DIR/ios.sh" ;;
+        android)  source "$LIB_DIR/android.sh" ;;
+        ios)      source "$LIB_DIR/ios.sh" ;;
+        electron) source "$LIB_DIR/electron.sh" ;;
         *)
-            log_error "Unknown PLATFORM: $PLATFORM (expected 'android' or 'ios')"
+            log_error "Unknown PLATFORM: $PLATFORM (expected 'android', 'ios', or 'electron')"
             return 1
             ;;
     esac
@@ -130,14 +129,19 @@ wait_for_bridge() {
 # on the selected platform wired to the bridge. The bridge binds an OS-assigned free port (never a
 # pre-picked number, which could collide with a parallel run); this reads that port back and
 # publishes it as APP_PORT (the global every test uses) so the app launch and all later commands
-# target it.
-# Usage: start_app <tmp_dir>
+# target it. Optional x_pos is used by Electron for window geometry (two-app LAN tests).
+# Usage: start_app <tmp_dir> [x_pos]
 #
 start_app() {
     local tmp_dir="$1"
+    local x_pos="${2:-0}"
     mkdir -p "$tmp_dir"
     # Clear any stale port file from a previous run so wait_for_bridge_port reads this run's port.
     rm -f "$tmp_dir/bridge.port"
+
+    # Remember for Electron launch/stop and wait_for_ready relaunch.
+    APP_TMP_DIR="$tmp_dir"
+    APP_X_POS="$x_pos"
 
     PHOTOSPHERE_TEST_PORT="0" \
     PHOTOSPHERE_LOG_DIR="$tmp_dir" \
@@ -160,7 +164,7 @@ start_app() {
     wait_for_bridge "$actual_port"
 
     # The platform launcher installs and launches the app pointed at the bridge port.
-    "${PLATFORM}_launch" "$actual_port"
+    "${PLATFORM}_launch" "$actual_port" "$x_pos"
     log_info "App launched on $PLATFORM (port $actual_port)"
 }
 
@@ -190,7 +194,7 @@ wait_for_ready() {
         if [ "$attempt" -lt "$max_attempts" ]; then
             log_info "Relaunching app on port $port and retrying..."
             "${PLATFORM}_stop" "$port" || true
-            "${PLATFORM}_launch" "$port"
+            "${PLATFORM}_launch" "$port" "${APP_X_POS:-0}"
         fi
         attempt=$((attempt + 1))
     done
@@ -264,12 +268,14 @@ send_command() {
 }
 
 #
-# Sends /quit (bridge stops the app host-side), then stops the app and kills the bridge.
+# Sends /quit (bridge stops the app host-side or via Electron IPC), then stops the app and
+# kills the bridge.
 # Usage: stop_app <port> <tmp_dir>
 #
 stop_app() {
     local port="$1"
     local tmp_dir="$2"
+    APP_TMP_DIR="$tmp_dir"
     send_command "$port" quit '{}' 2>/dev/null || true
     "${PLATFORM}_stop" "$port" 2>/dev/null || true
     local pid_file="$tmp_dir/bridge.pid"
@@ -282,6 +288,22 @@ stop_app() {
             kill -9 "$pid" 2>/dev/null || true
         fi
     fi
+}
+
+#
+# Seeds a database fixture via the active platform launcher.
+# Usage: seed_database <host_fixture_dir> <dest_name>
+#
+seed_database() {
+    "${PLATFORM}_seed_database" "$@"
+}
+
+#
+# Resets a sandbox/tmp relative path via the active platform launcher.
+# Usage: reset_path <relative_path>
+#
+reset_path() {
+    "${PLATFORM}_reset_path" "$@"
 }
 
 #

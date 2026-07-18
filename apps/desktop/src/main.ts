@@ -25,9 +25,6 @@ import { createStorage, CloudStorage, exportPublicKeyToPem } from 'storage';
 import { getVault, getDefaultVaultType } from 'vault';
 import { importDatabasePayload, importSecretPayload } from 'api';
 import type { IDatabaseSharePayload, ISecretSharePayload, IConflictResolution } from 'api';
-import { TestControlServer } from './lib/test-control-server';
-import type { ITestControlServer } from './lib/test-control-server';
-
 // Video decodes (canplay) but paints black on Linux Electron: a GPU video-compositing problem.
 // Disabling hardware acceleration forces video to composite on the CPU, which paints correctly.
 // Must run before app is ready.
@@ -70,9 +67,6 @@ let syncAllowed: boolean = false;
 
 // File logger for writing logs to files
 let fileLogger: FileLoggerElectron | null = null;
-
-// Test control server instance, only created when PHOTOSPHERE_TEST_MODE=1.
-let testControlServer: ITestControlServer | null = null;
 
 // URL of the news feed published in the Photosphere GitHub repo. Overridable via
 // PHOTOSPHERE_NEWS_URL for the local demo script (apps/desktop/demo-news.sh) and
@@ -120,7 +114,10 @@ async function createMainWindow() {
     const htmlPath = join(app.getAppPath(), 'bundle/frontend/index.html');
     const restApiUrl = `http://localhost:${restApiPort}`;
     const testMode = process.env.PHOTOSPHERE_TEST_MODE === '1' ? '&testMode=1' : '';
-    const fileUrl = `file://${htmlPath}?restApiUrl=${encodeURIComponent(restApiUrl)}&theme=${encodeURIComponent(theme)}${testMode}`;
+    const testBridgePort = process.env.PHOTOSPHERE_TEST_MODE === '1' && process.env.PHOTOSPHERE_TEST_PORT
+        ? `&testBridgePort=${encodeURIComponent(process.env.PHOTOSPHERE_TEST_PORT)}`
+        : '';
+    const fileUrl = `file://${htmlPath}?restApiUrl=${encodeURIComponent(restApiUrl)}&theme=${encodeURIComponent(theme)}${testMode}${testBridgePort}`;
     mainWindow.loadURL(fileUrl);
 
     mainWindow.on('closed', () => {
@@ -156,9 +153,6 @@ async function createMainWindow() {
     });
 
     mainWindow.webContents.once('did-finish-load', () => {
-        if (testControlServer) {
-            testControlServer.notifyReady();
-        }
         void checkForUpdate();
         void checkForNews();
     });
@@ -329,13 +323,21 @@ app.whenReady().then(async () => {
     await createMainWindow();
     log.event('Main window created');
 
-    if (process.env.PHOTOSPHERE_TEST_MODE === '1' && mainWindow) {
-        if (!workerPool) {
-            throw new Error('Worker pool not initialized');
-        }
-        const server = new TestControlServer(mainWindow, workerPool, () => currentDatabasePath);
-        server.start();
-        testControlServer = server;
+    if (process.env.PHOTOSPHERE_TEST_MODE === '1') {
+        //
+        // Test-mode IPC for screenshot/quit. Capabilities stay in main; the renderer
+        // invokes these via the host control bridge's platformHandlers.
+        //
+        ipcMain.handle('test-capture-page', async () => {
+            if (!mainWindow) {
+                throw new Error('Main window is not available for screenshot');
+            }
+            const image = await mainWindow.webContents.capturePage();
+            return image.toPNG().toString('base64');
+        });
+        ipcMain.on('test-quit', () => {
+            app.quit();
+        });
     }
 
     app.on('activate', async () => {
@@ -364,11 +366,6 @@ app.on('before-quit', async () => {
         fileLogger.info('Photosphere Desktop shutting down...', 'Main');
     }
     
-    if (testControlServer) {
-        testControlServer.close();
-        testControlServer = null;
-    }
-
     // Cleanup worker pool
     if (workerPool) {
         workerPool.shutdown();

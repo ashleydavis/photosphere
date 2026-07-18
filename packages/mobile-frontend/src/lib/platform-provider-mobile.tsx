@@ -410,6 +410,8 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
     //
     const setSyncAllowed = useCallback((allowed: boolean): void => {
         lastSyncAllowed = allowed;
+        // Matches the desktop main process so smoke tests observe the same log line.
+        log.info(`Sync gate set to ${allowed}`);
     }, []);
 
     const platformContext: IPlatformContext = {

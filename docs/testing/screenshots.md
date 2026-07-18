@@ -32,7 +32,7 @@ OUT_DIR=/tmp/shots bun run screenshots
 ## How it works
 
 The script is `apps/desktop/screenshots/capture-ux.sh`. It sources the smoke-test
-helpers in `apps/desktop/smoke-tests/lib/common.sh` and:
+helpers in `apps/smoke-tests/lib/common.sh` (PLATFORM=electron) and:
 
 1. Starts the app in test mode (`PHOTOSPHERE_TEST_MODE=1`), which starts an HTTP
    **test control server** on a free port.

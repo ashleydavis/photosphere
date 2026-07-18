@@ -2,7 +2,7 @@
   "name": "smoke-tests",
   "version": "1.0.0",
   "private": true,
-  "description": "Host-driven UI smoke tests and control bridge. Drives an app over a WebSocket from the host (Android and iOS today; the bridge and harness are platform-neutral so Electron can be folded in later).",
+  "description": "Host-driven UI smoke tests and control bridge. Drives an app over a WebSocket from the host (Electron, Android, and iOS).",
   "type": "module",
   "scripts": {
     "t": "bun run test",

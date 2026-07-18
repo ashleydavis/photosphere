@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Captures screenshots of the Photosphere desktop app's main screens by driving
-# the app through its test control server. Used for UX review and documentation.
+# the app through its host control bridge. Used for UX review and documentation.
 #
 # Run via the package script from the repo root:
 #   bun run screenshots
@@ -13,9 +13,14 @@
 set -uo pipefail
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
-source "$TEST_DIR/../smoke-tests/lib/common.sh"
 DESKTOP_DIR="$(cd "$TEST_DIR/.." && pwd)"
 REPO_DIR="$(cd "$DESKTOP_DIR/../.." && pwd)"
+export PLATFORM=electron
+source "$REPO_DIR/apps/smoke-tests/lib/common.sh"
+# Bundle once before launching (electron_build is also used by the shared runner).
+electron_prepare
+electron_build
+electron_install
 
 OUT_DIR="${OUT_DIR:-$REPO_DIR/ux-review/screenshots}"
 TMP_DIR="$TEST_DIR/tmp"

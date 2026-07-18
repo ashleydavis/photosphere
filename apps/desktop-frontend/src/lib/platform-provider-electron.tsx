@@ -1,5 +1,5 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
-import { PlatformContextProvider, ConfigContextProvider, createConfig, useLanShareTasks, readBrowserNetworkStatus, subscribeBrowserNetworkStatus, type IPlatformContext, type IPlatformEvent, type INetworkStatus, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, convertToPng, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions } from "user-interface";
+import { PlatformContextProvider, ConfigContextProvider, createConfig, useLanShareTasks, readBrowserNetworkStatus, subscribeBrowserNetworkStatus, signalTestAppReady, TEST_MENU_EVENT, TEST_OPEN_DATABASE_EVENT, type IPlatformContext, type IPlatformEvent, type INetworkStatus, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, convertToPng, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions } from "user-interface";
 import type { IElectronAPI } from "./electron-ipc";
 import type { IConflictResolution } from "api";
 import type { ISecret } from "vault";
@@ -190,6 +190,35 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
             electronAPI.removeAllListeners('platform-event');
         };
     }, [electronAPI]);
+
+    //
+    // Bridge the smoke-test driver's window events to the registered callbacks so menu actions
+    // and open-database requests drive the real app code paths without the old in-process
+    // TestControlServer. Mirrors PlatformProviderMobile.
+    //
+    useEffect(() => {
+        const handleMenu = (event: Event) => {
+            const itemId = (event as CustomEvent<string>).detail;
+            platformEventCallbacksRef.current.forEach(callback => callback({ type: "menu-action", action: itemId }));
+        };
+        const handleOpenDatabase = (event: Event) => {
+            const databasePath = (event as CustomEvent<string>).detail;
+            openedCallbacksRef.current.forEach(callback => callback(databasePath));
+        };
+        window.addEventListener(TEST_MENU_EVENT, handleMenu);
+        window.addEventListener(TEST_OPEN_DATABASE_EVENT, handleOpenDatabase);
+        //
+        // Test-command listeners are registered; tell the host bridge the app is ready so
+        // commands issued right after /ready are not dropped.
+        //
+        if (isTestMode) {
+            signalTestAppReady();
+        }
+        return () => {
+            window.removeEventListener(TEST_MENU_EVENT, handleMenu);
+            window.removeEventListener(TEST_OPEN_DATABASE_EVENT, handleOpenDatabase);
+        };
+    }, []);
 
     // Set up message listener for navigate events
     useEffect(() => {

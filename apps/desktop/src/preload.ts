@@ -30,6 +30,12 @@ const electronAPI: IElectronAPI = {
     log: (message: IRendererLogMessage): void => {
         ipcRenderer.send('renderer-log', message);
     },
+    capturePage: (): Promise<string> => {
+        return ipcRenderer.invoke('test-capture-page');
+    },
+    quit: (): void => {
+        ipcRenderer.send('test-quit');
+    },
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);

@@ -3,9 +3,9 @@ import { createRoot } from 'react-dom/client';
 import { App } from './app';
 import '@fortawesome/fontawesome-free/css/all.css';
 import './tailwind.css';
-import type { IElectronAPI, LogLevel } from "./lib/electron-ipc";
-import { installTestDriver } from "user-interface";
-import type { ITestTransport, ITestCommandPayload } from "user-interface";
+import type { IElectronAPI } from "./lib/electron-ipc";
+import { connectTestDriverWebSocket } from "user-interface";
+
 
 //
 // Get the Electron API for forwarding errors to main process
@@ -22,6 +22,13 @@ if (!electronAPI) {
 //
 const isTestMode = typeof window !== 'undefined'
     && new URLSearchParams(window.location.search).get('testMode') === '1';
+
+//
+// Host control bridge port (set via ?testBridgePort= by main process from PHOTOSPHERE_TEST_PORT).
+//
+const testBridgePort = typeof window !== 'undefined'
+    ? new URLSearchParams(window.location.search).get('testBridgePort')
+    : null;
 
 //
 // Handle uncaught errors in the renderer process
@@ -61,45 +68,20 @@ window.addEventListener('unhandledrejection', (event) => {
 });
 
 //
-// In test mode, patch console to forward output to main process via electronAPI.log
-// so raw renderer console output appears in app.log.
+// In test mode, connect the shared DOM test driver to the host control bridge over WebSocket.
+// Console forwarding is handled by the WS client's patchConsole. Screenshot/quit stay in the
+// Electron main process and are reached via platformHandlers → IPC.
 //
-if (isTestMode && electronAPI) {
-    const originalLog = console.log.bind(console);
-    const originalWarn = console.warn.bind(console);
-    const originalError = console.error.bind(console);
-    console.log = (...args: unknown[]) => {
-        originalLog(...args);
-        electronAPI.log({ level: 'info', message: args.map(String).join(' ') });
-    };
-    console.warn = (...args: unknown[]) => {
-        originalWarn(...args);
-        electronAPI.log({ level: 'warn', message: args.map(String).join(' ') });
-    };
-    console.error = (...args: unknown[]) => {
-        originalError(...args);
-        electronAPI.log({ level: 'error', message: args.map(String).join(' ') });
-    };
-}
-
-//
-// In test mode, install the shared DOM test driver over an Electron-IPC transport so the
-// test control server can drive UI elements by their data-id attribute. The DOM-action
-// logic lives in user-interface's test-driver so it is shared with the mobile WebView.
-//
-if (isTestMode && electronAPI) {
-    const transport: ITestTransport = {
-        onCommand(handler: (command: string, payload: ITestCommandPayload) => Promise<string | undefined>): void {
-            electronAPI.onMessage('test-click', (data: ITestCommandPayload) => { void handler('click', data); });
-            electronAPI.onMessage('test-long-press-click', (data: ITestCommandPayload) => { void handler('long-press-click', data); });
-            electronAPI.onMessage('test-type', (data: ITestCommandPayload) => { void handler('type', data); });
-            electronAPI.onMessage('test-drop', (data: ITestCommandPayload) => { void handler('drop', data); });
+if (isTestMode && electronAPI && testBridgePort) {
+    connectTestDriverWebSocket(`ws://localhost:${testBridgePort}`, {
+        screenshot: async () => {
+            return await electronAPI.capturePage();
         },
-        sendLog(level: string, message: string): void {
-            electronAPI.log({ level: level as LogLevel, message });
+        quit: async () => {
+            electronAPI.quit();
+            return undefined;
         },
-    };
-    installTestDriver(transport);
+    });
 }
 
 const container = document.getElementById('root');
@@ -109,4 +91,3 @@ if (!container) {
 
 const root = createRoot(container);
 root.render(<App electronAPI={electronAPI} />);
-

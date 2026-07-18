@@ -298,6 +298,22 @@ describe("getValue", () => {
         expect(getValue("label")).toBe("the label");
     });
 
+    test("prefers container text content over a nested switch input value", () => {
+        // Mirrors developer-page / configuration-dialog: a page root with a Switch inside.
+        document.body.innerHTML = `
+            <div data-id="developer-page">
+                <h2>Developer</h2>
+                <input type="checkbox" value="on" />
+            </div>
+        `;
+        expect(getValue("developer-page")).toContain("Developer");
+    });
+
+    test("reads a nested input when the wrapper itself has no text", () => {
+        document.body.innerHTML = `<div data-id="joy-input"><input value="typed" /></div>`;
+        expect(getValue("joy-input")).toBe("typed");
+    });
+
     test("returns an empty string when the element is missing", () => {
         document.body.innerHTML = ``;
         expect(getValue("nope")).toBe("");
@@ -389,6 +405,42 @@ describe("installTestDriver", () => {
         const { transport, invoke } = makeTransport();
         installTestDriver(transport);
         await expect(invoke("create-database", {})).rejects.toThrow("not implemented");
+    });
+
+    test("invokes a platform screenshot handler and returns its value", async () => {
+        const { transport, invoke } = makeTransport();
+        let called = 0;
+        installTestDriver(transport, {
+            screenshot: async () => {
+                called += 1;
+                return "base64png";
+            },
+        });
+        const value = await invoke("screenshot", {});
+        expect(called).toBe(1);
+        expect(value).toBe("base64png");
+    });
+
+    test("invokes a platform quit handler", async () => {
+        const { transport, invoke } = makeTransport();
+        let called = 0;
+        installTestDriver(transport, {
+            quit: async () => {
+                called += 1;
+                return undefined;
+            },
+        });
+        const value = await invoke("quit", {});
+        expect(called).toBe(1);
+        expect(value).toBeUndefined();
+    });
+
+    test("rejects an unknown command when no platform handler is provided", async () => {
+        const { transport, invoke } = makeTransport();
+        installTestDriver(transport, {
+            screenshot: async () => "x",
+        });
+        await expect(invoke("not-a-real-command", {})).rejects.toThrow("not implemented");
     });
 
     test("routes a menu command to a window event", async () => {

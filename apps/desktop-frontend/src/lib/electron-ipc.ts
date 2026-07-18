@@ -58,4 +58,14 @@ export interface IElectronAPI {
     // Required in Electron 30+ where File.path is no longer available in the renderer.
     //
     getPathForFile(file: File): string;
+
+    //
+    // Returns a base64-encoded PNG of the main window (test mode).
+    //
+    capturePage(): Promise<string>;
+
+    //
+    // Asks the main process to quit the app (test mode).
+    //
+    quit(): void;
 }

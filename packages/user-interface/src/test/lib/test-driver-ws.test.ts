@@ -139,6 +139,19 @@ describe("connectTestDriverWebSocket", () => {
         expect(reply.error).toContain("not implemented");
     });
 
+    test("routes screenshot through platformHandlers and returns the value", async () => {
+        connectTestDriverWebSocket("ws://localhost:1234", {
+            screenshot: async () => "YmFzZTY0",
+        });
+        const socket = FakeWebSocket.instances[0];
+        socket.emit("open", {});
+        socket.emit("message", { data: JSON.stringify({ id: 9, command: "screenshot", payload: {} }) });
+        await flush();
+
+        const reply = socket.sent.map((raw) => JSON.parse(raw)).find((message) => message.type === "reply");
+        expect(reply).toEqual({ type: "reply", id: 9, ok: true, value: "YmFzZTY0" });
+    });
+
     test("forwards console output as log messages", () => {
         connectTestDriverWebSocket("ws://localhost:1234");
         const socket = FakeWebSocket.instances[0];
