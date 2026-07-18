@@ -65,9 +65,9 @@ wait_for_log "$TMP_DIR" "Gallery items rendered"
 log_success "Gallery items are in the DOM"
 
 log_info "Selecting both gallery items..."
-# All thumbs share data-id="gallery-item-checkbox"; the test-click handler
-# accepts an nth index so we can target each one in turn.
-send_command "$APP_PORT" click '{"dataId":"gallery-item-checkbox","nth":0}'
+# Long-press the first thumb to enter selection mode (checkboxes are display:none until then,
+# so the visibility-aware test driver cannot click them cold). Then click the second checkbox.
+send_command "$APP_PORT" long-press '{"dataId":"gallery-thumb","nth":0}'
 send_command "$APP_PORT" click '{"dataId":"gallery-item-checkbox","nth":1}'
 
 log_info "Opening right sidebar..."

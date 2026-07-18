@@ -50,8 +50,10 @@ log_success "Source database opened with 1 asset"
 wait_for_log "$TMP_DIR" "Gallery items rendered"
 log_success "Gallery items are in the DOM"
 
-log_info "Selecting the first gallery item..."
-send_command "$APP_PORT" click '{"dataId":"gallery-item-checkbox"}'
+log_info "Selecting the first gallery item via long-press (reveals selection mode)..."
+# The selection checkbox is display:none until hover or selection mode; the visibility-aware
+# test driver cannot click a hidden checkbox. Long-press enables selecting and selects the item.
+send_command "$APP_PORT" long-press '{"dataId":"gallery-thumb"}'
 
 log_info "Opening right sidebar..."
 send_command "$APP_PORT" click '{"dataId":"right-sidebar-button"}'
