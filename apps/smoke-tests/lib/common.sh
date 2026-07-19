@@ -74,14 +74,14 @@ print_test_header() {
 load_platform() {
     if [ -z "${PLATFORM:-}" ]; then
         log_error "PLATFORM env var must be set to 'android' or 'ios'"
-        return 1
+        exit 1
     fi
     case "$PLATFORM" in
         android) source "$LIB_DIR/android.sh" ;;
         ios)     source "$LIB_DIR/ios.sh" ;;
         *)
             log_error "Unknown PLATFORM: $PLATFORM (expected 'android' or 'ios')"
-            return 1
+            exit 1
             ;;
     esac
 }
@@ -122,7 +122,7 @@ wait_for_bridge() {
         elapsed=$((elapsed + 1))
     done
     log_error "Control bridge did not start on port $port within ${DEFAULT_BRIDGE_TIMEOUT}s"
-    return 1
+    exit 1
 }
 
 #
@@ -153,7 +153,7 @@ start_app() {
     echo "$bridge_pid" > "$tmp_dir/bridge.pid"
 
     local actual_port
-    actual_port=$(wait_for_bridge_port "$tmp_dir/bridge.port") || return 1
+    actual_port=$(wait_for_bridge_port "$tmp_dir/bridge.port") || exit 1
     APP_PORT="$actual_port"
     log_info "Control bridge started (PID $bridge_pid, port $actual_port)"
 
@@ -195,7 +195,7 @@ wait_for_ready() {
         attempt=$((attempt + 1))
     done
     log_error "App failed to become ready after $max_attempts launch attempts"
-    return 1
+    exit 1
 }
 
 #
@@ -304,7 +304,7 @@ check_no_errors() {
         echo "$errors" | while IFS= read -r line; do
             echo "  $line"
         done
-        return 1
+        exit 1
     fi
     log_success "No errors in app.log"
     return 0
