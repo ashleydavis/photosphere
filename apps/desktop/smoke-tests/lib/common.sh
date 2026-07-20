@@ -176,7 +176,9 @@ start_app() {
     echo $! > "$tmp_dir/app.pid"
 
     local actual_port
-    actual_port=$(wait_for_test_port "$tmp_dir/test-control.port") || return 1
+    # wait_for_test_port prints the port on stdout so it stays return-based (exit would only kill the
+    # command-substitution subshell); this guard is what makes a start failure fatal to the test.
+    actual_port=$(wait_for_test_port "$tmp_dir/test-control.port") || exit 1
     APP_PORT="$actual_port"
     # Remember how to relaunch this instance so wait_for_ready can recover a startup that binds its
     # control server but never reaches /ready (a rare Electron wedge under concurrent load).
@@ -231,7 +233,9 @@ wait_for_ready() {
         attempt=$((attempt + 1))
     done
     log_error "App failed to become ready after $max_attempts launch attempts"
-    return 1
+    # Fatal by construction: a test that never reaches /ready must abort, not fall through to its
+    # later assertions and log_success. Not called from a cleanup path, so exit is safe here.
+    exit 1
 }
 
 #
@@ -336,7 +340,10 @@ check_no_errors() {
         grep '\[ERROR\]' "$tmp_dir/app.log" | while IFS= read -r line; do
             echo "  $line"
         done
-        return 1
+        # Fatal by construction: signalling failure by return let a test print [FAIL], fall through to
+        # log_success and exit 0 (a false pass). It is never called from a cleanup path or a command
+        # substitution, so exit is safe and makes an error in app.log fail the test outright.
+        exit 1
     fi
     log_success "No errors in app.log"
     return 0
