@@ -244,11 +244,12 @@ wait_for_ready() {
 # logged after the previous successful match. This avoids races where a repeated
 # pattern (e.g. "Databases page loaded" on a re-navigation) matches a stale
 # occurrence and returns before the new event has actually fired.
-# Usage: wait_for_log <tmp_dir> <pattern>
+# Usage: wait_for_log <tmp_dir> <pattern> [timeout]
 #
 wait_for_log() {
     local tmp_dir="$1"
     local pattern="$2"
+    local timeout="${3:-$DEFAULT_WAIT_TIMEOUT}"
     local elapsed=0
     local cursor_file="$tmp_dir/.log-cursor"
     local start_line=0
@@ -256,7 +257,7 @@ wait_for_log() {
         start_line=$(cat "$cursor_file")
     fi
     log_info "Waiting for log pattern: $pattern (after line $start_line)"
-    while [ "$elapsed" -lt "$DEFAULT_WAIT_TIMEOUT" ]; do
+    while [ "$elapsed" -lt "$timeout" ]; do
         if [ -f "$tmp_dir/app.log" ]; then
             local matched_line
             matched_line=$(awk -v start="$start_line" -v pat="$pattern" '

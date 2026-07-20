@@ -265,12 +265,24 @@ capture_loop() {
             #
             local out_path
             out_path="$(abs_path "${screenshots_dir}/${theme}/${category}/${story_id}.png")"
-            curl -sS --fail --connect-timeout 5 -X POST "http://127.0.0.1:$port/screenshot" \
+            #
+            # These requests are fatal on failure, not swallowed. A dropped /screenshot leaves a
+            # gap the paired index silently omits, and a dropped /cycle-advance stalls the whole
+            # cycle. Exiting kills this backgrounded capture loop, so no further screenshots are
+            # written and the `screenshot_count > 0` assertion at the end of the run fails loudly.
+            #
+            if ! curl -sS --fail --connect-timeout 5 -X POST "http://127.0.0.1:$port/screenshot" \
                 -H "Content-Type: application/json" \
-                -d "{\"outputPath\":\"$out_path\"}" </dev/null > /dev/null 2>&1 || true
-            curl -sS --fail --connect-timeout 5 -X POST "http://127.0.0.1:$port/cycle-advance" \
+                -d "{\"outputPath\":\"$out_path\"}" </dev/null > /dev/null 2>&1; then
+                log_error "Screenshot request failed for story $story_id ($theme)"
+                exit 1
+            fi
+            if ! curl -sS --fail --connect-timeout 5 -X POST "http://127.0.0.1:$port/cycle-advance" \
                 -H "Content-Type: application/json" \
-                -d '{}' </dev/null > /dev/null 2>&1 || true
+                -d '{}' </dev/null > /dev/null 2>&1; then
+                log_error "Cycle-advance request failed after story $story_id ($theme)"
+                exit 1
+            fi
         fi
     done
 }
@@ -542,6 +554,15 @@ if [ -n "$SCREENSHOTS_DIR" ]; then
     index_path="$SCREENSHOTS_DIR/index.html"
     screenshot_count=$(find "$SCREENSHOTS_DIR" -name "*.png" -type f 2>/dev/null | wc -l)
     screenshot_count=${screenshot_count// /}
+    #
+    # A run that requested screenshots but captured none is a failure, not a pass: the capture loop
+    # never fired (or died on a fatal /screenshot request above). Assert this rather than merely
+    # reporting the count, so an empty run cannot exit 0 and look successful.
+    #
+    if [ "$screenshot_count" -eq 0 ]; then
+        log_error "No screenshots were captured under $SCREENSHOTS_DIR (expected at least one)"
+        exit 1
+    fi
 fi
 
 echo ""
