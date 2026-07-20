@@ -166,14 +166,13 @@ export class EmbeddedJsQueueBackend implements IQueueBackend {
     }
 
     //
-    // Forwards a cancel-by-source request to the native plugin and fires local cancellation
-    // callbacks, matching the Electron backend.
+    // Forwards a cancel-by-source request to the native plugin and, only once the bridge
+    // confirms the cancellation, fires local cancellation callbacks. Awaits and propagates
+    // the bridge rejection (matching cancelMobileTasks and the defensive addTask path) so a
+    // failed cancel does not falsely clear the Job Manager while the native engine keeps running.
     //
-    cancelTasks(source: string): void {
-        this.plugin.cancelTasks({ source })
-            .catch(error => {
-                console.error("JsEngine.cancelTasks failed:", error);
-            });
+    async cancelTasks(source: string): Promise<void> {
+        await this.plugin.cancelTasks({ source });
         const callbacks = this.tasksCancelledCallbacks.get(source);
         if (callbacks) {
             for (const callback of callbacks) {
@@ -203,16 +202,15 @@ export class EmbeddedJsQueueBackend implements IQueueBackend {
     //
     // Removes the native listener handles and tears down the engine pool. The Capacitor
     // equivalent of Electron's removeAllListeners is handle.remove() per stored handle.
+    // Awaits and propagates the bridge rejection rather than swallowing it to console.error,
+    // so a failed teardown surfaces instead of silently reporting success on a device.
     //
-    shutdown(): void {
+    async shutdown(): Promise<void> {
         for (const handle of this.listenerHandles) {
             void handle.remove();
         }
         this.listenerHandles = [];
-        this.plugin.shutdown()
-            .catch(error => {
-                console.error("JsEngine.shutdown failed:", error);
-            });
+        await this.plugin.shutdown();
     }
 
     //

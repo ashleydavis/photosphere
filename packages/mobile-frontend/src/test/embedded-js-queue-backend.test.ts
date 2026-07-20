@@ -167,16 +167,29 @@ describe("EmbeddedJsQueueBackend", () => {
         expect(any).toHaveLength(1);
     });
 
-    test("cancelTasks forwards to the plugin and fires onTasksCancelled", () => {
+    test("cancelTasks forwards to the plugin and fires onTasksCancelled once the bridge resolves", async () => {
         const plugin = makeMockPlugin();
         const backend = new EmbeddedJsQueueBackend(plugin);
         let cancelled = false;
         backend.onTasksCancelled("db-1", () => { cancelled = true; });
 
-        backend.cancelTasks("db-1");
+        await backend.cancelTasks("db-1");
 
         expect(plugin.cancelTasks).toHaveBeenCalledWith({ source: "db-1" });
         expect(cancelled).toBe(true);
+    });
+
+    test("cancelTasks does not fire onTasksCancelled and propagates when the bridge rejects", async () => {
+        const plugin = makeMockPlugin();
+        plugin.cancelTasks.mockRejectedValueOnce(new Error("cancel bridge down"));
+        const backend = new EmbeddedJsQueueBackend(plugin);
+        let cancelled = false;
+        backend.onTasksCancelled("db-1", () => { cancelled = true; });
+
+        await expect(backend.cancelTasks("db-1")).rejects.toThrow("cancel bridge down");
+
+        // The cancellation did not actually happen, so the local callbacks must not fire.
+        expect(cancelled).toBe(false);
     });
 
     test("addTask is fire-and-forget: returns before the bridge promise settles", async () => {
@@ -247,9 +260,21 @@ describe("EmbeddedJsQueueBackend", () => {
         const backend = new EmbeddedJsQueueBackend(plugin);
         await backend.init();
 
-        backend.shutdown();
-        await Promise.resolve();
+        await backend.shutdown();
 
+        expect(plugin._removed).toEqual(["taskCompleted", "taskMessage"]);
+        expect(plugin.shutdown).toHaveBeenCalledTimes(1);
+    });
+
+    test("shutdown propagates when the plugin rejects, having still removed the listener handles", async () => {
+        const plugin = makeMockPlugin();
+        plugin.shutdown.mockRejectedValueOnce(new Error("shutdown bridge down"));
+        const backend = new EmbeddedJsQueueBackend(plugin);
+        await backend.init();
+
+        await expect(backend.shutdown()).rejects.toThrow("shutdown bridge down");
+
+        // Listener teardown still happened; the rejection surfaces instead of being swallowed.
         expect(plugin._removed).toEqual(["taskCompleted", "taskMessage"]);
         expect(plugin.shutdown).toHaveBeenCalledTimes(1);
     });
