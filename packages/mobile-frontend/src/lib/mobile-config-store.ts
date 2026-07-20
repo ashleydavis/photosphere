@@ -1,4 +1,4 @@
-import type { IDatabaseEntry, ISharedSecretEntry, IShowNotificationData } from "user-interface";
+import type { IDatabaseEntry, IShowNotificationData } from "user-interface";
 
 //
 // Client-side persistence for the mobile app's configured-databases and recent-databases lists.
@@ -21,10 +21,12 @@ export const DATABASES_KEY = "photosphere.databases";
 export const RECENT_DATABASES_KEY = "photosphere.recentDatabases";
 
 //
-// localStorage key for the secrets list (cleared by resetConfig; secret accessors land with the
-// secrets feature).
+// localStorage key an earlier build kept the secrets list under, values and all, in plaintext. Secrets
+// now live one-per-item in the device keychain (see mobile-secure-store.ts) and nothing writes this key
+// any more. It is retained solely so resetConfig and the startup purge can delete a plaintext copy left
+// behind on a device that ran that earlier build.
 //
-export const SECRETS_KEY = "photosphere.secrets";
+export const LEGACY_PLAINTEXT_SECRETS_KEY = "photosphere.secrets";
 
 //
 // localStorage key for the available news items (seeded in tests; would be fetched in production).
@@ -169,72 +171,6 @@ export function seedDatabases(store: IKeyValueStore, databases: IDatabaseEntry[]
 }
 
 //
-// A stored secret: its entry (name + type) plus its secret value (PEM, API key, or JSON for s3).
-//
-export interface IStoredSecret {
-    // The secret entry (name is the unique key; type is the category).
-    entry: ISharedSecretEntry;
-
-    // The secret value as a string (the vault would hold this on desktop).
-    value: string;
-}
-
-//
-// Returns the configured secret entries (values omitted, matching listSecrets on desktop).
-//
-export function listSecrets(store: IKeyValueStore): ISharedSecretEntry[] {
-    return readArray<IStoredSecret>(store, SECRETS_KEY).map(stored => stored.entry);
-}
-
-//
-// Adds a secret, returning the stored entry. Throws (with the exact message the desktop provider
-// uses) when a secret of the same name already exists, so the duplicate-name flow behaves identically.
-//
-export function addSecret(store: IKeyValueStore, entry: ISharedSecretEntry, value: string): ISharedSecretEntry {
-    const stored = readArray<IStoredSecret>(store, SECRETS_KEY);
-    if (stored.some(existing => existing.entry.name === entry.name)) {
-        throw new Error(`A secret named '${entry.name}' already exists.`);
-    }
-    stored.push({ entry, value });
-    writeArray(store, SECRETS_KEY, stored);
-    return entry;
-}
-
-//
-// Updates the secret matching originalName: replaces its entry, and its value when one is given.
-//
-export function updateSecret(store: IKeyValueStore, originalName: string, entry: ISharedSecretEntry, value?: string): void {
-    const stored = readArray<IStoredSecret>(store, SECRETS_KEY);
-    const updated = stored.map(existing =>
-        existing.entry.name === originalName
-            ? { entry, value: value !== undefined ? value : existing.value }
-            : existing);
-    writeArray(store, SECRETS_KEY, updated);
-}
-
-//
-// Removes the secret with the given name.
-//
-export function deleteSecret(store: IKeyValueStore, name: string): void {
-    writeArray(store, SECRETS_KEY, readArray<IStoredSecret>(store, SECRETS_KEY).filter(existing => existing.entry.name !== name));
-}
-
-//
-// Returns the stored value for a secret name, or undefined when not present.
-//
-export function getSecretValue(store: IKeyValueStore, name: string): string | undefined {
-    const found = readArray<IStoredSecret>(store, SECRETS_KEY).find(existing => existing.entry.name === name);
-    return found?.value;
-}
-
-//
-// Replaces the secrets list wholesale (used by test setup to seed a known secret state).
-//
-export function seedSecrets(store: IKeyValueStore, secrets: IStoredSecret[]): void {
-    writeArray(store, SECRETS_KEY, secrets);
-}
-
-//
 // A news item that can be shown as a toast notification.
 //
 export interface INewsItemRecord {
@@ -350,13 +286,15 @@ export function setConfigValue<ValueT>(store: IKeyValueStore, key: string, value
 }
 
 //
-// Clears all persisted config (databases, recent databases, secrets), used by test setup to start
-// from a clean, deterministic state on a device whose storage persists between test runs.
+// Clears all persisted config, used by test setup to start from a clean, deterministic state on a device
+// whose storage persists between test runs. Secrets are NOT in localStorage any more (they are in the
+// device keychain), so this clears only the legacy plaintext key; the platform provider clears the
+// keychain secrets alongside this call.
 //
 export function resetConfig(store: IKeyValueStore): void {
     store.removeItem(DATABASES_KEY);
     store.removeItem(RECENT_DATABASES_KEY);
-    store.removeItem(SECRETS_KEY);
+    store.removeItem(LEGACY_PLAINTEXT_SECRETS_KEY);
     store.removeItem(NEWS_KEY);
     store.removeItem(SHOWN_NEWS_KEY);
 }

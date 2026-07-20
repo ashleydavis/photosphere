@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Backup and device-transfer rules for API 31 and above (android:dataExtractionRules). Same reasoning
+    as backup_rules.xml: the secure store is encrypted with a Tink keyset protected by a non-exportable
+    AndroidKeyStore master key, so a copy moved to another device or restored alongside a different
+    keystore cannot be decrypted and its entries read back as absent. Exclude it from both paths.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="photosphere_secure_store.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="photosphere_secure_store.xml" />
+    </device-transfer>
+</data-extraction-rules>

@@ -18,12 +18,15 @@ trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
-# Clean slate, place an empty database in the sandbox (add auto-opens it), and seed an api-key
-# secret to attach as the geocoding key.
+# Clean slate, place an empty database in the sandbox (add auto-opens it), and add an api-key secret
+# through the real Add Secret UI to attach as the geocoding key.
 send_command "$APP_PORT" reset-config '{}' || exit 1
 create_database "$TMP_DIR/test-db"
 "${PLATFORM}_seed_database" "$TMP_DIR/test-db" "test-db"
-send_command "$APP_PORT" seed-secrets '{"secrets":[{"entry":{"name":"geo-key","type":"api-key"},"value":"the-geocoding-key"}]}' || exit 1
+
+send_command "$APP_PORT" navigate '{"page":"secrets"}' || exit 1
+wait_for_log "$TMP_DIR" "Secrets page loaded"
+add_secret_via_ui "$APP_PORT" "geo-key" "api-key" "the-geocoding-key" || exit 1
 
 send_command "$APP_PORT" navigate '{"page":"databases"}' || exit 1
 wait_for_log "$TMP_DIR" "Databases page loaded"

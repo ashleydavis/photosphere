@@ -139,6 +139,19 @@ start_app() {
     # Clear any stale port file from a previous run so wait_for_bridge_port reads this run's port.
     rm -f "$tmp_dir/bridge.port"
 
+    # app.log is appended across every launch within a test, and wait_for_log's cursor is a line number
+    # into that one file. A wait after a restart must never match a line the PREVIOUS launch wrote:
+    # test 39 restarted the app, matched the outgoing launch's trailing "Secrets page loaded" (written
+    # after the cursor when that launch re-rendered), and then read a value before the relaunched app had
+    # rendered anything, reading empty. Parking the cursor at the current end of app.log makes every wait
+    # after this launch see only this launch's lines. awk counts a trailing unterminated line, which
+    # wc -l would miss and so leave one stale line matchable.
+    local existing_log_lines=0
+    if [ -f "$tmp_dir/app.log" ]; then
+        existing_log_lines=$(awk 'END { print NR }' "$tmp_dir/app.log")
+    fi
+    echo "$existing_log_lines" > "$tmp_dir/.log-cursor"
+
     PHOTOSPHERE_TEST_PORT="0" \
     PHOTOSPHERE_LOG_DIR="$tmp_dir" \
     PHOTOSPHERE_TEST_PLATFORM="$PLATFORM" \
@@ -326,6 +339,45 @@ create_database() {
     for image in "$@"; do
         ( cd "$REPO_DIR/apps/cli" && bun run start -- add "$image" --db "$db_path" --yes ) >/dev/null 2>&1
     done
+}
+
+# Adds a secret through the real Add Secret UI (not a test backdoor), so a test that needs a
+# pre-existing secret creates it the same way a user would. Assumes the Secrets page is already open.
+# Args: port, name, type (s3-credentials|encryption-key|api-key), value.
+# The value maps to the one field the tests read back: the S3 region for s3-credentials, or the API
+# key for api-key. encryption-key is created with an empty PEM (its tests only re-save it, never read
+# the value), because the driver cannot type into the PEM textarea (it targets <input>, not <textarea>).
+add_secret_via_ui() {
+    local port="$1"
+    local name="$2"
+    local secret_type="$3"
+    local value="$4"
+
+    send_command "$port" click '{"dataId":"add-secret-button"}' || return 1
+    wait_for_log "$TMP_DIR" "Add secret dialog opened"
+    send_command "$port" type "{\"dataId\":\"secret-name-input\",\"text\":\"$name\"}" || return 1
+
+    # The type defaults to s3-credentials; only switch it when a different type is asked for. The click
+    # command waits for the option to render in the opened listbox before clicking it.
+    if [ "$secret_type" != "s3-credentials" ]; then
+        send_command "$port" click '{"dataId":"secret-type-select"}' || return 1
+        send_command "$port" click "{\"dataId\":\"secret-type-option-$secret_type\"}" || return 1
+    fi
+
+    case "$secret_type" in
+        s3-credentials)
+            send_command "$port" type "{\"dataId\":\"secret-s3-region-input\",\"text\":\"$value\"}" || return 1
+            ;;
+        api-key)
+            send_command "$port" type "{\"dataId\":\"secret-value-input\",\"text\":\"$value\"}" || return 1
+            ;;
+        encryption-key)
+            # No value field driven; created with an empty PEM (see the header note).
+            ;;
+    esac
+
+    send_command "$port" click '{"dataId":"add-secret-confirm"}' || return 1
+    wait_for_log "$TMP_DIR" "Secret added"
 }
 
 # Load the platform launcher when this file is sourced.

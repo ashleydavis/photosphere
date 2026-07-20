@@ -16,7 +16,7 @@ ALL 31 STEPS ARE test:and GREEN AND READY TO REVIEW.
 - [x] 4 - test driver fails rather than warns - `step-4-test-driver-throws`
 - [x] 5 - story player silent passes - `step-5-story-player`
 - [x] 6 - real state assertions in the 11 rewritten tests - `step-6-real-assertions`
-- [ ] 6a+6b - smoke-test numbering + mobile secrets in the device keychain - `step-6ab-numbering-keychain` - smoke test `39-secret-in-keychain`
+- [x] 6a+6b - smoke-test numbering + mobile secrets in the device keychain - `step-6ab-numbering-keychain` - smoke test `39-secret-in-keychain`
 - [ ] 7 (absorbs 8) - LAN receive on mobile - `step-7-lan-receive`
 - [x] 9 - `cancelTasks`/`shutdown` honest reporting - `step-9-cancel-shutdown-honest` - smoke test `40-cancel-shutdown-reports-failure`
 - [x] 10 - mobile theme survives restart - `step-10-theme-persist` - smoke test `28-theme-persists`

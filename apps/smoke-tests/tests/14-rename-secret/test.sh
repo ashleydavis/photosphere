@@ -16,12 +16,14 @@ trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
-# Seed one secret to rename.
+# Add one secret through the real Add Secret UI, then rename it (rename works for any type, so the
+# default s3-credentials type is used).
 send_command "$APP_PORT" reset-config '{}' || exit 1
-send_command "$APP_PORT" seed-secrets '{"secrets":[{"entry":{"name":"old-name","type":"api-key"},"value":"the-api-key-value"}]}' || exit 1
 
 send_command "$APP_PORT" navigate '{"page":"secrets"}' || exit 1
 wait_for_log "$TMP_DIR" "Secrets page loaded"
+
+add_secret_via_ui "$APP_PORT" "old-name" "s3-credentials" "us-east-1" || exit 1
 
 send_command "$APP_PORT" click '{"dataId":"entity-actions-menu"}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"edit-secret-button"}' || exit 1

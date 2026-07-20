@@ -385,6 +385,16 @@ public final class QuickJsTaskEngine implements TaskEngine {
         QuickJSLoader.initConsoleLog(context);
         hostBridge = new HostBridge(callbacks, cancellationState, sessionId, storageRoot);
 
+        // Build the device keychain before installing host.secureStore*, so the worker vault can read
+        // secrets natively. A failure here is logged, not fatal: the secureStore* functions throw when
+        // called, which the safe wrappers turn into a host error the JS side surfaces.
+        try {
+            SecureStoreHost.initialize(androidContext);
+        }
+        catch (Exception error) {
+            android.util.Log.e("QuickJsTaskEngine", "Failed to initialise secure store: " + error.getMessage());
+        }
+
         // QuickJS lacks setInterval/clearInterval; inject them as no-ops before the bundle.
         context.evaluate("var setInterval = function () { return 0; }; var clearInterval = function () {};");
 
@@ -488,6 +498,16 @@ public final class QuickJsTaskEngine implements TaskEngine {
             hostBridge.cryptoGenerateRsaKeyPair(((Number) args[0]).intValue())));
         host.setProperty("cryptoSignSha256", (JSCallFunction) args -> safeString(() ->
             hostBridge.cryptoSignSha256((String) args[0], (String) args[1])));
+
+        // Native-backed device keychain: the worker vault reads secret values (S3 credentials, the
+        // encryption private key, geocoding keys) natively through these so secrets never enter task
+        // payloads or the log. secureStoreGet returns the value or null; set/delete return null/envelope.
+        host.setProperty("secureStoreGet", (JSCallFunction) args -> safeString(() ->
+            hostBridge.secureStoreGet((String) args[0])));
+        host.setProperty("secureStoreSet", (JSCallFunction) args -> safeVoid(() ->
+            hostBridge.secureStoreSet((String) args[0], (String) args[1])));
+        host.setProperty("secureStoreDelete", (JSCallFunction) args -> safeVoid(() ->
+            hostBridge.secureStoreDelete((String) args[0])));
 
         context.getGlobalObject().setProperty("host", host);
 

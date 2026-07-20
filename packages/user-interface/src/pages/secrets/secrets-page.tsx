@@ -78,15 +78,30 @@ export function SecretsPage() {
     // The secret currently being viewed (undefined when dialog is closed).
     const [viewingSecret, setViewingSecret] = useState<ISharedSecretEntry | undefined>(undefined);
 
+    // Whether the mount refresh has finished, so the list on screen is the loaded one rather than the
+    // empty initial state.
+    const [loaded, setLoaded] = useState(false);
+
     // Re-read the secrets/databases lists when the page mounts, so state seeded or changed outside
     // this provider instance (e.g. mobile test setup) is reflected when the page is entered.
     useEffect(() => {
-        refresh().catch(err => log.exception('Failed to refresh on secrets page mount:', err as Error));
+        refresh()
+            .then(() => setLoaded(true))
+            .catch(err => log.exception('Failed to refresh on secrets page mount:', err as Error));
     }, []);
 
+    // Announced once the secrets have been read, and again whenever the list changes. The count is part
+    // of the line because "loaded" alone is ambiguous: the load flag and the list arrive in separate
+    // renders, so the line can be emitted once with the list still empty and again with it populated. A
+    // smoke test that waited for the bare text matched the first of those and read a row that had not
+    // rendered yet, concluding the secret was lost. With the count a test can wait for the state it
+    // actually needs. Only visible once secret reads became real keychain round-trips rather than reads
+    // of an in-memory cache.
     useEffect(() => {
-        log.info('Secrets page loaded');
-    }, [secrets]);
+        if (loaded) {
+            log.info(`Secrets page loaded: ${secrets.length} secret(s)`);
+        }
+    }, [secrets, loaded]);
 
     //
     // Reloads secrets via the context with a minimum delay so the spin animation is visible.
@@ -438,9 +453,10 @@ export function SecretsPage() {
                             value={form.type}
                             onChange={(_event, value) => setForm(prev => ({ ...prev, type: value as string }))}
                             disabled={!!editingSecret}
+                            slotProps={{ button: { 'data-id': 'secret-type-select' } }}
                         >
                             {SECRET_TYPES.map(secretType => (
-                                <Option key={secretType} value={secretType}>{secretType}</Option>
+                                <Option key={secretType} data-id={`secret-type-option-${secretType}`} value={secretType}>{secretType}</Option>
                             ))}
                         </Select>
                     </FormControl>

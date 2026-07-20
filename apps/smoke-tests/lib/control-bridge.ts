@@ -88,14 +88,14 @@ interface IBridgePayload {
     // Database entries to seed into the mobile config store (seed-databases).
     databases?: Array<{ name: string; description?: string; path: string }>;
 
-    // Secret records to seed into the mobile config store (seed-secrets).
-    secrets?: Array<{ entry: { name: string; type: string }; value: string }>;
-
     // Database entries to seed into the recent-databases list (seed-recent).
     recent?: Array<{ name: string; description?: string; path: string }>;
 
     // News items to seed into the mobile config store (seed-news).
     news?: Array<{ id: string; message: string; color?: string }>;
+
+    // A localStorage key to read back (get-storage), used to assert a value is or is not present.
+    storageKey?: string;
 }
 
 //
@@ -399,6 +399,10 @@ export class ControlBridge {
             void this.forward("get-value", { dataId: req.query.dataId as string }, res);
         });
 
+        this.expressApp.get("/get-storage", (req: Request, res: Response) => {
+            void this.forward("get-storage", { storageKey: req.query.storageKey as string }, res);
+        });
+
         this.expressApp.post("/lan-share-roundtrip", (_req: Request, res: Response) => {
             void this.forward("lan-share-roundtrip", {}, res);
         });
@@ -421,10 +425,6 @@ export class ControlBridge {
 
         this.expressApp.post("/seed-databases", (req: Request, res: Response) => {
             void this.forward("seed-databases", { databases: req.body.databases }, res);
-        });
-
-        this.expressApp.post("/seed-secrets", (req: Request, res: Response) => {
-            void this.forward("seed-secrets", { secrets: req.body.secrets }, res);
         });
 
         this.expressApp.post("/seed-recent", (req: Request, res: Response) => {

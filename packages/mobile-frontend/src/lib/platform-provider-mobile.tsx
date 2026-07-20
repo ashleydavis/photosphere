@@ -1,10 +1,12 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
 import eruda from "eruda";
 import { Network } from "@capacitor/network";
-import { PlatformContextProvider, ConfigContextProvider, createConfig, useLanShareTasks, readBrowserNetworkStatus, subscribeBrowserNetworkStatus, signalTestAppReady, TEST_MENU_EVENT, TEST_OPEN_DATABASE_EVENT, TEST_SEED_DATABASES_EVENT, TEST_SEED_SECRETS_EVENT, TEST_SEED_RECENT_EVENT, TEST_SEED_NEWS_EVENT, TEST_RESET_CONFIG_EVENT, TEST_PICK_FILES_EVENT, type IPlatformContext, type IPlatformEvent, type INetworkStatus, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions } from "user-interface";
+import { PlatformContextProvider, ConfigContextProvider, createConfig, useLanShareTasks, readBrowserNetworkStatus, subscribeBrowserNetworkStatus, signalTestAppReady, TEST_MENU_EVENT, TEST_OPEN_DATABASE_EVENT, TEST_SEED_DATABASES_EVENT, TEST_SEED_RECENT_EVENT, TEST_SEED_NEWS_EVENT, TEST_RESET_CONFIG_EVENT, TEST_PICK_FILES_EVENT, type ITestResetConfigEventDetail, type IPlatformContext, type IPlatformEvent, type INetworkStatus, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions } from "user-interface";
 import { log } from "utils";
 import { cancelMobileTasks, subscribeMobileTaskMessage, subscribeMobileTaskComplete, pickMobileFiles, setInjectedPickedFiles } from "./mobile-platform-tasks";
 import * as configStore from "./mobile-config-store";
+import { MobileSecretStore } from "./mobile-secure-store";
+import { createCapacitorSecureStore } from "./secure-store-plugin";
 
 // Whether the in-page Eruda console has been initialised and whether it is currently visible.
 let erudaInitialised = false;
@@ -33,10 +35,29 @@ function toggleEruda(): void {
 }
 
 //
-// The WebView localStorage used to persist the configured-databases / recent-databases lists. It
-// satisfies the small key/value interface the config store needs.
+// The WebView localStorage used to persist the configured-databases / recent-databases lists and the
+// generic config (theme, sync flags). It satisfies the small key/value interface the config store needs.
+// Secrets do NOT live here: they are held in the device keychain via secretStore below.
 //
 const persistentStore: configStore.IKeyValueStore = window.localStorage;
+
+//
+// The device keychain every mobile secret is stored in, one item per secret, matching desktop's use of
+// the OS keychain. No secret value is cached: each read goes to the keychain and the value is returned
+// straight to the caller.
+//
+const secretStore: MobileSecretStore = new MobileSecretStore(createCapacitorSecureStore());
+
+//
+// Deletes the plaintext secrets blob an earlier build wrote to localStorage. Secrets now live in the
+// device keychain, so a plaintext copy left on a device by that build is pure exposure with nothing
+// reading it. Removed at module load, before any UI can run, and logged so the removal is visible rather
+// than silent. Key name only, never a value.
+//
+if (persistentStore.getItem(configStore.LEGACY_PLAINTEXT_SECRETS_KEY) !== null) {
+    persistentStore.removeItem(configStore.LEGACY_PLAINTEXT_SECRETS_KEY);
+    log.info(`mobile-secrets: removed the legacy plaintext '${configStore.LEGACY_PLAINTEXT_SECRETS_KEY}' entry from localStorage; secrets are stored in the device keychain and any secret held only in that entry must be re-added.`);
+}
 
 //
 // Props for the mobile platform provider.
@@ -50,8 +71,9 @@ export interface IPlatformProviderMobileProps {
 
 //
 // Mobile platform context provider.
-// Most native integrations are still stubbed (database, sync, vault, file-picker),
-// but the background-task bindings (cancelTasks / onTaskMessage / onTaskComplete) are wired
+// Most native integrations are still stubbed (database, sync, file-picker); secrets are not, they are
+// stored one item per secret in the device keychain via the SecureStore plugin. The background-task
+// bindings (cancelTasks / onTaskMessage / onTaskComplete) are wired
 // to the native JsEngine plugin so task-driven UI (notably the Job Manager) works on mobile.
 // Share/receive now run as background tasks via useLanShareTasks; these fail at runtime on
 // the embedded JS engine until native networking host functions exist.
@@ -125,19 +147,18 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
             const databases = (event as CustomEvent<IDatabaseEntry[]>).detail || [];
             configStore.seedDatabases(persistentStore, databases);
         };
-        // Test setup: seed the secrets list (mirrors desktop seeding the vault).
-        const handleSeedSecrets = (event: Event) => {
-            const secrets = (event as CustomEvent<configStore.IStoredSecret[]>).detail || [];
-            configStore.seedSecrets(persistentStore, secrets);
-        };
         // Test setup: seed the recent-databases list.
         const handleSeedRecent = (event: Event) => {
             const databases = (event as CustomEvent<IDatabaseEntry[]>).detail || [];
             configStore.seedRecentDatabases(persistentStore, databases);
         };
-        // Test setup: clear all persisted config for a deterministic starting state.
-        const handleResetConfig = () => {
+        // Test setup: clear all persisted config for a deterministic starting state. Secrets live in the
+        // keychain, not localStorage, so they are cleared from the keychain too (resetConfig only removes
+        // localStorage keys, which no longer hold any secret).
+        const handleResetConfig = (event: Event) => {
             configStore.resetConfig(persistentStore);
+            const detail = (event as CustomEvent<ITestResetConfigEventDetail>).detail;
+            detail.waitFor(secretStore.clearSecrets());
         };
         // Test setup: stage picked file paths so the next pickFiles resolves with them instead of
         // opening the native picker (which cannot be automated in a smoke test).
@@ -148,7 +169,6 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         window.addEventListener(TEST_MENU_EVENT, handleMenu);
         window.addEventListener(TEST_OPEN_DATABASE_EVENT, handleOpenDatabase);
         window.addEventListener(TEST_SEED_DATABASES_EVENT, handleSeedDatabases);
-        window.addEventListener(TEST_SEED_SECRETS_EVENT, handleSeedSecrets);
         window.addEventListener(TEST_SEED_RECENT_EVENT, handleSeedRecent);
         window.addEventListener(TEST_RESET_CONFIG_EVENT, handleResetConfig);
         window.addEventListener(TEST_PICK_FILES_EVENT, handlePickFiles);
@@ -161,7 +181,6 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
             window.removeEventListener(TEST_MENU_EVENT, handleMenu);
             window.removeEventListener(TEST_OPEN_DATABASE_EVENT, handleOpenDatabase);
             window.removeEventListener(TEST_SEED_DATABASES_EVENT, handleSeedDatabases);
-            window.removeEventListener(TEST_SEED_SECRETS_EVENT, handleSeedSecrets);
             window.removeEventListener(TEST_SEED_RECENT_EVENT, handleSeedRecent);
             window.removeEventListener(TEST_RESET_CONFIG_EVENT, handleResetConfig);
             window.removeEventListener(TEST_PICK_FILES_EVENT, handlePickFiles);
@@ -313,23 +332,25 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
     }, []);
 
     const listSecrets = useCallback(async (): Promise<ISharedSecretEntry[]> => {
-        return configStore.listSecrets(persistentStore);
+        return secretStore.listSecrets();
     }, []);
 
     const addSecret = useCallback(async (entry: ISharedSecretEntry, value: string): Promise<ISharedSecretEntry> => {
-        return configStore.addSecret(persistentStore, entry, value);
+        // Resolves only once the keychain write has landed, so the UI reports the secret as added only
+        // when it is durable and would survive an immediate app restart.
+        return secretStore.addSecret(entry, value);
     }, []);
 
     const updateSecret = useCallback(async (originalName: string, entry: ISharedSecretEntry, value?: string): Promise<void> => {
-        configStore.updateSecret(persistentStore, originalName, entry, value);
+        await secretStore.updateSecret(originalName, entry, value);
     }, []);
 
     const deleteSecret = useCallback(async (name: string): Promise<void> => {
-        configStore.deleteSecret(persistentStore, name);
+        await secretStore.deleteSecret(name);
     }, []);
 
     const getSecretValue = useCallback(async (name: string): Promise<string | undefined> => {
-        return configStore.getSecretValue(persistentStore, name);
+        return secretStore.getSecretValue(name);
     }, []);
 
     const getRecentDatabases = useCallback(async (): Promise<IDatabaseEntry[]> => {

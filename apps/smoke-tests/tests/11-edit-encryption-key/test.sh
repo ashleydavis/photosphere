@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# Mobile port of desktop 11-edit-encryption-key. Edits an existing encryption-key secret and
-# asserts the raw PEM round-trips. Desktop seeds the vault on the host filesystem; on mobile the
-# vault lives on the device, so without device-side seeding there is no row to edit and the flow
-# stops at the missing Edit dialog, surfacing the seeding/vault gap.
+# Mobile port of desktop 11-edit-encryption-key. Adds an encryption-key secret through the real Add
+# Secret UI, then opens the Edit dialog and re-saves it. The secret is created the way a user would
+# (not seeded via a backdoor). The PEM is left empty because the driver cannot type into the PEM
+# textarea; this test covers the add-then-edit path for the encryption-key type, not the PEM value.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$TEST_DIR/../../lib/common.sh"
@@ -17,13 +17,13 @@ trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
-# Seed one encryption-key secret to edit (desktop seeds the vault; on mobile the secrets store is
-# seeded via the test driver). The value is the raw private-key PEM.
+# Add one encryption-key secret through the real Add Secret UI, then edit it.
 send_command "$APP_PORT" reset-config '{}' || exit 1
-send_command "$APP_PORT" seed-secrets '{"secrets":[{"entry":{"name":"enc-key","type":"encryption-key"},"value":"-----BEGIN PRIVATE KEY-----\nMOCK\n-----END PRIVATE KEY-----"}]}' || exit 1
 
 send_command "$APP_PORT" navigate '{"page":"secrets"}' || exit 1
 wait_for_log "$TMP_DIR" "Secrets page loaded"
+
+add_secret_via_ui "$APP_PORT" "enc-key" "encryption-key" "" || exit 1
 
 send_command "$APP_PORT" click '{"dataId":"entity-actions-menu"}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"edit-secret-button"}' || exit 1

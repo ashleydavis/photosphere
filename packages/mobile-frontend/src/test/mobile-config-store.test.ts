@@ -13,12 +13,7 @@ import {
     seedRecentDatabases,
     seedDatabases,
     resetConfig,
-    listSecrets,
-    addSecret,
-    updateSecret,
-    deleteSecret,
-    getSecretValue,
-    seedSecrets,
+    LEGACY_PLAINTEXT_SECRETS_KEY,
     seedNews,
     getShownNewsIds,
     addShownNewsId,
@@ -136,68 +131,13 @@ describe("mobile-config-store databases", () => {
 
 describe("mobile-config-store secrets", () => {
 
-    //
-    // Builds a secret entry for the tests.
-    //
-    function secret(name: string, type: string): any {
-        return { name, type };
-    }
-
-    test("addSecret then listSecrets returns the entry (without value)", () => {
+    test("resetConfig clears the legacy plaintext secrets entry", () => {
         const store = memoryStore();
-        addSecret(store, secret("api", "api-key"), "the-value");
-        expect(listSecrets(store)).toEqual([{ name: "api", type: "api-key" }]);
-    });
-
-    test("getSecretValue returns the stored value", () => {
-        const store = memoryStore();
-        addSecret(store, secret("api", "api-key"), "the-value");
-        expect(getSecretValue(store, "api")).toBe("the-value");
-        expect(getSecretValue(store, "missing")).toBeUndefined();
-    });
-
-    test("addSecret throws the exact duplicate-name message", () => {
-        const store = memoryStore();
-        addSecret(store, secret("dup", "api-key"), "v1");
-        expect(() => addSecret(store, secret("dup", "api-key"), "v2"))
-            .toThrow("A secret named 'dup' already exists.");
-    });
-
-    test("updateSecret replaces the entry and keeps the value when none is given", () => {
-        const store = memoryStore();
-        addSecret(store, secret("old", "api-key"), "v1");
-        updateSecret(store, "old", secret("renamed", "api-key"));
-        expect(listSecrets(store)).toEqual([{ name: "renamed", type: "api-key" }]);
-        expect(getSecretValue(store, "renamed")).toBe("v1");
-    });
-
-    test("updateSecret updates the value when one is given", () => {
-        const store = memoryStore();
-        addSecret(store, secret("api", "api-key"), "v1");
-        updateSecret(store, "api", secret("api", "api-key"), "v2");
-        expect(getSecretValue(store, "api")).toBe("v2");
-    });
-
-    test("deleteSecret removes the secret", () => {
-        const store = memoryStore();
-        addSecret(store, secret("api", "api-key"), "v1");
-        deleteSecret(store, "api");
-        expect(listSecrets(store)).toEqual([]);
-    });
-
-    test("resetConfig clears secrets", () => {
-        const store = memoryStore();
-        addSecret(store, secret("api", "api-key"), "v1");
+        // Written by an earlier build that kept secrets in plaintext localStorage. Nothing writes this
+        // key any more, but a device that ran that build still has it, so reset must remove it.
+        store.setItem(LEGACY_PLAINTEXT_SECRETS_KEY, JSON.stringify([{ entry: { name: "api", type: "api-key" }, value: "v1" }]));
         resetConfig(store);
-        expect(listSecrets(store)).toEqual([]);
-    });
-
-    test("seedSecrets replaces the secrets list wholesale", () => {
-        const store = memoryStore();
-        addSecret(store, secret("old", "api-key"), "v1");
-        seedSecrets(store, [{ entry: { name: "seeded", type: "api-key" }, value: "sv" }]);
-        expect(listSecrets(store)).toEqual([{ name: "seeded", type: "api-key" }]);
-        expect(getSecretValue(store, "seeded")).toBe("sv");
+        expect(store.getItem(LEGACY_PLAINTEXT_SECRETS_KEY)).toBeNull();
     });
 });
 

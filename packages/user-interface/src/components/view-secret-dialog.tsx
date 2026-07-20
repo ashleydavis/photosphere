@@ -63,13 +63,31 @@ function tryParse(valueJson: string): IParsedSecretValue | undefined {
 }
 
 //
+// Props for the labelled read-only field row.
+//
+interface IFieldProps {
+    // The field label shown above the value.
+    label: string;
+
+    // The revealed value shown in the field.
+    value: string;
+
+    // Whether to render the value as pre-formatted multiline text (used for PEM blocks).
+    multiline?: boolean;
+
+    // Optional data-id on the value box so smoke tests can read the revealed value back.
+    dataId?: string;
+}
+
+//
 // Labelled read-only field row.
 //
-function Field({ label, value, multiline }: { label: string; value: string; multiline?: boolean }) {
+function Field({ label, value, multiline, dataId }: IFieldProps) {
     return (
         <Box sx={{ mb: 1.5 }}>
             <Typography level="body-sm" sx={{ fontWeight: 'lg', mb: 0.5 }}>{label}</Typography>
             <Box
+                data-id={dataId}
                 component={multiline ? 'pre' : 'div'}
                 sx={{
                     fontFamily: 'monospace',
@@ -108,6 +126,16 @@ export function ViewSecretDialog({ open, secret, onClose, getSecretValue }: IVie
         }
     }, [open]);
 
+    // Log that the value is revealed only once React has committed the revealed fields to the DOM.
+    // Logging it straight after setRevealed (the same tick, before the commit) made the line arrive
+    // while the fields were still empty, so a smoke test that waits for it and immediately reads a field
+    // could read the pre-render value and conclude the secret had been lost.
+    useEffect(() => {
+        if (revealed) {
+            log.info('Secret revealed');
+        }
+    }, [revealed]);
+
     //
     // Fetches and reveals the secret value.
     //
@@ -117,7 +145,6 @@ export function ViewSecretDialog({ open, secret, onClose, getSecretValue }: IVie
         setSecretValue(value);
         setRevealed(true);
         setLoading(false);
-        log.info('Secret revealed');
     }
 
     //
@@ -132,7 +159,7 @@ export function ViewSecretDialog({ open, secret, onClose, getSecretValue }: IVie
             return (
                 <>
                     <Field label="Endpoint" value={parsed?.endpoint ?? ''} />
-                    <Field label="Region" value={parsed?.region ?? ''} />
+                    <Field label="Region" value={parsed?.region ?? ''} dataId="revealed-secret-region" />
                     <Field label="Access Key ID" value={parsed?.accessKeyId ?? ''} />
                     <Field label="Secret Access Key" value={parsed?.secretAccessKey ?? ''} />
                 </>

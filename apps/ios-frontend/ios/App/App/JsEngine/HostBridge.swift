@@ -446,6 +446,45 @@ final class HostBridge {
         }
         host.setValue(JSValue(object: cryptoSignSha256, in: context), forProperty: "cryptoSignSha256")
 
+        // Native device keychain (host.secureStore*): the worker vault reads secret values (S3
+        // credentials, the encryption private key, geocoding keys) natively through these so secrets
+        // never enter task payloads or the log. secureStoreGet returns the value, JS null when absent,
+        // or an @@HOSTERR@@ envelope on failure; set/delete return null or an envelope.
+        let secureStoreGet: @convention(block) (String) -> JSValue = { key in
+            do {
+                if let value = try SecureStoreHost.get(key: key) {
+                    return JSValue(object: value, in: context)
+                }
+                return JSValue(nullIn: context)
+            }
+            catch {
+                return JSValue(object: HostBridge.hostErrorEnvelope(error), in: context)
+            }
+        }
+        host.setValue(JSValue(object: secureStoreGet, in: context), forProperty: "secureStoreGet")
+
+        let secureStoreSet: @convention(block) (String, String) -> JSValue = { key, value in
+            do {
+                try SecureStoreHost.set(key: key, value: value)
+                return JSValue(nullIn: context)
+            }
+            catch {
+                return JSValue(object: HostBridge.hostErrorEnvelope(error), in: context)
+            }
+        }
+        host.setValue(JSValue(object: secureStoreSet, in: context), forProperty: "secureStoreSet")
+
+        let secureStoreDelete: @convention(block) (String) -> JSValue = { key in
+            do {
+                try SecureStoreHost.delete(key: key)
+                return JSValue(nullIn: context)
+            }
+            catch {
+                return JSValue(object: HostBridge.hostErrorEnvelope(error), in: context)
+            }
+        }
+        host.setValue(JSValue(object: secureStoreDelete, in: context), forProperty: "secureStoreDelete")
+
         // The media host functions (imageMagick/ffmpeg/ffprobe) never raise a JS exception across the
         // bridge: they take a JSON-encoded argv string, run the in-process tool, and return the JSON
         // string { exitCode, output } (or an @@HOSTERR@@ envelope on failure) that the mobile

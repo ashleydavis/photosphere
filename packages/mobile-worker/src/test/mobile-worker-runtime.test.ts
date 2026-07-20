@@ -83,6 +83,9 @@ function createMockHost(sessionId: string): IMockHost {
         tlsStopListening: () => null,
         cryptoGenerateRsaKeyPair: () => JSON.stringify({ privateKeyPem: "", publicKeyPem: "" }),
         cryptoSignSha256: () => "",
+        secureStoreGet: () => null,
+        secureStoreSet: () => { /* no-op */ },
+        secureStoreDelete: () => { /* no-op */ },
     };
 
     return mockHost;

@@ -36,6 +36,11 @@
 		D000000000000000000000B7 /* PathSandbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000A7 /* PathSandbox.swift */; };
 		D000000000000000000000BB /* ImportPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000AB /* ImportPicker.swift */; };
 		D000000000000000000000BC /* CryptoHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000AC /* CryptoHost.swift */; };
+		E1D0C0B0A0900000000000B1 /* SecureStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1D0C0B0A0900000000000A1 /* SecureStore.swift */; };
+		E1D0C0B0A0900000000000B2 /* SecureStoreHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1D0C0B0A0900000000000A2 /* SecureStoreHost.swift */; };
+		E1D0C0B0A0900000000000B3 /* SecureStorePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1D0C0B0A0900000000000A3 /* SecureStorePlugin.swift */; };
+		E1D0C0B0A0900000000000B4 /* SecureStorePlugin.m in Sources */ = {isa = PBXBuildFile; fileRef = E1D0C0B0A0900000000000A4 /* SecureStorePlugin.m */; };
+		E1D0C0B0A0900000000000B5 /* SecureStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1D0C0B0A0900000000000A5 /* SecureStoreTests.swift */; };
 		D000000000000000000000BD /* UdpHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000AD /* UdpHost.swift */; };
 		D000000000000000000000BE /* TlsHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000AE /* TlsHost.swift */; };
 		FFEE0000000000000000B001 /* FFmpegKitFullSPM in Frameworks */ = {isa = PBXBuildFile; productRef = FFEE0000000000000000A001 /* FFmpegKitFullSPM */; };
@@ -97,6 +102,11 @@
 		D000000000000000000000A7 /* PathSandbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PathSandbox.swift; sourceTree = "<group>"; };
 		D000000000000000000000AB /* ImportPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportPicker.swift; sourceTree = "<group>"; };
 		D000000000000000000000AC /* CryptoHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CryptoHost.swift; sourceTree = "<group>"; };
+		E1D0C0B0A0900000000000A1 /* SecureStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureStore.swift; sourceTree = "<group>"; };
+		E1D0C0B0A0900000000000A2 /* SecureStoreHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureStoreHost.swift; sourceTree = "<group>"; };
+		E1D0C0B0A0900000000000A3 /* SecureStorePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureStorePlugin.swift; sourceTree = "<group>"; };
+		E1D0C0B0A0900000000000A4 /* SecureStorePlugin.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SecureStorePlugin.m; sourceTree = "<group>"; };
+		E1D0C0B0A0900000000000A5 /* SecureStoreTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SecureStoreTests.swift; sourceTree = "<group>"; };
 		D000000000000000000000AD /* UdpHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UdpHost.swift; sourceTree = "<group>"; };
 		D000000000000000000000AE /* TlsHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TlsHost.swift; sourceTree = "<group>"; };
 		D000000000000000000000A8 /* PooledTask.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PooledTask.swift; sourceTree = "<group>"; };
@@ -209,6 +219,7 @@
 				941F7016C52F6B991858BFD4 /* HostBridgeTests.swift */,
 				A1B2C3D4E5F600000000FF02 /* HostFunctionsTests.swift */,
 				A1B2C3D4E5F600000000FF12 /* CryptoHostTests.swift */,
+				E1D0C0B0A0900000000000A5 /* SecureStoreTests.swift */,
 				A1B2C3D4E5F600000000FF03 /* HostBridgeMediaTests.swift */,
 				07855680FE24064B7769CBB4 /* NotImplementedTests.swift */,
 				7FBA8F4FD583EAFC5EFEC48E /* PathSandboxTests.swift */,
@@ -232,6 +243,10 @@
 				D000000000000000000000A7 /* PathSandbox.swift */,
 				D000000000000000000000AB /* ImportPicker.swift */,
 				D000000000000000000000AC /* CryptoHost.swift */,
+				E1D0C0B0A0900000000000A1 /* SecureStore.swift */,
+				E1D0C0B0A0900000000000A2 /* SecureStoreHost.swift */,
+				E1D0C0B0A0900000000000A3 /* SecureStorePlugin.swift */,
+				E1D0C0B0A0900000000000A4 /* SecureStorePlugin.m */,
 				D000000000000000000000AD /* UdpHost.swift */,
 				D000000000000000000000AE /* TlsHost.swift */,
 				D000000000000000000000A8 /* PooledTask.swift */,
@@ -419,6 +434,7 @@
 				05483FE31349F306D45026C0 /* HostBridgeTests.swift in Sources */,
 				A1B2C3D4E5F600000000FF01 /* HostFunctionsTests.swift in Sources */,
 				A1B2C3D4E5F600000000FF11 /* CryptoHostTests.swift in Sources */,
+				E1D0C0B0A0900000000000B5 /* SecureStoreTests.swift in Sources */,
 				A1B2C3D4E5F600000000FF04 /* HostBridgeMediaTests.swift in Sources */,
 				73F80B325942FD7BAAC99376 /* NotImplementedTests.swift in Sources */,
 				6EB04D6B0DEC313136AB77A5 /* PathSandboxTests.swift in Sources */,
@@ -443,6 +459,10 @@
 				D000000000000000000000B7 /* PathSandbox.swift in Sources */,
 				D000000000000000000000BB /* ImportPicker.swift in Sources */,
 				D000000000000000000000BC /* CryptoHost.swift in Sources */,
+				E1D0C0B0A0900000000000B1 /* SecureStore.swift in Sources */,
+				E1D0C0B0A0900000000000B2 /* SecureStoreHost.swift in Sources */,
+				E1D0C0B0A0900000000000B3 /* SecureStorePlugin.swift in Sources */,
+				E1D0C0B0A0900000000000B4 /* SecureStorePlugin.m in Sources */,
 				D000000000000000000000BD /* UdpHost.swift in Sources */,
 				D000000000000000000000BE /* TlsHost.swift in Sources */,
 				D000000000000000000000B8 /* PooledTask.swift in Sources */,

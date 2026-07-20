@@ -136,20 +136,32 @@ Then run the Android smoke suite, which is the gate that actually proves a mobil
 
 **There is a single Android emulator, shared by every parallel Claude instance running this command across every worktree.** Two suites on it at once corrupt each other's runs. Because these instances cannot see each other, coordinate through a lock file on a fixed, machine-wide path that every instance agrees on: `/tmp/photosphere-android-emulator.lock`. Do not put the lock inside a worktree or the repo, or parallel instances in different worktrees would each take a different lock and not exclude one another.
 
-Acquire the lock by wrapping the suite in `flock`, so the lock is held for exactly the duration of the run and released automatically when it exits, even if the run is killed:
+**The suite can run longer than any Bash-tool timeout, and a timeout does not stop it.** The Bash tool caps `timeout` at 600000ms (10 minutes). When that cap fires, the Bash call returns to you but the suite keeps running on the emulator, and if it was wrapped in a foreground `flock`, the lock is released the moment the wrapped process is reaped, while the test is still running on the device. A parallel instance then grabs the "free" lock and collides with the run still in progress. So you must never run the suite as a plain foreground call, and never infer pass or fail from a call that hit its timeout. The only proof a run finished is an exit code you observed after the run actually ended.
 
-```
-cd <abs-worktree> && flock -w 1800 /tmp/photosphere-android-emulator.lock mise exec -- bun run test:and
-```
+Instead, **detach the run so it lives independently of your view of it, hold the lock for its true duration, and wait on a condition, not a clock.** Use per-run scratch files in `/tmp` for the log and the exit-code sentinel (keyed by worktree name so parallel worktrees don't clobber each other). Writing these `/tmp` scratch files and the lock is the one allowed exception to "never write outside the worktree"; never write run scratch into the worktree or the repo.
 
-- `flock` blocks until the emulator is free, then runs the suite holding the lock. `-w 1800` gives up after 30 minutes of waiting and exits non-zero (code 1) without running; treat that as "still busy", not a test failure, and simply run the same command again.
-- Run it in the **foreground**, with `timeout: 600000`. Backgrounded runs get killed intermittently; foreground runs do not. Never rely on the default 2-minute Bash timeout, it will cut the run short and look like a failure. If the Bash timeout fires while `flock` is still waiting for the lock, that is contention, not a failure: re-run the same command.
-- The lock enforces **one run at a time** on the shared emulator; never bypass it by launching the suite without `flock`. Keep one emulator warm rather than rebooting it between runs.
-- It passes only on exit 0 **and** an "All N tests passed" line. Anything else is a failure.
+1. Clear stale state so an old sentinel can't read as "done":
+   ```
+   rm -f /tmp/ps-and-<worktree>.exit /tmp/ps-and-<worktree>.log
+   ```
+2. Write a tiny detached runner (keeps quoting sane) and launch it in a new session so it survives the Bash call being reaped at timeout. `setsid` detaches it from your process group; `</dev/null` and the redirects free it from any tty. `flock` runs *inside* the detached process, so the lock is held for the real duration of the suite and auto-released only when the suite truly exits (or the process dies):
+   ```
+   printf '%s\n' '#!/bin/sh' \
+     'cd <abs-worktree>' \
+     'flock /tmp/photosphere-android-emulator.lock mise exec -- bun run test:and' \
+     'echo $? > /tmp/ps-and-<worktree>.exit' > /tmp/ps-and-<worktree>.sh
+   setsid sh /tmp/ps-and-<worktree>.sh > /tmp/ps-and-<worktree>.log 2>&1 </dev/null &
+   ```
+   This launch command returns immediately; it is not the run, it only starts it.
+3. **Wait on the sentinel, not on a timeout.** Use the `Monitor` tool with an until-condition that the sentinel file exists (for example `test -f /tmp/ps-and-<worktree>.exit`), with a generous ceiling (45-60 minutes). Do not `sleep` in the foreground and do not poll in a tight loop. The sentinel appears only after `flock` has both acquired the lock and the suite has finished, so this naturally waits out another instance's run too.
+4. When the sentinel exists, read the real result: the exit code is the contents of `/tmp/ps-and-<worktree>.exit`, and the pass line is in `/tmp/ps-and-<worktree>.log`. It passes only on **exit code 0 and an "All N tests passed" line**. Anything else is a failure.
+5. If the `Monitor` ceiling is reached with no sentinel, the run is still going or wedged. Do **not** report a result and do **not** launch a second run. Say it is still running (or investigate a wedge: `flock` releases a crashed holder's lock automatically, so a persistently missing sentinel points at a hung suite, not a stuck lock), then extend the wait.
+
+- The lock enforces **one run at a time** on the shared emulator; never bypass it by launching the suite without `flock`, and never start a second run while this worktree's sentinel is still pending. Keep one emulator warm rather than rebooting it between runs.
 - Removing a smoke test in step 5 changes the expected test count.
 - Run this after step 6, not before, so the suites gate the simplification too. Account for that rather than treating a lower number as a regression.
 
-Report the exit code of every suite. Never report a suite as passing without having seen its exit code. If one fails, fix the code, not the test.
+Report the exit code of every suite. Never report a suite as passing without having seen its exit code. A timed-out or still-running Android suite is not a passing suite and not a failing one: it is unfinished, and you say so. If one fails, fix the code, not the test.
 
 ## Step 8: Confirm the worktree is now only the core fix
 

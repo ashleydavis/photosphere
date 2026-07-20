@@ -100,14 +100,15 @@ export interface ITestCommandPayload {
     // Database entries to seed into the mobile config store (seed-databases command).
     databases?: ISeedDatabaseEntry[];
 
-    // Secret records to seed into the mobile config store (seed-secrets command).
-    secrets?: ISeedSecret[];
-
     // Database entries to seed into the recent-databases list (seed-recent command).
     recent?: ISeedDatabaseEntry[];
 
     // News items to seed into the mobile config store (seed-news command).
     news?: ISeedNewsItem[];
+
+    // A localStorage key to read back (get-storage command). Used by smoke tests to assert that a
+    // value is or is not present in WebView localStorage (for example that no plaintext secret lingers).
+    storageKey?: string;
 }
 
 //
@@ -124,16 +125,6 @@ export interface ISeedNewsItem {
     color?: string;
 }
 
-//
-// A secret record the test harness seeds into the mobile config store.
-//
-export interface ISeedSecret {
-    // The secret entry (name is the unique key; type is the category, e.g. 'encryption-key').
-    entry: { name: string; type: string };
-
-    // The secret value as a string.
-    value: string;
-}
 
 //
 // A database entry the test harness seeds into the mobile config store. Mirrors the subset of
@@ -444,11 +435,6 @@ export const TEST_OPEN_DATABASE_EVENT = "photosphere-test:open-database";
 export const TEST_SEED_DATABASES_EVENT = "photosphere-test:seed-databases";
 
 //
-// Window event name used to seed the mobile config store's secrets list (test setup).
-//
-export const TEST_SEED_SECRETS_EVENT = "photosphere-test:seed-secrets";
-
-//
 // Window event name used to seed the mobile config store's recent-databases list (test setup).
 //
 export const TEST_SEED_RECENT_EVENT = "photosphere-test:seed-recent";
@@ -462,6 +448,16 @@ export const TEST_SEED_NEWS_EVENT = "photosphere-test:seed-news";
 // Window event name used to clear the mobile config store (test setup).
 //
 export const TEST_RESET_CONFIG_EVENT = "photosphere-test:reset-config";
+
+//
+// Detail for the reset-config event. The listener's keychain clear is asynchronous and is registered via
+// waitFor so the dispatcher awaits it, ensuring the reset-config command resolves only once the clear has
+// completed (a shell with no listener registers nothing and resolves immediately).
+//
+export interface ITestResetConfigEventDetail {
+    // Registers an async operation the dispatcher must await before the command resolves.
+    waitFor: (operation: Promise<void>) => void;
+}
 
 //
 // Seeds news items by dispatching a window event the mobile platform provider listens for; the
@@ -482,15 +478,6 @@ export function doSeedRecent(databases: ISeedDatabaseEntry[]): void {
 }
 
 //
-// Seeds the secrets list by dispatching a window event the mobile platform provider listens for.
-// Used by smoke tests that need a pre-existing secret to edit/view (desktop seeds the vault instead).
-//
-export function doSeedSecrets(secrets: ISeedSecret[]): void {
-    console.log(`test-seed-secrets: seeding ${secrets.length} secret(s)`);
-    window.dispatchEvent(new CustomEvent(TEST_SEED_SECRETS_EVENT, { detail: secrets }));
-}
-
-//
 // Seeds the configured-databases list by dispatching a window event the mobile platform provider
 // listens for. Used by smoke tests to establish a known database list (the desktop equivalent is
 // writing databases.toml). A no-op on shells without a listener.
@@ -504,9 +491,19 @@ export function doSeedDatabases(databases: ISeedDatabaseEntry[]): void {
 // Clears the mobile config store (databases, recent databases, secrets) by dispatching a window
 // event the mobile platform provider listens for. Used by smoke tests for a deterministic start.
 //
-export function doResetConfig(): void {
+export async function doResetConfig(): Promise<void> {
     console.log(`test-reset-config: clearing persisted config`);
-    window.dispatchEvent(new CustomEvent(TEST_RESET_CONFIG_EVENT));
+    const pending: Promise<void>[] = [];
+    const detail: ITestResetConfigEventDetail = {
+        waitFor: (operation: Promise<void>): void => {
+            pending.push(operation);
+        },
+    };
+    // dispatchEvent is synchronous, so a listener has registered its keychain clear in `pending` by the
+    // time this returns. Awaiting it makes the reset-config command resolve only once the clear has
+    // completed, so a secret added or read right after starts from a genuinely cleared store.
+    window.dispatchEvent(new CustomEvent(TEST_RESET_CONFIG_EVENT, { detail }));
+    await Promise.all(pending);
 }
 
 //
@@ -553,6 +550,8 @@ export function installTestDriver(transport: ITestTransport): void {
                 return undefined;
             case 'get-value':
                 return getValue(payload.dataId!);
+            case 'get-storage':
+                return window.localStorage.getItem(payload.storageKey!) ?? '';
             case 'navigate':
                 doNavigate(payload.page!);
                 return undefined;
@@ -565,9 +564,6 @@ export function installTestDriver(transport: ITestTransport): void {
             case 'seed-databases':
                 doSeedDatabases(payload.databases!);
                 return undefined;
-            case 'seed-secrets':
-                doSeedSecrets(payload.secrets!);
-                return undefined;
             case 'seed-recent':
                 doSeedRecent(payload.recent!);
                 return undefined;
@@ -575,7 +571,7 @@ export function installTestDriver(transport: ITestTransport): void {
                 doSeedNews(payload.news!);
                 return undefined;
             case 'reset-config':
-                doResetConfig();
+                await doResetConfig();
                 return undefined;
             case 'cycle-advance':
                 doCycleAdvance();

@@ -17,7 +17,6 @@ import {
     doMenu,
     doOpenDatabase,
     doSeedDatabases,
-    doSeedSecrets,
     doSeedRecent,
     doSeedNews,
     doResetConfig,
@@ -25,12 +24,11 @@ import {
     TEST_MENU_EVENT,
     TEST_OPEN_DATABASE_EVENT,
     TEST_SEED_DATABASES_EVENT,
-    TEST_SEED_SECRETS_EVENT,
     TEST_SEED_RECENT_EVENT,
     TEST_SEED_NEWS_EVENT,
     TEST_RESET_CONFIG_EVENT,
 } from "../../lib/test-driver";
-import type { ITestTransport, ITestCommandPayload } from "../../lib/test-driver";
+import type { ITestTransport, ITestCommandPayload, ITestResetConfigEventDetail } from "../../lib/test-driver";
 
 //
 // Regression guard for the create-database smoke-test failure caused by commit fa673c6b (mobile
@@ -474,9 +472,26 @@ describe("mobile config-seeding driver commands", () => {
         expect(captureEvent(TEST_SEED_DATABASES_EVENT, () => doSeedDatabases(databases))).toEqual(databases);
     });
 
-    test("doSeedSecrets dispatches the secrets to seed", () => {
-        const secrets = [{ entry: { name: "s", type: "api-key" }, value: "v" }];
-        expect(captureEvent(TEST_SEED_SECRETS_EVENT, () => doSeedSecrets(secrets))).toEqual(secrets);
+    test("doResetConfig awaits the keychain clear a listener registers", async () => {
+        let resolveClear: (() => void) | undefined;
+        const listener = (event: Event) => {
+            const detail = (event as CustomEvent<ITestResetConfigEventDetail>).detail;
+            detail.waitFor(new Promise<void>(resolve => { resolveClear = resolve; }));
+        };
+        window.addEventListener(TEST_RESET_CONFIG_EVENT, listener);
+        try {
+            let settled = false;
+            const pending = doResetConfig().then(() => { settled = true; });
+            // Not resolved until the registered clear completes.
+            await Promise.resolve();
+            expect(settled).toBe(false);
+            resolveClear!();
+            await pending;
+            expect(settled).toBe(true);
+        }
+        finally {
+            window.removeEventListener(TEST_RESET_CONFIG_EVENT, listener);
+        }
     });
 
     test("doSeedRecent dispatches the recent databases to seed", () => {
@@ -494,7 +509,7 @@ describe("mobile config-seeding driver commands", () => {
         const listener = () => { fired = true; };
         window.addEventListener(TEST_RESET_CONFIG_EVENT, listener);
         try {
-            doResetConfig();
+            void doResetConfig();
         }
         finally {
             window.removeEventListener(TEST_RESET_CONFIG_EVENT, listener);

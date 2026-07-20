@@ -98,11 +98,89 @@ export function signalTestAppReady(): void {
 }
 
 //
-// Test-only: resets the ready-gating state so each unit test starts from a clean slate.
+// The largest number of log messages held while the socket is still connecting. The buffer only has to
+// cover app startup (the window between the console being patched and the socket opening), so this is
+// far more than needed; it exists so a runaway logger cannot grow the buffer without bound. When it is
+// full the newest messages are dropped, keeping the earliest startup diagnostics this buffer exists for.
+//
+const MAX_BUFFERED_LOGS = 500;
+
+//
+// Log messages produced before the socket reached OPEN, held in order and flushed on open. Without this
+// every log emitted during early startup was silently discarded: the socket is still CONNECTING then, so
+// the send was skipped and the line never reached app.log. That made startup diagnostics (notably the
+// mobile keychain-secrets load) structurally invisible to the smoke tests.
+//
+let bufferedLogs: ITestWebSocketMessage[] = [];
+
+//
+// The socket log messages are sent over once it is open, or null before connectTestDriverWebSocket runs.
+//
+let activeSocket: WebSocket | null = null;
+
+//
+// Whether the console has already been patched, so patching again is a no-op rather than wrapping the
+// console a second time (which would duplicate every line).
+//
+let consolePatched = false;
+
+//
+// The console.log replaced by patchConsole, kept so restoreConsole can put it back.
+//
+let originalConsoleLog: ((...args: unknown[]) => void) | null = null;
+
+//
+// The console.warn replaced by patchConsole, kept so restoreConsole can put it back.
+//
+let originalConsoleWarn: ((...args: unknown[]) => void) | null = null;
+
+//
+// The console.error replaced by patchConsole, kept so restoreConsole can put it back.
+//
+let originalConsoleError: ((...args: unknown[]) => void) | null = null;
+
+//
+// Sends a log message to the host bridge, or buffers it when the socket is not open yet so it is
+// delivered, in order, once the connection completes.
+//
+function enqueueLog(message: ITestWebSocketMessage): void {
+    if (activeSocket !== null && activeSocket.readyState === WebSocket.OPEN) {
+        activeSocket.send(JSON.stringify(message));
+        return;
+    }
+
+    if (bufferedLogs.length >= MAX_BUFFERED_LOGS) {
+        // Full: keep the oldest, which are the startup diagnostics this buffer exists for.
+        return;
+    }
+    bufferedLogs.push(message);
+}
+
+//
+// Sends every buffered log message in order and empties the buffer. Called when the socket opens, before
+// "ready", so the startup output is already in app.log by the time the host considers the app ready.
+//
+function flushBufferedLogs(): void {
+    const pending = bufferedLogs;
+    bufferedLogs = [];
+
+    for (const message of pending) {
+        if (activeSocket !== null && activeSocket.readyState === WebSocket.OPEN) {
+            activeSocket.send(JSON.stringify(message));
+        }
+    }
+}
+
+//
+// Test-only: resets the ready-gating, console-patch and log-buffer state so each unit test starts from a
+// clean slate.
 //
 export function resetTestReadyGateForTests(): void {
     testAppMounted = false;
     deferredSendReady = null;
+    activeSocket = null;
+    bufferedLogs = [];
+    restoreConsole();
 }
 
 //
@@ -112,6 +190,7 @@ export function resetTestReadyGateForTests(): void {
 //
 export function connectTestDriverWebSocket(url: string): void {
     const socket = new WebSocket(url);
+    activeSocket = socket;
 
     //
     // The command handler registered by the shared driver via transport.onCommand.
@@ -132,15 +211,19 @@ export function connectTestDriverWebSocket(url: string): void {
             commandHandler = handler;
         },
         sendLog(level: string, message: string): void {
-            sendMessage({ type: "log", level, message });
+            enqueueLog({ type: "log", level, message });
         },
     };
 
     installTestDriver(transport);
 
-    patchConsole(transport);
+    patchConsole();
 
     socket.addEventListener("open", () => {
+        // Deliver anything logged while the socket was still connecting, in order and before "ready",
+        // so early-startup output is in app.log rather than silently dropped.
+        flushBufferedLogs();
+
         //
         // Withhold "ready" until the app has mounted its test-command window listeners. If it has
         // already mounted, send immediately; otherwise defer so a command issued the instant the
@@ -181,25 +264,56 @@ export function connectTestDriverWebSocket(url: string): void {
 }
 
 //
-// Patches console.log/warn/error to forward output over the transport, mirroring the desktop
-// renderer's test-mode console patch so raw console output appears in app.log.
+// Patches console.log/warn/error to forward output to the host bridge, mirroring the desktop renderer's
+// test-mode console patch so raw console output appears in app.log. Output produced before the socket
+// opens is buffered by enqueueLog rather than dropped. Patching is idempotent, so calling it from both
+// startTestDriverFromGlobal (early, to capture startup output) and connectTestDriverWebSocket wraps the
+// console only once.
 //
-function patchConsole(transport: ITestTransport): void {
-    const originalLog = console.log.bind(console);
-    const originalWarn = console.warn.bind(console);
-    const originalError = console.error.bind(console);
+function patchConsole(): void {
+    if (consolePatched) {
+        return;
+    }
+    consolePatched = true;
+
+    originalConsoleLog = console.log.bind(console);
+    originalConsoleWarn = console.warn.bind(console);
+    originalConsoleError = console.error.bind(console);
     console.log = (...args: unknown[]) => {
-        originalLog(...args);
-        transport.sendLog("info", args.map(String).join(" "));
+        originalConsoleLog!(...args);
+        enqueueLog({ type: "log", level: "info", message: args.map(String).join(" ") });
     };
     console.warn = (...args: unknown[]) => {
-        originalWarn(...args);
-        transport.sendLog("warn", args.map(String).join(" "));
+        originalConsoleWarn!(...args);
+        enqueueLog({ type: "log", level: "warn", message: args.map(String).join(" ") });
     };
     console.error = (...args: unknown[]) => {
-        originalError(...args);
-        transport.sendLog("error", args.map(String).join(" "));
+        originalConsoleError!(...args);
+        enqueueLog({ type: "log", level: "error", message: args.map(String).join(" ") });
     };
+}
+
+//
+// Puts the original console methods back and discards any buffered output. Used when the app turns out
+// not to be running in test mode, so a normal (non-test) run is not left with a patched console and a
+// buffer that can never be flushed.
+//
+function restoreConsole(): void {
+    if (!consolePatched) {
+        return;
+    }
+    consolePatched = false;
+
+    if (originalConsoleLog !== null) {
+        console.log = originalConsoleLog;
+    }
+    if (originalConsoleWarn !== null) {
+        console.warn = originalConsoleWarn;
+    }
+    if (originalConsoleError !== null) {
+        console.error = originalConsoleError;
+    }
+    bufferedLogs = [];
 }
 
 //
@@ -212,6 +326,12 @@ export function startTestDriverFromGlobal(): void {
     const maxAttempts = 50;
     let attempts = 0;
 
+    // Patch the console before polling, not just once connected. The config arrives asynchronously, so
+    // anything the app logs while this polls (app startup, including the keychain-secrets load) would
+    // otherwise never be captured at all. enqueueLog buffers it until the socket opens. If no config
+    // ever appears the app is not under test, and the poll restores the console below.
+    patchConsole();
+
     function poll(): void {
         const config = (globalThis as ITestGlobal).__PHOTOSPHERE_TEST__;
         if (config && config.host && config.port) {
@@ -222,7 +342,12 @@ export function startTestDriverFromGlobal(): void {
         attempts += 1;
         if (attempts < maxAttempts) {
             setTimeout(poll, 100);
+            return;
         }
+
+        // Not running under test: undo the speculative console patch so a normal run is not left
+        // forwarding into a buffer that will never be flushed.
+        restoreConsole();
     }
 
     poll();

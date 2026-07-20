@@ -115,6 +115,16 @@ export interface IHost {
 
     // Signs base64-encoded data with SHA256withRSA using the PEM private key and returns a base64 signature.
     cryptoSignSha256: (privateKeyPem: string, dataBase64: string) => string;
+
+    // Reads a secret from the device keychain by key, returning its value (or null when absent). Lets the
+    // worker vault resolve secret values natively so they never transit task payloads or the log.
+    secureStoreGet: (key: string) => string | null;
+
+    // Writes (or overwrites) a secret in the device keychain.
+    secureStoreSet: (key: string, value: string) => void;
+
+    // Deletes a secret from the device keychain (a missing key is not an error).
+    secureStoreDelete: (key: string) => void;
 }
 
 //
@@ -155,6 +165,9 @@ export const EXPECTED_HOST_FUNCTIONS: string[] = [
     "tlsStopListening",
     "cryptoGenerateRsaKeyPair",
     "cryptoSignSha256",
+    "secureStoreGet",
+    "secureStoreSet",
+    "secureStoreDelete",
 ];
 
 //

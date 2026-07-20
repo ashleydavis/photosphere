@@ -173,6 +173,27 @@ public final class HostBridge {
     }
 
     //
+    // host.secureStoreGet(key): reads a secret from the device keychain, returning its value or null.
+    //
+    public String secureStoreGet(String key) {
+        return SecureStoreHost.secureStoreGet(key);
+    }
+
+    //
+    // host.secureStoreSet(key, value): writes (or overwrites) a secret in the device keychain.
+    //
+    public void secureStoreSet(String key, String value) {
+        SecureStoreHost.secureStoreSet(key, value);
+    }
+
+    //
+    // host.secureStoreDelete(key): deletes a secret from the device keychain (a missing key is not an error).
+    //
+    public void secureStoreDelete(String key) {
+        SecureStoreHost.secureStoreDelete(key);
+    }
+
+    //
     // Sets the task that is about to run on this context. Called by the engine before
     // invoking runTask, and cleared after.
     //

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Backup rules for API 30 and below (android:fullBackupContent).
+
+    The secure store must never be backed up. Its contents are encrypted with a Tink keyset that is
+    itself encrypted by a master key held in the AndroidKeyStore, and keystore keys are non-exportable,
+    so they are NOT part of a backup. Restoring the preferences file onto a device whose keystore holds a
+    different master key leaves entries that cannot be decrypted: reads then either throw or, because key
+    names are encrypted deterministically, silently miss and report the secret as absent. Excluding the
+    file means a restored install starts with no stored secrets, which is correct and recoverable, rather
+    than with secrets that appear to have vanished.
+-->
+<full-backup-content>
+    <exclude domain="sharedpref" path="photosphere_secure_store.xml" />
+</full-backup-content>
