@@ -13,13 +13,13 @@ ALL 31 STEPS ARE test:and GREEN AND READY TO REVIEW.
 - [x] 1 - mobile harness fatal by construction - `step-1-mobile-harness-fatal`
 - [x] 2 - desktop harness fatal - `step-2-desktop-harness-fatal`
 - [x] 3 - state-assertion helpers (`wait_for_value`/`assert_value`) - `step-3-assert-helpers`
-- [ ] 4 - test driver fails rather than warns - `step-4-test-driver-throws`
-- [ ] 5 - story player silent passes - `step-5-story-player`
-- [ ] 6 - real state assertions in the 11 rewritten tests - `step-6-real-assertions`
+- [x] 4 - test driver fails rather than warns - `step-4-test-driver-throws`
+- [x] 5 - story player silent passes - `step-5-story-player`
+- [x] 6 - real state assertions in the 11 rewritten tests - `step-6-real-assertions`
 - [ ] 6a+6b - smoke-test numbering + mobile secrets in the device keychain - `step-6ab-numbering-keychain` - smoke test `39-secret-in-keychain`
 - [ ] 7 (absorbs 8) - LAN receive on mobile - `step-7-lan-receive`
-- [ ] 9 - `cancelTasks`/`shutdown` honest reporting - `step-9-cancel-shutdown-honest` - smoke test `40-cancel-shutdown-reports-failure`
-- [ ] 10 - mobile theme survives restart - `step-10-theme-persist` - smoke test `28-theme-persists`
+- [x] 9 - `cancelTasks`/`shutdown` honest reporting - `step-9-cancel-shutdown-honest` - smoke test `40-cancel-shutdown-reports-failure`
+- [x] 10 - mobile theme survives restart - `step-10-theme-persist` - smoke test `28-theme-persists`
 - [ ] 11 - `checkDatabaseExists` real - `step-11-check-db-exists`
 - [ ] 12 (absorbs 13) - asset export path - `step-12-export-path`
 - [ ] 14 (absorbs 15, 16, 17, 18) - crypto, vault, S3, sync - `step-14-crypto-vault-s3-sync` - smoke tests `32-encrypted-database`, `34-sync` (this worktree runs 29 tests, not 27)
