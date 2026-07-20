@@ -10,9 +10,9 @@ ALL 31 STEPS ARE test:and GREEN AND READY TO REVIEW.
 
 ## Ready to review (test:and green)
 
-- [ ] 1 - mobile harness fatal by construction - `step-1-mobile-harness-fatal`
-- [ ] 2 - desktop harness fatal - `step-2-desktop-harness-fatal`
-- [ ] 3 - state-assertion helpers (`wait_for_value`/`assert_value`) - `step-3-assert-helpers`
+- [x] 1 - mobile harness fatal by construction - `step-1-mobile-harness-fatal`
+- [x] 2 - desktop harness fatal - `step-2-desktop-harness-fatal`
+- [x] 3 - state-assertion helpers (`wait_for_value`/`assert_value`) - `step-3-assert-helpers`
 - [ ] 4 - test driver fails rather than warns - `step-4-test-driver-throws`
 - [ ] 5 - story player silent passes - `step-5-story-player`
 - [ ] 6 - real state assertions in the 11 rewritten tests - `step-6-real-assertions`

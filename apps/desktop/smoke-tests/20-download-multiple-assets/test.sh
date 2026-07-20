@@ -65,9 +65,12 @@ wait_for_log "$TMP_DIR" "Gallery items rendered"
 log_success "Gallery items are in the DOM"
 
 log_info "Selecting both gallery items..."
-# All thumbs share data-id="gallery-item-checkbox"; the test-click handler
-# accepts an nth index so we can target each one in turn.
-send_command "$APP_PORT" click '{"dataId":"gallery-item-checkbox","nth":0}'
+# The selection checkboxes are hidden (display:none) until selecting mode is on,
+# so the first item has to be selected with a long press, the same gesture a
+# user makes. Once selecting mode is on every checkbox becomes visible and the
+# second item can be selected by clicking its checkbox. All thumbs share
+# data-id="gallery-item-checkbox", so nth picks which one.
+send_command "$APP_PORT" long-press '{"dataId":"gallery-thumb","nth":0}'
 send_command "$APP_PORT" click '{"dataId":"gallery-item-checkbox","nth":1}'
 
 log_info "Opening right sidebar..."

@@ -51,7 +51,9 @@ wait_for_log "$TMP_DIR" "Gallery items rendered"
 log_success "Gallery items are in the DOM"
 
 log_info "Selecting the first gallery item..."
-send_command "$APP_PORT" click '{"dataId":"gallery-item-checkbox"}'
+# The selection checkbox is hidden (display:none) until selecting mode is on, so
+# the item is selected with a long press, the same gesture a user makes.
+send_command "$APP_PORT" long-press '{"dataId":"gallery-thumb","nth":0}'
 
 log_info "Opening right sidebar..."
 send_command "$APP_PORT" click '{"dataId":"right-sidebar-button"}'

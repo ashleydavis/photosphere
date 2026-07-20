@@ -92,6 +92,7 @@ if (isTestMode && electronAPI) {
         onCommand(handler: (command: string, payload: ITestCommandPayload) => Promise<string | undefined>): void {
             electronAPI.onMessage('test-click', (data: ITestCommandPayload) => { void handler('click', data); });
             electronAPI.onMessage('test-long-press-click', (data: ITestCommandPayload) => { void handler('long-press-click', data); });
+            electronAPI.onMessage('test-long-press', (data: ITestCommandPayload) => { void handler('long-press', data); });
             electronAPI.onMessage('test-type', (data: ITestCommandPayload) => { void handler('type', data); });
             electronAPI.onMessage('test-drop', (data: ITestCommandPayload) => { void handler('drop', data); });
         },
