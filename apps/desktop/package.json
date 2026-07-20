@@ -35,7 +35,7 @@
     "config": "workspace:*",
     "desktop-frontend": "workspace:*",
     "express": "^5.2.1",
-    "lan-share": "workspace:*",
+    "lan-share-network": "workspace:*",
     "node-utils": "workspace:*",
     "rest-api": "workspace:*",
     "serialize-error": "^11.0.0",

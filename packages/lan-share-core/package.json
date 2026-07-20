@@ -1,7 +1,7 @@
 {
-  "name": "lan-share",
+  "name": "lan-share-core",
   "version": "1.0.0",
-  "description": "LAN-based sharing of database configs and secrets between devices.",
+  "description": "Platform-agnostic LAN-share payload types and secret-import logic, shared by desktop (api) and mobile with no Node dependencies.",
   "main": "src/index.ts",
   "type": "module",
   "scripts": {
@@ -26,8 +26,5 @@
     "ts-jest": "^29.0.5",
     "typescript": "^5.6.3"
   },
-  "dependencies": {
-    "vault": "workspace:*",
-    "storage": "workspace:*"
-  }
+  "dependencies": {}
 }

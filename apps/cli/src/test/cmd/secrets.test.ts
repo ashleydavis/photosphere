@@ -11,7 +11,7 @@ jest.mock('vault', () => ({
     getVault: jest.fn(),
     getDefaultVaultType: jest.fn().mockReturnValue('plaintext'),
 }));
-jest.mock('lan-share', () => ({
+jest.mock('lan-share-network', () => ({
     LanShareSender: jest.fn(),
     LanShareReceiver: jest.fn(),
     resolveSecretSharePayload: jest.fn(),

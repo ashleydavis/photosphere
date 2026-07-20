@@ -16,6 +16,7 @@
   "author": "ashley@codecapers.com.au",
   "license": "MIT",
   "dependencies": {
+    "lan-share-core": "workspace:*",
     "task-queue": "workspace:*",
     "user-interface": "workspace:*",
     "react": "^18.2.0",

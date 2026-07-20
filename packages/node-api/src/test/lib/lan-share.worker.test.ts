@@ -12,7 +12,7 @@ const mockReceivers: any[] = [];
 const mockSenders: any[] = [];
 const mockSendResultRef = { value: true };
 
-jest.mock('lan-share', () => {
+jest.mock('lan-share-network', () => {
     //
     // Fake receiver whose receive() stays pending until a payload is delivered or cancel() is called.
     //

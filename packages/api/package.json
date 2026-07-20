@@ -38,6 +38,7 @@
     "js-yaml": "^4.1.0",
     "json-stable-stringify": "^1.3.0",
     "jszip": "^3.10.1",
+    "lan-share-core": "workspace:*",
     "lodash": "^4.17.21",
     "merkle-tree": "workspace:*",
     "mime": "^4.0.7",

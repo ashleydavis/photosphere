@@ -16,4 +16,4 @@ export * from "./lib/replicate-database.types";
 export * from "./lib/sync-database.types";
 export * from "./lan-share/index";
 export * from "./lan-share/lan-share-resolve";
-export * from "./lan-share/lan-share-import";
+export * from "./lan-share/lan-share-receive";

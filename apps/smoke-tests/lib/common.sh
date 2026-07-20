@@ -278,6 +278,49 @@ send_command() {
 }
 
 #
+# Reads the value of a data-id element via the control bridge's /get-value endpoint, echoing the raw
+# value string to stdout (empty when the element is absent, since the driver's getValue returns '').
+# A value-returning helper only: it never exits, so it is safe inside a command substitution. The
+# JSON "value" field is extracted with grep -oP rather than sed, because sed echoes its input
+# unchanged when the pattern does not match and so cannot signal an absent value.
+# Usage: read_value <port> <dataId>
+#
+read_value() {
+    local port="$1"
+    local data_id="$2"
+    local response
+    response=$(curl -sf "http://localhost:$port/get-value?dataId=$data_id" 2>/dev/null || true)
+    printf '%s' "$response" | grep -oP '"value":"\K[^"]*' || true
+}
+
+#
+# Polls /get-value until the element's value matches expected_regex, up to a timeout. An empty value
+# (a missing element, or a mistyped dataId) never matches, so it fails rather than passing. Exits 1
+# on timeout and prints nothing capturable, so it must be called as a statement, never inside a
+# command substitution (where exit would only kill the subshell and the failure would be swallowed).
+# Usage: wait_for_value <port> <dataId> <expected_regex> [timeout_seconds]
+#
+wait_for_value() {
+    local port="$1"
+    local data_id="$2"
+    local expected="$3"
+    local timeout="${4:-20}"
+    local elapsed=0
+    local value=""
+    while [ "$elapsed" -lt "$timeout" ]; do
+        value="$(read_value "$port" "$data_id")"
+        if [ -n "$value" ] && echo "$value" | grep -qE "$expected"; then
+            log_success "Value for '$data_id' matched /$expected/: $value"
+            return 0
+        fi
+        sleep 1
+        elapsed=$((elapsed + 1))
+    done
+    log_error "Timed out waiting for '$data_id' to match /$expected/ (last value: '$value')"
+    exit 1
+}
+
+#
 # Sends /quit (bridge stops the app host-side), then stops the app and kills the bridge.
 # Usage: stop_app <port> <tmp_dir>
 #
@@ -378,6 +421,68 @@ add_secret_via_ui() {
 
     send_command "$port" click '{"dataId":"add-secret-confirm"}' || return 1
     wait_for_log "$TMP_DIR" "Secret added"
+}
+
+#
+# Runs the psi CLI from source against a vault and config isolated under the test's own tmp dir, so a
+# test never reads or writes the developer's real OS keychain or database list. Both variables are
+# required for isolation: PHOTOSPHERE_VAULT_DIR alone still selects the keychain vault, because
+# getDefaultVaultType defaults to "keychain" unless PHOTOSPHERE_VAULT_TYPE says otherwise. stdin is
+# closed so an unexpected interactive prompt aborts instead of hanging the run, and NO_COLOR keeps
+# the output greppable. Usage: run_cli <tmp_dir> <cli args...>
+#
+run_cli() {
+    local tmp_dir="$1"
+    shift
+    (
+        cd "$REPO_DIR/apps/cli" && \
+        NO_COLOR=1 \
+        PHOTOSPHERE_VAULT_TYPE="plaintext" \
+        PHOTOSPHERE_VAULT_DIR="$tmp_dir/cli-vault" \
+        PHOTOSPHERE_CONFIG_DIR="$tmp_dir/cli-config" \
+        timeout --kill-after=5 90 bun run start -- "$@" </dev/null
+    )
+}
+
+#
+# Fails the test unless the Android emulator is attached to the host LAN bridge. Host-to-device LAN
+# sharing needs it: under QEMU's default user-mode NAT the guest's discovery broadcast never reaches
+# the host and the host cannot open the return connection, so a host-side sender would silently wait
+# out its full 60-second timeout and exit 0. Detected from the guest's wlan0 address, the same signal
+# android_host_address uses. A no-op off Android, where the simulator shares the host's network.
+# Usage: require_lan_bridge
+#
+require_lan_bridge() {
+    if [ "$PLATFORM" != "android" ]; then
+        return 0
+    fi
+    if adb shell ip addr show wlan0 2>/dev/null | tr -d '\r' | grep -q 'inet 192\.168\.55\.'; then
+        log_success "Emulator is on the host LAN bridge."
+        return 0
+    fi
+    log_error "The emulator is not on the host LAN bridge, so a host-to-device LAN transfer cannot work."
+    log_error "Bring it up with: sudo apps/android-frontend/scripts/emulator-lan-bridge.sh up"
+    exit 1
+}
+
+#
+# Runs a psi CLI LAN send and fails the test unless it reports a successful transfer. The exit code
+# alone is NOT a usable signal: when the sender never discovers a receiver it prints "No device found
+# within 60 seconds." and still exits 0, so a silent non-delivery would pass. Asserting on the
+# success line is what makes a failed transfer fail the test. run_cli caps the send with `timeout` so
+# a wedged sender cannot hang the suite. Output is written to <tmp_dir>/sender.log and dumped on
+# failure. Usage: cli_send_expect_success <tmp_dir> <cli args...>
+#
+cli_send_expect_success() {
+    local tmp_dir="$1"
+    shift
+    local sender_log="$tmp_dir/sender.log"
+    run_cli "$tmp_dir" "$@" >"$sender_log" 2>&1 || true
+    if ! grep -q "sent successfully" "$sender_log"; then
+        log_error "The CLI sender did not report a successful transfer. Sender output: $sender_log"
+        exit 1
+    fi
+    log_success "CLI sender reported a successful transfer."
 }
 
 # Load the platform launcher when this file is sourced.

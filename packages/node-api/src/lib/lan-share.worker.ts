@@ -1,5 +1,5 @@
 import { ITaskContext } from "task-queue";
-import { LanShareReceiver, LanShareSender } from "lan-share";
+import { LanShareReceiver, LanShareSender } from "lan-share-network";
 import type {
     IReceiveShareTaskData,
     IReceiveShareTaskResult,

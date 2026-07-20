@@ -1,4 +1,4 @@
-import { importDatabasePayload, importSecretPayload } from "../lan-share/lan-share-import";
+import { importDatabasePayload, importSecretPayload } from "../lan-share/lan-share-receive";
 import type { ConflictResolver, IDatabaseSharePayload, ISecretSharePayload } from "../lan-share/index";
 
 // Mock the vault module

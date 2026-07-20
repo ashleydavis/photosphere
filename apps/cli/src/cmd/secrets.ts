@@ -6,7 +6,7 @@ import { confirm, intro, outro, text, password, select, isCancel, spinner, note,
 import { exit } from 'node-utils';
 import * as fs from 'fs/promises';
 import { existsSync } from 'fs';
-import { LanShareSender, LanShareReceiver } from 'lan-share';
+import { LanShareSender, LanShareReceiver } from 'lan-share-network';
 import { resolveSecretSharePayload, importSecretPayload } from 'api';
 import type { ISecretSharePayload } from 'api';
 import { findSimilarSecretNames } from '../lib/init-cmd';

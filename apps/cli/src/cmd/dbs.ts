@@ -8,7 +8,7 @@ import { confirm, intro, outro, text, select, isCancel, spinner, note } from '..
 import { exit } from 'node-utils';
 import { generateKeyPair } from 'storage';
 import type { IDatabaseEntry } from 'node-api';
-import { LanShareSender, LanShareReceiver } from 'lan-share';
+import { LanShareSender, LanShareReceiver } from 'lan-share-network';
 import { resolveDatabaseSharePayload, importDatabasePayload } from 'api';
 import type { IDatabaseSharePayload, ConflictResolver, IConflictResolution } from 'api';
 import { findSimilarDatabaseNames, findSimilarKeyNames, findSimilarSecretNames } from '../lib/init-cmd';

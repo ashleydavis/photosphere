@@ -21,7 +21,7 @@ jest.mock('storage', () => ({
     generateKeyPair: jest.fn(),
     exportPublicKeyToPem: jest.fn(),
 }));
-jest.mock('lan-share', () => ({
+jest.mock('lan-share-network', () => ({
     LanShareSender: jest.fn(),
     LanShareReceiver: jest.fn(),
     resolveDatabaseSharePayload: jest.fn(),

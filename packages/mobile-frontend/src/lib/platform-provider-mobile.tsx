@@ -7,6 +7,8 @@ import { cancelMobileTasks, subscribeMobileTaskMessage, subscribeMobileTaskCompl
 import * as configStore from "./mobile-config-store";
 import { MobileSecretStore } from "./mobile-secure-store";
 import { createCapacitorSecureStore } from "./secure-store-plugin";
+import { importSharePayload as importReceivedShare, type IReceivedSharePayload } from "./mobile-share-receive";
+import type { IConflictResolution } from "lan-share-core";
 
 // Whether the in-page Eruda console has been initialised and whether it is currently visible.
 let erudaInitialised = false;
@@ -367,7 +369,10 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         return [];
     }, []);
 
-    const importSharePayload = useCallback(async (_payload: unknown, _conflictResolutions: Record<string, unknown>): Promise<void> => {
+    const importSharePayload = useCallback(async (payload: unknown, conflictResolutions: Record<string, unknown>): Promise<void> => {
+        // Imports a LAN-received database (into the config store) or secret (into the device keychain
+        // via secretStore, per step 6b); see mobile-share-receive.ts.
+        await importReceivedShare(persistentStore, secretStore, payload as IReceivedSharePayload, conflictResolutions as Record<string, IConflictResolution>);
     }, []);
 
     const markUpdateAsShown = useCallback(async (_version: string): Promise<void> => {
