@@ -11,6 +11,7 @@ import CircularProgress from '@mui/joy/CircularProgress';
 import Box from '@mui/joy/Box';
 import { usePlatform, type ISharedSecretEntry } from '../context/platform-context';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
+import { lanShareErrorMessage } from '../lib/lan-share-error-message';
 
 export interface IShareSecretDialogProps {
     // Whether the dialog is visible.
@@ -54,34 +55,42 @@ export function ShareSecretDialog({ open, entry, onClose }: IShareSecretDialogPr
         setPairingCode(code);
         setStep("showing-code");
 
-        // Get the secret value and build the payload
-        const value = await platform.getSecretValue(entry.name);
-        if (!value) {
-            setErrorMessage("Could not read secret value.");
-            setStep("error");
-            return;
-        }
+        try {
+            // Get the secret value and build the payload
+            const value = await platform.getSecretValue(entry.name);
+            if (!value) {
+                setErrorMessage("Could not read secret value.");
+                setStep("error");
+                return;
+            }
 
-        const payload = {
-            type: "secret" as const,
-            name: entry.name,
-            secretType: entry.type,
-            value,
-        };
+            const payload = {
+                type: "secret" as const,
+                name: entry.name,
+                secretType: entry.type,
+                value,
+            };
 
-        const foundEndpoint = await platform.waitForReceiver(payload, code);
-        if (!foundEndpoint) {
-            setErrorMessage("No receiver found within 60 seconds.");
-            setStep("error");
-            return;
-        }
+            const foundEndpoint = await platform.waitForReceiver(payload, code);
+            if (!foundEndpoint) {
+                setErrorMessage("No receiver found within 60 seconds.");
+                setStep("error");
+                return;
+            }
 
-        const success = await platform.sendToReceiver(foundEndpoint);
-        if (success) {
-            setStep("success");
+            const success = await platform.sendToReceiver(foundEndpoint);
+            if (success) {
+                setStep("success");
+            }
+            else {
+                setErrorMessage("Pairing code rejected by receiver.");
+                setStep("error");
+            }
         }
-        else {
-            setErrorMessage("Pairing code rejected by receiver.");
+        catch (err) {
+            // Surface the failure instead of leaving the dialog spinning on the pairing code.
+            log.exception("Share error:", err as Error);
+            setErrorMessage(lanShareErrorMessage(err as Error));
             setStep("error");
         }
     }, [entry, platform]);
@@ -173,7 +182,7 @@ export function ShareSecretDialog({ open, entry, onClose }: IShareSecretDialogPr
                 {step === "confirm" && (
                     <>
                         <Button variant="plain" onClick={handleCancel}>Cancel</Button>
-                        <Button data-id="share-secret-send-button" onClick={() => { handleStartSend().catch(err => log.exception("Share error:", err as Error)); }}>
+                        <Button data-id="share-secret-send-button" onClick={() => { handleStartSend(); }}>
                             Send
                         </Button>
                     </>

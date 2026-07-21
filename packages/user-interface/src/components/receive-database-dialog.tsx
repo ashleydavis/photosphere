@@ -19,6 +19,7 @@ import type { IConflictResolution } from 'api';
 import { usePlatform } from '../context/platform-context';
 import { useApp } from '../context/app-context';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
+import { lanShareErrorMessage } from '../lib/lan-share-error-message';
 
 export interface IReceiveDatabaseDialogProps {
     // Whether the dialog is visible.
@@ -132,27 +133,35 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
     // Starts the receiver with the entered code, waits for the sender payload, then moves to review.
     //
     const handleStartReceiving = useCallback(async () => {
-        await platform.startShareReceive(enteredCode);
-        setStep("waiting");
+        try {
+            await platform.startShareReceive(enteredCode);
+            setStep("waiting");
 
-        const received = await platform.waitShareReceive();
+            const received = await platform.waitShareReceive();
 
-        if (!received) {
-            setErrorMessage("No sender connected within 60 seconds.");
-            setStep("error");
-            return;
+            if (!received) {
+                setErrorMessage("No sender connected within 60 seconds.");
+                setStep("error");
+                return;
+            }
+
+            const receivedPayload = received as IReceivedDatabasePayload;
+            setPayload(receivedPayload);
+            setEditedName(receivedPayload.name);
+            setEditedDescription(receivedPayload.description || "");
+            setEditedPath(receivedPayload.path);
+            setImportS3(!!receivedPayload.s3Credentials);
+            setImportEncryption(!!receivedPayload.encryptionKey);
+            setImportGeocoding(!!receivedPayload.geocodingKey);
+            setStep("review");
+            log.event('Database review step');
         }
-
-        const receivedPayload = received as IReceivedDatabasePayload;
-        setPayload(receivedPayload);
-        setEditedName(receivedPayload.name);
-        setEditedDescription(receivedPayload.description || "");
-        setEditedPath(receivedPayload.path);
-        setImportS3(!!receivedPayload.s3Credentials);
-        setImportEncryption(!!receivedPayload.encryptionKey);
-        setImportGeocoding(!!receivedPayload.geocodingKey);
-        setStep("review");
-        log.event('Database review step');
+        catch (err) {
+            // Surface the failure instead of leaving the dialog spinning on "Waiting for sender...".
+            log.exception("Receive error:", err as Error);
+            setErrorMessage(lanShareErrorMessage(err as Error));
+            setStep("error");
+        }
     }, [enteredCode, platform]);
 
     //
@@ -193,14 +202,22 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
             return;
         }
 
-        const found = await detectConflicts(payload);
-        if (found.length > 0) {
-            setConflicts(found);
-            setStep("conflict");
-            return;
-        }
+        try {
+            const found = await detectConflicts(payload);
+            if (found.length > 0) {
+                setConflicts(found);
+                setStep("conflict");
+                return;
+            }
 
-        await proceedAfterSecretConflicts({});
+            await proceedAfterSecretConflicts({});
+        }
+        catch (err) {
+            // Surface the failure instead of leaving the dialog stuck on the review step.
+            log.exception("Import error:", err as Error);
+            setErrorMessage(lanShareErrorMessage(err as Error));
+            setStep("error");
+        }
     }, [payload, importS3, importEncryption, importGeocoding, editedName]);
 
     //
@@ -232,11 +249,19 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
     // Proceeds with the import after secret conflicts have been resolved.
     //
     const handleConflictsResolved = useCallback(async () => {
-        const resolutions: Record<string, IConflictResolution> = {};
-        for (const conflict of conflicts) {
-            resolutions[conflict.secretName] = conflict.resolution;
+        try {
+            const resolutions: Record<string, IConflictResolution> = {};
+            for (const conflict of conflicts) {
+                resolutions[conflict.secretName] = conflict.resolution;
+            }
+            await proceedAfterSecretConflicts(resolutions);
         }
-        await proceedAfterSecretConflicts(resolutions);
+        catch (err) {
+            // Surface the failure instead of leaving the dialog stuck on the conflict step.
+            log.exception("Import error:", err as Error);
+            setErrorMessage(lanShareErrorMessage(err as Error));
+            setStep("error");
+        }
     }, [conflicts, editedName]);
 
     //
@@ -245,25 +270,33 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
     // For Rename: imports under the user's chosen unique name.
     //
     const handleDbNameConflictResolved = useCallback(async () => {
-        if (dbNameConflictAction === "replace") {
-            if (existingDbName !== undefined) {
-                await removeDatabase(existingDbName);
+        try {
+            if (dbNameConflictAction === "replace") {
+                if (existingDbName !== undefined) {
+                    await removeDatabase(existingDbName);
+                }
+                await doImport(pendingSecretResolutions, editedName.trim());
+                return;
             }
-            await doImport(pendingSecretResolutions, editedName.trim());
-            return;
-        }
 
-        const trimmedRename = dbNameConflictRename.trim();
-        if (trimmedRename.length === 0) {
-            setDbNameConflictRenameError('Name is required');
-            return;
+            const trimmedRename = dbNameConflictRename.trim();
+            if (trimmedRename.length === 0) {
+                setDbNameConflictRenameError('Name is required');
+                return;
+            }
+            const stillCollides = await platform.findDatabase(trimmedRename);
+            if (stillCollides) {
+                setDbNameConflictRenameError(`A database named "${trimmedRename}" already exists.`);
+                return;
+            }
+            await doImport(pendingSecretResolutions, trimmedRename);
         }
-        const stillCollides = await platform.findDatabase(trimmedRename);
-        if (stillCollides) {
-            setDbNameConflictRenameError(`A database named "${trimmedRename}" already exists.`);
-            return;
+        catch (err) {
+            // Surface the failure instead of leaving the dialog stuck on the conflict step.
+            log.exception("Import error:", err as Error);
+            setErrorMessage(lanShareErrorMessage(err as Error));
+            setStep("error");
         }
-        await doImport(pendingSecretResolutions, trimmedRename);
     }, [dbNameConflictAction, dbNameConflictRename, existingDbName, pendingSecretResolutions, editedName, platform, removeDatabase]);
 
     //
@@ -541,7 +574,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
                             <Button
                                 data-id="receive-database-start-button"
                                 disabled={!/^\d{4}$/.test(enteredCode)}
-                                onClick={() => { handleStartReceiving().catch(err => log.exception("Receive error:", err as Error)); }}
+                                onClick={() => { handleStartReceiving(); }}
                             >
                                 Start
                             </Button>
@@ -558,7 +591,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
                             <Button
                                 data-id="receive-database-save-button"
                                 disabled={!editedName || !editedPath}
-                                onClick={() => { handleSave().catch(err => log.exception("Import error:", err as Error)); }}
+                                onClick={() => { handleSave(); }}
                             >
                                 Save
                             </Button>
@@ -570,7 +603,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
                             <Button variant="plain" onClick={() => setStep("review")}>Back</Button>
                             <Button
                                 disabled={conflictResolutionInvalid}
-                                onClick={() => { handleConflictsResolved().catch(err => log.exception("Import error:", err as Error)); }}
+                                onClick={() => { handleConflictsResolved(); }}
                             >
                                 Continue
                             </Button>
@@ -582,7 +615,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
                             <Button variant="plain" onClick={() => setStep("review")}>Cancel</Button>
                             <Button
                                 data-id="receive-database-name-conflict-continue"
-                                onClick={() => { handleDbNameConflictResolved().catch(err => log.exception("Import error:", err as Error)); }}
+                                onClick={() => { handleDbNameConflictResolved(); }}
                             >
                                 Continue
                             </Button>

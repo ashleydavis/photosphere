@@ -15,6 +15,7 @@ import Box from '@mui/joy/Box';
 import { usePlatform, type IDatabaseEntry } from '../context/platform-context';
 import type { IDatabaseSharePayload, IShareS3Credentials, IShareEncryptionKey, IShareGeocodingKey } from 'api';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
+import { lanShareErrorMessage } from '../lib/lan-share-error-message';
 import { ResponsiveDialog } from './responsive-dialog';
 
 export interface IShareDatabaseDialogProps {
@@ -98,68 +99,76 @@ export function ShareDatabaseDialog({ open, entry, onClose }: IShareDatabaseDial
         setPairingCode(code);
         setStep("showing-code");
 
-        let s3Credentials: IShareS3Credentials | undefined;
-        if (form.includeS3 && entry.s3Key) {
-            const valueJson = await platform.getSecretValue(entry.s3Key);
-            if (valueJson) {
-                const parsed = JSON.parse(valueJson);
-                s3Credentials = {
-                    name: entry.s3Key,
-                    region: parsed.region,
-                    accessKeyId: parsed.accessKeyId,
-                    secretAccessKey: parsed.secretAccessKey,
-                    endpoint: parsed.endpoint,
-                };
+        try {
+            let s3Credentials: IShareS3Credentials | undefined;
+            if (form.includeS3 && entry.s3Key) {
+                const valueJson = await platform.getSecretValue(entry.s3Key);
+                if (valueJson) {
+                    const parsed = JSON.parse(valueJson);
+                    s3Credentials = {
+                        name: entry.s3Key,
+                        region: parsed.region,
+                        accessKeyId: parsed.accessKeyId,
+                        secretAccessKey: parsed.secretAccessKey,
+                        endpoint: parsed.endpoint,
+                    };
+                }
+            }
+
+            let encryptionKey: IShareEncryptionKey | undefined;
+            if (form.includeEncryption && entry.encryptionKey) {
+                const valueJson = await platform.getSecretValue(entry.encryptionKey);
+                if (valueJson) {
+                    encryptionKey = {
+                        name: entry.encryptionKey,
+                        privateKeyPem: valueJson,
+                        publicKeyPem: "",
+                    };
+                }
+            }
+
+            let geocodingKey: IShareGeocodingKey | undefined;
+            if (form.includeGeocoding && entry.geocodingKey) {
+                const valueJson = await platform.getSecretValue(entry.geocodingKey);
+                if (valueJson) {
+                    geocodingKey = {
+                        name: entry.geocodingKey,
+                        apiKey: valueJson,
+                    };
+                }
+            }
+
+            const payload: IDatabaseSharePayload = {
+                type: "database",
+                name: form.name.trim(),
+                description: form.description,
+                path: form.path.trim(),
+                origin: entry.origin,
+                s3Credentials,
+                encryptionKey,
+                geocodingKey,
+            };
+
+            const foundEndpoint = await platform.waitForReceiver(payload, code);
+            if (!foundEndpoint) {
+                setErrorMessage("No receiver found within 60 seconds.");
+                setStep("error");
+                return;
+            }
+
+            const success = await platform.sendToReceiver(foundEndpoint);
+            if (success) {
+                setStep("success");
+            }
+            else {
+                setErrorMessage("Pairing code rejected by receiver.");
+                setStep("error");
             }
         }
-
-        let encryptionKey: IShareEncryptionKey | undefined;
-        if (form.includeEncryption && entry.encryptionKey) {
-            const valueJson = await platform.getSecretValue(entry.encryptionKey);
-            if (valueJson) {
-                encryptionKey = {
-                    name: entry.encryptionKey,
-                    privateKeyPem: valueJson,
-                    publicKeyPem: "",
-                };
-            }
-        }
-
-        let geocodingKey: IShareGeocodingKey | undefined;
-        if (form.includeGeocoding && entry.geocodingKey) {
-            const valueJson = await platform.getSecretValue(entry.geocodingKey);
-            if (valueJson) {
-                geocodingKey = {
-                    name: entry.geocodingKey,
-                    apiKey: valueJson,
-                };
-            }
-        }
-
-        const payload: IDatabaseSharePayload = {
-            type: "database",
-            name: form.name.trim(),
-            description: form.description,
-            path: form.path.trim(),
-            origin: entry.origin,
-            s3Credentials,
-            encryptionKey,
-            geocodingKey,
-        };
-
-        const foundEndpoint = await platform.waitForReceiver(payload, code);
-        if (!foundEndpoint) {
-            setErrorMessage("No receiver found within 60 seconds.");
-            setStep("error");
-            return;
-        }
-
-        const success = await platform.sendToReceiver(foundEndpoint);
-        if (success) {
-            setStep("success");
-        }
-        else {
-            setErrorMessage("Pairing code rejected by receiver.");
+        catch (err) {
+            // Surface the failure instead of leaving the dialog spinning on the pairing code.
+            log.exception("Share error:", err as Error);
+            setErrorMessage(lanShareErrorMessage(err as Error));
             setStep("error");
         }
     }, [form, entry, platform]);
@@ -295,7 +304,7 @@ export function ShareDatabaseDialog({ open, entry, onClose }: IShareDatabaseDial
                 {step === "review" && (
                     <>
                         <Button variant="plain" onClick={handleCancel}>Cancel</Button>
-                        <Button data-id="share-database-send-button" onClick={() => { handleStartSend().catch(err => log.exception("Share error:", err as Error)); }}>
+                        <Button data-id="share-database-send-button" onClick={() => { handleStartSend(); }}>
                             Send
                         </Button>
                     </>
