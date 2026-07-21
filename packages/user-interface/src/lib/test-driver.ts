@@ -109,6 +109,13 @@ export interface ITestCommandPayload {
     // A localStorage key to read back (get-storage command). Used by smoke tests to assert that a
     // value is or is not present in WebView localStorage (for example that no plaintext secret lingers).
     storageKey?: string;
+
+    // Outcome to stage for the next mobile asset export (stage-export command).
+    exportOutcome?: "shared" | "cancelled";
+
+    // Result to stage for the next mobile pickFolder name prompt: a path, or null for cancel
+    // (stage-pick-folder command).
+    folderResult?: string | null;
 }
 
 //
@@ -365,6 +372,37 @@ export function doPickFiles(paths: string[]): void {
 }
 
 //
+// Window event name used to stage the outcome of the next mobile asset export (share sheet) in tests.
+//
+export const TEST_STAGE_EXPORT_EVENT = "photosphere-test:stage-export";
+
+//
+// Stages the outcome of the next asset export by dispatching a window event the mobile platform
+// provider listens for, so the export share sheet resolves with this outcome (a completed "shared"
+// or a "cancelled") without presenting the non-automatable native sheet. The smoke test calls this
+// before triggering a download to drive the success and cancel paths.
+//
+export function doStageExport(outcome: "shared" | "cancelled"): void {
+    console.log(`test-stage-export: staging export outcome "${outcome}"`);
+    window.dispatchEvent(new CustomEvent(TEST_STAGE_EXPORT_EVENT, { detail: outcome }));
+}
+
+//
+// Window event name used to stage the result of the next mobile pickFolder name prompt in tests.
+//
+export const TEST_STAGE_PICK_FOLDER_EVENT = "photosphere-test:stage-pick-folder";
+
+//
+// Stages the result of the next pickFolder "Browse" name prompt by dispatching a window event the
+// mobile platform provider listens for: a sandbox-relative path is returned as the picked folder,
+// and null simulates the user cancelling. The smoke test calls this before clicking a Browse button.
+//
+export function doStagePickFolder(result: string | null): void {
+    console.log(`test-stage-pick-folder: staging pick-folder result "${result ?? "(cancel)"}"`);
+    window.dispatchEvent(new CustomEvent(TEST_STAGE_PICK_FOLDER_EVENT, { detail: result }));
+}
+
+//
 // Reads the current value of the element with the given `data-id`, preferring its input
 // value and falling back to its text content. Returns an empty string when not found.
 //
@@ -547,6 +585,12 @@ export function installTestDriver(transport: ITestTransport): void {
                 return undefined;
             case 'pick-files':
                 doPickFiles(payload.paths!);
+                return undefined;
+            case 'stage-export':
+                doStageExport(payload.exportOutcome!);
+                return undefined;
+            case 'stage-pick-folder':
+                doStagePickFolder(payload.folderResult ?? null);
                 return undefined;
             case 'get-value':
                 return getValue(payload.dataId!);

@@ -9,7 +9,6 @@ import {
     DeleteConfirmationContextProvider,
     ImportContextProvider,
     ToastContextProvider,
-    UuidGeneratorProvider,
     ApiContextProvider,
     axiosApi,
     StoriesPage,
@@ -18,16 +17,8 @@ import {
 import { useWebSocket } from "./lib/use-web-socket";
 import { WebSocketQueueBackend } from "./lib/websocket-queue-backend";
 import { setQueueBackend } from "task-queue";
-import { RandomUuidGenerator, TestUuidGenerator } from "utils";
 import { PlatformProviderWeb } from "./lib/platform-provider-web";
 
-//
-// In test mode a deterministic TestUuidGenerator is used so smoke tests
-// get reproducible task ids; otherwise the real RandomUuidGenerator is used.
-//
-const isTestMode = typeof window !== 'undefined'
-    && new URLSearchParams(window.location.search).get('testMode') === '1';
-const uuidGenerator = isTestMode ? new TestUuidGenerator() : new RandomUuidGenerator();
 
 
 export function App() {
@@ -60,33 +51,31 @@ export function App() {
                     </PlatformProviderWeb>
                 } />
                 <Route path="*" element={
-                    <UuidGeneratorProvider value={uuidGenerator}>
-                        <PlatformProviderWeb ws={ws}>
-                            <ApiContextProvider value={axiosApi}>
-                            <AppContextProvider>
-                                <ToastContextProvider>
-                                    <AssetDatabaseProvider queueBackend={queueBackend} restApiUrl="http://localhost:3001">
-                                        <ImportContextProvider>
-                                            <GalleryContextProvider>
-                                                <DeleteConfirmationContextProvider>
-                                                    <SearchContextProvider>
-                                                        <GalleryLayoutContextProvider>
-                                                            <DeveloperContextProvider>
-                                                                <SyncContextProvider>
-                                                                    <Main initialTheme={initialTheme} />
-                                                                </SyncContextProvider>
-                                                            </DeveloperContextProvider>
-                                                        </GalleryLayoutContextProvider>
-                                                    </SearchContextProvider>
-                                                </DeleteConfirmationContextProvider>
-                                            </GalleryContextProvider>
-                                        </ImportContextProvider>
-                                    </AssetDatabaseProvider>
-                                </ToastContextProvider>
-                            </AppContextProvider>
-                            </ApiContextProvider>
-                        </PlatformProviderWeb>
-                    </UuidGeneratorProvider>
+                    <PlatformProviderWeb ws={ws}>
+                        <ApiContextProvider value={axiosApi}>
+                        <AppContextProvider>
+                            <ToastContextProvider>
+                                <AssetDatabaseProvider queueBackend={queueBackend} restApiUrl="http://localhost:3001">
+                                    <ImportContextProvider>
+                                        <GalleryContextProvider>
+                                            <DeleteConfirmationContextProvider>
+                                                <SearchContextProvider>
+                                                    <GalleryLayoutContextProvider>
+                                                        <DeveloperContextProvider>
+                                                            <SyncContextProvider>
+                                                                <Main initialTheme={initialTheme} />
+                                                            </SyncContextProvider>
+                                                        </DeveloperContextProvider>
+                                                    </GalleryLayoutContextProvider>
+                                                </SearchContextProvider>
+                                            </DeleteConfirmationContextProvider>
+                                        </GalleryContextProvider>
+                                    </ImportContextProvider>
+                                </AssetDatabaseProvider>
+                            </ToastContextProvider>
+                        </AppContextProvider>
+                        </ApiContextProvider>
+                    </PlatformProviderWeb>
                 } />
             </Routes>
         </HashRouter>

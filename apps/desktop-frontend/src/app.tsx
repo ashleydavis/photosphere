@@ -9,7 +9,6 @@ import {
     DeleteConfirmationContextProvider,
     ImportContextProvider,
     ToastContextProvider,
-    UuidGeneratorProvider,
     ApiContextProvider,
     axiosApi,
     StoriesPage,
@@ -19,18 +18,11 @@ import { ElectronRendererQueueBackend } from "./lib/electron-renderer-queue-back
 import { setQueueBackend } from "task-queue";
 import { PlatformProviderElectron } from "./lib/platform-provider-electron";
 import type { IElectronAPI } from "./lib/electron-ipc";
-import { setLog, RandomUuidGenerator, TestUuidGenerator } from "utils";
+import { setLog } from "utils";
 import { createRendererLog } from "./lib/renderer-log";
 import { McpToolHandler } from "./lib/mcp-tool-handler";
 import { PreviewBanner } from "./lib/preview-banner";
 
-//
-// In test mode a deterministic TestUuidGenerator is used so smoke tests
-// get reproducible task ids; otherwise the real RandomUuidGenerator is used.
-//
-const isTestMode = typeof window !== 'undefined'
-    && new URLSearchParams(window.location.search).get('testMode') === '1';
-const uuidGenerator = isTestMode ? new TestUuidGenerator() : new RandomUuidGenerator();
 
 //
 // Props for the App component.
@@ -72,35 +64,33 @@ export function App({ electronAPI }: IAppProps) {
                     </PlatformProviderElectron>
                 } />
                 <Route path="*" element={
-                    <UuidGeneratorProvider value={uuidGenerator}>
-                        <PlatformProviderElectron electronAPI={electronAPI}>
-                            <ApiContextProvider value={axiosApi}>
-                            <AppContextProvider>
-                                <ToastContextProvider>
-                                    <AssetDatabaseProvider queueBackend={queueBackend} restApiUrl={restApiUrl}>
-                                        <ImportContextProvider>
-                                            <GalleryContextProvider>
-                                                <DeleteConfirmationContextProvider>
-                                                    <SearchContextProvider>
-                                                        <GalleryLayoutContextProvider>
-                                                            <McpToolHandler />
-                                                            <PreviewBanner />
-                                                            <DeveloperContextProvider>
-                                                                <SyncContextProvider>
-                                                                    <Main initialTheme={initialTheme} />
-                                                                </SyncContextProvider>
-                                                            </DeveloperContextProvider>
-                                                        </GalleryLayoutContextProvider>
-                                                    </SearchContextProvider>
-                                                </DeleteConfirmationContextProvider>
-                                            </GalleryContextProvider>
-                                        </ImportContextProvider>
-                                    </AssetDatabaseProvider>
-                                </ToastContextProvider>
-                            </AppContextProvider>
-                            </ApiContextProvider>
-                        </PlatformProviderElectron>
-                    </UuidGeneratorProvider>
+                    <PlatformProviderElectron electronAPI={electronAPI}>
+                        <ApiContextProvider value={axiosApi}>
+                        <AppContextProvider>
+                            <ToastContextProvider>
+                                <AssetDatabaseProvider queueBackend={queueBackend} restApiUrl={restApiUrl}>
+                                    <ImportContextProvider>
+                                        <GalleryContextProvider>
+                                            <DeleteConfirmationContextProvider>
+                                                <SearchContextProvider>
+                                                    <GalleryLayoutContextProvider>
+                                                        <McpToolHandler />
+                                                        <PreviewBanner />
+                                                        <DeveloperContextProvider>
+                                                            <SyncContextProvider>
+                                                                <Main initialTheme={initialTheme} />
+                                                            </SyncContextProvider>
+                                                        </DeveloperContextProvider>
+                                                    </GalleryLayoutContextProvider>
+                                                </SearchContextProvider>
+                                            </DeleteConfirmationContextProvider>
+                                        </GalleryContextProvider>
+                                    </ImportContextProvider>
+                                </AssetDatabaseProvider>
+                            </ToastContextProvider>
+                        </AppContextProvider>
+                        </ApiContextProvider>
+                    </PlatformProviderElectron>
                 } />
             </Routes>
         </HashRouter>

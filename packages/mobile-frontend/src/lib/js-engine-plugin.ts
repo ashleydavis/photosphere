@@ -59,6 +59,62 @@ export interface IPickFilesResult {
 }
 
 //
+// Options for handing a single finished file out of the app via the native share/save sheet.
+//
+export interface IExportFileOptions {
+    //
+    // Sandbox-relative path of the finished file to export. The download task has already written
+    // the bytes here; the plugin presents the sheet for this file and deletes it on every exit.
+    //
+    path: string;
+
+    //
+    // Test-only outcome. When set, the plugin skips presenting the (non-automatable) sheet and runs
+    // its completion handler with this outcome, so a smoke test on a device drives the shared and
+    // cancelled paths (including the temp-file cleanup) without a sheet that cannot be dismissed.
+    // Undefined in production so the real sheet is presented.
+    //
+    testOutcome?: "shared" | "cancelled";
+}
+
+//
+// Result of a single-file export. `path` is the exported sandbox-relative path on success, or null
+// when the user cancelled the sheet (the frontend maps null to the "cancelled" undefined contract).
+//
+export interface IExportFileResult {
+    //
+    // The exported sandbox-relative path, or null when the user cancelled.
+    //
+    path: string | null;
+}
+
+//
+// Options for handing several finished files out of the app via a single native sheet.
+//
+export interface IExportFilesOptions {
+    //
+    // Sandbox-relative paths of the finished files to export. Each is deleted on every sheet exit.
+    //
+    paths: string[];
+
+    //
+    // Test-only outcome; see IExportFileOptions.testOutcome. Undefined in production.
+    //
+    testOutcome?: "shared" | "cancelled";
+}
+
+//
+// Result of a multi-file export. `paths` is the exported sandbox-relative paths on success, or null
+// when the user cancelled the sheet.
+//
+export interface IExportFilesResult {
+    //
+    // The exported sandbox-relative paths, or null when the user cancelled.
+    //
+    paths: string[] | null;
+}
+
+//
 // Result payload carried by a `taskCompleted` event. This is the JSON-safe subset
 // of ITaskResult: native cannot marshal a live Error object across the bridge, so it
 // sends `errorMessage` and the backend reconstructs an Error for the result.
@@ -148,6 +204,18 @@ export interface IJsEnginePlugin {
     // resolves with their sandbox-relative paths (empty when cancelled).
     //
     pickFiles(options: IPickFilesOptions): Promise<IPickFilesResult>;
+
+    //
+    // Presents the native share/save sheet for one finished sandbox-relative file, deletes the temp
+    // copy on every exit, and resolves with the path (or null when cancelled).
+    //
+    exportFile(options: IExportFileOptions): Promise<IExportFileResult>;
+
+    //
+    // Presents a single native share/save sheet for several finished sandbox-relative files, deletes
+    // each temp copy on every exit, and resolves with the paths (or null when cancelled).
+    //
+    exportFiles(options: IExportFilesOptions): Promise<IExportFilesResult>;
 
     //
     // Tears down the engine pool and releases native resources.

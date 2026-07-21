@@ -35,6 +35,8 @@
 		D000000000000000000000B6 /* JsEnginePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000A6 /* JsEnginePlugin.swift */; };
 		D000000000000000000000B7 /* PathSandbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000A7 /* PathSandbox.swift */; };
 		D000000000000000000000BB /* ImportPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000AB /* ImportPicker.swift */; };
+		D000000000000000000000CF /* ExportTemp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000AF /* ExportTemp.swift */; };
+		D0000000000000000000B102 /* ExportTempTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0000000000000000000A102 /* ExportTempTests.swift */; };
 		D000000000000000000000BC /* CryptoHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000AC /* CryptoHost.swift */; };
 		E1D0C0B0A0900000000000B1 /* SecureStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1D0C0B0A0900000000000A1 /* SecureStore.swift */; };
 		E1D0C0B0A0900000000000B2 /* SecureStoreHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1D0C0B0A0900000000000A2 /* SecureStoreHost.swift */; };
@@ -101,6 +103,8 @@
 		D000000000000000000000A6 /* JsEnginePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JsEnginePlugin.swift; sourceTree = "<group>"; };
 		D000000000000000000000A7 /* PathSandbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PathSandbox.swift; sourceTree = "<group>"; };
 		D000000000000000000000AB /* ImportPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportPicker.swift; sourceTree = "<group>"; };
+		D000000000000000000000AF /* ExportTemp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportTemp.swift; sourceTree = "<group>"; };
+		D0000000000000000000A102 /* ExportTempTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ExportTempTests.swift; sourceTree = "<group>"; };
 		D000000000000000000000AC /* CryptoHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CryptoHost.swift; sourceTree = "<group>"; };
 		E1D0C0B0A0900000000000A1 /* SecureStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureStore.swift; sourceTree = "<group>"; };
 		E1D0C0B0A0900000000000A2 /* SecureStoreHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureStoreHost.swift; sourceTree = "<group>"; };
@@ -225,6 +229,7 @@
 				7FBA8F4FD583EAFC5EFEC48E /* PathSandboxTests.swift */,
 				D0000000000000000000A100 /* TcpHostTests.swift */,
 				D0000000000000000000A101 /* MediaRunnerTests.swift */,
+				D0000000000000000000A102 /* ExportTempTests.swift */,
 				B36CD9CADF6F132C9A9BAAE5 /* WorkerBundleParityTests.swift */,
 			);
 			name = AppTests;
@@ -242,6 +247,7 @@
 				D000000000000000000000A6 /* JsEnginePlugin.swift */,
 				D000000000000000000000A7 /* PathSandbox.swift */,
 				D000000000000000000000AB /* ImportPicker.swift */,
+				D000000000000000000000AF /* ExportTemp.swift */,
 				D000000000000000000000AC /* CryptoHost.swift */,
 				E1D0C0B0A0900000000000A1 /* SecureStore.swift */,
 				E1D0C0B0A0900000000000A2 /* SecureStoreHost.swift */,
@@ -440,6 +446,7 @@
 				6EB04D6B0DEC313136AB77A5 /* PathSandboxTests.swift in Sources */,
 				D0000000000000000000B100 /* TcpHostTests.swift in Sources */,
 				D0000000000000000000B101 /* MediaRunnerTests.swift in Sources */,
+				D0000000000000000000B102 /* ExportTempTests.swift in Sources */,
 				13E4EC3C45DA72EF0950953D /* WorkerBundleParityTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -458,6 +465,7 @@
 				D000000000000000000000B6 /* JsEnginePlugin.swift in Sources */,
 				D000000000000000000000B7 /* PathSandbox.swift in Sources */,
 				D000000000000000000000BB /* ImportPicker.swift in Sources */,
+				D000000000000000000000CF /* ExportTemp.swift in Sources */,
 				D000000000000000000000BC /* CryptoHost.swift in Sources */,
 				E1D0C0B0A0900000000000B1 /* SecureStore.swift in Sources */,
 				E1D0C0B0A0900000000000B2 /* SecureStoreHost.swift in Sources */,

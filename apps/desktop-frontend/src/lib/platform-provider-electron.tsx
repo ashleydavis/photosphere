@@ -1,11 +1,19 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
-import { PlatformContextProvider, ConfigContextProvider, createConfig, useLanShareTasks, readBrowserNetworkStatus, subscribeBrowserNetworkStatus, type IPlatformContext, type IPlatformEvent, type INetworkStatus, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, convertToPng, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions } from "user-interface";
+import { PlatformContextProvider, ConfigContextProvider, createConfig, useLanShareTasks, readBrowserNetworkStatus, subscribeBrowserNetworkStatus, type IPlatformContext, type IPlatformEvent, type INetworkStatus, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, convertToPng, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions, type ISaveDownloadResult, UuidGeneratorProvider } from "user-interface";
+import { RandomUuidGenerator, TestUuidGenerator, type IUuidGenerator } from "utils";
+import type { ISaveAssetItem } from "api";
 import type { IElectronAPI } from "./electron-ipc";
 import type { IConflictResolution } from "api";
 import type { ISecret } from "vault";
 
 const isTestMode = typeof window !== 'undefined'
     && new URLSearchParams(window.location.search).get('testMode') === '1';
+
+//
+// The uuid generator this platform provides to the app: deterministic under a smoke test so task ids
+// are reproducible, otherwise the real random one.
+//
+const uuidGenerator: IUuidGenerator = isTestMode ? new TestUuidGenerator() : new RandomUuidGenerator();
 
 //
 // Extends the standard File interface with an optional test-injected filesystem path.
@@ -397,12 +405,13 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         return await electronAPI.invoke('pick-folder', options);
     }, [electronAPI]);
 
-    const pickFile = useCallback(async (defaultFilename: string): Promise<string | undefined> => {
-        return await electronAPI.invoke('pick-file', defaultFilename);
-    }, [electronAPI]);
-
     const pickFiles = useCallback(async (title: string): Promise<string[] | undefined> => {
         return await electronAPI.invoke('pick-files', title);
+    }, [electronAPI]);
+
+    const saveDownloadedFiles = useCallback(async (items: ISaveAssetItem[], databasePath: string): Promise<ISaveDownloadResult> => {
+        // One round trip: main shows the destination dialog, writes the files and reports the outcome.
+        return await electronAPI.invoke('save-assets', { items, databasePath });
     }, [electronAPI]);
 
     const listSecrets = useCallback(async (): Promise<ISharedSecretEntry[]> => {
@@ -534,8 +543,8 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         removeDatabaseEntry,
         findDatabase,
         pickFolder,
-        pickFile,
         pickFiles,
+        saveDownloadedFiles,
         listSecrets,
         addSecret,
         updateSecret,
@@ -565,11 +574,13 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
     );
 
     return (
-        <ConfigContextProvider value={config}>
-            <PlatformContextProvider value={platformContext}>
-                {children}
-            </PlatformContextProvider>
-        </ConfigContextProvider>
+        <UuidGeneratorProvider value={uuidGenerator}>
+            <ConfigContextProvider value={config}>
+                <PlatformContextProvider value={platformContext}>
+                    {children}
+                </PlatformContextProvider>
+            </ConfigContextProvider>
+        </UuidGeneratorProvider>
     );
 }
 

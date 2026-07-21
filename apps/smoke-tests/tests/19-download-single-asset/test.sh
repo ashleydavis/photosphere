@@ -33,6 +33,9 @@ wait_for_log "$TMP_DIR" "Gallery items rendered"
 send_command "$APP_PORT" long-press-click '{"dataId":"gallery-thumb"}' || exit 1
 wait_for_log "$TMP_DIR" "AssetView opened"
 
+# The download hands the saved file out via the native share/save sheet, which an automated test
+# cannot dismiss. Stage the sheet outcome so the export completes in test mode instead of blocking.
+send_command "$APP_PORT" stage-export '{"exportOutcome":"shared"}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"download-asset-button"}' || exit 1
 wait_for_log "$TMP_DIR" "Download completed: test-1.jpeg"
 

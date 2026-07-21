@@ -12,6 +12,10 @@ import {
     doDrop,
     doPickFiles,
     TEST_PICK_FILES_EVENT,
+    doStageExport,
+    doStagePickFolder,
+    TEST_STAGE_EXPORT_EVENT,
+    TEST_STAGE_PICK_FOLDER_EVENT,
     getValue,
     doNavigate,
     doMenu,
@@ -347,6 +351,43 @@ describe("doPickFiles", () => {
         }
         finally {
             window.removeEventListener(TEST_PICK_FILES_EVENT, listener);
+        }
+    });
+});
+
+describe("doStageExport", () => {
+
+    test("dispatches the stage-export event carrying the outcome", () => {
+        const received: string[] = [];
+        const listener = (event: Event) => {
+            received.push((event as CustomEvent<string>).detail);
+        };
+        window.addEventListener(TEST_STAGE_EXPORT_EVENT, listener);
+        try {
+            doStageExport("cancelled");
+            expect(received).toEqual(["cancelled"]);
+        }
+        finally {
+            window.removeEventListener(TEST_STAGE_EXPORT_EVENT, listener);
+        }
+    });
+});
+
+describe("doStagePickFolder", () => {
+
+    test("dispatches the stage-pick-folder event carrying the path", () => {
+        const received: (string | null)[] = [];
+        const listener = (event: Event) => {
+            received.push((event as CustomEvent<string | null>).detail);
+        };
+        window.addEventListener(TEST_STAGE_PICK_FOLDER_EVENT, listener);
+        try {
+            doStagePickFolder("my-database");
+            doStagePickFolder(null);
+            expect(received).toEqual(["my-database", null]);
+        }
+        finally {
+            window.removeEventListener(TEST_STAGE_PICK_FOLDER_EVENT, listener);
         }
     });
 });

@@ -9,7 +9,6 @@ import {
     DeleteConfirmationContextProvider,
     ImportContextProvider,
     ToastContextProvider,
-    UuidGeneratorProvider,
     ApiContextProvider,
     axiosApi,
     StoriesPage,
@@ -18,13 +17,8 @@ import {
     resolveInitialTheme, themeOverrideFromEnv,
 } from "user-interface";
 import { setQueueBackend } from "task-queue";
-import { RandomUuidGenerator } from "utils";
 import { EmbeddedJsQueueBackend, PlatformProviderMobile } from "mobile-frontend";
 
-//
-// UUID generator used for task ids on mobile.
-//
-const uuidGenerator = new RandomUuidGenerator();
 
 //
 // The mobile queue backend dispatches background tasks into the native embedded JS engine
@@ -77,33 +71,31 @@ export function App() {
                 <Route path="*" element={
                     !restApiUrl
                         ? <FullscreenSpinner />
-                        : <UuidGeneratorProvider value={uuidGenerator}>
-                        <PlatformProviderMobile>
-                            <ApiContextProvider value={axiosApi}>
-                            <AppContextProvider>
-                                <ToastContextProvider>
-                                    <AssetDatabaseProvider queueBackend={queueBackend} restApiUrl={restApiUrl}>
-                                        <ImportContextProvider>
-                                            <GalleryContextProvider>
-                                                <DeleteConfirmationContextProvider>
-                                                    <SearchContextProvider>
-                                                        <GalleryLayoutContextProvider>
-                                                            <DeveloperContextProvider>
-                                                                <SyncContextProvider>
-                                                                    <Main initialTheme={initialTheme} />
-                                                                </SyncContextProvider>
-                                                            </DeveloperContextProvider>
-                                                        </GalleryLayoutContextProvider>
-                                                    </SearchContextProvider>
-                                                </DeleteConfirmationContextProvider>
-                                            </GalleryContextProvider>
-                                        </ImportContextProvider>
-                                    </AssetDatabaseProvider>
-                                </ToastContextProvider>
-                            </AppContextProvider>
-                            </ApiContextProvider>
-                        </PlatformProviderMobile>
-                    </UuidGeneratorProvider>
+                        : <PlatformProviderMobile>
+                        <ApiContextProvider value={axiosApi}>
+                        <AppContextProvider>
+                            <ToastContextProvider>
+                                <AssetDatabaseProvider queueBackend={queueBackend} restApiUrl={restApiUrl}>
+                                    <ImportContextProvider>
+                                        <GalleryContextProvider>
+                                            <DeleteConfirmationContextProvider>
+                                                <SearchContextProvider>
+                                                    <GalleryLayoutContextProvider>
+                                                        <DeveloperContextProvider>
+                                                            <SyncContextProvider>
+                                                                <Main initialTheme={initialTheme} />
+                                                            </SyncContextProvider>
+                                                        </DeveloperContextProvider>
+                                                    </GalleryLayoutContextProvider>
+                                                </SearchContextProvider>
+                                            </DeleteConfirmationContextProvider>
+                                        </GalleryContextProvider>
+                                    </ImportContextProvider>
+                                </AssetDatabaseProvider>
+                            </ToastContextProvider>
+                        </AppContextProvider>
+                        </ApiContextProvider>
+                    </PlatformProviderMobile>
                 } />
             </Routes>
         </HashRouter>

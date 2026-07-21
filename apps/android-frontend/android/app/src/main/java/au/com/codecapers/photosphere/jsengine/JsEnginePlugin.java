@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
+import android.provider.DocumentsContract;
 import android.provider.OpenableColumns;
 import android.util.Log;
 
@@ -22,6 +23,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -329,6 +331,226 @@ public final class JsEnginePlugin extends Plugin {
             }
         }
         return null;
+    }
+
+    //
+    // Capacitor lifecycle hook invoked once when the plugin loads. Sweeps the export temp directory
+    // so any decrypted copy orphaned by a process kill mid-sheet (which skips the completion handler)
+    // is collected on the next launch rather than accumulating in app-private storage.
+    //
+    @Override
+    public void load() {
+        super.load();
+        ExportTemp.sweep(getStorageRoot());
+    }
+
+    //
+    // exportFile: hands one finished sandbox file out of the app. The download task has already
+    // written the bytes at { path }; this presents ACTION_CREATE_DOCUMENT so the user chooses a
+    // destination, copies the bytes there, and deletes the temp copy on every exit. Resolves
+    // { path } on success and { path: null } when the user cancels. A testOutcome short-circuits the
+    // sheet (which cannot be dismissed by an automated test) straight to the completion path.
+    //
+    @PluginMethod
+    public void exportFile(PluginCall call) {
+        String path = call.getString("path");
+        if (path == null) {
+            call.reject("exportFile requires a path.");
+            return;
+        }
+
+        // Confirm the temp file is inside the sandbox before presenting anything.
+        File tempFile;
+        try {
+            tempFile = PathSandbox.resolveWithin(getStorageRoot(), path);
+        }
+        catch (SecurityException error) {
+            call.reject("exportFile: " + error.getMessage());
+            return;
+        }
+
+        String testOutcome = call.getString("testOutcome");
+        if (testOutcome != null) {
+            resolveExportFile(call, path, testOutcome.equals("cancelled"));
+            return;
+        }
+
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        intent.putExtra(Intent.EXTRA_TITLE, tempFile.getName());
+        startActivityForResult(call, intent, "exportFileResult");
+    }
+
+    //
+    // Handles the ACTION_CREATE_DOCUMENT result for a single-file export: on a chosen destination,
+    // copies the sandbox temp file's bytes into it; on cancel (RESULT_CANCELED, no data) it skips the
+    // copy. Either way the temp copy is deleted and the call resolved with the path or null.
+    //
+    @ActivityCallback
+    private void exportFileResult(PluginCall call, ActivityResult result) {
+        if (call == null) {
+            return;
+        }
+
+        String path = call.getString("path");
+        boolean cancelled = result.getResultCode() != Activity.RESULT_OK
+            || result.getData() == null
+            || result.getData().getData() == null;
+
+        if (!cancelled) {
+            try {
+                copyTempToDestination(path, result.getData().getData());
+            }
+            catch (IOException error) {
+                // Error exit: still delete the temp copy, then report the failure.
+                ExportTemp.finishExport(getStorageRoot(), path, true);
+                call.reject("exportFile: failed to write destination: " + error.getMessage());
+                return;
+            }
+        }
+
+        resolveExportFile(call, path, cancelled);
+    }
+
+    //
+    // exportFiles: hands several finished sandbox files out of the app. Presents
+    // ACTION_OPEN_DOCUMENT_TREE so the user chooses a destination folder; each temp file is copied
+    // into it and then deleted. Resolves { paths } on success and { paths: null } on cancel.
+    //
+    @PluginMethod
+    public void exportFiles(PluginCall call) {
+        List<String> paths = readPaths(call);
+        if (paths == null) {
+            call.reject("exportFiles requires a paths array.");
+            return;
+        }
+
+        // Confirm every temp file is inside the sandbox before presenting anything.
+        try {
+            for (String relativePath : paths) {
+                PathSandbox.resolveWithin(getStorageRoot(), relativePath);
+            }
+        }
+        catch (SecurityException error) {
+            call.reject("exportFiles: " + error.getMessage());
+            return;
+        }
+
+        String testOutcome = call.getString("testOutcome");
+        if (testOutcome != null) {
+            resolveExportFiles(call, paths, testOutcome.equals("cancelled"));
+            return;
+        }
+
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+        startActivityForResult(call, intent, "exportFilesResult");
+    }
+
+    //
+    // Handles the ACTION_OPEN_DOCUMENT_TREE result for a batch export: on a chosen folder, copies each
+    // sandbox temp file into it as a new document; on cancel it skips the copy. Either way every temp
+    // copy is deleted and the call resolved with the paths or null.
+    //
+    @ActivityCallback
+    private void exportFilesResult(PluginCall call, ActivityResult result) {
+        if (call == null) {
+            return;
+        }
+
+        List<String> paths = readPaths(call);
+        boolean cancelled = result.getResultCode() != Activity.RESULT_OK
+            || result.getData() == null
+            || result.getData().getData() == null;
+
+        if (!cancelled && paths != null) {
+            try {
+                copyTempsIntoTree(paths, result.getData().getData());
+            }
+            catch (IOException error) {
+                ExportTemp.finishExportBatch(getStorageRoot(), paths, true);
+                call.reject("exportFiles: failed to write destination: " + error.getMessage());
+                return;
+            }
+        }
+
+        resolveExportFiles(call, paths, cancelled);
+    }
+
+    //
+    // Copies one sandbox temp file's bytes into a chosen content:// destination and closes both
+    // streams. The temp file is resolved through PathSandbox so a hostile path cannot escape the root.
+    //
+    private void copyTempToDestination(String relativePath, Uri destination) throws IOException {
+        File source = PathSandbox.resolveWithin(getStorageRoot(), relativePath);
+        try (InputStream input = new FileInputStream(source);
+             OutputStream output = getContext().getContentResolver().openOutputStream(destination)) {
+            if (output == null) {
+                throw new IOException("could not open destination stream");
+            }
+            ExportTemp.copyStream(input, output);
+        }
+    }
+
+    //
+    // Copies each sandbox temp file into the user's chosen document tree as a new document, keeping
+    // each file's own name.
+    //
+    private void copyTempsIntoTree(List<String> relativePaths, Uri treeUri) throws IOException {
+        Uri documentTreeUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, DocumentsContract.getTreeDocumentId(treeUri));
+        for (String relativePath : relativePaths) {
+            File source = PathSandbox.resolveWithin(getStorageRoot(), relativePath);
+            Uri created = DocumentsContract.createDocument(getContext().getContentResolver(), documentTreeUri, "application/octet-stream", source.getName());
+            if (created == null) {
+                throw new IOException("could not create destination document for " + source.getName());
+            }
+            copyTempToDestination(relativePath, created);
+        }
+    }
+
+    //
+    // Reads the { paths } string array from a call, or null when it is absent or malformed.
+    //
+    private List<String> readPaths(PluginCall call) {
+        JSArray pathsArray = call.getArray("paths");
+        if (pathsArray == null) {
+            return null;
+        }
+        try {
+            return pathsArray.toList();
+        }
+        catch (JSONException error) {
+            return null;
+        }
+    }
+
+    //
+    // Deletes the single temp copy and resolves the call with { path } (or { path: null } on cancel).
+    //
+    private void resolveExportFile(PluginCall call, String path, boolean cancelled) {
+        String exported = ExportTemp.finishExport(getStorageRoot(), path, cancelled);
+        JSObject response = new JSObject();
+        response.put("path", exported == null ? JSONObject.NULL : exported);
+        call.resolve(response);
+    }
+
+    //
+    // Deletes every temp copy and resolves the call with { paths } (or { paths: null } on cancel).
+    //
+    private void resolveExportFiles(PluginCall call, List<String> paths, boolean cancelled) {
+        List<String> exported = ExportTemp.finishExportBatch(getStorageRoot(), paths == null ? new ArrayList<>() : paths, cancelled);
+        JSObject response = new JSObject();
+        if (exported == null) {
+            response.put("paths", JSONObject.NULL);
+        }
+        else {
+            JSArray exportedArray = new JSArray();
+            for (String exportedPath : exported) {
+                exportedArray.put(exportedPath);
+            }
+            response.put("paths", exportedArray);
+        }
+        call.resolve(response);
     }
 
     //

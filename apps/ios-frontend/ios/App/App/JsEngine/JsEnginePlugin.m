@@ -13,4 +13,6 @@ CAP_PLUGIN(JsEnginePlugin, "JsEngine",
     CAP_PLUGIN_METHOD(cancelTasks, CAPPluginReturnPromise);
     CAP_PLUGIN_METHOD(shutdown, CAPPluginReturnPromise);
     CAP_PLUGIN_METHOD(pickFiles, CAPPluginReturnPromise);
+    CAP_PLUGIN_METHOD(exportFile, CAPPluginReturnPromise);
+    CAP_PLUGIN_METHOD(exportFiles, CAPPluginReturnPromise);
 )

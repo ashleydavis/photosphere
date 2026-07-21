@@ -1,14 +1,25 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
 import eruda from "eruda";
 import { Network } from "@capacitor/network";
-import { PlatformContextProvider, ConfigContextProvider, createConfig, useLanShareTasks, readBrowserNetworkStatus, subscribeBrowserNetworkStatus, signalTestAppReady, TEST_MENU_EVENT, TEST_OPEN_DATABASE_EVENT, TEST_SEED_DATABASES_EVENT, TEST_SEED_RECENT_EVENT, TEST_SEED_NEWS_EVENT, TEST_RESET_CONFIG_EVENT, TEST_PICK_FILES_EVENT, type ITestResetConfigEventDetail, type IPlatformContext, type IPlatformEvent, type INetworkStatus, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions } from "user-interface";
-import { log } from "utils";
+import { PlatformContextProvider, ConfigContextProvider, createConfig, useLanShareTasks, readBrowserNetworkStatus, subscribeBrowserNetworkStatus, signalTestAppReady, TEST_MENU_EVENT, TEST_OPEN_DATABASE_EVENT, TEST_SEED_DATABASES_EVENT, TEST_SEED_RECENT_EVENT, TEST_SEED_NEWS_EVENT, TEST_RESET_CONFIG_EVENT, TEST_PICK_FILES_EVENT, TEST_STAGE_EXPORT_EVENT, TEST_STAGE_PICK_FOLDER_EVENT, type ITestResetConfigEventDetail, type IPlatformContext, type IPlatformEvent, type INetworkStatus, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions, type ISaveDownloadResult, UuidGeneratorProvider } from "user-interface";
+import { TaskQueue, TaskStatus } from "task-queue";
+import type { ITaskResult } from "task-queue";
+import type { ISaveAssetItem } from "api";
+import { log, RandomUuidGenerator, TestUuidGenerator, type IUuidGenerator } from "utils";
 import { cancelMobileTasks, subscribeMobileTaskMessage, subscribeMobileTaskComplete, pickMobileFiles, setInjectedPickedFiles } from "./mobile-platform-tasks";
+import { pickMobileFolder, saveMobileDownloadedFile, saveMobileDownloadedFiles, setInjectedExportOutcome, setInjectedPickFolderResult } from "./mobile-export";
 import * as configStore from "./mobile-config-store";
 import { MobileSecretStore } from "./mobile-secure-store";
 import { createCapacitorSecureStore } from "./secure-store-plugin";
 import { importSharePayload as importReceivedShare, type IReceivedSharePayload } from "./mobile-share-receive";
 import type { IConflictResolution } from "lan-share-core";
+
+//
+// The uuid generator this platform provides to the app: deterministic under a smoke test so task ids
+// are reproducible. On mobile the native layer injects __PHOTOSPHERE_TEST__ into the WebView.
+//
+const isTestMode = Boolean((globalThis as { __PHOTOSPHERE_TEST__?: boolean }).__PHOTOSPHERE_TEST__);
+const uuidGenerator: IUuidGenerator = isTestMode ? new TestUuidGenerator() : new RandomUuidGenerator();
 
 // Whether the in-page Eruda console has been initialised and whether it is currently visible.
 let erudaInitialised = false;
@@ -168,12 +179,26 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
             const paths = (event as CustomEvent<string[]>).detail || [];
             setInjectedPickedFiles(paths);
         };
+        // Test setup: stage the outcome of the next asset export (share sheet) so the smoke test drives
+        // the shared/cancelled paths without a native sheet that cannot be dismissed on a device.
+        const handleStageExport = (event: Event) => {
+            const outcome = (event as CustomEvent<"shared" | "cancelled">).detail;
+            setInjectedExportOutcome(outcome);
+        };
+        // Test setup: stage the result of the next pickFolder name prompt (a sandbox-relative path, or
+        // null to simulate the user cancelling), so the "Browse" flow needs no native prompt.
+        const handleStagePickFolder = (event: Event) => {
+            const result = (event as CustomEvent<string | null>).detail ?? null;
+            setInjectedPickFolderResult(result);
+        };
         window.addEventListener(TEST_MENU_EVENT, handleMenu);
         window.addEventListener(TEST_OPEN_DATABASE_EVENT, handleOpenDatabase);
         window.addEventListener(TEST_SEED_DATABASES_EVENT, handleSeedDatabases);
         window.addEventListener(TEST_SEED_RECENT_EVENT, handleSeedRecent);
         window.addEventListener(TEST_RESET_CONFIG_EVENT, handleResetConfig);
         window.addEventListener(TEST_PICK_FILES_EVENT, handlePickFiles);
+        window.addEventListener(TEST_STAGE_EXPORT_EVENT, handleStageExport);
+        window.addEventListener(TEST_STAGE_PICK_FOLDER_EVENT, handleStagePickFolder);
         // The test-command listeners are now registered, so it is safe to tell the host bridge the
         // app is ready. Signaling earlier (the WebSocket sends "ready" on connect) let a command
         // fired right after /ready dispatch its one-shot CustomEvent before these listeners existed,
@@ -186,6 +211,8 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
             window.removeEventListener(TEST_SEED_RECENT_EVENT, handleSeedRecent);
             window.removeEventListener(TEST_RESET_CONFIG_EVENT, handleResetConfig);
             window.removeEventListener(TEST_PICK_FILES_EVENT, handlePickFiles);
+            window.removeEventListener(TEST_STAGE_EXPORT_EVENT, handleStageExport);
+            window.removeEventListener(TEST_STAGE_PICK_FOLDER_EVENT, handleStagePickFolder);
         };
     }, []);
 
@@ -313,13 +340,49 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         return configStore.findDatabase(persistentStore, name);
     }, []);
 
-    const pickFolder = useCallback(async (_options?: IPickFolderOptions): Promise<string | undefined> => {
-        // No native folder picker yet; downloads go to a fixed sandbox-relative "downloads" folder.
-        return "downloads";
+    const pickFolder = useCallback(async (options?: IPickFolderOptions): Promise<string | undefined> => {
+        // A database-path "Browse" prompts for a name. Returns undefined when the user cancels the prompt.
+        return pickMobileFolder(options);
     }, []);
 
-    const pickFile = useCallback(async (defaultFilename: string): Promise<string | undefined> => {
-        return defaultFilename;
+    const saveDownloadedFiles = useCallback(async (items: ISaveAssetItem[], databasePath: string): Promise<ISaveDownloadResult> => {
+        // Mobile cannot write to a user-chosen location, so the download task writes into app-private
+        // storage and the native share sheet then hands the files out, deleting each temp copy on every
+        // exit. A cancelled sheet means nothing was handed out.
+        const queue = new TaskQueue(uuidGenerator, databasePath);
+        let taskResult: ITaskResult | undefined;
+        let delivered: boolean;
+        if (items.length === 1) {
+            delivered = await saveMobileDownloadedFile(items[0].filename, async (destinationPath: string) => {
+                const taskId = queue.addTask("save-asset", { assetId: items[0].assetId, assetType: items[0].assetType, destPath: destinationPath, databasePath });
+                taskResult = await queue.awaitTask(taskId);
+                return taskResult?.status === TaskStatus.Succeeded;
+            });
+        }
+        else {
+            delivered = await saveMobileDownloadedFiles(async (destinationFolder: string) => {
+                const taskId = queue.addTask("save-assets-batch", { assets: items, folderPath: destinationFolder, databasePath });
+                taskResult = await queue.awaitTask(taskId);
+                if (taskResult?.status !== TaskStatus.Succeeded) {
+                    return undefined;
+                }
+                const succeeded = (taskResult.outputs as { succeededFiles: string[] }).succeededFiles;
+                return succeeded.map(assetFilename => `${destinationFolder}/${assetFilename}`);
+            });
+        }
+        queue.shutdown();
+
+        if (taskResult?.status !== TaskStatus.Succeeded) {
+            return { outcome: "failed", savedCount: 0, failedCount: items.length, errorMessage: taskResult?.errorMessage };
+        }
+        if (!delivered) {
+            return { outcome: "cancelled", savedCount: 0, failedCount: 0 };
+        }
+        if (items.length === 1) {
+            return { outcome: "saved", savedCount: 1, failedCount: 0 };
+        }
+        const outputs = taskResult.outputs as { succeededFiles: string[]; failedFiles: string[] };
+        return { outcome: "saved", savedCount: outputs.succeededFiles.length, failedCount: outputs.failedFiles.length };
     }, []);
 
     const pickFiles = useCallback(async (title: string): Promise<string[] | undefined> => {
@@ -461,7 +524,7 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         removeDatabaseEntry,
         findDatabase,
         pickFolder,
-        pickFile,
+        saveDownloadedFiles,
         pickFiles,
         listSecrets,
         addSecret,
@@ -496,10 +559,12 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
     );
 
     return (
-        <ConfigContextProvider value={config}>
-            <PlatformContextProvider value={platformContext}>
-                {children}
-            </PlatformContextProvider>
-        </ConfigContextProvider>
+        <UuidGeneratorProvider value={uuidGenerator}>
+            <ConfigContextProvider value={config}>
+                <PlatformContextProvider value={platformContext}>
+                    {children}
+                </PlatformContextProvider>
+            </ConfigContextProvider>
+        </UuidGeneratorProvider>
     );
 }

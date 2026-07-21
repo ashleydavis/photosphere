@@ -471,18 +471,6 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
     }
 
     //
-    // Extracts the parent folder and the file name from an absolute path.
-    // Works for both POSIX and Windows separators so the browser does not need a path module.
-    //
-    function splitDestPath(destPath: string): { folder: string; filename: string } {
-        const lastSep = Math.max(destPath.lastIndexOf("/"), destPath.lastIndexOf("\\"));
-        if (lastSep === -1) {
-            return { folder: "", filename: destPath };
-        }
-        return { folder: destPath.substring(0, lastSep), filename: destPath.substring(lastSep + 1) };
-    }
-
-    //
     // Downloads a single asset by showing the platform save picker, queueing a save-asset
     // task on the local task queue, and surfacing a success or failure toast when the task completes.
     // On Electron destPath is an absolute file path and the success toast offers an "Open Folder" action.
@@ -490,40 +478,28 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
     //
     async function downloadAsset(asset: IGalleryItem): Promise<void> {
         const filename = asset.origFileName || asset._id;
-        const destPath = await platform.pickFile(filename);
-        if (!destPath) {
+        const result = await platform.saveDownloadedFiles([{ assetId: asset._id, assetType: "asset", filename }], databasePath!);
+        if (result.outcome === "cancelled") {
             return;
         }
 
-        const queue = new TaskQueue(uuidGenerator, databasePath!);
-        const taskId = queue.addTask("save-asset", {
-            assetId: asset._id,
-            assetType: "asset",
-            destPath,
-            contentType: asset.contentType,
-            databasePath: databasePath!,
-        });
-        const result = await queue.awaitTask(taskId);
-        queue.shutdown();
-
-        const { folder, filename: savedFilename } = splitDestPath(destPath);
-        if (result && result.status === TaskStatus.Succeeded) {
-            log.event(`Download completed: ${savedFilename}`);
+        if (result.outcome === "failed") {
             addToast({
-                message: `Downloaded "${savedFilename}"`,
-                color: "success",
-                action: folder
-                    ? { label: "Open Folder", onClick: () => platform.openFolder(folder) }
-                    : undefined,
-            });
-        }
-        else {
-            addToast({
-                message: `Failed to download "${savedFilename}": ${result?.errorMessage ?? "unknown error"}`,
+                message: `Failed to download "${filename}": ${result.errorMessage ?? "unknown error"}`,
                 color: "danger",
                 duration: 8000,
             });
+            return;
         }
+
+        log.event(`Download completed: ${filename}`);
+        addToast({
+            message: `Downloaded "${filename}"`,
+            color: "success",
+            action: result.savedFolder
+                ? { label: "Open Folder", onClick: () => platform.openFolder(result.savedFolder!) }
+                : undefined,
+        });
     }
 
     //
@@ -531,58 +507,52 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
     // queueing a save-assets-batch task, and surfacing success/partial/failure toasts when it completes.
     //
     async function downloadAssets(assets: IDownloadAssetItem[]): Promise<void> {
-        const folderPath = await platform.pickFolder({
-            title: 'Choose folder to save assets',
-            folderKey: 'lastDownloadFolder',
-            createDirectory: true,
-        });
-        if (!folderPath) {
-            return;
-        }
-
         const saveItems: ISaveAssetItem[] = assets.map(asset => ({
             assetId: asset.assetId,
             assetType: asset.assetType,
             filename: asset.filename,
         }));
 
-        const queue = new TaskQueue(uuidGenerator, databasePath!);
-        const taskId = queue.addTask("save-assets-batch", { assets: saveItems, folderPath, databasePath: databasePath! });
-        const result = await queue.awaitTask(taskId);
-        queue.shutdown();
+        const result = await platform.saveDownloadedFiles(saveItems, databasePath!);
+        if (result.outcome === "cancelled") {
+            return;
+        }
 
-        if (result && result.status === TaskStatus.Succeeded) {
-            const { succeededFiles, failedFiles } = result.outputs as { succeededFiles: string[]; failedFiles: Array<{ filename: string; error: string }> };
-            const total = succeededFiles.length + failedFiles.length;
-            log.event(`Download to folder completed: ${succeededFiles.length} assets downloaded`);
-            if (failedFiles.length === 0) {
-                addToast({
-                    message: `Downloaded ${total} asset${total !== 1 ? 's' : ''}`,
-                    color: 'success',
-                    action: { label: 'Open Folder', onClick: () => platform.openFolder(folderPath) },
-                });
-            }
-            else if (succeededFiles.length === 0) {
-                addToast({
-                    message: `Failed to download ${failedFiles.length} asset${failedFiles.length !== 1 ? 's' : ''}`,
-                    color: 'danger',
-                    duration: 8000,
-                });
-            }
-            else {
-                addToast({
-                    message: `Downloaded ${succeededFiles.length} of ${total} assets (${failedFiles.length} failed)`,
-                    color: 'warning',
-                    duration: 8000,
-                    action: { label: 'Open Folder', onClick: () => platform.openFolder(folderPath) },
-                });
-            }
+        if (result.outcome === "failed") {
+            addToast({
+                message: `Failed to download assets: ${result.errorMessage ?? "unknown error"}`,
+                color: 'danger',
+                duration: 8000,
+            });
+            return;
+        }
+
+        const total = result.savedCount + result.failedCount;
+        log.event(`Download to folder completed: ${result.savedCount} assets downloaded`);
+        if (result.failedCount === 0) {
+            addToast({
+                message: `Downloaded ${total} asset${total !== 1 ? 's' : ''}`,
+                color: 'success',
+                action: result.savedFolder
+                    ? { label: 'Open Folder', onClick: () => platform.openFolder(result.savedFolder!) }
+                    : undefined,
+            });
+        }
+        else if (result.savedCount === 0) {
+            addToast({
+                message: `Failed to download ${result.failedCount} asset${result.failedCount !== 1 ? 's' : ''}`,
+                color: 'danger',
+                duration: 8000,
+            });
         }
         else {
             addToast({
-                message: `Failed to download assets: ${result?.errorMessage ?? "unknown error"}`,
-                color: 'danger',
+                message: `Downloaded ${result.savedCount} of ${total} assets (${result.failedCount} failed)`,
+                color: 'warning',
                 duration: 8000,
+                action: result.savedFolder
+                    ? { label: 'Open Folder', onClick: () => platform.openFolder(result.savedFolder!) }
+                    : undefined,
             });
         }
     }

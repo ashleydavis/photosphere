@@ -96,6 +96,13 @@ interface IBridgePayload {
 
     // A localStorage key to read back (get-storage), used to assert a value is or is not present.
     storageKey?: string;
+
+    // Outcome to stage for the next mobile asset export share sheet (stage-export).
+    exportOutcome?: "shared" | "cancelled";
+
+    // Result to stage for the next mobile pickFolder name prompt (stage-pick-folder): a
+    // sandbox-relative path, or null to simulate the user cancelling.
+    folderResult?: string | null;
 }
 
 //
@@ -393,6 +400,14 @@ export class ControlBridge {
 
         this.expressApp.post("/pick-files", (req: Request, res: Response) => {
             void this.forward("pick-files", { paths: req.body.paths }, res);
+        });
+
+        this.expressApp.post("/stage-export", (req: Request, res: Response) => {
+            void this.forward("stage-export", { exportOutcome: req.body.exportOutcome }, res);
+        });
+
+        this.expressApp.post("/stage-pick-folder", (req: Request, res: Response) => {
+            void this.forward("stage-pick-folder", { folderResult: req.body.folderResult }, res);
         });
 
         this.expressApp.get("/get-value", (req: Request, res: Response) => {

@@ -1,5 +1,5 @@
 import React, { ReactNode, createContext, useContext } from "react";
-import type { IConflictResolution } from "api";
+import type { IConflictResolution, ISaveAssetItem } from "api";
 import type { NetworkConnectionType } from "../lib/sync-gate";
 
 //
@@ -290,6 +290,38 @@ export interface IToolsStatus {
 // Platform-specific operations interface.
 // Implemented by Electron for desktop and Capacitor for mobile.
 //
+//
+// The outcome of saving downloaded assets, so the caller can surface the right toast.
+//
+export interface ISaveDownloadResult {
+    //
+    // "saved" when the files reached the user, "cancelled" when the destination picker or share sheet
+    // was dismissed, "failed" when the save did not complete.
+    //
+    outcome: "saved" | "cancelled" | "failed";
+
+    //
+    // How many assets were written successfully.
+    //
+    savedCount: number;
+
+    //
+    // How many assets failed to write (a batch save can partially fail).
+    //
+    failedCount: number;
+
+    //
+    // Error message when outcome is "failed".
+    //
+    errorMessage?: string;
+
+    //
+    // The folder the files were saved into, for the "Open Folder" toast action. Undefined on mobile,
+    // where files are handed out via the share sheet.
+    //
+    savedFolder?: string;
+}
+
 export interface IPlatformContext {
     //
     // Opens a database file dialog.
@@ -475,15 +507,18 @@ export interface IPlatformContext {
     pickFolder: (options?: IPickFolderOptions) => Promise<string | undefined>;
 
     //
-    // Opens a save-file dialog and returns the chosen path, or undefined if cancelled.
-    // The default path is derived from the last download folder and the given filename.
-    //
-    pickFile: (defaultFilename: string) => Promise<string | undefined>;
-
-    //
     // Opens a multi-file picker dialog and returns the chosen paths, or undefined if cancelled.
     //
     pickFiles: (title: string) => Promise<string[] | undefined>;
+
+    //
+    // Saves downloaded assets to a user-chosen location and hands them to the user, reporting the
+    // outcome. The platform owns the whole operation so it can do it in a single native call: desktop
+    // shows one dialog (Save-As for one asset, folder picker for several) and writes straight there;
+    // mobile writes to app-private storage then hands the files out via the native share sheet. One
+    // item is a single download, several is a batch.
+    //
+    saveDownloadedFiles: (items: ISaveAssetItem[], databasePath: string) => Promise<ISaveDownloadResult>;
 
     //
     // Returns all shared secrets stored in the vault.

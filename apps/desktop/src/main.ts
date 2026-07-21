@@ -4,7 +4,7 @@ import { join, dirname, basename } from 'path';
 import { randomUUID, createPrivateKey, createPublicKey } from 'crypto';
 import { cpus } from 'os';
 import { version } from 'config';
-import type { IQueueBackend, ITaskMessageData } from 'task-queue';
+import type { IQueueBackend, ITaskMessageData, ITaskResult } from 'task-queue';
 import { TaskStatus, setQueueBackend } from 'task-queue';
 import { WorkerPoolElectronMain } from './lib/worker-pool-electron-main';
 import { RandomUuidGenerator, TimestampProvider, logExceptions, log, noLogDetails } from 'utils';
@@ -765,27 +765,67 @@ ipcMain.handle('save-asset', logExceptions(async (_event, assetId: string, asset
     workerPool.addTask("save-asset", { assetId, assetType, destPath: actualDestPath, databasePath }, databasePath);
 }, 'Error saving asset'));
 
-// IPC handler for showing a folder picker and enqueuing background tasks to save multiple assets.
-ipcMain.handle('save-assets', logExceptions(async (_event, assets: ISaveAssetItem[], databasePath: string): Promise<void> => {
-    const config = await loadDesktopConfig();
+//
+// The payload for the save-assets IPC: the assets to save and the database they live in.
+//
+interface ISaveAssetsRequest {
+    //
+    // The assets to write. One shows a Save-As dialog, several show a folder picker.
+    //
+    items: ISaveAssetItem[];
 
-    const result = await dialog.showOpenDialog(mainWindow!, {
-        properties: ['openDirectory', 'createDirectory'],
-        title: 'Choose folder to save assets',
-        defaultPath: config.lastDownloadFolder,
+    //
+    // The database the assets live in.
+    //
+    databasePath: string;
+}
+
+//
+// Queues a task and resolves with its result, so an IPC handler can do the work and report the
+// outcome in one round trip instead of the renderer queueing and waiting for it separately.
+//
+function runWorkerTask(taskType: string, data: any, source: string): Promise<ITaskResult> {
+    return new Promise<ITaskResult>((resolve) => {
+        const taskId = workerPool!.addTask(taskType, data, source);
+        const unsubscribe = workerPool!.onTaskComplete((taskResult) => {
+            if (taskResult.taskId === taskId) {
+                unsubscribe();
+                resolve(taskResult);
+            }
+        });
     });
+}
 
-    if (result.canceled || result.filePaths.length === 0) {
-        return;
-    }
-
+// IPC handler that saves downloaded assets: shows the destination dialog (Save-As for one asset, a
+// folder picker for several), writes them, and reports the outcome, so a download costs one round
+// trip rather than picking a destination and then queueing the write separately.
+ipcMain.handle('save-assets', logExceptions(async (_event, { items: assets, databasePath }: ISaveAssetsRequest) => {
     if (!workerPool) {
         throw new Error('Worker pool not initialized');
     }
 
-    const folderPath = result.filePaths[0];
-    await updateLastDownloadFolder(folderPath);
-    workerPool.addTask("save-assets-batch", { assets, folderPath, databasePath }, databasePath);
+    if (assets.length === 1) {
+        const destPath = await pickFileDialog(mainWindow, assets[0].filename);
+        if (!destPath) {
+            return { outcome: 'cancelled', savedCount: 0, failedCount: 0 };
+        }
+        const taskResult = await runWorkerTask("save-asset", { assetId: assets[0].assetId, assetType: assets[0].assetType, destPath, databasePath }, databasePath);
+        if (taskResult.status !== TaskStatus.Succeeded) {
+            return { outcome: 'failed', savedCount: 0, failedCount: 1, errorMessage: taskResult.errorMessage };
+        }
+        return { outcome: 'saved', savedCount: 1, failedCount: 0, savedFolder: dirname(destPath) };
+    }
+
+    const folderPath = await pickFolderDialog(mainWindow, { title: 'Choose folder to save assets', folderKey: 'lastDownloadFolder', createDirectory: true });
+    if (!folderPath) {
+        return { outcome: 'cancelled', savedCount: 0, failedCount: 0 };
+    }
+    const taskResult = await runWorkerTask("save-assets-batch", { assets, folderPath, databasePath }, databasePath);
+    if (taskResult.status !== TaskStatus.Succeeded) {
+        return { outcome: 'failed', savedCount: 0, failedCount: assets.length, errorMessage: taskResult.errorMessage };
+    }
+    const outputs = taskResult.outputs as { succeededFiles: string[]; failedFiles: string[] };
+    return { outcome: 'saved', savedCount: outputs.succeededFiles.length, failedCount: outputs.failedFiles.length, savedFolder: folderPath };
 }, 'Error saving assets'));
 
 // IPC handler for opening a folder in the system's file manager

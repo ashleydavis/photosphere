@@ -264,6 +264,7 @@ export function CreateDatabaseModal({ open, onClose }: ICreateDatabaseModalProps
                                 onChange={event => setForm(prev => ({ ...prev, path: event.target.value }))}
                             />
                             <Button
+                                data-id="database-browse-button"
                                 variant="outlined"
                                 disabled={browseDisabled}
                                 onClick={() => handleBrowse().catch(err => log.exception('Browse error:', err as Error))}

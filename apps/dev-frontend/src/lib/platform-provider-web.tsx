@@ -1,6 +1,17 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
 import eruda from "eruda";
-import { PlatformContextProvider, ConfigContextProvider, createConfig, readBrowserNetworkStatus, subscribeBrowserNetworkStatus, type IPlatformContext, type IPlatformEvent, type INetworkStatus, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions, convertToPng } from "user-interface";
+import { PlatformContextProvider, ConfigContextProvider, createConfig, readBrowserNetworkStatus, subscribeBrowserNetworkStatus, type IPlatformContext, type IPlatformEvent, type INetworkStatus, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions, type ISaveDownloadResult, UuidGeneratorProvider, convertToPng } from "user-interface";
+import { RandomUuidGenerator, TestUuidGenerator, type IUuidGenerator } from "utils";
+import { TaskQueue, TaskStatus } from "task-queue";
+import type { ISaveAssetItem } from "api";
+
+//
+// The uuid generator this platform provides to the app: deterministic under a smoke test (the web
+// frontend is loaded with a testMode query parameter) so task ids are reproducible.
+//
+const isTestMode = typeof window !== "undefined"
+    && new URLSearchParams(window.location.search).get("testMode") === "1";
+const uuidGenerator: IUuidGenerator = isTestMode ? new TestUuidGenerator() : new RandomUuidGenerator();
 
 const restApiUrl = "http://localhost:3001";
 
@@ -242,15 +253,37 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         return await sendAndWait<string | undefined>({ type: "pick-folder", options }, "pick-folder-result");
     }, [ws]);
 
-    const pickFile = useCallback(async (defaultFilename: string): Promise<string | undefined> => {
-        // The web browser has no native save dialog that returns a filesystem path. The web
-        // save-asset task handler consumes the returned string as the download filename, so
-        // pass the suggested filename straight through. Returning undefined would cancel the flow.
-        return defaultFilename;
-    }, []);
-
     const pickFiles = useCallback(async (title: string): Promise<string[] | undefined> => {
         return await sendAndWait<string[] | undefined>({ type: "pick-files", title }, "pick-files-result");
+    }, [ws]);
+
+    const saveDownloadedFiles = useCallback(async (items: ISaveAssetItem[], databasePath: string): Promise<ISaveDownloadResult> => {
+        const queue = new TaskQueue(uuidGenerator, databasePath);
+        if (items.length === 1) {
+            // The browser has no save dialog: the web save-asset handler treats the destination as the
+            // download filename and the browser decides where the bytes land.
+            const taskId = queue.addTask("save-asset", { assetId: items[0].assetId, assetType: items[0].assetType, destPath: items[0].filename, databasePath });
+            const taskResult = await queue.awaitTask(taskId);
+            queue.shutdown();
+            if (taskResult?.status !== TaskStatus.Succeeded) {
+                return { outcome: "failed", savedCount: 0, failedCount: 1, errorMessage: taskResult?.errorMessage };
+            }
+            return { outcome: "saved", savedCount: 1, failedCount: 0 };
+        }
+
+        const destinationFolder = await sendAndWait<string | undefined>({ type: "pick-folder", options: { title: 'Choose folder to save assets', folderKey: 'lastDownloadFolder', createDirectory: true } }, "pick-folder-result");
+        if (!destinationFolder) {
+            queue.shutdown();
+            return { outcome: "cancelled", savedCount: 0, failedCount: 0 };
+        }
+        const taskId = queue.addTask("save-assets-batch", { assets: items, folderPath: destinationFolder, databasePath });
+        const taskResult = await queue.awaitTask(taskId);
+        queue.shutdown();
+        if (taskResult?.status !== TaskStatus.Succeeded) {
+            return { outcome: "failed", savedCount: 0, failedCount: items.length, errorMessage: taskResult?.errorMessage };
+        }
+        const outputs = taskResult.outputs as { succeededFiles: string[]; failedFiles: string[] };
+        return { outcome: "saved", savedCount: outputs.succeededFiles.length, failedCount: outputs.failedFiles.length, savedFolder: destinationFolder };
     }, [ws]);
 
     const listSecrets = useCallback(async (): Promise<ISharedSecretEntry[]> => {
@@ -382,8 +415,8 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         removeDatabaseEntry,
         findDatabase,
         pickFolder,
-        pickFile,
         pickFiles,
+        saveDownloadedFiles,
         listSecrets,
         addSecret,
         updateSecret,
@@ -449,11 +482,13 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
     );
 
     return (
-        <ConfigContextProvider value={config}>
-            <PlatformContextProvider value={platformContext}>
-                {children}
-            </PlatformContextProvider>
-        </ConfigContextProvider>
+        <UuidGeneratorProvider value={uuidGenerator}>
+            <ConfigContextProvider value={config}>
+                <PlatformContextProvider value={platformContext}>
+                    {children}
+                </PlatformContextProvider>
+            </ConfigContextProvider>
+        </UuidGeneratorProvider>
     );
 }
 

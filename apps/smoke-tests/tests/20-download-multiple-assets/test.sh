@@ -37,6 +37,9 @@ wait_for_log "$TMP_DIR" "Gallery items rendered"
 send_command "$APP_PORT" long-press '{"dataId":"gallery-thumb","nth":0}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"gallery-item-checkbox","nth":1}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"right-sidebar-button"}' || exit 1
+# The batch download hands the saved files out via a single native share/save sheet, which an
+# automated test cannot dismiss. Stage the sheet outcome so the export completes in test mode.
+send_command "$APP_PORT" stage-export '{"exportOutcome":"shared"}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"download-selected-button"}' || exit 1
 wait_for_log "$TMP_DIR" "Download to folder completed: 2 assets downloaded"
 

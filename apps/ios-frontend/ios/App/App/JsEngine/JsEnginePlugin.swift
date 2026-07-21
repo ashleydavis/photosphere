@@ -1,6 +1,7 @@
 import Foundation
 import Capacitor
 import PhotosUI
+import UIKit
 import UniformTypeIdentifiers
 
 //
@@ -182,6 +183,122 @@ public class JsEnginePlugin: CAPPlugin, EnginePoolDelegate {
         try fileManager.copyItem(at: url, to: destination)
 
         return relativePath
+    }
+
+    //
+    // load: Capacitor lifecycle hook invoked once when the plugin loads. Sweeps the export temp
+    // directory so any decrypted copy orphaned by a process kill mid-sheet (which skips the completion
+    // handler) is collected on the next launch rather than accumulating in app-private storage.
+    //
+    override public func load() {
+        ExportTemp.sweep(root: storageRoot())
+    }
+
+    //
+    // exportFile: hands one finished sandbox file out of the app. The download task has already
+    // written the bytes at { path }; this presents a UIActivityViewController for that file and, once
+    // the sheet is dismissed (shared or cancelled), deletes the temp copy and resolves { path } on a
+    // completed share or { path: null } on cancel. A testOutcome short-circuits the non-automatable
+    // sheet straight to the completion path.
+    //
+    @objc func exportFile(_ call: CAPPluginCall) {
+        guard let path = call.getString("path") else {
+            call.reject("exportFile requires a path")
+            return
+        }
+
+        let root = storageRoot()
+        let fileURL: URL
+        do {
+            fileURL = try PathSandbox.resolveWithin(root: root, candidate: path)
+        }
+        catch {
+            call.reject("exportFile: \(error)")
+            return
+        }
+
+        if let testOutcome = call.getString("testOutcome") {
+            resolveExportFile(call, root: root, path: path, cancelled: testOutcome == "cancelled")
+            return
+        }
+
+        DispatchQueue.main.async {
+            let activityController = UIActivityViewController(activityItems: [fileURL], applicationActivities: nil)
+            activityController.completionWithItemsHandler = { [weak self] _, completed, _, _ in
+                guard let self = self else {
+                    return
+                }
+                self.resolveExportFile(call, root: root, path: path, cancelled: !completed)
+            }
+            guard let presenter = self.bridge?.viewController else {
+                self.resolveExportFile(call, root: root, path: path, cancelled: true)
+                return
+            }
+            // On iPad the sheet is a popover and needs a source anchor.
+            activityController.popoverPresentationController?.sourceView = presenter.view
+            presenter.present(activityController, animated: true)
+        }
+    }
+
+    //
+    // exportFiles: batch form of exportFile presenting a single UIActivityViewController for several
+    // finished sandbox files; deletes each temp copy on dismissal and resolves { paths } on a
+    // completed share or { paths: null } on cancel.
+    //
+    @objc func exportFiles(_ call: CAPPluginCall) {
+        guard let paths = call.getArray("paths", String.self) else {
+            call.reject("exportFiles requires a paths array")
+            return
+        }
+
+        let root = storageRoot()
+        var fileURLs: [URL] = []
+        do {
+            for relativePath in paths {
+                fileURLs.append(try PathSandbox.resolveWithin(root: root, candidate: relativePath))
+            }
+        }
+        catch {
+            call.reject("exportFiles: \(error)")
+            return
+        }
+
+        if let testOutcome = call.getString("testOutcome") {
+            resolveExportFiles(call, root: root, paths: paths, cancelled: testOutcome == "cancelled")
+            return
+        }
+
+        DispatchQueue.main.async {
+            let activityController = UIActivityViewController(activityItems: fileURLs, applicationActivities: nil)
+            activityController.completionWithItemsHandler = { [weak self] _, completed, _, _ in
+                guard let self = self else {
+                    return
+                }
+                self.resolveExportFiles(call, root: root, paths: paths, cancelled: !completed)
+            }
+            guard let presenter = self.bridge?.viewController else {
+                self.resolveExportFiles(call, root: root, paths: paths, cancelled: true)
+                return
+            }
+            activityController.popoverPresentationController?.sourceView = presenter.view
+            presenter.present(activityController, animated: true)
+        }
+    }
+
+    //
+    // Deletes the single temp copy and resolves the call with { path } (or { path: null } on cancel).
+    //
+    private func resolveExportFile(_ call: CAPPluginCall, root: URL, path: String, cancelled: Bool) {
+        let exported = ExportTemp.finishExport(root: root, relativePath: path, cancelled: cancelled)
+        call.resolve(["path": exported ?? NSNull()])
+    }
+
+    //
+    // Deletes every temp copy and resolves the call with { paths } (or { paths: null } on cancel).
+    //
+    private func resolveExportFiles(_ call: CAPPluginCall, root: URL, paths: [String], cancelled: Bool) {
+        let exported = ExportTemp.finishExportBatch(root: root, relativePaths: paths, cancelled: cancelled)
+        call.resolve(["paths": exported ?? NSNull()])
     }
 
     //

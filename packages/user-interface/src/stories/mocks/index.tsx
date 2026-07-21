@@ -33,7 +33,7 @@ import { SearchContextProvider } from "../../context/search-context";
 import { GalleryLayoutContextProvider } from "../../context/gallery-layout-context";
 import { SyncContextProvider } from "../../context/sync-context";
 import { useAssetServer } from "../../lib/use-asset-server";
-import type { IAsset } from "api";
+import type { IAsset, ISaveAssetItem } from "api";
 
 //
 // A no-op synchronous callback. Use for event handler props in stories
@@ -206,8 +206,8 @@ export function mockPlatform(): IPlatformContext {
         removeDatabaseEntry: async () => {},
         findDatabase: async () => undefined,
         pickFolder: async () => undefined,
-        pickFile: async () => undefined,
         pickFiles: async () => undefined,
+        saveDownloadedFiles: async (items: ISaveAssetItem[]) => ({ outcome: "saved" as const, savedCount: items.length, failedCount: 0, savedFolder: "mock-download-folder" }),
         listSecrets: async () => [],
         addSecret: async (entry: ISharedSecretEntry) => entry,
         updateSecret: async () => {},
