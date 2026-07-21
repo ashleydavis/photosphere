@@ -15,6 +15,7 @@ import { getDatabaseSummaryHandler } from "./get-database-summary.worker";
 import { moveAssetsHandler } from "./move-assets.worker";
 import { assetServerHandler } from "./asset-server.worker";
 import { receiveShareHandler, findReceiverHandler, sendPayloadHandler } from "./lan-share.worker";
+import { checkDatabaseExistsHandler } from "./check-database-exists.worker";
 
 //
 // Register all task handlers
@@ -39,4 +40,5 @@ export function initTaskHandlers(): void {
     registerHandler("receive-share", receiveShareHandler);
     registerHandler("find-receiver", findReceiverHandler);
     registerHandler("send-payload", sendPayloadHandler);
+    registerHandler("check-database-exists", checkDatabaseExistsHandler);
 }

@@ -23,6 +23,11 @@ discover_tests() {
 }
 
 main() {
+    # Optional first argument narrows the run to test dirs whose name contains it (e.g.
+    # "29-stale-recent-database" or "stale-recent"), so a single test can be iterated without the
+    # full build-install-27-tests cycle. An absent argument runs every test.
+    local filter="${1:-}"
+
     "${PLATFORM}_prepare"
     "${PLATFORM}_build"
     "${PLATFORM}_install"
@@ -33,10 +38,20 @@ main() {
 
     local tests=()
     while IFS= read -r test_path; do
+        local test_name
+        test_name="$(basename "$(dirname "$test_path")")"
+        if [ -n "$filter" ] && [[ "$test_name" != *"$filter"* ]]; then
+            continue
+        fi
         tests+=("$test_path")
     done < <(discover_tests)
 
     if [ ${#tests[@]} -eq 0 ]; then
+        if [ -n "$filter" ]; then
+            # A filter that matches nothing is an error, not a silent zero-test pass.
+            echo "No tests matched filter: $filter"
+            exit 1
+        fi
         echo "No tests found in tests/"
         exit 0
     fi

@@ -59,7 +59,7 @@ function ToastItem({ toast }: { toast: IToast }) {
             }
         >
             <div>
-                <div>{toast.message}</div>
+                <div data-id="toast-message">{toast.message}</div>
                 {toast.link && (
                     <a
                         href={toast.link.url}

@@ -271,13 +271,6 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         };
     }, []);
 
-    const checkDatabaseExists = useCallback(async (_databasePath: string): Promise<boolean> => {
-        // The WebView has no filesystem access, so existence cannot be checked here directly. Treat
-        // the database as present and let the load-assets task surface a genuinely missing/corrupt
-        // database as a task error. (A precise check would need a native fs call from the WebView.)
-        return true;
-    }, []);
-
     const onTaskMessage = useCallback((handler: (taskId: string, message: Record<string, unknown>) => void): (() => void) => {
         // Subscribe to native taskMessage events streamed by running handlers.
         return subscribeMobileTaskMessage(handler);
@@ -458,7 +451,6 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         getPathForFile,
         supportsDragAndDropImport: false,
         checkTools,
-        checkDatabaseExists,
         onTaskMessage,
         onTaskComplete,
         cancelTasks,

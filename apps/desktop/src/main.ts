@@ -10,7 +10,7 @@ import { WorkerPoolElectronMain } from './lib/worker-pool-electron-main';
 import { RandomUuidGenerator, TimestampProvider, logExceptions, log, noLogDetails } from 'utils';
 import { loadDatabaseConfig, updateDatabaseConfig } from 'api';
 import type { IReplicateDatabaseData } from 'api';
-import { loadDesktopConfig, updateDesktopConfig, updateLastFolder, updateLastDownloadFolder, getTheme, setTheme, getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry, getRecentDatabases, markDatabaseOpened, removeRecentDatabaseName, findDatabase, fetchNews, getShownNewsIds, addShownNewsIds, getLastShownUpdateVersion, setLastShownUpdateVersion, checkConnectivity } from 'node-api';
+import { loadDesktopConfig, updateDesktopConfig, updateLastFolder, updateLastDownloadFolder, getTheme, setTheme, getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry, getRecentDatabases, markDatabaseOpened, removeRecentDatabaseName, findDatabase, fetchNews, getShownNewsIds, addShownNewsIds, getLastShownUpdateVersion, setLastShownUpdateVersion } from 'node-api';
 import type { IDatabaseEntry, IDesktopConfig } from 'node-api';
 import type { ISaveAssetItem } from 'api';
 import type { IWorkerPoolOptions } from './lib/worker-pool-electron-main';
@@ -516,29 +516,6 @@ ipcMain.handle('vault-list', logExceptions(async () => {
     const vault = getVault(getDefaultVaultType());
     return await vault.list();
 }, 'Error listing vault secrets'));
-
-// IPC handler for checking whether a database is accessible (works for local FS, S3, etc.)
-ipcMain.handle('check-database-exists', logExceptions(async (_event, databasePath: string) => {
-    const vault = getVault(getDefaultVaultType());
-    const databases = await getDatabases();
-    const dbEntry = databases.find(entry => entry.path === databasePath);
-    let s3Credentials = undefined;
-
-    if (dbEntry?.s3Key) {
-        const s3Secret = await vault.get(dbEntry.s3Key);
-        if (s3Secret) {
-            const parsed = JSON.parse(s3Secret.value);
-            s3Credentials = {
-                region: parsed.region,
-                accessKeyId: parsed.accessKeyId,
-                secretAccessKey: parsed.secretAccessKey,
-                endpoint: parsed.endpoint,
-            };
-        }
-    }
-
-    return checkConnectivity(databasePath, s3Credentials);
-}, 'Error checking database exists'));
 
 // IPC handler for returning all configured database entries
 ipcMain.handle('get-databases', logExceptions(async () => {

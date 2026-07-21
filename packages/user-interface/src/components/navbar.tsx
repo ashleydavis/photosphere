@@ -275,7 +275,7 @@ export function Navbar({
                                     </button>
                                     {selectedItemsCount} selected
                                 </div>
-                                || <div>{sortedItemsCount} photos</div>
+                                || <div data-id="database-photo-count">{sortedItemsCount} photos</div>
                             }                        
                         </div>
                     )}

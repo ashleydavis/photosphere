@@ -91,6 +91,15 @@ export interface IAssetDatabaseProviderProps {
     restApiUrl: string;
 }
 
+//
+// Shape of the check-database-exists task result payload. Declared locally because user-interface does
+// not depend on node-api's worker types; the result is read structurally.
+//
+interface ICheckDatabaseExistsOutputs {
+    // True when a real database is accessible at the probed path.
+    exists: boolean;
+}
+
 export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IAssetDatabaseProviderProps) {
     const platform = usePlatform();
     const api = useApi();
@@ -370,12 +379,38 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
     }
 
     //
+    // Whether an accessible database lives at the given path. Runs the check as a worker task (the same
+    // check-database-exists handler registered on desktop and mobile) rather than a per-platform call, so
+    // "exists" means the same thing everywhere: checkConnectivity reports a directory that holds no
+    // database as absent.
+    //
+    // The queue is tagged with a unique throwaway source, never dbPath: shutdown() cancels the source and
+    // the mobile engine pool remembers a cancelled source permanently, so reusing dbPath here would drop
+    // every later task for the database (load-assets and the dialogs all run under source == dbPath).
+    //
+    async function checkDatabaseExists(dbPath: string): Promise<boolean> {
+        const queue = new TaskQueue(uuidGenerator, `check-database-exists-${uuidGenerator.generate()}`);
+        try {
+            const taskId = queue.addTask("check-database-exists", { databasePath: dbPath });
+            const result = await queue.awaitTask(taskId);
+            if (!result || result.status !== TaskStatus.Succeeded) {
+                throw new Error(`check-database-exists task did not succeed: ${result?.errorMessage ?? "unknown error"}`);
+            }
+            const outputs = result.outputs as ICheckDatabaseExistsOutputs | undefined;
+            return outputs?.exists === true;
+        }
+        finally {
+            queue.shutdown();
+        }
+    }
+
+    //
     // Opens a database by path directly (without showing file dialog).
     // Checks accessibility first; if not found, notifies the user and returns without
     // changing state so the previously open database stays loaded.
     //
     async function openDatabase(dbPath: string): Promise<void> {
-        const exists = await platform.checkDatabaseExists(dbPath);
+        const exists = await checkDatabaseExists(dbPath);
         if (!exists) {
             addToast({
                 message: `Database not found: ${dbPath}`,

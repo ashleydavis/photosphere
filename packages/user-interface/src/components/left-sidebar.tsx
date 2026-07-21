@@ -273,6 +273,7 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                                     }
                                     >
                                     <ListItemButton
+                                        data-id={`open-recent-database-button-${dbIndex}`}
                                         onClick={async () => {
                                             setSidebarOpen(false);
                                             await openDatabase(dbEntry.path);

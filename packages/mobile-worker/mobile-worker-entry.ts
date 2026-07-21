@@ -14,6 +14,7 @@ import { importAssetsHandler } from "node-api/src/lib/import-assets.worker";
 import { hashFileHandler } from "node-api/src/lib/hash-file.worker";
 import { uploadAssetHandler } from "node-api/src/lib/upload-asset.worker";
 import { receiveShareHandler, findReceiverHandler, sendPayloadHandler } from "node-api/src/lib/lan-share.worker";
+import { checkDatabaseExistsHandler } from "node-api/src/lib/check-database-exists.worker";
 import { installWorkerGlobal } from "./src/index";
 
 //
@@ -64,6 +65,11 @@ registerHandler("upload-asset", uploadAssetHandler);
 registerHandler("receive-share", receiveShareHandler);
 registerHandler("find-receiver", findReceiverHandler);
 registerHandler("send-payload", sendPayloadHandler);
+
+// Register the check-database-exists handler: probes whether an accessible database lives at a path
+// (via node-api's checkConnectivity). Desktop registers the same handler through initTaskHandlers, so
+// the shared openDatabase guard runs the identical check on both platforms.
+registerHandler("check-database-exists", checkDatabaseExistsHandler);
 
 // Expose the worker entry point (globalThis.__photosphereWorker = { runTask }).
 installWorkerGlobal();

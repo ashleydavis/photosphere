@@ -351,10 +351,6 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         return await electronAPI.invoke('check-tools');
     }, [electronAPI]);
 
-    const checkDatabaseExists = useCallback(async (databasePath: string): Promise<boolean> => {
-        return await electronAPI.invoke('check-database-exists', databasePath);
-    }, [electronAPI]);
-
     const onTaskMessage = useCallback((handler: (taskId: string, message: Record<string, unknown>) => void): (() => void) => {
         taskMessageCallbacksRef.current.add(handler);
         return () => {
@@ -528,7 +524,6 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         getPathForFile,
         supportsDragAndDropImport: true,
         checkTools,
-        checkDatabaseExists,
         onTaskMessage,
         onTaskComplete,
         cancelTasks,

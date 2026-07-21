@@ -18,6 +18,7 @@ import _ from "lodash";
 import { acquireWriteLock, refreshWriteLock, releaseWriteLock } from "api";
 import { computeAssetHash } from "./hash";
 import { loadMerkleTree, merkleTreeExists, saveMerkleTree, stampDatabaseModified } from "./tree";
+import { openStorage } from "./open-storage";
 import { addItem, createTree, deleteItem, combineHashes, IMerkleTree } from "merkle-tree";
 
 //
@@ -650,9 +651,12 @@ export async function createLazyDatabaseStorage(
 // Works for any storage path (local filesystem, S3, network).
 // Used by sync scheduling to avoid queuing tasks when the target is unreachable.
 //
-export async function checkConnectivity(databasePath: string, s3Credentials?: IS3Credentials): Promise<boolean> {
+export async function checkConnectivity(databasePath: string): Promise<boolean> {
     try {
-        const { storage } = createStorage(databasePath, s3Credentials, undefined);
+        // Open storage the same way the load path does: openStorage resolves S3/encryption credentials
+        // from the database's own config, so the existence check and the actual load agree on what is
+        // reachable rather than probing with no credentials.
+        const { storage } = await openStorage(databasePath);
         return await merkleTreeExists(storage);
     }
     catch {

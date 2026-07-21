@@ -485,5 +485,23 @@ cli_send_expect_success() {
     log_success "CLI sender reported a successful transfer."
 }
 
+#
+# Asserts immediately (no polling) that the element's value matches <expected_regex>, exiting 1
+# otherwise. An empty value never matches. Usage: assert_value <port> <dataId> <expected_regex>
+#
+assert_value() {
+    local port="$1"
+    local data_id="$2"
+    local expected="$3"
+    local value
+    value=$(read_value "$port" "$data_id")
+    if [ -z "$value" ] || ! echo "$value" | grep -qE "$expected"; then
+        log_error "Value of '$data_id' ('$value') did not match: $expected"
+        exit 1
+    fi
+    log_info "Value of '$data_id' matched: $value"
+    return 0
+}
+
 # Load the platform launcher when this file is sourced.
 load_platform
