@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { log } from "utils";
 import { TaskQueue, TaskStatus } from "task-queue";
 import Box from "@mui/joy/Box";
 import Card from "@mui/joy/Card";
@@ -179,10 +180,16 @@ export function DatabaseSummaryPage() {
                 return;
             }
             if (result.status === TaskStatus.Succeeded) {
-                setSummary(result.outputs as IDatabaseSummary);
+                const loadedSummary = result.outputs as IDatabaseSummary;
+                setSummary(loadedSummary);
+                // Observable success line so a smoke test can confirm the get-database-summary
+                // handler ran and returned data.
+                log.info(`Database summary loaded: ${loadedSummary.totalImports} imports, ${loadedSummary.totalFiles} files`);
             }
             else {
-                setError(result.errorMessage || "Failed to load database summary");
+                const summaryError = result.errorMessage || "Failed to load database summary";
+                setError(summaryError);
+                log.error(`Database summary failed: ${summaryError}`);
             }
             setIsLoading(false);
         });

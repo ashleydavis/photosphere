@@ -7,7 +7,7 @@ import { useTheme } from '@mui/joy/styles/ThemeProvider';
 import List from '@mui/joy/List/List';
 import ListItem from '@mui/joy/ListItem/ListItem';
 import ListItemDecorator from '@mui/joy/ListItemDecorator/ListItemDecorator';
-import { PhotoLibrary, Folder, FolderOpen, Map, Search, Settings, CreateNewFolder, LibraryAdd, FileUpload, ManageSearch, Key, Delete, DeveloperMode } from '@mui/icons-material';
+import { PhotoLibrary, Folder, FolderOpen, Map, Search, Settings, CreateNewFolder, LibraryAdd, FileUpload, ManageSearch, Key, Delete, DeveloperMode, Storage } from '@mui/icons-material';
 import { CollapsibleSection } from './collapsible-section';
 import ListItemContent from '@mui/joy/ListItemContent/ListItemContent';
 import ListItemButton from '@mui/joy/ListItemButton/ListItemButton';
@@ -228,6 +228,23 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                             </ListItem>
                         )}
                     </NavLink>
+
+                    {databasePath && (
+                        <NavLink
+                            to="/database-summary"
+                            data-id="sidebar-database-summary"
+                            onClick={() => setSidebarOpen(false)}
+                            >
+                            {({ isActive }) => (
+                                <ListItem sx={isActive ? activeNavItemSx : undefined}>
+                                    <ListItemButton>
+                                        <ListItemDecorator><Storage /></ListItemDecorator>
+                                        <ListItemContent>Database Info</ListItemContent>
+                                    </ListItemButton>
+                                </ListItem>
+                            )}
+                        </NavLink>
+                    )}
 
                     {temporaryNavPage && TemporaryNavPageIcon && (
                         <NavLink

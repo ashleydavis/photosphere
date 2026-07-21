@@ -13,6 +13,10 @@ import { assetServerHandler } from "node-api/src/lib/asset-server.worker";
 import { importAssetsHandler } from "node-api/src/lib/import-assets.worker";
 import { hashFileHandler } from "node-api/src/lib/hash-file.worker";
 import { uploadAssetHandler } from "node-api/src/lib/upload-asset.worker";
+import { getDatabaseSummaryHandler } from "node-api/src/lib/get-database-summary.worker";
+import { prefetchDatabaseHandler } from "node-api/src/lib/prefetch-database.worker";
+import { verifyFileHandler } from "node-api/src/lib/verify.worker";
+import { checkFileHandler } from "node-api/src/lib/check.worker";
 import { receiveShareHandler, findReceiverHandler, sendPayloadHandler } from "node-api/src/lib/lan-share.worker";
 import { checkDatabaseExistsHandler } from "node-api/src/lib/check-database-exists.worker";
 import { installWorkerGlobal } from "./src/index";
@@ -58,6 +62,20 @@ registerHandler("asset-server", assetServerHandler);
 registerHandler("import-assets", importAssetsHandler);
 registerHandler("hash-file", hashFileHandler);
 registerHandler("upload-asset", uploadAssetHandler);
+
+// Register the get-database-summary handler: the /database-summary page dispatches this task to
+// compute the summary of the open database (photo/file counts, total size, integrity hashes).
+registerHandler("get-database-summary", getDatabaseSummaryHandler);
+
+// Register the prefetch-database handler: load-assets fire-and-forget queues this for a partial
+// database to pull the missing thumbnails and BSON database files from origin storage.
+registerHandler("prefetch-database", prefetchDatabaseHandler);
+
+// Register the verify-file / check-file handlers for parity with the desktop registry
+// (packages/node-api/src/lib/task-handlers.ts). Nothing on mobile queues them yet: their only
+// callers are the CLI verify and check commands.
+registerHandler("verify-file", verifyFileHandler);
+registerHandler("check-file", checkFileHandler);
 
 // Register the real shared LAN-share handlers (the same ones desktop/CLI use). They run unchanged in
 // the embedded engine because the bundle aliases dgram/tls/https/crypto to native-backed shims, so

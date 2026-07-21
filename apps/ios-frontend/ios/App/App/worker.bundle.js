@@ -53032,6 +53032,30 @@ ${stack}`);
       return new Date;
     }
   }
+  // ../utils/src/lib/format.ts
+  function formatFileSize(bytes) {
+    if (bytes === 0)
+      return "0 B";
+    const k = 1024;
+    const sizes = ["B", "KB", "MB", "GB", "TB"];
+    const i2 = Math.floor(Math.log(bytes) / Math.log(k));
+    const value = bytes / Math.pow(k, i2);
+    return `${Math.round(value * 100) / 100} ${sizes[i2]}`;
+  }
+  // ../utils/src/lib/batch-generator.ts
+  async function* batchGenerator(source, batchSize) {
+    let batch = [];
+    for await (const item of source) {
+      batch.push(item);
+      if (batch.length >= batchSize) {
+        yield batch;
+        batch = [];
+      }
+    }
+    if (batch.length > 0) {
+      yield batch;
+    }
+  }
   // ../task-queue/src/lib/queue-backend.ts
   var _backend;
   function setQueueBackend(backend) {
@@ -65415,6 +65439,36 @@ ${JSON.stringify(b, null, 2)}`);
     await retry(() => metadataCollection.sortIndex("hash", "asc").ensure(metadataCollection, "string"));
     await retry(() => metadataCollection.sortIndex("photoDate", "desc").ensure(metadataCollection, "date"));
   }
+  async function getDatabaseSummary(assetStorage) {
+    const merkleTree = await retry(() => loadMerkleTree(assetStorage));
+    if (!merkleTree) {
+      throw new Error(`Failed to load merkle tree.`);
+    }
+    const filesImported = merkleTree.databaseMetadata?.filesImported || 0;
+    const filesRootHash = merkleTree.merkle?.hash;
+    const databaseRootHash = await retry(() => getDatabaseRootHash(assetStorage, ".db/bson"));
+    let fullHash;
+    if (filesRootHash && databaseRootHash) {
+      const aggregateHash = combineHashes(filesRootHash, databaseRootHash);
+      fullHash = aggregateHash.toString("hex");
+    } else if (filesRootHash) {
+      fullHash = filesRootHash.toString("hex");
+    } else if (databaseRootHash) {
+      fullHash = databaseRootHash.toString("hex");
+    } else {
+      fullHash = "empty";
+    }
+    return {
+      totalImports: filesImported,
+      totalFiles: merkleTree.sort?.leafCount || 0,
+      totalSize: merkleTree.sort?.size || 0,
+      totalNodes: merkleTree.sort?.nodeCount || 0,
+      fullHash,
+      filesHash: filesRootHash?.toString("hex"),
+      databaseHash: databaseRootHash?.toString("hex"),
+      databaseVersion: merkleTree.version
+    };
+  }
   async function streamAsset(assetStorage, assetId, assetType) {
     const assetPath = `${assetType}/${assetId}`;
     return assetStorage.readStream(assetPath);
@@ -68680,6 +68734,135 @@ Copied hash: ${copiedHash.toString("hex")}
       }
     }
   }
+
+  // ../node-api/src/lib/get-database-summary.worker.ts
+  async function getDatabaseSummaryHandler(data, _context) {
+    if (!data.databasePath) {
+      throw new Error("databasePath is required");
+    }
+    const { storage: storage2 } = await openStorage(data.databasePath);
+    return await getDatabaseSummary(storage2);
+  }
+
+  // ../node-api/src/lib/prefetch-database.worker.ts
+  var PREFETCH_CONCURRENCY = 3;
+  async function prefetchDatabaseHandler(data, context) {
+    if (!data.databasePath) {
+      throw new Error("databasePath is required");
+    }
+    const { storage: localStorage2, rawStorage } = await openStorage(data.databasePath);
+    const merkleTree = await loadMerkleTree(localStorage2);
+    if (!merkleTree?.databaseMetadata?.isPartial) {
+      return;
+    }
+    const config = await loadDatabaseConfig(rawStorage);
+    if (!config?.origin) {
+      return;
+    }
+    const { storage: originStorage } = await openStorage(config.origin);
+    async function* missingFiles() {
+      for (const dir2 of ["thumb", ".db/bson"]) {
+        for await (const file of walkDirectory(originStorage, dir2)) {
+          if (!await localStorage2.fileExists(file.fileName)) {
+            yield file.fileName;
+          }
+        }
+      }
+    }
+    for await (const batch of batchGenerator(missingFiles(), PREFETCH_CONCURRENCY)) {
+      if (context.isCancelled()) {
+        break;
+      }
+      await Promise.all(batch.map(async (filePath) => {
+        await retry(async () => {
+          const stream = await originStorage.readStream(filePath);
+          await localStorage2.writeStream(filePath, undefined, stream);
+        });
+      }));
+    }
+  }
+
+  // ../node-api/src/lib/verify.worker.ts
+  async function verifyFileHandler(data, context) {
+    const { node, storageDescriptor, options } = data;
+    const fileName = node.name;
+    const { storage: storage2 } = await openStorage(storageDescriptor.databasePath, storageDescriptor.encryptionKey);
+    const fileInfo = await retry(() => storage2.info(fileName));
+    if (!fileInfo) {
+      return {
+        fileName,
+        status: "removed"
+      };
+    }
+    const sizeChanged = node.size !== fileInfo.length;
+    const timestampChanged = node.lastModified === undefined || node.lastModified.getTime() !== fileInfo.lastModified.getTime();
+    if (sizeChanged || timestampChanged) {
+      const freshHash = await retry(async () => computeAssetHash(await storage2.readStream(fileName), fileInfo), 3, 1000, 2, LARGE_FILE_TIMEOUT);
+      if (Buffer.compare(freshHash.hash, node.contentHash) !== 0) {
+        const reasons = [];
+        if (sizeChanged) {
+          const oldSize = formatFileSize(node.size);
+          const newSize = formatFileSize(fileInfo.length);
+          reasons.push(`size changed (${oldSize} → ${newSize})`);
+        }
+        if (timestampChanged) {
+          const oldTime = node.lastModified.toLocaleString();
+          const newTime = fileInfo.lastModified.toLocaleString();
+          reasons.push(`timestamp changed (${oldTime} → ${newTime})`);
+        }
+        reasons.push("content hash changed");
+        if (log.verboseEnabled) {
+          log.verbose(`Modified file: ${node.name} - ${reasons.join(", ")}`);
+        }
+        return {
+          fileName,
+          status: "modified",
+          reasons
+        };
+      } else {
+        return {
+          fileName,
+          status: "unmodified"
+        };
+      }
+    } else {
+      return {
+        fileName,
+        status: "unmodified"
+      };
+    }
+  }
+
+  // ../node-api/src/lib/check.worker.ts
+  async function checkFileHandler(data, context) {
+    const { filePath, fileStat, contentType, storageDescriptor, hashCacheDir } = data;
+    const { uuidGenerator, timestampProvider } = context;
+    const localHashCache = new HashCache(hashCacheDir, true);
+    await localHashCache.load();
+    let hashedFile = await getHashFromCache(filePath, fileStat, localHashCache);
+    const hashFromCache = !!hashedFile;
+    if (!hashedFile) {
+      hashedFile = await validateAndHash(filePath, fileStat, contentType, data.logicalPath);
+      if (!hashedFile) {
+        return { hashedFile: undefined, matchingRecordsCount: 0, hashFromCache: false };
+      }
+    }
+    const { storage: storage2 } = await openStorage(storageDescriptor.databasePath, storageDescriptor.encryptionKey);
+    const database2 = createMediaFileDatabase(storage2, uuidGenerator, timestampProvider);
+    const metadataCollection = database2.metadataCollection;
+    const localHashStr = hashedFile.hash.toString("hex");
+    const records = await metadataCollection.sortIndex("hash", "asc").findByValue(localHashStr);
+    const matchingRecordsCount = records.length;
+    return {
+      hashedFile: {
+        hash: localHashStr,
+        lastModified: hashedFile.lastModified.toISOString(),
+        length: hashedFile.length
+      },
+      matchingRecordsCount,
+      hashFromCache
+    };
+  }
   // src/shims/node-https.ts
   init_buffer();
   init_node_http();
@@ -69898,6 +70081,10 @@ ${lines.join(`
   registerHandler("import-assets", importAssetsHandler);
   registerHandler("hash-file", hashFileHandler);
   registerHandler("upload-asset", uploadAssetHandler);
+  registerHandler("get-database-summary", getDatabaseSummaryHandler);
+  registerHandler("prefetch-database", prefetchDatabaseHandler);
+  registerHandler("verify-file", verifyFileHandler);
+  registerHandler("check-file", checkFileHandler);
   registerHandler("receive-share", receiveShareHandler);
   registerHandler("find-receiver", findReceiverHandler);
   registerHandler("send-payload", sendPayloadHandler);

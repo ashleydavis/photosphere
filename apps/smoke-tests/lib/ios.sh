@@ -158,6 +158,29 @@ ios_reset_path() {
 }
 
 #
+# Polls the app's Documents directory until the given path exists and is non-empty (for a directory,
+# until it lists at least one entry), or the wait times out. Mirrors android_wait_for_file: it lets a
+# test observe a background task's effect on device storage (for example a partial-database prefetch
+# copying thumbnails into the local replica). Returns 0 once present, non-zero on timeout.
+# Usage: ios_wait_for_file <relative_path_under_documents>
+#
+ios_wait_for_file() {
+    local rel="$1"
+    local container
+    container="$(ios_app_container)"
+    local elapsed=0
+    while [ "$elapsed" -lt "$DEFAULT_WAIT_TIMEOUT" ]; do
+        if [ -n "$container" ] && [ -n "$(ls -A "$container/Documents/$rel" 2>/dev/null)" ]; then
+            return 0
+        fi
+        container="$(ios_app_container)"
+        sleep 1
+        elapsed=$((elapsed + 1))
+    done
+    return 1
+}
+
+#
 # Removes everything a run leaves in the app's container: the databases seeded into its storage
 # sandbox (Documents) and whatever the run imported into them. The app stays installed, so the next
 # run does not pay for a reinstall.

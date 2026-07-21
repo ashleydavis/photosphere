@@ -238,6 +238,27 @@ android_reset_path() {
 }
 
 #
+# Polls the app's private files directory until the given path exists and is non-empty (for a
+# directory, until it lists at least one entry), or the wait times out. Used to observe a background
+# task's effect on device storage (for example a partial-database prefetch copying thumbnails into
+# the local replica), which the host cannot otherwise see. Returns 0 once present, non-zero on
+# timeout.
+# Usage: android_wait_for_file <relative_path_under_files>
+#
+android_wait_for_file() {
+    local rel="$1"
+    local elapsed=0
+    while [ "$elapsed" -lt "$DEFAULT_WAIT_TIMEOUT" ]; do
+        if adb shell run-as "$APP_ID" ls "files/$rel" 2>/dev/null | grep -q .; then
+            return 0
+        fi
+        sleep 1
+        elapsed=$((elapsed + 1))
+    done
+    return 1
+}
+
+#
 # Removes everything a run leaves on the device: the databases seeded into the app's storage sandbox
 # and whatever the run imported into them, plus the fixture copies pushed through the shared temp
 # directory. The app stays installed, so the next run does not pay for a reinstall.
