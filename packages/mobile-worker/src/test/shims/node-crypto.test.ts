@@ -1,6 +1,6 @@
 import { createHash as nodeCreateHash } from "crypto";
 import { Buffer } from "buffer";
-import { createHash, createSign, generateKeyPairSync } from "../../shims/node-crypto";
+import { createHash, createSign, generateKeyPairSync, randomUUID } from "../../shims/node-crypto";
 
 //
 // Unit tests for the crypto shim's sha256, which serialization uses to verify file checksums.
@@ -77,5 +77,20 @@ describe("node-crypto shim RSA keygen/sign", () => {
 
         expect(cryptoSignSha256).toHaveBeenCalledWith("PRIVATE-KEY-PEM", Buffer.from("hello world").toString("base64"));
         expect(signature.equals(signatureBytes)).toBe(true);
+    });
+});
+
+//
+// Unit tests for the shim's randomUUID, used by node-utils outputFile to name temp files.
+//
+describe("node-crypto shim randomUUID", () => {
+
+    test("produces a well-formed v4 UUID", () => {
+        expect(randomUUID()).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    });
+
+    test("produces distinct values across calls", () => {
+        const generated = new Set(Array.from({ length: 100 }, () => randomUUID()));
+        expect(generated.size).toBe(100);
     });
 });

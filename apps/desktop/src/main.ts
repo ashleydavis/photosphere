@@ -10,7 +10,7 @@ import { WorkerPoolElectronMain } from './lib/worker-pool-electron-main';
 import { RandomUuidGenerator, TimestampProvider, logExceptions, log, noLogDetails } from 'utils';
 import { loadDatabaseConfig, updateDatabaseConfig } from 'api';
 import type { IReplicateDatabaseData } from 'api';
-import { loadDesktopConfig, saveDesktopConfig, updateLastFolder, updateLastDownloadFolder, getTheme, setTheme, getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry, getRecentDatabases, markDatabaseOpened, removeRecentDatabaseName, findDatabase, fetchNews, getShownNewsIds, addShownNewsIds, getLastShownUpdateVersion, setLastShownUpdateVersion, checkConnectivity } from 'node-api';
+import { loadDesktopConfig, updateDesktopConfig, updateLastFolder, updateLastDownloadFolder, getTheme, setTheme, getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry, getRecentDatabases, markDatabaseOpened, removeRecentDatabaseName, findDatabase, fetchNews, getShownNewsIds, addShownNewsIds, getLastShownUpdateVersion, setLastShownUpdateVersion, checkConnectivity } from 'node-api';
 import type { IDatabaseEntry, IDesktopConfig } from 'node-api';
 import type { ISaveAssetItem } from 'api';
 import type { IWorkerPoolOptions } from './lib/worker-pool-electron-main';
@@ -661,9 +661,9 @@ ipcMain.handle('notify-database-opened', logExceptions(async (_event, databasePa
         }
         await markDatabaseOpened(existing.name);
     }
-    const desktopConfig = await loadDesktopConfig();
-    desktopConfig.lastDatabase = databasePath;
-    await saveDesktopConfig(desktopConfig);
+    await updateDesktopConfig(desktopConfig => {
+        desktopConfig.lastDatabase = databasePath;
+    });
     isDatabaseOpen = true;
     await updateMenu();
     resetSyncState();
@@ -716,9 +716,9 @@ ipcMain.handle('list-s3-dirs', logExceptions(async (_event, { s3Key, bucket, pre
 
 // IPC handler for notifying that database was closed from frontend
 ipcMain.handle('notify-database-closed', logExceptions(async () => {
-    const desktopConfig = await loadDesktopConfig();
-    delete desktopConfig.lastDatabase;
-    await saveDesktopConfig(desktopConfig);
+    await updateDesktopConfig(desktopConfig => {
+        delete desktopConfig.lastDatabase;
+    });
     isDatabaseOpen = false;
     await updateMenu();
     resetSyncState();
@@ -749,9 +749,9 @@ interface ISetConfigRequest {
 
 // IPC handler for writing a value to the desktop config file
 ipcMain.handle('set-config', logExceptions(async (_event, { key, value }: ISetConfigRequest) => {
-    const config = await loadDesktopConfig();
-    (config as Record<string, IDesktopConfig[keyof IDesktopConfig]>)[key] = value;
-    await saveDesktopConfig(config);
+    await updateDesktopConfig(config => {
+        (config as Record<string, IDesktopConfig[keyof IDesktopConfig]>)[key] = value;
+    });
     // Keep the theme-changed event so the menu bar can react to theme changes
     if (key === 'theme' && mainWindow) {
         mainWindow.webContents.send('theme-changed', value);

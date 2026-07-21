@@ -137,9 +137,10 @@ export function DeveloperContextProvider({ children }: IDeveloperContextProvider
     function toggleDevTools(): void {
         const nextValue = !devToolsOpen;
         setDevToolsOpen(nextValue);
+        // Request the real inspector flip. The host echoes a devtools-state event
+        // which is the single writer that persists dev_tools_open, so we do not
+        // persist here (persisting in both places races on the config file).
         platform.toggleDevTools();
-        config.set<boolean>(DEV_TOOLS_OPEN_CONFIG_KEY, nextValue)
-            .catch(err => log.exception("Failed to persist developer tools setting:", err as Error));
         log.event(`Developer tools ${nextValue ? "opened" : "closed"}`);
     }
 

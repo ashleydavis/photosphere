@@ -1,6 +1,6 @@
 import * as os from "os";
 import * as path from "path";
-import { readJson, readToml, writeToml, pathExists, remove } from "node-utils";
+import { readJson, readToml, writeToml, updateToml, pathExists, remove } from "node-utils";
 
 //
 // Configuration for the desktop app stored in ~/.config/photosphere/desktop.toml
@@ -208,12 +208,26 @@ export async function saveDesktopConfig(config: IDesktopConfig): Promise<void> {
 }
 
 //
+// Applies a mutation to the desktop config as a serialized read-modify-write: reads the
+// current config, applies the mutator in place, and writes it back. Updates are serialized
+// on the config file (via updateToml) so two overlapping updates cannot lose each other's
+// changes. Prefer this over a manual load/mutate/save when changing a single field.
+//
+export async function updateDesktopConfig(mutator: (config: IDesktopConfig) => void): Promise<void> {
+    await updateToml<ITomlDesktopConfig>(CONFIG_FILE, {}, (toml) => {
+        const config = tomlToDesktopConfig(toml);
+        mutator(config);
+        return desktopConfigToToml(config);
+    });
+}
+
+//
 // Updates the last folder that was opened in the file dialog.
 //
 export async function updateLastFolder(folderPath: string): Promise<void> {
-    const config = await loadDesktopConfig();
-    config.lastFolder = folderPath;
-    await saveDesktopConfig(config);
+    await updateDesktopConfig(config => {
+        config.lastFolder = folderPath;
+    });
 }
 
 //
@@ -228,18 +242,18 @@ export async function getTheme(): Promise<'light' | 'dark' | 'system'> {
 // Sets the theme preference.
 //
 export async function setTheme(theme: 'light' | 'dark' | 'system'): Promise<void> {
-    const config = await loadDesktopConfig();
-    config.theme = theme;
-    await saveDesktopConfig(config);
+    await updateDesktopConfig(config => {
+        config.theme = theme;
+    });
 }
 
 //
 // Updates the last folder used when downloading assets.
 //
 export async function updateLastDownloadFolder(folderPath: string): Promise<void> {
-    const config = await loadDesktopConfig();
-    config.lastDownloadFolder = folderPath;
-    await saveDesktopConfig(config);
+    await updateDesktopConfig(config => {
+        config.lastDownloadFolder = folderPath;
+    });
 }
 
 //
@@ -254,18 +268,18 @@ export async function getRecentSearches(): Promise<string[]> {
 // Adds a search to the recent searches list, deduplicating and capping at MAX_RECENT_SEARCHES.
 //
 export async function addRecentSearch(searchText: string): Promise<void> {
-    const config = await loadDesktopConfig();
-    const filtered = (config.recentSearches || []).filter(item => item !== searchText);
-    config.recentSearches = [searchText, ...filtered].slice(0, MAX_RECENT_SEARCHES);
-    await saveDesktopConfig(config);
+    await updateDesktopConfig(config => {
+        const filtered = (config.recentSearches || []).filter(item => item !== searchText);
+        config.recentSearches = [searchText, ...filtered].slice(0, MAX_RECENT_SEARCHES);
+    });
 }
 
 //
 // Removes a search from the recent searches list.
 //
 export async function removeRecentSearch(searchText: string): Promise<void> {
-    const config = await loadDesktopConfig();
-    config.recentSearches = (config.recentSearches || []).filter(item => item !== searchText);
-    await saveDesktopConfig(config);
+    await updateDesktopConfig(config => {
+        config.recentSearches = (config.recentSearches || []).filter(item => item !== searchText);
+    });
 }
 

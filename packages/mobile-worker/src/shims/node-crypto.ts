@@ -232,6 +232,19 @@ export function randomBytes(): never {
 }
 
 //
+// Generates a random v4 UUID string. Node's crypto.randomUUID is cryptographically strong; the
+// mobile worker only needs this for unique temporary file names (see outputFile's atomic write in
+// node-utils), so a Math.random-based v4 UUID is sufficient. It is not suitable for security use.
+//
+export function randomUUID(): string {
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, character => {
+        const randomNibble = Math.floor(Math.random() * 16);
+        const hexValue = character === "x" ? randomNibble : (randomNibble & 0x3) | 0x8;
+        return hexValue.toString(16);
+    });
+}
+
+//
 // The default export mirrors `import crypto from "crypto"` / `"node:crypto"`.
 //
 const cryptoModule = {
@@ -245,6 +258,7 @@ const cryptoModule = {
     privateDecrypt,
     publicEncrypt,
     randomBytes,
+    randomUUID,
     KeyObject,
     Decipher,
 };

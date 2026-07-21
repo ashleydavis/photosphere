@@ -11,6 +11,14 @@ jest.mock('node-utils', () => ({
     writeToml: mockWriteToml,
     readJson: mockReadJson,
     remove: mockRemove,
+    // Mirror the real updateToml as a read-modify-write over the mocked fs helpers, so the
+    // config mutators (which now go through updateDesktopConfig -> updateToml) still exercise
+    // the mocked readToml/writeToml the existing assertions rely on.
+    updateToml: async (filePath: string, fallback: any, mutator: (current: any) => any) => {
+        const current = await mockPathExists(filePath) ? await mockReadToml(filePath) : fallback;
+        const updated = mutator(current);
+        await mockWriteToml(filePath, updated);
+    },
 }));
 
 import {
@@ -24,6 +32,7 @@ import {
     getRecentSearches,
     addRecentSearch,
     removeRecentSearch,
+    updateDesktopConfig,
 } from '../../lib/desktop-config';
 
 describe('getConfigPath', () => {
@@ -367,6 +376,24 @@ describe('developerMode persistence', () => {
         const loaded = await loadDesktopConfig();
 
         expect(loaded.developerMode).toBe(true);
+    });
+});
+
+describe('updateDesktopConfig', () => {
+    beforeEach(() => jest.clearAllMocks());
+
+    test('reads current config, applies the mutation, and writes snake_case TOML', async () => {
+        mockPathExists.mockImplementation((filePath: string) => filePath.endsWith('.toml'));
+        mockReadToml.mockResolvedValue({ theme: 'dark' });
+
+        await updateDesktopConfig(config => {
+            config.developerMode = true;
+        });
+
+        const tomlArg = mockWriteToml.mock.calls[0][1];
+        // The pre-existing value survives and the mutation is applied, converted to snake_case.
+        expect(tomlArg.theme).toBe('dark');
+        expect(tomlArg.developer_mode).toBe(true);
     });
 });
 

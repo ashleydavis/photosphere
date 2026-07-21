@@ -8523,608 +8523,6 @@ __p += '`;
     node_util_default = utilModule;
   });
 
-  // src/shims/node-net.ts
-  var exports_node_net = {};
-  __export(exports_node_net, {
-    isIP: () => isIP,
-    installTcpInbound: () => installTcpInbound,
-    default: () => node_net_default,
-    createServer: () => createServer,
-    Socket: () => Socket,
-    Server: () => Server,
-    AddressInfo: () => AddressInfo
-  });
-
-  class AddressInfo {
-  }
-  function getTcpHost() {
-    const host = globalThis.host;
-    if (!host) {
-      throw new Error("Native host bridge (globalThis.host) is not installed; net shim cannot run.");
-    }
-    return host;
-  }
-
-  class TinyEmitter {
-    netListeners = new Map;
-    on(eventName, listener) {
-      const existing = this.netListeners.get(eventName);
-      if (existing) {
-        existing.push(listener);
-      } else {
-        this.netListeners.set(eventName, [listener]);
-      }
-      return this;
-    }
-    once(eventName, listener) {
-      const wrapper = (...args) => {
-        this.off(eventName, wrapper);
-        listener(...args);
-      };
-      return this.on(eventName, wrapper);
-    }
-    off(eventName, listener) {
-      const existing = this.netListeners.get(eventName);
-      if (existing) {
-        const index = existing.indexOf(listener);
-        if (index >= 0) {
-          existing.splice(index, 1);
-        }
-      }
-      return this;
-    }
-    emit(eventName, ...args) {
-      const handlers2 = this.netListeners.get(eventName);
-      if (!handlers2) {
-        return;
-      }
-      for (const handler of handlers2.slice()) {
-        handler(...args);
-      }
-    }
-  }
-  function createServer(connectionListener) {
-    const server = new Server;
-    if (connectionListener) {
-      server.on("connection", connectionListener);
-    }
-    return server;
-  }
-  function dispatchInboundEvent(event) {
-    if (event.kind === "connection") {
-      if (event.listenerId === undefined || event.connectionId === undefined) {
-        return;
-      }
-      const server = activeServers.get(event.listenerId);
-      if (server) {
-        server.acceptConnection(event.connectionId);
-      }
-      return;
-    }
-    if (event.kind === "data") {
-      if (event.connectionId === undefined || event.base64 === undefined) {
-        return;
-      }
-      const socket = activeSockets.get(event.connectionId);
-      if (socket) {
-        socket.deliverData(event.base64);
-      }
-      return;
-    }
-    if (event.kind === "close") {
-      if (event.connectionId === undefined) {
-        return;
-      }
-      const socket = activeSockets.get(event.connectionId);
-      if (socket) {
-        socket.deliverClose();
-      }
-    }
-  }
-  function installTcpInbound(globalScope = globalThis) {
-    globalScope.__tcpEvent = (eventJson) => {
-      const event = JSON.parse(eventJson);
-      dispatchInboundEvent(event);
-    };
-  }
-  function isIP(input) {
-    if (/^(\d{1,3}\.){3}\d{1,3}$/.test(input)) {
-      return 4;
-    }
-    if (input.includes(":")) {
-      return 6;
-    }
-    return 0;
-  }
-  var activeServers, activeSockets, Socket, Server, netModule, node_net_default;
-  var init_node_net = __esm(() => {
-    init_buffer();
-    init_host_access();
-    activeServers = new Map;
-    activeSockets = new Map;
-    Socket = class Socket extends TinyEmitter {
-      connectionId;
-      closed = false;
-      constructor(connectionId) {
-        super();
-        this.connectionId = connectionId;
-      }
-      write(chunk) {
-        if (this.closed) {
-          return false;
-        }
-        const buffer = typeof chunk === "string" ? Buffer2.from(chunk, "utf8") : Buffer2.from(chunk);
-        const host = getTcpHost();
-        callHost(() => host.tcpWrite(this.connectionId, buffer.toString("base64")));
-        return true;
-      }
-      end(chunk) {
-        if (chunk !== undefined) {
-          this.write(chunk);
-        }
-        this.close();
-      }
-      destroy() {
-        this.close();
-      }
-      close() {
-        if (this.closed) {
-          return;
-        }
-        this.closed = true;
-        activeSockets.delete(this.connectionId);
-        const host = getTcpHost();
-        callHost(() => host.tcpClose(this.connectionId));
-        this.emit("close");
-      }
-      deliverData(base64) {
-        this.emit("data", Buffer2.from(base64, "base64"));
-      }
-      deliverClose() {
-        if (this.closed) {
-          return;
-        }
-        this.closed = true;
-        activeSockets.delete(this.connectionId);
-        this.emit("end");
-        this.emit("close");
-      }
-    };
-    Server = class Server extends TinyEmitter {
-      listenerId = undefined;
-      boundPort = 0;
-      boundHost = "127.0.0.1";
-      listen(port, host, callback) {
-        const actualHost = typeof host === "string" ? host : "127.0.0.1";
-        const actualCallback = typeof host === "function" ? host : callback;
-        const tcpHost = getTcpHost();
-        const resultJson = callHost(() => tcpHost.tcpListen(actualHost, port));
-        const result = JSON.parse(resultJson);
-        this.listenerId = result.listenerId;
-        this.boundPort = result.port;
-        this.boundHost = actualHost;
-        activeServers.set(result.listenerId, this);
-        if (actualCallback) {
-          this.once("listening", actualCallback);
-        }
-        Promise.resolve().then(() => {
-          this.emit("listening");
-        });
-        return this;
-      }
-      address() {
-        return { port: this.boundPort, address: this.boundHost, family: "IPv4" };
-      }
-      close(callback) {
-        if (this.listenerId !== undefined) {
-          const tcpHost = getTcpHost();
-          const listenerId = this.listenerId;
-          activeServers.delete(listenerId);
-          this.listenerId = undefined;
-          callHost(() => tcpHost.tcpStopListening(listenerId));
-        }
-        this.emit("close");
-        if (callback) {
-          callback();
-        }
-        return this;
-      }
-      acceptConnection(connectionId) {
-        const socket = new Socket(connectionId);
-        activeSockets.set(connectionId, socket);
-        this.emit("connection", socket);
-      }
-    };
-    installTcpInbound();
-    netModule = { AddressInfo, Server, Socket, createServer, installTcpInbound, isIP };
-    node_net_default = netModule;
-  });
-
-  // src/shims/node-http.ts
-  var exports_node_http = {};
-  __export(exports_node_http, {
-    default: () => node_http_default,
-    createServer: () => createServer2,
-    ServerResponse: () => ServerResponse,
-    Server: () => Server2,
-    STATUS_CODES: () => STATUS_CODES,
-    METHODS: () => METHODS,
-    IncomingMessage: () => IncomingMessage
-  });
-
-  class HttpEmitter {
-    httpListeners = new Map;
-    on(eventName, listener) {
-      const existing = this.httpListeners.get(eventName);
-      if (existing) {
-        existing.push(listener);
-      } else {
-        this.httpListeners.set(eventName, [listener]);
-      }
-      return this;
-    }
-    addListener(eventName, listener) {
-      return this.on(eventName, listener);
-    }
-    once(eventName, listener) {
-      const wrapper = (...args) => {
-        this.removeListener(eventName, wrapper);
-        listener(...args);
-      };
-      return this.on(eventName, wrapper);
-    }
-    removeListener(eventName, listener) {
-      const existing = this.httpListeners.get(eventName);
-      if (existing) {
-        const index = existing.indexOf(listener);
-        if (index >= 0) {
-          existing.splice(index, 1);
-        }
-      }
-      return this;
-    }
-    listeners(eventName) {
-      return (this.httpListeners.get(eventName) || []).slice();
-    }
-    emit(eventName, ...args) {
-      const handlers2 = this.httpListeners.get(eventName);
-      if (!handlers2 || handlers2.length === 0) {
-        return false;
-      }
-      for (const handler of handlers2.slice()) {
-        handler(...args);
-      }
-      return true;
-    }
-  }
-  function parseHead(headerText) {
-    const lines = headerText.split(`\r
-`);
-    const requestLine = lines[0] || "";
-    const parts = requestLine.split(" ");
-    const method = (parts[0] || "GET").toUpperCase();
-    const url = parts[1] || "/";
-    const headers = {};
-    for (let index = 1;index < lines.length; index++) {
-      const line = lines[index];
-      const colon = line.indexOf(":");
-      if (colon > 0) {
-        const name = line.slice(0, colon).trim().toLowerCase();
-        const value = line.slice(colon + 1).trim();
-        headers[name] = value;
-      }
-    }
-    return { method, url, headers };
-  }
-
-  class Server2 {
-    netServer;
-    requestListener;
-    serverEmitter = new HttpEmitter;
-    constructor(requestListener) {
-      this.requestListener = requestListener;
-      this.netServer = createServer((socket) => this.handleConnection(socket));
-    }
-    on(eventName, listener) {
-      this.serverEmitter.on(eventName, listener);
-      return this;
-    }
-    once(eventName, listener) {
-      this.serverEmitter.once(eventName, listener);
-      return this;
-    }
-    listen(port, host, callback) {
-      const actualHost = typeof host === "string" ? host : "127.0.0.1";
-      const actualCallback = typeof host === "function" ? host : callback;
-      this.netServer.listen(port, actualHost, () => {
-        this.serverEmitter.emit("listening");
-        if (actualCallback) {
-          actualCallback();
-        }
-      });
-      return this;
-    }
-    address() {
-      return this.netServer.address();
-    }
-    close(callback) {
-      this.netServer.close(callback);
-      this.serverEmitter.emit("close");
-      return this;
-    }
-    handleConnection(socket) {
-      let buffer = Buffer2.alloc(0);
-      let headersParsed = false;
-      let request = undefined;
-      let bodyRemaining = 0;
-      const feedBody = (chunk) => {
-        if (!request) {
-          return;
-        }
-        if (bodyRemaining > 0) {
-          const take = chunk.subarray(0, bodyRemaining);
-          request.push(take);
-          bodyRemaining -= take.length;
-        }
-        if (bodyRemaining <= 0) {
-          request.push(null);
-        }
-      };
-      socket.on("data", (chunk) => {
-        if (headersParsed) {
-          feedBody(chunk);
-          return;
-        }
-        buffer = Buffer2.concat([buffer, chunk]);
-        const terminator = buffer.indexOf(`\r
-\r
-`);
-        if (terminator === -1) {
-          return;
-        }
-        const headerText = buffer.subarray(0, terminator).toString("utf8");
-        const remainder = buffer.subarray(terminator + 4);
-        const parsed = parseHead(headerText);
-        headersParsed = true;
-        request = new IncomingMessage(parsed.method, parsed.url, parsed.headers, socket);
-        const response = new ServerResponse(socket);
-        const contentLength = parseInt(parsed.headers["content-length"] || "0", 10);
-        bodyRemaining = Number.isNaN(contentLength) ? 0 : contentLength;
-        this.requestListener(request, response);
-        this.serverEmitter.emit("request", request, response);
-        if (bodyRemaining > 0 && remainder.length > 0) {
-          feedBody(remainder);
-        } else if (bodyRemaining <= 0) {
-          request.push(null);
-        }
-      });
-      socket.on("end", () => {
-        if (request && bodyRemaining > 0) {
-          request.push(null);
-        }
-      });
-    }
-  }
-  function createServer2(requestListener) {
-    return new Server2(requestListener);
-  }
-  var REASON_PHRASES, IncomingMessage, ServerResponse, STATUS_CODES, METHODS, httpModule, node_http_default;
-  var init_node_http = __esm(() => {
-    init_buffer();
-    init_node_net();
-    REASON_PHRASES = {
-      200: "OK",
-      204: "No Content",
-      400: "Bad Request",
-      404: "Not Found",
-      500: "Internal Server Error"
-    };
-    IncomingMessage = class IncomingMessage extends HttpEmitter {
-      method;
-      url;
-      headers;
-      httpVersion = "1.1";
-      complete = false;
-      readable = true;
-      _body = false;
-      _readableState = { encoding: null };
-      socket;
-      connection;
-      flowing = false;
-      buffered = [];
-      endPending = false;
-      flushScheduled = false;
-      constructor(method, url, headers, socket) {
-        super();
-        this.method = method;
-        this.url = url;
-        this.headers = headers;
-        this.socket = socket;
-        this.connection = socket;
-      }
-      on(eventName, listener) {
-        super.on(eventName, listener);
-        if (eventName === "data" && !this.flowing) {
-          this.startFlowing();
-        }
-        return this;
-      }
-      push(chunk) {
-        if (chunk === null) {
-          if (this.flowing && !this.flushScheduled) {
-            this.finishEnd();
-          } else {
-            this.endPending = true;
-          }
-          return false;
-        }
-        if (this.flowing && !this.flushScheduled) {
-          this.emit("data", chunk);
-        } else {
-          this.buffered.push(chunk);
-        }
-        return true;
-      }
-      startFlowing() {
-        if (this.flowing) {
-          return;
-        }
-        this.flowing = true;
-        this.flushScheduled = true;
-        Promise.resolve().then(() => {
-          const chunks = this.buffered;
-          this.buffered = [];
-          this.flushScheduled = false;
-          for (const chunk of chunks) {
-            this.emit("data", chunk);
-          }
-          if (this.endPending) {
-            this.finishEnd();
-          }
-        });
-      }
-      finishEnd() {
-        this.complete = true;
-        this.readable = false;
-        this.emit("end");
-      }
-      resume() {
-        if (!this.flowing) {
-          this.startFlowing();
-        }
-        return this;
-      }
-      pause() {
-        return this;
-      }
-      setEncoding() {
-        return this;
-      }
-      unpipe() {
-        return this;
-      }
-      pipe(destination) {
-        return destination;
-      }
-      destroy() {
-        this.readable = false;
-        return this;
-      }
-    };
-    ServerResponse = class ServerResponse extends HttpEmitter {
-      statusCode = 200;
-      statusMessage = undefined;
-      headersSent = false;
-      finished = false;
-      writableEnded = false;
-      socket;
-      connection;
-      outboundHeaders = new Map;
-      bodyChunks = [];
-      constructor(socket) {
-        super();
-        this.socket = socket;
-        this.connection = socket;
-      }
-      setHeader(name, value) {
-        this.outboundHeaders.set(name.toLowerCase(), Array.isArray(value) ? value.join(", ") : String(value));
-        return this;
-      }
-      getHeader(name) {
-        return this.outboundHeaders.get(name.toLowerCase());
-      }
-      hasHeader(name) {
-        return this.outboundHeaders.has(name.toLowerCase());
-      }
-      removeHeader(name) {
-        this.outboundHeaders.delete(name.toLowerCase());
-      }
-      getHeaderNames() {
-        return Array.from(this.outboundHeaders.keys());
-      }
-      writeHead(statusCode, headersOrMessage, headers) {
-        this.statusCode = statusCode;
-        let headerObject = headers;
-        if (typeof headersOrMessage === "string") {
-          this.statusMessage = headersOrMessage;
-        } else if (headersOrMessage) {
-          headerObject = headersOrMessage;
-        }
-        if (headerObject) {
-          for (const name of Object.keys(headerObject)) {
-            this.setHeader(name, headerObject[name]);
-          }
-        }
-        return this;
-      }
-      write(chunk) {
-        if (chunk !== undefined && chunk !== null) {
-          this.bodyChunks.push(typeof chunk === "string" ? Buffer2.from(chunk, "utf8") : Buffer2.from(chunk));
-        }
-        return true;
-      }
-      end(chunk) {
-        if (this.finished) {
-          return this;
-        }
-        if (chunk !== undefined && chunk !== null) {
-          this.write(chunk);
-        }
-        const body = Buffer2.concat(this.bodyChunks);
-        if (!this.outboundHeaders.has("content-length")) {
-          this.outboundHeaders.set("content-length", String(body.length));
-        }
-        this.outboundHeaders.set("connection", "close");
-        const reason = this.statusMessage || REASON_PHRASES[this.statusCode] || "OK";
-        let head = `HTTP/1.1 ${this.statusCode} ${reason}\r
-`;
-        for (const [name, value] of this.outboundHeaders) {
-          head += `${name}: ${value}\r
-`;
-        }
-        head += `\r
-`;
-        this.headersSent = true;
-        this.writableEnded = true;
-        this.socket.write(Buffer2.concat([Buffer2.from(head, "utf8"), body]));
-        this.socket.end();
-        this.finished = true;
-        this.emit("finish");
-        this.emit("close");
-        return this;
-      }
-    };
-    STATUS_CODES = {
-      200: "OK",
-      201: "Created",
-      204: "No Content",
-      301: "Moved Permanently",
-      302: "Found",
-      304: "Not Modified",
-      400: "Bad Request",
-      401: "Unauthorized",
-      403: "Forbidden",
-      404: "Not Found",
-      405: "Method Not Allowed",
-      500: "Internal Server Error",
-      501: "Not Implemented",
-      503: "Service Unavailable"
-    };
-    METHODS = [
-      "GET",
-      "HEAD",
-      "POST",
-      "PUT",
-      "DELETE",
-      "CONNECT",
-      "OPTIONS",
-      "TRACE",
-      "PATCH"
-    ];
-    httpModule = { createServer: createServer2, Server: Server2, IncomingMessage, ServerResponse, STATUS_CODES, METHODS };
-    node_http_default = httpModule;
-  });
-
   // ../../node_modules/inherits/inherits_browser.js
   var require_inherits_browser = __commonJS((exports, module) => {
     if (typeof Object.create === "function") {
@@ -14872,6 +14270,7 @@ __p += '`;
   // src/shims/node-crypto.ts
   var exports_node_crypto = {};
   __export(exports_node_crypto, {
+    randomUUID: () => randomUUID2,
     randomBytes: () => randomBytes,
     publicEncrypt: () => publicEncrypt,
     privateDecrypt: () => privateDecrypt,
@@ -14953,6 +14352,13 @@ __p += '`;
   function randomBytes() {
     notImplemented4("cryptoRandomBytes");
   }
+  function randomUUID2() {
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (character) => {
+      const randomNibble = Math.floor(Math.random() * 16);
+      const hexValue = character === "x" ? randomNibble : randomNibble & 3 | 8;
+      return hexValue.toString(16);
+    });
+  }
   var import_create_hash, cryptoModule, node_crypto_default;
   var init_node_crypto = __esm(() => {
     init_buffer();
@@ -14969,10 +14375,613 @@ __p += '`;
       privateDecrypt,
       publicEncrypt,
       randomBytes,
+      randomUUID: randomUUID2,
       KeyObject,
       Decipher
     };
     node_crypto_default = cryptoModule;
+  });
+
+  // src/shims/node-net.ts
+  var exports_node_net = {};
+  __export(exports_node_net, {
+    isIP: () => isIP,
+    installTcpInbound: () => installTcpInbound,
+    default: () => node_net_default,
+    createServer: () => createServer,
+    Socket: () => Socket,
+    Server: () => Server,
+    AddressInfo: () => AddressInfo
+  });
+
+  class AddressInfo {
+  }
+  function getTcpHost() {
+    const host = globalThis.host;
+    if (!host) {
+      throw new Error("Native host bridge (globalThis.host) is not installed; net shim cannot run.");
+    }
+    return host;
+  }
+
+  class TinyEmitter {
+    netListeners = new Map;
+    on(eventName, listener) {
+      const existing = this.netListeners.get(eventName);
+      if (existing) {
+        existing.push(listener);
+      } else {
+        this.netListeners.set(eventName, [listener]);
+      }
+      return this;
+    }
+    once(eventName, listener) {
+      const wrapper = (...args) => {
+        this.off(eventName, wrapper);
+        listener(...args);
+      };
+      return this.on(eventName, wrapper);
+    }
+    off(eventName, listener) {
+      const existing = this.netListeners.get(eventName);
+      if (existing) {
+        const index = existing.indexOf(listener);
+        if (index >= 0) {
+          existing.splice(index, 1);
+        }
+      }
+      return this;
+    }
+    emit(eventName, ...args) {
+      const handlers2 = this.netListeners.get(eventName);
+      if (!handlers2) {
+        return;
+      }
+      for (const handler of handlers2.slice()) {
+        handler(...args);
+      }
+    }
+  }
+  function createServer(connectionListener) {
+    const server = new Server;
+    if (connectionListener) {
+      server.on("connection", connectionListener);
+    }
+    return server;
+  }
+  function dispatchInboundEvent(event) {
+    if (event.kind === "connection") {
+      if (event.listenerId === undefined || event.connectionId === undefined) {
+        return;
+      }
+      const server = activeServers.get(event.listenerId);
+      if (server) {
+        server.acceptConnection(event.connectionId);
+      }
+      return;
+    }
+    if (event.kind === "data") {
+      if (event.connectionId === undefined || event.base64 === undefined) {
+        return;
+      }
+      const socket = activeSockets.get(event.connectionId);
+      if (socket) {
+        socket.deliverData(event.base64);
+      }
+      return;
+    }
+    if (event.kind === "close") {
+      if (event.connectionId === undefined) {
+        return;
+      }
+      const socket = activeSockets.get(event.connectionId);
+      if (socket) {
+        socket.deliverClose();
+      }
+    }
+  }
+  function installTcpInbound(globalScope = globalThis) {
+    globalScope.__tcpEvent = (eventJson) => {
+      const event = JSON.parse(eventJson);
+      dispatchInboundEvent(event);
+    };
+  }
+  function isIP(input) {
+    if (/^(\d{1,3}\.){3}\d{1,3}$/.test(input)) {
+      return 4;
+    }
+    if (input.includes(":")) {
+      return 6;
+    }
+    return 0;
+  }
+  var activeServers, activeSockets, Socket, Server, netModule, node_net_default;
+  var init_node_net = __esm(() => {
+    init_buffer();
+    init_host_access();
+    activeServers = new Map;
+    activeSockets = new Map;
+    Socket = class Socket extends TinyEmitter {
+      connectionId;
+      closed = false;
+      constructor(connectionId) {
+        super();
+        this.connectionId = connectionId;
+      }
+      write(chunk) {
+        if (this.closed) {
+          return false;
+        }
+        const buffer = typeof chunk === "string" ? Buffer2.from(chunk, "utf8") : Buffer2.from(chunk);
+        const host = getTcpHost();
+        callHost(() => host.tcpWrite(this.connectionId, buffer.toString("base64")));
+        return true;
+      }
+      end(chunk) {
+        if (chunk !== undefined) {
+          this.write(chunk);
+        }
+        this.close();
+      }
+      destroy() {
+        this.close();
+      }
+      close() {
+        if (this.closed) {
+          return;
+        }
+        this.closed = true;
+        activeSockets.delete(this.connectionId);
+        const host = getTcpHost();
+        callHost(() => host.tcpClose(this.connectionId));
+        this.emit("close");
+      }
+      deliverData(base64) {
+        this.emit("data", Buffer2.from(base64, "base64"));
+      }
+      deliverClose() {
+        if (this.closed) {
+          return;
+        }
+        this.closed = true;
+        activeSockets.delete(this.connectionId);
+        this.emit("end");
+        this.emit("close");
+      }
+    };
+    Server = class Server extends TinyEmitter {
+      listenerId = undefined;
+      boundPort = 0;
+      boundHost = "127.0.0.1";
+      listen(port, host, callback) {
+        const actualHost = typeof host === "string" ? host : "127.0.0.1";
+        const actualCallback = typeof host === "function" ? host : callback;
+        const tcpHost = getTcpHost();
+        const resultJson = callHost(() => tcpHost.tcpListen(actualHost, port));
+        const result = JSON.parse(resultJson);
+        this.listenerId = result.listenerId;
+        this.boundPort = result.port;
+        this.boundHost = actualHost;
+        activeServers.set(result.listenerId, this);
+        if (actualCallback) {
+          this.once("listening", actualCallback);
+        }
+        Promise.resolve().then(() => {
+          this.emit("listening");
+        });
+        return this;
+      }
+      address() {
+        return { port: this.boundPort, address: this.boundHost, family: "IPv4" };
+      }
+      close(callback) {
+        if (this.listenerId !== undefined) {
+          const tcpHost = getTcpHost();
+          const listenerId = this.listenerId;
+          activeServers.delete(listenerId);
+          this.listenerId = undefined;
+          callHost(() => tcpHost.tcpStopListening(listenerId));
+        }
+        this.emit("close");
+        if (callback) {
+          callback();
+        }
+        return this;
+      }
+      acceptConnection(connectionId) {
+        const socket = new Socket(connectionId);
+        activeSockets.set(connectionId, socket);
+        this.emit("connection", socket);
+      }
+    };
+    installTcpInbound();
+    netModule = { AddressInfo, Server, Socket, createServer, installTcpInbound, isIP };
+    node_net_default = netModule;
+  });
+
+  // src/shims/node-http.ts
+  var exports_node_http = {};
+  __export(exports_node_http, {
+    default: () => node_http_default,
+    createServer: () => createServer2,
+    ServerResponse: () => ServerResponse,
+    Server: () => Server2,
+    STATUS_CODES: () => STATUS_CODES,
+    METHODS: () => METHODS,
+    IncomingMessage: () => IncomingMessage
+  });
+
+  class HttpEmitter {
+    httpListeners = new Map;
+    on(eventName, listener) {
+      const existing = this.httpListeners.get(eventName);
+      if (existing) {
+        existing.push(listener);
+      } else {
+        this.httpListeners.set(eventName, [listener]);
+      }
+      return this;
+    }
+    addListener(eventName, listener) {
+      return this.on(eventName, listener);
+    }
+    once(eventName, listener) {
+      const wrapper = (...args) => {
+        this.removeListener(eventName, wrapper);
+        listener(...args);
+      };
+      return this.on(eventName, wrapper);
+    }
+    removeListener(eventName, listener) {
+      const existing = this.httpListeners.get(eventName);
+      if (existing) {
+        const index = existing.indexOf(listener);
+        if (index >= 0) {
+          existing.splice(index, 1);
+        }
+      }
+      return this;
+    }
+    listeners(eventName) {
+      return (this.httpListeners.get(eventName) || []).slice();
+    }
+    emit(eventName, ...args) {
+      const handlers2 = this.httpListeners.get(eventName);
+      if (!handlers2 || handlers2.length === 0) {
+        return false;
+      }
+      for (const handler of handlers2.slice()) {
+        handler(...args);
+      }
+      return true;
+    }
+  }
+  function parseHead(headerText) {
+    const lines = headerText.split(`\r
+`);
+    const requestLine = lines[0] || "";
+    const parts = requestLine.split(" ");
+    const method = (parts[0] || "GET").toUpperCase();
+    const url = parts[1] || "/";
+    const headers = {};
+    for (let index = 1;index < lines.length; index++) {
+      const line = lines[index];
+      const colon = line.indexOf(":");
+      if (colon > 0) {
+        const name = line.slice(0, colon).trim().toLowerCase();
+        const value = line.slice(colon + 1).trim();
+        headers[name] = value;
+      }
+    }
+    return { method, url, headers };
+  }
+
+  class Server2 {
+    netServer;
+    requestListener;
+    serverEmitter = new HttpEmitter;
+    constructor(requestListener) {
+      this.requestListener = requestListener;
+      this.netServer = createServer((socket) => this.handleConnection(socket));
+    }
+    on(eventName, listener) {
+      this.serverEmitter.on(eventName, listener);
+      return this;
+    }
+    once(eventName, listener) {
+      this.serverEmitter.once(eventName, listener);
+      return this;
+    }
+    listen(port, host, callback) {
+      const actualHost = typeof host === "string" ? host : "127.0.0.1";
+      const actualCallback = typeof host === "function" ? host : callback;
+      this.netServer.listen(port, actualHost, () => {
+        this.serverEmitter.emit("listening");
+        if (actualCallback) {
+          actualCallback();
+        }
+      });
+      return this;
+    }
+    address() {
+      return this.netServer.address();
+    }
+    close(callback) {
+      this.netServer.close(callback);
+      this.serverEmitter.emit("close");
+      return this;
+    }
+    handleConnection(socket) {
+      let buffer = Buffer2.alloc(0);
+      let headersParsed = false;
+      let request = undefined;
+      let bodyRemaining = 0;
+      const feedBody = (chunk) => {
+        if (!request) {
+          return;
+        }
+        if (bodyRemaining > 0) {
+          const take = chunk.subarray(0, bodyRemaining);
+          request.push(take);
+          bodyRemaining -= take.length;
+        }
+        if (bodyRemaining <= 0) {
+          request.push(null);
+        }
+      };
+      socket.on("data", (chunk) => {
+        if (headersParsed) {
+          feedBody(chunk);
+          return;
+        }
+        buffer = Buffer2.concat([buffer, chunk]);
+        const terminator = buffer.indexOf(`\r
+\r
+`);
+        if (terminator === -1) {
+          return;
+        }
+        const headerText = buffer.subarray(0, terminator).toString("utf8");
+        const remainder = buffer.subarray(terminator + 4);
+        const parsed = parseHead(headerText);
+        headersParsed = true;
+        request = new IncomingMessage(parsed.method, parsed.url, parsed.headers, socket);
+        const response = new ServerResponse(socket);
+        const contentLength = parseInt(parsed.headers["content-length"] || "0", 10);
+        bodyRemaining = Number.isNaN(contentLength) ? 0 : contentLength;
+        this.requestListener(request, response);
+        this.serverEmitter.emit("request", request, response);
+        if (bodyRemaining > 0 && remainder.length > 0) {
+          feedBody(remainder);
+        } else if (bodyRemaining <= 0) {
+          request.push(null);
+        }
+      });
+      socket.on("end", () => {
+        if (request && bodyRemaining > 0) {
+          request.push(null);
+        }
+      });
+    }
+  }
+  function createServer2(requestListener) {
+    return new Server2(requestListener);
+  }
+  var REASON_PHRASES, IncomingMessage, ServerResponse, STATUS_CODES, METHODS, httpModule, node_http_default;
+  var init_node_http = __esm(() => {
+    init_buffer();
+    init_node_net();
+    REASON_PHRASES = {
+      200: "OK",
+      204: "No Content",
+      400: "Bad Request",
+      404: "Not Found",
+      500: "Internal Server Error"
+    };
+    IncomingMessage = class IncomingMessage extends HttpEmitter {
+      method;
+      url;
+      headers;
+      httpVersion = "1.1";
+      complete = false;
+      readable = true;
+      _body = false;
+      _readableState = { encoding: null };
+      socket;
+      connection;
+      flowing = false;
+      buffered = [];
+      endPending = false;
+      flushScheduled = false;
+      constructor(method, url, headers, socket) {
+        super();
+        this.method = method;
+        this.url = url;
+        this.headers = headers;
+        this.socket = socket;
+        this.connection = socket;
+      }
+      on(eventName, listener) {
+        super.on(eventName, listener);
+        if (eventName === "data" && !this.flowing) {
+          this.startFlowing();
+        }
+        return this;
+      }
+      push(chunk) {
+        if (chunk === null) {
+          if (this.flowing && !this.flushScheduled) {
+            this.finishEnd();
+          } else {
+            this.endPending = true;
+          }
+          return false;
+        }
+        if (this.flowing && !this.flushScheduled) {
+          this.emit("data", chunk);
+        } else {
+          this.buffered.push(chunk);
+        }
+        return true;
+      }
+      startFlowing() {
+        if (this.flowing) {
+          return;
+        }
+        this.flowing = true;
+        this.flushScheduled = true;
+        Promise.resolve().then(() => {
+          const chunks = this.buffered;
+          this.buffered = [];
+          this.flushScheduled = false;
+          for (const chunk of chunks) {
+            this.emit("data", chunk);
+          }
+          if (this.endPending) {
+            this.finishEnd();
+          }
+        });
+      }
+      finishEnd() {
+        this.complete = true;
+        this.readable = false;
+        this.emit("end");
+      }
+      resume() {
+        if (!this.flowing) {
+          this.startFlowing();
+        }
+        return this;
+      }
+      pause() {
+        return this;
+      }
+      setEncoding() {
+        return this;
+      }
+      unpipe() {
+        return this;
+      }
+      pipe(destination) {
+        return destination;
+      }
+      destroy() {
+        this.readable = false;
+        return this;
+      }
+    };
+    ServerResponse = class ServerResponse extends HttpEmitter {
+      statusCode = 200;
+      statusMessage = undefined;
+      headersSent = false;
+      finished = false;
+      writableEnded = false;
+      socket;
+      connection;
+      outboundHeaders = new Map;
+      bodyChunks = [];
+      constructor(socket) {
+        super();
+        this.socket = socket;
+        this.connection = socket;
+      }
+      setHeader(name, value) {
+        this.outboundHeaders.set(name.toLowerCase(), Array.isArray(value) ? value.join(", ") : String(value));
+        return this;
+      }
+      getHeader(name) {
+        return this.outboundHeaders.get(name.toLowerCase());
+      }
+      hasHeader(name) {
+        return this.outboundHeaders.has(name.toLowerCase());
+      }
+      removeHeader(name) {
+        this.outboundHeaders.delete(name.toLowerCase());
+      }
+      getHeaderNames() {
+        return Array.from(this.outboundHeaders.keys());
+      }
+      writeHead(statusCode, headersOrMessage, headers) {
+        this.statusCode = statusCode;
+        let headerObject = headers;
+        if (typeof headersOrMessage === "string") {
+          this.statusMessage = headersOrMessage;
+        } else if (headersOrMessage) {
+          headerObject = headersOrMessage;
+        }
+        if (headerObject) {
+          for (const name of Object.keys(headerObject)) {
+            this.setHeader(name, headerObject[name]);
+          }
+        }
+        return this;
+      }
+      write(chunk) {
+        if (chunk !== undefined && chunk !== null) {
+          this.bodyChunks.push(typeof chunk === "string" ? Buffer2.from(chunk, "utf8") : Buffer2.from(chunk));
+        }
+        return true;
+      }
+      end(chunk) {
+        if (this.finished) {
+          return this;
+        }
+        if (chunk !== undefined && chunk !== null) {
+          this.write(chunk);
+        }
+        const body = Buffer2.concat(this.bodyChunks);
+        if (!this.outboundHeaders.has("content-length")) {
+          this.outboundHeaders.set("content-length", String(body.length));
+        }
+        this.outboundHeaders.set("connection", "close");
+        const reason = this.statusMessage || REASON_PHRASES[this.statusCode] || "OK";
+        let head = `HTTP/1.1 ${this.statusCode} ${reason}\r
+`;
+        for (const [name, value] of this.outboundHeaders) {
+          head += `${name}: ${value}\r
+`;
+        }
+        head += `\r
+`;
+        this.headersSent = true;
+        this.writableEnded = true;
+        this.socket.write(Buffer2.concat([Buffer2.from(head, "utf8"), body]));
+        this.socket.end();
+        this.finished = true;
+        this.emit("finish");
+        this.emit("close");
+        return this;
+      }
+    };
+    STATUS_CODES = {
+      200: "OK",
+      201: "Created",
+      204: "No Content",
+      301: "Moved Permanently",
+      302: "Found",
+      304: "Not Modified",
+      400: "Bad Request",
+      401: "Unauthorized",
+      403: "Forbidden",
+      404: "Not Found",
+      405: "Method Not Allowed",
+      500: "Internal Server Error",
+      501: "Not Implemented",
+      503: "Service Unavailable"
+    };
+    METHODS = [
+      "GET",
+      "HEAD",
+      "POST",
+      "PUT",
+      "DELETE",
+      "CONNECT",
+      "OPTIONS",
+      "TRACE",
+      "PATCH"
+    ];
+    httpModule = { createServer: createServer2, Server: Server2, IncomingMessage, ServerResponse, STATUS_CODES, METHODS };
+    node_http_default = httpModule;
   });
 
   // ../../node_modules/pako/dist/pako.esm.mjs
@@ -54561,6 +54570,7 @@ ${stack}`);
 
   // ../node-utils/src/lib/fs.ts
   init_node_path();
+  init_node_crypto();
 
   // ../../node_modules/smol-toml/dist/error.js
   /*!
@@ -55696,7 +55706,9 @@ ${tables}` : preamble || tables;
   }
   async function outputFile(filePath, data, options) {
     await ensureFileDir(filePath);
-    await writeFile(filePath, data, options);
+    const tempPath = `${filePath}.tmp-${randomUUID2()}`;
+    await writeFile(tempPath, data, options);
+    await rename(tempPath, filePath);
   }
   async function readJson(filePath, options) {
     const data = await readFile(filePath, options || { encoding: "utf8" });

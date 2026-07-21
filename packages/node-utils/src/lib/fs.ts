@@ -2,6 +2,7 @@ import * as fs from 'fs/promises';
 import * as fsSync from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { randomUUID } from 'crypto';
 import { parse as tomlParse, stringify as tomlStringify } from 'smol-toml';
 
 //
@@ -69,10 +70,18 @@ export async function remove(targetPath: string): Promise<void> {
 
 //
 // Outputs a file ensuring the directory exists. Like fs-extra's outputFile.
+// The write is atomic: data is written to a unique temporary file in the same
+// directory and then renamed into place. Because rename is atomic, a concurrent
+// reader never sees a half-written file and two concurrent writers cannot
+// interleave their bytes into a corrupt result (the last rename wins, and every
+// intermediate state is a complete file). The temp name uses a fresh UUID so
+// overlapping writes to the same target never share a temp file.
 //
 export async function outputFile(filePath: string, data: string | Buffer, options?: { encoding?: BufferEncoding; mode?: number }): Promise<void> {
     await ensureFileDir(filePath);
-    await fs.writeFile(filePath, data, options);
+    const tempPath = `${filePath}.tmp-${randomUUID()}`;
+    await fs.writeFile(tempPath, data, options);
+    await fs.rename(tempPath, filePath);
 }
 
 //
@@ -105,6 +114,105 @@ export async function writeToml(filePath: string, object: Record<string, any>): 
 export async function writeJson(filePath: string, object: any, options?: { encoding?: BufferEncoding; spaces?: number | string; mode?: number }): Promise<void> {
     const jsonString = JSON.stringify(object, null, options?.spaces);
     await outputFile(filePath, jsonString, { encoding: options?.encoding || 'utf8', mode: options?.mode });
+}
+
+//
+// Reads a file's raw text, or undefined when it does not exist yet.
+//
+async function readRawFile(filePath: string): Promise<string | undefined> {
+    if (!await pathExists(filePath)) {
+        return undefined;
+    }
+    return await fs.readFile(filePath, { encoding: 'utf8' });
+}
+
+//
+// A cheap fingerprint of a file used to detect whether it changed between our read and our write
+// without re-reading its contents. Undefined when the file does not exist. It uses only fields
+// available on every platform we target (Node on Linux/macOS/Windows and the mobile stat shim):
+// size and last-modified time. It deliberately avoids inode/nanosecond fields, which are absent on
+// mobile and unreliable on Windows. The trade-off is that two writes producing an identical size in
+// the same millisecond would not be told apart, which the optimistic retry accepts.
+//
+interface IFileFingerprint {
+    // Last-modified time in milliseconds since the epoch.
+    modifiedMs: number;
+
+    // File size in bytes.
+    size: number;
+}
+
+//
+// Returns a fingerprint of the file at the given path, or undefined when it does not exist.
+//
+async function fileFingerprint(filePath: string): Promise<IFileFingerprint | undefined> {
+    if (!await pathExists(filePath)) {
+        return undefined;
+    }
+    const stats = await fs.stat(filePath);
+    return { modifiedMs: stats.mtime.getTime(), size: stats.size };
+}
+
+//
+// Reports whether two fingerprints describe the same file state. Two absent files (both
+// undefined) count as unchanged.
+//
+function fingerprintsMatch(before: IFileFingerprint | undefined, after: IFileFingerprint | undefined): boolean {
+    if (before === undefined || after === undefined) {
+        return before === after;
+    }
+    return before.modifiedMs === after.modifiedMs && before.size === after.size;
+}
+
+//
+// Updates a file as an optimistic read-modify-write, with no cross-call locking or shared state.
+// It fingerprints the file, reads and parses the current text (or uses `fallback` when absent),
+// applies `mutator`, and writes the result to a temp file. Just before the atomic move it
+// re-fingerprints the file (a cheap stat, not a second full read): if it changed since we read
+// it, another writer got in first, so it discards the temp and retries from the fresh contents.
+// After `retries` such conflicts it throws. This makes concurrent updates safe without serializing
+// them. The fingerprint is taken before the read so a change during the read is caught as a
+// conflict rather than silently overwriting the other writer.
+//
+export async function updateFileOptimistic<ContentType>(filePath: string, fallback: ContentType, mutator: (current: ContentType) => ContentType, parse: (raw: string) => ContentType, serialize: (value: ContentType) => string, retries: number): Promise<void> {
+    for (let attempt = 0; attempt <= retries; attempt += 1) {
+        const fingerprintBefore = await fileFingerprint(filePath);
+        const originalRaw = await readRawFile(filePath);
+        const current = originalRaw === undefined ? fallback : parse(originalRaw);
+        const updatedRaw = serialize(mutator(current));
+
+        await ensureFileDir(filePath);
+        const tempPath = `${filePath}.tmp-${randomUUID()}`;
+        await fs.writeFile(tempPath, updatedRaw, { encoding: 'utf8' });
+
+        // If the file is unchanged since we read it, publish our version atomically.
+        // Otherwise a concurrent writer won; drop the temp and retry from fresh contents.
+        const fingerprintAfter = await fileFingerprint(filePath);
+        if (fingerprintsMatch(fingerprintBefore, fingerprintAfter)) {
+            await fs.rename(tempPath, filePath);
+            return;
+        }
+        await fs.rm(tempPath, { force: true });
+    }
+    throw new Error(`Failed to update ${filePath}: the file kept changing under concurrent writers after ${retries} retries.`);
+}
+
+//
+// Updates a TOML file as an optimistic read-modify-write: reads the current parsed contents
+// (or `fallback` when the file does not exist yet), passes them to `mutator`, and writes the
+// returned value back atomically. If another writer changed the file first, it reloads and
+// re-applies the mutator, up to `retries` times (default 3) before throwing.
+//
+export async function updateToml<ContentType extends Record<string, any>>(filePath: string, fallback: ContentType, mutator: (current: ContentType) => ContentType, retries: number = 3): Promise<void> {
+    await updateFileOptimistic(filePath, fallback, mutator, raw => tomlParse(raw) as ContentType, value => tomlStringify(value), retries);
+}
+
+//
+// Updates a JSON file as an optimistic read-modify-write. Same semantics as updateToml,
+// but for JSON files.
+//
+export async function updateJson<ContentType>(filePath: string, fallback: ContentType, mutator: (current: ContentType) => ContentType, retries: number = 3): Promise<void> {
+    await updateFileOptimistic(filePath, fallback, mutator, raw => JSON.parse(raw) as ContentType, value => JSON.stringify(value), retries);
 }
 
 //
