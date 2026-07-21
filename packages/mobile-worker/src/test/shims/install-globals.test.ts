@@ -202,13 +202,25 @@ describe("install-globals", () => {
             expect(typeof scope.setTimeout).toBe("function");
         });
 
-        test("does not overwrite an existing Buffer/process", () => {
+        test("aliases `global` to the scope so bare-global browser builds resolve it", () => {
+            const scope: any = {};
+            installGlobals(scope);
+
+            // `global` points at the scope, and `global.crypto` reaches the installed crypto shim
+            // (this is exactly what randombytes' browser build reads at module-init time).
+            expect(scope.global).toBe(scope);
+            expect(typeof scope.global.crypto.getRandomValues).toBe("function");
+        });
+
+        test("does not overwrite an existing Buffer/process/global", () => {
             const existingBuffer = function existingBuffer() {};
             const existingProcess = { env: { KEEP: "1" } };
-            const scope: any = { Buffer: existingBuffer, process: existingProcess };
+            const existingGlobal = { marker: "keep" };
+            const scope: any = { Buffer: existingBuffer, process: existingProcess, global: existingGlobal };
             installGlobals(scope);
             expect(scope.Buffer).toBe(existingBuffer);
             expect(scope.process).toBe(existingProcess);
+            expect(scope.global).toBe(existingGlobal);
         });
     });
 });

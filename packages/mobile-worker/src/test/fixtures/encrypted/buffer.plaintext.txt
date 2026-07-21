@@ -1,0 +1,1 @@
+Photosphere mobile crypto fixture: encrypted buffer round-trip.

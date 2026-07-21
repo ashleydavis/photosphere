@@ -1,6 +1,6 @@
 //
 // Installs the JS globals the bundled storage/database code expects but the bare embedded engine
-// (QuickJS/JavaScriptCore) does not provide: `Buffer` and a minimal `process`.
+// (QuickJS/JavaScriptCore) does not provide: `Buffer`, a minimal `process`, and a `global` alias.
 //
 // This module is imported FIRST by the worker entry so the globals exist before any storage module
 // evaluates. In particular `bson` selects its Node vs web byte-utils at import time based on
@@ -279,6 +279,16 @@ export function installPerformance(globalScope: any): void {
 // the result without mutating the real global environment.
 //
 export function installGlobals(globalScope: any = globalThis): void {
+    // Alias `global` to the global scope so bundled browser builds that read the bare `global`
+    // identifier at module-init time do not throw a ReferenceError on the embedded engine (which
+    // exposes only `globalThis`, not `global`). `randombytes`' browser build, for example, reads
+    // `global.crypto` at init; installed here (before any storage/crypto module evaluates) it
+    // resolves to the crypto shim installed below, so its module init succeeds instead of aborting
+    // the whole bundle evaluation. Node/Bun already define `global`, so this is a no-op there.
+    if (!globalScope.global) {
+        globalScope.global = globalScope;
+    }
+
     if (!globalScope.Buffer) {
         globalScope.Buffer = Buffer;
     }

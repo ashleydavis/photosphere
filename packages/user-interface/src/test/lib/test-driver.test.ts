@@ -24,6 +24,8 @@ import {
     doSeedRecent,
     doSeedNews,
     doResetConfig,
+    doSetSyncAllowed,
+    doNotifyDatabaseEdited,
     installTestDriver,
     TEST_MENU_EVENT,
     TEST_OPEN_DATABASE_EVENT,
@@ -31,6 +33,8 @@ import {
     TEST_SEED_RECENT_EVENT,
     TEST_SEED_NEWS_EVENT,
     TEST_RESET_CONFIG_EVENT,
+    TEST_SET_SYNC_ALLOWED_EVENT,
+    TEST_NOTIFY_DATABASE_EDITED_EVENT,
 } from "../../lib/test-driver";
 import type { ITestTransport, ITestCommandPayload, ITestResetConfigEventDetail } from "../../lib/test-driver";
 
@@ -623,6 +627,54 @@ describe("mobile config-seeding driver commands", () => {
             window.removeEventListener(TEST_RESET_CONFIG_EVENT, listener);
         }
         expect(fired).toBe(true);
+    });
+
+    test("doSetSyncAllowed dispatches the sync gate decision", () => {
+        expect(captureEvent(TEST_SET_SYNC_ALLOWED_EVENT, () => doSetSyncAllowed(true))).toBe(true);
+        expect(captureEvent(TEST_SET_SYNC_ALLOWED_EVENT, () => doSetSyncAllowed(false))).toBe(false);
+    });
+
+    test("doNotifyDatabaseEdited dispatches the database-edited event", () => {
+        let fired = false;
+        const listener = () => { fired = true; };
+        window.addEventListener(TEST_NOTIFY_DATABASE_EDITED_EVENT, listener);
+        try {
+            doNotifyDatabaseEdited();
+        }
+        finally {
+            window.removeEventListener(TEST_NOTIFY_DATABASE_EDITED_EVENT, listener);
+        }
+        expect(fired).toBe(true);
+    });
+
+    //
+    // Regression guard for the 34-sync smoke-test failure: the sync commands were missing from the
+    // driver's command switch (and from the control bridge's routes), so the sync the test asked for
+    // never started and navbar-sync-state stayed "idle" forever.
+    //
+    test("installTestDriver routes the sync commands to their handlers", async () => {
+        let handler: ((command: string, payload: ITestCommandPayload) => Promise<string | undefined>) | undefined;
+        const transport: ITestTransport = {
+            onCommand: (incoming) => { handler = incoming; },
+            sendLog: () => { /* unused */ },
+        };
+        installTestDriver(transport);
+
+        const allowed = captureEvent(TEST_SET_SYNC_ALLOWED_EVENT, () => {
+            void handler!("set-sync-allowed", { allowed: true });
+        });
+        expect(allowed).toBe(true);
+
+        let editedFired = false;
+        const editedListener = () => { editedFired = true; };
+        window.addEventListener(TEST_NOTIFY_DATABASE_EDITED_EVENT, editedListener);
+        try {
+            await handler!("notify-database-edited", {});
+        }
+        finally {
+            window.removeEventListener(TEST_NOTIFY_DATABASE_EDITED_EVENT, editedListener);
+        }
+        expect(editedFired).toBe(true);
     });
 
     test("installTestDriver routes seed/reset commands to their handlers", async () => {

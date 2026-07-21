@@ -4,8 +4,13 @@ import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.PrivateKey;
+import java.security.PublicKey;
 import java.security.Signature;
+import java.security.interfaces.RSAPrivateCrtKey;
 import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.RSAPublicKeySpec;
+import java.security.spec.X509EncodedKeySpec;
+import javax.crypto.Cipher;
 
 //
 // The native RSA crypto behind the host.crypto* functions. The embedded engine has no RSA key
@@ -60,6 +65,74 @@ public final class CryptoHost {
             signature.initSign(privateKey);
             signature.update(HostFunctions.base64Decode(dataBase64));
             return HostFunctions.base64Encode(signature.sign());
+        }
+        catch (Exception error) {
+            return HostFunctions.hostErrorEnvelope(error);
+        }
+    }
+
+    //
+    // The RSA OAEP transformation matching Node's default padding for publicEncrypt/privateDecrypt:
+    // RSA_PKCS1_OAEP_PADDING with a SHA-1 OAEP digest and SHA-1 MGF1 (the JCA name uses SHA-1 for both).
+    // This MUST match the encrypted-file format on disk, so it is pinned here.
+    //
+    private static final String OAEP_SHA1_TRANSFORMATION = "RSA/ECB/OAEPWithSHA-1AndMGF1Padding";
+
+    //
+    // host.cryptoPublicEncryptOaepSha1(publicKeyPem, dataBase64): RSA-encrypts the base64-decoded data
+    // with the SPKI PEM public key using OAEP (SHA-1 + MGF1), returning the base64 ciphertext. On failure
+    // returns a host error envelope so the JS crypto shim throws.
+    //
+    public static String cryptoPublicEncryptOaepSha1(String publicKeyPem, String dataBase64) {
+        try {
+            byte[] spki = derFromPem(publicKeyPem);
+            KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+            PublicKey publicKey = keyFactory.generatePublic(new X509EncodedKeySpec(spki));
+
+            Cipher cipher = Cipher.getInstance(OAEP_SHA1_TRANSFORMATION);
+            cipher.init(Cipher.ENCRYPT_MODE, publicKey);
+            byte[] encrypted = cipher.doFinal(HostFunctions.base64Decode(dataBase64));
+            return HostFunctions.base64Encode(encrypted);
+        }
+        catch (Exception error) {
+            return HostFunctions.hostErrorEnvelope(error);
+        }
+    }
+
+    //
+    // host.cryptoPrivateDecryptOaepSha1(privateKeyPem, dataBase64): RSA-decrypts the base64-decoded data
+    // with the PKCS#8 PEM private key using OAEP (SHA-1 + MGF1), returning the base64 plaintext. On
+    // failure returns a host error envelope so the JS crypto shim throws.
+    //
+    public static String cryptoPrivateDecryptOaepSha1(String privateKeyPem, String dataBase64) {
+        try {
+            byte[] pkcs8 = derFromPem(privateKeyPem);
+            KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+            PrivateKey privateKey = keyFactory.generatePrivate(new PKCS8EncodedKeySpec(pkcs8));
+
+            Cipher cipher = Cipher.getInstance(OAEP_SHA1_TRANSFORMATION);
+            cipher.init(Cipher.DECRYPT_MODE, privateKey);
+            byte[] decrypted = cipher.doFinal(HostFunctions.base64Decode(dataBase64));
+            return HostFunctions.base64Encode(decrypted);
+        }
+        catch (Exception error) {
+            return HostFunctions.hostErrorEnvelope(error);
+        }
+    }
+
+    //
+    // host.cryptoPublicKeyFromPrivate(privateKeyPem): derives the SPKI PEM public key from a PKCS#8 PEM
+    // private key (via the modulus and public exponent in the CRT private key). On failure returns a host
+    // error envelope so the JS crypto shim throws.
+    //
+    public static String cryptoPublicKeyFromPrivate(String privateKeyPem) {
+        try {
+            byte[] pkcs8 = derFromPem(privateKeyPem);
+            KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+            RSAPrivateCrtKey privateKey = (RSAPrivateCrtKey) keyFactory.generatePrivate(new PKCS8EncodedKeySpec(pkcs8));
+            RSAPublicKeySpec publicSpec = new RSAPublicKeySpec(privateKey.getModulus(), privateKey.getPublicExponent());
+            PublicKey publicKey = keyFactory.generatePublic(publicSpec);
+            return toPem("PUBLIC KEY", publicKey.getEncoded());
         }
         catch (Exception error) {
             return HostFunctions.hostErrorEnvelope(error);

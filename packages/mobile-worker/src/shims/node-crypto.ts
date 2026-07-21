@@ -1,15 +1,27 @@
 //
-// Minimal `crypto` shim for the embedded mobile worker.
+// `crypto` shim for the embedded mobile worker.
 //
-// The database read path needs exactly one crypto capability: `createHash('sha256')`, used by
-// `packages/serialization` to verify the checksum appended to every serialized file. This is
-// provided with a pure-JS SHA-256 (`hash.js`) so no native crypto is required. The asymmetric-key
-// functions (`createPrivateKey`/`createPublicKey`) are only used when opening an ENCRYPTED database,
-// which is out of scope for this slice, so they throw the loud NOT IMPLEMENTED error.
+// Capabilities, split by risk:
+//   - Hashing (`createHash`) is pure JS via `create-hash`, used by `packages/serialization` to verify
+//     the checksum appended to every serialized file, and by the encrypted-file header.
+//   - The RSA operations (`publicEncrypt`/`privateDecrypt` and the `createPrivateKey`/`createPublicKey`
+//     /`KeyObject.export` key handling around them) run NATIVELY via host functions, because
+//     `encrypt-buffer.ts`/`encrypt-stream.ts` encrypt the AES key with RSA using Node's default
+//     OAEP padding (SHA-1 OAEP + MGF1). The on-disk format is pinned to that padding and to RSA-4096
+//     (the encrypted key is a fixed 512-byte slice), so hand-rolling OAEP in JS would risk making
+//     every existing encrypted database permanently unreadable. Platform crypto gets OAEP right by
+//     construction, so it is used for the once-per-file RSA step.
+//   - The bulk symmetric work (`createCipheriv`/`createDecipheriv` for AES-256-CBC), HMAC-SHA256
+//     (`createHmac`, used by the S3 SigV4 signer) and `randomBytes` run in pure JS (`browserify-aes`,
+//     `create-hmac`, `randombytes`), consistent with the `create-hash`/`hash.js`/`pako` precedent,
+//     where the format is unambiguous and a round-trip test is cheap.
 //
 
 import { Buffer } from "buffer";
 import createHashLib from "create-hash";
+import createHmacLib from "create-hmac";
+import { createCipheriv as aesCreateCipheriv, createDecipheriv as aesCreateDecipheriv, type ICipheriv } from "browserify-aes";
+import randomBytesLib from "randombytes";
 import { callHost } from "./host-access";
 
 //
@@ -21,6 +33,17 @@ interface ICryptoHost {
 
     // Signs base64-encoded data with SHA256withRSA using the PEM private key; returns a base64 signature.
     cryptoSignSha256: (privateKeyPem: string, dataBase64: string) => string;
+
+    // RSA-encrypts base64-encoded data with the SPKI PEM public key using OAEP (SHA-1 digest + MGF1,
+    // matching Node's default padding); returns the base64 ciphertext.
+    cryptoPublicEncryptOaepSha1: (publicKeyPem: string, dataBase64: string) => string;
+
+    // RSA-decrypts base64-encoded data with the PKCS#8 PEM private key using OAEP (SHA-1 digest + MGF1);
+    // returns the base64 plaintext.
+    cryptoPrivateDecryptOaepSha1: (privateKeyPem: string, dataBase64: string) => string;
+
+    // Derives the SPKI PEM public key from a PKCS#8 PEM private key.
+    cryptoPublicKeyFromPrivate: (privateKeyPem: string) => string;
 }
 
 //
@@ -95,14 +118,6 @@ function getCryptoHost(): ICryptoHost {
 }
 
 //
-// The platform string used in NOT IMPLEMENTED messages.
-//
-function hostPlatform(): string {
-    const platform = (globalThis as any).host?.platform;
-    return typeof platform === "string" ? platform : "mobile";
-}
-
-//
 // A Node `Hash`-compatible object: chained `update(...)` and `digest()` (Buffer) / `digest('hex')`.
 //
 interface IHash {
@@ -123,40 +138,171 @@ export function createHash(algorithm: string): IHash {
 }
 
 //
-// The asymmetric-key and cipher functions below are only used when opening an ENCRYPTED database,
-// which is out of scope for this slice. They are exported so the encryption/storage modules bundle,
-// but each fails loudly if actually called.
+// The kind of key a KeyObject wraps.
 //
+type KeyObjectKind = "public" | "private";
 
 //
-// Throws the verbatim NOT IMPLEMENTED error for an unsupported crypto function.
+// Options accepted by KeyObject.export: the encoding type (spki/pkcs8) and format (pem/der). The type
+// is accepted for API compatibility but not transformed: native returns SPKI (public) / PKCS#8
+// (private) PEM already, so a public KeyObject always exports SPKI and a private one PKCS#8.
 //
-function notImplemented(name: string): never {
-    throw new Error(`NOT IMPLEMENTED: native host function "${name}" is not implemented yet on ${hostPlatform()}. Implement it ASAP.`);
+export interface IKeyExportOptions {
+    // The key encoding type: "spki" for a public key, "pkcs8" for a private key.
+    type: string;
+
+    // The output format: "pem" for the PEM string, "der" for the raw DER bytes.
+    format: string;
 }
 
 //
-// The crypto KeyObject type, used only in type position by the bundled code.
+// A key input as accepted by createPrivateKey/createPublicKey/publicEncrypt/privateDecrypt: a PEM
+// string, a KeyObject, or an options object carrying the PEM under `key`.
 //
-export class KeyObject {}
-
-//
-// The crypto Decipher type, used only in type position by the bundled code.
-//
-export class Decipher {}
-
-//
-// Encrypted-database only; fails loudly.
-//
-export function createPrivateKey(): never {
-    notImplemented("cryptoCreatePrivateKey");
+export interface IKeyInputObject {
+    // The PEM key material.
+    key: string | Buffer | KeyObject;
 }
 
 //
-// Encrypted-database only; fails loudly.
+// The union of accepted key inputs.
 //
-export function createPublicKey(): never {
-    notImplemented("cryptoCreatePublicKey");
+export type KeyInput = string | Buffer | KeyObject | IKeyInputObject;
+
+//
+// Strips the PEM armour and whitespace from a PEM block and returns the raw DER bytes it base64-encodes.
+//
+function derFromPem(pem: string): Buffer {
+    const body = pem
+        .replace(/-----BEGIN [^-]+-----/g, "")
+        .replace(/-----END [^-]+-----/g, "")
+        .replace(/\s+/g, "");
+    return Buffer.from(body, "base64");
+}
+
+//
+// A Node `KeyObject`-compatible wrapper. It holds the key as PEM (the form native produces and
+// consumes) and exports it as either PEM (the stored string) or DER (the base64-decoded body). The
+// DER export is on the encrypted-file read path: `hashPublicKey` (key-utils.ts) exports the public
+// key as SPKI DER and SHA-256s it into the file header, so DER must be exact, not PEM-only.
+//
+export class KeyObject {
+    //
+    // The key material in PEM form (SPKI for a public key, PKCS#8 for a private key).
+    //
+    private readonly keyPem: string;
+
+    //
+    // Whether this wraps a public or private key.
+    //
+    private readonly keyKind: KeyObjectKind;
+
+    //
+    // The asymmetric key algorithm, always RSA here (matches the Node KeyObject property some code reads).
+    //
+    readonly asymmetricKeyType = "rsa";
+
+    //
+    // Builds a KeyObject over the given PEM and kind.
+    //
+    constructor(keyPem: string, keyKind: KeyObjectKind) {
+        this.keyPem = keyPem;
+        this.keyKind = keyKind;
+    }
+
+    //
+    // The wrapped PEM string.
+    //
+    get pem(): string {
+        return this.keyPem;
+    }
+
+    //
+    // Whether this is a public or private key.
+    //
+    get kind(): KeyObjectKind {
+        return this.keyKind;
+    }
+
+    //
+    // Exports the key: the stored PEM string for format "pem", or the DER bytes (base64-decoded PEM
+    // body) for format "der".
+    //
+    export(options: IKeyExportOptions): string | Buffer {
+        if (options.format === "der") {
+            return derFromPem(this.keyPem);
+        }
+        return this.keyPem;
+    }
+}
+
+//
+// A Node `Decipher`-compatible class: chained update(...) and a final(). The AES decipher the shim
+// returns from createDecipheriv structurally satisfies it. Kept as a runtime value export (not a bare
+// type) because `encrypt-stream.ts` imports `Decipher` from crypto, and the bundler needs the binding.
+//
+export class Decipher {
+    // Decrypts the next chunk; overridden by the concrete browserify decipher returned to callers.
+    update(_data: Buffer | Uint8Array): Buffer {
+        throw new Error("Decipher.update is abstract in the crypto shim.");
+    }
+
+    // Finalises decryption; overridden by the concrete browserify decipher returned to callers.
+    final(): Buffer {
+        throw new Error("Decipher.final is abstract in the crypto shim.");
+    }
+}
+
+//
+// A Node `Cipher`-compatible type: chained update(...) and a final().
+//
+export type Cipher = ICipheriv;
+
+//
+// Resolves the PEM string from any accepted key input.
+//
+function pemFromKeyInput(key: KeyInput): string {
+    if (typeof key === "string") {
+        return key;
+    }
+    if (Buffer.isBuffer(key)) {
+        return key.toString("utf8");
+    }
+    if (key instanceof KeyObject) {
+        return key.pem;
+    }
+    if (key && typeof key === "object" && "key" in key) {
+        return pemFromKeyInput((key as IKeyInputObject).key);
+    }
+    throw new Error("Unsupported key input for the mobile crypto shim (expected a PEM string or KeyObject).");
+}
+
+//
+// Creates a KeyObject for a private key from a PEM string, an existing KeyObject, or a { key } object.
+// A private KeyObject is returned as-is.
+//
+export function createPrivateKey(key: KeyInput): KeyObject {
+    if (key instanceof KeyObject && key.kind === "private") {
+        return key;
+    }
+    return new KeyObject(pemFromKeyInput(key), "private");
+}
+
+//
+// Creates a KeyObject for a public key. From a PEM string or a public KeyObject it wraps/returns it
+// directly; from a private KeyObject or a { key } carrying a private PEM it derives the SPKI public
+// key natively (Node's createPublicKey(privateKey) behaviour).
+//
+export function createPublicKey(key: KeyInput): KeyObject {
+    if (key instanceof KeyObject) {
+        if (key.kind === "public") {
+            return key;
+        }
+        const host = getCryptoHost();
+        const publicPem = callHost(() => host.cryptoPublicKeyFromPrivate(key.pem)) as string;
+        return new KeyObject(publicPem, "public");
+    }
+    return new KeyObject(pemFromKeyInput(key), "public");
 }
 
 //
@@ -197,38 +343,71 @@ export function createSign(_algorithm: string): ISign {
 }
 
 //
-// Encrypted-database only; fails loudly.
+// Creates a symmetric cipher (AES-256-CBC on the encryption path). Pure JS via `browserify-aes`, which
+// implements Node's createCipheriv exactly (PKCS#7 padding, CBC), so the on-disk format is unambiguous.
 //
-export function createCipheriv(): never {
-    notImplemented("cryptoCreateCipheriv");
+export function createCipheriv(algorithm: string, key: Buffer | Uint8Array, iv: Buffer | Uint8Array): Cipher {
+    return aesCreateCipheriv(algorithm, key, iv);
 }
 
 //
-// Encrypted-database only; fails loudly.
+// Creates a symmetric decipher (AES-256-CBC on the decryption path). Pure JS via `browserify-aes`.
 //
-export function createDecipheriv(): never {
-    notImplemented("cryptoCreateDecipheriv");
+export function createDecipheriv(algorithm: string, key: Buffer | Uint8Array, iv: Buffer | Uint8Array): Decipher {
+    return aesCreateDecipheriv(algorithm, key, iv) as unknown as Decipher;
 }
 
 //
-// Encrypted-database only; fails loudly.
+// RSA-decrypts the encrypted AES key with the PKCS#8 private key. Runs natively (OAEP SHA-1 + MGF1,
+// Node's default padding) so the padding matches every existing encrypted-file header.
 //
-export function privateDecrypt(): never {
-    notImplemented("cryptoPrivateDecrypt");
+export function privateDecrypt(privateKey: KeyInput, data: Buffer | Uint8Array): Buffer {
+    const host = getCryptoHost();
+    const privateKeyPem = pemFromKeyInput(privateKey);
+    const dataBase64 = Buffer.from(data).toString("base64");
+    const resultBase64 = callHost(() => host.cryptoPrivateDecryptOaepSha1(privateKeyPem, dataBase64)) as string;
+    return Buffer.from(resultBase64, "base64");
 }
 
 //
-// Encrypted-database only; fails loudly.
+// RSA-encrypts the AES key with the SPKI public key. Runs natively (OAEP SHA-1 + MGF1, Node's default
+// padding) so the ciphertext matches what desktop produces and can be decrypted by the same key.
 //
-export function publicEncrypt(): never {
-    notImplemented("cryptoPublicEncrypt");
+export function publicEncrypt(publicKey: KeyInput, data: Buffer | Uint8Array): Buffer {
+    const host = getCryptoHost();
+    const publicKeyPem = pemFromKeyInput(publicKey);
+    const dataBase64 = Buffer.from(data).toString("base64");
+    const resultBase64 = callHost(() => host.cryptoPublicEncryptOaepSha1(publicKeyPem, dataBase64)) as string;
+    return Buffer.from(resultBase64, "base64");
 }
 
 //
-// Encrypted-database only; fails loudly.
+// Returns `size` cryptographically-random bytes. Pure JS via `randombytes` (Node crypto.randomBytes
+// off-device; the engine's crypto.getRandomValues on device). Used for the AES key and IV.
 //
-export function randomBytes(): never {
-    notImplemented("cryptoRandomBytes");
+export function randomBytes(size: number): Buffer {
+    return randomBytesLib(size);
+}
+
+//
+// A Node `Hmac`-compatible object: chained update(...) then a single digest().
+//
+export interface IHmac {
+    // Feeds data into the HMAC.
+    update(data: Buffer | Uint8Array | string): IHmac;
+
+    // Finalises the HMAC, returning a Buffer, or a hex/base64 string when an encoding is given.
+    digest(): Buffer;
+    digest(encoding: string): string;
+}
+
+//
+// Creates an HMAC (HMAC-SHA256 for the S3 SigV4 signer). Pure JS via `create-hmac`, the same lineage
+// as `create-hash`. Exported and added to the default map so `crypto.createHmac` resolves rather than
+// being `undefined` on the default-import path.
+//
+export function createHmac(algorithm: string, key: Buffer | Uint8Array | string): IHmac {
+    return createHmacLib(algorithm, key) as unknown as IHmac;
 }
 
 //
@@ -249,6 +428,7 @@ export function randomUUID(): string {
 //
 const cryptoModule = {
     createHash,
+    createHmac,
     createSign,
     createPrivateKey,
     createPublicKey,
@@ -260,7 +440,6 @@ const cryptoModule = {
     randomBytes,
     randomUUID,
     KeyObject,
-    Decipher,
 };
 
 export default cryptoModule;

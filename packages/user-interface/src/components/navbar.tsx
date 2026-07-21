@@ -260,6 +260,20 @@ export function Navbar({
                         </div>
                     }
 
+                    {/*
+                        Machine-readable sync state for the smoke tests: the driver reads this data-id to
+                        assert the navbar reflects a running background sync ("syncing") and its return to
+                        rest ("idle"). It always renders so the value is never empty, and it is taken
+                        off-screen (rather than display:none, which the driver treats as absent) so it adds
+                        no visible chrome while staying present in the DOM.
+                    */}
+                    <span
+                        data-id="navbar-sync-state"
+                        style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' }}
+                    >
+                        {isSyncing ? "syncing" : "idle"}
+                    </span>
+
                     {databasePath && (
                         <div
                             className="flex flex-row items-center mr-2 text-xs sm:text-sm"

@@ -7,8 +7,9 @@
 // Buffer then ends, which is sufficient for the whole-file read model used on mobile (the native
 // fs functions return whole files, not chunks).
 //
-// The write side (`Writable`, `pipeline`) is not needed by the read path and is intentionally
-// absent here; the `stream/promises` shim throws NOT IMPLEMENTED for `pipeline`.
+// `Writable` buffers writes and flushes them whole (the write model the native fs bridge uses), and
+// `Transform` is a working transform stream because serving an encrypted asset pipes a file read
+// through the encryption layer's decryption stream.
 //
 
 import { Buffer } from "buffer";
@@ -17,6 +18,38 @@ import { Buffer } from "buffer";
 // A registered event listener for a given event name.
 //
 type StreamListener = (...args: any[]) => void;
+
+//
+// The writable end that `pipe()` forwards bytes into. Both the Writable and Transform shims and the
+// http ServerResponse satisfy it.
+//
+export interface IStreamDestination {
+    // Accepts a chunk of bytes.
+    write(chunk: Buffer): boolean;
+
+    // Signals that no more chunks are coming.
+    end?(): void;
+}
+
+//
+// The transform/flush hooks a Transform is constructed with, mirroring the subset of Node's
+// Transform options the encryption streams use.
+//
+export interface ITransformOptions {
+    // Called for each written chunk; emits transformed output through `this.push`.
+    transform?: (this: ITransformContext, chunk: Buffer, encoding: string, callback: (error?: Error) => void) => void;
+
+    // Called once the input has ended; may emit trailing output through `this.push`.
+    flush?: (this: ITransformContext, callback: (error?: Error) => void) => void;
+}
+
+//
+// The `this` a transform/flush hook is invoked with: it pushes output downstream.
+//
+export interface ITransformContext {
+    // Queues a chunk of transformed output for emission.
+    push(chunk: Buffer | null): boolean;
+}
 
 //
 // A minimal readable stream over an in-memory Buffer. It emits one `data` event with the whole
@@ -80,6 +113,23 @@ export class Readable {
     //
     destroy(): void {
         this.destroyed = true;
+    }
+
+    //
+    // Forwards this stream's bytes into a writable destination and returns that destination, so
+    // `source.pipe(dest)` behaves as callers expect. Attaching the 'data' listener is what schedules
+    // emission, so the payload is delivered to the destination and the destination is then ended.
+    //
+    pipe(destination: IStreamDestination): IStreamDestination {
+        this.on("data", (chunk: Buffer) => {
+            destination.write(chunk);
+        });
+        this.on("end", () => {
+            if (destination.end) {
+                destination.end();
+            }
+        });
+        return destination;
     }
 
     //
@@ -210,16 +260,185 @@ export class Writable {
 }
 
 //
-// Duplex/Transform/PassThrough are exported as minimal no-op base "classes" defined as plain
-// functions (NOT ES6 classes) so that ES5-style consumers can both subclass them via `inherits` and
-// invoke them with `Base.call(this)` (the pattern used by `cipher-base`, a transitive dependency of
-// the crypto `create-hash` shim). An ES6 class cannot be called without `new` and would throw
-// "class constructors must be invoked with 'new'". These are only used as inheritance bases; no
-// real streaming behaviour is required on the read/write paths the mobile worker exercises.
+// Transform is a working transform stream, and is still defined as a plain function (NOT an ES6
+// class) so ES5-style consumers can subclass it via `inherits` and invoke it with
+// `Base.call(this)` (the pattern used by `cipher-base`, a transitive dependency of the crypto
+// `create-hash` shim). An ES6 class cannot be called without `new` and would throw "class
+// constructors must be invoked with 'new'".
 //
-export const Transform = function Transform(this: any): void {
-    // No-op base constructor.
-} as unknown as { new (): any };
+// Real streaming behaviour IS required: the encryption layer builds its decryption stream as
+// `new Transform({ transform, flush })` and `encrypted-storage.readStream` pipes a file read into
+// it, so serving an encrypted asset depends on this emitting the decrypted bytes. Output is
+// buffered until a 'data' listener attaches, because the source Readable emits on a microtask and
+// can therefore deliver its payload before the consumer (the asset server's `pipeline`) is hooked up.
+//
+export const Transform = function Transform(this: any, options?: ITransformOptions): void {
+    this.shimListeners = new Map<string, StreamListener[]>();
+    this.shimPending = [] as Buffer[];
+    this.shimTransform = options && options.transform;
+    this.shimFlush = options && options.flush;
+    this.shimInputEnded = false;
+    this.shimEndEmitted = false;
+    this.shimDrainScheduled = false;
+    this.shimDestroyed = false;
+} as unknown as { new (options?: ITransformOptions): any };
+
+const transformPrototype: any = (Transform as any).prototype;
+
+//
+// Registers a listener. Attaching one may make buffered output deliverable, so a drain is scheduled.
+//
+transformPrototype.on = function (eventName: string, listener: StreamListener): any {
+    const existing = this.shimListeners.get(eventName);
+    if (existing) {
+        existing.push(listener);
+    }
+    else {
+        this.shimListeners.set(eventName, [listener]);
+    }
+    this.scheduleDrain();
+    return this;
+};
+
+//
+// Alias of on(), matching the Node EventEmitter surface used by callers.
+//
+transformPrototype.once = function (eventName: string, listener: StreamListener): any {
+    return this.on(eventName, listener);
+};
+
+//
+// Emits an event to all registered listeners.
+//
+transformPrototype.emit = function (eventName: string, ...args: any[]): boolean {
+    const handlers = this.shimListeners.get(eventName);
+    if (!handlers) {
+        return false;
+    }
+    for (const handler of handlers.slice()) {
+        handler(...args);
+    }
+    return true;
+};
+
+//
+// Queues transformed output. Called by the transform/flush hooks as `this.push(...)`.
+//
+transformPrototype.push = function (chunk: Buffer | null): boolean {
+    if (chunk === null || chunk === undefined) {
+        return true;
+    }
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    if (buffer.length > 0) {
+        this.shimPending.push(buffer);
+    }
+    this.scheduleDrain();
+    return true;
+};
+
+//
+// Feeds a chunk through the transform hook (or straight through when no hook was supplied).
+//
+transformPrototype.write = function (chunk: Buffer): boolean {
+    if (this.shimDestroyed) {
+        return false;
+    }
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    if (this.shimTransform) {
+        this.shimTransform.call(this, buffer, "buffer", (error?: Error) => {
+            if (error) {
+                this.emit("error", error);
+            }
+        });
+    }
+    else {
+        this.push(buffer);
+    }
+    return true;
+};
+
+//
+// Ends the input, running the flush hook so it can emit any trailing output.
+//
+transformPrototype.end = function (chunk?: Buffer): any {
+    if (chunk !== undefined && chunk !== null) {
+        this.write(chunk);
+    }
+    if (this.shimInputEnded) {
+        return this;
+    }
+    this.shimInputEnded = true;
+    if (this.shimFlush) {
+        this.shimFlush.call(this, (error?: Error) => {
+            if (error) {
+                this.emit("error", error);
+            }
+            this.scheduleDrain();
+        });
+    }
+    else {
+        this.scheduleDrain();
+    }
+    return this;
+};
+
+//
+// Forwards this stream's output into a writable destination and returns that destination.
+//
+transformPrototype.pipe = function (destination: IStreamDestination): IStreamDestination {
+    this.on("data", (chunk: Buffer) => {
+        destination.write(chunk);
+    });
+    this.on("end", () => {
+        if (destination.end) {
+            destination.end();
+        }
+    });
+    return destination;
+};
+
+//
+// Stops the stream; no further output is emitted.
+//
+transformPrototype.destroy = function (error?: Error): any {
+    this.shimDestroyed = true;
+    if (error) {
+        this.emit("error", error);
+    }
+    return this;
+};
+
+//
+// Delivers buffered output on a microtask, then 'end' once the input has ended and everything has
+// been handed over. Holding output until a 'data' listener exists is what makes the stream safe to
+// hook up after the source has already produced its bytes.
+//
+transformPrototype.scheduleDrain = function (): void {
+    if (this.shimDrainScheduled) {
+        return;
+    }
+    this.shimDrainScheduled = true;
+
+    Promise.resolve().then(() => {
+        this.shimDrainScheduled = false;
+        if (this.shimDestroyed) {
+            return;
+        }
+
+        const dataHandlers = this.shimListeners.get("data");
+        if (dataHandlers && dataHandlers.length > 0) {
+            while (this.shimPending.length > 0) {
+                this.emit("data", this.shimPending.shift());
+            }
+        }
+
+        if (this.shimInputEnded && this.shimPending.length === 0 && !this.shimEndEmitted) {
+            this.shimEndEmitted = true;
+            this.emit("end");
+            this.emit("finish");
+        }
+    });
+};
 
 //
 // See Transform.

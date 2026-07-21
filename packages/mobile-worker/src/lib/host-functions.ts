@@ -98,8 +98,12 @@ export interface IHost {
     // Binds a TLS listener using the given PEM cert/key and returns a JSON string { listenerId, port }.
     tlsListen: (host: string, port: number, certPem: string, keyPem: string) => string;
 
-    // Opens a TLS client connection (trusting any cert so the JS side can pin) and returns a JSON string { connectionId, peerCertBase64 }.
-    tlsConnect: (host: string, port: number) => string;
+    // Opens a TLS client connection and returns a JSON string { connectionId, peerCertBase64 }. `mode`
+    // is a REQUIRED explicit trust mode: "pinned" installs a trust-all manager so the JS side can pin
+    // the cert itself (LAN share); "validated" performs real CA-chain and hostname validation (S3).
+    // There is deliberately no default: an omitted/unknown mode is a native error, so the S3 path can
+    // never accidentally downgrade to trust-all.
+    tlsConnect: (host: string, port: number, mode: string) => string;
 
     // Writes base64-encoded bytes to an accepted or connected TLS connection.
     tlsWrite: (connectionId: string, base64: string) => string | null;
@@ -116,8 +120,20 @@ export interface IHost {
     // Signs base64-encoded data with SHA256withRSA using the PEM private key and returns a base64 signature.
     cryptoSignSha256: (privateKeyPem: string, dataBase64: string) => string;
 
-    // Reads a secret from the device keychain by key, returning its value (or null when absent). Lets the
-    // worker vault resolve secret values natively so they never transit task payloads or the log.
+    // RSA-encrypts base64 data with the SPKI PEM public key using OAEP (SHA-1 + MGF1, Node's default
+    // padding) and returns the base64 ciphertext. Used when writing an encrypted database.
+    cryptoPublicEncryptOaepSha1: (publicKeyPem: string, dataBase64: string) => string;
+
+    // RSA-decrypts base64 data with the PKCS#8 PEM private key using OAEP (SHA-1 + MGF1) and returns the
+    // base64 plaintext. Used when reading an encrypted database.
+    cryptoPrivateDecryptOaepSha1: (privateKeyPem: string, dataBase64: string) => string;
+
+    // Derives the SPKI PEM public key from a PKCS#8 PEM private key.
+    cryptoPublicKeyFromPrivate: (privateKeyPem: string) => string;
+
+    // Reads a secret value from the device keychain by key, returning the value string, or null when
+    // no such secret is configured. A keychain that is unavailable returns a host error envelope (so
+    // the vault shim can distinguish "unavailable" from "unconfigured").
     secureStoreGet: (key: string) => string | null;
 
     // Writes (or overwrites) a secret in the device keychain.
@@ -165,6 +181,9 @@ export const EXPECTED_HOST_FUNCTIONS: string[] = [
     "tlsStopListening",
     "cryptoGenerateRsaKeyPair",
     "cryptoSignSha256",
+    "cryptoPublicEncryptOaepSha1",
+    "cryptoPrivateDecryptOaepSha1",
+    "cryptoPublicKeyFromPrivate",
     "secureStoreGet",
     "secureStoreSet",
     "secureStoreDelete",

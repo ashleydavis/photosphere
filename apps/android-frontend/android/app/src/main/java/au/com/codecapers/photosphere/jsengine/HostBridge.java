@@ -131,10 +131,12 @@ public final class HostBridge {
     }
 
     //
-    // host.tlsConnect(host, port): opens a cert-capturing TLS client and returns JSON { connectionId, peerCertBase64 }.
+    // host.tlsConnect(host, port, mode): opens a cert-capturing TLS client in the given trust mode
+    // ("pinned" trusts any cert for JS-side pinning; "validated" validates the CA chain and hostname)
+    // and returns JSON { connectionId, peerCertBase64 }.
     //
-    public String tlsConnect(String host, int port) {
-        return tls.tlsConnect(host, port);
+    public String tlsConnect(String host, int port, String mode) {
+        return tls.tlsConnect(host, port, mode);
     }
 
     //
@@ -170,6 +172,27 @@ public final class HostBridge {
     //
     public String cryptoSignSha256(String privateKeyPem, String dataBase64) {
         return CryptoHost.cryptoSignSha256(privateKeyPem, dataBase64);
+    }
+
+    //
+    // host.cryptoPublicEncryptOaepSha1(publicKeyPem, dataBase64): RSA-OAEP-SHA1 encrypt, returning base64.
+    //
+    public String cryptoPublicEncryptOaepSha1(String publicKeyPem, String dataBase64) {
+        return CryptoHost.cryptoPublicEncryptOaepSha1(publicKeyPem, dataBase64);
+    }
+
+    //
+    // host.cryptoPrivateDecryptOaepSha1(privateKeyPem, dataBase64): RSA-OAEP-SHA1 decrypt, returning base64.
+    //
+    public String cryptoPrivateDecryptOaepSha1(String privateKeyPem, String dataBase64) {
+        return CryptoHost.cryptoPrivateDecryptOaepSha1(privateKeyPem, dataBase64);
+    }
+
+    //
+    // host.cryptoPublicKeyFromPrivate(privateKeyPem): derives the SPKI PEM public key from a PKCS#8 PEM private key.
+    //
+    public String cryptoPublicKeyFromPrivate(String privateKeyPem) {
+        return CryptoHost.cryptoPublicKeyFromPrivate(privateKeyPem);
     }
 
     //

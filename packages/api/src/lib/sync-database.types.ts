@@ -32,6 +32,28 @@ export interface ISyncChange {
 }
 
 //
+// Task message sent when a sync returns early without running, so the UI can report why a
+// requested sync produced no sync-started / sync-completed pair. Without this a skipped sync is
+// silent on the frontend and indistinguishable from a sync that never started.
+//
+export interface ISyncSkippedMessage {
+    //
+    // Message type discriminator.
+    //
+    type: "sync-skipped";
+
+    //
+    // The path of the local database whose sync was skipped.
+    //
+    databasePath: string;
+
+    //
+    // Human-readable explanation of why the sync was skipped.
+    //
+    reason: string;
+}
+
+//
 // Task message sent during a sync to carry a batch of incremental changes to the UI.
 //
 export interface ISyncBatchMessage {

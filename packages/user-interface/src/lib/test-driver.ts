@@ -116,6 +116,9 @@ export interface ITestCommandPayload {
     // Result to stage for the next mobile pickFolder name prompt: a path, or null for cancel
     // (stage-pick-folder command).
     folderResult?: string | null;
+
+    // Whether the sync gate permits automatic syncs (set-sync-allowed command).
+    allowed?: boolean;
 }
 
 //
@@ -214,11 +217,11 @@ function findElement(dataId: string, nth: number): HTMLElement | undefined {
 // Input puts the `data-id` on its wrapper and the real input inside it, so the action targets a node
 // the `data-id` lookup alone does not reach.
 //
-function findNestedInput(dataId: string): HTMLInputElement | undefined {
+function findNestedInput(dataId: string): HTMLInputElement | HTMLTextAreaElement | undefined {
     for (const wrapper of visibleElements(dataId)) {
-        const input = wrapper.querySelector('input');
+        const input = wrapper.querySelector('input, textarea');
         if (input && isElementVisible(input)) {
-            return input as HTMLInputElement;
+            return input as HTMLInputElement | HTMLTextAreaElement;
         }
     }
     return undefined;
@@ -320,7 +323,10 @@ export function doType(dataId: string, text: string): void {
     const element = findNestedInput(dataId);
     if (element) {
         console.log(`test-type: typing into element data-id="${dataId}"`);
-        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+        // A masked PEM field is a <textarea>, whose value setter lives on HTMLTextAreaElement, not
+        // HTMLInputElement; pick the prototype matching the element so React observes the change.
+        const valueSetterPrototype = element instanceof HTMLTextAreaElement ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
+        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(valueSetterPrototype, 'value')?.set;
         if (nativeInputValueSetter) {
             nativeInputValueSetter.call(element, text);
             element.dispatchEvent(new Event('input', { bubbles: true }));
@@ -498,6 +504,36 @@ export interface ITestResetConfigEventDetail {
 }
 
 //
+// Window event name used to open or close the sync gate (test setup).
+//
+export const TEST_SET_SYNC_ALLOWED_EVENT = "photosphere-test:set-sync-allowed";
+
+//
+// Window event name used to signal that the database was edited, scheduling a background sync.
+//
+export const TEST_NOTIFY_DATABASE_EDITED_EVENT = "photosphere-test:notify-database-edited";
+
+//
+// Opens or closes the sync gate by dispatching a window event the mobile platform provider listens
+// for; the provider pushes the decision into the sync scheduler. This lets a test permit an automatic
+// background sync without depending on the device's real network state or the persisted user toggles.
+//
+export function doSetSyncAllowed(allowed: boolean): void {
+    console.log(`test-set-sync-allowed: sync allowed = ${allowed}`);
+    window.dispatchEvent(new CustomEvent(TEST_SET_SYNC_ALLOWED_EVENT, { detail: allowed }));
+}
+
+//
+// Signals that the database was edited by dispatching a window event the mobile platform provider
+// listens for; the provider asks the sync scheduler to schedule its debounced background sync. This is
+// the test-side equivalent of an edit made through the UI.
+//
+export function doNotifyDatabaseEdited(): void {
+    console.log(`test-notify-database-edited: scheduling a background sync`);
+    window.dispatchEvent(new Event(TEST_NOTIFY_DATABASE_EDITED_EVENT));
+}
+
+//
 // Seeds news items by dispatching a window event the mobile platform provider listens for; the
 // provider then shows the first unshown item as a toast. Mirrors the desktop news feed in tests.
 //
@@ -616,6 +652,12 @@ export function installTestDriver(transport: ITestTransport): void {
                 return undefined;
             case 'reset-config':
                 await doResetConfig();
+                return undefined;
+            case 'set-sync-allowed':
+                doSetSyncAllowed(payload.allowed!);
+                return undefined;
+            case 'notify-database-edited':
+                doNotifyDatabaseEdited();
                 return undefined;
             case 'cycle-advance':
                 doCycleAdvance();

@@ -400,9 +400,9 @@ final class HostBridge {
         }
         host.setValue(JSValue(object: tlsListen, in: context), forProperty: "tlsListen")
 
-        let tlsConnect: @convention(block) (String, Int) -> JSValue = { [weak self] host, port in
+        let tlsConnect: @convention(block) (String, Int, String) -> JSValue = { [weak self] host, port, mode in
             guard let self = self else { return JSValue(nullIn: context) }
-            return JSValue(object: self.tls.tlsConnect(host: host, port: port), in: context)
+            return JSValue(object: self.tls.tlsConnect(host: host, port: port, mode: mode), in: context)
         }
         host.setValue(JSValue(object: tlsConnect, in: context), forProperty: "tlsConnect")
 
@@ -445,6 +445,23 @@ final class HostBridge {
             return JSValue(object: CryptoHost.cryptoSignSha256(privateKeyPem: privateKeyPem, dataBase64: dataBase64), in: context)
         }
         host.setValue(JSValue(object: cryptoSignSha256, in: context), forProperty: "cryptoSignSha256")
+
+        // Native RSA OAEP (SHA-1) encrypt/decrypt and public-key derivation, used to open and write
+        // ENCRYPTED databases (the AES key is RSA-wrapped with Node's default OAEP padding).
+        let cryptoPublicEncryptOaepSha1: @convention(block) (String, String) -> JSValue = { publicKeyPem, dataBase64 in
+            return JSValue(object: CryptoHost.cryptoPublicEncryptOaepSha1(publicKeyPem: publicKeyPem, dataBase64: dataBase64), in: context)
+        }
+        host.setValue(JSValue(object: cryptoPublicEncryptOaepSha1, in: context), forProperty: "cryptoPublicEncryptOaepSha1")
+
+        let cryptoPrivateDecryptOaepSha1: @convention(block) (String, String) -> JSValue = { privateKeyPem, dataBase64 in
+            return JSValue(object: CryptoHost.cryptoPrivateDecryptOaepSha1(privateKeyPem: privateKeyPem, dataBase64: dataBase64), in: context)
+        }
+        host.setValue(JSValue(object: cryptoPrivateDecryptOaepSha1, in: context), forProperty: "cryptoPrivateDecryptOaepSha1")
+
+        let cryptoPublicKeyFromPrivate: @convention(block) (String) -> JSValue = { privateKeyPem in
+            return JSValue(object: CryptoHost.cryptoPublicKeyFromPrivate(privateKeyPem: privateKeyPem), in: context)
+        }
+        host.setValue(JSValue(object: cryptoPublicKeyFromPrivate, in: context), forProperty: "cryptoPublicKeyFromPrivate")
 
         // Native device keychain (host.secureStore*): the worker vault reads secret values (S3
         // credentials, the encryption private key, geocoding keys) natively through these so secrets

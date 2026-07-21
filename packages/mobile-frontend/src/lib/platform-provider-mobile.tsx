@@ -1,8 +1,8 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
 import eruda from "eruda";
 import { Network } from "@capacitor/network";
-import { PlatformContextProvider, ConfigContextProvider, createConfig, useLanShareTasks, readBrowserNetworkStatus, subscribeBrowserNetworkStatus, signalTestAppReady, TEST_MENU_EVENT, TEST_OPEN_DATABASE_EVENT, TEST_SEED_DATABASES_EVENT, TEST_SEED_RECENT_EVENT, TEST_SEED_NEWS_EVENT, TEST_RESET_CONFIG_EVENT, TEST_PICK_FILES_EVENT, TEST_STAGE_EXPORT_EVENT, TEST_STAGE_PICK_FOLDER_EVENT, type ITestResetConfigEventDetail, type IPlatformContext, type IPlatformEvent, type INetworkStatus, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions, type ISaveDownloadResult, UuidGeneratorProvider } from "user-interface";
-import { TaskQueue, TaskStatus } from "task-queue";
+import { PlatformContextProvider, ConfigContextProvider, createConfig, useLanShareTasks, readBrowserNetworkStatus, subscribeBrowserNetworkStatus, signalTestAppReady, TEST_MENU_EVENT, TEST_OPEN_DATABASE_EVENT, TEST_SEED_DATABASES_EVENT, TEST_SEED_RECENT_EVENT, TEST_SEED_NEWS_EVENT, TEST_RESET_CONFIG_EVENT, TEST_PICK_FILES_EVENT, TEST_STAGE_EXPORT_EVENT, TEST_STAGE_PICK_FOLDER_EVENT, TEST_SET_SYNC_ALLOWED_EVENT, TEST_NOTIFY_DATABASE_EDITED_EVENT, type ITestResetConfigEventDetail, type IPlatformContext, type IPlatformEvent, type INetworkStatus, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions, type ISaveDownloadResult, UuidGeneratorProvider } from "user-interface";
+import { TaskQueue, TaskStatus, getQueueBackend } from "task-queue";
 import type { ITaskResult } from "task-queue";
 import type { ISaveAssetItem } from "api";
 import { log, RandomUuidGenerator, TestUuidGenerator, type IUuidGenerator } from "utils";
@@ -12,6 +12,7 @@ import * as configStore from "./mobile-config-store";
 import { MobileSecretStore } from "./mobile-secure-store";
 import { createCapacitorSecureStore } from "./secure-store-plugin";
 import { importSharePayload as importReceivedShare, type IReceivedSharePayload } from "./mobile-share-receive";
+import { MobileSyncScheduler, SYNC_TASK_TYPE } from "./mobile-sync-scheduler";
 import type { IConflictResolution } from "lan-share-core";
 
 //
@@ -25,9 +26,28 @@ const uuidGenerator: IUuidGenerator = isTestMode ? new TestUuidGenerator() : new
 let erudaInitialised = false;
 let erudaVisible = false;
 
-// The last sync-gate decision pushed by the shared SyncContext. Mobile has no
-// sync scheduler yet, so this is retained for a future mobile scheduler to read.
-let lastSyncAllowed = false;
+// Source tag grouping the S3-directory-listing background tasks so they can be cancelled together.
+const LIST_S3_DIRS_SOURCE = "list-s3-dirs";
+
+//
+// The fields of a completed task result the provider inspects. The native taskCompleted event
+// arrives as a plain record, so this names the shape rather than indexing it untyped.
+//
+interface ICompletedTaskResult {
+    // The task type that completed (for example "sync-database").
+    type: string;
+
+    // The terminal status of the task.
+    status: TaskStatus;
+}
+
+//
+// The outputs of the list-s3-dirs worker task: the directory names under the requested prefix.
+//
+interface IListS3DirsOutputs {
+    // The immediate subdirectory names under the requested prefix.
+    names?: string[];
+}
 
 //
 // Shows or hides the in-page Eruda developer console, the only inspector
@@ -105,6 +125,24 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
     // Registered callbacks for show-notification events (used by the news-notification flow).
     const showNotificationCallbacksRef = useRef<Set<(data: IShowNotificationData) => void>>(new Set());
 
+    // Registered callbacks for sync-started / sync-completed events. Fired from the worker's sync task
+    // messages routed below, mirroring the desktop main process relaying sync-started/sync-completed to
+    // the renderer. These drive the navbar sync spinner via the shared SyncContext.
+    const syncStartedCallbacksRef = useRef<Set<() => void>>(new Set());
+    const syncCompletedCallbacksRef = useRef<Set<() => void>>(new Set());
+
+    // The mobile background-sync scheduler (debounce + periodic + gate), created once. It enqueues
+    // sync-database tasks onto the embedded worker queue when the gate permits.
+    const syncSchedulerRef = useRef<MobileSyncScheduler | null>(null);
+    const getSyncScheduler = useCallback((): MobileSyncScheduler => {
+        if (!syncSchedulerRef.current) {
+            syncSchedulerRef.current = new MobileSyncScheduler((type, data, source) => {
+                getQueueBackend().addTask(type, data, source);
+            });
+        }
+        return syncSchedulerRef.current;
+    }, []);
+
     const openDatabase = useCallback(async (): Promise<void> => {
         // No-op: no native database picker on mobile yet.
     }, []);
@@ -127,7 +165,12 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         const name = known?.name ?? configStore.databaseBasename(databasePath);
         configStore.addRecentDatabase(persistentStore, known ?? { name, description: "", path: databasePath });
         log.info(`Database opened: ${configStore.databaseBasename(databasePath)}`);
-    }, []);
+        // Point the sync scheduler at the newly opened database and start its periodic timer, so
+        // subsequent edits and the periodic interval enqueue syncs for this database.
+        const scheduler = getSyncScheduler();
+        scheduler.setDatabasePath(databasePath);
+        scheduler.start();
+    }, [getSyncScheduler]);
 
     const notifyDatabaseClosed = useCallback(async (): Promise<void> => {
     }, []);
@@ -191,6 +234,16 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
             const result = (event as CustomEvent<string | null>).detail ?? null;
             setInjectedPickFolderResult(result);
         };
+        // Test setup: open or close the sync gate, so a test can permit an automatic background sync
+        // without depending on the device's real network state or the persisted user toggles.
+        const handleSetSyncAllowed = (event: Event) => {
+            const allowed = (event as CustomEvent<boolean>).detail;
+            getSyncScheduler().setSyncAllowed(allowed);
+        };
+        // Test setup: schedule the debounced background sync, as a real edit through the UI would.
+        const handleNotifyDatabaseEdited = () => {
+            getSyncScheduler().notifyDatabaseEdited();
+        };
         window.addEventListener(TEST_MENU_EVENT, handleMenu);
         window.addEventListener(TEST_OPEN_DATABASE_EVENT, handleOpenDatabase);
         window.addEventListener(TEST_SEED_DATABASES_EVENT, handleSeedDatabases);
@@ -199,6 +252,8 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         window.addEventListener(TEST_PICK_FILES_EVENT, handlePickFiles);
         window.addEventListener(TEST_STAGE_EXPORT_EVENT, handleStageExport);
         window.addEventListener(TEST_STAGE_PICK_FOLDER_EVENT, handleStagePickFolder);
+        window.addEventListener(TEST_SET_SYNC_ALLOWED_EVENT, handleSetSyncAllowed);
+        window.addEventListener(TEST_NOTIFY_DATABASE_EDITED_EVENT, handleNotifyDatabaseEdited);
         // The test-command listeners are now registered, so it is safe to tell the host bridge the
         // app is ready. Signaling earlier (the WebSocket sends "ready" on connect) let a command
         // fired right after /ready dispatch its one-shot CustomEvent before these listeners existed,
@@ -213,6 +268,8 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
             window.removeEventListener(TEST_PICK_FILES_EVENT, handlePickFiles);
             window.removeEventListener(TEST_STAGE_EXPORT_EVENT, handleStageExport);
             window.removeEventListener(TEST_STAGE_PICK_FOLDER_EVENT, handleStagePickFolder);
+            window.removeEventListener(TEST_SET_SYNC_ALLOWED_EVENT, handleSetSyncAllowed);
+            window.removeEventListener(TEST_NOTIFY_DATABASE_EDITED_EVENT, handleNotifyDatabaseEdited);
         };
     }, []);
 
@@ -221,18 +278,26 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
     }, []);
 
     const notifyDatabaseEdited = useCallback((): void => {
-    }, []);
+        // Debounced background sync after an edit (mirrors desktop's notify-database-edited).
+        getSyncScheduler().notifyDatabaseEdited();
+    }, [getSyncScheduler]);
 
     const copyToClipboard = useCallback(async (_blob: Blob, _contentType: string): Promise<void> => {
         // No-op: native clipboard image support is not wired up on mobile yet.
     }, []);
 
-    const onSyncStarted = useCallback((_callback: () => void): (() => void) => {
-        return () => {};
+    const onSyncStarted = useCallback((callback: () => void): (() => void) => {
+        syncStartedCallbacksRef.current.add(callback);
+        return () => {
+            syncStartedCallbacksRef.current.delete(callback);
+        };
     }, []);
 
-    const onSyncCompleted = useCallback((_callback: () => void): (() => void) => {
-        return () => {};
+    const onSyncCompleted = useCallback((callback: () => void): (() => void) => {
+        syncCompletedCallbacksRef.current.add(callback);
+        return () => {
+            syncCompletedCallbacksRef.current.delete(callback);
+        };
     }, []);
 
     const onShowNotification = useCallback((callback: (data: IShowNotificationData) => void): (() => void) => {
@@ -270,6 +335,56 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
             window.removeEventListener(TEST_SEED_NEWS_EVENT, handleSeedNews);
         };
     }, [showFirstUnshownNews]);
+
+    // Route the worker's sync-started / sync-completed task messages to the registered callbacks (which
+    // drive the navbar spinner) and settle the scheduler so the next sync can be enqueued. The worker's
+    // sync-database handler emits these messages; on mobile there is no main process to relay them, so
+    // the provider observes the task-message stream directly.
+    useEffect(() => {
+        const unsubscribe = subscribeMobileTaskMessage((_taskId, message) => {
+            const messageType = (message as { type?: string }).type;
+            if (messageType === "sync-started") {
+                // Logged at the same point desktop's main process logs it, so both platforms record
+                // the sync lifecycle identically and a smoke test can observe the transition from the
+                // append-only log rather than racing the transient navbar spinner state.
+                log.event("Sync started");
+                syncStartedCallbacksRef.current.forEach(callback => callback());
+            }
+            else if (messageType === "sync-completed") {
+                log.event("Sync completed");
+                syncCompletedCallbacksRef.current.forEach(callback => callback());
+            }
+            else if (messageType === "sync-skipped") {
+                // A sync that returns early (no origin, origin unreachable) emits no sync-started /
+                // sync-completed pair. Logging the worker's reason here is the only place it reaches
+                // the app log, so a sync that silently does nothing is diagnosable.
+                const reason = (message as { reason?: string }).reason;
+                log.event(`Sync skipped: ${reason}`);
+            }
+        });
+        return unsubscribe;
+    }, []);
+
+    // Settle the sync scheduler when the sync task itself finishes, mirroring desktop's syncStopped in
+    // the task-complete handler. Settling on the sync-completed *message* instead would leave the
+    // scheduler stuck believing a sync was still running whenever the sync skipped early or failed,
+    // because neither path sends that message, and no later sync would ever be enqueued.
+    useEffect(() => {
+        const unsubscribe = subscribeMobileTaskComplete((_taskId, result) => {
+            const completed = result as unknown as ICompletedTaskResult;
+            if (completed.type !== SYNC_TASK_TYPE) {
+                return;
+            }
+            getSyncScheduler().onSyncSettled();
+            log.event(`Sync task finished: ${completed.status}`);
+            if (completed.status !== TaskStatus.Succeeded) {
+                // The spinner was turned on by sync-started but no sync-completed will arrive, so
+                // clear it here rather than leaving it spinning forever.
+                syncCompletedCallbacksRef.current.forEach(callback => callback());
+            }
+        });
+        return unsubscribe;
+    }, [getSyncScheduler]);
 
     const onDatabasesChanged = useCallback((_callback: () => void): (() => void) => {
         return () => {};
@@ -421,8 +536,23 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         log.info(`Recent database removed: ${name}`);
     }, []);
 
-    const listS3Dirs = useCallback(async (_s3Key: string, _bucket: string, _prefix: string): Promise<string[]> => {
-        return [];
+    const listS3Dirs = useCallback(async (s3Key: string, bucket: string, prefix: string): Promise<string[]> => {
+        // The WebView has no S3 client or vault access, so list directories via a background task on the
+        // embedded worker (which has both). A failure (bad credentials, unreachable bucket) rejects here,
+        // so the S3 browser shows a real error rather than the empty-array stub's fake empty bucket.
+        const queue = new TaskQueue(new RandomUuidGenerator(), LIST_S3_DIRS_SOURCE);
+        try {
+            const taskId = queue.addTask("list-s3-dirs", { s3Key, bucket, prefix });
+            const result = await queue.awaitTask(taskId);
+            if (!result || result.status === TaskStatus.Failed) {
+                throw new Error(result?.errorMessage || "Failed to list S3 directories");
+            }
+            const outputs = result.outputs as IListS3DirsOutputs;
+            return outputs?.names ?? [];
+        }
+        finally {
+            queue.shutdown();
+        }
     }, []);
 
     const importSharePayload = useCallback(async (payload: unknown, conflictResolutions: Record<string, unknown>): Promise<void> => {
@@ -487,12 +617,13 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
     }, [getNetworkStatus]);
 
     //
-    // Stores the shared sync gate's decision. Mobile has no sync scheduler yet,
-    // so the value is retained for a future mobile scheduler to honour.
+    // Pushes the shared sync gate's decision to the scheduler. When sync becomes allowed the scheduler
+    // schedules a catch-up sync; when disallowed it cancels any pending debounce, so no automatic sync
+    // is enqueued while the gate is closed (matches desktop's set-sync-allowed behaviour).
     //
     const setSyncAllowed = useCallback((allowed: boolean): void => {
-        lastSyncAllowed = allowed;
-    }, []);
+        getSyncScheduler().setSyncAllowed(allowed);
+    }, [getSyncScheduler]);
 
     const platformContext: IPlatformContext = {
         openDatabase,

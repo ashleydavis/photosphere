@@ -1,5 +1,5 @@
 import { Buffer } from "buffer";
-import { createServer, Server, Socket } from "../../shims/node-net";
+import { createServer, installTcpInbound, isIP, Server, Socket } from "../../shims/node-net";
 
 //
 // Builds a mock native TCP host with jest mocks for each function.
@@ -114,5 +114,24 @@ describe("net shim", () => {
         server.close();
 
         expect(host.tcpStopListening).toHaveBeenCalledWith("L-stop");
+    });
+
+    test("installTcpInbound installs the native event entry point on the given scope", () => {
+        const scope: any = {};
+
+        installTcpInbound(scope);
+
+        expect(typeof scope.__tcpEvent).toBe("function");
+        // An event for a connection that no longer exists is ignored rather than throwing.
+        expect(() => scope.__tcpEvent(JSON.stringify({ kind: "data", connectionId: "gone", base64: "" }))).not.toThrow();
+    });
+
+    test("isIP classifies IPv4, IPv6 and non-addresses", () => {
+        expect(isIP("127.0.0.1")).toBe(4);
+        expect(isIP("192.168.55.1")).toBe(4);
+        expect(isIP("::1")).toBe(6);
+        expect(isIP("fe80::1234")).toBe(6);
+        expect(isIP("localhost")).toBe(0);
+        expect(isIP("")).toBe(0);
     });
 });

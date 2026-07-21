@@ -16,7 +16,7 @@
 
 import { Buffer } from "buffer";
 import { IncomingMessage, ServerResponse } from "./node-http";
-import { Server as TlsServer, connectClient, type TLSSocket, type ITlsServerOptions } from "./node-tls";
+import { Server as TlsServer, connectClient, type TLSSocket, type ITlsServerOptions, type TlsConnectMode } from "./node-tls";
 import type { Socket as NetSocket } from "./node-net";
 
 //
@@ -99,7 +99,7 @@ function parseResponseHead(headerText: string): IParsedResponseHead {
 // A client HTTP response: an IncomingMessage extended with the numeric statusCode the response line
 // carried (LAN-share reads response.statusCode and the body via data/end).
 //
-interface IClientResponse extends IncomingMessage {
+export interface IClientResponse extends IncomingMessage {
     // The HTTP status code from the response status line.
     statusCode: number;
 }
@@ -148,11 +148,13 @@ export class ClientRequest extends TinyEmitter {
     private aborted = false;
 
     //
-    // Builds the request, opens the TLS connection, and schedules the send after the pinning handshake.
+    // Builds the request, opens the TLS connection in the given trust mode, and schedules the send
+    // after the handshake. The mode is explicit: "pinned" for LAN share (the caller pins the cert),
+    // "validated" for S3 (native validates the CA chain and hostname).
     //
-    constructor(options: IRequestOptions, callback: (response: IClientResponse) => void) {
+    constructor(options: IRequestOptions, callback: (response: IClientResponse) => void, tlsMode: TlsConnectMode) {
         super();
-        this.socket = connectClient(options.port, options.hostname);
+        this.socket = connectClient(options.port, options.hostname, tlsMode);
 
         // Sequence the events so a `socket` handler that attaches a `secureConnect` listener observes
         // the handshake, then send the request only if the caller did not abort during pinning.
@@ -217,14 +219,18 @@ export class ClientRequest extends TinyEmitter {
         const body = Buffer.concat(this.bodyChunks);
 
         let head = `${options.method} ${options.path} HTTP/1.1\r\n`;
-        head += `Host: ${options.hostname}:${options.port}\r\n`;
+        // Omit the port from the Host header when it is the HTTPS/HTTP default, so an AWS SigV4
+        // signature (which canonicalises the host without the default port) matches the sent header.
+        // Non-default ports (LAN share) keep the explicit `:port`.
+        const hostHeader = options.port === 443 || options.port === 80 ? options.hostname : `${options.hostname}:${options.port}`;
+        head += `Host: ${hostHeader}\r\n`;
         const headers = options.headers || {};
         for (const name of Object.keys(headers)) {
             head += `${name}: ${headers[name]}\r\n`;
         }
         head += "Connection: close\r\n\r\n";
 
-        this.setupResponseParsing(callback);
+        this.setupResponseParsing(callback, options.method);
 
         this.socket.write(Buffer.from(head, "utf8"));
         if (body.length > 0) {
@@ -236,11 +242,14 @@ export class ClientRequest extends TinyEmitter {
     // Accumulates inbound bytes from the TLS socket, parses the response head once the blank line
     // arrives, builds the response, dispatches it, and feeds the body until Content-Length is satisfied.
     //
-    private setupResponseParsing(callback: (response: IClientResponse) => void): void {
+    private setupResponseParsing(callback: (response: IClientResponse) => void, method: string): void {
         let buffer = Buffer.alloc(0);
         let headParsed = false;
         let response: IClientResponse | undefined = undefined;
         let bodyRemaining = 0;
+        // A HEAD response carries the object's Content-Length header but NO body, so never wait for
+        // body bytes on a HEAD request (S3's HeadObject would otherwise hang the response forever).
+        const expectsBody = method.toUpperCase() !== "HEAD";
 
         const feedBody = (chunk: Buffer): void => {
             if (!response) {
@@ -275,7 +284,7 @@ export class ClientRequest extends TinyEmitter {
             response.statusCode = parsed.statusCode;
 
             const contentLength = parseInt(parsed.headers["content-length"] || "0", 10);
-            bodyRemaining = Number.isNaN(contentLength) ? 0 : contentLength;
+            bodyRemaining = expectsBody && !Number.isNaN(contentLength) ? contentLength : 0;
 
             callback(response);
 
@@ -422,15 +431,25 @@ export function createServer(options: ITlsServerOptions, requestListener: (req: 
 }
 
 //
-// Makes an HTTPS request, mirroring https.request(options, callback). Returns a ClientRequest.
+// Makes an HTTPS request, mirroring https.request(options, callback). Returns a ClientRequest. This is
+// the LAN-share path: the connection uses "pinned" trust (native trusts any cert; the caller pins it).
 //
 export function request(options: IRequestOptions, callback: (response: IClientResponse) => void): ClientRequest {
-    return new ClientRequest(options, callback);
+    return new ClientRequest(options, callback, "pinned");
+}
+
+//
+// Makes an HTTPS request over a "validated" TLS connection (native validates the CA chain and
+// hostname). This is the S3 path, and it is a separate entry point so the S3 client can NEVER select
+// the trust-all/pinned mode: an S3 request is validated by construction.
+//
+export function requestValidated(options: IRequestOptions, callback: (response: IClientResponse) => void): ClientRequest {
+    return new ClientRequest(options, callback, "validated");
 }
 
 //
 // The default export mirrors `import https from "https"`.
 //
-const httpsModule = { Server, ClientRequest, createServer, request };
+const httpsModule = { Server, ClientRequest, createServer, request, requestValidated };
 
 export default httpsModule;

@@ -19,6 +19,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLServerSocket;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.TrustManager;
@@ -144,15 +145,29 @@ public final class TlsHost {
     }
 
     //
-    // host.tlsConnect(host, port): opens a TLS client connection trusting any certificate, completes the
-    // handshake, and returns a JSON string { connectionId, peerCertBase64 } (the server's cert DER,
-    // base64) so the JS side can pin it. A read thread streams inbound bytes. Returns an error envelope
-    // on failure.
+    // host.tlsConnect(host, port, mode): opens a TLS client connection in the given trust mode, completes
+    // the handshake, and returns a JSON string { connectionId, peerCertBase64 } (the server's cert DER,
+    // base64) so the JS side can pin it. `mode` is REQUIRED: "pinned" trusts any certificate (LAN share
+    // pins it in JS); "validated" validates the CA chain and the hostname (S3). An unknown mode is an
+    // error, so the S3 path can never accidentally downgrade to trust-all. A read thread streams inbound
+    // bytes. Returns an error envelope on failure.
     //
-    public String tlsConnect(String host, int port) {
+    public String tlsConnect(String host, int port, String mode) {
         try {
-            SSLContext sslContext = buildTrustAllClientContext();
+            boolean validated = "validated".equals(mode);
+            if (!validated && !"pinned".equals(mode)) {
+                throw new IllegalArgumentException("tlsConnect: unknown TLS mode '" + mode + "'");
+            }
+
+            SSLContext sslContext = validated ? buildValidatedClientContext() : buildTrustAllClientContext();
             SSLSocket socket = (SSLSocket) sslContext.getSocketFactory().createSocket(host, port);
+            if (validated) {
+                // Enable hostname verification during the handshake (default SSLSocket does not verify the
+                // hostname against the certificate; endpoint identification "HTTPS" does).
+                SSLParameters sslParameters = socket.getSSLParameters();
+                sslParameters.setEndpointIdentificationAlgorithm("HTTPS");
+                socket.setSSLParameters(sslParameters);
+            }
             socket.startHandshake();
 
             Certificate[] peerCertificates = socket.getSession().getPeerCertificates();
@@ -197,6 +212,18 @@ public final class TlsHost {
         };
         SSLContext sslContext = SSLContext.getInstance("TLS");
         sslContext.init(null, trustAll, null);
+        return sslContext;
+    }
+
+    //
+    // Builds a client SSLContext that validates the server certificate against the platform's default
+    // trust store (the system CA chain). Combined with the "HTTPS" endpoint-identification algorithm set
+    // on the socket, this gives real CA-chain and hostname validation for S3 over public HTTPS.
+    //
+    private SSLContext buildValidatedClientContext() throws Exception {
+        SSLContext sslContext = SSLContext.getInstance("TLS");
+        // Passing null trust managers uses the platform default, which validates against the system CAs.
+        sslContext.init(null, null, null);
         return sslContext;
     }
 

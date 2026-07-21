@@ -71,6 +71,34 @@ describe('secretsView', () => {
 
         expect(mockLogInfo).not.toHaveBeenCalledWith(expect.stringContaining('Did you mean'));
     });
+
+    test('--raw writes only the bare value to stdout', async () => {
+        const multiLineValue = '-----BEGIN PRIVATE KEY-----\nABC\n-----END PRIVATE KEY-----';
+        const mockVault = makeMockVault({ name: 'enc-key', type: 'encryption-key', value: multiLineValue });
+        mockGetVault.mockReturnValue(mockVault);
+        const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+        await secretsView({ yes: true, name: 'enc-key', raw: true });
+
+        expect(writeSpy).toHaveBeenCalledWith(multiLineValue);
+        // No labels, so the captured output can be fed straight to another program.
+        expect(mockLogInfo).not.toHaveBeenCalled();
+
+        writeSpy.mockRestore();
+    });
+
+    test('without --raw the value is logged with labels rather than written to stdout', async () => {
+        const mockVault = makeMockVault({ name: 'enc-key', type: 'encryption-key', value: 'the-value' });
+        mockGetVault.mockReturnValue(mockVault);
+        const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+        await secretsView({ yes: true, name: 'enc-key' });
+
+        expect(writeSpy).not.toHaveBeenCalled();
+        expect(mockLogInfo).toHaveBeenCalledWith(expect.stringContaining('the-value'));
+
+        writeSpy.mockRestore();
+    });
 });
 
 describe('secretsEdit', () => {

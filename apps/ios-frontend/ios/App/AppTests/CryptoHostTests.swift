@@ -93,6 +93,53 @@ final class CryptoHostTests: XCTestCase {
     }
 
     //
+    // cryptoPublicEncryptOaepSha1 / cryptoPrivateDecryptOaepSha1 round-trip an AES key through OAEP-SHA1.
+    //
+    func testOaepSha1EncryptDecryptRoundTrips() throws {
+        let parsed = try parse(CryptoHost.cryptoGenerateRsaKeyPair(modulusLength: 2048))
+        let privatePem = try XCTUnwrap(parsed["privateKeyPem"] as? String)
+        let publicPem = try XCTUnwrap(parsed["publicKeyPem"] as? String)
+
+        let secret = Data("an-aes-256-key-placeholder-32byt".utf8)
+        let encrypted = CryptoHost.cryptoPublicEncryptOaepSha1(publicKeyPem: publicPem, dataBase64: secret.base64EncodedString())
+        XCTAssertFalse(encrypted.hasPrefix("@@HOSTERR@@"), "encryption should not error: \(encrypted)")
+
+        let decrypted = CryptoHost.cryptoPrivateDecryptOaepSha1(privateKeyPem: privatePem, dataBase64: encrypted)
+        XCTAssertFalse(decrypted.hasPrefix("@@HOSTERR@@"), "decryption should not error: \(decrypted)")
+        XCTAssertEqual(decrypted, secret.base64EncodedString())
+    }
+
+    //
+    // cryptoPrivateDecryptOaepSha1 decrypts ciphertext produced with .rsaEncryptionOAEPSHA1 directly
+    // (the same padding Node's default publicEncrypt uses), pinning the SHA-1 OAEP contract.
+    //
+    func testOaepSha1DecryptsSecKeyOaepSha1Ciphertext() throws {
+        let parsed = try parse(CryptoHost.cryptoGenerateRsaKeyPair(modulusLength: 2048))
+        let privatePem = try XCTUnwrap(parsed["privateKeyPem"] as? String)
+        let publicPem = try XCTUnwrap(parsed["publicKeyPem"] as? String)
+
+        let publicKey = try makePublicKey(spkiPem: publicPem)
+        let plaintext = Data("padding contract check".utf8)
+        let encrypted = try XCTUnwrap(SecKeyCreateEncryptedData(publicKey, .rsaEncryptionOAEPSHA1, plaintext as CFData, nil) as Data?)
+
+        let decrypted = CryptoHost.cryptoPrivateDecryptOaepSha1(privateKeyPem: privatePem, dataBase64: encrypted.base64EncodedString())
+        XCTAssertEqual(Data(base64Encoded: decrypted), plaintext)
+    }
+
+    //
+    // cryptoPublicKeyFromPrivate derives the SPKI public key that matches the generated public key.
+    //
+    func testPublicKeyFromPrivateMatchesGenerated() throws {
+        let parsed = try parse(CryptoHost.cryptoGenerateRsaKeyPair(modulusLength: 2048))
+        let privatePem = try XCTUnwrap(parsed["privateKeyPem"] as? String)
+        let publicPem = try XCTUnwrap(parsed["publicKeyPem"] as? String)
+
+        let derived = CryptoHost.cryptoPublicKeyFromPrivate(privateKeyPem: privatePem)
+        XCTAssertFalse(derived.hasPrefix("@@HOSTERR@@"), "derivation should not error: \(derived)")
+        XCTAssertEqual(CryptoHost.derFromPem(derived), CryptoHost.derFromPem(publicPem))
+    }
+
+    //
     // Parses a host-function JSON result object into a dictionary.
     //
     private func parse(_ json: String) throws -> [String: Any] {

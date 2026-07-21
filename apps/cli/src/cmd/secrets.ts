@@ -51,6 +51,9 @@ interface ISecretsViewOptions {
     yes?: boolean;
     // Secret name to view.
     name?: string;
+    // Print only the secret's raw value, with no name/type labels or colouring, so the output can be
+    // captured and fed to another program. Requires --name and --yes.
+    raw?: boolean;
 }
 
 //
@@ -132,6 +135,7 @@ export function secretsCommand(): Command {
         .description('Show the full value of a named secret.')
         .option('--yes', 'Skip confirmation prompt')
         .option('--name <name>', 'Secret name')
+        .option('--raw', 'Print only the raw value, with no labels or colouring, for capture by another program')
         .action(secretsView);
 
     // psi secrets edit
@@ -381,6 +385,13 @@ export async function secretsView(cmdOptions: ISecretsViewOptions): Promise<void
             outro(pc.yellow('Cancelled.'));
             return;
         }
+    }
+
+    if (cmdOptions.raw) {
+        // Bare value only, so a caller can capture it. Written straight to stdout rather than through
+        // the logger so no labels, colour codes or trailing blank line contaminate the output.
+        process.stdout.write(secret.value);
+        return;
     }
 
     log.info(pc.cyan(`\nName: `) + secret.name);

@@ -41,6 +41,7 @@ jest.mock("utils", () => ({
 }));
 
 import { createStorage } from "storage";
+import { loadDatabaseConfig } from "api";
 import { merkleTreeExists } from "../../lib/tree";
 import { syncDatabases } from "../../lib/sync";
 import { syncDatabaseHandler } from "../../lib/sync-database.worker";
@@ -48,6 +49,7 @@ import { syncDatabaseHandler } from "../../lib/sync-database.worker";
 const mockCreateStorage = createStorage as jest.MockedFunction<typeof createStorage>;
 const mockMerkleTreeExists = merkleTreeExists as jest.MockedFunction<typeof merkleTreeExists>;
 const mockSyncDatabases = syncDatabases as jest.MockedFunction<typeof syncDatabases>;
+const mockLoadDatabaseConfig = loadDatabaseConfig as jest.MockedFunction<typeof loadDatabaseConfig>;
 
 //
 // Builds a minimal ITaskContext for testing.
@@ -116,5 +118,42 @@ describe("syncDatabaseHandler", () => {
         await syncDatabaseHandler(makeData(), makeContext());
 
         expect(mockSyncDatabases).not.toHaveBeenCalled();
+    });
+
+    test("reports a sync-skipped message when the origin storage has no merkle tree", async () => {
+        mockMerkleTreeExists.mockResolvedValueOnce(false);
+        const context = makeContext();
+
+        await syncDatabaseHandler(makeData(), context);
+
+        expect(context.sendMessage).toHaveBeenCalledWith({
+            type: "sync-skipped",
+            databasePath: "/fake/local",
+            reason: "origin not accessible (/fake/origin)",
+        });
+    });
+
+    test("reports a sync-skipped message when the database has no origin configured", async () => {
+        mockLoadDatabaseConfig.mockResolvedValueOnce(null);
+        const context = makeContext();
+
+        await syncDatabaseHandler(makeData(), context);
+
+        expect(mockSyncDatabases).not.toHaveBeenCalled();
+        expect(context.sendMessage).toHaveBeenCalledWith({
+            type: "sync-skipped",
+            databasePath: "/fake/local",
+            reason: "no origin configured",
+        });
+    });
+
+    test("sends sync-started and sync-completed around a sync that runs", async () => {
+        const context = makeContext();
+
+        await syncDatabaseHandler(makeData(), context);
+
+        const messageTypes = (context.sendMessage as jest.Mock).mock.calls
+            .map(call => call[0].type);
+        expect(messageTypes).toEqual(["sync-started", "sync-completed"]);
     });
 });

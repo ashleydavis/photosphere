@@ -535,7 +535,7 @@ public final class QuickJsTaskEngine implements TaskEngine {
         host.setProperty("tlsListen", (JSCallFunction) args -> safeString(() ->
             hostBridge.tlsListen((String) args[0], ((Number) args[1]).intValue(), (String) args[2], (String) args[3])));
         host.setProperty("tlsConnect", (JSCallFunction) args -> safeString(() ->
-            hostBridge.tlsConnect((String) args[0], ((Number) args[1]).intValue())));
+            hostBridge.tlsConnect((String) args[0], ((Number) args[1]).intValue(), (String) args[2])));
         host.setProperty("tlsWrite", (JSCallFunction) args -> safeString(() ->
             hostBridge.tlsWrite((String) args[0], (String) args[1])));
         host.setProperty("tlsClose", (JSCallFunction) args -> safeString(() ->
@@ -549,6 +549,15 @@ public final class QuickJsTaskEngine implements TaskEngine {
             hostBridge.cryptoGenerateRsaKeyPair(((Number) args[0]).intValue())));
         host.setProperty("cryptoSignSha256", (JSCallFunction) args -> safeString(() ->
             hostBridge.cryptoSignSha256((String) args[0], (String) args[1])));
+
+        // Native-backed RSA OAEP (SHA-1) encrypt/decrypt and public-key derivation, used to open and
+        // write ENCRYPTED databases (the AES key is RSA-wrapped with Node's default OAEP padding).
+        host.setProperty("cryptoPublicEncryptOaepSha1", (JSCallFunction) args -> safeString(() ->
+            hostBridge.cryptoPublicEncryptOaepSha1((String) args[0], (String) args[1])));
+        host.setProperty("cryptoPrivateDecryptOaepSha1", (JSCallFunction) args -> safeString(() ->
+            hostBridge.cryptoPrivateDecryptOaepSha1((String) args[0], (String) args[1])));
+        host.setProperty("cryptoPublicKeyFromPrivate", (JSCallFunction) args -> safeString(() ->
+            hostBridge.cryptoPublicKeyFromPrivate((String) args[0])));
 
         // Native-backed device keychain: the worker vault reads secret values (S3 credentials, the
         // encryption private key, geocoding keys) natively through these so secrets never enter task

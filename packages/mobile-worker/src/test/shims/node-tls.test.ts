@@ -1,5 +1,5 @@
 import { Buffer } from "buffer";
-import { connect, createServer, Server, TLSSocket } from "../../shims/node-tls";
+import { connect, connectClient, createServer, installTlsInbound, Server, TLSSocket } from "../../shims/node-tls";
 
 //
 // Builds a mock native TLS host with jest mocks for each function.
@@ -30,8 +30,8 @@ describe("tls shim", () => {
         const certDer = Buffer.from("fake-cert-der");
         const host = installHost({ listenerId: "L", port: 1, connectionId: "TC-1", peerCertBase64: certDer.toString("base64") });
 
-        const socket = connect(4433, "127.0.0.1");
-        expect(host.tlsConnect).toHaveBeenCalledWith("127.0.0.1", 4433);
+        const socket = connect(4433, "127.0.0.1", "pinned");
+        expect(host.tlsConnect).toHaveBeenCalledWith("127.0.0.1", 4433, "pinned");
 
         let secured = false;
         socket.on("secureConnect", () => { secured = true; });
@@ -83,7 +83,7 @@ describe("tls shim", () => {
 
     test("an inbound close event emits end then close", () => {
         installHost({ listenerId: "L-close", port: 1, connectionId: "TC-c", peerCertBase64: "" });
-        const socket = connect(4433, "127.0.0.1");
+        const socket = connect(4433, "127.0.0.1", "pinned");
 
         const events: string[] = [];
         socket.on("end", () => events.push("end"));
@@ -99,5 +99,32 @@ describe("tls shim", () => {
         server.listen(0);
         server.close();
         expect(host.tlsStopListening).toHaveBeenCalledWith("L-stop");
+    });
+
+    test("connectClient connects in the requested mode and returns the socket", () => {
+        const host = installHost({ listenerId: "L-cc", port: 4433, connectionId: "C-cc", peerCertBase64: "" });
+
+        const socket = connectClient(4433, "s3.example.com", "validated");
+
+        expect(host.tlsConnect).toHaveBeenCalledWith("s3.example.com", 4433, "validated");
+        expect(socket).toBeInstanceOf(TLSSocket);
+    });
+
+    test("connectClient passes the pinned mode through unchanged", () => {
+        const host = installHost({ listenerId: "L-cp", port: 4433, connectionId: "C-cp", peerCertBase64: "" });
+
+        connectClient(4433, "127.0.0.1", "pinned");
+
+        expect(host.tlsConnect).toHaveBeenCalledWith("127.0.0.1", 4433, "pinned");
+    });
+
+    test("installTlsInbound installs the native event entry point on the given scope", () => {
+        const scope: any = {};
+
+        installTlsInbound(scope);
+
+        expect(typeof scope.__tlsEvent).toBe("function");
+        // An event for a connection that no longer exists is ignored rather than throwing.
+        expect(() => scope.__tlsEvent(JSON.stringify({ kind: "data", connectionId: "gone", base64: "" }))).not.toThrow();
     });
 });

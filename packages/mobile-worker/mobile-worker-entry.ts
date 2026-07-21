@@ -19,6 +19,8 @@ import { verifyFileHandler } from "node-api/src/lib/verify.worker";
 import { checkFileHandler } from "node-api/src/lib/check.worker";
 import { receiveShareHandler, findReceiverHandler, sendPayloadHandler } from "node-api/src/lib/lan-share.worker";
 import { checkDatabaseExistsHandler } from "node-api/src/lib/check-database-exists.worker";
+import { syncDatabaseHandler } from "node-api/src/lib/sync-database.worker";
+import { listS3DirsHandler } from "node-api/src/lib/list-s3-dirs.worker";
 import { installWorkerGlobal } from "./src/index";
 
 //
@@ -88,6 +90,16 @@ registerHandler("send-payload", sendPayloadHandler);
 // (via node-api's checkConnectivity). Desktop registers the same handler through initTaskHandlers, so
 // the shared openDatabase guard runs the identical check on both platforms.
 registerHandler("check-database-exists", checkDatabaseExistsHandler);
+
+// Register the sync-database handler: syncs a local database against its configured (e.g. S3) origin.
+// It opens the origin via storage (S3 over the mobile worker's S3 client) and streams sync-started /
+// sync-batch / sync-completed messages back to the provider's scheduler and UI.
+registerHandler("sync-database", syncDatabaseHandler);
+
+// Register the list-s3-dirs handler: lists directories under an S3 bucket/prefix using the S3 client
+// and the keychain-backed credentials, so the WebView's S3 browser lists a real bucket rather than
+// rendering the empty-array stub.
+registerHandler("list-s3-dirs", listS3DirsHandler);
 
 // Expose the worker entry point (globalThis.__photosphereWorker = { runTask }).
 installWorkerGlobal();

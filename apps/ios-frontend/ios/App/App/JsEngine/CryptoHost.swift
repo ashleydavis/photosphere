@@ -88,6 +88,91 @@ enum CryptoHost {
     }
 
     //
+    // host.cryptoPublicEncryptOaepSha1(publicKeyPem, dataBase64): RSA-encrypts the base64-decoded data
+    // with the SPKI PEM public key using OAEP (SHA-1 digest + MGF1, matching Node's default padding) and
+    // returns the base64 ciphertext. On failure returns a host error envelope so the JS crypto shim throws.
+    //
+    static func cryptoPublicEncryptOaepSha1(publicKeyPem: String, dataBase64: String) -> String {
+        guard let data = Data(base64Encoded: dataBase64) else {
+            return HostBridge.hostErrorEnvelope(NSError(domain: "crypto", code: 0, userInfo: [NSLocalizedDescriptionKey: "cryptoPublicEncryptOaepSha1: invalid base64 data"]))
+        }
+
+        let spki = derFromPem(publicKeyPem)
+        guard let pkcs1 = unwrapSpki(spki: spki) else {
+            return HostBridge.hostErrorEnvelope(NSError(domain: "crypto", code: 0, userInfo: [NSLocalizedDescriptionKey: "cryptoPublicEncryptOaepSha1: could not parse SPKI public key"]))
+        }
+
+        let attributes: [String: Any] = [
+            kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
+            kSecAttrKeyClass as String: kSecAttrKeyClassPublic
+        ]
+        var error: Unmanaged<CFError>?
+        guard let publicKey = SecKeyCreateWithData(Data(pkcs1) as CFData, attributes as CFDictionary, &error) else {
+            return HostBridge.hostErrorEnvelope(cryptoError("cryptoPublicEncryptOaepSha1: could not import public key", error))
+        }
+        guard let encrypted = SecKeyCreateEncryptedData(publicKey, .rsaEncryptionOAEPSHA1, data as CFData, &error) as Data? else {
+            return HostBridge.hostErrorEnvelope(cryptoError("cryptoPublicEncryptOaepSha1: encryption failed", error))
+        }
+        return encrypted.base64EncodedString()
+    }
+
+    //
+    // host.cryptoPrivateDecryptOaepSha1(privateKeyPem, dataBase64): RSA-decrypts the base64-decoded data
+    // with the PKCS#8 PEM private key using OAEP (SHA-1 digest + MGF1) and returns the base64 plaintext.
+    // On failure returns a host error envelope so the JS crypto shim throws.
+    //
+    static func cryptoPrivateDecryptOaepSha1(privateKeyPem: String, dataBase64: String) -> String {
+        guard let data = Data(base64Encoded: dataBase64) else {
+            return HostBridge.hostErrorEnvelope(NSError(domain: "crypto", code: 0, userInfo: [NSLocalizedDescriptionKey: "cryptoPrivateDecryptOaepSha1: invalid base64 data"]))
+        }
+
+        let pkcs8 = derFromPem(privateKeyPem)
+        guard let pkcs1 = unwrapPkcs8(pkcs8: pkcs8) else {
+            return HostBridge.hostErrorEnvelope(NSError(domain: "crypto", code: 0, userInfo: [NSLocalizedDescriptionKey: "cryptoPrivateDecryptOaepSha1: could not parse PKCS#8 private key"]))
+        }
+
+        let attributes: [String: Any] = [
+            kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
+            kSecAttrKeyClass as String: kSecAttrKeyClassPrivate
+        ]
+        var error: Unmanaged<CFError>?
+        guard let privateKey = SecKeyCreateWithData(Data(pkcs1) as CFData, attributes as CFDictionary, &error) else {
+            return HostBridge.hostErrorEnvelope(cryptoError("cryptoPrivateDecryptOaepSha1: could not import private key", error))
+        }
+        guard let decrypted = SecKeyCreateDecryptedData(privateKey, .rsaEncryptionOAEPSHA1, data as CFData, &error) as Data? else {
+            return HostBridge.hostErrorEnvelope(cryptoError("cryptoPrivateDecryptOaepSha1: decryption failed", error))
+        }
+        return decrypted.base64EncodedString()
+    }
+
+    //
+    // host.cryptoPublicKeyFromPrivate(privateKeyPem): derives the SPKI PEM public key from a PKCS#8 PEM
+    // private key. On failure returns a host error envelope so the JS crypto shim throws.
+    //
+    static func cryptoPublicKeyFromPrivate(privateKeyPem: String) -> String {
+        let pkcs8 = derFromPem(privateKeyPem)
+        guard let pkcs1 = unwrapPkcs8(pkcs8: pkcs8) else {
+            return HostBridge.hostErrorEnvelope(NSError(domain: "crypto", code: 0, userInfo: [NSLocalizedDescriptionKey: "cryptoPublicKeyFromPrivate: could not parse PKCS#8 private key"]))
+        }
+
+        let attributes: [String: Any] = [
+            kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
+            kSecAttrKeyClass as String: kSecAttrKeyClassPrivate
+        ]
+        var error: Unmanaged<CFError>?
+        guard let privateKey = SecKeyCreateWithData(Data(pkcs1) as CFData, attributes as CFDictionary, &error) else {
+            return HostBridge.hostErrorEnvelope(cryptoError("cryptoPublicKeyFromPrivate: could not import private key", error))
+        }
+        guard let publicKey = SecKeyCopyPublicKey(privateKey) else {
+            return HostBridge.hostErrorEnvelope(NSError(domain: "crypto", code: 0, userInfo: [NSLocalizedDescriptionKey: "cryptoPublicKeyFromPrivate: public key derivation failed"]))
+        }
+        guard let publicPkcs1 = SecKeyCopyExternalRepresentation(publicKey, &error) as Data? else {
+            return HostBridge.hostErrorEnvelope(cryptoError("cryptoPublicKeyFromPrivate: public key export failed", error))
+        }
+        return toPem(type: "PUBLIC KEY", der: wrapSpki(pkcs1Public: [UInt8](publicPkcs1)))
+    }
+
+    //
     // Wraps a PKCS#1 RSAPrivateKey DER into a PKCS#8 PrivateKeyInfo DER (version 0, rsaEncryption
     // algorithm, the PKCS#1 key as the private-key OCTET STRING).
     //
@@ -128,6 +213,29 @@ enum CryptoHost {
         }
         // privateKey OCTET STRING (the PKCS#1 RSAPrivateKey)
         return inner.readTagged(0x04)
+    }
+
+    //
+    // Unwraps an SPKI SubjectPublicKeyInfo DER back to the PKCS#1 RSAPublicKey DER (the BIT STRING
+    // contents, minus the leading unused-bits byte), so SecKeyCreateWithData can import it. Returns nil
+    // if the structure is not an SPKI RSA public key. The inverse of wrapSpki.
+    //
+    static func unwrapSpki(spki: [UInt8]) -> [UInt8]? {
+        var reader = DerReader(bytes: spki)
+        guard let sequence = reader.readTagged(0x30) else {
+            return nil
+        }
+        var inner = DerReader(bytes: sequence)
+
+        // AlgorithmIdentifier SEQUENCE
+        guard inner.readTagged(0x30) != nil else {
+            return nil
+        }
+        // subjectPublicKey BIT STRING (a leading 0x00 unused-bits byte, then the PKCS#1 RSAPublicKey)
+        guard let bitString = inner.readTagged(0x03), bitString.count > 1, bitString[0] == 0x00 else {
+            return nil
+        }
+        return Array(bitString[1...])
     }
 
     //

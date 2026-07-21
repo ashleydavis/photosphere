@@ -1,4 +1,4 @@
-import { readFile, access, stat, readdir } from "../../shims/node-fs-promises";
+import { readFile, access, stat, readdir, appendFile, copyFile } from "../../shims/node-fs-promises";
 
 //
 // Unit tests for the fs/promises shim over a mock native host. Read functions are backed; every
@@ -106,6 +106,12 @@ describe("node-fs-promises shim", () => {
 
     test("readdir throws ENOENT for a missing directory", async () => {
         await expect(readdir("nope")).rejects.toMatchObject({ code: "ENOENT" });
+    });
+
+    test("the unimplemented entry points fail loudly rather than silently doing nothing", async () => {
+        // These are not on any implemented mobile path; a call must surface, not no-op.
+        await expect(appendFile()).rejects.toThrow(/NOT IMPLEMENTED.*fsAppendFile/);
+        await expect(copyFile()).rejects.toThrow(/NOT IMPLEMENTED.*fsCopyFile/);
     });
 
 });

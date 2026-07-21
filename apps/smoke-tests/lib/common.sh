@@ -262,7 +262,11 @@ send_command() {
     body="${3}"
     if [ -z "$body" ]; then body="{}"; fi
     local response
-    response=$(curl -s -X POST "http://localhost:$port/$endpoint" \
+    # The trailing status code lets an unroutable endpoint be caught. Without it a POST to a route the
+    # bridge does not register returns Express's 404 HTML page, which curl reports as success and which
+    # contains no '"ok":false', so an unimplemented command silently "passed" and the test only failed
+    # later on the effect that never happened.
+    response=$(curl -s -w '\n%{http_code}' -X POST "http://localhost:$port/$endpoint" \
         -H "Content-Type: application/json" \
         -d "$body" 2>&1)
     local exit_code=$?
@@ -270,8 +274,16 @@ send_command() {
         log_error "curl failed (exit $exit_code) posting to $endpoint: $response"
         return 1
     fi
-    if echo "$response" | grep -q '"ok":false'; then
-        log_error "Command failed: $response"
+    local status_code
+    status_code=$(echo "$response" | tail -1)
+    local body_text
+    body_text=$(echo "$response" | sed '$d')
+    if [ "$status_code" != "200" ]; then
+        log_error "Command $endpoint failed with HTTP $status_code: $body_text"
+        return 1
+    fi
+    if echo "$body_text" | grep -q '"ok":false'; then
+        log_error "Command failed: $body_text"
         return 1
     fi
     return 0

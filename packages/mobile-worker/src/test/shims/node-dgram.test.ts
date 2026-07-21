@@ -1,5 +1,5 @@
 import { Buffer } from "buffer";
-import { createSocket, Socket, type IRemoteInfo } from "../../shims/node-dgram";
+import { createSocket, installUdpInbound, Socket, type IRemoteInfo } from "../../shims/node-dgram";
 
 //
 // Builds a mock native UDP host with jest mocks for each function.
@@ -100,5 +100,15 @@ describe("dgram shim", () => {
         socket.bind(0);
         pushEvent({ kind: "message", socketId: "U-opts", address: "127.0.0.1", port: 1, base64: Buffer.from("hi").toString("base64") });
         expect(received).toEqual(["hi"]);
+    });
+
+    test("installUdpInbound installs the native event entry point on the given scope", () => {
+        const scope: any = {};
+
+        installUdpInbound(scope);
+
+        expect(typeof scope.__udpEvent).toBe("function");
+        // A datagram for a socket that no longer exists is ignored rather than throwing.
+        expect(() => scope.__udpEvent(JSON.stringify({ kind: "message", socketId: "gone", address: "127.0.0.1", port: 1, base64: "" }))).not.toThrow();
     });
 });

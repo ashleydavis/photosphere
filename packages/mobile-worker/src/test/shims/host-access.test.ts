@@ -1,4 +1,4 @@
-import { getFsHost, codedError, base64ToBuffer, callHost, makeHostErrorEnvelope } from "../../shims/host-access";
+import { getFsHost, codedError, base64ToBuffer, callHost, makeHostErrorEnvelope, HOST_ERROR_PREFIX } from "../../shims/host-access";
 
 //
 // Unit tests for the fs-shim host accessor and marshalling helpers.
@@ -63,5 +63,12 @@ describe("host-access helpers", () => {
         // Base64 cannot contain '@'; JSON values start with { or [.
         expect(callHost(() => "SGVsbG8=")).toBe("SGVsbG8=");
         expect(callHost(() => '{"size":5}')).toBe('{"size":5}');
+    });
+
+    test("an envelope built with HOST_ERROR_PREFIX is recognised and rethrown by callHost", () => {
+        // The prefix is the contract the native sides mirror; what matters is that a value carrying
+        // it round-trips back out as a thrown error rather than being returned as data.
+        expect(makeHostErrorEnvelope("ECODE", "native blew up").startsWith(HOST_ERROR_PREFIX)).toBe(true);
+        expect(() => callHost(() => makeHostErrorEnvelope("ECODE", "native blew up"))).toThrow("native blew up");
     });
 });

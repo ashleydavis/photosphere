@@ -211,6 +211,7 @@ export function SecretsPage() {
                     <FormControl sx={{ mb: 1 }}>
                         <FormLabel>Endpoint (optional)</FormLabel>
                         <Input
+                            data-id="secret-s3-endpoint-input"
                             value={form.s3Endpoint}
                             onChange={event => setForm(prev => ({ ...prev, s3Endpoint: event.target.value }))}
                         />
@@ -226,6 +227,7 @@ export function SecretsPage() {
                     <FormControl sx={{ mb: 1 }}>
                         <FormLabel>Access Key ID</FormLabel>
                         <Input
+                            data-id="secret-s3-access-key-input"
                             value={form.s3AccessKeyId}
                             onChange={event => setForm(prev => ({ ...prev, s3AccessKeyId: event.target.value }))}
                         />
@@ -233,6 +235,7 @@ export function SecretsPage() {
                     <FormControl sx={{ mb: 1 }}>
                         <FormLabel>Secret Access Key</FormLabel>
                         <Input
+                            data-id="secret-s3-secret-key-input"
                             type="password"
                             value={form.s3SecretAccessKey}
                             onChange={event => setForm(prev => ({ ...prev, s3SecretAccessKey: event.target.value }))}
@@ -247,6 +250,7 @@ export function SecretsPage() {
                     <FormControl sx={{ mb: 1 }}>
                         <FormLabel>Private Key PEM</FormLabel>
                         <Textarea
+                            data-id="secret-private-key-input"
                             minRows={4}
                             value={form.privateKeyPem}
                             onChange={event => setForm(prev => ({ ...prev, privateKeyPem: event.target.value }))}

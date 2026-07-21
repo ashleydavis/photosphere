@@ -74,4 +74,130 @@ describe("node-stream Readable shim", () => {
         const target: any = {};
         expect(() => (Transform as any).call(target)).not.toThrow();
     });
+
+    test("pipe forwards the payload into a destination and ends it", async () => {
+        const payload = Buffer.from("piped payload", "utf8");
+        const readable = new Readable(payload);
+
+        let flushed: Buffer | undefined;
+        const destination = new Writable((data: Buffer) => { flushed = data; });
+
+        const finished = new Promise<void>((resolveDone) => {
+            destination.on("finish", () => resolveDone());
+        });
+
+        expect(readable.pipe(destination)).toBe(destination);
+
+        await finished;
+        expect(flushed?.equals(payload)).toBe(true);
+    });
+});
+
+//
+// Unit tests for the Transform used by the encryption layer's decryption stream, which the asset
+// server pipes an encrypted file read through when serving an asset.
+//
+describe("node-stream Transform shim", () => {
+
+    //
+    // Builds a Transform that uppercases each chunk and appends a marker when the input ends, so
+    // both the transform and flush hooks are observable.
+    //
+    function createUppercaseTransform(): any {
+        return new (Transform as any)({
+            transform(chunk: Buffer, encoding: string, callback: () => void) {
+                (this as any).push(Buffer.from(chunk.toString("utf8").toUpperCase(), "utf8"));
+                callback();
+            },
+            flush(callback: () => void) {
+                (this as any).push(Buffer.from("!", "utf8"));
+                callback();
+            },
+        });
+    }
+
+    //
+    // Collects the transform's output, resolving once it ends.
+    //
+    function collectOutput(transform: any): Promise<string> {
+        const received: Buffer[] = [];
+        return new Promise<string>((resolveDone) => {
+            transform.on("data", (chunk: Buffer) => {
+                received.push(chunk);
+            });
+            transform.on("end", () => {
+                resolveDone(Buffer.concat(received).toString("utf8"));
+            });
+        });
+    }
+
+    test("runs the transform hook per write and the flush hook on end", async () => {
+        const transform = createUppercaseTransform();
+        const output = collectOutput(transform);
+
+        transform.write(Buffer.from("ab", "utf8"));
+        transform.end();
+
+        expect(await output).toBe("AB!");
+    });
+
+    test("buffers output produced before a data listener attaches", async () => {
+        const transform = createUppercaseTransform();
+
+        // Write and end before anything is listening: the source Readable emits on a microtask, so
+        // output can be produced before the consumer is hooked up and must not be dropped.
+        transform.write(Buffer.from("xy", "utf8"));
+        transform.end();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(await collectOutput(transform)).toBe("XY!");
+    });
+
+    test("passes chunks through unchanged when no transform hook is supplied", async () => {
+        const transform = new (Transform as any)();
+        const output = collectOutput(transform);
+
+        transform.write(Buffer.from("hello", "utf8"));
+        transform.end();
+
+        expect(await output).toBe("hello");
+    });
+
+    test("pipe forwards transformed output into a destination and ends it", async () => {
+        const transform = createUppercaseTransform();
+
+        let flushed: Buffer | undefined;
+        const destination = new Writable((data: Buffer) => { flushed = data; });
+        const finished = new Promise<void>((resolveDone) => {
+            destination.on("finish", () => resolveDone());
+        });
+
+        expect(transform.pipe(destination)).toBe(destination);
+        transform.write(Buffer.from("ok", "utf8"));
+        transform.end();
+
+        await finished;
+        expect(flushed?.toString("utf8")).toBe("OK!");
+    });
+
+    test("destroy suppresses any further output", async () => {
+        const transform = createUppercaseTransform();
+
+        let sawData = false;
+        let sawEnd = false;
+        transform.on("data", () => { sawData = true; });
+        transform.on("end", () => { sawEnd = true; });
+
+        transform.write(Buffer.from("ab", "utf8"));
+        transform.destroy();
+
+        // Let the scheduled drain microtask run.
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(sawData).toBe(false);
+        expect(sawEnd).toBe(false);
+    });
+
 });

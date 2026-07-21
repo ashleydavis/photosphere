@@ -78,6 +78,61 @@ public final class CryptoHostTest {
     }
 
     @Test
+    public void oaepSha1EncryptDecryptRoundTrips() throws Exception {
+        String json = CryptoHost.cryptoGenerateRsaKeyPair(2048);
+        String privatePem = extractJsonString(json, "privateKeyPem");
+        String publicPem = extractJsonString(json, "publicKeyPem");
+
+        byte[] secret = "an-aes-256-key-placeholder-32byt".getBytes(StandardCharsets.UTF_8);
+        String secretBase64 = Base64.getEncoder().encodeToString(secret);
+
+        String encryptedBase64 = CryptoHost.cryptoPublicEncryptOaepSha1(publicPem, secretBase64);
+        assertFalse("not an error envelope", encryptedBase64.startsWith("@@HOSTERR@@"));
+
+        String decryptedBase64 = CryptoHost.cryptoPrivateDecryptOaepSha1(privatePem, encryptedBase64);
+        assertFalse("not an error envelope", decryptedBase64.startsWith("@@HOSTERR@@"));
+        assertEquals(secretBase64, decryptedBase64);
+    }
+
+    @Test
+    public void oaepSha1DecryptsCiphertextProducedByNodeStyleDefaultPadding() throws Exception {
+        // Encrypt with the JCA OAEP-SHA1 transformation directly (what Node's default padding produces)
+        // and confirm the host function decrypts it, pinning the padding contract to SHA-1 OAEP.
+        String json = CryptoHost.cryptoGenerateRsaKeyPair(2048);
+        String privatePem = extractJsonString(json, "privateKeyPem");
+        String publicPem = extractJsonString(json, "publicKeyPem");
+
+        byte[] spki = CryptoHost.derFromPem(publicPem);
+        PublicKey publicKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(spki));
+        javax.crypto.Cipher cipher = javax.crypto.Cipher.getInstance("RSA/ECB/OAEPWithSHA-1AndMGF1Padding");
+        cipher.init(javax.crypto.Cipher.ENCRYPT_MODE, publicKey);
+        byte[] plaintext = "round-trip via node-style padding".getBytes(StandardCharsets.UTF_8);
+        String encryptedBase64 = Base64.getEncoder().encodeToString(cipher.doFinal(plaintext));
+
+        String decryptedBase64 = CryptoHost.cryptoPrivateDecryptOaepSha1(privatePem, encryptedBase64);
+        assertFalse("not an error envelope", decryptedBase64.startsWith("@@HOSTERR@@"));
+        assertEquals(new String(plaintext, StandardCharsets.UTF_8), new String(Base64.getDecoder().decode(decryptedBase64), StandardCharsets.UTF_8));
+    }
+
+    @Test
+    public void publicKeyFromPrivateMatchesGeneratedPublicKey() throws Exception {
+        String json = CryptoHost.cryptoGenerateRsaKeyPair(2048);
+        String privatePem = extractJsonString(json, "privateKeyPem");
+        String publicPem = extractJsonString(json, "publicKeyPem");
+
+        String derivedPublicPem = CryptoHost.cryptoPublicKeyFromPrivate(privatePem);
+        assertFalse("not an error envelope", derivedPublicPem.startsWith("@@HOSTERR@@"));
+
+        // The derived SPKI DER equals the generated public key's SPKI DER.
+        byte[] generatedSpki = CryptoHost.derFromPem(publicPem);
+        byte[] derivedSpki = CryptoHost.derFromPem(derivedPublicPem);
+        assertEquals(generatedSpki.length, derivedSpki.length);
+        for (int index = 0; index < generatedSpki.length; index++) {
+            assertEquals(generatedSpki[index], derivedSpki[index]);
+        }
+    }
+
+    @Test
     public void toPemAndDerFromPemRoundTrip() {
         byte[] original = new byte[] { 0, 1, 2, (byte) 250, (byte) 255, 42, 7 };
         String pem = CryptoHost.toPem("PRIVATE KEY", original);

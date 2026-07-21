@@ -4,7 +4,7 @@ import { openStorage } from "./open-storage";
 import { merkleTreeExists } from "./tree";
 import { loadDatabaseConfig } from "api";
 import { syncDatabases } from "./sync";
-import type { ISyncDatabaseData, ISyncChange, ISyncBatchMessage } from "api";
+import type { ISyncDatabaseData, ISyncChange, ISyncBatchMessage, ISyncSkippedMessage } from "api";
 import type { IAsset } from "api";
 import { log } from "utils";
 
@@ -34,7 +34,10 @@ export async function syncDatabaseHandler(
 
         const config = await loadDatabaseConfig(localRawStorage);
         if (!config?.origin) {
-            log.info(`Sync skipped for "${data.databasePath}": no origin configured`);
+            const reason = "no origin configured";
+            log.info(`Sync skipped for "${data.databasePath}": ${reason}`);
+            const skippedMessage: ISyncSkippedMessage = { type: "sync-skipped", databasePath: data.databasePath, reason };
+            context.sendMessage(skippedMessage);
             return;
         }
 
@@ -46,7 +49,10 @@ export async function syncDatabaseHandler(
 
         const connected = await merkleTreeExists(originStorage);
         if (!connected) {
-            log.info(`Sync skipped for "${data.databasePath}": origin not accessible (${config.origin})`);
+            const reason = `origin not accessible (${config.origin})`;
+            log.info(`Sync skipped for "${data.databasePath}": ${reason}`);
+            const skippedMessage: ISyncSkippedMessage = { type: "sync-skipped", databasePath: data.databasePath, reason };
+            context.sendMessage(skippedMessage);
             return;
         }
 
