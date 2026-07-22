@@ -297,9 +297,16 @@ export class Socket extends TinyEmitter {
 
 //
 // Creates a UDP socket. Accepts the type string ("udp4") or an options object, matching
-// dgram.createSocket. An optional message listener can be registered inline.
+// dgram.createSocket. An optional message listener can be registered inline. Only "udp4" is
+// supported: the native host bridge opens IPv4 sockets only, so any other type (notably "udp6")
+// throws rather than silently binding an IPv4 socket a caller believes is IPv6.
 //
 export function createSocket(typeOrOptions: "udp4" | ISocketOptions, messageListener?: (message: Buffer, remoteInfo: IRemoteInfo) => void): Socket {
+    const socketType = typeof typeOrOptions === "string" ? typeOrOptions : typeOrOptions.type;
+    if (socketType !== "udp4") {
+        throw new Error(`dgram shim only supports "udp4" sockets; "${socketType}" is not supported.`);
+    }
+
     const socket = new Socket();
     if (messageListener) {
         socket.on("message", messageListener);

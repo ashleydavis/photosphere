@@ -93,6 +93,16 @@ describe("dgram shim", () => {
         expect(closed).toBe(true);
     });
 
+    test("createSocket throws for udp6 (unsupported) passed as a type string", () => {
+        installHost("U-udp6", 1);
+        expect(() => createSocket("udp6" as any)).toThrow(/udp4/);
+    });
+
+    test("createSocket throws for udp6 (unsupported) passed in an options object", () => {
+        installHost("U-udp6-opts", 1);
+        expect(() => createSocket({ type: "udp6" } as any)).toThrow(/udp4/);
+    });
+
     test("createSocket accepts an options object and an inline message listener", () => {
         installHost("U-opts", 1);
         const received: string[] = [];
