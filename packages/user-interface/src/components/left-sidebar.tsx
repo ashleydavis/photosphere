@@ -302,7 +302,7 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                                                 : <Folder />
                                             }
                                         </ListItemDecorator>
-                                        <ListItemContent title={dbEntry.path}>
+                                        <ListItemContent data-id={`recent-database-name-${dbIndex}`} title={dbEntry.path}>
                                             {dbEntry.name || dbEntry.path.split(/[\\/]/).filter(Boolean).pop() || dbEntry.path}
                                         </ListItemContent>
                                     </ListItemButton>

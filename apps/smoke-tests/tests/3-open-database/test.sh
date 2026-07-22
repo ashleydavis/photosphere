@@ -29,6 +29,14 @@ wait_for_log "$TMP_DIR" "Open database dialog opened"
 send_command "$APP_PORT" click '{"dataId":"database-list-item-0"}' || exit 1
 wait_for_log "$TMP_DIR" "Database opened"
 
+# Assert onDatabaseOpened fired from the REAL open flow (the list-item click above drives the real
+# openDatabase -> notifyDatabaseOpened path; no TEST_OPEN_DATABASE_EVENT is dispatched). The sidebar
+# refreshes its recent-database list only on the database-opened callback, so open the sidebar and
+# assert the opened database now appears in the recent list. Without the callback wiring the sidebar
+# would not refresh and this element's value would stay empty.
+send_command "$APP_PORT" click '{"dataId":"sidebar-toggle-button"}' || exit 1
+wait_for_value "$APP_PORT" "recent-database-name-0" "^$DB_NAME\$"
+
 # Thumbnail fetches require the not-yet-built mobile asset-serving layer; ignore only those errors.
 check_no_errors "$TMP_DIR" 'Failed to load asset: thumb:|Network Error' || exit 1
 

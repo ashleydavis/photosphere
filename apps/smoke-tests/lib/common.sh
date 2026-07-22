@@ -380,6 +380,47 @@ check_no_errors() {
 }
 
 #
+# Reads the current value of the element with the given data-id via the control bridge's /get-value
+# endpoint, echoing the value to stdout (empty when the element is absent). Value-returning helper:
+# it prints and never exits, so it is safe inside $(...). getValue returns '' for a missing element.
+# Usage: read_value <port> <dataId>
+#
+read_value() {
+    local port="$1"
+    local data_id="$2"
+    local response
+    response=$(curl -sf "http://localhost:$port/get-value?dataId=$data_id" 2>/dev/null || true)
+    # grep -o only prints matches, so on no match nothing is echoed (avoiding sed's echo-on-no-match).
+    echo "$response" | grep -o '"value":"[^"]*"' | head -n1 | sed 's/^"value":"//; s/"$//'
+}
+
+#
+# Polls /get-value until the element's value matches expected_regex (extended regex), failing with
+# exit 1 if it never does within the timeout. An empty value is always a miss (a missing element
+# reads as ''). Asserting helper: it exits and prints nothing capturable, so do NOT use it in $(...).
+# Usage: wait_for_value <port> <dataId> <expected_regex> [timeout_seconds]
+#
+wait_for_value() {
+    local port="$1"
+    local data_id="$2"
+    local expected="$3"
+    local timeout="${4:-$DEFAULT_WAIT_TIMEOUT}"
+    local elapsed=0
+    local value=""
+    while [ "$elapsed" -lt "$timeout" ]; do
+        value=$(read_value "$port" "$data_id")
+        if [ -n "$value" ] && echo "$value" | grep -qE "$expected"; then
+            log_success "Value for '$data_id' matched /$expected/: $value"
+            return 0
+        fi
+        sleep 1
+        elapsed=$((elapsed + 1))
+    done
+    log_error "Timed out waiting for '$data_id' to match /$expected/ (last value: '${value:-}')"
+    exit 1
+}
+
+#
 # Creates a database on the host via the CLI at the given path, importing any image files passed
 # after the path. Mirrors how the desktop smoke tests pre-create their databases (the CLI does the
 # host-side image processing the mobile device cannot do yet). The database is created under the

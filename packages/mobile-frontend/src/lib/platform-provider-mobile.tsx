@@ -170,6 +170,9 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         const scheduler = getSyncScheduler();
         scheduler.setDatabasePath(databasePath);
         scheduler.start();
+        // Notify the database-opened subscribers (the app-context reload and the sidebar's recent-database
+        // refresh). This is the real production trigger; TEST_OPEN_DATABASE_EVENT is the test-only path.
+        openedCallbacksRef.current.forEach(callback => callback(databasePath));
     }, [getSyncScheduler]);
 
     const notifyDatabaseClosed = useCallback(async (): Promise<void> => {
