@@ -103,9 +103,6 @@ interface IBridgePayload {
     // Result to stage for the next mobile pickFolder name prompt (stage-pick-folder): a
     // sandbox-relative path, or null to simulate the user cancelling.
     folderResult?: string | null;
-
-    // Whether the sync gate permits automatic syncs (set-sync-allowed).
-    allowed?: boolean;
 }
 
 //
@@ -455,14 +452,6 @@ export class ControlBridge {
 
         this.expressApp.post("/reset-config", (req: Request, res: Response) => {
             void this.forward("reset-config", {}, res);
-        });
-
-        //
-        // Opens or closes the sync gate, so a test can permit an automatic background sync without
-        // depending on the device's real network state or the persisted user toggles.
-        //
-        this.expressApp.post("/set-sync-allowed", (req: Request, res: Response) => {
-            void this.forward("set-sync-allowed", { allowed: req.body.allowed }, res);
         });
 
         //

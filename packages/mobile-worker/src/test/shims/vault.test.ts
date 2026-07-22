@@ -1,6 +1,5 @@
 import { getVault, getDefaultVaultType } from "../../shims/vault";
 import { makeHostErrorEnvelope } from "../../shims/host-access";
-import { redactingReplacer, isRedactedFieldName, REDACTED_PLACEHOLDER } from "../../lib/redact";
 
 //
 // Installs a mock native host whose secureStoreGet returns the given map value: a string (configured),
@@ -45,45 +44,5 @@ describe("mobile worker vault shim", () => {
     test("an unavailable keychain throws, distinguishably from unconfigured", async () => {
         installSecureStoreHost({}, true);
         await expect(getVault(getDefaultVaultType()).get("any-key")).rejects.toThrow(/keychain unavailable/);
-    });
-});
-
-//
-// The redaction boundary: derived request material (secret access key, signing key, session token,
-// Authorization header) never reaches a serialised log line, even though raw secrets no longer transit
-// task payloads. This is the "resolved secret never reaches the log" cover.
-//
-describe("serialisation-boundary redaction", () => {
-
-    test("allowlisted field names are recognised case-insensitively", () => {
-        expect(isRedactedFieldName("secretAccessKey")).toBe(true);
-        expect(isRedactedFieldName("Authorization")).toBe(true);
-        expect(isRedactedFieldName("sessionToken")).toBe(true);
-        expect(isRedactedFieldName("signingKey")).toBe(true);
-        expect(isRedactedFieldName("bucket")).toBe(false);
-    });
-
-    test("a message carrying credential material serialises with no secret in the output", () => {
-        const secretAccessKey = "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY";
-        const authorization = "AWS4-HMAC-SHA256 Credential=AKIA.../.../s3/aws4_request, Signature=deadbeef";
-        const message = {
-            type: "sync-batch",
-            request: {
-                secretAccessKey,
-                sessionToken: "FQoGZXIvYXdzE...",
-                authorization,
-            },
-            added: 3,
-        };
-
-        const serialised = JSON.stringify(message, redactingReplacer());
-
-        expect(serialised).not.toContain(secretAccessKey);
-        expect(serialised).not.toContain(authorization);
-        expect(serialised).not.toContain("FQoGZXIvYXdzE");
-        expect(serialised).toContain(REDACTED_PLACEHOLDER);
-        // Non-sensitive fields survive.
-        expect(JSON.parse(serialised).added).toBe(3);
-        expect(JSON.parse(serialised).type).toBe("sync-batch");
     });
 });

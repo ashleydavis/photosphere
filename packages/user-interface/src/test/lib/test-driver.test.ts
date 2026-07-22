@@ -24,7 +24,6 @@ import {
     doSeedRecent,
     doSeedNews,
     doResetConfig,
-    doSetSyncAllowed,
     doNotifyDatabaseEdited,
     installTestDriver,
     TEST_MENU_EVENT,
@@ -33,77 +32,9 @@ import {
     TEST_SEED_RECENT_EVENT,
     TEST_SEED_NEWS_EVENT,
     TEST_RESET_CONFIG_EVENT,
-    TEST_SET_SYNC_ALLOWED_EVENT,
     TEST_NOTIFY_DATABASE_EDITED_EVENT,
 } from "../../lib/test-driver";
 import type { ITestTransport, ITestCommandPayload, ITestResetConfigEventDetail } from "../../lib/test-driver";
-
-//
-// Regression guard for the create-database smoke-test failure caused by commit fa673c6b (mobile
-// dialogs became Joy Drawers). A closed Joy Drawer stays in the DOM with visibility:hidden, and a
-// dialog mounted in several places matches its data-id several times, all but one hidden. The driver
-// must act only on the visible one; before this it took the first in DOM order (a hidden drawer), so
-// it typed into an invisible form and the visible one stayed empty.
-//
-describe("hidden elements are not actionable", () => {
-
-    // A hidden wrapper (a closed drawer) followed by a visible one, both carrying the same data-id.
-    function twoWrappers(): void {
-        document.body.innerHTML = `
-            <div id="closed" style="visibility: hidden;">
-                <div data-id="field"><input type="text" /></div>
-                <button data-id="confirm">Confirm</button>
-            </div>
-            <div id="open">
-                <div data-id="field"><input type="text" /></div>
-                <button data-id="confirm">Confirm</button>
-            </div>`;
-    }
-
-    test("isElementVisible reports a visibility:hidden subtree as not visible", () => {
-        document.body.innerHTML = `<div style="visibility: hidden;"><span data-id="x">x</span></div>`;
-        expect(isElementVisible(document.querySelector(`[data-id="x"]`)!)).toBe(false);
-    });
-
-    test("isElementVisible reports a display:none subtree as not visible", () => {
-        document.body.innerHTML = `<div style="display: none;"><span data-id="x">x</span></div>`;
-        expect(isElementVisible(document.querySelector(`[data-id="x"]`)!)).toBe(false);
-    });
-
-    test("isElementVisible reports a plain element as visible", () => {
-        document.body.innerHTML = `<span data-id="x">x</span>`;
-        expect(isElementVisible(document.querySelector(`[data-id="x"]`)!)).toBe(true);
-    });
-
-    test("doType types into the visible input, not the hidden one that comes first", () => {
-        twoWrappers();
-        const hiddenInput = document.querySelector(`#closed [data-id="field"] input`) as HTMLInputElement;
-        const visibleInput = document.querySelector(`#open [data-id="field"] input`) as HTMLInputElement;
-        doType("field", "typed-value");
-        expect(visibleInput.value).toBe("typed-value");
-        expect(hiddenInput.value).toBe("");
-    });
-
-    test("doClick clicks the visible element, not the hidden one that comes first", () => {
-        twoWrappers();
-        let hiddenClicks = 0;
-        let visibleClicks = 0;
-        (document.querySelector(`#closed [data-id="confirm"]`) as HTMLElement).addEventListener("click", () => { hiddenClicks += 1; });
-        (document.querySelector(`#open [data-id="confirm"]`) as HTMLElement).addEventListener("click", () => { visibleClicks += 1; });
-        doClick("confirm");
-        expect(visibleClicks).toBe(1);
-        expect(hiddenClicks).toBe(0);
-    });
-
-    test("waitForElement ignores a hidden match and waits for a visible one", async () => {
-        document.body.innerHTML = `<div style="visibility: hidden;"><span data-id="late">x</span></div>`;
-        setTimeout(() => {
-            document.body.innerHTML += `<span data-id="late">x</span>`;
-        }, 80);
-        await waitForElement("late", 0, 2000);
-        expect(document.querySelectorAll(`[data-id="late"]`).length).toBe(2);
-    });
-});
 
 //
 // Regression guard for the create-database smoke-test failure caused by commit fa673c6b (mobile
@@ -629,11 +560,6 @@ describe("mobile config-seeding driver commands", () => {
         expect(fired).toBe(true);
     });
 
-    test("doSetSyncAllowed dispatches the sync gate decision", () => {
-        expect(captureEvent(TEST_SET_SYNC_ALLOWED_EVENT, () => doSetSyncAllowed(true))).toBe(true);
-        expect(captureEvent(TEST_SET_SYNC_ALLOWED_EVENT, () => doSetSyncAllowed(false))).toBe(false);
-    });
-
     test("doNotifyDatabaseEdited dispatches the database-edited event", () => {
         let fired = false;
         const listener = () => { fired = true; };
@@ -648,22 +574,17 @@ describe("mobile config-seeding driver commands", () => {
     });
 
     //
-    // Regression guard for the 34-sync smoke-test failure: the sync commands were missing from the
-    // driver's command switch (and from the control bridge's routes), so the sync the test asked for
-    // never started and navbar-sync-state stayed "idle" forever.
+    // Regression guard for the 34-sync smoke-test failure: the notify-database-edited command was
+    // missing from the driver's command switch (and from the control bridge's routes), so the sync the
+    // test asked for never started and navbar-sync-state stayed "idle" forever.
     //
-    test("installTestDriver routes the sync commands to their handlers", async () => {
+    test("installTestDriver routes the database-edited command to its handler", async () => {
         let handler: ((command: string, payload: ITestCommandPayload) => Promise<string | undefined>) | undefined;
         const transport: ITestTransport = {
             onCommand: (incoming) => { handler = incoming; },
             sendLog: () => { /* unused */ },
         };
         installTestDriver(transport);
-
-        const allowed = captureEvent(TEST_SET_SYNC_ALLOWED_EVENT, () => {
-            void handler!("set-sync-allowed", { allowed: true });
-        });
-        expect(allowed).toBe(true);
 
         let editedFired = false;
         const editedListener = () => { editedFired = true; };

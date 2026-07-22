@@ -45,8 +45,9 @@ wait_for_log "$TMP_DIR" "Open database dialog opened"
 send_command "$APP_PORT" click '{"dataId":"database-list-item-0"}' || exit 1
 wait_for_log "$TMP_DIR" "Database opened"
 
-# Allow automatic sync, then make an edit to trigger the debounced sync.
-send_command "$APP_PORT" set-sync-allowed '{"allowed":true}' || exit 1
+# Make an edit to trigger the debounced sync. The sync gate is not forced open by the test: the app's
+# own SyncContext already permits automatic syncs here (syncing enabled and the emulator is online), so
+# what runs below is the real gate, not a test override.
 send_command "$APP_PORT" notify-database-edited '{}' || exit 1
 
 # The sync runs start to finish. These are observed from the append-only app log rather than by

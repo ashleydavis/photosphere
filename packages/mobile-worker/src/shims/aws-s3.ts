@@ -9,9 +9,9 @@
 // Transport and trust: requests go through the `https` shim's `requestValidated`, which opens the TLS
 // connection in "validated" mode (native validates the CA chain and hostname). This module never uses
 // the pinned/trust-all path, so an S3 request is validated by construction and cannot silently
-// downgrade. Signing is SigV4 (HMAC-SHA256 via the crypto shim's create-hmac). Credentials, the derived
-// signing key, the session token and the Authorization header are never logged (see the redaction
-// boundary in the vault shim); this client emits no request-level logging at all.
+// downgrade. Signing is SigV4 (HMAC-SHA256 via the crypto shim's create-hmac). This client emits no
+// request-level logging at all, so credentials, the derived signing key, the session token and the
+// Authorization header never reach a log line.
 //
 // Upload is single-PUT only (no multipart yet): S3's single-PUT limit is 5GB, which no thumbnail or
 // display asset approaches. Originals can exceed it; that is a recorded known limit, consistent with

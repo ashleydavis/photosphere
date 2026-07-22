@@ -72437,33 +72437,9 @@ ${lines.join(`
   }
   // src/lib/mobile-worker-runtime.ts
   init_buffer();
-
-  // src/lib/redact.ts
-  var REDACTED_PLACEHOLDER = "[redacted]";
-  var REDACTED_FIELD_NAMES = new Set([
-    "secretaccesskey",
-    "signingkey",
-    "sessiontoken",
-    "authorization",
-    "x-amz-security-token"
-  ]);
-  function isRedactedFieldName(name) {
-    return REDACTED_FIELD_NAMES.has(name.toLowerCase());
-  }
-  function redactingReplacer(baseReplacer) {
-    return function redact(key, value) {
-      if (key.length > 0 && isRedactedFieldName(key)) {
-        return REDACTED_PLACEHOLDER;
-      }
-      return baseReplacer ? baseReplacer.call(this, key, value) : value;
-    };
-  }
-
-  // src/lib/mobile-worker-runtime.ts
   var workerBackend;
   var BINARY_TAG = "__u8b64__";
   var DATE_TAG = "__date__";
-  var messageRedactingReplacer = redactingReplacer();
   function bridgeReplacer(key, value) {
     const rawValue = this[key];
     if (rawValue instanceof Uint8Array) {
@@ -72540,7 +72516,7 @@ ${lines.join(`
       sessionId: host.sessionId,
       taskId,
       sendMessage: (message) => {
-        host.sendMessage(taskId, JSON.stringify(message, messageRedactingReplacer));
+        host.sendMessage(taskId, JSON.stringify(message));
       },
       isCancelled: () => {
         return host.isCancelled(taskId);

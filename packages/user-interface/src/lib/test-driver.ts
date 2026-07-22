@@ -116,9 +116,6 @@ export interface ITestCommandPayload {
     // Result to stage for the next mobile pickFolder name prompt: a path, or null for cancel
     // (stage-pick-folder command).
     folderResult?: string | null;
-
-    // Whether the sync gate permits automatic syncs (set-sync-allowed command).
-    allowed?: boolean;
 }
 
 //
@@ -504,24 +501,9 @@ export interface ITestResetConfigEventDetail {
 }
 
 //
-// Window event name used to open or close the sync gate (test setup).
-//
-export const TEST_SET_SYNC_ALLOWED_EVENT = "photosphere-test:set-sync-allowed";
-
-//
 // Window event name used to signal that the database was edited, scheduling a background sync.
 //
 export const TEST_NOTIFY_DATABASE_EDITED_EVENT = "photosphere-test:notify-database-edited";
-
-//
-// Opens or closes the sync gate by dispatching a window event the mobile platform provider listens
-// for; the provider pushes the decision into the sync scheduler. This lets a test permit an automatic
-// background sync without depending on the device's real network state or the persisted user toggles.
-//
-export function doSetSyncAllowed(allowed: boolean): void {
-    console.log(`test-set-sync-allowed: sync allowed = ${allowed}`);
-    window.dispatchEvent(new CustomEvent(TEST_SET_SYNC_ALLOWED_EVENT, { detail: allowed }));
-}
 
 //
 // Signals that the database was edited by dispatching a window event the mobile platform provider
@@ -652,9 +634,6 @@ export function installTestDriver(transport: ITestTransport): void {
                 return undefined;
             case 'reset-config':
                 await doResetConfig();
-                return undefined;
-            case 'set-sync-allowed':
-                doSetSyncAllowed(payload.allowed!);
                 return undefined;
             case 'notify-database-edited':
                 doNotifyDatabaseEdited();

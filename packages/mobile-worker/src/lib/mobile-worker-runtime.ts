@@ -2,7 +2,6 @@ import { Buffer } from "buffer";
 import { ITaskContext, executeTaskHandler, ITaskResult, TaskStatus, WorkerQueueBackend, setQueueBackend } from "task-queue";
 import { RandomUuidGenerator, TimestampProvider } from "utils";
 import { IHost, buildHost } from "./host-functions";
-import { redactingReplacer } from "./redact";
 
 //
 // The worker API exposed to native code as `globalThis.__photosphereWorker`.
@@ -135,14 +134,6 @@ const BINARY_TAG = "__u8b64__";
 const DATE_TAG = "__date__";
 
 //
-// The [redacted] allowlist applied when serialising streamed task messages that native may write to
-// app.log, so credential-derived material (secret access key, signing key, session token, the
-// Authorization header) is never logged. No base replacer, so a message's binary/date encoding is
-// unchanged from before; only sensitive field names are redacted.
-//
-const messageRedactingReplacer = redactingReplacer();
-
-//
 // JSON.stringify replacer that encodes binary (Buffer/Uint8Array) and Date fields into tagged
 // objects so they survive the bridge crossing. Uses `this[key]` to read the raw value before the
 // value's own toJSON (Buffer -> number object, Date -> ISO string) would run.
@@ -267,7 +258,7 @@ function createTaskContext(taskId: string, host: IHost): ITaskContext {
         sessionId: host.sessionId,
         taskId,
         sendMessage: (message: any) => {
-            host.sendMessage(taskId, JSON.stringify(message, messageRedactingReplacer));
+            host.sendMessage(taskId, JSON.stringify(message));
         },
         isCancelled: () => {
             return host.isCancelled(taskId);

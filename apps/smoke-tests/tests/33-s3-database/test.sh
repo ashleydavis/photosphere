@@ -8,7 +8,7 @@
 # `bun run test:and` runnable without credentials. Point it at MinIO via AWS_ENDPOINT for local runs.
 #
 # Asserts three things the plan calls out:
-#   1. a populated bucket lists (assert_value on a listed directory),
+#   1. a populated bucket lists (wait_for_value on a listed directory),
 #   2. a bad credential shows an error, not an empty list,
 #   3. a bad server certificate fails closed (validated TLS mode; 14c's fail-closed guarantee).
 

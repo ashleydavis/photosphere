@@ -1,7 +1,7 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
 import eruda from "eruda";
 import { Network } from "@capacitor/network";
-import { PlatformContextProvider, ConfigContextProvider, createConfig, useLanShareTasks, readBrowserNetworkStatus, subscribeBrowserNetworkStatus, signalTestAppReady, TEST_MENU_EVENT, TEST_OPEN_DATABASE_EVENT, TEST_SEED_DATABASES_EVENT, TEST_SEED_RECENT_EVENT, TEST_SEED_NEWS_EVENT, TEST_RESET_CONFIG_EVENT, TEST_PICK_FILES_EVENT, TEST_STAGE_EXPORT_EVENT, TEST_STAGE_PICK_FOLDER_EVENT, TEST_SET_SYNC_ALLOWED_EVENT, TEST_NOTIFY_DATABASE_EDITED_EVENT, type ITestResetConfigEventDetail, type IPlatformContext, type IPlatformEvent, type INetworkStatus, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions, type ISaveDownloadResult, UuidGeneratorProvider } from "user-interface";
+import { PlatformContextProvider, ConfigContextProvider, createConfig, useLanShareTasks, readBrowserNetworkStatus, subscribeBrowserNetworkStatus, signalTestAppReady, TEST_MENU_EVENT, TEST_OPEN_DATABASE_EVENT, TEST_SEED_DATABASES_EVENT, TEST_SEED_RECENT_EVENT, TEST_SEED_NEWS_EVENT, TEST_RESET_CONFIG_EVENT, TEST_PICK_FILES_EVENT, TEST_STAGE_EXPORT_EVENT, TEST_STAGE_PICK_FOLDER_EVENT, TEST_NOTIFY_DATABASE_EDITED_EVENT, type ITestResetConfigEventDetail, type IPlatformContext, type IPlatformEvent, type INetworkStatus, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions, type ISaveDownloadResult, UuidGeneratorProvider } from "user-interface";
 import { TaskQueue, TaskStatus, getQueueBackend } from "task-queue";
 import type { ITaskResult } from "task-queue";
 import type { ISaveAssetItem } from "api";
@@ -234,12 +234,6 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
             const result = (event as CustomEvent<string | null>).detail ?? null;
             setInjectedPickFolderResult(result);
         };
-        // Test setup: open or close the sync gate, so a test can permit an automatic background sync
-        // without depending on the device's real network state or the persisted user toggles.
-        const handleSetSyncAllowed = (event: Event) => {
-            const allowed = (event as CustomEvent<boolean>).detail;
-            getSyncScheduler().setSyncAllowed(allowed);
-        };
         // Test setup: schedule the debounced background sync, as a real edit through the UI would.
         const handleNotifyDatabaseEdited = () => {
             getSyncScheduler().notifyDatabaseEdited();
@@ -252,7 +246,6 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         window.addEventListener(TEST_PICK_FILES_EVENT, handlePickFiles);
         window.addEventListener(TEST_STAGE_EXPORT_EVENT, handleStageExport);
         window.addEventListener(TEST_STAGE_PICK_FOLDER_EVENT, handleStagePickFolder);
-        window.addEventListener(TEST_SET_SYNC_ALLOWED_EVENT, handleSetSyncAllowed);
         window.addEventListener(TEST_NOTIFY_DATABASE_EDITED_EVENT, handleNotifyDatabaseEdited);
         // The test-command listeners are now registered, so it is safe to tell the host bridge the
         // app is ready. Signaling earlier (the WebSocket sends "ready" on connect) let a command
@@ -268,7 +261,6 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
             window.removeEventListener(TEST_PICK_FILES_EVENT, handlePickFiles);
             window.removeEventListener(TEST_STAGE_EXPORT_EVENT, handleStageExport);
             window.removeEventListener(TEST_STAGE_PICK_FOLDER_EVENT, handleStagePickFolder);
-            window.removeEventListener(TEST_SET_SYNC_ALLOWED_EVENT, handleSetSyncAllowed);
             window.removeEventListener(TEST_NOTIFY_DATABASE_EDITED_EVENT, handleNotifyDatabaseEdited);
         };
     }, []);
