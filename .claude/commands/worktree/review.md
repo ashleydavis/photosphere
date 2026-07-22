@@ -13,7 +13,12 @@ This command runs unattended. Never ask a question and never wait for a reply: n
 
 **Run every command yourself with the Bash tool. Never hand a command to the user to run, never print a command and wait for them to paste output, never end your turn waiting on the user.** This overrides the usual convention that the user runs commands in their own terminal: for this command you execute the compile, the unit tests, and the Android smoke suite yourself, read their output yourself, and act on it. Any code block below is a command for you to run, not an instruction for the user. The only thing you ever leave to the user is `git worktree remove` (banned here) and committing.
 
-If `$ARGUMENTS` is empty there is no target to review, so you cannot proceed. List the directories under `<repo-root>/.claude/worktrees/` (sorted by step number, so `step-6ab` comes before `step-10`, not after), one per line, state that a worktree name or path is required, and stop. This is a precondition failure to report, not a menu to wait on. Build the list from the directory listing alone: do not read any plan, checklist, or other doc.
+If `$ARGUMENTS` is empty there is no target to review, so you cannot proceed. Print the available worktrees and stop. This is a precondition failure to report, not a menu to wait on: show the list, say a worktree name or path is required and that the user can re-run with either the number or the name, and end your turn. Do not wait for a reply, do not pick one yourself.
+
+- List the directories under `<repo-root>/.claude/worktrees/`, sorted by step number (so `step-6ab` comes before `step-10`, not after).
+- Print a **numbered markdown list, one worktree per line**. Never put more than one worktree on a line. A comma-separated run-on of two dozen names is unreadable and is not an acceptable answer.
+
+Build the list from the directory listing alone: do not read any plan, checklist, or other doc. The names are self-describing, and hunting for a description turns this into a fishing expedition through files that may not exist. No preamble, no commentary on the list.
 
 ## Hard rules
 
@@ -131,6 +136,10 @@ cd <abs-worktree> && mise exec -- bun run test
 ```
 
 Both must exit 0.
+
+**Run the Android smoke suite last, after everything else has passed.** It is the final gate, not one check among several. Compile clean, unit tests green, and every other check you intend to run must all be done and passing before you go near the emulator. Never run it early to "see where things stand", never run it while you still have edits to make, and never run it twice because the first attempt caught something the compiler or unit tests would have caught for free.
+
+The reason is queueing. The emulator is a single machine-wide resource and there are multiple chats lined up for it, each taking a turn. Every minute you hold the lock is a minute every other chat is blocked, and a run you launch on code you have not already verified is a run you will probably have to repeat, sending you to the back of the queue and pushing everyone else back too. So satisfy yourself the code is genuinely correct by the cheap, local, parallel-safe checks first. Acquiring the lock is a claim that you believe this run will pass.
 
 Then run the Android smoke suite, which is the gate that actually proves a mobile change works.
 

@@ -20,15 +20,15 @@ ALL 31 STEPS ARE test:and GREEN AND READY TO REVIEW.
 - [x] 7 (absorbs 8) - LAN receive on mobile - `step-7-lan-receive`
 - [x] 9 - `cancelTasks`/`shutdown` honest reporting - `step-9-cancel-shutdown-honest` - smoke test `40-cancel-shutdown-reports-failure`
 - [x] 10 - mobile theme survives restart - `step-10-theme-persist` - smoke test `28-theme-persists`
-- [ ] 11 - `checkDatabaseExists` real - `step-11-check-db-exists`
-- [ ] 12 (absorbs 13) - asset export path - `step-12-export-path`
-- [ ] 14 (absorbs 15, 16, 17, 18) - crypto, vault, S3, sync - `step-14-crypto-vault-s3-sync` - smoke tests `32-encrypted-database`, `34-sync` (this worktree runs 29 tests, not 27)
-- [ ] 19 - missing task handlers registered + summary entry point - `step-19-task-handlers`
-- [ ] 20 - Android timer pump budget - `step-20-timer-pump`
-- [ ] 21 - LAN share/receive dialogs surface errors - `step-21-lan-dialog-errors`
-- [ ] 22 - dead platform events wired / news deleted - `step-22-platform-events-news`
-- [ ] 23 - iOS stops dropping photos that fail to copy - `step-23-ios-photo-copy`
-- [ ] 24 - infinite-spinner failure handling - `step-24-infinite-spinner`
+- [x] 11 - `checkDatabaseExists` real - `step-11-check-db-exists`
+- [READY] 12 (absorbs 13) - asset export path - `step-12-export-path`
+- [x] 14 (absorbs 15, 16, 17, 18) - crypto, vault, S3, sync - `step-14-crypto-vault-s3-sync` - smoke tests `32-encrypted-database`, `34-sync` (this worktree runs 29 tests, not 27)
+- [x] 19 - missing task handlers registered + summary entry point - `step-19-task-handlers`
+- [?] 20 - Android timer pump budget - `step-20-timer-pump`
+- [x] 21 - LAN share/receive dialogs surface errors - `step-21-lan-dialog-errors`
+- [?] 22 - dead platform events wired / news deleted - `step-22-platform-events-news`
+- [?] 23 - iOS stops dropping photos that fail to copy - `step-23-ios-photo-copy`
+- [?] 24 - infinite-spinner failure handling - `step-24-infinite-spinner`
 - [ ] 25 - `resetConfig` clears the config namespace - `step-25-resetconfig` - smoke test `41-reset-config-clears`
 - [ ] 26 - config-store mutators report a miss - `step-26-config-mutators` - smoke test `42-config-mutator-miss`
 - [ ] 27 - recent-databases list capped - `step-27-recent-cap` - smoke test `43-recent-databases-cap`

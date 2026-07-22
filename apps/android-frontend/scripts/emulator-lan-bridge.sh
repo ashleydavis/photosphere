@@ -195,6 +195,16 @@ cmd_up() {
         echo "DHCP server already running (pid $(cat "$DNSMASQ_PID_FILE"))."
     else
         rm -f "$DNSMASQ_PID_FILE"
+
+        # Also clear any log left by a previous run. dnsmasq drops privileges and so leaves the log
+        # owned by `nobody`, while /tmp is root-owned, world-writable and sticky. Under
+        # fs.protected_regular (2 on current Ubuntu) the kernel refuses to let root open an existing
+        # file in such a directory when it is owned by neither root nor the directory's owner, so the
+        # next start dies with "cannot open log ...: Permission denied". Removing it first means
+        # dnsmasq always creates the log fresh and that can never happen. Safe here because this
+        # branch only runs when dnsmasq is not already running.
+        rm -f "$DNSMASQ_LOG_FILE"
+
         dnsmasq \
             --interface="$BRIDGE_NAME" \
             --bind-interfaces \
