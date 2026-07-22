@@ -55,6 +55,12 @@ public final class QuickJsTaskEngine implements TaskEngine {
     private static final String BUNDLE_ASSET_NAME = "worker.bundle.js";
 
     //
+    // The longest a run-loop iteration parks waiting for a pending virtual-clock timer to come due
+    // before re-checking inbound work, in milliseconds. Matches the 50ms bound used for socket waits.
+    //
+    private static final long TIMER_IDLE_SLEEP_MAX_MS = 50;
+
+    //
     // The Android context used to open the bundle asset.
     //
     private final Context androidContext;
@@ -212,6 +218,10 @@ public final class QuickJsTaskEngine implements TaskEngine {
             // never settles still fails fast; a long-running asset-server task (which keeps a listener
             // open) runs until it is cancelled.
             int idleAttempts = 0;
+            // Anchors the real-time budget for the virtual-clock timer pump below: each pump advances
+            // the JS setTimeout/setInterval timers by the real ms elapsed since the previous pump, so
+            // the virtual clock tracks real time, matching iOS's scheduleTimerPump.
+            long lastPumpNanos = System.nanoTime();
             while (true) {
                 Object result = globalObject.getProperty("__ptResult");
                 if (result instanceof String) {
@@ -275,11 +285,44 @@ public final class QuickJsTaskEngine implements TaskEngine {
                     continue;
                 }
 
-                // The engine has no real clock: with the microtask queue drained and the task still
-                // unsettled, advance the earliest pending timer (setTimeout) so timer-driven progress
-                // (retry backoff, timeout guards, the asset-server keep-alive poll) can happen.
-                context.evaluate("globalThis.__ptPumped = (typeof globalThis.__pumpTimers === 'function') ? globalThis.__pumpTimers() : false;");
-                boolean pumped = Boolean.TRUE.equals(globalObject.getProperty("__ptPumped"));
+                // With the microtask queue drained and the task still unsettled, advance the virtual
+                // clock by the REAL milliseconds elapsed since the previous pump, firing every timer
+                // now due within that budget (matching iOS's scheduleTimerPump). Firing the earliest
+                // timer regardless, as this used to, races the clock far ahead of real time and
+                // collapses a long timeout guard (LAN share's 60s window) into seconds. Each pump
+                // records the fired timer's virtual advance in globalThis.__lastTimerAdvanceMs and the
+                // next timer's remaining ms in globalThis.__nextTimerMs (-1 when none).
+                long nowNanos = System.nanoTime();
+                long budgetMs = (nowNanos - lastPumpNanos) / 1_000_000L;
+                lastPumpNanos = nowNanos;
+                if (budgetMs < 0) {
+                    budgetMs = 0;
+                }
+                boolean pumped = false;
+                long nextTimerMs = -1;
+                while (true) {
+                    context.evaluate("globalThis.__ptPumped = (typeof globalThis.__pumpTimers === 'function') ? globalThis.__pumpTimers(" + budgetMs + ") : false;");
+                    boolean fired = Boolean.TRUE.equals(globalObject.getProperty("__ptPumped"));
+                    nextTimerMs = toLongNumber(globalObject.getProperty("__nextTimerMs"), -1);
+                    // A fired timer callback may have settled the task; stop pumping so the run loop
+                    // reads the settled result on its next pass rather than firing further timers.
+                    if (globalObject.getProperty("__ptResult") instanceof String
+                            || globalObject.getProperty("__ptError") instanceof String) {
+                        pumped = pumped || fired;
+                        break;
+                    }
+                    if (!fired) {
+                        break;
+                    }
+                    pumped = true;
+                    // The fired timer consumed part of the budget; keep firing any timer still due
+                    // within the remaining budget, exactly as iOS's pump loop does.
+                    long advanced = toLongNumber(globalObject.getProperty("__lastTimerAdvanceMs"), 0);
+                    budgetMs -= Math.max(advanced, 0);
+                    if (budgetMs <= 0) {
+                        break;
+                    }
+                }
 
                 // A live "port" is any bound TCP listener, TLS listener, or UDP socket. The asset-server
                 // task keeps a TCP listener; a LAN-share receiver keeps a TLS listener plus a broadcasting
@@ -334,6 +377,14 @@ public final class QuickJsTaskEngine implements TaskEngine {
                     idleAttempts = 0;
                 }
                 else if (deliveredEvent || pumped) {
+                    idleAttempts = 0;
+                }
+                else if (nextTimerMs >= 0) {
+                    // A timer is pending but not yet due within the elapsed real-time budget: the task
+                    // is legitimately waiting on the virtual clock, not stuck. Park (bounded, so other
+                    // inbound work is still re-checked promptly) without counting an idle attempt,
+                    // which would otherwise fail a genuinely-waiting long task as "did not settle".
+                    sleepQuietly(Math.min(nextTimerMs, TIMER_IDLE_SLEEP_MAX_MS));
                     idleAttempts = 0;
                 }
                 else {
@@ -521,6 +572,33 @@ public final class QuickJsTaskEngine implements TaskEngine {
     //
     private static boolean toBoolean(Object value) {
         return value instanceof Boolean && (Boolean) value;
+    }
+
+    //
+    // Coerces a host-side number global (globalThis.__nextTimerMs / __lastTimerAdvanceMs) to a long.
+    // QuickJS passes JS numbers as java.lang.Number; anything else (null/undefined) yields the fallback.
+    //
+    private static long toLongNumber(Object value, long fallback) {
+        if (value instanceof Number) {
+            return ((Number) value).longValue();
+        }
+        return fallback;
+    }
+
+    //
+    // Sleeps the worker thread for the given milliseconds, restoring the interrupt flag if interrupted.
+    // A non-positive duration returns immediately.
+    //
+    private static void sleepQuietly(long milliseconds) {
+        if (milliseconds <= 0) {
+            return;
+        }
+        try {
+            Thread.sleep(milliseconds);
+        }
+        catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     //

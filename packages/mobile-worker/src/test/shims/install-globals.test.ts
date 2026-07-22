@@ -90,6 +90,43 @@ describe("install-globals", () => {
             expect(order.filter(entry => entry === "tick").length).toBeGreaterThanOrEqual(2);
             expect(order.indexOf("tick")).toBeLessThan(order.indexOf("timeout"));
         });
+
+        test("a real-elapsed budget advances the clock without firing a not-yet-due timer", () => {
+            // This is the property the Android pump now relies on (matching iOS): passing the real ms
+            // elapsed since the last pump advances the virtual clock by that budget and fires nothing
+            // when the earliest timer is still further out, so the clock tracks real time instead of
+            // firing the earliest timer regardless.
+            const scope: any = {};
+            installTimers(scope);
+
+            let fired = false;
+            scope.setTimeout(() => { fired = true; }, 250);
+
+            // 50ms of real time elapsed: not enough for the 250ms timer.
+            expect(scope.__pumpTimers(50)).toBe(false);
+            expect(fired).toBe(false);
+            expect(scope.__lastTimerAdvanceMs).toBe(50);
+            expect(scope.__nextTimerMs).toBe(200);
+        });
+
+        test("a timer fires only once its full delay of real budget has elapsed", () => {
+            const scope: any = {};
+            installTimers(scope);
+
+            let fired = false;
+            scope.setTimeout(() => { fired = true; }, 250);
+
+            // Five 50ms budgets total the 250ms delay; the timer fires on the pump that reaches it.
+            expect(scope.__pumpTimers(50)).toBe(false);
+            expect(scope.__pumpTimers(50)).toBe(false);
+            expect(scope.__pumpTimers(50)).toBe(false);
+            expect(scope.__pumpTimers(50)).toBe(false);
+            expect(fired).toBe(false);
+            expect(scope.__pumpTimers(50)).toBe(true);
+            expect(fired).toBe(true);
+            // No timer remains, so the next-timer sentinel reports absence.
+            expect(scope.__nextTimerMs).toBe(-1);
+        });
     });
 
     describe("installTextCodecs", () => {

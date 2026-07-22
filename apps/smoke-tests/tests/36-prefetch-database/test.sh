@@ -48,6 +48,14 @@ wait_for_log "$TMP_DIR" "Database entry added"
 send_command "$APP_PORT" navigate '{"page":"databases"}' || exit 1
 wait_for_log "$TMP_DIR" "Databases page loaded"
 
+# Adding the entry also opens that database, which re-renders the card list. That open runs after
+# "Database entry added" is logged, so wait for it to settle before opening the menu: otherwise it
+# lands mid-test and tears the menu down before the action can be clicked, and the click falls
+# through to the card and merely re-opens the database. Polled from the navbar marker (rendered only
+# while a database is open) rather than a log line, because the open can complete either side of the
+# page-loaded event and a log wait would miss an early one. Same wait as test 8.
+wait_for_value "$APP_PORT" database-photo-count "photos"
+
 send_command "$APP_PORT" click '{"dataId":"entity-actions-menu"}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"replicate-database-button"}' || exit 1
 wait_for_log "$TMP_DIR" "Replicate database dialog opened"

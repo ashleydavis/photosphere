@@ -173,7 +173,7 @@ export function ShareSecretDialog({ open, entry, onClose }: IShareSecretDialogPr
                 )}
 
                 {step === "error" && (
-                    <Alert color="danger">
+                    <Alert data-id="share-error-message" color="danger">
                         {errorMessage}
                     </Alert>
                 )}
