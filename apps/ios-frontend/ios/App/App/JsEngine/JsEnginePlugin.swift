@@ -472,16 +472,73 @@ public class JsEnginePlugin: CAPPlugin, EnginePoolDelegate {
 }
 
 //
+// Error raised when the picker vends neither a file URL nor an error for a picked item, so it cannot
+// be copied into the sandbox. Surfacing it lets pickFiles reject rather than silently drop the item.
+//
+enum JsEnginePickError: Error {
+
+    // The picker's loadFileRepresentation completion supplied no URL and no error.
+    case missingFileRepresentation
+}
+
+//
+// Outcome of loading and copying one picked item into the sandbox: either the sandbox-relative path
+// of the copied file, or the error that prevented the copy. The picker collects one per picked item.
+//
+enum PickedItemOutcome {
+
+    // The item was copied successfully to this sandbox-relative path.
+    case copied(String)
+
+    // The item could not be loaded or copied; carries the underlying error.
+    case failed(Error)
+}
+
+//
+// Result of aggregating every picked item's outcome: either all items copied (their relative paths in
+// pick order) or the first failure that occurred, so pickFiles resolves with the paths or rejects with
+// the error, matching the Android plugin which rejects the whole call on any copy failure.
+//
+enum PickAggregation {
+
+    // Every picked item copied; carries the sandbox-relative paths in pick order.
+    case success([String])
+
+    // At least one item failed; carries the first failure's error.
+    case failure(Error)
+}
+
+//
+// Reduces the per-item outcomes to a single aggregation: the first failure wins and short-circuits the
+// whole pick (matching Android's reject-on-IOException), otherwise every copied path is returned in
+// pick order. Kept as a free function so the resolve-versus-reject decision is unit-testable.
+//
+func aggregatePickedOutcomes(_ outcomes: [PickedItemOutcome]) -> PickAggregation {
+    var paths: [String] = []
+    for outcome in outcomes {
+        switch outcome {
+        case .copied(let relativePath):
+            paths.append(relativePath)
+        case .failed(let error):
+            return .failure(error)
+        }
+    }
+    return .success(paths)
+}
+
+//
 // PHPicker delegate: copies each picked item into the sandbox and resolves the held pickFiles call
-// with the copied files' sandbox-relative paths (empty when the user cancelled). Kept in this file so
-// the fileprivate copyPickedFile and private storageRoot remain accessible.
+// with the copied files' sandbox-relative paths (empty when the user cancelled). If any item fails to
+// load or copy the call is rejected instead of silently dropping that item, matching the Android
+// plugin. Kept in this file so the fileprivate copyPickedFile and private storageRoot remain accessible.
 //
 @available(iOS 14.0, *)
 extension JsEnginePlugin: PHPickerViewControllerDelegate {
 
     //
     // Handles the picker finishing: dismisses it, loads each result's file representation into the
-    // sandbox off the main thread, and resolves the held call once every copy has finished.
+    // sandbox off the main thread, and resolves the held call once every copy has finished. If any
+    // item fails to load or copy, the call is rejected rather than resolving with a partial list.
     //
     public func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
         picker.dismiss(animated: true)
@@ -497,30 +554,49 @@ extension JsEnginePlugin: PHPickerViewControllerDelegate {
         }
 
         let group = DispatchGroup()
-        let pathsLock = NSLock()
-        var paths: [String] = []
+        let outcomesLock = NSLock()
+        var outcomes = [PickedItemOutcome?](repeating: nil, count: results.count)
 
-        for result in results {
+        for (index, result) in results.enumerated() {
             group.enter()
             let provider = result.itemProvider
             let typeIdentifier = provider.registeredTypeIdentifiers.first ?? UTType.data.identifier
-            provider.loadFileRepresentation(forTypeIdentifier: typeIdentifier) { [weak self] url, _ in
+            provider.loadFileRepresentation(forTypeIdentifier: typeIdentifier) { [weak self] url, loadError in
                 defer {
                     group.leave()
                 }
-                guard let self = self, let url = url else {
-                    return
+                let outcome: PickedItemOutcome
+                if let loadError = loadError {
+                    outcome = .failed(loadError)
                 }
-                if let relativePath = try? self.copyPickedFile(from: url, suggestedName: provider.suggestedName) {
-                    pathsLock.lock()
-                    paths.append(relativePath)
-                    pathsLock.unlock()
+                else if let self = self, let url = url {
+                    do {
+                        let relativePath = try self.copyPickedFile(from: url, suggestedName: provider.suggestedName)
+                        outcome = .copied(relativePath)
+                    }
+                    catch {
+                        outcome = .failed(error)
+                    }
                 }
+                else {
+                    outcome = .failed(JsEnginePickError.missingFileRepresentation)
+                }
+                outcomesLock.lock()
+                outcomes[index] = outcome
+                outcomesLock.unlock()
             }
         }
 
         group.notify(queue: .main) {
-            call.resolve(["paths": paths])
+            let resolvedOutcomes = outcomes.map { outcome in
+                outcome ?? .failed(JsEnginePickError.missingFileRepresentation)
+            }
+            switch aggregatePickedOutcomes(resolvedOutcomes) {
+            case .success(let paths):
+                call.resolve(["paths": paths])
+            case .failure(let error):
+                call.reject("Failed to import picked files: \(error.localizedDescription)")
+            }
         }
     }
 }

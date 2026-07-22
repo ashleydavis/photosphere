@@ -25,6 +25,7 @@
 		D0000000000000000000B100 /* TcpHostTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0000000000000000000A100 /* TcpHostTests.swift */; };
 		D0000000000000000000B101 /* MediaRunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0000000000000000000A101 /* MediaRunnerTests.swift */; };
 		73F80B325942FD7BAAC99376 /* NotImplementedTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07855680FE24064B7769CBB4 /* NotImplementedTests.swift */; };
+		A1B2C3D4E5F600000000FF21 /* PickFilesCopyFailureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600000000FF22 /* PickFilesCopyFailureTests.swift */; };
 		8108CF91E144FF97BA5C7390 /* EnginePoolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79D28BB3B7D9903A032E51CC /* EnginePoolTests.swift */; };
 		A084ECDBA7D38E1E42DFC39D /* Pods_App.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AF277DCFFFF123FFC6DF26C7 /* Pods_App.framework */; };
 		D000000000000000000000B1 /* EngineCallbacks.swift in Sources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000A1 /* EngineCallbacks.swift */; };
@@ -69,6 +70,7 @@
 
 /* Begin PBXFileReference section */
 		07855680FE24064B7769CBB4 /* NotImplementedTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NotImplementedTests.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F600000000FF22 /* PickFilesCopyFailureTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PickFilesCopyFailureTests.swift; sourceTree = "<group>"; };
 		17ABBD4539EDBE292DFB23E7 /* Pods_AppTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_AppTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		2FAD9762203C412B000D30F8 /* config.xml */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = config.xml; sourceTree = "<group>"; };
 		4F7072CFB47B9D6D5E9DCC75 /* AppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -226,6 +228,7 @@
 				E1D0C0B0A0900000000000A5 /* SecureStoreTests.swift */,
 				A1B2C3D4E5F600000000FF03 /* HostBridgeMediaTests.swift */,
 				07855680FE24064B7769CBB4 /* NotImplementedTests.swift */,
+				A1B2C3D4E5F600000000FF22 /* PickFilesCopyFailureTests.swift */,
 				7FBA8F4FD583EAFC5EFEC48E /* PathSandboxTests.swift */,
 				D0000000000000000000A100 /* TcpHostTests.swift */,
 				D0000000000000000000A101 /* MediaRunnerTests.swift */,
@@ -443,6 +446,7 @@
 				E1D0C0B0A0900000000000B5 /* SecureStoreTests.swift in Sources */,
 				A1B2C3D4E5F600000000FF04 /* HostBridgeMediaTests.swift in Sources */,
 				73F80B325942FD7BAAC99376 /* NotImplementedTests.swift in Sources */,
+				A1B2C3D4E5F600000000FF21 /* PickFilesCopyFailureTests.swift in Sources */,
 				6EB04D6B0DEC313136AB77A5 /* PathSandboxTests.swift in Sources */,
 				D0000000000000000000B100 /* TcpHostTests.swift in Sources */,
 				D0000000000000000000B101 /* MediaRunnerTests.swift in Sources */,
