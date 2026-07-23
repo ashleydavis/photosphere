@@ -117,9 +117,15 @@ function createHash(content: string): Buffer {
 describe('HashCache', () => {
     let hashCache: HashCache;
     let cacheDir: string;
-    
+
+    // Monotonic counter making each test's cache directory unique. Date.now() alone is not enough:
+    // two tests whose beforeEach runs in the same millisecond would share a directory, so a test that
+    // calls load() would inherit the entries a prior test saved there (this made the buffer-resizing
+    // test see 1004 entries instead of 1000). The counter guarantees a fresh directory per test.
+    let cacheDirCounter = 0;
+
     beforeEach(() => {
-        cacheDir = path.join(getProcessTmpDir(), `hash-cache-test-${Date.now()}`);
+        cacheDir = path.join(getProcessTmpDir(), `hash-cache-test-${Date.now()}-${cacheDirCounter++}`);
         hashCache = new HashCache(cacheDir);
     });
     

@@ -369,13 +369,6 @@ export interface IPlatformContext {
     onPlatformEvent: (callback: (event: IPlatformEvent) => void) => Unsubscribe;
 
     //
-    // Subscribes to navigate events sent from the main process.
-    // The page argument is the route to navigate to (e.g. '/gallery', '/databases').
-    // Returns an unsubscribe function.
-    //
-    onNavigate: (callback: (page: string) => void) => Unsubscribe;
-
-    //
     // Notifies the platform that the user has edited the database.
     // Used to trigger a debounced background sync.
     //

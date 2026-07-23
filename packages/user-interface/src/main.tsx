@@ -234,15 +234,6 @@ function __Main({ initialTheme }: IMainProps) {
     }, [platform, startImportDirectories, addToast, navigate]);
 
     //
-    // Listen for navigate events from the main process.
-    //
-    useEffect(() => {
-        return platform.onNavigate((page) => {
-            navigate(page);
-        });
-    }, [platform, navigate]);
-
-    //
     // Adds the mobile or desktop class to the body based on the current form
     // factor, re-running whenever the viewport crosses the mobile breakpoint.
     //

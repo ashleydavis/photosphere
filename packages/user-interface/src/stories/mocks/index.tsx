@@ -184,7 +184,6 @@ export function mockPlatform(): IPlatformContext {
         notifyDatabaseClosed: async () => {},
         onThemeChanged: () => noUnsubscribe,
         onPlatformEvent: () => noUnsubscribe,
-        onNavigate: () => noUnsubscribe,
         notifyDatabaseEdited: () => {},
         copyToClipboard: async () => {},
         onSyncStarted: () => noUnsubscribe,

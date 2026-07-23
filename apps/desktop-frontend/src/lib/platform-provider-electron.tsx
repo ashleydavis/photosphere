@@ -48,9 +48,6 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
     // Store callbacks for menu actions
     const platformEventCallbacksRef = useRef<Set<(event: IPlatformEvent) => void>>(new Set());
 
-    // Store callbacks for navigate events
-    const navigateCallbacksRef = useRef<Set<(page: string) => void>>(new Set());
-
     // Store callbacks for sync-started events
     const syncStartedCallbacksRef = useRef<Set<() => void>>(new Set());
 
@@ -199,10 +196,15 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         };
     }, [electronAPI]);
 
-    // Set up message listener for navigate events
+    // Set up message listener for navigate events sent from the native menu (main process). Navigate
+    // by setting the route hash directly rather than dispatching to a React subscriber: the app uses a
+    // HashRouter, so the hash is the navigation primitive and it takes effect whatever is mounted. A
+    // subscriber-based delivery would be lost whenever no subscriber is mounted (for example while the
+    // Main subtree is torn down to show the top-level /stories route). This mirrors how the mobile
+    // provider and the shared test-driver already navigate.
     useEffect(() => {
         const handleNavigate = (page: string) => {
-            navigateCallbacksRef.current.forEach(cb => cb(page));
+            window.location.hash = page.startsWith('/') ? page : `/${page}`;
         };
 
         electronAPI.onMessage('navigate', handleNavigate);
@@ -331,13 +333,6 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         platformEventCallbacksRef.current.add(callback);
         return () => {
             platformEventCallbacksRef.current.delete(callback);
-        };
-    }, []);
-
-    const onNavigate = useCallback((callback: (page: string) => void): (() => void) => {
-        navigateCallbacksRef.current.add(callback);
-        return () => {
-            navigateCallbacksRef.current.delete(callback);
         };
     }, []);
 
@@ -529,7 +524,6 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         onUpdateAvailable,
         openFolder,
         onPlatformEvent,
-        onNavigate,
         getPathForFile,
         supportsDragAndDropImport: true,
         checkTools,

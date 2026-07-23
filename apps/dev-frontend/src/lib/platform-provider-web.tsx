@@ -193,11 +193,6 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         return () => {};
     }, []);
 
-    const onNavigate = useCallback((_callback: (page: string) => void): (() => void) => {
-        // No-op for web platform.
-        return () => {};
-    }, []);
-
     const getPathForFile = useCallback((_file: File): string | undefined => {
         // Not supported on web platform.
         return undefined;
@@ -401,7 +396,6 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         onUpdateAvailable,
         openFolder,
         onPlatformEvent,
-        onNavigate,
         getPathForFile,
         supportsDragAndDropImport: true,
         checkTools,

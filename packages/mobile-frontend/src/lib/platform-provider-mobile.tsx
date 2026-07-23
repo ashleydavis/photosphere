@@ -268,10 +268,6 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         };
     }, []);
 
-    const onNavigate = useCallback((_callback: (page: string) => void): (() => void) => {
-        return () => {};
-    }, []);
-
     const notifyDatabaseEdited = useCallback((): void => {
         // Debounced background sync after an edit (mirrors desktop's notify-database-edited).
         getSyncScheduler().notifyDatabaseEdited();
@@ -636,7 +632,6 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         onUpdateAvailable,
         openFolder,
         onPlatformEvent,
-        onNavigate,
         getPathForFile,
         supportsDragAndDropImport: false,
         checkTools,
