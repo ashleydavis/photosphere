@@ -382,6 +382,7 @@ export function mockImportContext(overrides?: Partial<IImportContext>): IImportC
         importItems: [],
         startImportDirectories: async () => false,
         startImportFiles: async () => false,
+        isPicking: false,
         cancelImport: noOpAsync,
         clearImport: noOp,
     };

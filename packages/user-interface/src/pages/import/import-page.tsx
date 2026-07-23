@@ -177,7 +177,7 @@ function ImportItemRow({ item }: { item: IImportItem }) {
 export function ImportPage() {
     const { databasePath } = useAssetDatabase();
     const platform = usePlatform();
-    const { status, importItems, startImportDirectories, startImportFiles, cancelImport, clearImport } = useImport();
+    const { status, importItems, startImportDirectories, startImportFiles, isPicking, cancelImport, clearImport } = useImport();
 
     // Drives the phone layout: stacked full-width import buttons, chips for the summary.
     const isMobile = useIsMobile();
@@ -395,6 +395,7 @@ export function ImportPage() {
                                         size="lg"
                                         startDecorator={<FileUpload />}
                                         onClick={handleImportFiles}
+                                        disabled={isPicking}
                                         sx={{ minHeight: isMobile ? 52 : undefined, borderRadius: isMobile ? "md" : undefined }}
                                     >
                                         {platform.supportsDragAndDropImport ? "Import files" : "Select photos"}
@@ -406,6 +407,7 @@ export function ImportPage() {
                                             size="lg"
                                             startDecorator={<FileUpload />}
                                             onClick={handleImportDirectories}
+                                            disabled={isPicking}
                                             sx={{ minHeight: isMobile ? 52 : undefined }}
                                         >
                                             Import directory

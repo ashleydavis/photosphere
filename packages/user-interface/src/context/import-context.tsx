@@ -132,6 +132,10 @@ export interface IImportContext {
     // Returns false if no database is open or the user cancelled the picker.
     startImportFiles: (paths?: string[]) => Promise<boolean>;
 
+    // True while a file or folder picker is open, so the UI can disable the import buttons and a
+    // second picker is never requested while one is still pending.
+    isPicking: boolean;
+
     // Cancels the running import.
     cancelImport: () => Promise<void>;
 
@@ -173,6 +177,14 @@ export function ImportContextProvider({ children }: IImportContextProviderProps)
 
     // Stable ref to the current status so event handlers can read it without stale closures.
     const statusRef = useRef<ImportStatus>('idle');
+
+    // True while a file or folder picker is open. Drives the disabled state of the import buttons.
+    const [isPicking, setIsPicking] = useState<boolean>(false);
+
+    // Synchronous mirror of isPicking. A state update is not visible until the next render, so two
+    // activations landing in the same tick would both still see isPicking false; the ref closes that
+    // gap and makes the guard reliable no matter how fast the second one arrives.
+    const isPickingRef = useRef<boolean>(false);
 
     //
     // Keeps statusRef in sync with state.
@@ -299,11 +311,41 @@ export function ImportContextProvider({ children }: IImportContextProviderProps)
     }
 
     //
+    // Starts an import that shows a picker when no paths were supplied, refusing to start a second
+    // one while a picker is still open. Two overlapping picker requests are not something any
+    // platform handles well (on iOS the earlier pickFiles call is dropped and its promise never
+    // settles, hanging the first import), so the second request is simply declined here.
+    // Calls that supply paths do not open a picker, so they are never blocked.
+    //
+    async function beginPickedImportSession(paths: string[] | undefined, sessionPromiseFactory: () => Promise<IImportSession | undefined>): Promise<boolean> {
+        const opensPicker = !paths || paths.length === 0;
+        if (!opensPicker) {
+            return beginImportSession(sessionPromiseFactory());
+        }
+
+        if (isPickingRef.current) {
+            return false;
+        }
+
+        isPickingRef.current = true;
+        setIsPicking(true);
+
+        try {
+            return await beginImportSession(sessionPromiseFactory());
+        }
+        finally {
+            // Always released, so a picker that fails cannot leave the import buttons stuck disabled.
+            isPickingRef.current = false;
+            setIsPicking(false);
+        }
+    }
+
+    //
     // Opens a directory picker (or uses the given paths) and starts an import.
     // Returns false if no database is open or the user cancelled the picker.
     //
     const startImportDirectories = useCallback(async (paths?: string[]): Promise<boolean> => {
-        return beginImportSession(importDirectories({ platform, databasePath, uuidGenerator }, paths));
+        return beginPickedImportSession(paths, () => importDirectories({ platform, databasePath, uuidGenerator }, paths));
     }, [platform, databasePath, uuidGenerator]);
 
     //
@@ -311,7 +353,7 @@ export function ImportContextProvider({ children }: IImportContextProviderProps)
     // Returns false if no database is open or the user cancelled the picker.
     //
     const startImportFiles = useCallback(async (paths?: string[]): Promise<boolean> => {
-        return beginImportSession(importFiles({ platform, databasePath, uuidGenerator }, paths));
+        return beginPickedImportSession(paths, () => importFiles({ platform, databasePath, uuidGenerator }, paths));
     }, [platform, databasePath, uuidGenerator]);
 
     //
@@ -353,6 +395,7 @@ export function ImportContextProvider({ children }: IImportContextProviderProps)
         importItems,
         startImportDirectories,
         startImportFiles,
+        isPicking,
         cancelImport,
         clearImport,
     };
