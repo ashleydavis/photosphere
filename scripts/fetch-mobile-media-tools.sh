@@ -127,6 +127,26 @@ android_fetch_libs() {
     cp "$unpack"/shared/libomp.so "$JNILIBS_DIR/$abi/"
 }
 
+# Asserts the fetched prebuilt library really is Q16 HDRI. Unlike iOS (whose static library carries
+# the depth in its filename) the prebuilt .so has no quantum suffix, so CMakeLists.txt's
+# MAGICKCORE_QUANTUM_DEPTH=16 / MAGICKCORE_HDRI_ENABLE=1 are a claim about the binary, not a check of
+# it: a Q8 upstream build would silently misread every pixel. ImageMagick embeds its depth and HDRI
+# setting as the "Q16" and "HDRI" tokens, so this reads them straight out of the fetched .so.
+android_assert_quantum_depth() {
+    local abi="$1"
+    local lib="$JNILIBS_DIR/$abi/libmagickcore-7.so"
+    local libStrings; libStrings="$(strings "$lib")"
+    if ! grep -qw 'Q16' <<< "$libStrings"; then
+        echo "ERROR: prebuilt ImageMagick for $abi is not quantum-depth 16 (no Q16 marker in $lib)." >&2
+        return 1
+    fi
+    if ! grep -qw 'HDRI' <<< "$libStrings"; then
+        echo "ERROR: prebuilt ImageMagick for $abi is not HDRI (no HDRI marker in $lib)." >&2
+        return 1
+    fi
+    log "Verified $abi ImageMagick is Q16 HDRI."
+}
+
 # Fetches + builds all Android ImageMagick artifacts, unless already present.
 fetch_android() {
     if android_already_fetched; then
@@ -144,6 +164,7 @@ fetch_android() {
         configDir="$(echo "$target" | cut -d: -f2)"
         triple="$(echo "$target" | cut -d: -f3)"
         android_fetch_libs "$abi"
+        android_assert_quantum_depth "$abi"
         android_configure_headers "$ndk" "$abi" "$configDir" "$triple" "$srcDir"
     done
 
@@ -154,8 +175,8 @@ fetch_android() {
 # from-source) build is skipped on reruns. Mirrors android_already_fetched.
 ios_already_fetched() {
     local vendor="$REPO_ROOT/apps/ios-frontend/ios/App/vendor/im"
-    [ -f "$vendor/device/lib/libMagickWand-7.Q8HDRI.a" ] || return 1
-    [ -f "$vendor/sim/lib/libMagickWand-7.Q8HDRI.a" ] || return 1
+    [ -f "$vendor/device/lib/libMagickWand-7.Q16HDRI.a" ] || return 1
+    [ -f "$vendor/sim/lib/libMagickWand-7.Q16HDRI.a" ] || return 1
     return 0
 }
 

@@ -669,9 +669,9 @@
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"$(inherited)",
 					"MAGICKCORE_HDRI_ENABLE=1",
-					"MAGICKCORE_QUANTUM_DEPTH=8",
+					"MAGICKCORE_QUANTUM_DEPTH=16",
 				);
-				OTHER_LDFLAGS = "$(inherited) -lMagickWand-7.Q8HDRI -lMagickCore-7.Q8HDRI -ljpeg -lpng16 -lz";
+				OTHER_LDFLAGS = "$(inherited) -lMagickWand-7.Q16HDRI -lMagickCore-7.Q16HDRI -ljpeg -lpng16 -lz";
 				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" \"-DDEBUG\"";
 				PRODUCT_BUNDLE_IDENTIFIER = au.com.codecapers.photosphere;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -706,9 +706,9 @@
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"$(inherited)",
 					"MAGICKCORE_HDRI_ENABLE=1",
-					"MAGICKCORE_QUANTUM_DEPTH=8",
+					"MAGICKCORE_QUANTUM_DEPTH=16",
 				);
-				OTHER_LDFLAGS = "$(inherited) -lMagickWand-7.Q8HDRI -lMagickCore-7.Q8HDRI -ljpeg -lpng16 -lz";
+				OTHER_LDFLAGS = "$(inherited) -lMagickWand-7.Q16HDRI -lMagickCore-7.Q16HDRI -ljpeg -lpng16 -lz";
 				PRODUCT_BUNDLE_IDENTIFIER = au.com.codecapers.photosphere;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = IMAGEMAGICK_LINKED;

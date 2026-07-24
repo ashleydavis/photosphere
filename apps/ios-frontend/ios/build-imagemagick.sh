@@ -9,7 +9,7 @@
 #
 # After it completes, in Xcode set the App target's HEADER_SEARCH_PATHS and LIBRARY_SEARCH_PATHS to
 # the matching slice under vendor/im, add OTHER_LDFLAGS
-#   -lMagickWand-7.Q8HDRI -lMagickCore-7.Q8HDRI -ljpeg -lpng16 -lz
+#   -lMagickWand-7.Q16HDRI -lMagickCore-7.Q16HDRI -ljpeg -lpng16 -lz
 # and add IMAGEMAGICK_LINKED to SWIFT_ACTIVE_COMPILATION_CONDITIONS to enable the runner.
 set -euo pipefail
 
@@ -79,7 +79,7 @@ build_slice() {
       --disable-shared --enable-static \
       --disable-openmp --disable-opencl --without-threads \
       --without-magick-plus-plus --disable-docs --disable-installed \
-      --with-quantum-depth=8 --enable-hdri --without-x \
+      --with-quantum-depth=16 --enable-hdri --without-x \
       --with-jpeg --with-png --with-zlib \
       --without-tiff --without-webp --without-heic --without-freetype \
       --without-fontconfig --without-xml --without-bzlib --without-lzma \
