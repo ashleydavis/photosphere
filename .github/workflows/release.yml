@@ -216,6 +216,44 @@ jobs:
           echo "Write lock tests exit code: $WRITE_LOCK_EXIT_CODE" >> write-lock-test-logs/write-lock-tests-output.log
           exit $WRITE_LOCK_EXIT_CODE
 
+  hash-cache-tests:
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Run hash cache concurrency smoke tests
+        working-directory: ./apps/cli
+        run: |
+          mkdir -p hash-cache-test-logs
+          ./hash-cache-smoke-test.sh 2>&1 | tee hash-cache-test-logs/hash-cache-tests-output.log
+          HASH_CACHE_EXIT_CODE=${PIPESTATUS[0]}
+          echo "Hash cache tests exit code: $HASH_CACHE_EXIT_CODE"
+          echo "Hash cache tests exit code: $HASH_CACHE_EXIT_CODE" >> hash-cache-test-logs/hash-cache-tests-output.log
+          exit $HASH_CACHE_EXIT_CODE
+
   sync-tests:
     timeout-minutes: 20
     runs-on: ubuntu-latest
@@ -1521,7 +1559,7 @@ jobs:
 
   create-release:
     timeout-minutes: 20
-    needs: [prepare-tag, compile, unit-tests, perf-tests, build-linux, build-windows, build-windows-baseline, build-macos-x64, build-macos-arm64, build-desktop, smoke-test, smoke-test-encrypted, write-lock-tests, sync-tests, lan-share-smoke-test, electron-smoke-tests, cli-desktop-lan-share-smoke-tests, android-unit-tests, ios-unit-tests, android-smoke-tests, ios-smoke-tests]
+    needs: [prepare-tag, compile, unit-tests, perf-tests, build-linux, build-windows, build-windows-baseline, build-macos-x64, build-macos-arm64, build-desktop, smoke-test, smoke-test-encrypted, write-lock-tests, hash-cache-tests, sync-tests, lan-share-smoke-test, electron-smoke-tests, cli-desktop-lan-share-smoke-tests, android-unit-tests, ios-unit-tests, android-smoke-tests, ios-smoke-tests]
     runs-on: ubuntu-latest
     permissions:
       contents: write

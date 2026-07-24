@@ -1,7 +1,7 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import { createHash } from "crypto";
-import { ensureDir, pathExists } from "node-utils";
+import { pathExists, updateFileRawOptimistic } from "node-utils";
 import { log } from "utils";
 
 /**
@@ -21,12 +21,51 @@ import { log } from "utils";
 
 const HASH_CACHE_VERSION = 1;
 
+//
+// How many times a save retries when another process publishes a new cache file underneath it.
+// Each retry re-reads the winner's file and re-applies this instance's changes onto it. This is
+// set high because the cache is genuinely contended: every worker in every running instance saves
+// after each file it hashes, so a writer can lose several times in a row before it lands. Losing
+// all of them means the save throws and its entries wait until the next save.
+//
+const SAVE_RETRIES = 20;
+
+//
+// A single decoded entry of the hash cache.
+//
+export interface IHashCacheEntry {
+    // Normalized path of the file this entry describes.
+    filePath: string;
+
+    // SHA-256 hash of the file's content (always 32 bytes).
+    hash: Buffer;
+
+    // Length of the file in bytes.
+    length: number;
+
+    // Last modified time of the file, in milliseconds since the epoch.
+    lastModified: number;
+}
+
 export class HashCache {
     private buffer: Buffer | null = null;
     private initialized = false;
     private isDirty = false;
     private entryCount = 0;
     private offsetLookup: number[] = [];
+
+    //
+    // Entries this instance has added or updated since the last load or save, keyed by normalized
+    // file path. They are merged onto the on-disk cache at save time so a concurrent writer's
+    // entries are kept instead of being overwritten by this instance's whole snapshot.
+    //
+    private pendingUpserts: Map<string, IHashCacheEntry> = new Map();
+
+    //
+    // Normalized file paths this instance has removed since the last load or save. Applied to the
+    // on-disk cache at save time, before the pending upserts.
+    //
+    private pendingRemovals: Set<string> = new Set();
 
     /**
      * Creates a new hash cache
@@ -53,6 +92,91 @@ export class HashCache {
         return createHash('sha256').update(data).digest();
     }
 
+    //
+    // Decodes the bytes of a hash cache file into its entries.
+    // Returns undefined when the bytes are not a usable cache file: absent, too small to hold a
+    // header and checksum, of an unsupported version, failing their checksum, or describing an
+    // entry that runs past the end of the data. Callers treat that as "start fresh" and do the
+    // logging, so this stays free of side effects and of any dependency on instance state.
+    //
+    private decodeEntries(fileBytes: Buffer | undefined): IHashCacheEntry[] | undefined {
+        if (!fileBytes || fileBytes.length < 40) {
+            return undefined;
+        }
+
+        const storedChecksum = fileBytes.subarray(fileBytes.length - 32);
+        const dataWithoutChecksum = fileBytes.subarray(0, fileBytes.length - 32);
+        if (!this.computeChecksum(dataWithoutChecksum).equals(storedChecksum)) {
+            return undefined;
+        }
+
+        if (dataWithoutChecksum.readUInt32LE(0) !== HASH_CACHE_VERSION) {
+            return undefined;
+        }
+
+        const entryCount = dataWithoutChecksum.readUInt32LE(4);
+        const entries: IHashCacheEntry[] = [];
+        let offset = 8; // Start after the version and entry count headers.
+
+        for (let entryIndex = 0; entryIndex < entryCount; entryIndex++) {
+            if (offset + 4 > dataWithoutChecksum.length) {
+                return undefined;
+            }
+
+            const pathLength = dataWithoutChecksum.readUInt32LE(offset);
+            if (offset + this.entrySize(pathLength) > dataWithoutChecksum.length) {
+                return undefined;
+            }
+
+            offset += 4; // Skip path length.
+            const filePath = dataWithoutChecksum.toString('utf8', offset, offset + pathLength);
+            offset += pathLength; // Skip path.
+            const hash = Buffer.from(dataWithoutChecksum.subarray(offset, offset + 32));
+            offset += 32; // Skip hash.
+            const length = dataWithoutChecksum.readUIntLE(offset, 6);
+            offset += 6; // Skip size.
+            const lastModified = dataWithoutChecksum.readUIntLE(offset, 6);
+            offset += 6; // Skip last modified.
+
+            entries.push({ filePath, hash, length, lastModified });
+        }
+
+        return entries;
+    }
+
+    //
+    // Encodes entries into the bytes of a hash cache file: version and entry count headers, the
+    // entries themselves, then a SHA-256 checksum of everything before it. The entries are written
+    // in the order given, so callers must sort them the way the binary search expects.
+    //
+    private encodeEntries(entries: IHashCacheEntry[]): Buffer {
+        const pathBuffers = entries.map(entry => Buffer.from(entry.filePath, 'utf8'));
+        const totalEntryBytes = pathBuffers.reduce((total, pathBuffer) => total + this.entrySize(pathBuffer.length), 0);
+
+        const dataBuffer = Buffer.alloc(8 + totalEntryBytes);
+        dataBuffer.writeUInt32LE(HASH_CACHE_VERSION, 0);
+        dataBuffer.writeUInt32LE(entries.length, 4);
+
+        let offset = 8; // Start after the version and entry count headers.
+
+        for (let entryIndex = 0; entryIndex < entries.length; entryIndex++) {
+            const entry = entries[entryIndex];
+            const pathBuffer = pathBuffers[entryIndex];
+            dataBuffer.writeUInt32LE(pathBuffer.length, offset);
+            offset += 4; // Skip path length.
+            pathBuffer.copy(dataBuffer, offset);
+            offset += pathBuffer.length; // Skip path.
+            entry.hash.copy(dataBuffer, offset);
+            offset += 32; // Skip hash.
+            dataBuffer.writeUIntLE(entry.length, offset, 6);
+            offset += 6; // Skip size.
+            dataBuffer.writeUIntLE(entry.lastModified, offset, 6);
+            offset += 6; // Skip last modified.
+        }
+
+        return Buffer.concat([dataBuffer, this.computeChecksum(dataBuffer)]);
+    }
+
     /**
      * Loads the hash cache from storage.
      * This function is 100% safe - it will never throw exceptions.
@@ -60,60 +184,24 @@ export class HashCache {
      */
     async load(): Promise<boolean> {
         const cachePath = path.join(this.cacheDir, "hash-cache-x.dat");
-        
+
         try {
             // Check if file exists first
             if (!await pathExists(cachePath)) {
                 // File doesn't exist - create new cache
-                this.buffer = Buffer.alloc(1024); // Start with 1KB
-                this.entryCount = 0;
-                this.initialized = true;
-                return false;
-            }
-            
-            // File exists - read and verify it
-            const cacheData = await fs.readFile(cachePath);
-            if (cacheData.length < 40) {
-                log.error(`Hash cache file is too small: expected at least 40 bytes (4 for version + 4 for entry count + 32 for checksum), got ${cacheData.length} bytes`);
                 this.initializeFreshCache();
                 return false;
             }
-            
-            // Extract checksum from the last 32 bytes
-            const storedChecksum = cacheData.subarray(cacheData.length - 32);
-            const dataWithoutChecksum = cacheData.subarray(0, cacheData.length - 32);
-            
-            // Verify checksum
-            const computedChecksum = this.computeChecksum(dataWithoutChecksum);
-            if (!computedChecksum.equals(storedChecksum)) {
-                // Checksum mismatch - cache is corrupted
-                log.error("Hash cache checksum mismatch - cache may be corrupted");
+
+            // File exists - read and decode it.
+            const entries = this.decodeEntries(await fs.readFile(cachePath));
+            if (entries === undefined) {
+                log.error(`Hash cache at ${cachePath} is unusable (too small, an unsupported version, corrupted, or failing its checksum) - starting with a fresh cache`);
                 this.initializeFreshCache();
                 return false;
             }
-            
-            // Read and verify version
-            const version = dataWithoutChecksum.readUInt32LE(0);
-            if (version < HASH_CACHE_VERSION) {
-                // Older version - delete the cache and start fresh
-                try {
-                    await fs.unlink(cachePath);
-                }
-                catch (error) {
-                    // Ignore errors deleting old cache file
-                }
-                this.initializeFreshCache();
-                return false;
-            }
-            else if (version > HASH_CACHE_VERSION) {
-                // Newer version - can't read it
-                log.error(`Hash cache version is newer than supported: file version ${version}, supported version ${HASH_CACHE_VERSION}`);
-                this.initializeFreshCache();
-                return false;
-            }
-            
-            this.buffer = dataWithoutChecksum;
-            this.createLookupTable();
+
+            this.adoptEntries(entries);
             this.initialized = true;
             return true;
         }
@@ -132,6 +220,23 @@ export class HashCache {
         this.entryCount = 0;
         this.offsetLookup = [];
         this.initialized = true;
+        this.isDirty = false;
+        this.pendingUpserts.clear();
+        this.pendingRemovals.clear();
+    }
+
+    //
+    // Adopts a sorted list of entries as this instance's state: it rebuilds the in-memory buffer
+    // and lookup table from them and drops the changeset, because those entries are now exactly
+    // what is on disk. The in-memory buffer holds the file layout without its trailing checksum,
+    // which is what encodeEntries produces minus its last 32 bytes.
+    //
+    private adoptEntries(entries: IHashCacheEntry[]): void {
+        const encoded = this.encodeEntries(entries);
+        this.buffer = encoded.subarray(0, encoded.length - 32);
+        this.createLookupTable();
+        this.pendingUpserts.clear();
+        this.pendingRemovals.clear();
         this.isDirty = false;
     }
 
@@ -215,7 +320,16 @@ export class HashCache {
     }
 
     /**
-     * Saves the hash cache to storage
+     * Saves the hash cache to storage.
+     *
+     * The save merges this instance's changes onto whatever is currently on disk rather than
+     * writing its own snapshot over the top. Several Photosphere instances can share one cache
+     * directory, and each one only knows about the entries it loaded plus the ones it added, so
+     * overwriting would silently drop every entry another instance added in the meantime.
+     * updateFileRawOptimistic does the read-modify-write under an exclusive lock, so overlapping
+     * saves neither interleave their bytes nor lose each other's work. Under a load heavy enough
+     * that it cannot get in at all, it gives up rather than failing the caller: the cache is only
+     * an optimization, and a missing entry costs one recomputed hash.
      */
     async save(): Promise<void> {
         if (!this.initialized || !this.isDirty || !this.buffer || this.isReadonly) {
@@ -223,43 +337,43 @@ export class HashCache {
         }
 
         const cachePath = path.join(this.cacheDir, "hash-cache-x.dat");
+        let mergedEntries: IHashCacheEntry[] = [];
 
-        // Calculate actual used size (entries start at offset 8 after version and entry count headers)
-        let offset = 8; // Start after version and entry count headers
+        try {
+            await updateFileRawOptimistic(cachePath, currentBytes => {
+                const entriesByPath = new Map<string, IHashCacheEntry>();
 
-        for (let i = 0; i < this.entryCount; i++) {
-            const pathLength = this.buffer.readUInt32LE(offset);
-            offset += this.entrySize(pathLength);
+                for (const entry of this.decodeEntries(currentBytes) || []) {
+                    entriesByPath.set(entry.filePath, entry);
+                }
+
+                for (const removedPath of this.pendingRemovals) {
+                    entriesByPath.delete(removedPath);
+                }
+
+                // This instance wins on a conflict: a freshly computed hash for a path is as valid
+                // as the one already on disk.
+                for (const [upsertedPath, entry] of this.pendingUpserts) {
+                    entriesByPath.set(upsertedPath, entry);
+                }
+
+                // Sorted with the same ordering the binary search in findEntryOffset relies on.
+                mergedEntries = Array.from(entriesByPath.values())
+                    .sort((first, second) => first.filePath.localeCompare(second.filePath));
+
+                return this.encodeEntries(mergedEntries);
+            }, SAVE_RETRIES);
+        }
+        catch {
+            // Too much contention to get in. Nothing is said about it, because nothing is wrong:
+            // the changeset stays pending and stays dirty, so the next save carries these entries
+            // along with whatever is added by then, and even if the process exits first the only
+            // cost is recomputing those hashes next time.
+            return;
         }
 
-        // Create buffer with version + entry count headers + entries
-        const entryBuffer = this.buffer.subarray(8, offset); // Entries only (skip the 8-byte header area)
-        const headerBuffer = Buffer.alloc(8);
-        headerBuffer.writeUInt32LE(HASH_CACHE_VERSION, 0);
-        headerBuffer.writeUInt32LE(this.entryCount, 4);
-        const dataBuffer = Buffer.concat([headerBuffer, entryBuffer]);
-        
-        // Compute SHA-256 checksum of the data
-        const checksum = this.computeChecksum(dataBuffer);
-        
-        // Create final buffer with checksum appended
-        const finalBuffer = Buffer.concat([dataBuffer, checksum]);
-        
-        // Use atomic write: write to temp file first, then rename
-        // This ensures workers always read a complete file, never a partially written one
-        const tempPath = `${cachePath}.tmp`;
-        await ensureDir(this.cacheDir);
-        await fs.writeFile(tempPath, finalBuffer);
-        
-        //
-        // Rename is atomic on most filesystems, ensuring workers see either old or new complete file
-        //
-        // Annoyingly this can fail (because workers are constantly loading the hash cache) and when it does so there is no callstack.
-        // If it fails we handle it at a higher level and the hash cache remains dirty until next time we try to save it.
-        //
-        await fs.rename(tempPath, cachePath);
-
-        this.isDirty = false;
+        // Adopt the merged result so this instance can serve entries other instances contributed.
+        this.adoptEntries(mergedEntries);
     }
 
     /**
@@ -465,6 +579,12 @@ export class HashCache {
             this.offsetLookup = newOffsetLookup;
         }
 
+        // Record the change so the next save merges it onto the on-disk cache instead of
+        // overwriting entries other instances added. The hash is copied because the caller keeps
+        // ownership of the buffer it passed in.
+        this.pendingUpserts.set(filePath, { filePath, hash: Buffer.from(hash), length, lastModified: lastModified.getTime() });
+        this.pendingRemovals.delete(filePath);
+
         this.isDirty = true;
     }
 
@@ -507,6 +627,12 @@ export class HashCache {
 
         this.entryCount--;
         this.isDirty = true;
+
+        // Record the removal so the next save applies it to the on-disk cache. The key uses the
+        // same normalization findEntryOffset applies, so it matches the entry that was removed.
+        const normalizedPath = filePath.replace(/\\/g, '/');
+        this.pendingRemovals.add(normalizedPath);
+        this.pendingUpserts.delete(normalizedPath);
 
         // Find the index of the entry that was removed
         const removedIndex = this.offsetLookup.findIndex(offset => offset === entryOffset);

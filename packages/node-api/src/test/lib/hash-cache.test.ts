@@ -1,7 +1,7 @@
 import * as crypto from 'crypto';
 import * as path from 'path';
 import * as fs from 'fs/promises';
-import { HashCache } from '../../lib/hash-cache';
+import { HashCache, IHashCacheEntry } from '../../lib/hash-cache';
 import { getProcessTmpDir } from 'node-utils';
 
 // Mock implementation of IStorage (no longer used, kept for reference)
@@ -406,6 +406,253 @@ describe('HashCache', () => {
         
         // Test with a path that would be after the last entry
         expect(hashCache.getHash('zzz.txt')).toBeUndefined();
+    });
+});
+
+//
+// Builds a cache entry with predictable content for the encode/decode and merge tests.
+//
+function makeEntry(filePath: string): IHashCacheEntry {
+    return {
+        filePath,
+        hash: createHash(`content of ${filePath}`),
+        length: filePath.length,
+        lastModified: new Date(2024, 0, 1).getTime(),
+    };
+}
+
+// The file codec is private to HashCache and depends on no instance state, so the tests reach it
+// through a throwaway instance rather than going through the filesystem for every case.
+const codec = new HashCache('unused-cache-dir') as any;
+
+//
+// Encodes entries into the bytes of a cache file.
+//
+function encodeEntries(entries: IHashCacheEntry[]): Buffer {
+    return codec.encodeEntries(entries);
+}
+
+//
+// Decodes the bytes of a cache file, or undefined when they are not usable.
+//
+function decodeEntries(fileBytes: Buffer | undefined): IHashCacheEntry[] | undefined {
+    return codec.decodeEntries(fileBytes);
+}
+
+describe('encodeEntries / decodeEntries', () => {
+    test('round-trips a set of entries', () => {
+        const entries = [makeEntry('a/one.txt'), makeEntry('b/two.txt'), makeEntry('c/three.txt')];
+
+        const decoded = decodeEntries(encodeEntries(entries));
+
+        expect(decoded).toBeDefined();
+        expect(decoded!.length).toBe(3);
+        for (let entryIndex = 0; entryIndex < entries.length; entryIndex++) {
+            expect(decoded![entryIndex].filePath).toBe(entries[entryIndex].filePath);
+            expect(decoded![entryIndex].hash.toString('hex')).toBe(entries[entryIndex].hash.toString('hex'));
+            expect(decoded![entryIndex].length).toBe(entries[entryIndex].length);
+            expect(decoded![entryIndex].lastModified).toBe(entries[entryIndex].lastModified);
+        }
+    });
+
+    test('round-trips an empty set of entries', () => {
+        const decoded = decodeEntries(encodeEntries([]));
+
+        expect(decoded).toEqual([]);
+    });
+
+    test('returns undefined for an absent file', () => {
+        expect(decodeEntries(undefined)).toBeUndefined();
+    });
+
+    test('returns undefined for a buffer that is too small', () => {
+        expect(decodeEntries(Buffer.alloc(39))).toBeUndefined();
+    });
+
+    test('returns undefined for an unsupported version', () => {
+        const encoded = encodeEntries([makeEntry('a/one.txt')]);
+
+        // Bump the version, then re-checksum so only the version makes it unusable.
+        const dataWithoutChecksum = encoded.subarray(0, encoded.length - 32);
+        dataWithoutChecksum.writeUInt32LE(99, 0);
+        const rechecksummed = Buffer.concat([dataWithoutChecksum, crypto.createHash('sha256').update(dataWithoutChecksum).digest()]);
+
+        expect(decodeEntries(rechecksummed)).toBeUndefined();
+    });
+
+    test('returns undefined when the checksum does not match', () => {
+        const encoded = encodeEntries([makeEntry('a/one.txt')]);
+
+        // Corrupt a byte in the middle of the entries without touching the checksum.
+        encoded[20] = encoded[20] ^ 0xff;
+
+        expect(decodeEntries(encoded)).toBeUndefined();
+    });
+
+    test('returns undefined when an entry runs past the end of the data', () => {
+        const encoded = encodeEntries([makeEntry('a/one.txt')]);
+
+        // Claim a second entry that is not there, then re-checksum so only the truncation is wrong.
+        const dataWithoutChecksum = encoded.subarray(0, encoded.length - 32);
+        dataWithoutChecksum.writeUInt32LE(2, 4);
+        const rechecksummed = Buffer.concat([dataWithoutChecksum, crypto.createHash('sha256').update(dataWithoutChecksum).digest()]);
+
+        expect(decodeEntries(rechecksummed)).toBeUndefined();
+    });
+});
+
+describe('HashCache concurrent saves', () => {
+    let cacheDir: string;
+    let cacheDirCounter = 0;
+
+    beforeEach(() => {
+        cacheDir = path.join(getProcessTmpDir(), `hash-cache-concurrent-test-${Date.now()}-${cacheDirCounter++}`);
+    });
+
+    //
+    // Reads and decodes the cache file written to the shared directory.
+    //
+    async function readCacheFile(): Promise<IHashCacheEntry[] | undefined> {
+        return decodeEntries(await fs.readFile(path.join(cacheDir, 'hash-cache-x.dat')));
+    }
+
+    //
+    // Writes a cache file containing the supplied entries, as if another instance had saved it.
+    //
+    async function writeCacheFile(entries: IHashCacheEntry[]): Promise<void> {
+        await fs.mkdir(cacheDir, { recursive: true });
+        await fs.writeFile(path.join(cacheDir, 'hash-cache-x.dat'), encodeEntries(entries));
+    }
+
+    test('merges its own additions onto entries already on disk', async () => {
+        await writeCacheFile([makeEntry('a/one.txt'), makeEntry('b/two.txt')]);
+
+        const hashCache = new HashCache(cacheDir);
+        await hashCache.load();
+        const added = makeEntry('c/three.txt');
+        hashCache.addHash(added.filePath, { hash: added.hash, length: added.length, lastModified: new Date(added.lastModified) });
+        await hashCache.save();
+
+        const onDisk = await readCacheFile();
+        expect(onDisk!.map(entry => entry.filePath)).toEqual(['a/one.txt', 'b/two.txt', 'c/three.txt']);
+    });
+
+    test('keeps entries another instance added after this one loaded', async () => {
+        // Both instances load the same (empty) cache, so neither knows about the other's entries.
+        const firstCache = new HashCache(cacheDir);
+        const secondCache = new HashCache(cacheDir);
+        await firstCache.load();
+        await secondCache.load();
+
+        const firstEntry = makeEntry('first/file.txt');
+        firstCache.addHash(firstEntry.filePath, { hash: firstEntry.hash, length: firstEntry.length, lastModified: new Date(firstEntry.lastModified) });
+        await firstCache.save();
+
+        const secondEntry = makeEntry('second/file.txt');
+        secondCache.addHash(secondEntry.filePath, { hash: secondEntry.hash, length: secondEntry.length, lastModified: new Date(secondEntry.lastModified) });
+        await secondCache.save();
+
+        // Before merge-on-save the second save overwrote the first instance's entry.
+        const onDisk = await readCacheFile();
+        expect(onDisk!.map(entry => entry.filePath)).toEqual(['first/file.txt', 'second/file.txt']);
+
+        // The saving instance also picks up the entry it merged in.
+        expect(secondCache.getHash('first/file.txt')).toBeDefined();
+        expect(secondCache.getEntryCount()).toBe(2);
+    });
+
+    test('loses no entries when many instances load together and save one after another', async () => {
+        const writerCount = 10;
+        const caches: HashCache[] = [];
+
+        // Every instance loads before any of them saves, the situation that used to lose entries.
+        for (let writerIndex = 0; writerIndex < writerCount; writerIndex++) {
+            const cache = new HashCache(cacheDir);
+            await cache.load();
+            caches.push(cache);
+        }
+
+        for (let writerIndex = 0; writerIndex < writerCount; writerIndex++) {
+            const entry = makeEntry(`writer${writerIndex}/file.txt`);
+            caches[writerIndex].addHash(entry.filePath, { hash: entry.hash, length: entry.length, lastModified: new Date(entry.lastModified) });
+            await caches[writerIndex].save();
+        }
+
+        const onDisk = await readCacheFile();
+        expect(onDisk!.length).toBe(writerCount);
+        for (let writerIndex = 0; writerIndex < writerCount; writerIndex++) {
+            expect(onDisk!.some(entry => entry.filePath === `writer${writerIndex}/file.txt`)).toBe(true);
+        }
+    });
+
+    test('applies removals to the on-disk cache instead of resurrecting them', async () => {
+        await writeCacheFile([makeEntry('a/one.txt'), makeEntry('b/two.txt')]);
+
+        const hashCache = new HashCache(cacheDir);
+        await hashCache.load();
+        expect(hashCache.removeHash('a/one.txt')).toBe(true);
+        await hashCache.save();
+
+        const onDisk = await readCacheFile();
+        expect(onDisk!.map(entry => entry.filePath)).toEqual(['b/two.txt']);
+    });
+
+    test('never publishes a corrupt file when saves overlap', async () => {
+        // Overlapping saves used to share one temp file path and interleave their bytes into it,
+        // so the published file failed its checksum and the whole cache was discarded on load.
+        const writerCount = 8;
+        const savePromises: Promise<void>[] = [];
+
+        for (let writerIndex = 0; writerIndex < writerCount; writerIndex++) {
+            const cache = new HashCache(cacheDir);
+            await cache.load();
+            const entry = makeEntry(`overlap${writerIndex}/file.txt`);
+            cache.addHash(entry.filePath, { hash: entry.hash, length: entry.length, lastModified: new Date(entry.lastModified) });
+            savePromises.push(cache.save());
+        }
+
+        await Promise.all(savePromises);
+
+        // The file is always a complete, checksum-valid cache, whichever save published last.
+        const onDisk = await readCacheFile();
+        expect(onDisk).toBeDefined();
+        expect(onDisk!.length).toBeGreaterThan(0);
+    });
+
+    test('clears the changeset after a save so later saves only apply later changes', async () => {
+        const hashCache = new HashCache(cacheDir);
+        await hashCache.load();
+        const firstEntry = makeEntry('first/file.txt');
+        hashCache.addHash(firstEntry.filePath, { hash: firstEntry.hash, length: firstEntry.length, lastModified: new Date(firstEntry.lastModified) });
+        await hashCache.save();
+
+        // Another instance replaces the file wholesale, dropping the first entry.
+        await writeCacheFile([makeEntry('other/file.txt')]);
+
+        const secondEntry = makeEntry('second/file.txt');
+        hashCache.addHash(secondEntry.filePath, { hash: secondEntry.hash, length: secondEntry.length, lastModified: new Date(secondEntry.lastModified) });
+        await hashCache.save();
+
+        // Only the change made since the last save is applied, not the whole in-memory snapshot.
+        const onDisk = await readCacheFile();
+        expect(onDisk!.map(entry => entry.filePath)).toEqual(['other/file.txt', 'second/file.txt']);
+    });
+
+    test('clears the changeset on load so pre-load changes are not re-applied', async () => {
+        const hashCache = new HashCache(cacheDir);
+        await hashCache.load();
+        const discardedEntry = makeEntry('discarded/file.txt');
+        hashCache.addHash(discardedEntry.filePath, { hash: discardedEntry.hash, length: discardedEntry.length, lastModified: new Date(discardedEntry.lastModified) });
+
+        // Reloading throws away everything that was not saved.
+        await hashCache.load();
+
+        const keptEntry = makeEntry('kept/file.txt');
+        hashCache.addHash(keptEntry.filePath, { hash: keptEntry.hash, length: keptEntry.length, lastModified: new Date(keptEntry.lastModified) });
+        await hashCache.save();
+
+        const onDisk = await readCacheFile();
+        expect(onDisk!.map(entry => entry.filePath)).toEqual(['kept/file.txt']);
     });
 });
 

@@ -1,7 +1,7 @@
 import * as path from 'path';
 import * as fsNative from 'fs/promises';
 import { writeFileSync } from 'fs';
-import { readToml, writeToml, readJson, writeJson, outputFile, updateToml, updateJson, updateFileOptimistic, getProcessTmpDir } from '../../lib/fs';
+import { readToml, writeToml, readJson, writeJson, outputFile, updateToml, updateJson, updateFileOptimistic, updateFileRawOptimistic, getProcessTmpDir } from '../../lib/fs';
 
 //
 // Simple config shape used by the update-mutator tests.
@@ -269,6 +269,79 @@ describe('updateFileOptimistic', () => {
             external += 1;
             return `${current}!`;
         }, raw => raw, value => value, 2)).rejects.toThrow(/kept changing/);
+
+        await fsNative.unlink(filePath);
+    });
+});
+
+describe('updateFileRawOptimistic', () => {
+    test('passes undefined for a missing file and writes the mutator result', async () => {
+        const filePath = tempFilePath('optimistic-raw-create.bin');
+        let receivedCurrent: Buffer | undefined = Buffer.alloc(0);
+
+        // Bytes that are not valid utf8, proving the raw path never decodes the content.
+        const newBytes = Buffer.from([0x00, 0xff, 0xfe, 0x01]);
+        await updateFileRawOptimistic(filePath, current => {
+            receivedCurrent = current;
+            return newBytes;
+        }, 3);
+
+        expect(receivedCurrent).toBeUndefined();
+        const written = await fsNative.readFile(filePath);
+        expect(written.equals(newBytes)).toBe(true);
+
+        await fsNative.unlink(filePath);
+    });
+
+    test('passes the existing bytes to the mutator and publishes its result', async () => {
+        const filePath = tempFilePath('optimistic-raw-update.bin');
+        const originalBytes = Buffer.from([0x10, 0x20, 0x30]);
+        await outputFile(filePath, originalBytes);
+
+        await updateFileRawOptimistic(filePath, current => {
+            expect(current).toBeDefined();
+            expect(current!.equals(originalBytes)).toBe(true);
+            return Buffer.concat([current!, Buffer.from([0x40])]);
+        }, 3);
+
+        const written = await fsNative.readFile(filePath);
+        expect(written.equals(Buffer.from([0x10, 0x20, 0x30, 0x40]))).toBe(true);
+
+        await fsNative.unlink(filePath);
+    });
+
+    test('reloads and re-applies the mutator when the file changed under it', async () => {
+        const filePath = tempFilePath('optimistic-raw-retry.bin');
+        await outputFile(filePath, Buffer.from('base'));
+        let injected = false;
+
+        await updateFileRawOptimistic(filePath, current => {
+            if (!injected) {
+                injected = true;
+                // Simulate a concurrent writer changing the file after our read, before the check.
+                writeFileSync(filePath, 'changed-by-other');
+            }
+            return Buffer.concat([current || Buffer.alloc(0), Buffer.from('!')]);
+        }, 3);
+
+        const written = await fsNative.readFile(filePath);
+        expect(written.toString('utf8')).toBe('changed-by-other!');
+
+        await fsNative.unlink(filePath);
+    });
+
+    test('throws after the configured retries when the file keeps changing', async () => {
+        const filePath = tempFilePath('optimistic-raw-exhaust.bin');
+        await outputFile(filePath, Buffer.from('x'));
+        let external = 1;
+
+        await expect(updateFileRawOptimistic(filePath, current => {
+            // Grow the file each attempt to a size that always differs from the current file,
+            // so the pre-move check always sees a conflict regardless of timestamp resolution.
+            writeFileSync(filePath, 'y'.repeat(external + 4));
+            external += 1;
+            return Buffer.concat([current || Buffer.alloc(0), Buffer.from('!')]);
+        }, 2)).rejects.toThrow(/kept changing/);
 
         await fsNative.unlink(filePath);
     });

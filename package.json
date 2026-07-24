@@ -41,6 +41,7 @@
     "tce": "bun run test:cli:encrypted",
     "test:cli:lan-share": "cd ./apps/cli/ && ./smoke-tests-lan-share.sh",
     "tcl": "bun run test:cli:lan-share",
+    "test:cli:hash-cache": "cd ./apps/cli/ && ./hash-cache-smoke-test.sh",
     "test:lan-share:cli-desktop": "./cli-desktop-lan-share-smoke-tests.sh",
     "tlcd": "bun run test:lan-share:cli-desktop",
     "stories": "./scripts/story-player.sh --platform electron",

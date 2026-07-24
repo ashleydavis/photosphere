@@ -6,6 +6,46 @@ import { randomUUID } from 'crypto';
 import { parse as tomlParse, stringify as tomlStringify } from 'smol-toml';
 
 //
+// Sleeps for the given number of milliseconds. Kept local rather than imported from the `utils`
+// package so this low-level module does not pull the whole `utils` barrel (and its ESM-only
+// transitive dependencies) into `node-utils`'s test path.
+//
+function sleep(timeMs: number): Promise<void> {
+    return new Promise<void>(resolve => {
+        setTimeout(resolve, timeMs);
+    });
+}
+
+//
+// The base delay before an optimistic update retries after losing to another writer. Retrying
+// immediately makes things worse: the losers re-read and re-write straight away, which keeps the
+// file changing and starves everyone, so a burst of concurrent writers exhausts its retries
+// instead of making progress. The wait doubles with each attempt and is randomized, so writers
+// that collided spread out rather than colliding again in lockstep.
+//
+const UPDATE_BACKOFF_BASE_MS = 5;
+
+//
+// The longest a single backoff waits, so a busy file never stalls a writer for long.
+//
+const UPDATE_BACKOFF_MAX_MS = 250;
+
+//
+// How long an update lock may sit untouched before it is treated as abandoned by a process that
+// died holding it, and broken. Far longer than any read-modify-write takes.
+//
+const LOCK_STALE_MS = 30000;
+
+//
+// How many times to poll for the update lock before giving up on it. Waiting for the lock is not
+// the same as losing a write race: the holder is making progress and we simply have to wait our
+// turn, so this is deliberately generous and is counted separately from the caller's retry budget.
+// Spending the caller's retries on waiting would make a slow write by one process look like a
+// failure to every other process.
+//
+const LOCK_WAIT_ATTEMPTS = 50;
+
+//
 // Ensures that the directory exists. If the directory structure does not exist, it is created.
 // Like fs-extra's ensureDir, but using native fs.promises.
 //
@@ -117,13 +157,13 @@ export async function writeJson(filePath: string, object: any, options?: { encod
 }
 
 //
-// Reads a file's raw text, or undefined when it does not exist yet.
+// Reads a file's raw bytes, or undefined when it does not exist yet.
 //
-async function readRawFile(filePath: string): Promise<string | undefined> {
+async function readRawFileBytes(filePath: string): Promise<Buffer | undefined> {
     if (!await pathExists(filePath)) {
         return undefined;
     }
-    return await fs.readFile(filePath, { encoding: 'utf8' });
+    return await fs.readFile(filePath);
 }
 
 //
@@ -144,13 +184,21 @@ interface IFileFingerprint {
 
 //
 // Returns a fingerprint of the file at the given path, or undefined when it does not exist.
+// The single stat is deliberate: checking for the file and then stat'ing it would be two steps,
+// and a file that is deleted in between (an update lock being released, for instance) would make
+// the stat fail even though "it is not there" is an answer this is meant to return.
 //
 async function fileFingerprint(filePath: string): Promise<IFileFingerprint | undefined> {
-    if (!await pathExists(filePath)) {
-        return undefined;
+    try {
+        const stats = await fs.stat(filePath);
+        return { modifiedMs: stats.mtime.getTime(), size: stats.size };
     }
-    const stats = await fs.stat(filePath);
-    return { modifiedMs: stats.mtime.getTime(), size: stats.size };
+    catch (error: any) {
+        if (error.code === 'ENOENT') {
+            return undefined;
+        }
+        throw error;
+    }
 }
 
 //
@@ -165,36 +213,124 @@ function fingerprintsMatch(before: IFileFingerprint | undefined, after: IFileFin
 }
 
 //
-// Updates a file as an optimistic read-modify-write, with no cross-call locking or shared state.
-// It fingerprints the file, reads and parses the current text (or uses `fallback` when absent),
-// applies `mutator`, and writes the result to a temp file. Just before the atomic move it
-// re-fingerprints the file (a cheap stat, not a second full read): if it changed since we read
-// it, another writer got in first, so it discards the temp and retries from the fresh contents.
-// After `retries` such conflicts it throws. This makes concurrent updates safe without serializing
-// them. The fingerprint is taken before the read so a change during the read is caught as a
-// conflict rather than silently overwriting the other writer.
+// Tries to take the exclusive lock guarding updates to a file, without waiting. Creating the lock
+// file with the 'wx' flag is a single atomic operation in the filesystem: exactly one caller can
+// create it, and everyone else gets EEXIST. That is what makes the update safe. A check-then-create
+// would not be, because two callers could both pass the check before either created the file.
 //
-export async function updateFileOptimistic<ContentType>(filePath: string, fallback: ContentType, mutator: (current: ContentType) => ContentType, parse: (raw: string) => ContentType, serialize: (value: ContentType) => string, retries: number): Promise<void> {
-    for (let attempt = 0; attempt <= retries; attempt += 1) {
-        const fingerprintBefore = await fileFingerprint(filePath);
-        const originalRaw = await readRawFile(filePath);
-        const current = originalRaw === undefined ? fallback : parse(originalRaw);
-        const updatedRaw = serialize(mutator(current));
-
-        await ensureFileDir(filePath);
-        const tempPath = `${filePath}.tmp-${randomUUID()}`;
-        await fs.writeFile(tempPath, updatedRaw, { encoding: 'utf8' });
-
-        // If the file is unchanged since we read it, publish our version atomically.
-        // Otherwise a concurrent writer won; drop the temp and retry from fresh contents.
-        const fingerprintAfter = await fileFingerprint(filePath);
-        if (fingerprintsMatch(fingerprintBefore, fingerprintAfter)) {
-            await fs.rename(tempPath, filePath);
-            return;
+// A lock left behind by a process that died while holding it would otherwise block every later
+// update forever, so a lock older than LOCK_STALE_MS is broken. The threshold is far longer than
+// any read-modify-write takes, so a live holder is never robbed of its lock.
+//
+async function tryTakeUpdateLock(lockPath: string): Promise<boolean> {
+    try {
+        const lockHandle = await fs.open(lockPath, 'wx');
+        await lockHandle.close();
+        return true;
+    }
+    catch (error: any) {
+        // Anything other than "someone else holds it" is a real problem.
+        if (error.code !== 'EEXIST') {
+            throw error;
         }
-        await fs.rm(tempPath, { force: true });
+    }
+
+    const lockFingerprint = await fileFingerprint(lockPath);
+    if (lockFingerprint !== undefined && Date.now() - lockFingerprint.modifiedMs > LOCK_STALE_MS) {
+        await fs.rm(lockPath, { force: true });
+    }
+
+    return false;
+}
+
+//
+// Returns how long to wait before another attempt: a randomized delay that grows with each one.
+//
+function updateBackoffMs(attempt: number): number {
+    return Math.random() * Math.min(UPDATE_BACKOFF_MAX_MS, UPDATE_BACKOFF_BASE_MS * Math.pow(2, attempt));
+}
+
+//
+// Waits for the exclusive lock guarding updates to a file, and reports whether it was taken.
+//
+async function takeUpdateLock(lockPath: string): Promise<boolean> {
+    for (let attempt = 0; attempt < LOCK_WAIT_ATTEMPTS; attempt += 1) {
+        if (await tryTakeUpdateLock(lockPath)) {
+            return true;
+        }
+
+        await sleep(updateBackoffMs(attempt));
+    }
+
+    return false;
+}
+
+//
+// Updates a file's raw bytes as a read-modify-write that is safe against other processes doing the
+// same thing at the same time. It takes an exclusive lock beside the file, reads the current bytes
+// (or passes `undefined` to the mutator when the file does not exist yet), applies `mutator`,
+// writes the result to a temp file whose name carries a fresh UUID, and moves it into place. The
+// lock is what makes concurrent updates lossless: without it two writers can both read the same
+// contents and both publish, and whichever renames second silently discards the other's work.
+//
+// Holding the lock is not enough on its own, because a writer that does not take the lock can
+// still change the file underneath us, so just before the atomic move it re-checks a cheap
+// fingerprint (a stat, not a second full read) and retries from the fresh contents if the file
+// moved on. `retries` bounds those conflicts only, not the wait for the lock, which is bounded
+// separately: a slow write by one process is not a failure for the others, it is just their turn
+// coming later. Waiting and retrying both back off with a randomized, growing delay, so writers
+// that collide spread out instead of colliding again in lockstep.
+//
+export async function updateFileRawOptimistic(filePath: string, mutator: (current: Buffer | undefined) => Buffer, retries: number): Promise<void> {
+    // The lock lives beside the file, so the directory has to exist before we can take it.
+    await ensureFileDir(filePath);
+    const lockPath = `${filePath}.lock`;
+
+    for (let attempt = 0; attempt <= retries; attempt += 1) {
+        if (!await takeUpdateLock(lockPath)) {
+            throw new Error(`Failed to update ${filePath}: could not take the update lock after ${LOCK_WAIT_ATTEMPTS} attempts.`);
+        }
+
+        try {
+            const fingerprintBefore = await fileFingerprint(filePath);
+            const currentBytes = await readRawFileBytes(filePath);
+            const updatedBytes = mutator(currentBytes);
+
+            const tempPath = `${filePath}.tmp-${randomUUID()}`;
+            await fs.writeFile(tempPath, updatedBytes);
+
+            // If the file is unchanged since we read it, publish our version atomically.
+            // Otherwise a writer that ignored the lock won; drop the temp and start over.
+            const fingerprintAfter = await fileFingerprint(filePath);
+            if (fingerprintsMatch(fingerprintBefore, fingerprintAfter)) {
+                await fs.rename(tempPath, filePath);
+                return;
+            }
+            await fs.rm(tempPath, { force: true });
+        }
+        finally {
+            // Released on the way out however we leave, so a failed mutator does not strand the
+            // lock and make every other writer wait out the staleness timeout.
+            await fs.rm(lockPath, { force: true });
+        }
+
+        // Back off before trying again so the writers that collided do not collide again.
+        await sleep(updateBackoffMs(attempt));
     }
     throw new Error(`Failed to update ${filePath}: the file kept changing under concurrent writers after ${retries} retries.`);
+}
+
+//
+// Updates a file as an optimistic read-modify-write, with no cross-call locking or shared state.
+// It reads and parses the current text (or uses `fallback` when absent), applies `mutator`, and
+// publishes the serialized result through `updateFileRawOptimistic`, so a concurrent writer causes
+// a reload and re-apply rather than a lost update. After `retries` such conflicts it throws.
+//
+export async function updateFileOptimistic<ContentType>(filePath: string, fallback: ContentType, mutator: (current: ContentType) => ContentType, parse: (raw: string) => ContentType, serialize: (value: ContentType) => string, retries: number): Promise<void> {
+    await updateFileRawOptimistic(filePath, currentBytes => {
+        const current = currentBytes === undefined ? fallback : parse(currentBytes.toString('utf8'));
+        return Buffer.from(serialize(mutator(current)), 'utf8');
+    }, retries);
 }
 
 //

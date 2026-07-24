@@ -609,7 +609,7 @@ run_all_tests() {
 
     # Clear local cache
     log_info "Clearing local cache before running tests"
-    invoke_command "Clear local cache" "$(get_cli_command) clear-cache" || {
+    invoke_command "Clear local cache" "$(get_cli_command) hash-cache clear" || {
         log_warning "Failed to clear cache, continuing anyway..."
     }
 
@@ -715,7 +715,7 @@ run_multiple_commands() {
     
     # Clear local cache before running tests
     log_info "Clearing local cache before running tests"
-    invoke_command "Clear local cache" "$(get_cli_command) clear-cache" || {
+    invoke_command "Clear local cache" "$(get_cli_command) hash-cache clear" || {
         log_warning "Failed to clear cache, continuing anyway..."
     }
     
@@ -897,7 +897,7 @@ main() {
             fi
 
             log_info "Clearing local cache before running tests"
-            invoke_command "Clear local cache" "$(get_cli_command) clear-cache" || {
+            invoke_command "Clear local cache" "$(get_cli_command) hash-cache clear" || {
                 log_warning "Failed to clear cache, continuing anyway..."
             }
 
@@ -967,7 +967,7 @@ main() {
     
     # Clear local cache before running tests
     log_info "Clearing local cache before running tests"
-    invoke_command "Clear local cache" "$(get_cli_command) clear-cache" || {
+    invoke_command "Clear local cache" "$(get_cli_command) hash-cache clear" || {
         log_warning "Failed to clear cache, continuing anyway..."
     }
     

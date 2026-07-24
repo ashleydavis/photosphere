@@ -55,6 +55,12 @@ Run the encrypted CLI smoke tests:
 bun run test:cli:encrypted
 ```
 
+Run the hash cache concurrency smoke test, which proves that parallel processes can share one hash cache without losing entries:
+
+```bash
+bun run test:cli:hash-cache
+```
+
 Run every test across the monorepo via the shell script, which prints a summary of results. It does not run the tests in parallel, which makes it easier to see where a failure originates:
 
 ```bash

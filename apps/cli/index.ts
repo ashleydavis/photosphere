@@ -9,6 +9,7 @@ import { verifyCommand } from './src/cmd/verify';
 import { replicateCommand } from './src/cmd/replicate';
 import { compareCommand } from './src/cmd/compare';
 import { hashCacheCommand } from './src/cmd/hash-cache';
+import { hashFileCommand, hashCacheAddCommand, hashCacheSetCommand, hashCacheGetCommand, hashCacheRemoveCommand, hashCacheListCommand, hashCacheCountCommand } from './src/cmd/hash-cache-tools';
 import { debugMerkleTreeCommand, debugFindCollisionsCommand, debugFindDuplicatesCommand, debugRemoveDuplicatesCommand, debugBuildSortIndexCommand, debugBuildFilesTreeCommand } from './src/cmd/debug';
 import { bugReportCommand } from './src/cmd/bug';
 import { examplesCommand } from './src/cmd/examples';
@@ -142,10 +143,6 @@ Resources:
         .addHelpText('after', getCommandExamplesHelp('check'))
         .action(initContext(checkCommand));
 
-    program
-        .command("clear-cache")
-        .description("Clear the local hash cache to force re-hashing of files.")
-        .action(clearCacheCommand);
 
     program
         .command("compare")
@@ -207,8 +204,17 @@ Resources:
         .addHelpText('after', getCommandExamplesHelp('hash'))
         .action(hashCommand);
 
-    program
-        .command("hash-cache")
+    //
+    // Commands for inspecting and driving the local hash cache. The whole group is hidden: it is
+    // for development and for the concurrency smoke test, not for end users, and it is documented
+    // in the wiki rather than in the program help.
+    //
+    const hashCacheCmd = program
+        .command("hash-cache", { hidden: true })
+        .description("Inspect and manage the local hash cache.");
+
+    hashCacheCmd
+        .command("show")
         .description("Display information about the local hash cache.")
         .option(...dbOption)
         .option(...keyOption)
@@ -216,6 +222,46 @@ Resources:
         .option(...yesOption)
         .option(...cwdOption)
         .action(hashCacheCommand);
+
+    hashCacheCmd
+        .command("clear")
+        .description("Clear the local hash cache to force re-hashing of files.")
+        .action(clearCacheCommand);
+
+    hashCacheCmd
+        .command("hash-file <file>")
+        .description("Compute the SHA-256 hash of a file without touching the cache.")
+        .action(hashFileCommand);
+
+    hashCacheCmd
+        .command("add <file>")
+        .description("Hash a file and record it in the local hash cache.")
+        .action(hashCacheAddCommand);
+
+    hashCacheCmd
+        .command("set <path> <hash> <length>")
+        .description("Record a hash in the local hash cache against an arbitrary path.")
+        .action(hashCacheSetCommand);
+
+    hashCacheCmd
+        .command("get <path>")
+        .description("Print the cached hash for a path. Exits 1 when it is not cached.")
+        .action(hashCacheGetCommand);
+
+    hashCacheCmd
+        .command("remove <path>")
+        .description("Remove a path from the local hash cache. Exits 1 when it was not cached.")
+        .action(hashCacheRemoveCommand);
+
+    hashCacheCmd
+        .command("list")
+        .description("Print the path of every entry in the local hash cache, one per line.")
+        .action(hashCacheListCommand);
+
+    hashCacheCmd
+        .command("count")
+        .description("Print how many entries the local hash cache holds.")
+        .action(hashCacheCountCommand);
 
     const debugCommand = program
         .command("debug")
