@@ -98,7 +98,7 @@ Create `MyPlugin.swift` (`@objc(MyPlugin) public class MyPlugin: CAPPlugin`) and
 
 ## After changing worker shims: rebuild the bundle
 
-The worker JS is shipped as a prebuilt file. After editing anything in `packages/mobile-worker/src/`, rebuild and copy it:
+The worker JS is a build artifact: it is generated at build time and is not committed to git. `bun run sync` builds and copies it (so `bun run open`, `bun run run`, `bun run test:ios`, `bun run test:ios:unit`, `bun run build:ios`, and the story player all regenerate it). After editing anything in `packages/mobile-worker/src/`, do just the bundle step:
 
 ```
 bun run bundle:worker

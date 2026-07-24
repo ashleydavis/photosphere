@@ -17,6 +17,8 @@ android/local.properties
 android/app/src/main/assets/public/
 android/app/src/main/assets/capacitor.config.json
 android/app/src/main/assets/capacitor.plugins.json
+# Generated worker bundle, copied in by `bun run bundle:worker` (run by `sync`). Never committed.
+android/app/src/main/assets/worker.bundle.js
 
 # Vendored native media (ImageMagick prebuilt libs + headers). Fetched at build time by
 # scripts/fetch-mobile-media-tools.sh — never copied in by hand or committed.

@@ -106,6 +106,24 @@ tasks.withType(Test).configureEach {
     }
 }
 
+// The embedded worker bundle is generated (never committed), so a build run without `bun run sync`
+// would otherwise package an APK with no worker asset and every background task would fail at
+// runtime on the device. Fail the build up front instead, with the command that fixes it. The check
+// runs at execution time (doLast), so an Android Studio Gradle sync is unaffected.
+tasks.register('checkWorkerBundle') {
+    doLast {
+        def workerBundle = file('src/main/assets/worker.bundle.js')
+        if (!workerBundle.exists()) {
+            throw new GradleException(
+                "Missing generated worker bundle: ${workerBundle}\n" +
+                "Run `bun run bundle:worker` from apps/android-frontend (or `bun run sync`) to build and copy it."
+            )
+        }
+    }
+}
+
+preBuild.dependsOn checkWorkerBundle
+
 apply from: 'capacitor.build.gradle'
 
 try {

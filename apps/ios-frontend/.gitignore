@@ -15,6 +15,8 @@ ios/App/App/capacitor.config.json
 ios/App/App/config.xml
 ios/DerivedData/
 ios/build/
+# Generated worker bundle, copied in by `bun run bundle:worker` (run by `sync`). Never committed.
+ios/App/App/worker.bundle.js
 
 # Vendored native media (ImageMagick static libs + headers). Built at build time by
 # scripts/fetch-mobile-media-tools.sh (ios/build-imagemagick.sh) — never committed.

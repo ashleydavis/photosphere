@@ -20,7 +20,7 @@ On iOS and Android there is no Node or Bun runtime inside the app, so background
 
 ### How a task runs on mobile
 
-The TypeScript orchestration in `packages/task-queue` is reused unchanged. The task handlers in `packages/node-api/src/lib/*.worker.ts` are compiled into a single `worker.bundle.js` and executed by the embedded engine. The bundle exposes its entry point by assigning `globalThis.__photosphereWorker = { runTask }` (built with `bun build --format=iife`; no bundler global-name is set, so the two mechanisms cannot collide). The name `__photosphereWorker` is used rather than `Worker` so it does not shadow the built-in Web Worker constructor.
+The TypeScript orchestration in `packages/task-queue` is reused unchanged. The task handlers in `packages/node-api/src/lib/*.worker.ts` are compiled into a single `worker.bundle.js` and executed by the embedded engine. The bundle exposes its entry point by assigning `globalThis.__photosphereWorker = { runTask }` (built with `bun build --format=iife`; no bundler global-name is set, so the two mechanisms cannot collide). The name `__photosphereWorker` is used rather than `Worker` so it does not shadow the built-in Web Worker constructor. The bundle is a build artifact produced by `packages/mobile-worker/bundle.ts` (`build:bundle`) and copied into both native projects by `copy:bundle`, both run by each mobile app's `sync`. It is not committed to git.
 
 ### The round trip
 
