@@ -53,7 +53,7 @@
     "test:and:unlock": "bun run --filter=smoke-tests test:and:unlock",
     "test:ios": "cd ./apps/smoke-tests && PLATFORM=ios ./run.sh",
     "test:and:unit": "bun run --filter=android-frontend test:unit",
-    "test:ios:unit": "bun --filter=ios-frontend sync && bash ./apps/ios-frontend/ios/run-unit-tests.sh",
+    "test:ios:unit": "bun run --filter=ios-frontend test:unit",
     "build:and": "bun --filter=android-frontend sync && cd ./apps/android-frontend/android && ./gradlew :app:assembleDebug",
     "build:ios": "bun --filter=ios-frontend sync && cd ./apps/ios-frontend/ios/App && xcodebuild -workspace App.xcworkspace -scheme App -destination 'generic/platform=iOS Simulator' build",
     "vendor:imagemagick:ios": "bash ./apps/ios-frontend/ios/build-imagemagick.sh",
