@@ -24,6 +24,7 @@
 		6EB04D6B0DEC313136AB77A5 /* PathSandboxTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FBA8F4FD583EAFC5EFEC48E /* PathSandboxTests.swift */; };
 		D0000000000000000000B100 /* TcpHostTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0000000000000000000A100 /* TcpHostTests.swift */; };
 		D0000000000000000000B101 /* MediaRunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0000000000000000000A101 /* MediaRunnerTests.swift */; };
+		D0000000000000000000B103 /* ImportPickerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0000000000000000000A103 /* ImportPickerTests.swift */; };
 		73F80B325942FD7BAAC99376 /* NotImplementedTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07855680FE24064B7769CBB4 /* NotImplementedTests.swift */; };
 		A1B2C3D4E5F600000000FF21 /* PickFilesCopyFailureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600000000FF22 /* PickFilesCopyFailureTests.swift */; };
 		8108CF91E144FF97BA5C7390 /* EnginePoolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79D28BB3B7D9903A032E51CC /* EnginePoolTests.swift */; };
@@ -87,6 +88,7 @@
 		7FBA8F4FD583EAFC5EFEC48E /* PathSandboxTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PathSandboxTests.swift; sourceTree = "<group>"; };
 		D0000000000000000000A100 /* TcpHostTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TcpHostTests.swift; sourceTree = "<group>"; };
 		D0000000000000000000A101 /* MediaRunnerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MediaRunnerTests.swift; sourceTree = "<group>"; };
+		D0000000000000000000A103 /* ImportPickerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ImportPickerTests.swift; sourceTree = "<group>"; };
 		83151A04F7CCCA92455397D7 /* Pods-AppTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-AppTests.debug.xcconfig"; path = "Pods/Target Support Files/Pods-AppTests/Pods-AppTests.debug.xcconfig"; sourceTree = "<group>"; };
 		941F7016C52F6B991858BFD4 /* HostBridgeTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HostBridgeTests.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F600000000FF02 /* HostFunctionsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HostFunctionsTests.swift; sourceTree = "<group>"; };
@@ -233,6 +235,7 @@
 				D0000000000000000000A100 /* TcpHostTests.swift */,
 				D0000000000000000000A101 /* MediaRunnerTests.swift */,
 				D0000000000000000000A102 /* ExportTempTests.swift */,
+				D0000000000000000000A103 /* ImportPickerTests.swift */,
 				B36CD9CADF6F132C9A9BAAE5 /* WorkerBundleParityTests.swift */,
 			);
 			name = AppTests;
@@ -451,6 +454,7 @@
 				D0000000000000000000B100 /* TcpHostTests.swift in Sources */,
 				D0000000000000000000B101 /* MediaRunnerTests.swift in Sources */,
 				D0000000000000000000B102 /* ExportTempTests.swift in Sources */,
+				D0000000000000000000B103 /* ImportPickerTests.swift in Sources */,
 				13E4EC3C45DA72EF0950953D /* WorkerBundleParityTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

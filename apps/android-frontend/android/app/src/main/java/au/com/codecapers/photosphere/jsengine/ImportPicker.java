@@ -34,8 +34,15 @@ final class ImportPicker {
 
     //
     // Derives a lowercase file extension for a picked item: the display name's own extension when it
-    // has one, otherwise the mime subtype ("image/jpeg" -> "jpeg"), otherwise "bin". "jpg" is mapped
-    // to "jpeg" so the extension matches the content type the importer infers.
+    // has one, otherwise the mime subtype ("image/jpeg" -> "jpeg"), otherwise "bin". The display
+    // name's extension is used verbatim (lowercased), so "cat.jpg" yields "jpg", not "jpeg".
+    //
+    // This must resolve the same extension as the iOS ImportPicker for the same picked item, so one
+    // photo does not import as an image on one platform and as an untyped blob on the other. iOS runs
+    // the same chain with the same per-step rules, differing only in that it has a second name source
+    // (the picked file's own extension) that it checks first. ImportPickerTest.sharedParityCases and
+    // the iOS ImportPickerTests.testSharedParityCases assert an identical table of inputs and results;
+    // keep them in step when changing either platform.
     //
     static String extensionFor(String displayName, String mimeType) {
         String fromName = extensionFromName(displayName);

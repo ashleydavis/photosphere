@@ -164,11 +164,12 @@ public class JsEnginePlugin: CAPPlugin, EnginePoolDelegate {
     // Copies one picked file (a temporary URL vended by PHPickerResult.loadFileRepresentation) into
     // the sandbox import temp directory under a fresh uuid name, returning its sandbox-relative path.
     //
-    fileprivate func copyPickedFile(from url: URL, suggestedName: String?) throws -> String {
+    fileprivate func copyPickedFile(from url: URL, suggestedName: String?, mimeType: String?) throws -> String {
         let relativePath = ImportPicker.buildRelativePath(
             uuid: UUID().uuidString,
             displayName: suggestedName,
-            fileExtension: url.pathExtension
+            fileExtension: url.pathExtension,
+            mimeType: mimeType
         )
 
         let destination = storageRoot().appendingPathComponent(relativePath)
@@ -561,6 +562,7 @@ extension JsEnginePlugin: PHPickerViewControllerDelegate {
             group.enter()
             let provider = result.itemProvider
             let typeIdentifier = provider.registeredTypeIdentifiers.first ?? UTType.data.identifier
+            let mimeType = UTType(typeIdentifier)?.preferredMIMEType
             provider.loadFileRepresentation(forTypeIdentifier: typeIdentifier) { [weak self] url, loadError in
                 defer {
                     group.leave()
@@ -571,7 +573,7 @@ extension JsEnginePlugin: PHPickerViewControllerDelegate {
                 }
                 else if let self = self, let url = url {
                     do {
-                        let relativePath = try self.copyPickedFile(from: url, suggestedName: provider.suggestedName)
+                        let relativePath = try self.copyPickedFile(from: url, suggestedName: provider.suggestedName, mimeType: mimeType)
                         outcome = .copied(relativePath)
                     }
                     catch {
