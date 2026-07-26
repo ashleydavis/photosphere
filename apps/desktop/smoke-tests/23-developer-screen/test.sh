@@ -91,6 +91,12 @@ send_command "$APP_PORT" click '{"dataId":"developer-tool-stories"}'
 wait_for_value "$APP_PORT" "stories-page" "story"
 send_command "$APP_PORT" click '{"dataId":"stories-back-link"}'
 
+# Wait for the back link to actually land before navigating on. It goes to "/", which Main redirects
+# to /gallery once it has remounted, and the app shows the no-database screen there. Navigating while
+# that is still in flight races it: navigate only sets the route hash, so the redirect that lands
+# afterwards replaces it and the developer page never renders.
+wait_for_value "$APP_PORT" "no-database-loaded" "Welcome to Photosphere"
+
 # Return to the developer screen (developer mode is persisted).
 send_command "$APP_PORT" navigate '{"page":"/developer"}'
 wait_for_value "$APP_PORT" "developer-page" "Developer"

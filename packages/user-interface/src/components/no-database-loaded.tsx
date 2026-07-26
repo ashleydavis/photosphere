@@ -45,6 +45,7 @@ export function NoDatabaseLoaded() {
                 Three side-by-side buttons is a desktop shape, and at phone width it clipped the
                 outer two off both edges of the screen. */}
             <Box
+                data-id="no-database-loaded"
                 sx={{
                     display: 'flex',
                     alignItems: 'center',
