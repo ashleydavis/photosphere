@@ -30,7 +30,7 @@ Each step carries a checkbox and a status: `not started`, `completed`, or `aband
 
     In `apps/smoke-tests/lib/android.sh`, make `android_build` return early with a clear log line when `PHOTOSPHERE_SKIP_BUILD` is set to `1`. Do not gate the build on a source checksum: a checksum that misses a file produces exactly the stale-build class of failure this repo forbids blaming. Document the variable in `docs/testing/README.md`.
 
-5. [ ] **Stop `test:and:unit` re-running every Gradle task.** Status: not started. Drops a flag that forces Gradle to redo every task from scratch, defeating incremental build and the build cache. **Impact: 30-60s on repeat runs of the Android unit tests. Does not touch the smoke-test loop.**
+5. [x] **Stop `test:and:unit` re-running every Gradle task.** Status: abandoned, change made then reverted. **Measured: with `--rerun-tasks` 8.5s (9s, 8s); without it 6.5s (7s, 6s). Saving 2s, not the 30-60s estimated.** Worse, the log shows why the flag was there: without it Gradle reports `> Task :app:testDebugUnitTest UP-TO-DATE` and does not execute the tests at all, so `bun run test:and:unit` would pass without having run anything. Trading a test command that actually runs its tests for 2s is a bad deal. Drops a flag that forces Gradle to redo every task from scratch, defeating incremental build and the build cache. **Impact: 30-60s on repeat runs of the Android unit tests. Does not touch the smoke-test loop.**
 
     In `apps/android-frontend/package.json`, remove `--rerun-tasks` from the `test:unit` script.
 
