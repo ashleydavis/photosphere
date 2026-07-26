@@ -514,7 +514,7 @@ require_lan_bridge() {
         return 0
     fi
     log_error "The emulator is not on the host LAN bridge, so a host-to-device LAN transfer cannot work."
-    log_error "Bring it up with: sudo apps/android-frontend/scripts/emulator-lan-bridge.sh up"
+    log_error "Bring it up with: bun run emu:and:up"
     exit 1
 }
 

@@ -216,6 +216,17 @@ jobs:
           echo "Write lock tests exit code: $WRITE_LOCK_EXIT_CODE" >> write-lock-test-logs/write-lock-tests-output.log
           exit $WRITE_LOCK_EXIT_CODE
 
+  android-lock-tests:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Android lock tests
+        working-directory: ./apps/smoke-tests
+        run: bash ./android-lock.test.sh
+
   hash-cache-tests:
     timeout-minutes: 20
     runs-on: ubuntu-latest
@@ -1559,7 +1570,7 @@ jobs:
 
   create-release:
     timeout-minutes: 20
-    needs: [prepare-tag, compile, unit-tests, perf-tests, build-linux, build-windows, build-windows-baseline, build-macos-x64, build-macos-arm64, build-desktop, smoke-test, smoke-test-encrypted, write-lock-tests, hash-cache-tests, sync-tests, lan-share-smoke-test, electron-smoke-tests, cli-desktop-lan-share-smoke-tests, android-unit-tests, ios-unit-tests, android-smoke-tests, ios-smoke-tests]
+    needs: [prepare-tag, compile, unit-tests, perf-tests, build-linux, build-windows, build-windows-baseline, build-macos-x64, build-macos-arm64, build-desktop, smoke-test, smoke-test-encrypted, write-lock-tests, android-lock-tests, hash-cache-tests, sync-tests, lan-share-smoke-test, electron-smoke-tests, cli-desktop-lan-share-smoke-tests, android-unit-tests, ios-unit-tests, android-smoke-tests, ios-smoke-tests]
     runs-on: ubuntu-latest
     permissions:
       contents: write

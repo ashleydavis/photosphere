@@ -12,6 +12,24 @@
 # Path to the debug APK produced by assembleDebug.
 ANDROID_APK="$ANDROID_FRONTEND_DIR/android/app/build/outputs/apk/debug/app-debug.apk"
 
+# The bridge script owns the definition of "ready" (emulator started + on the LAN bridge). run.sh
+# gates on it so `status` and the test run never disagree about what ready means.
+ANDROID_BRIDGE_SCRIPT="$ANDROID_FRONTEND_DIR/scripts/emulator.sh"
+
+#
+# Fails the whole run immediately unless the emulator is started AND on the LAN bridge, by delegating
+# to the bridge script's `status` (exit 0 = ready). Never boots, restarts, wipes, reboots, or changes
+# any setting on the emulator: getting it ready is the human's job, not this script's.
+#
+android_require_ready() {
+    log_info "Checking the emulator is ready (started + on the LAN bridge)..."
+    if ! "$ANDROID_BRIDGE_SCRIPT" status; then
+        log_error "Emulator not ready (see above). test:and needs it started and on the LAN bridge."
+        log_error "Start it and bring up the bridge yourself, then rerun. This script will not touch the emulator."
+        exit 1
+    fi
+}
+
 #
 # Returns 0 if the given Java home is a JDK 17 installation.
 #
@@ -144,7 +162,7 @@ android_install() {
 #
 # Prints the address the emulator/device uses to reach this host.
 #
-# A bridge-attached emulator (the LAN sharing setup, apps/android-frontend/scripts/emulator-lan-bridge.sh)
+# A bridge-attached emulator (the LAN sharing setup, apps/android-frontend/scripts/emulator.sh)
 # has a 192.168.55.x address on wlan0 and reaches the host at 192.168.55.1, where the 10.0.2.2 NAT
 # alias is dead (the guest has no default route to it). A plain user-mode NAT emulator reaches the
 # host at 10.0.2.2. Auto-detect from the guest's wlan0 address, overridable with

@@ -41590,6 +41590,451 @@ Use Chrome, Firefox or Internet Explorer 11`);
     }
   });
 
+  // ../../node_modules/router/node_modules/debug/node_modules/ms/index.js
+  var require_ms2 = __commonJS((exports, module) => {
+    var s = 1000;
+    var m = s * 60;
+    var h = m * 60;
+    var d = h * 24;
+    var w = d * 7;
+    var y = d * 365.25;
+    module.exports = function(val, options) {
+      options = options || {};
+      var type = typeof val;
+      if (type === "string" && val.length > 0) {
+        return parse5(val);
+      } else if (type === "number" && isFinite(val)) {
+        return options.long ? fmtLong(val) : fmtShort(val);
+      }
+      throw new Error("val is not a non-empty string or a valid number. val=" + JSON.stringify(val));
+    };
+    function parse5(str) {
+      str = String(str);
+      if (str.length > 100) {
+        return;
+      }
+      var match = /^(-?(?:\d+)?\.?\d+) *(milliseconds?|msecs?|ms|seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|w|years?|yrs?|y)?$/i.exec(str);
+      if (!match) {
+        return;
+      }
+      var n = parseFloat(match[1]);
+      var type = (match[2] || "ms").toLowerCase();
+      switch (type) {
+        case "years":
+        case "year":
+        case "yrs":
+        case "yr":
+        case "y":
+          return n * y;
+        case "weeks":
+        case "week":
+        case "w":
+          return n * w;
+        case "days":
+        case "day":
+        case "d":
+          return n * d;
+        case "hours":
+        case "hour":
+        case "hrs":
+        case "hr":
+        case "h":
+          return n * h;
+        case "minutes":
+        case "minute":
+        case "mins":
+        case "min":
+        case "m":
+          return n * m;
+        case "seconds":
+        case "second":
+        case "secs":
+        case "sec":
+        case "s":
+          return n * s;
+        case "milliseconds":
+        case "millisecond":
+        case "msecs":
+        case "msec":
+        case "ms":
+          return n;
+        default:
+          return;
+      }
+    }
+    function fmtShort(ms) {
+      var msAbs = Math.abs(ms);
+      if (msAbs >= d) {
+        return Math.round(ms / d) + "d";
+      }
+      if (msAbs >= h) {
+        return Math.round(ms / h) + "h";
+      }
+      if (msAbs >= m) {
+        return Math.round(ms / m) + "m";
+      }
+      if (msAbs >= s) {
+        return Math.round(ms / s) + "s";
+      }
+      return ms + "ms";
+    }
+    function fmtLong(ms) {
+      var msAbs = Math.abs(ms);
+      if (msAbs >= d) {
+        return plural(ms, msAbs, d, "day");
+      }
+      if (msAbs >= h) {
+        return plural(ms, msAbs, h, "hour");
+      }
+      if (msAbs >= m) {
+        return plural(ms, msAbs, m, "minute");
+      }
+      if (msAbs >= s) {
+        return plural(ms, msAbs, s, "second");
+      }
+      return ms + " ms";
+    }
+    function plural(ms, msAbs, n, name) {
+      var isPlural = msAbs >= n * 1.5;
+      return Math.round(ms / n) + " " + name + (isPlural ? "s" : "");
+    }
+  });
+
+  // ../../node_modules/router/node_modules/debug/src/common.js
+  var require_common2 = __commonJS((exports, module) => {
+    function setup(env) {
+      createDebug.debug = createDebug;
+      createDebug.default = createDebug;
+      createDebug.coerce = coerce;
+      createDebug.disable = disable;
+      createDebug.enable = enable;
+      createDebug.enabled = enabled;
+      createDebug.humanize = require_ms2();
+      createDebug.destroy = destroy;
+      Object.keys(env).forEach((key) => {
+        createDebug[key] = env[key];
+      });
+      createDebug.names = [];
+      createDebug.skips = [];
+      createDebug.formatters = {};
+      function selectColor(namespace) {
+        let hash = 0;
+        for (let i2 = 0;i2 < namespace.length; i2++) {
+          hash = (hash << 5) - hash + namespace.charCodeAt(i2);
+          hash |= 0;
+        }
+        return createDebug.colors[Math.abs(hash) % createDebug.colors.length];
+      }
+      createDebug.selectColor = selectColor;
+      function createDebug(namespace) {
+        let prevTime;
+        let enableOverride = null;
+        let namespacesCache;
+        let enabledCache;
+        function debug(...args) {
+          if (!debug.enabled) {
+            return;
+          }
+          const self2 = debug;
+          const curr = Number(new Date);
+          const ms = curr - (prevTime || curr);
+          self2.diff = ms;
+          self2.prev = prevTime;
+          self2.curr = curr;
+          prevTime = curr;
+          args[0] = createDebug.coerce(args[0]);
+          if (typeof args[0] !== "string") {
+            args.unshift("%O");
+          }
+          let index = 0;
+          args[0] = args[0].replace(/%([a-zA-Z%])/g, (match, format3) => {
+            if (match === "%%") {
+              return "%";
+            }
+            index++;
+            const formatter = createDebug.formatters[format3];
+            if (typeof formatter === "function") {
+              const val = args[index];
+              match = formatter.call(self2, val);
+              args.splice(index, 1);
+              index--;
+            }
+            return match;
+          });
+          createDebug.formatArgs.call(self2, args);
+          const logFn = self2.log || createDebug.log;
+          logFn.apply(self2, args);
+        }
+        debug.namespace = namespace;
+        debug.useColors = createDebug.useColors();
+        debug.color = createDebug.selectColor(namespace);
+        debug.extend = extend;
+        debug.destroy = createDebug.destroy;
+        Object.defineProperty(debug, "enabled", {
+          enumerable: true,
+          configurable: false,
+          get: () => {
+            if (enableOverride !== null) {
+              return enableOverride;
+            }
+            if (namespacesCache !== createDebug.namespaces) {
+              namespacesCache = createDebug.namespaces;
+              enabledCache = createDebug.enabled(namespace);
+            }
+            return enabledCache;
+          },
+          set: (v) => {
+            enableOverride = v;
+          }
+        });
+        if (typeof createDebug.init === "function") {
+          createDebug.init(debug);
+        }
+        return debug;
+      }
+      function extend(namespace, delimiter) {
+        const newDebug = createDebug(this.namespace + (typeof delimiter === "undefined" ? ":" : delimiter) + namespace);
+        newDebug.log = this.log;
+        return newDebug;
+      }
+      function enable(namespaces) {
+        createDebug.save(namespaces);
+        createDebug.namespaces = namespaces;
+        createDebug.names = [];
+        createDebug.skips = [];
+        const split = (typeof namespaces === "string" ? namespaces : "").trim().replace(/\s+/g, ",").split(",").filter(Boolean);
+        for (const ns of split) {
+          if (ns[0] === "-") {
+            createDebug.skips.push(ns.slice(1));
+          } else {
+            createDebug.names.push(ns);
+          }
+        }
+      }
+      function matchesTemplate(search, template) {
+        let searchIndex = 0;
+        let templateIndex = 0;
+        let starIndex = -1;
+        let matchIndex = 0;
+        while (searchIndex < search.length) {
+          if (templateIndex < template.length && (template[templateIndex] === search[searchIndex] || template[templateIndex] === "*")) {
+            if (template[templateIndex] === "*") {
+              starIndex = templateIndex;
+              matchIndex = searchIndex;
+              templateIndex++;
+            } else {
+              searchIndex++;
+              templateIndex++;
+            }
+          } else if (starIndex !== -1) {
+            templateIndex = starIndex + 1;
+            matchIndex++;
+            searchIndex = matchIndex;
+          } else {
+            return false;
+          }
+        }
+        while (templateIndex < template.length && template[templateIndex] === "*") {
+          templateIndex++;
+        }
+        return templateIndex === template.length;
+      }
+      function disable() {
+        const namespaces = [
+          ...createDebug.names,
+          ...createDebug.skips.map((namespace) => "-" + namespace)
+        ].join(",");
+        createDebug.enable("");
+        return namespaces;
+      }
+      function enabled(name) {
+        for (const skip of createDebug.skips) {
+          if (matchesTemplate(name, skip)) {
+            return false;
+          }
+        }
+        for (const ns of createDebug.names) {
+          if (matchesTemplate(name, ns)) {
+            return true;
+          }
+        }
+        return false;
+      }
+      function coerce(val) {
+        if (val instanceof Error) {
+          return val.stack || val.message;
+        }
+        return val;
+      }
+      function destroy() {
+        console.warn("Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`.");
+      }
+      createDebug.enable(createDebug.load());
+      return createDebug;
+    }
+    module.exports = setup;
+  });
+
+  // ../../node_modules/router/node_modules/debug/src/browser.js
+  var require_browser8 = __commonJS((exports, module) => {
+    exports.formatArgs = formatArgs;
+    exports.save = save2;
+    exports.load = load2;
+    exports.useColors = useColors;
+    exports.storage = localstorage();
+    exports.destroy = (() => {
+      let warned = false;
+      return () => {
+        if (!warned) {
+          warned = true;
+          console.warn("Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`.");
+        }
+      };
+    })();
+    exports.colors = [
+      "#0000CC",
+      "#0000FF",
+      "#0033CC",
+      "#0033FF",
+      "#0066CC",
+      "#0066FF",
+      "#0099CC",
+      "#0099FF",
+      "#00CC00",
+      "#00CC33",
+      "#00CC66",
+      "#00CC99",
+      "#00CCCC",
+      "#00CCFF",
+      "#3300CC",
+      "#3300FF",
+      "#3333CC",
+      "#3333FF",
+      "#3366CC",
+      "#3366FF",
+      "#3399CC",
+      "#3399FF",
+      "#33CC00",
+      "#33CC33",
+      "#33CC66",
+      "#33CC99",
+      "#33CCCC",
+      "#33CCFF",
+      "#6600CC",
+      "#6600FF",
+      "#6633CC",
+      "#6633FF",
+      "#66CC00",
+      "#66CC33",
+      "#9900CC",
+      "#9900FF",
+      "#9933CC",
+      "#9933FF",
+      "#99CC00",
+      "#99CC33",
+      "#CC0000",
+      "#CC0033",
+      "#CC0066",
+      "#CC0099",
+      "#CC00CC",
+      "#CC00FF",
+      "#CC3300",
+      "#CC3333",
+      "#CC3366",
+      "#CC3399",
+      "#CC33CC",
+      "#CC33FF",
+      "#CC6600",
+      "#CC6633",
+      "#CC9900",
+      "#CC9933",
+      "#CCCC00",
+      "#CCCC33",
+      "#FF0000",
+      "#FF0033",
+      "#FF0066",
+      "#FF0099",
+      "#FF00CC",
+      "#FF00FF",
+      "#FF3300",
+      "#FF3333",
+      "#FF3366",
+      "#FF3399",
+      "#FF33CC",
+      "#FF33FF",
+      "#FF6600",
+      "#FF6633",
+      "#FF9900",
+      "#FF9933",
+      "#FFCC00",
+      "#FFCC33"
+    ];
+    function useColors() {
+      if (typeof window !== "undefined" && window.process && (window.process.type === "renderer" || window.process.__nwjs)) {
+        return true;
+      }
+      if (typeof navigator !== "undefined" && navigator.userAgent && navigator.userAgent.toLowerCase().match(/(edge|trident)\/(\d+)/)) {
+        return false;
+      }
+      let m;
+      return typeof document !== "undefined" && document.documentElement && document.documentElement.style && document.documentElement.style.WebkitAppearance || typeof window !== "undefined" && window.console && (window.console.firebug || window.console.exception && window.console.table) || typeof navigator !== "undefined" && navigator.userAgent && (m = navigator.userAgent.toLowerCase().match(/firefox\/(\d+)/)) && parseInt(m[1], 10) >= 31 || typeof navigator !== "undefined" && navigator.userAgent && navigator.userAgent.toLowerCase().match(/applewebkit\/(\d+)/);
+    }
+    function formatArgs(args) {
+      args[0] = (this.useColors ? "%c" : "") + this.namespace + (this.useColors ? " %c" : " ") + args[0] + (this.useColors ? "%c " : " ") + "+" + module.exports.humanize(this.diff);
+      if (!this.useColors) {
+        return;
+      }
+      const c = "color: " + this.color;
+      args.splice(1, 0, c, "color: inherit");
+      let index = 0;
+      let lastC = 0;
+      args[0].replace(/%[a-zA-Z%]/g, (match) => {
+        if (match === "%%") {
+          return;
+        }
+        index++;
+        if (match === "%c") {
+          lastC = index;
+        }
+      });
+      args.splice(lastC, 0, c);
+    }
+    exports.log = console.debug || console.log || (() => {});
+    function save2(namespaces) {
+      try {
+        if (namespaces) {
+          exports.storage.setItem("debug", namespaces);
+        } else {
+          exports.storage.removeItem("debug");
+        }
+      } catch (error) {}
+    }
+    function load2() {
+      let r;
+      try {
+        r = exports.storage.getItem("debug") || exports.storage.getItem("DEBUG");
+      } catch (error) {}
+      if (!r && typeof process !== "undefined" && "env" in process) {
+        r = process.env.DEBUG;
+      }
+      return r;
+    }
+    function localstorage() {
+      try {
+        return localStorage;
+      } catch (error) {}
+    }
+    module.exports = require_common2()(exports);
+    var { formatters } = module.exports;
+    formatters.j = function(v) {
+      try {
+        return JSON.stringify(v);
+      } catch (error) {
+        return "[UnexpectedJSONParseError]: " + error.message;
+      }
+    };
+  });
+
   // ../../node_modules/router/lib/layer.js
   var require_layer = __commonJS((exports, module) => {
     /*!
@@ -41600,7 +42045,7 @@ Use Chrome, Firefox or Internet Explorer 11`);
      */
     var isPromise = require_is_promise();
     var pathRegexp = require_dist2();
-    var debug = require_browser6()("router:layer");
+    var debug = require_browser8()("router:layer");
     var deprecate = require_browser7()("router");
     var TRAILING_SLASH_REGEXP = /\/+$/;
     var MATCHING_GROUP_REGEXP = /\((?:\?<(.*?)>)?(?!\?)/g;
@@ -41751,7 +42196,7 @@ Use Chrome, Firefox or Internet Explorer 11`);
      * Copyright(c) 2014-2022 Douglas Christopher Wilson
      * MIT Licensed
      */
-    var debug = require_browser6()("router:route");
+    var debug = require_browser8()("router:route");
     var Layer = require_layer();
     var { METHODS: METHODS2 } = (init_node_http(), __toCommonJS(exports_node_http));
     var slice = Array.prototype.slice;
@@ -41879,7 +42324,7 @@ Use Chrome, Firefox or Internet Explorer 11`);
     var { METHODS: METHODS2 } = (init_node_http(), __toCommonJS(exports_node_http));
     var parseUrl = require_parseurl();
     var Route = require_route();
-    var debug = require_browser6()("router");
+    var debug = require_browser8()("router");
     var deprecate = require_browser7()("router");
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
@@ -45470,7 +45915,7 @@ Use Chrome, Firefox or Internet Explorer 11`);
   });
 
   // ../../node_modules/immediate/lib/browser.js
-  var require_browser8 = __commonJS((exports, module) => {
+  var require_browser9 = __commonJS((exports, module) => {
     var Mutation = global.MutationObserver || global.WebKitMutationObserver;
     var scheduleDrain;
     {
@@ -45537,8 +45982,8 @@ Use Chrome, Firefox or Internet Explorer 11`);
   });
 
   // ../../node_modules/lie/lib/browser.js
-  var require_browser9 = __commonJS((exports, module) => {
-    var immediate = require_browser8();
+  var require_browser10 = __commonJS((exports, module) => {
+    var immediate = require_browser9();
     function INTERNAL() {}
     var handlers2 = {};
     var REJECTED = ["REJECTED"];
@@ -45787,7 +46232,7 @@ Use Chrome, Firefox or Internet Explorer 11`);
     if (typeof Promise !== "undefined") {
       ES6Promise = Promise;
     } else {
-      ES6Promise = require_browser9();
+      ES6Promise = require_browser10();
     }
     module.exports = {
       Promise: ES6Promise
@@ -47051,7 +47496,7 @@ Use Chrome, Firefox or Internet Explorer 11`);
   });
 
   // ../../node_modules/jszip/node_modules/pako/lib/utils/common.js
-  var require_common2 = __commonJS((exports) => {
+  var require_common3 = __commonJS((exports) => {
     var TYPED_OK = typeof Uint8Array !== "undefined" && typeof Uint16Array !== "undefined" && typeof Int32Array !== "undefined";
     function _has2(obj, key) {
       return Object.prototype.hasOwnProperty.call(obj, key);
@@ -47138,7 +47583,7 @@ Use Chrome, Firefox or Internet Explorer 11`);
 
   // ../../node_modules/jszip/node_modules/pako/lib/zlib/trees.js
   var require_trees = __commonJS((exports) => {
-    var utils = require_common2();
+    var utils = require_common3();
     var Z_FIXED2 = 4;
     var Z_BINARY2 = 0;
     var Z_TEXT2 = 1;
@@ -47797,7 +48242,7 @@ Use Chrome, Firefox or Internet Explorer 11`);
 
   // ../../node_modules/jszip/node_modules/pako/lib/zlib/deflate.js
   var require_deflate = __commonJS((exports) => {
-    var utils = require_common2();
+    var utils = require_common3();
     var trees2 = require_trees();
     var adler322 = require_adler32();
     var crc322 = require_crc322();
@@ -48827,7 +49272,7 @@ Use Chrome, Firefox or Internet Explorer 11`);
 
   // ../../node_modules/jszip/node_modules/pako/lib/utils/strings.js
   var require_strings = __commonJS((exports) => {
-    var utils = require_common2();
+    var utils = require_common3();
     var STR_APPLY_OK = true;
     var STR_APPLY_UIA_OK2 = true;
     try {
@@ -48986,7 +49431,7 @@ Use Chrome, Firefox or Internet Explorer 11`);
   // ../../node_modules/jszip/node_modules/pako/lib/deflate.js
   var require_deflate2 = __commonJS((exports) => {
     var zlib_deflate = require_deflate();
-    var utils = require_common2();
+    var utils = require_common3();
     var strings2 = require_strings();
     var msg = require_messages();
     var ZStream2 = require_zstream();
@@ -49363,7 +49808,7 @@ Use Chrome, Firefox or Internet Explorer 11`);
 
   // ../../node_modules/jszip/node_modules/pako/lib/zlib/inftrees.js
   var require_inftrees = __commonJS((exports, module) => {
-    var utils = require_common2();
+    var utils = require_common3();
     var MAXBITS2 = 15;
     var ENOUGH_LENS2 = 852;
     var ENOUGH_DISTS2 = 592;
@@ -49672,7 +50117,7 @@ Use Chrome, Firefox or Internet Explorer 11`);
 
   // ../../node_modules/jszip/node_modules/pako/lib/zlib/inflate.js
   var require_inflate = __commonJS((exports) => {
-    var utils = require_common2();
+    var utils = require_common3();
     var adler322 = require_adler32();
     var crc322 = require_crc322();
     var inflate_fast2 = require_inffast();
@@ -50921,7 +51366,7 @@ Use Chrome, Firefox or Internet Explorer 11`);
   // ../../node_modules/jszip/node_modules/pako/lib/inflate.js
   var require_inflate2 = __commonJS((exports) => {
     var zlib_inflate = require_inflate();
-    var utils = require_common2();
+    var utils = require_common3();
     var strings2 = require_strings();
     var c = require_constants();
     var msg = require_messages();
@@ -51089,7 +51534,7 @@ Use Chrome, Firefox or Internet Explorer 11`);
 
   // ../../node_modules/jszip/node_modules/pako/index.js
   var require_pako = __commonJS((exports, module) => {
-    var assign2 = require_common2().assign;
+    var assign2 = require_common3().assign;
     var deflate2 = require_deflate2();
     var inflate2 = require_inflate2();
     var constants4 = require_constants();
@@ -57594,6 +58039,15 @@ ${tables}` : preamble || tables;
    */
 
   // ../node-utils/src/lib/fs.ts
+  function sleep3(timeMs) {
+    return new Promise((resolve2) => {
+      setTimeout(resolve2, timeMs);
+    });
+  }
+  var UPDATE_BACKOFF_BASE_MS = 5;
+  var UPDATE_BACKOFF_MAX_MS = 250;
+  var LOCK_STALE_MS = 30000;
+  var LOCK_WAIT_ATTEMPTS = 50;
   async function ensureDir(dirPath) {
     try {
       await mkdir(dirPath, { recursive: true });
@@ -57651,6 +58105,83 @@ ${tables}` : preamble || tables;
   async function writeToml(filePath, object) {
     const tomlString = stringify(object);
     await outputFile(filePath, tomlString, { encoding: "utf8" });
+  }
+  async function readRawFileBytes(filePath) {
+    if (!await pathExists(filePath)) {
+      return;
+    }
+    return await readFile(filePath);
+  }
+  async function fileFingerprint(filePath) {
+    try {
+      const stats = await stat(filePath);
+      return { modifiedMs: stats.mtime.getTime(), size: stats.size };
+    } catch (error) {
+      if (error.code === "ENOENT") {
+        return;
+      }
+      throw error;
+    }
+  }
+  function fingerprintsMatch(before, after) {
+    if (before === undefined || after === undefined) {
+      return before === after;
+    }
+    return before.modifiedMs === after.modifiedMs && before.size === after.size;
+  }
+  async function tryTakeUpdateLock(lockPath) {
+    try {
+      const lockHandle = await undefined(lockPath, "wx");
+      await lockHandle.close();
+      return true;
+    } catch (error) {
+      if (error.code !== "EEXIST") {
+        throw error;
+      }
+    }
+    const lockFingerprint = await fileFingerprint(lockPath);
+    if (lockFingerprint !== undefined && Date.now() - lockFingerprint.modifiedMs > LOCK_STALE_MS) {
+      await rm(lockPath, { force: true });
+    }
+    return false;
+  }
+  function updateBackoffMs(attempt) {
+    return Math.random() * Math.min(UPDATE_BACKOFF_MAX_MS, UPDATE_BACKOFF_BASE_MS * Math.pow(2, attempt));
+  }
+  async function takeUpdateLock(lockPath) {
+    for (let attempt = 0;attempt < LOCK_WAIT_ATTEMPTS; attempt += 1) {
+      if (await tryTakeUpdateLock(lockPath)) {
+        return true;
+      }
+      await sleep3(updateBackoffMs(attempt));
+    }
+    return false;
+  }
+  async function updateFileRawOptimistic(filePath, mutator, retries) {
+    await ensureFileDir(filePath);
+    const lockPath = `${filePath}.lock`;
+    for (let attempt = 0;attempt <= retries; attempt += 1) {
+      if (!await takeUpdateLock(lockPath)) {
+        throw new Error(`Failed to update ${filePath}: could not take the update lock after ${LOCK_WAIT_ATTEMPTS} attempts.`);
+      }
+      try {
+        const fingerprintBefore = await fileFingerprint(filePath);
+        const currentBytes = await readRawFileBytes(filePath);
+        const updatedBytes = mutator(currentBytes);
+        const tempPath = `${filePath}.tmp-${randomUUID2()}`;
+        await writeFile(tempPath, updatedBytes);
+        const fingerprintAfter = await fileFingerprint(filePath);
+        if (fingerprintsMatch(fingerprintBefore, fingerprintAfter)) {
+          await rename(tempPath, filePath);
+          return;
+        }
+        await rm(tempPath, { force: true });
+      } finally {
+        await rm(lockPath, { force: true });
+      }
+      await sleep3(updateBackoffMs(attempt));
+    }
+    throw new Error(`Failed to update ${filePath}: the file kept changing under concurrent writers after ${retries} retries.`);
   }
   async function copy(src, dest) {
     const srcStats = await stat(src);
@@ -68780,7 +69311,7 @@ Copied hash: ${copiedHash.toString("hex")}
 
   // ../node-api/src/lib/asset-server.worker.ts
   var CANCEL_POLL_INTERVAL_MS = 250;
-  function sleep3(milliseconds) {
+  function sleep4(milliseconds) {
     return new Promise((resolve2) => {
       setTimeout(resolve2, milliseconds);
     });
@@ -68811,7 +69342,7 @@ Copied hash: ${copiedHash.toString("hex")}
     const readyMessage = { type: "asset-server-ready", port: boundPort, host };
     context.sendMessage(readyMessage);
     while (!context.isCancelled()) {
-      await sleep3(CANCEL_POLL_INTERVAL_MS);
+      await sleep4(CANCEL_POLL_INTERVAL_MS);
     }
     await new Promise((resolve2) => {
       server.close(() => resolve2());
@@ -68828,6 +69359,7 @@ Copied hash: ${copiedHash.toString("hex")}
   init_node_path();
   init_node_crypto();
   var HASH_CACHE_VERSION = 1;
+  var SAVE_RETRIES = 20;
 
   class HashCache {
     cacheDir;
@@ -68837,6 +69369,8 @@ Copied hash: ${copiedHash.toString("hex")}
     isDirty = false;
     entryCount = 0;
     offsetLookup = [];
+    pendingUpserts = new Map;
+    pendingRemovals = new Set;
     constructor(cacheDir, isReadonly = false) {
       this.cacheDir = cacheDir;
       this.isReadonly = isReadonly;
@@ -68847,43 +69381,79 @@ Copied hash: ${copiedHash.toString("hex")}
     computeChecksum(data) {
       return createHash("sha256").update(data).digest();
     }
+    decodeEntries(fileBytes) {
+      if (!fileBytes || fileBytes.length < 40) {
+        return;
+      }
+      const storedChecksum = fileBytes.subarray(fileBytes.length - 32);
+      const dataWithoutChecksum = fileBytes.subarray(0, fileBytes.length - 32);
+      if (!this.computeChecksum(dataWithoutChecksum).equals(storedChecksum)) {
+        return;
+      }
+      if (dataWithoutChecksum.readUInt32LE(0) !== HASH_CACHE_VERSION) {
+        return;
+      }
+      const entryCount = dataWithoutChecksum.readUInt32LE(4);
+      const entries = [];
+      let offset = 8;
+      for (let entryIndex = 0;entryIndex < entryCount; entryIndex++) {
+        if (offset + 4 > dataWithoutChecksum.length) {
+          return;
+        }
+        const pathLength = dataWithoutChecksum.readUInt32LE(offset);
+        if (offset + this.entrySize(pathLength) > dataWithoutChecksum.length) {
+          return;
+        }
+        offset += 4;
+        const filePath = dataWithoutChecksum.toString("utf8", offset, offset + pathLength);
+        offset += pathLength;
+        const hash = Buffer.from(dataWithoutChecksum.subarray(offset, offset + 32));
+        offset += 32;
+        const length = dataWithoutChecksum.readUIntLE(offset, 6);
+        offset += 6;
+        const lastModified = dataWithoutChecksum.readUIntLE(offset, 6);
+        offset += 6;
+        entries.push({ filePath, hash, length, lastModified });
+      }
+      return entries;
+    }
+    encodeEntries(entries) {
+      const pathBuffers = entries.map((entry) => Buffer.from(entry.filePath, "utf8"));
+      const totalEntryBytes = pathBuffers.reduce((total, pathBuffer) => total + this.entrySize(pathBuffer.length), 0);
+      const dataBuffer = Buffer.alloc(8 + totalEntryBytes);
+      dataBuffer.writeUInt32LE(HASH_CACHE_VERSION, 0);
+      dataBuffer.writeUInt32LE(entries.length, 4);
+      let offset = 8;
+      for (let entryIndex = 0;entryIndex < entries.length; entryIndex++) {
+        const entry = entries[entryIndex];
+        const pathBuffer = pathBuffers[entryIndex];
+        dataBuffer.writeUInt32LE(pathBuffer.length, offset);
+        offset += 4;
+        pathBuffer.copy(dataBuffer, offset);
+        offset += pathBuffer.length;
+        entry.hash.copy(dataBuffer, offset);
+        offset += 32;
+        dataBuffer.writeUIntLE(entry.length, offset, 6);
+        offset += 6;
+        dataBuffer.writeUIntLE(entry.lastModified, offset, 6);
+        offset += 6;
+      }
+      return Buffer.concat([dataBuffer, this.computeChecksum(dataBuffer)]);
+    }
     async load() {
       const cachePath = join(this.cacheDir, "hash-cache-x.dat");
       try {
         if (!await pathExists(cachePath)) {
-          this.buffer = Buffer.alloc(1024);
-          this.entryCount = 0;
-          this.initialized = true;
-          return false;
-        }
-        const cacheData = await readFile(cachePath);
-        if (cacheData.length < 40) {
-          log.error(`Hash cache file is too small: expected at least 40 bytes (4 for version + 4 for entry count + 32 for checksum), got ${cacheData.length} bytes`);
           this.initializeFreshCache();
           return false;
         }
-        const storedChecksum = cacheData.subarray(cacheData.length - 32);
-        const dataWithoutChecksum = cacheData.subarray(0, cacheData.length - 32);
-        const computedChecksum = this.computeChecksum(dataWithoutChecksum);
-        if (!computedChecksum.equals(storedChecksum)) {
-          log.error("Hash cache checksum mismatch - cache may be corrupted");
+        const entries = this.decodeEntries(await readFile(cachePath));
+        if (entries === undefined) {
+          log.error(`Hash cache at ${cachePath} is unusable (too small, an unsupported version, corrupted, or failing its checksum) - starting with a fresh cache`);
           this.initializeFreshCache();
           return false;
         }
-        const version = dataWithoutChecksum.readUInt32LE(0);
-        if (version < HASH_CACHE_VERSION) {
-          try {
-            await unlink(cachePath);
-          } catch (error) {}
-          this.initializeFreshCache();
-          return false;
-        } else if (version > HASH_CACHE_VERSION) {
-          log.error(`Hash cache version is newer than supported: file version ${version}, supported version ${HASH_CACHE_VERSION}`);
-          this.initializeFreshCache();
-          return false;
-        }
-        this.buffer = dataWithoutChecksum;
-        this.createLookupTable();
+        this.adoptEntries(entries);
         this.initialized = true;
         return true;
       } catch (error) {
@@ -68897,6 +69467,16 @@ Copied hash: ${copiedHash.toString("hex")}
       this.entryCount = 0;
       this.offsetLookup = [];
       this.initialized = true;
+      this.isDirty = false;
+      this.pendingUpserts.clear();
+      this.pendingRemovals.clear();
+    }
+    adoptEntries(entries) {
+      const encoded = this.encodeEntries(entries);
+      this.buffer = encoded.subarray(0, encoded.length - 32);
+      this.createLookupTable();
+      this.pendingUpserts.clear();
+      this.pendingRemovals.clear();
       this.isDirty = false;
     }
     createLookupTable() {
@@ -68954,23 +69534,26 @@ Copied hash: ${copiedHash.toString("hex")}
         return;
       }
       const cachePath = join(this.cacheDir, "hash-cache-x.dat");
-      let offset = 8;
-      for (let i2 = 0;i2 < this.entryCount; i2++) {
-        const pathLength = this.buffer.readUInt32LE(offset);
-        offset += this.entrySize(pathLength);
+      let mergedEntries = [];
+      try {
+        await updateFileRawOptimistic(cachePath, (currentBytes) => {
+          const entriesByPath = new Map;
+          for (const entry of this.decodeEntries(currentBytes) || []) {
+            entriesByPath.set(entry.filePath, entry);
+          }
+          for (const removedPath of this.pendingRemovals) {
+            entriesByPath.delete(removedPath);
+          }
+          for (const [upsertedPath, entry] of this.pendingUpserts) {
+            entriesByPath.set(upsertedPath, entry);
+          }
+          mergedEntries = Array.from(entriesByPath.values()).sort((first, second) => first.filePath.localeCompare(second.filePath));
+          return this.encodeEntries(mergedEntries);
+        }, SAVE_RETRIES);
+      } catch {
+        return;
       }
-      const entryBuffer = this.buffer.subarray(8, offset);
-      const headerBuffer = Buffer.alloc(8);
-      headerBuffer.writeUInt32LE(HASH_CACHE_VERSION, 0);
-      headerBuffer.writeUInt32LE(this.entryCount, 4);
-      const dataBuffer = Buffer.concat([headerBuffer, entryBuffer]);
-      const checksum = this.computeChecksum(dataBuffer);
-      const finalBuffer = Buffer.concat([dataBuffer, checksum]);
-      const tempPath = `${cachePath}.tmp`;
-      await ensureDir(this.cacheDir);
-      await writeFile(tempPath, finalBuffer);
-      await rename(tempPath, cachePath);
-      this.isDirty = false;
+      this.adoptEntries(mergedEntries);
     }
     findEntryOffset(filePath) {
       if (!this.buffer || this.entryCount === 0) {
@@ -69092,6 +69675,8 @@ Copied hash: ${copiedHash.toString("hex")}
         }
         this.offsetLookup = newOffsetLookup;
       }
+      this.pendingUpserts.set(filePath, { filePath, hash: Buffer.from(hash), length, lastModified: lastModified.getTime() });
+      this.pendingRemovals.delete(filePath);
       this.isDirty = true;
     }
     removeHash(filePath) {
@@ -69113,6 +69698,9 @@ Copied hash: ${copiedHash.toString("hex")}
       }
       this.entryCount--;
       this.isDirty = true;
+      const normalizedPath = filePath.replace(/\\/g, "/");
+      this.pendingRemovals.add(normalizedPath);
+      this.pendingUpserts.delete(normalizedPath);
       const removedIndex = this.offsetLookup.findIndex((offset) => offset === entryOffset);
       if (removedIndex !== -1) {
         const newOffsetLookup = this.offsetLookup.slice(0, removedIndex);
@@ -71496,7 +72084,7 @@ Copied hash: ${copiedHash.toString("hex")}
   }
   installUdpInbound();
 
-  // ../../../../../packages/lan-share-network/src/lib/lan-share-receiver.ts
+  // ../lan-share-network/src/lib/lan-share-receiver.ts
   init_node_crypto();
   var MAX_REQUESTS = 5;
   var BROADCAST_INTERVAL_MS = 1000;
@@ -71774,7 +72362,7 @@ ${lines.join(`
       }
     }
   }
-  // ../../../../../packages/lan-share-network/src/lib/lan-share-sender.ts
+  // ../lan-share-network/src/lib/lan-share-sender.ts
   init_node_crypto();
   var DISCOVERY_PORT2 = 54321;
   var BROADCAST_PREFIX = "PSIE_RECV:";

@@ -13,6 +13,10 @@
     "sync": "bun run fetch:media && bun run bundle:worker && vite build && cap sync android",
     "open": "bun run sync && cap open android",
     "run": "bun run sync && bash ./scripts/run-android.sh",
+    "emu:up": "./scripts/emulator.sh up",
+    "emu:down": "./scripts/emulator.sh down",
+    "emu:restart": "./scripts/emulator.sh restart",
+    "emu:status": "./scripts/emulator.sh status",
     "test:unit": "bun run sync && bash ./scripts/android-gradle.sh :app:testDebugUnitTest --rerun-tasks"
   },
   "dependencies": {

@@ -26,21 +26,21 @@ ALL 31 STEPS ARE test:and GREEN AND READY TO REVIEW.
 - [x] 19 - missing task handlers registered + summary entry point - `step-19-task-handlers`
 - [x] 20 - Android timer pump budget - `step-20-timer-pump`
 - [x] 21 - LAN share/receive dialogs surface errors - `step-21-lan-dialog-errors`
-- [merging] 22 - dead platform events wired / news deleted - `step-22-platform-events-news`
-- [merging] 23 - iOS stops dropping photos that fail to copy - `step-23-ios-photo-copy`
+- [x] 22 - dead platform events wired / news deleted - `step-22-platform-events-news`
+- [x] 23 - iOS stops dropping photos that fail to copy - `step-23-ios-photo-copy`
 - [x] 24 - infinite-spinner failure handling - `step-24-infinite-spinner`
 - [x] 25 - `resetConfig` clears the config namespace - `step-25-resetconfig` - smoke test `41-reset-config-clears`
 - [x] 26 - config-store mutators report a miss - `step-26-config-mutators` - smoke test `42-config-mutator-miss`
-- [?] 27 - recent-databases list capped - `step-27-recent-cap` - smoke test `43-recent-databases-cap`
-- [?] 28 - `node-dgram` fails loudly on `udp6` - `step-28-dgram-udp6` - smoke test `44-dgram-udp6-fails-loud`
-- [ ] 29 - iOS concurrent `pickFiles` - `step-29-ios-concurrent-pickfiles` - smoke test `45-concurrent-pickfiles`
-- [ ] 30 - dead PostCSS config / autoprefixer removed - `step-30-postcss-removed`
-- [ ] 31 - ImageMagick quantum depth reconciled (Q16) - `step-31-imagemagick-q16` - smoke test `46-imagemagick-q16`
-- [ ] 32 - picked-file extension inference reconciled - `step-32-ext-inference` - smoke test `47-extension-inference`
-- [ ] 33 - iOS `test:unit` package script - `step-33-ios-test-unit`
-- [ ] 34 - correct every false claim in comments/docs/wiki/READMEs - `step-34-docs-corrections`
-- [ ] 35 - bundle id reconciled - `step-35-bundle-id`
-- [ ] 36 - mobile versions set to `0.0.1` - `step-36-versions`
+- [x] 27 - recent-databases list capped - `step-27-recent-cap` - smoke test `43-recent-databases-cap`
+- [x] 28 - `node-dgram` fails loudly on `udp6` - `step-28-dgram-udp6` - smoke test `44-dgram-udp6-fails-loud`
+- [x] 29 - iOS concurrent `pickFiles` - `step-29-ios-concurrent-pickfiles` - smoke test `45-concurrent-pickfiles`
+- [x - still working] 30 - dead PostCSS config / autoprefixer removed - `step-30-postcss-removed`
+- [x] 31 - ImageMagick quantum depth reconciled (Q16) - `step-31-imagemagick-q16` - smoke test `46-imagemagick-q16`
+- [merging] 32 - picked-file extension inference reconciled - `step-32-ext-inference` - smoke test `47-extension-inference`
+- [merging] 33 - iOS `test:unit` package script - `step-33-ios-test-unit`
+- [?] 34 - correct every false claim in comments/docs/wiki/READMEs - `step-34-docs-corrections`
+- [?] 35 - bundle id reconciled - `step-35-bundle-id`
+- [?] 36 - mobile versions set to `0.0.1` - `step-36-versions`
 
 ## Notes for the reviewer
 

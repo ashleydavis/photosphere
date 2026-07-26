@@ -1,6 +1,6 @@
 # LAN sharing in the Android emulator
 
-`apps/android-frontend/scripts/emulator-lan-bridge.sh` puts the Android emulator on a real network segment shared with your host, so you can use LAN sharing between the Electron app and the emulator. Without it, sharing to the emulator always fails with "No sender connected within 60 seconds".
+`apps/android-frontend/scripts/emulator.sh` puts the Android emulator on a real network segment shared with your host, so you can use LAN sharing between the Electron app and the emulator. Without it, sharing to the emulator always fails with "No sender connected within 60 seconds".
 
 ## Why it is needed
 
@@ -16,36 +16,37 @@ It does not bridge your physical NIC, and does not need to, because the emulator
 
 - Linux. This uses `ip`, tap interfaces, and `dnsmasq`, which are Linux specific.
 - `dnsmasq` installed (`sudo apt install dnsmasq` on Ubuntu/Debian). The script checks and tells you if it is missing.
-- Root for `up` and `down`, because creating network interfaces requires it. `status` does not need root.
+- Root for the bridge parts (creating network interfaces, binding DHCP). `up`/`down` handle this automatically via `sudo`, so you run them as your normal user; `status` needs no root.
 - An AVD on API 31 or newer. Those use VirtioWifi, which is what `-wifi-tap` attaches to.
 
 ## Usage
 
-Bring the segment up. This is a one time thing per boot, not per test run:
+Bring the emulator up on the bridge and wait until it is ready. This sets the LAN bridge up
+automatically (prompting for sudo only for the privileged bridge parts) and starts the emulator
+attached to it. Run as your normal user, not root. The AVD is auto-selected (override with
+`ANDROID_AVD`):
 
 ```
-sudo apps/android-frontend/scripts/emulator-lan-bridge.sh up
+bun run emu:and:up
 ```
 
-Start the emulator attached to the tap, as your normal user rather than root:
+Check the guest actually landed on the segment (prints `ready` / `not ready`, exit 0 / non-zero):
 
 ```
-"${ANDROID_HOME:-$HOME/Android/Sdk}/emulator/emulator" -avd <your-avd> -wifi-tap emu-netcard
+bun run emu:and:status
 ```
 
-Confirm the guest actually landed on the segment:
+`ready` means the guest has a `192.168.55.x` address on `wlan0`. If it stays `not ready` / `not on
+lan bridge`, the emulator ignored `-wifi-tap` and is still behind the virtual router (`10.0.2.16`);
+`bun run emu:and:restart` for a clean bridged boot, then see troubleshooting below.
+
+Tear it all down (stops the emulator and removes the bridge) when you are finished:
 
 ```
-apps/android-frontend/scripts/emulator-lan-bridge.sh status
+bun run emu:and:down
 ```
 
-You want a `192.168.55.x` address against the guest. If you see `10.0.2.16` instead (the emulator's default Wi-Fi address, per the [address space docs](https://developer.android.com/studio/run/emulator-networking-address)), the emulator ignored `-wifi-tap` and is still behind the virtual router, so sharing will not work. See troubleshooting below.
-
-Tear it all down when you are finished:
-
-```
-sudo apps/android-frontend/scripts/emulator-lan-bridge.sh down
-```
+To stop and bring it back up on the bridge in one go: `bun run emu:and:restart`.
 
 ## Reversing it
 
@@ -54,7 +55,7 @@ Everything this script does is runtime only. It writes no configuration files: n
 **Normal teardown**, which restores each thing it changed:
 
 ```
-sudo apps/android-frontend/scripts/emulator-lan-bridge.sh down
+bun run emu:and:down
 ```
 
 **Reboot.** Every change made here lives in kernel runtime state, so a reboot clears all of it whether or not `down` ran, or ran correctly. If something looks wrong and you want out, reboot and you are back to a clean machine.
@@ -103,14 +104,14 @@ The host and the guest are now on one segment, so the emulator's broadcast reach
 Override the DNS server handed to the guest with `GUEST_DNS` if you would rather it used your own resolver:
 
 ```
-sudo GUEST_DNS=192.168.20.1 apps/android-frontend/scripts/emulator-lan-bridge.sh up
+GUEST_DNS=192.168.20.1 bun run emu:and:up
 ```
 
 ## Troubleshooting
 
 **The guest still has a `10.0.2.x` address.** The emulator ignored `-wifi-tap` and is still behind the virtual router. Check that you passed the flag to the `emulator` binary directly rather than launching from Android Studio, which starts its own emulator process without your arguments. Be aware that `-wifi-tap` is undocumented (see the caveat below), so if this persists the flag may simply not be wired up in your emulator build.
 
-**The guest has no address at all.** DHCP is not being answered. Check the dnsmasq log at `/tmp/psphere-emulator-dnsmasq.log` for `DHCPDISCOVER` lines. No lines at all means the guest's frames are not reaching the bridge, so check `apps/android-frontend/scripts/emulator-lan-bridge.sh status` shows `emu-netcard` as a port on the bridge.
+**The guest has no address at all.** DHCP is not being answered. Check the dnsmasq log at `/tmp/psphere-emulator-dnsmasq.log` for `DHCPDISCOVER` lines. No lines at all means the guest's frames are not reaching the bridge, so check `bun run emu:and:status` shows `emu-netcard` as a port on the bridge.
 
 **dnsmasq will not start.** Usually something else already holds the DHCP port. The script runs it with `--port=0` so it does not fight systemd-resolved over DNS on port 53, but a second dnsmasq or a libvirt network can still clash. Check with `ss -lnup | grep :67`.
 

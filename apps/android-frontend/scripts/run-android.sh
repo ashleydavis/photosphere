@@ -10,7 +10,7 @@
 #
 # 2. The emulator has to be started a specific way for LAN sharing to work, and starting it any other
 #    way (Android Studio, a bare `emulator -avd`) silently breaks sharing in a way that only shows up
-#    60 seconds later as "No sender connected". See emulator-lan-bridge.md for why. Rather than leave
+#    60 seconds later as "No sender connected". See emulator.md for why. Rather than leave
 #    that to memory, this starts it correctly when nothing is attached.
 #
 # Usage: apps/android-frontend/scripts/run-android.sh
@@ -78,7 +78,7 @@ start_emulator() {
         net_args=(-net-tap "$NETCARD_NAME")
         echo "Starting '$avd' on the LAN bridge ($NETCARD_NAME)..."
     else
-        echo "Starting '$avd' (no LAN bridge; run 'sudo apps/android-frontend/scripts/emulator-lan-bridge.sh up' first if you want LAN sharing)..."
+        echo "Starting '$avd' (no LAN bridge; run 'bun run emu:and:up' first if you want LAN sharing)..."
     fi
 
     # setsid detaches the emulator so it outlives this script: the deploy below, and everything you

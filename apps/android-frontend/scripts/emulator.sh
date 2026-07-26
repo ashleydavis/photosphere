@@ -22,10 +22,11 @@
 # host, so a private segment shared with the host is enough, and it avoids any risk of dropping your
 # real network. The guest still reaches the internet, via NAT through the host's uplink (see below).
 #
-# Examples:
-#   sudo apps/android-frontend/scripts/emulator-lan-bridge.sh up
-#   apps/android-frontend/scripts/emulator-lan-bridge.sh status
-#   sudo apps/android-frontend/scripts/emulator-lan-bridge.sh down
+# Examples (run as your user; up/down sudo only for the bridge, or use the bun scripts):
+#   apps/android-frontend/scripts/emulator.sh up        # bun run emu:and:up
+#   apps/android-frontend/scripts/emulator.sh status
+#   apps/android-frontend/scripts/emulator.sh restart    # bun run emu:and:restart
+#   apps/android-frontend/scripts/emulator.sh down       # bun run emu:and:down
 set -euo pipefail
 
 # Name of the bridge (the virtual switch). Prefixed so it is obvious what created it.
@@ -139,11 +140,11 @@ uplink_interface() {
 }
 
 #
-# Brings the segment up. Safe to re-run: every step checks for the state it wants before creating it,
-# so running this twice is not an error.
+# Brings the LAN bridge up (privileged). Internal: invoked with sudo by `cmd_up`. Safe to re-run:
+# every step checks for the state it wants before creating it, so running this twice is not an error.
 #
-cmd_up() {
-    require_root "up"
+bridge_up() {
+    require_root "__bridge-up"
     require_command ip "Install iproute2."
     require_command dnsmasq "Install it with your package manager (for example: sudo apt install dnsmasq)."
 
@@ -256,26 +257,15 @@ cmd_up() {
         echo "WARNING: no default route or iptables found, skipping NAT. LAN sharing still works, but the emulator will have no internet." >&2
     fi
 
-    echo ""
-    echo "Segment is up. Host is $BRIDGE_ADDRESS on $BRIDGE_NAME."
-    echo ""
-    echo "Now start the emulator attached to it (as $TARGET_USER, not root):"
-    echo ""
-    echo "  \"\${ANDROID_HOME:-\$HOME/Android/Sdk}/emulator/emulator\" -avd <your-avd> -wifi-tap $NETCARD_NAME"
-    echo ""
-    echo "Then confirm the guest picked up an address on this segment:"
-    echo ""
-    echo "  adb shell ip addr show wlan0"
-    echo ""
-    echo "A 192.168.55.x address means it worked. A 10.0.2.16 address (the emulator's default Wi-Fi"
-    echo "address under user-mode NAT) means -wifi-tap did not take."
+    echo "LAN bridge up. Host is $BRIDGE_ADDRESS on $BRIDGE_NAME."
 }
 
 #
-# Tears everything down and puts the host's network config back as it was. Safe to re-run.
+# Tears the LAN bridge down and puts the host's network config back as it was (privileged). Internal:
+# invoked with sudo by `cmd_down`. Safe to re-run.
 #
-cmd_down() {
-    require_root "down"
+bridge_down() {
+    require_root "__bridge-down"
 
     # Stop the DHCP server first, so it is not left holding an interface that is about to vanish.
     if [ -f "$DNSMASQ_PID_FILE" ]; then
@@ -340,18 +330,31 @@ emulator_path() {
 }
 
 #
-# Starts the emulator attached to the bridge. This exists so the -wifi-tap flag is not something you
-# have to remember: launching the emulator any other way (Android Studio, a bare `emulator -avd`)
-# silently puts it back on the isolated NAT, where LAN sharing cannot work.
+# True when an emulator/device is attached and reporting "device" (booted, usable) state.
 #
-# Takes an optional AVD name. With no argument it uses the only AVD when there is exactly one, and
-# lists them and stops when there is a choice to make.
+device_attached() {
+    local adb
+    adb="$(adb_path)"
+    [ -n "$adb" ] && "$adb" devices 2>/dev/null | awk 'NR > 1 && $2 == "device" { found = 1 } END { exit found ? 0 : 1 }'
+}
+
 #
-cmd_emulator() {
-    # The emulator must run as your login user, because it can only open a tap that it owns and `up`
-    # gives the tap to that user. Running it under sudo fails with an unhelpful permissions error.
+# True when the LAN bridge is fully up: the bridge and tap exist and the DHCP server is running.
+#
+bridge_is_up() {
+    ip link show "$BRIDGE_NAME" >/dev/null 2>&1 \
+        && ip link show "$NETCARD_NAME" >/dev/null 2>&1 \
+        && dnsmasq_running
+}
+
+#
+# Starts the emulator in the background attached to the tap, so it lands on the bridge. The AVD is
+# auto-selected (ANDROID_AVD, else the first one found) -- you do not pass one. Must run as your user,
+# not root: the emulator can only open a tap it owns. Detached so it outlives this script; logs to /tmp.
+#
+start_emulator_bg() {
     if [ "$(id -u)" -eq 0 ]; then
-        echo "ERROR: do not run the emulator as root. Run this without sudo." >&2
+        echo "ERROR: the emulator must run as your user, not root." >&2
         exit 1
     fi
 
@@ -361,86 +364,192 @@ cmd_emulator() {
         echo "ERROR: emulator not found (looked on PATH and in \${ANDROID_HOME:-\$HOME/Android/Sdk}/emulator)." >&2
         exit 1
     fi
-
-    # Fail early with a clear cause rather than letting the emulator start on the isolated NAT and
-    # leaving you to work out later why sharing times out.
     if ! ip link show "$NETCARD_NAME" >/dev/null 2>&1; then
-        echo "ERROR: $NETCARD_NAME does not exist. Run 'sudo $0 up' first." >&2
+        echo "ERROR: $NETCARD_NAME does not exist; the bridge is not up." >&2
         exit 1
     fi
 
-    local avd="${1:-}"
+    local avd
+    avd="${ANDROID_AVD:-$("$emulator" -list-avds 2>/dev/null | grep -v '^$' | head -1)}"
     if [ -z "$avd" ]; then
-        local avds
-        avds="$("$emulator" -list-avds 2>/dev/null | grep -v '^$' || true)"
-        local count
-        count="$(echo "$avds" | grep -c . || true)"
-        if [ "$count" -eq 1 ]; then
-            avd="$avds"
-        else
-            echo "ERROR: specify which AVD to start. Available:" >&2
-            echo "$avds" | sed 's/^/  /' >&2
-            echo "" >&2
-            echo "Usage: $0 emulator <avd-name>" >&2
-            exit 1
-        fi
+        echo "ERROR: no AVD found. Create one in Android Studio's Device Manager." >&2
+        exit 1
     fi
 
-    echo "Starting '$avd' on $NETCARD_NAME (host is $BRIDGE_ADDRESS)..."
-    echo "Check it landed on the segment with: $0 status"
-    exec "$emulator" -avd "$avd" -wifi-tap "$NETCARD_NAME" "${@:2}"
+    echo "Starting emulator '$avd' on $NETCARD_NAME (cold boot, so wifi associates to the bridge)..."
+
+    # -no-snapshot forces a cold boot. A quick-boot snapshot restores the guest's
+    # previous network state (behind the 10.0.2.x virtual router), so wlan0 never
+    # re-associates to the freshly created tap and stays NO-CARRIER. A cold boot
+    # brings wifi up fresh and associates it to -wifi-tap, which is the whole point.
+    setsid "$emulator" -avd "$avd" -no-snapshot -no-boot-anim -wifi-tap "$NETCARD_NAME" >/tmp/psphere-emulator.log 2>&1 </dev/null &
 }
 
 #
-# Reports what is currently set up, for when the emulator cannot see the host and you need to know
-# which piece is missing.
+# Polls `status` until the emulator is ready (started AND on the bridge) or the timeout passes.
 #
-cmd_status() {
-    echo "Bridge:"
-    ip -br addr show "$BRIDGE_NAME" 2>/dev/null || echo "  $BRIDGE_NAME does not exist"
+wait_for_ready() {
+    local timeout="${1:-180}"
+    local start="$SECONDS"
+    local elapsed=0
+    local last_note=0
+    while [ "$elapsed" -lt "$timeout" ]; do
+        if cmd_status >/dev/null 2>&1; then
+            return 0
+        fi
 
-    echo ""
-    echo "Tap:"
-    ip -br link show "$NETCARD_NAME" 2>/dev/null || echo "  $NETCARD_NAME does not exist"
+        # Print a progress line every 15s so a long wait is not silent dead air.
+        if [ "$((elapsed - last_note))" -ge 15 ]; then
+            echo "  still waiting for the guest to reach the bridge (${elapsed}s / ${timeout}s)..."
+            last_note="$elapsed"
+        fi
+        sleep 3
 
-    echo ""
-    echo "Bridge ports:"
-    ip link show master "$BRIDGE_NAME" 2>/dev/null | awk '/^[0-9]+:/ { sub(/:$/, "", $2); print "  " $2 }' || echo "  none"
+        # Track real wall-clock elapsed (SECONDS), not a fixed increment, so the
+        # timeout is honest even though cmd_status itself takes a few seconds.
+        elapsed="$((SECONDS - start))"
+    done
+    return 1
+}
 
-    echo ""
-    echo "DHCP server:"
-    if dnsmasq_running; then
-        echo "  running (pid $(cat "$DNSMASQ_PID_FILE")), log at $DNSMASQ_LOG_FILE"
-    else
-        echo "  not running"
+#
+# Brings everything up: the LAN bridge (privileged, via sudo, automatically) and the emulator attached
+# to it, then waits until it is ready. Run as your user; it sudo's only for the bridge.
+#
+cmd_up() {
+    if [ "$(id -u)" -eq 0 ]; then
+        echo "ERROR: run 'up' as your user (it uses sudo only for the bridge)." >&2
+        exit 1
     fi
 
-    echo ""
-    echo "Guest address (needs a running emulator):"
+    if bridge_is_up; then
+        echo "LAN bridge already up."
+    else
+        echo "Bringing up the LAN bridge (needs sudo)..."
+        # Pass GUEST_DNS through: sudo strips the environment, and the bridge setup reads it.
+        sudo GUEST_DNS="$GUEST_DNS" "$0" __bridge-up
+    fi
+
+    if device_attached; then
+        # An emulator is attached. If it is already on the bridge we are done. If it is off the
+        # bridge we cannot attach it: -wifi-tap is bound at launch, so a running emulator that is
+        # off the bridge can never join it. Do NOT kill it here (up is non-destructive); report it
+        # and tell the user to restart. Give a short grace first to ride out a transient gap.
+        echo "An emulator is attached; checking whether it is on the bridge..."
+        if wait_for_ready 25; then
+            cmd_status
+            return 0
+        fi
+        echo "" >&2
+        echo "The attached emulator is not on the bridge and cannot be added to it: the -wifi-tap" >&2
+        echo "attachment is fixed at launch, so a running emulator that is off the bridge can never" >&2
+        echo "join it. This is unrecoverable without a restart." >&2
+        echo "Run: bun run emu:and:restart   (or: bun run emu:and:down then bun run emu:and:up)" >&2
+        cmd_status >&2 || true
+        exit 1
+    fi
+
+    start_emulator_bg
+
+    echo "Waiting for the emulator to be ready on the bridge (up to 180s)..."
+    if wait_for_ready 180; then
+        cmd_status
+    else
+        echo "Timed out waiting for the emulator to reach the bridge." >&2
+        cmd_status || true
+        echo "If an emulator is up but off the bridge, run: bun run emu:and:restart" >&2
+        exit 1
+    fi
+}
+
+#
+# Brings everything down: stops the emulator, then tears down the LAN bridge (privileged, via sudo).
+#
+# Stop the running emulator (if any) and wait for adb to drop it. Leaves the bridge alone;
+# both cmd_down (full teardown) and cmd_up (cold-restart of an off-bridge emulator) use this.
+stop_emulator() {
+    local adb
+    adb="$(adb_path)"
+    if [ -n "$adb" ] && device_attached; then
+        echo "Stopping the emulator..."
+        "$adb" emu kill >/dev/null 2>&1 || true
+        local waited=0
+        while [ "$waited" -lt 15 ] && device_attached; do
+            sleep 1
+            waited=$((waited + 1))
+        done
+    fi
+}
+
+cmd_down() {
+    stop_emulator
+
+    if ip link show "$BRIDGE_NAME" >/dev/null 2>&1 || dnsmasq_running; then
+        echo "Bringing down the LAN bridge (needs sudo)..."
+        sudo "$0" __bridge-down
+    else
+        echo "LAN bridge already down."
+    fi
+}
+
+#
+# Stops everything and brings it back up on the bridge.
+#
+cmd_restart() {
+    cmd_down
+    cmd_up
+}
+
+#
+# Prints a one-word verdict on the first line -- "ready" or "not ready" -- with a short reason on
+# the next line, and sets the exit code to match (0 = ready, non-zero = not ready) so callers such
+# as `test:and` can gate on it.
+#
+# "ready" means the emulator is started AND on the LAN bridge, i.e. its wlan0 has a 192.168.55.x
+# address. That is exactly what the smoke tests need (require_lan_bridge asserts the same thing), so
+# this verdict is the truth, not a proxy. Nothing else about the host-side bridge is reported here
+# because it misled more than it helped; if you need to debug the setup, inspect with `ip` / `adb`.
+#
+cmd_status() {
     local adb
     adb="$(adb_path)"
     if [ -z "$adb" ]; then
+        echo "not ready"
         echo "  adb not found (looked on PATH and in \${ANDROID_HOME:-\$HOME/Android/Sdk}/platform-tools)"
-    else
-        # `|| true` because adb exits non-zero when no emulator is running, and with `set -o pipefail`
-        # that would abort status entirely rather than just reporting no device.
-        local guest
-        guest="$("$adb" shell ip addr show wlan0 2>/dev/null | awk '/inet / { print $2 }' || true)"
-        if [ -z "$guest" ]; then
-            echo "  no device, or wlan0 has no address yet"
-        else
-            echo "  $guest"
-        fi
+        return 1
     fi
 
-    # A tap gets carrier only once a process opens its file descriptor, and a bridge stays DOWN
-    # while none of its ports have carrier. So both showing DOWN with no emulator running is normal
-    # and not a fault. Said explicitly here because it otherwise looks exactly like a broken setup.
-    if ! ip link show "$NETCARD_NAME" 2>/dev/null | grep -q "LOWER_UP"; then
-        echo ""
-        echo "Note: bridge and tap show DOWN / NO-CARRIER because no emulator is attached to the tap"
-        echo "yet. That is expected. They come up when you start the emulator with -wifi-tap $NETCARD_NAME."
+    # Is an emulator/device actually started and booted? adb reports it as "device" (not "offline").
+    if ! "$adb" devices 2>/dev/null | awk 'NR > 1 && $2 == "device" { found = 1 } END { exit found ? 0 : 1 }'; then
+        echo "not ready"
+        echo "  emulator not started"
+        return 1
     fi
+
+    # Started. On the bridge = a 192.168.55.x address on wlan0. Retry a few times to ride out an adb
+    # hiccup or a brief wifi-association gap; a genuinely off-bridge guest never shows the address no
+    # matter how often we look. `|| true` keeps `set -o pipefail` from aborting.
+    local guest attempt
+    guest=""
+    attempt=0
+    while [ "$attempt" -lt 3 ]; do
+        guest="$(timeout 8 "$adb" shell ip addr show wlan0 2>/dev/null | tr -d '\r' | awk '/inet 192\.168\.55\./ { print $2 }' || true)"
+        if [ -n "$guest" ]; then
+            break
+        fi
+        sleep 1
+        attempt=$((attempt + 1))
+    done
+
+    if [ -n "$guest" ]; then
+        echo "ready"
+        echo "  emulator is started and on the lan bridge (wlan0 = $guest)"
+        return 0
+    fi
+
+    echo "not ready"
+    echo "  not on lan bridge (emulator started, but wlan0 has no 192.168.55.x address)"
+    return 1
 }
 
 case "${1:-}" in
@@ -450,22 +559,28 @@ case "${1:-}" in
     down)
         cmd_down
         ;;
+    restart)
+        cmd_restart
+        ;;
     status)
         cmd_status
         ;;
-    emulator)
-        shift
-        cmd_emulator "$@"
+    # Internal: the privileged bridge steps, run with sudo by up/down. Not for direct use.
+    __bridge-up)
+        bridge_up
+        ;;
+    __bridge-down)
+        bridge_down
         ;;
     *)
-        echo "Usage: $0 {up|down|status|emulator}"
+        echo "Usage: $0 {up|down|restart|status}"
         echo ""
-        echo "  up               Create the bridge/tap and start DHCP, so the emulator can share a network with this host."
-        echo "  down             Remove all of it."
-        echo "  status           Show what is currently set up and what address the guest has."
-        echo "  emulator [avd]   Start the emulator attached to the bridge (no sudo). Pass extra emulator flags after the AVD name."
+        echo "  up        Bring the emulator up on the LAN bridge (sets the bridge up automatically, sudo for that part) and wait until ready."
+        echo "  down      Stop the emulator and tear the LAN bridge down."
+        echo "  restart   down then up."
+        echo "  status    Print 'ready' / 'not ready' (exit 0 / non-zero): is the emulator started and on the bridge."
         echo ""
-        echo "See apps/android-frontend/scripts/emulator-lan-bridge.md for the full walkthrough."
+        echo "The AVD is auto-selected (override with ANDROID_AVD). See apps/android-frontend/scripts/emulator.md."
         exit 1
         ;;
 esac

@@ -28,6 +28,13 @@ main() {
     # full build-install-27-tests cycle. An absent argument runs every test.
     local filter="${1:-}"
 
+    # Android: fail immediately unless the emulator is already started and on the LAN bridge. This
+    # never boots or changes the emulator; readiness is set up by hand. The single-run lock is taken
+    # outside this script by android-lock.sh, which `test:and` wraps this run in.
+    if [ "$PLATFORM" = "android" ]; then
+        android_require_ready
+    fi
+
     "${PLATFORM}_prepare"
     "${PLATFORM}_build"
     "${PLATFORM}_install"

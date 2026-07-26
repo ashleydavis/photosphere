@@ -137,11 +137,13 @@ cd <abs-worktree> && mise exec -- bun run test
 
 Both must exit 0.
 
-**Run the Android smoke suite last, after everything else has passed.** It is the final gate, not one check among several. Compile clean, unit tests green, and every other check you intend to run must all be done and passing before you go near the emulator. Never run it early to "see where things stand", never run it while you still have edits to make, and never run it twice because the first attempt caught something the compiler or unit tests would have caught for free.
+**Run the Android smoke suite only once the cheap local checks have passed.** Compile clean and unit tests green before you go near the emulator. Never run it early to "see where things stand", never run it while you still have edits to make, and never run it twice because the first attempt caught something the compiler or unit tests would have caught for free.
 
 The reason is queueing. The emulator is a single machine-wide resource and there are multiple chats lined up for it, each taking a turn. Every minute you hold the lock is a minute every other chat is blocked, and a run you launch on code you have not already verified is a run you will probably have to repeat, sending you to the back of the queue and pushing everyone else back too. So satisfy yourself the code is genuinely correct by the cheap, local, parallel-safe checks first. Acquiring the lock is a claim that you believe this run will pass.
 
 Then run the Android smoke suite, which is the gate that actually proves a mobile change works.
+
+**Run `test:all` and `test:and` in parallel, not one after the other.** Once compile and unit tests are green, launch both and let them run at the same time. They contend for nothing that matters: `test:all` drives CLI processes and Electron windows on the host, while `test:and` drives the emulator over adb. Running them back to back roughly doubles the wall clock of the slowest part of the review for no benefit. Launch each detached with its own sentinel file, then wait on both with `Monitor`. The rule above still holds: do not launch either on code you have not already compiled and unit-tested, because a wasted emulator run is expensive for every other chat.
 
 **There is a single Android emulator, shared by every parallel Claude instance running this command across every worktree.** Two suites on it at once corrupt each other's runs. Because these instances cannot see each other, coordinate through a lock file on a fixed, machine-wide path that every instance agrees on: `/tmp/photosphere-android-emulator.lock`. Do not put the lock inside a worktree or the repo, or parallel instances in different worktrees would each take a different lock and not exclude one another.
 

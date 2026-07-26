@@ -11,7 +11,10 @@
     "test:watch": "jest --watch",
     "c": "bun run compile",
     "compile": "tsc --noEmit",
-    "clean": "rm -rf build dist coverage tsconfig.tsbuildinfo"
+    "clean": "rm -rf build dist coverage tsconfig.tsbuildinfo",
+    "test:and:lock": "./android-lock.sh hold",
+    "test:and:lock-status": "./android-lock.sh status",
+    "test:and:unlock": "./android-lock.sh unlock"
   },
   "keywords": [],
   "author": "ashley@codecapers.com.au",
