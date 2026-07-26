@@ -1,0 +1,118 @@
+name: Retry install
+description: >
+  Runs an install command, retrying it when it fails or when it leaves behind tools it was supposed
+  to install. Package feeds go down: a Chocolatey 504 once left ffmpeg uninstalled and failed a build
+  two steps later on "the term 'ffmpeg' is not recognized". A transient feed error is worth another
+  attempt rather than a failed build, and an install that quietly did nothing should be caught where
+  it happened rather than wherever the missing tool is first used.
+
+inputs:
+  run:
+    description: The install command to run. Passed to bash, so it may span several lines.
+    required: true
+
+  verify:
+    description: >
+      Space-separated executables that must be on PATH once the install has run. An install that
+      leaves any of them missing counts as a failure, so it is retried and then reported naming what
+      is missing. This is not belt and braces: some package managers report success having installed
+      nothing. Chocolatey exits 0 when its feed errors on one of several packages, so the exit code
+      alone would not have caught the failure above. Leave empty to retry on the exit code only.
+
+      An entry may offer alternatives separated by "|", satisfied when any one of them resolves. This
+      exists because the same package provides differently named commands on different platforms:
+      apt's imagemagick is ImageMagick 6, which has convert and identify but no magick, while
+      Homebrew's and Chocolatey's are ImageMagick 7, which has magick. The code handles both the same
+      way (packages/tools/src/lib/image.ts tries magick and falls back to convert/identify), so the
+      check here has to accept whichever the platform provides rather than insisting on one.
+    required: false
+    default: ""
+
+  attempts:
+    description: How many times to try before giving up.
+    required: false
+    default: "3"
+
+  delay-seconds:
+    description: >
+      Seconds to wait after the first failed attempt. Each subsequent wait is a multiple of it, so
+      the default backs off 15s then 30s, which is enough to ride out a feed hiccup without adding
+      much to a job that succeeds first time (the common case costs nothing).
+    required: false
+    default: "15"
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      # The inputs go through the environment rather than being interpolated into the script, so a
+      # command containing quotes or newlines cannot break out of it.
+      env:
+        RETRY_INSTALL_RUN: ${{ inputs.run }}
+        RETRY_INSTALL_VERIFY: ${{ inputs.verify }}
+        RETRY_INSTALL_ATTEMPTS: ${{ inputs.attempts }}
+        RETRY_INSTALL_DELAY: ${{ inputs.delay-seconds }}
+      run: |
+        set -uo pipefail
+
+        #
+        # Prints the verify entries that are not satisfied, each preceded by a space. Empty when they
+        # all resolve. Word splitting on the input is intended: it is a space-separated list. An entry
+        # holding "|"-separated alternatives is satisfied by any one of them.
+        #
+        missing_tools() {
+            local missing=""
+            local entry
+            local alternative
+            local found
+            for entry in $RETRY_INSTALL_VERIFY; do
+                found=""
+                for alternative in ${entry//|/ }; do
+                    if command -v "$alternative" >/dev/null 2>&1; then
+                        found="yes"
+                        break
+                    fi
+                done
+                if [ -z "$found" ]; then
+                    missing="$missing $entry"
+                fi
+            done
+            echo "$missing"
+        }
+
+        installStatus=0
+        missing=""
+        attempt=1
+
+        while [ "$attempt" -le "$RETRY_INSTALL_ATTEMPTS" ]; do
+            installStatus=0
+            bash -c "$RETRY_INSTALL_RUN" || installStatus=$?
+            missing="$(missing_tools)"
+
+            if [ "$installStatus" -eq 0 ] && [ -z "$missing" ]; then
+                exit 0
+            fi
+
+            if [ "$installStatus" -ne 0 ]; then
+                echo "Attempt $attempt of $RETRY_INSTALL_ATTEMPTS exited $installStatus."
+            fi
+            if [ -n "$missing" ]; then
+                echo "Attempt $attempt of $RETRY_INSTALL_ATTEMPTS reported success but left these missing:$missing"
+            fi
+
+            if [ "$attempt" -eq "$RETRY_INSTALL_ATTEMPTS" ]; then
+                break
+            fi
+
+            delay=$((RETRY_INSTALL_DELAY * attempt))
+            echo "Waiting ${delay}s before retrying."
+            sleep "$delay"
+            attempt=$((attempt + 1))
+        done
+
+        if [ -n "$missing" ]; then
+            echo "::error::Install failed after $RETRY_INSTALL_ATTEMPTS attempts; still missing:$missing"
+        else
+            echo "::error::Install failed after $RETRY_INSTALL_ATTEMPTS attempts (last exit $installStatus)."
+        fi
+        exit 1
