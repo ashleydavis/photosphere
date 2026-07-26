@@ -8,6 +8,15 @@ source "$TEST_DIR/../../lib/common.sh"
 
 print_test_header 28 "host-emulator-comms"
 
+# Android only: both directions are checked through adb and the emulator's NAT/bridge addressing,
+# neither of which exists on iOS, where the simulator shares the host's network and there is nothing
+# to check. Without this guard the test ran on iOS and failed on the missing adb.
+if [ "$PLATFORM" != "android" ]; then
+    log_info "SKIP: 28-host-emulator-comms checks Android emulator networking and does not apply to $PLATFORM. Skipping."
+    log_success "Test 28 skipped: host-emulator-comms (not applicable to $PLATFORM)"
+    exit 0
+fi
+
 # Host to emulator: adb reaches the guest shell and a token round-trips.
 token="h2g-$$-${RANDOM}"
 result="$(adb shell echo "$token" 2>/dev/null | tr -d '\r')"
