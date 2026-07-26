@@ -29,7 +29,7 @@ describe('printNotifications', () => {
         mockCheckForUpdates.mockResolvedValue('1.2.3');
         mockCheckForNews.mockResolvedValue(undefined);
 
-        await printNotifications();
+        await printNotifications(false);
 
         const calls = (log.info as jest.Mock).mock.calls.map(callArgs => callArgs[0]);
         expect(calls.some(line => line.includes('A new version is available: v1.2.3'))).toBe(true);
@@ -39,7 +39,7 @@ describe('printNotifications', () => {
         mockCheckForUpdates.mockResolvedValue('1.2.3');
         mockCheckForNews.mockResolvedValue(undefined);
 
-        await printNotifications();
+        await printNotifications(false);
 
         expect(mockMarkUpdateAsShown).toHaveBeenCalledWith('1.2.3');
     });
@@ -48,7 +48,7 @@ describe('printNotifications', () => {
         mockCheckForUpdates.mockResolvedValue(undefined);
         mockCheckForNews.mockResolvedValue(undefined);
 
-        await printNotifications();
+        await printNotifications(false);
 
         expect(mockMarkUpdateAsShown).not.toHaveBeenCalled();
     });
@@ -57,7 +57,7 @@ describe('printNotifications', () => {
         mockCheckForUpdates.mockResolvedValue(undefined);
         mockCheckForNews.mockResolvedValue(undefined);
 
-        await printNotifications();
+        await printNotifications(false);
 
         const calls = (log.info as jest.Mock).mock.calls.map(callArgs => callArgs[0]);
         expect(calls.some(line => line.includes('A new version is available'))).toBe(false);
@@ -67,7 +67,7 @@ describe('printNotifications', () => {
         mockCheckForUpdates.mockResolvedValue(undefined);
         mockCheckForNews.mockResolvedValue({ id: 'a', message: 'Hello users' });
 
-        await printNotifications();
+        await printNotifications(false);
 
         const calls = (log.info as jest.Mock).mock.calls.map(callArgs => callArgs[0]);
         expect(calls.some(line => line.includes('📰 News:'))).toBe(true);
@@ -83,7 +83,7 @@ describe('printNotifications', () => {
             action: { label: 'Try it', url: 'https://example.com/try' },
         });
 
-        await printNotifications();
+        await printNotifications(false);
 
         const calls = (log.info as jest.Mock).mock.calls.map(callArgs => callArgs[0]);
         expect(calls.some(line => line.includes('Read more') && line.includes('https://example.com/read'))).toBe(true);
@@ -94,9 +94,29 @@ describe('printNotifications', () => {
         mockCheckForUpdates.mockResolvedValue(undefined);
         mockCheckForNews.mockResolvedValue(undefined);
 
-        await printNotifications();
+        await printNotifications(false);
 
         expect(log.info).not.toHaveBeenCalled();
+    });
+
+    test('prints nothing when quiet is set, and does not even check', async () => {
+        mockCheckForUpdates.mockResolvedValue('1.2.3');
+        mockCheckForNews.mockResolvedValue({ id: 'a', message: 'Some news' });
+
+        await printNotifications(true);
+
+        expect(log.info).not.toHaveBeenCalled();
+        expect(mockCheckForUpdates).not.toHaveBeenCalled();
+        expect(mockCheckForNews).not.toHaveBeenCalled();
+    });
+
+    test('does not record the update as shown when quiet is set, so it still surfaces later', async () => {
+        mockCheckForUpdates.mockResolvedValue('1.2.3');
+        mockCheckForNews.mockResolvedValue(undefined);
+
+        await printNotifications(true);
+
+        expect(mockMarkUpdateAsShown).not.toHaveBeenCalled();
     });
 });
 

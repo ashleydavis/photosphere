@@ -71,6 +71,7 @@ async function main() {
             process.exit(0);
         })
         .option('--debug', 'Enable debug REST API server')
+        .option('-q, --quiet', 'Suppress optional output (update and news notifications). Give it before the command name.')
         .addHelpText('after', `
 
 Getting help:
@@ -91,14 +92,15 @@ Resources:
 
     // Print update + news notifications before every command. Skipped for the `news`
     // command itself (which renders its own full-feed listing) and for the `bug` command
-    // (which captures clean output for the bug report). Network/parse errors are swallowed
-    // inside printNotifications(), so the hook never blocks the user.
+    // (which captures clean output for the bug report). --quiet suppresses them for any
+    // command, which is what a caller reading the output by machine wants. Network/parse
+    // errors are swallowed inside printNotifications(), so the hook never blocks the user.
     program.hook('preAction', async (_thisCommand, actionCommand) => {
         const skipForCommands = new Set(['news', 'bug']);
         if (skipForCommands.has(actionCommand.name())) {
             return;
         }
-        await printNotifications();
+        await printNotifications(program.opts().quiet === true);
     });
 
     program

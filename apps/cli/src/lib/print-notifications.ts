@@ -31,7 +31,17 @@ export function printNewsItem(item: INewsItem): void {
 // The `psi news` command skips this hook and renders its own (always-on, full-feed)
 // listing instead (see cmd/news.ts).
 //
-export async function printNotifications(): Promise<void> {
+// `quiet` is the CLI's --quiet flag. These notifications are the CLI's optional output: useful to a
+// person, noise to anything reading the output by machine, and they appear on a schedule the caller
+// does not control (an unseen news item, a newer release), so a caller that parses output has no way
+// to write around them. --quiet turns them off. Nothing else here is suppressed: the command's own
+// output is what the caller asked for.
+//
+export async function printNotifications(quiet: boolean): Promise<void> {
+    if (quiet) {
+        return;
+    }
+
     const updateVersion = await checkForUpdates();
     if (updateVersion) {
         log.info('');

@@ -60,9 +60,12 @@ export TEST_TMP_DIR="$TEST_ROOT"
 
 EXPECTED_ENTRIES=$((NUM_PROCESSES * ENTRIES_PER_PROCESS))
 
-# Runs a psi command quietly, so its output can be parsed.
+# Runs a psi command quietly, so its output can be parsed. --quiet suppresses the update and news
+# notifications the CLI prints before a command runs: on a machine that has never run psi they land
+# in the middle of the output this test reads, and the contention check below counts them as a
+# writer complaining. It goes before the command name because it is a top-level option.
 psi_cmd() {
-    (cd "$SCRIPT_DIR" && bun run --silent start -- "$@")
+    (cd "$SCRIPT_DIR" && bun run --silent start -- --quiet "$@")
 }
 
 echo -e "${BLUE}=== Hash Cache Concurrency Smoke Test ===${NC}"
