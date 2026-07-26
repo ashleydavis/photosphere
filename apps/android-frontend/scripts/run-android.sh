@@ -28,8 +28,13 @@ source "$SCRIPT_DIR/android-env.sh"
 ADB="$ANDROID_HOME/platform-tools/adb"
 EMULATOR="$ANDROID_HOME/emulator/emulator"
 
-# The network card the emulator plugs into to reach the host. Must match the bridge script.
-NETCARD_NAME="tap-psphere"
+# The network card the emulator plugs into to reach the host, from the one file that defines it.
+#
+# This used to be a local copy reading "tap-psphere", which the bridge script has never created. The
+# check below therefore never matched, so this script silently started every emulator off the bridge
+# even when one was up. Sourcing the name is what stops that happening again.
+source "$SCRIPT_DIR/emulator-config.sh"
+NETCARD_NAME="$NETCARD_PREFIX-0"
 
 #
 # Prints the ids of every target adb can actually deploy to. Deliberately ignores "offline" and

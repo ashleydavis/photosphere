@@ -10,7 +10,7 @@ source "$TEST_DIR/../../lib/common.sh"
 
 print_test_header 39 "secret-in-keychain"
 
-TMP_DIR="$TEST_DIR/tmp"
+TMP_DIR="$TEST_DIR/$TEST_TMP_NAME"
 
 # The default add-secret type is s3-credentials, whose region field is on screen at open and reads
 # back through the revealed-secret-region field. A distinctive value so the round-trip is unambiguous.

@@ -10,7 +10,7 @@ source "$TEST_DIR/../../lib/common.sh"
 
 print_test_header 11 "edit-encryption-key"
 
-TMP_DIR="$TEST_DIR/tmp"
+TMP_DIR="$TEST_DIR/$TEST_TMP_NAME"
 
 trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 

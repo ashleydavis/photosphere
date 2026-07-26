@@ -14,7 +14,7 @@ source "$TEST_DIR/../../lib/common.sh"
 
 print_test_header 1 "load-fixture"
 
-TMP_DIR="$TEST_DIR/tmp"
+TMP_DIR="$TEST_DIR/$TEST_TMP_NAME"
 
 # The fixture's sandbox-relative name (under the app's private files directory).
 DB_NAME="50-assets"

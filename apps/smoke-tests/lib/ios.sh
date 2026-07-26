@@ -55,6 +55,14 @@ ios_prepare() {
 }
 
 #
+# iOS has one simulator and no second checkout competing for it, so there is never a foreign build to
+# put back. Present so the runner can call the same hook on both platforms.
+#
+ios_ensure_apk() {
+    return 0
+}
+
+#
 # Prints the device slots the pool should run on, one per line. iOS is always a single slot: the
 # simulator ios_prepare already selected and booted. Exists so run.sh can stay platform-neutral and
 # drive Android's many devices and iOS's one through the same two hooks.

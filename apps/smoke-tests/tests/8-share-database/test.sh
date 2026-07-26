@@ -12,7 +12,7 @@ source "$TEST_DIR/../../lib/common.sh"
 
 print_test_header 8 "share-database"
 
-TMP_DIR="$TEST_DIR/tmp"
+TMP_DIR="$TEST_DIR/$TEST_TMP_NAME"
 DB_NAME="test-db"
 
 trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT

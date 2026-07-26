@@ -10,7 +10,7 @@ source "$TEST_DIR/../../lib/common.sh"
 
 print_test_header 22 "edit-database-origin"
 
-TMP_DIR="$TEST_DIR/tmp"
+TMP_DIR="$TEST_DIR/$TEST_TMP_NAME"
 NEW_ORIGIN="s3:my-bucket:/origin-database"
 
 trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT

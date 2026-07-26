@@ -35,21 +35,10 @@ BRIDGE_NAME="br-psphere"
 # How many emulators the pool brings up. Only `pool` reads this; `up` is always a single emulator.
 PHOTOSPHERE_EMULATOR_COUNT="${PHOTOSPHERE_EMULATOR_COUNT:-5}"
 
-# Tap interface prefixes. The single emulator and the pool use separate prefixes so that bringing
-# either up or down never disturbs the other. One tap per emulator, because -wifi-tap binds a single
-# emulator to a single tap at launch and a tap cannot be shared.
-NETCARD_PREFIX="emu-netcard"
-POOL_NETCARD_PREFIX="emu-pool"
-
-# Prefix for the cloned AVDs the pool runs on.
-#
-# Every emulator here is writable. Two emulators cannot share one AVD (its disk images are
-# single-writer, enforced by hardware-qemu.ini.lock and multiinstance.lock), and the alternative,
-# -read-only, would make the whole pool throw its state away. So each pool emulator gets its own
-# clone of the base AVD instead. A clone is about 8KB: it is just config.ini plus an .ini pointing
-# at it, because the Android system image lives in the SDK and is shared, and every disk image is
-# created fresh on first cold boot.
-POOL_AVD_PREFIX="psphere-pool"
+# The tap and AVD names, shared with the smoke-test harness and the run script. Sourced rather than
+# repeated, so a rename cannot leave one side looking for an interface or an AVD the other never
+# creates. See emulator-config.sh for what each one is for.
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/emulator-config.sh"
 
 #
 # Prints the tap interface name for the single emulator.
@@ -390,6 +379,98 @@ emulator_path() {
 }
 
 #
+# Prints the path of an installed system image directory, or nothing when the SDK has none. Prefers
+# the highest API level, so a machine with several picks the newest.
+#
+installed_system_image() {
+    local sdk
+    sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}}"
+    ls -d "$sdk"/system-images/*/*/* 2>/dev/null | sort -V | tail -1
+}
+
+#
+# Creates the base AVD from an installed system image, so a machine that has never had one can still
+# bring up an emulator or a pool. Prints nothing and fails when the SDK has no system image, which is
+# the one thing this cannot conjure: it is several GB of Android and has to be downloaded.
+#
+# Written by hand rather than with avdmanager, because avdmanager lives in cmdline-tools, which is a
+# separate SDK package that is frequently not installed (it is not on this machine). The format is
+# only config.ini plus an .ini pointing at it, which is the same thing clone_avd writes.
+# Usage: create_base_avd <avd_name>
+#
+create_base_avd() {
+    local name="$1"
+    local sdk image api tag abi home dir
+    sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}}"
+
+    image="$(installed_system_image)"
+    if [ -z "$image" ]; then
+        echo "ERROR: no AVD exists and the SDK has no system image to build one from." >&2
+        echo "Install one in Android Studio (Device Manager, or SDK Manager > SDK Platforms)," >&2
+        echo "or with: sdkmanager 'system-images;android-34;google_apis;x86_64'" >&2
+        return 1
+    fi
+
+    # The three path components after system-images/ are the API level, the tag and the ABI, which
+    # are exactly what config.ini needs to identify the image.
+    abi="$(basename "$image")"
+    tag="$(basename "$(dirname "$image")")"
+    api="$(basename "$(dirname "$(dirname "$image")")")"
+
+    home="$(avd_home)"
+    dir="$home/$name.avd"
+    mkdir -p "$dir"
+
+    # A minimal but complete hardware profile. Anything not named here the emulator defaults for
+    # itself; these are the settings the tests actually depend on (a writable data partition big
+    # enough for the fixtures, and a phone-sized screen).
+    cat > "$dir/config.ini" <<CONFIG
+AvdId=$name
+avd.ini.displayname=$name
+avd.ini.encoding=UTF-8
+abi.type=$abi
+image.sysdir.1=system-images/$api/$tag/$abi/
+tag.id=$tag
+hw.cpu.arch=x86_64
+hw.ramSize=2048
+hw.lcd.width=1080
+hw.lcd.height=2400
+hw.lcd.density=440
+hw.gpu.enabled=yes
+hw.gpu.mode=auto
+hw.keyboard=yes
+disk.dataPartition.size=6G
+CONFIG
+
+    {
+        echo "avd.ini.encoding=UTF-8"
+        echo "path=$dir"
+        echo "path.rel=avd/$name.avd"
+        echo "target=$api"
+    } > "$home/$name.ini"
+
+    echo "Created base AVD '$name' from $api/$tag/$abi." >&2
+}
+
+#
+# Prints the AVD to use, creating one first when the machine has none. This is what lets `up` and
+# `pool` work on a fresh machine that has never had an emulator.
+#
+ensure_base_avd() {
+    local existing
+    existing="$(base_avd_name)"
+    if [ -n "$existing" ]; then
+        echo "$existing"
+        return 0
+    fi
+
+    if ! create_base_avd "$DEFAULT_BASE_AVD"; then
+        return 1
+    fi
+    echo "$DEFAULT_BASE_AVD"
+}
+
+#
 # Prints the name of the AVD the pool clones from: ANDROID_AVD when set, otherwise the first AVD
 # that is not itself a pool clone. Prints nothing when the machine has no AVD at all.
 #
@@ -622,11 +703,7 @@ cmd_up() {
     fi
 
     local avd
-    avd="$(base_avd_name)"
-    if [ -z "$avd" ]; then
-        echo "ERROR: no AVD found. Create one in Android Studio's Device Manager." >&2
-        exit 1
-    fi
+    avd="$(ensure_base_avd)" || exit 1
 
     start_emulator_bg "$avd" "$netcard" "single"
 
@@ -653,11 +730,7 @@ cmd_pool_up() {
     fi
 
     local base
-    base="$(base_avd_name)"
-    if [ -z "$base" ]; then
-        echo "ERROR: no AVD to clone from. Create one in Android Studio's Device Manager." >&2
-        exit 1
-    fi
+    base="$(ensure_base_avd)" || exit 1
     echo "Cloning the pool's AVDs from '$base'..."
 
     local index taps=""

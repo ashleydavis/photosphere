@@ -5,7 +5,7 @@ source "$TEST_DIR/../../lib/common.sh"
 
 print_test_header 0 "launch-and-navigate"
 
-TMP_DIR="$TEST_DIR/tmp"
+TMP_DIR="$TEST_DIR/$TEST_TMP_NAME"
 
 cleanup() {
     stop_app "$APP_PORT" "$TMP_DIR" 2>/dev/null || true

@@ -12,7 +12,7 @@ source "$TEST_DIR/../../lib/common.sh"
 
 print_test_header 34 "sync"
 
-TMP_DIR="$TEST_DIR/tmp"
+TMP_DIR="$TEST_DIR/$TEST_TMP_NAME"
 DB_NAME="sync-db"
 ORIGIN_NAME="sync-origin"
 

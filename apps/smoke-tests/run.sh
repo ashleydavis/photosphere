@@ -2,9 +2,16 @@
 set -euo pipefail
 
 # Discovers and runs the mobile smoke tests (tests/*/test.sh) on the platform given by the
-# PLATFORM env var (android or ios). Builds and installs the app once up front, then runs each
-# test sequentially. Mirrors apps/desktop/smoke-tests.sh but simpler (sequential only) and
-# without an in-app control server (the host control bridge handles that, see lib/common.sh).
+# PLATFORM env var (android or ios). Builds and installs the app once up front, then spreads the
+# tests over the available devices. Mirrors apps/desktop/smoke-tests.sh but without an in-app
+# control server (the host control bridge handles that, see lib/common.sh).
+
+# Nothing in a test run may read the terminal. This is a non-interactive suite, but the build
+# toolchain underneath it (cap sync, Gradle) can try stdin, and a backgrounded job that reads the
+# tty is stopped by the kernel with SIGTTIN. That made `bun run test:and &` suspend instead of run,
+# so several suites could not be started from one terminal without redirecting stdin by hand.
+# Detaching stdin here means backgrounding just works, with no ceremony at the call site.
+exec </dev/null
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -17,6 +24,11 @@ NC='\033[0m'
 
 # Sourcing common.sh also sources the platform launcher and defines the *_prepare/_build/etc.
 source "$SCRIPT_DIR/lib/common.sh"
+
+# Give this run its own per-test scratch directory before anything reads it, so several suites can
+# run at once out of one checkout without wiping each other's live test state. Exported, because each
+# test.sh is a separate process that builds its TMP_DIR from it.
+export PHOTOSPHERE_TEST_TMP="${PHOTOSPHERE_TEST_TMP:-tmp/run-$$}"
 
 # The work queue and worker pool that spread the tests over the available devices.
 source "$SCRIPT_DIR/lib/runner.sh"
@@ -32,8 +44,7 @@ discover_tests() {
 cleanup_all_devices() {
     local slot
     for slot in "${RUNNER_SLOTS[@]}"; do
-        "${PLATFORM}_export_device" "$slot"
-        "${PLATFORM}_cleanup"
+        with_device "$slot" "${PLATFORM}_cleanup"
     done
 }
 
@@ -51,39 +62,33 @@ main() {
     fi
 
     "${PLATFORM}_prepare"
-    "${PLATFORM}_build"
 
-    # One worker per device. The app is built once and installed onto each of them.
-    local available=()
+    # One suite builds at a time: concurrent builds out of one checkout corrupt each other.
+    with_build_lock "${PLATFORM}_build"
+
+    # Every ready device is a candidate. Nothing is reserved here: a worker takes an emulator for one
+    # test and hands it back, so other suites running at the same time get their turn too.
+    RUNNER_SLOTS=()
     while IFS= read -r slot; do
-        available+=("$slot")
+        RUNNER_SLOTS+=("$slot")
     done < <("${PLATFORM}_device_slots")
 
-    if [ ${#available[@]} -eq 0 ]; then
+    if [ ${#RUNNER_SLOTS[@]} -eq 0 ]; then
         log_error "No usable device found for $PLATFORM."
         exit 1
     fi
-
-    # Take only the devices no other run is using, so several suites can run at once on disjoint
-    # subsets rather than queueing behind one machine-wide lock. Called directly, never through a
-    # subshell, because the claims are file descriptors this shell has to keep open.
-    if ! claim_device_slots "${available[@]}"; then
-        log_error "Timed out waiting for a free device (all ${#available[@]} are in use by other runs)."
-        exit 1
-    fi
-    RUNNER_SLOTS=("${CLAIMED_SLOTS[@]}")
 
     log_info "Running on ${#RUNNER_SLOTS[@]} device(s): ${RUNNER_SLOTS[*]}"
 
     local slot
     for slot in "${RUNNER_SLOTS[@]}"; do
-        "${PLATFORM}_export_device" "$slot"
-        "${PLATFORM}_install"
+        with_device "$slot" "${PLATFORM}_install"
     done
 
     # Clear the app's data from every device however the run ends, so the databases the tests seed
-    # and import into do not pile up until a device runs out of storage.
-    trap 'cleanup_all_devices' EXIT
+    # and import into do not pile up until a device runs out of storage. Deregistering here too, so
+    # an interrupted run does not leave a registration behind shrinking the other suites' shares.
+    trap 'cleanup_all_devices; deregister_suite' EXIT
 
     local tests=()
     while IFS= read -r test_path; do
@@ -141,7 +146,7 @@ main() {
         # leaving it to be hunted for in the scrollback.
         printf "${RED}%d of %d tests failed${NC}\n" "$fail" "$((pass + fail))"
         for name in "${failed_names[@]}"; do
-            printf "${RED}  %s${NC}  (log: %s)\n" "$name" "$SCRIPT_DIR/tests/$name/tmp/test-run.log"
+            printf "${RED}  %s${NC}  (log: %s)\n" "$name" "$SCRIPT_DIR/tests/$name/$RUN_TMP_NAME/test-run.log"
         done
     fi
     return $((fail > 0 ? 1 : 0))

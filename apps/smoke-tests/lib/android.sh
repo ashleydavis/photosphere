@@ -12,9 +12,20 @@
 # Path to the debug APK produced by assembleDebug.
 ANDROID_APK="$ANDROID_FRONTEND_DIR/android/app/build/outputs/apk/debug/app-debug.apk"
 
+# Where a device records the checksum of the APK currently installed on it. Lives outside the app's
+# own storage, which android_cleanup wipes, so it survives a run's teardown and can still be trusted
+# by the next one.
+ANDROID_APK_STAMP="/data/local/tmp/psphere-apk.sha"
+
 # The bridge script owns the definition of "ready" (emulator started + on the LAN bridge). run.sh
 # gates on it so `status` and the test run never disagree about what ready means.
 ANDROID_BRIDGE_SCRIPT="$ANDROID_FRONTEND_DIR/scripts/emulator.sh"
+
+# The pool's AVD and tap names, from the one file that defines them. Sourced rather than copied: the
+# harness has to recognise a pool emulator so it leaves a hand-testing one alone, and a duplicated
+# literal would silently stop matching the day it was renamed, quietly reinstalling over somebody's
+# own emulator.
+source "$ANDROID_FRONTEND_DIR/scripts/emulator-config.sh"
 
 #
 # Fails the whole run immediately unless the emulator is started AND on the LAN bridge, by delegating
@@ -46,8 +57,10 @@ android_require_ready() {
 }
 
 #
-# Prints one serial per line for every attached device that is on the LAN bridge, which is what the
-# smoke tests require. These are the devices the run spreads its work over, one worker each.
+# Prints one serial per line for every attached device the run may use. These are the devices the run
+# spreads its work over.
+#
+# That means devices on the LAN bridge, which is what the smoke tests require.
 #
 android_ready_devices() {
     local serial
@@ -59,9 +72,13 @@ android_ready_devices() {
 }
 
 #
-# Prints the device slots the pool should run on, one per line. Honours
-# PHOTOSPHERE_ANDROID_DEVICES (a space-separated serial list) so a run can be pinned to specific
-# emulators, for example to leave a hand-testing one alone.
+# Prints the emulators this run may use, one per line.
+#
+# When the pool is up, only the pool is used: a hand-testing emulator is left alone, because tests
+# reinstall the app and wipe its data. Only when no pool emulator is running does this fall back to
+# whatever bridge-ready device there is, which is what makes a single hand-started emulator work.
+#
+# PHOTOSPHERE_ANDROID_DEVICES (a space-separated serial list) overrides both.
 #
 android_device_slots() {
     if [ -n "${PHOTOSPHERE_ANDROID_DEVICES:-}" ]; then
@@ -71,7 +88,31 @@ android_device_slots() {
         done
         return 0
     fi
+
+    local pool_devices
+    pool_devices="$(android_pool_devices)"
+    if [ -n "$pool_devices" ]; then
+        echo "$pool_devices"
+        return 0
+    fi
+
     android_ready_devices
+}
+
+#
+# Prints the bridge-ready emulators that belong to the test pool, one per line. A pool emulator is
+# one running a cloned pool AVD, which is how it is told apart from a hand-started one.
+#
+android_pool_devices() {
+    local serial avd
+    for serial in $(android_ready_devices); do
+        avd="$(adb -s "$serial" emu avd name 2>/dev/null | head -1 | tr -d '\r')"
+        case "$avd" in
+            "$POOL_AVD_PREFIX"-*)
+                echo "$serial"
+                ;;
+        esac
+    done
 }
 
 #
@@ -218,6 +259,38 @@ android_install() {
     fi
     log_info "Installing APK..."
     adb install -r "$ANDROID_APK"
+    # Record what is now on this device, so a run can tell whether the app it is about to test is
+    # still its own build. See android_ensure_apk.
+    adb shell "echo $(android_apk_checksum) > $ANDROID_APK_STAMP" >/dev/null 2>&1 || true
+}
+
+#
+# Prints a checksum of the APK this run built.
+#
+android_apk_checksum() {
+    sha256sum "$ANDROID_APK" | cut -d' ' -f1
+}
+
+#
+# Reinstalls the app when the one on the device is not this run's build, and does nothing when it is.
+#
+# Every worktree builds an APK with the same applicationId, so two checkouts running their suites
+# against the same emulators overwrite each other's install. Without this, a run's later tests
+# silently execute another worktree's code and pass or fail for reasons that have nothing to do with
+# it. The device's own lock is held while this runs, so the reinstall cannot land underneath a test.
+#
+# The stamp is the APK's sha recorded on the device at install time. Comparing bytes rather than
+# timestamps or "did we build" flags means an unnoticed swap can never look like a match.
+#
+android_ensure_apk() {
+    local installed expected
+    expected="$(android_apk_checksum)"
+    installed="$(adb shell cat "$ANDROID_APK_STAMP" 2>/dev/null | tr -d '\r\n')"
+    if [ "$installed" = "$expected" ]; then
+        return 0
+    fi
+    log_info "Another build is installed on ${ANDROID_SERIAL:-this device}; reinstalling this run's APK."
+    android_install
 }
 
 #

@@ -17,7 +17,7 @@ source "$TEST_DIR/../../lib/common.sh"
 
 print_test_header 33 "s3-database"
 
-TMP_DIR="$TEST_DIR/tmp"
+TMP_DIR="$TEST_DIR/$TEST_TMP_NAME"
 
 if [ -z "${TEST_S3_BUCKET:-}" ]; then
     log_info "SKIP: 33-s3-database requires TEST_S3_BUCKET / AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY (and AWS_ENDPOINT for MinIO). Skipping."

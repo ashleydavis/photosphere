@@ -21,6 +21,15 @@ NC='\033[0m'
 # Directory containing this script (apps/smoke-tests/lib).
 LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Name of the per-test scratch directory, relative to the test's own directory. Every test sets
+# TMP_DIR from this rather than hardcoding "tmp", so that several suites running at once out of one
+# checkout each get their own scratch space. The runner sets it to tmp/run-<id> per run; on its own
+# it stays "tmp", which is what a single run has always used.
+#
+# Without this, two concurrent runs share tests/<name>/tmp, and the runner wiping that directory
+# before a test destroys the other run's live bridge log and pid file underneath it.
+TEST_TMP_NAME="${PHOTOSPHERE_TEST_TMP:-tmp}"
+
 # Repo-relative locations used by the platform launchers.
 SMOKE_TESTS_DIR="$(cd "$LIB_DIR/.." && pwd)"
 REPO_DIR="$(cd "$SMOKE_TESTS_DIR/../.." && pwd)"

@@ -14,7 +14,7 @@ source "$TEST_DIR/../../lib/common.sh"
 
 print_test_header 27 "receive-secret"
 
-TMP_DIR="$TEST_DIR/tmp"
+TMP_DIR="$TEST_DIR/$TEST_TMP_NAME"
 
 # A host-side sender can only reach the device's receiver over the LAN bridge. Checked before the
 # stop_app trap is armed, so failing here does not run a teardown for an app that never started.
