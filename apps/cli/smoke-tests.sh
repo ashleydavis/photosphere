@@ -1,7 +1,6 @@
 #!/bin/bash
 
 # Photosphere CLI Smoke Tests
-# Based on test plan from photosphere-wiki/Test-plan-from-repo.md
 # This script runs smoke tests to verify basic CLI functionality
 
 # Absolute path to this script's directory, resolved before any cd takes place.

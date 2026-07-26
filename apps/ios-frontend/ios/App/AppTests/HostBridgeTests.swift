@@ -4,8 +4,8 @@ import JavaScriptCore
 
 //
 // Tests the native host bridge directly: sha256 reporting NOT IMPLEMENTED (hashing is not
-// implemented natively in this infrastructure plan), sendMessage capture through the message sink,
-// and isCancelled reading the provider. Mirrors the Android host-bridge tests.
+// implemented natively), sendMessage capture through the message sink, and isCancelled reading
+// the provider. Mirrors the Android host-bridge tests.
 //
 final class HostBridgeTests: XCTestCase {
 
@@ -32,8 +32,8 @@ final class HostBridgeTests: XCTestCase {
     }
 
     //
-    // sha256 is not implemented natively in this infrastructure plan, so it must throw the exact
-    // NOT IMPLEMENTED error rather than computing a hash.
+    // sha256 is not implemented natively, so it must throw the exact NOT IMPLEMENTED error
+    // rather than computing a hash.
     //
     func testSha256ReportsNotImplemented() {
         let bridge = HostBridge(

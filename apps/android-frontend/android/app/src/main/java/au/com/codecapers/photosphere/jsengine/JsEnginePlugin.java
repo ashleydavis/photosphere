@@ -120,9 +120,8 @@ public final class JsEnginePlugin extends Plugin {
     }
 
     //
-    // Returns the storage root the path-sandbox confines host functions to. For the first slice
-    // this is the app's private files directory; plan-mobile-storage-options.md owns the final
-    // root choice and the rest of the fs surface.
+    // Returns the storage root the path-sandbox confines host functions to: the app's private
+    // files directory.
     //
     private File getStorageRoot() {
         return getContext().getFilesDir();

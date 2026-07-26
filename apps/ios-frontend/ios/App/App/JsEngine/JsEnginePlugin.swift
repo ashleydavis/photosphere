@@ -51,8 +51,8 @@ public class JsEnginePlugin: CAPPlugin, EnginePoolDelegate {
 
     //
     // Resolves the storage root the host functions are sandboxed to. Uses the app's Documents
-    // directory, the writable sandbox location the storage plan targets on iOS. All task-supplied
-    // paths are resolved relative to this root and may never escape it.
+    // directory, the writable sandbox location on iOS. All task-supplied paths are resolved
+    // relative to this root and may never escape it.
     //
     private func storageRoot() -> URL {
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)

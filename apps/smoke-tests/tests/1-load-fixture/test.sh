@@ -32,7 +32,7 @@ send_command "$APP_PORT" open-database "{\"path\":\"$DB_NAME\"}" || exit 1
 wait_for_log "$TMP_DIR" "Gallery loaded: 50 assets"
 
 # The gallery renders the 50 assets from the loaded metadata and upgrades each tile from its embedded
-# micro-thumbnail to a full thumbnail, fetched over the embedded asset server (plan-mobile-serving-options.md):
+# micro-thumbnail to a full thumbnail, fetched over the embedded asset server:
 # http://localhost:<port>/asset?type=thumb&db=50-assets, served from device storage by the asset-server
 # background task over the native TCP socket. With that layer in place the thumbnail fetches succeed, so
 # no asset-load errors are tolerated here.

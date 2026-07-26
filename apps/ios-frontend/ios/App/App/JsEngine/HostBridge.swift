@@ -192,9 +192,9 @@ final class HostBridge {
         }
         host.setValue(JSValue(object: queueTask, in: context), forProperty: "queueTask")
 
-        // sha256(path): hashing a file is a Node.js crypto capability this infrastructure plan
-        // deliberately does not implement natively. It raises the NOT IMPLEMENTED JS exception so
-        // the task fails loudly until a later plan provides the native hashing host function.
+        // sha256(path): hashing a file is a Node.js crypto capability that is not implemented
+        // natively. It raises the NOT IMPLEMENTED JS exception so the task fails loudly rather
+        // than silently producing a wrong hash.
         let sha256: @convention(block) (String) -> JSValue = { path in
             context.exception = JSValue(newErrorFromMessage: notImplemented("sha256").message, in: context)
             return JSValue(undefinedIn: context)
@@ -594,9 +594,8 @@ final class HostBridge {
     }
 
     //
-    // host.sha256(path): hashing a file is a Node.js crypto capability that this infrastructure
-    // plan deliberately does not implement natively. It reports NOT IMPLEMENTED until a later plan
-    // provides the native hashing host function. The path is accepted only so the signature stays
+    // host.sha256(path): hashing a file is a Node.js crypto capability that is not implemented
+    // natively. It reports NOT IMPLEMENTED. The path is accepted only so the signature stays
     // stable for when the real implementation lands.
     //
     func sha256(path: String) throws -> String {

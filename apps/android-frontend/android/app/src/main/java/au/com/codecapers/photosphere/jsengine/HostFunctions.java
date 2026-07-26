@@ -73,9 +73,8 @@ public final class HostFunctions {
     }
 
     //
-    // host.sha256(path): hashing a file is a Node.js crypto capability that this infrastructure
-    // plan deliberately does not implement natively. It reports NOT IMPLEMENTED until a later plan
-    // provides the native hashing host function. The arguments are accepted only so the host-bridge
+    // host.sha256(path): hashing a file is a Node.js crypto capability that is not implemented
+    // natively. It reports NOT IMPLEMENTED. The arguments are accepted only so the host-bridge
     // signature stays stable for when the real implementation lands.
     //
     public static String sha256(File storageRoot, String candidatePath) {
