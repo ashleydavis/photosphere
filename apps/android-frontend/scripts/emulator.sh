@@ -32,19 +32,51 @@ set -euo pipefail
 # Name of the bridge (the virtual switch). Prefixed so it is obvious what created it.
 BRIDGE_NAME="br-psphere"
 
-# How many emulator instances to bring up. 1 is a single emulator for hand testing; a higher count
-# is a pool for the smoke tests to spread work over. Every instance gets its own tap on the bridge.
-PHOTOSPHERE_EMULATOR_COUNT="${PHOTOSPHERE_EMULATOR_COUNT:-1}"
+# How many emulators the pool brings up. Only `pool` reads this; `up` is always a single emulator.
+PHOTOSPHERE_EMULATOR_COUNT="${PHOTOSPHERE_EMULATOR_COUNT:-5}"
 
-# Prefix for the tap interfaces the emulators attach to. One tap per instance, because -wifi-tap
-# binds a single emulator to a single tap at launch and cannot be shared.
+# Tap interface prefixes. The single emulator and the pool use separate prefixes so that bringing
+# either up or down never disturbs the other. One tap per emulator, because -wifi-tap binds a single
+# emulator to a single tap at launch and a tap cannot be shared.
 NETCARD_PREFIX="emu-netcard"
+POOL_NETCARD_PREFIX="emu-pool"
+
+# Prefix for the cloned AVDs the pool runs on.
+#
+# Every emulator here is writable. Two emulators cannot share one AVD (its disk images are
+# single-writer, enforced by hardware-qemu.ini.lock and multiinstance.lock), and the alternative,
+# -read-only, would make the whole pool throw its state away. So each pool emulator gets its own
+# clone of the base AVD instead. A clone is about 8KB: it is just config.ini plus an .ini pointing
+# at it, because the Android system image lives in the SDK and is shared, and every disk image is
+# created fresh on first cold boot.
+POOL_AVD_PREFIX="psphere-pool"
 
 #
-# Prints the tap interface name for the given instance index.
+# Prints the tap interface name for the single emulator.
 #
 netcard_name() {
-    echo "$NETCARD_PREFIX-$1"
+    echo "$NETCARD_PREFIX-0"
+}
+
+#
+# Prints the tap interface name for the given pool instance index.
+#
+pool_netcard_name() {
+    echo "$POOL_NETCARD_PREFIX-$1"
+}
+
+#
+# Prints the AVD name for the given pool instance index.
+#
+pool_avd_name() {
+    echo "$POOL_AVD_PREFIX-$1"
+}
+
+#
+# Prints the directory holding the AVDs, honouring ANDROID_AVD_HOME.
+#
+avd_home() {
+    echo "${ANDROID_AVD_HOME:-$HOME/.android/avd}"
 }
 
 # The host's address on the private segment. This is what the guest sees traffic coming from, and
@@ -183,13 +215,12 @@ bridge_up() {
 
     ip link set "$BRIDGE_NAME" up
 
-    # Create one tap per emulator instance: a virtual NIC whose wire is a file descriptor. The
-    # emulator opens it and the guest's ethernet frames come out on the bridge. Owned by your user
-    # because the emulator is not root and can only open a tap it owns. One per instance because
+    # Create the taps named in PSPHERE_TAPS: virtual NICs whose wire is a file descriptor. The
+    # emulator opens one and the guest's ethernet frames come out on the bridge. Owned by your user
+    # because the emulator is not root and can only open a tap it owns. One per emulator, because
     # -wifi-tap binds an emulator to a tap at launch and two emulators cannot share one.
-    local index netcard
-    for index in $(seq 0 $((PHOTOSPHERE_EMULATOR_COUNT - 1))); do
-        netcard="$(netcard_name "$index")"
+    local netcard
+    for netcard in $PSPHERE_TAPS; do
         if ! ip link show "$netcard" >/dev/null 2>&1; then
             ip tuntap add dev "$netcard" mode tap user "$TARGET_USER"
         fi
@@ -284,6 +315,24 @@ bridge_up() {
 bridge_down() {
     require_root "__bridge-down"
 
+    # Remove this caller's taps first. Removing a tap detaches it from the bridge as well. Only the
+    # taps named in PSPHERE_TAPS go, so tearing down the pool never pulls the single emulator's tap
+    # out from under it, or the other way round.
+    local netcard
+    for netcard in $PSPHERE_TAPS; do
+        if ip link show "$netcard" >/dev/null 2>&1; then
+            ip link del "$netcard"
+            echo "Removed $netcard."
+        fi
+    done
+
+    # The bridge, the DHCP server and the NAT rules are shared between the single emulator and the
+    # pool, so they are only torn down once nothing is plugged into the bridge any more.
+    if [ -n "$(ip -o link show master "$BRIDGE_NAME" 2>/dev/null)" ]; then
+        echo "Other taps are still on $BRIDGE_NAME; leaving the bridge, DHCP and NAT up."
+        return 0
+    fi
+
     # Stop the DHCP server first, so it is not left holding an interface that is about to vanish.
     if [ -f "$DNSMASQ_PID_FILE" ]; then
         kill "$(cat "$DNSMASQ_PID_FILE")" 2>/dev/null || true
@@ -314,15 +363,6 @@ bridge_down() {
         iptables -D FORWARD -i "$uplink" -o "$BRIDGE_NAME" -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || true
     fi
 
-    # Removing a tap detaches it from the bridge as well. Every tap this script has ever created is
-    # removed, not just the ones the current count covers, so a teardown after a smaller pool does
-    # not strand interfaces from a bigger one.
-    local netcard
-    for netcard in $(ip -o link show | awk -F': ' '{ print $2 }' | grep "^$NETCARD_PREFIX" || true); do
-        ip link del "$netcard"
-        echo "Removed $netcard."
-    done
-
     if ip link show "$BRIDGE_NAME" >/dev/null 2>&1; then
         ip link del "$BRIDGE_NAME"
         echo "Removed $BRIDGE_NAME."
@@ -350,6 +390,92 @@ emulator_path() {
 }
 
 #
+# Prints the name of the AVD the pool clones from: ANDROID_AVD when set, otherwise the first AVD
+# that is not itself a pool clone. Prints nothing when the machine has no AVD at all.
+#
+base_avd_name() {
+    local emulator
+    emulator="$(emulator_path)"
+    if [ -z "$emulator" ]; then
+        return 0
+    fi
+    if [ -n "${ANDROID_AVD:-}" ]; then
+        echo "$ANDROID_AVD"
+        return 0
+    fi
+    "$emulator" -list-avds 2>/dev/null | grep -v '^$' | grep -v "^$POOL_AVD_PREFIX-" | head -1
+}
+
+#
+# Creates the pool's clone of the base AVD, unless it already exists.
+#
+# The clone is only config.ini plus an .ini pointing at its directory, about 8KB. config.ini holds
+# no absolute paths (image.sysdir.1 is relative to the SDK), so nothing needs rewriting except the
+# AVD's own name, and every disk image is created fresh from the shared system image on first cold
+# boot. The base AVD's own 8GB of accumulated userdata and snapshots is deliberately not copied.
+# Usage: clone_avd <base_avd_name> <clone_avd_name>
+#
+clone_avd() {
+    local base="$1"
+    local clone="$2"
+    local home base_ini base_dir clone_dir clone_ini
+    home="$(avd_home)"
+    base_ini="$home/$base.ini"
+    clone_dir="$home/$clone.avd"
+    clone_ini="$home/$clone.ini"
+
+    if [ -f "$clone_ini" ] && [ -f "$clone_dir/config.ini" ]; then
+        return 0
+    fi
+
+    if [ ! -f "$base_ini" ]; then
+        echo "ERROR: base AVD '$base' not found at $base_ini." >&2
+        return 1
+    fi
+
+    # The AVD's directory name does not have to match its name, so read it from the .ini rather
+    # than assuming (the stock "Medium_Phone_API_36.1" lives in "Medium_Phone.avd", for instance).
+    base_dir="$(grep '^path=' "$base_ini" | cut -d= -f2-)"
+    if [ ! -f "$base_dir/config.ini" ]; then
+        echo "ERROR: base AVD '$base' has no config.ini at $base_dir." >&2
+        return 1
+    fi
+
+    mkdir -p "$clone_dir"
+    sed -e "s/^AvdId=.*/AvdId=$clone/" \
+        -e "s/^avd.ini.displayname=.*/avd.ini.displayname=$clone/" \
+        "$base_dir/config.ini" > "$clone_dir/config.ini"
+    {
+        echo "avd.ini.encoding=UTF-8"
+        echo "path=$clone_dir"
+        echo "path.rel=avd/$clone.avd"
+        grep '^target=' "$base_ini" || true
+    } > "$clone_ini"
+
+    echo "Cloned AVD '$base' to '$clone'."
+}
+
+#
+# Prints the serials of attached emulators whose AVD is one of the pool's clones. Used so the pool
+# only ever stops emulators it started, never the single hand-testing one.
+#
+pool_serials() {
+    local adb serial avd
+    adb="$(adb_path)"
+    if [ -z "$adb" ]; then
+        return 0
+    fi
+    for serial in $("$adb" devices 2>/dev/null | awk 'NR > 1 && $2 == "device" { print $1 }'); do
+        avd="$("$adb" -s "$serial" emu avd name 2>/dev/null | head -1 | tr -d '\r')"
+        case "$avd" in
+            "$POOL_AVD_PREFIX"-*)
+                echo "$serial"
+                ;;
+        esac
+    done
+}
+
+#
 # True when an emulator/device is attached and reporting "device" (booted, usable) state.
 #
 device_attached() {
@@ -359,20 +485,26 @@ device_attached() {
 }
 
 #
-# True when the LAN bridge is fully up: the bridge and tap exist and the DHCP server is running.
+# True when the LAN bridge is fully up for the given tap: the bridge and that tap exist and the DHCP
+# server is running. Usage: bridge_is_up <tap_name>
 #
 bridge_is_up() {
     ip link show "$BRIDGE_NAME" >/dev/null 2>&1 \
-        && ip link show "$(netcard_name $((PHOTOSPHERE_EMULATOR_COUNT - 1)))" >/dev/null 2>&1 \
+        && ip link show "$1" >/dev/null 2>&1 \
         && dnsmasq_running
 }
 
 #
-# Starts the emulator in the background attached to the tap, so it lands on the bridge. The AVD is
-# auto-selected (ANDROID_AVD, else the first one found) -- you do not pass one. Must run as your user,
-# not root: the emulator can only open a tap it owns. Detached so it outlives this script; logs to /tmp.
+# Starts one writable emulator in the background on the given tap, so it lands on the bridge. Must
+# run as your user, not root: the emulator can only open a tap it owns. Detached so it outlives this
+# script. Nothing here is ever -read-only, so every emulator keeps its own state.
+# Usage: start_emulator_bg <avd_name> <tap_name> <log_suffix>
 #
 start_emulator_bg() {
+    local avd="$1"
+    local netcard="$2"
+    local log_suffix="$3"
+
     if [ "$(id -u)" -eq 0 ]; then
         echo "ERROR: the emulator must run as your user, not root." >&2
         exit 1
@@ -385,38 +517,19 @@ start_emulator_bg() {
         exit 1
     fi
 
-    local avd
-    avd="${ANDROID_AVD:-$("$emulator" -list-avds 2>/dev/null | grep -v '^$' | head -1)}"
-    if [ -z "$avd" ]; then
-        echo "ERROR: no AVD found. Create one in Android Studio's Device Manager." >&2
+    if ! ip link show "$netcard" >/dev/null 2>&1; then
+        echo "ERROR: $netcard does not exist; the bridge is not up." >&2
         exit 1
     fi
 
-    # Several instances of one AVD can only run when every one of them is -read-only, because the
-    # AVD's own userdata can have a single writer. A single emulator is left writable so hand testing
-    # keeps its state between sessions; a pool is throwaway by nature, so read-only costs nothing.
-    local read_only=""
-    if [ "$PHOTOSPHERE_EMULATOR_COUNT" -gt 1 ]; then
-        read_only="-read-only"
-    fi
+    echo "Starting emulator '$avd' on $netcard (cold boot, so wifi associates to the bridge)..."
 
-    local index netcard
-    for index in $(seq 0 $((PHOTOSPHERE_EMULATOR_COUNT - 1))); do
-        netcard="$(netcard_name "$index")"
-        if ! ip link show "$netcard" >/dev/null 2>&1; then
-            echo "ERROR: $netcard does not exist; the bridge is not up." >&2
-            exit 1
-        fi
-
-        echo "Starting emulator $index of $PHOTOSPHERE_EMULATOR_COUNT ('$avd') on $netcard (cold boot, so wifi associates to the bridge)..."
-
-        # -no-snapshot forces a cold boot. A quick-boot snapshot restores the guest's
-        # previous network state (behind the 10.0.2.x virtual router), so wlan0 never
-        # re-associates to the freshly created tap and stays NO-CARRIER. A cold boot
-        # brings wifi up fresh and associates it to -wifi-tap, which is the whole point.
-        setsid "$emulator" -avd "$avd" $read_only -no-snapshot -no-boot-anim -wifi-tap "$netcard" \
-            >"/tmp/psphere-emulator-$index.log" 2>&1 </dev/null &
-    done
+    # -no-snapshot forces a cold boot. A quick-boot snapshot restores the guest's
+    # previous network state (behind the 10.0.2.x virtual router), so wlan0 never
+    # re-associates to the freshly created tap and stays NO-CARRIER. A cold boot
+    # brings wifi up fresh and associates it to -wifi-tap, which is the whole point.
+    setsid "$emulator" -avd "$avd" -no-snapshot -no-boot-anim -wifi-tap "$netcard" \
+        >"/tmp/psphere-emulator-$log_suffix.log" 2>&1 </dev/null &
 }
 
 #
@@ -439,15 +552,17 @@ ready_device_count() {
 }
 
 #
-# Polls until every requested emulator is ready (started AND on the bridge) or the timeout passes.
+# Polls until at least <wanted> emulators are ready (started AND on the bridge), or the timeout
+# passes. Usage: wait_for_ready <timeout_seconds> <wanted_count>
 #
 wait_for_ready() {
     local timeout="${1:-180}"
+    local wanted="${2:-1}"
     local start="$SECONDS"
     local elapsed=0
     local last_note=0
     while [ "$elapsed" -lt "$timeout" ]; do
-        if [ "$(ready_device_count)" -ge "$PHOTOSPHERE_EMULATOR_COUNT" ]; then
+        if [ "$(ready_device_count)" -ge "$wanted" ]; then
             return 0
         fi
 
@@ -475,24 +590,16 @@ cmd_up() {
         exit 1
     fi
 
-    # A pool needs every instance to be -read-only, and an already-running writable emulator makes
-    # that impossible. Refuse rather than kill it: stopping someone's emulator is never this
-    # script's call to make. Checked before the bridge setup so it fails immediately instead of
-    # asking for a sudo password first.
-    if [ "$PHOTOSPHERE_EMULATOR_COUNT" -gt 1 ] && device_attached; then
-        echo "" >&2
-        echo "An emulator is already running, so a pool of $PHOTOSPHERE_EMULATOR_COUNT cannot start: every" >&2
-        echo "instance sharing an AVD must be -read-only, and a running writable one blocks that." >&2
-        echo "Stop it first with: bun run emu:and:down" >&2
-        exit 1
-    fi
+    local netcard
+    netcard="$(netcard_name)"
 
-    if bridge_is_up; then
+    if bridge_is_up "$netcard"; then
         echo "LAN bridge already up."
     else
         echo "Bringing up the LAN bridge (needs sudo)..."
-        # Pass GUEST_DNS through: sudo strips the environment, and the bridge setup reads it.
-        sudo GUEST_DNS="$GUEST_DNS" "$0" __bridge-up
+        # Pass GUEST_DNS and the tap list through: sudo strips the environment, and the bridge
+        # setup reads both.
+        sudo GUEST_DNS="$GUEST_DNS" PSPHERE_TAPS="$netcard" "$0" __bridge-up
     fi
 
     if device_attached; then
@@ -501,7 +608,7 @@ cmd_up() {
         # off the bridge can never join it. Do NOT kill it here (up is non-destructive); report it
         # and tell the user to restart. Give a short grace first to ride out a transient gap.
         echo "An emulator is attached; checking whether it is on the bridge..."
-        if wait_for_ready 25; then
+        if wait_for_ready 25 1; then
             cmd_status
             return 0
         fi
@@ -514,17 +621,117 @@ cmd_up() {
         exit 1
     fi
 
-    start_emulator_bg
+    local avd
+    avd="$(base_avd_name)"
+    if [ -z "$avd" ]; then
+        echo "ERROR: no AVD found. Create one in Android Studio's Device Manager." >&2
+        exit 1
+    fi
 
-    echo "Waiting for $PHOTOSPHERE_EMULATOR_COUNT emulator(s) to be ready on the bridge (up to 300s)..."
-    if wait_for_ready 300; then
+    start_emulator_bg "$avd" "$netcard" "single"
+
+    echo "Waiting for the emulator to be ready on the bridge (up to 180s)..."
+    if wait_for_ready 180 1; then
         cmd_status
     else
-        echo "Timed out waiting for the emulator(s) to reach the bridge." >&2
+        echo "Timed out waiting for the emulator to reach the bridge." >&2
         cmd_status || true
         echo "If an emulator is up but off the bridge, run: bun run emu:and:restart" >&2
         exit 1
     fi
+}
+
+#
+# Brings up the pool: one writable clone AVD per instance, each on its own tap, all on the same
+# bridge as the single emulator. Deliberately independent of `up`, so a pool can be started and
+# stopped while a hand-testing emulator keeps running untouched.
+#
+cmd_pool_up() {
+    if [ "$(id -u)" -eq 0 ]; then
+        echo "ERROR: run 'pool' as your user (it uses sudo only for the bridge)." >&2
+        exit 1
+    fi
+
+    local base
+    base="$(base_avd_name)"
+    if [ -z "$base" ]; then
+        echo "ERROR: no AVD to clone from. Create one in Android Studio's Device Manager." >&2
+        exit 1
+    fi
+    echo "Cloning the pool's AVDs from '$base'..."
+
+    local index taps=""
+    for index in $(seq 0 $((PHOTOSPHERE_EMULATOR_COUNT - 1))); do
+        clone_avd "$base" "$(pool_avd_name "$index")" || exit 1
+        taps="$taps $(pool_netcard_name "$index")"
+    done
+
+    # Every pool tap has to exist, so the check is on the last one rather than any one of them.
+    if bridge_is_up "$(pool_netcard_name $((PHOTOSPHERE_EMULATOR_COUNT - 1)))"; then
+        echo "LAN bridge already up for the pool."
+    else
+        echo "Bringing up the LAN bridge for $PHOTOSPHERE_EMULATOR_COUNT pool taps (needs sudo)..."
+        sudo GUEST_DNS="$GUEST_DNS" PSPHERE_TAPS="$taps" "$0" __bridge-up
+    fi
+
+    # Count what is already ready, so the pool's own target is on top of any single emulator that
+    # is already up and must not be disturbed.
+    local already
+    already="$(ready_device_count)"
+
+    local running
+    running="$(pool_serials | wc -l)"
+    if [ "$running" -gt 0 ]; then
+        echo "$running pool emulator(s) already running; starting the rest."
+    fi
+
+    for index in $(seq 0 $((PHOTOSPHERE_EMULATOR_COUNT - 1))); do
+        start_emulator_bg "$(pool_avd_name "$index")" "$(pool_netcard_name "$index")" "pool-$index"
+    done
+
+    echo "Waiting for $PHOTOSPHERE_EMULATOR_COUNT pool emulator(s) to reach the bridge (up to 600s)..."
+    if wait_for_ready 600 $((already + PHOTOSPHERE_EMULATOR_COUNT - running)); then
+        cmd_status
+    else
+        echo "Timed out waiting for the pool to reach the bridge." >&2
+        cmd_status || true
+        exit 1
+    fi
+}
+
+#
+# Stops the pool and removes only its taps. Never touches the single hand-testing emulator: the
+# emulators stopped are exactly those whose AVD is one of the pool's clones, and the taps removed
+# are exactly the pool's. The clone AVDs are left on disk (about 8KB each) so a later pool start
+# does not have to rebuild them.
+#
+cmd_pool_down() {
+    local adb serial stopped=0
+    adb="$(adb_path)"
+    for serial in $(pool_serials); do
+        echo "Stopping pool emulator $serial..."
+        "$adb" -s "$serial" emu kill >/dev/null 2>&1 || true
+        stopped=$((stopped + 1))
+    done
+
+    if [ "$stopped" -eq 0 ]; then
+        echo "No pool emulators are running."
+    else
+        local waited=0
+        while [ "$waited" -lt 30 ] && [ "$(pool_serials | wc -l)" -gt 0 ]; do
+            sleep 1
+            waited=$((waited + 1))
+        done
+        echo "Stopped $stopped pool emulator(s)."
+    fi
+
+    local index taps=""
+    for index in $(seq 0 $((PHOTOSPHERE_EMULATOR_COUNT - 1))); do
+        taps="$taps $(pool_netcard_name "$index")"
+    done
+
+    echo "Removing the pool's taps (needs sudo)..."
+    sudo PSPHERE_TAPS="$taps" "$0" __bridge-down
 }
 
 #
@@ -536,14 +743,19 @@ stop_emulator() {
     local adb
     adb="$(adb_path)"
     if [ -n "$adb" ] && device_attached; then
-        # Every attached emulator, not just the first: a pool leaves several running.
-        local serial
+        # Only the emulators that are NOT part of the pool: `down` is the single emulator's
+        # teardown, and it must leave a running pool alone. Use `pool-down` for the pool.
+        local serial pool_list
+        pool_list="$(pool_serials)"
         for serial in $("$adb" devices 2>/dev/null | awk 'NR > 1 && $2 == "device" { print $1 }'); do
+            if echo "$pool_list" | grep -qx "$serial"; then
+                continue
+            fi
             echo "Stopping $serial..."
             "$adb" -s "$serial" emu kill >/dev/null 2>&1 || true
         done
         local waited=0
-        while [ "$waited" -lt 30 ] && device_attached; do
+        while [ "$waited" -lt 30 ] && [ -n "$("$adb" devices 2>/dev/null | awk 'NR > 1 && $2 == "device" { print $1 }' | grep -vxF "$pool_list" || true)" ]; do
             sleep 1
             waited=$((waited + 1))
         done
@@ -553,9 +765,10 @@ stop_emulator() {
 cmd_down() {
     stop_emulator
 
+    export PSPHERE_TAPS="$(netcard_name)"
     if ip link show "$BRIDGE_NAME" >/dev/null 2>&1 || dnsmasq_running; then
         echo "Bringing down the LAN bridge (needs sudo)..."
-        sudo "$0" __bridge-down
+        sudo PSPHERE_TAPS="$PSPHERE_TAPS" "$0" __bridge-down
     else
         echo "LAN bridge already down."
     fi
@@ -646,7 +859,13 @@ case "${1:-}" in
     status)
         cmd_status
         ;;
-    # Internal: the privileged bridge steps, run with sudo by up/down. Not for direct use.
+    pool)
+        cmd_pool_up
+        ;;
+    pool-down)
+        cmd_pool_down
+        ;;
+    # Internal: the privileged bridge steps, run with sudo by up/down/pool. Not for direct use.
     __bridge-up)
         bridge_up
         ;;
@@ -654,13 +873,17 @@ case "${1:-}" in
         bridge_down
         ;;
     *)
-        echo "Usage: $0 {up|down|restart|status}"
+        echo "Usage: $0 {up|down|restart|status|pool|pool-down}"
         echo ""
-        echo "  up        Bring the emulator up on the LAN bridge (sets the bridge up automatically, sudo for that part) and wait until ready."
-        echo "  down      Stop the emulator and tear the LAN bridge down."
-        echo "  restart   down then up."
-        echo "  status    Print 'ready' / 'not ready' (exit 0 / non-zero): is the emulator started and on the bridge."
+        echo "  up          Bring one writable emulator up on the LAN bridge and wait until ready."
+        echo "  down        Stop that emulator and remove its tap. Leaves a running pool alone."
+        echo "  restart     down then up."
+        echo "  status      Print each attached device and whether it is on the bridge (exit 0 if any is)."
+        echo "  pool        Bring up PHOTOSPHERE_EMULATOR_COUNT writable emulators, each on its own"
+        echo "              cloned AVD and its own tap. Runs alongside 'up' without disturbing it."
+        echo "  pool-down   Stop only the pool's emulators and remove only the pool's taps."
         echo ""
+        echo "The bridge, DHCP and NAT are shared: they are only torn down once no taps are left."
         echo "The AVD is auto-selected (override with ANDROID_AVD). See apps/android-frontend/scripts/emulator.md."
         exit 1
         ;;

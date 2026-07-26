@@ -63,6 +63,7 @@
     "run:ios": "bun run --filter=ios-frontend run",
     "emu:and:up": "bun run --filter=android-frontend emu:up",
     "emu:and:pool": "bun run --filter=android-frontend emu:pool",
+    "emu:and:pool:down": "bun run --filter=android-frontend emu:pool:down",
     "emu:and:down": "bun run --filter=android-frontend emu:down",
     "emu:and:restart": "bun run --filter=android-frontend emu:restart",
     "emu:and:status": "bun run --filter=android-frontend emu:status",
