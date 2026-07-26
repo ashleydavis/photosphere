@@ -32,8 +32,20 @@ set -euo pipefail
 # Name of the bridge (the virtual switch). Prefixed so it is obvious what created it.
 BRIDGE_NAME="br-psphere"
 
-# Name of the tap interface the emulator attaches to.
-NETCARD_NAME="emu-netcard"
+# How many emulator instances to bring up. 1 is a single emulator for hand testing; a higher count
+# is a pool for the smoke tests to spread work over. Every instance gets its own tap on the bridge.
+PHOTOSPHERE_EMULATOR_COUNT="${PHOTOSPHERE_EMULATOR_COUNT:-1}"
+
+# Prefix for the tap interfaces the emulators attach to. One tap per instance, because -wifi-tap
+# binds a single emulator to a single tap at launch and cannot be shared.
+NETCARD_PREFIX="emu-netcard"
+
+#
+# Prints the tap interface name for the given instance index.
+#
+netcard_name() {
+    echo "$NETCARD_PREFIX-$1"
+}
 
 # The host's address on the private segment. This is what the guest sees traffic coming from, and
 # what it uses as its default gateway.
@@ -171,16 +183,21 @@ bridge_up() {
 
     ip link set "$BRIDGE_NAME" up
 
-    # Create the tap: a virtual NIC whose wire is a file descriptor. The emulator opens it and the
-    # guest's ethernet frames come out on the bridge. Owned by your user because the emulator is not
-    # root and can only open a tap it owns.
-    if ! ip link show "$NETCARD_NAME" >/dev/null 2>&1; then
-        ip tuntap add dev "$NETCARD_NAME" mode tap user "$TARGET_USER"
-    fi
+    # Create one tap per emulator instance: a virtual NIC whose wire is a file descriptor. The
+    # emulator opens it and the guest's ethernet frames come out on the bridge. Owned by your user
+    # because the emulator is not root and can only open a tap it owns. One per instance because
+    # -wifi-tap binds an emulator to a tap at launch and two emulators cannot share one.
+    local index netcard
+    for index in $(seq 0 $((PHOTOSPHERE_EMULATOR_COUNT - 1))); do
+        netcard="$(netcard_name "$index")"
+        if ! ip link show "$netcard" >/dev/null 2>&1; then
+            ip tuntap add dev "$netcard" mode tap user "$TARGET_USER"
+        fi
 
-    # Plug the tap into the bridge and bring it up. Until it has a master it is an unconnected NIC.
-    ip link set "$NETCARD_NAME" master "$BRIDGE_NAME"
-    ip link set "$NETCARD_NAME" up
+        # Plug the tap into the bridge and bring it up. Until it has a master it is an unconnected NIC.
+        ip link set "$netcard" master "$BRIDGE_NAME"
+        ip link set "$netcard" up
+    done
 
     # Serve DHCP. Android runs a DHCP client on wlan0 the moment it associates with the emulator's
     # virtual access point, and with nothing answering on this segment it never gets an address and
@@ -297,11 +314,14 @@ bridge_down() {
         iptables -D FORWARD -i "$uplink" -o "$BRIDGE_NAME" -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || true
     fi
 
-    # Removing the tap detaches it from the bridge as well.
-    if ip link show "$NETCARD_NAME" >/dev/null 2>&1; then
-        ip link del "$NETCARD_NAME"
-        echo "Removed $NETCARD_NAME."
-    fi
+    # Removing a tap detaches it from the bridge as well. Every tap this script has ever created is
+    # removed, not just the ones the current count covers, so a teardown after a smaller pool does
+    # not strand interfaces from a bigger one.
+    local netcard
+    for netcard in $(ip -o link show | awk -F': ' '{ print $2 }' | grep "^$NETCARD_PREFIX" || true); do
+        ip link del "$netcard"
+        echo "Removed $netcard."
+    done
 
     if ip link show "$BRIDGE_NAME" >/dev/null 2>&1; then
         ip link del "$BRIDGE_NAME"
@@ -343,7 +363,7 @@ device_attached() {
 #
 bridge_is_up() {
     ip link show "$BRIDGE_NAME" >/dev/null 2>&1 \
-        && ip link show "$NETCARD_NAME" >/dev/null 2>&1 \
+        && ip link show "$(netcard_name $((PHOTOSPHERE_EMULATOR_COUNT - 1)))" >/dev/null 2>&1 \
         && dnsmasq_running
 }
 
@@ -364,10 +384,6 @@ start_emulator_bg() {
         echo "ERROR: emulator not found (looked on PATH and in \${ANDROID_HOME:-\$HOME/Android/Sdk}/emulator)." >&2
         exit 1
     fi
-    if ! ip link show "$NETCARD_NAME" >/dev/null 2>&1; then
-        echo "ERROR: $NETCARD_NAME does not exist; the bridge is not up." >&2
-        exit 1
-    fi
 
     local avd
     avd="${ANDROID_AVD:-$("$emulator" -list-avds 2>/dev/null | grep -v '^$' | head -1)}"
@@ -376,17 +392,54 @@ start_emulator_bg() {
         exit 1
     fi
 
-    echo "Starting emulator '$avd' on $NETCARD_NAME (cold boot, so wifi associates to the bridge)..."
+    # Several instances of one AVD can only run when every one of them is -read-only, because the
+    # AVD's own userdata can have a single writer. A single emulator is left writable so hand testing
+    # keeps its state between sessions; a pool is throwaway by nature, so read-only costs nothing.
+    local read_only=""
+    if [ "$PHOTOSPHERE_EMULATOR_COUNT" -gt 1 ]; then
+        read_only="-read-only"
+    fi
 
-    # -no-snapshot forces a cold boot. A quick-boot snapshot restores the guest's
-    # previous network state (behind the 10.0.2.x virtual router), so wlan0 never
-    # re-associates to the freshly created tap and stays NO-CARRIER. A cold boot
-    # brings wifi up fresh and associates it to -wifi-tap, which is the whole point.
-    setsid "$emulator" -avd "$avd" -no-snapshot -no-boot-anim -wifi-tap "$NETCARD_NAME" >/tmp/psphere-emulator.log 2>&1 </dev/null &
+    local index netcard
+    for index in $(seq 0 $((PHOTOSPHERE_EMULATOR_COUNT - 1))); do
+        netcard="$(netcard_name "$index")"
+        if ! ip link show "$netcard" >/dev/null 2>&1; then
+            echo "ERROR: $netcard does not exist; the bridge is not up." >&2
+            exit 1
+        fi
+
+        echo "Starting emulator $index of $PHOTOSPHERE_EMULATOR_COUNT ('$avd') on $netcard (cold boot, so wifi associates to the bridge)..."
+
+        # -no-snapshot forces a cold boot. A quick-boot snapshot restores the guest's
+        # previous network state (behind the 10.0.2.x virtual router), so wlan0 never
+        # re-associates to the freshly created tap and stays NO-CARRIER. A cold boot
+        # brings wifi up fresh and associates it to -wifi-tap, which is the whole point.
+        setsid "$emulator" -avd "$avd" $read_only -no-snapshot -no-boot-anim -wifi-tap "$netcard" \
+            >"/tmp/psphere-emulator-$index.log" 2>&1 </dev/null &
+    done
 }
 
 #
-# Polls `status` until the emulator is ready (started AND on the bridge) or the timeout passes.
+# Prints how many attached devices are on the LAN bridge. Read-only.
+#
+ready_device_count() {
+    local adb serial count
+    adb="$(adb_path)"
+    count=0
+    if [ -z "$adb" ]; then
+        echo 0
+        return 0
+    fi
+    for serial in $("$adb" devices 2>/dev/null | awk 'NR > 1 && $2 == "device" { print $1 }'); do
+        if timeout 8 "$adb" -s "$serial" shell ip addr show wlan0 2>/dev/null | tr -d '\r' | grep -q 'inet 192\.168\.55\.'; then
+            count=$((count + 1))
+        fi
+    done
+    echo "$count"
+}
+
+#
+# Polls until every requested emulator is ready (started AND on the bridge) or the timeout passes.
 #
 wait_for_ready() {
     local timeout="${1:-180}"
@@ -394,7 +447,7 @@ wait_for_ready() {
     local elapsed=0
     local last_note=0
     while [ "$elapsed" -lt "$timeout" ]; do
-        if cmd_status >/dev/null 2>&1; then
+        if [ "$(ready_device_count)" -ge "$PHOTOSPHERE_EMULATOR_COUNT" ]; then
             return 0
         fi
 
@@ -419,6 +472,18 @@ wait_for_ready() {
 cmd_up() {
     if [ "$(id -u)" -eq 0 ]; then
         echo "ERROR: run 'up' as your user (it uses sudo only for the bridge)." >&2
+        exit 1
+    fi
+
+    # A pool needs every instance to be -read-only, and an already-running writable emulator makes
+    # that impossible. Refuse rather than kill it: stopping someone's emulator is never this
+    # script's call to make. Checked before the bridge setup so it fails immediately instead of
+    # asking for a sudo password first.
+    if [ "$PHOTOSPHERE_EMULATOR_COUNT" -gt 1 ] && device_attached; then
+        echo "" >&2
+        echo "An emulator is already running, so a pool of $PHOTOSPHERE_EMULATOR_COUNT cannot start: every" >&2
+        echo "instance sharing an AVD must be -read-only, and a running writable one blocks that." >&2
+        echo "Stop it first with: bun run emu:and:down" >&2
         exit 1
     fi
 
@@ -451,11 +516,11 @@ cmd_up() {
 
     start_emulator_bg
 
-    echo "Waiting for the emulator to be ready on the bridge (up to 180s)..."
-    if wait_for_ready 180; then
+    echo "Waiting for $PHOTOSPHERE_EMULATOR_COUNT emulator(s) to be ready on the bridge (up to 300s)..."
+    if wait_for_ready 300; then
         cmd_status
     else
-        echo "Timed out waiting for the emulator to reach the bridge." >&2
+        echo "Timed out waiting for the emulator(s) to reach the bridge." >&2
         cmd_status || true
         echo "If an emulator is up but off the bridge, run: bun run emu:and:restart" >&2
         exit 1
@@ -471,10 +536,14 @@ stop_emulator() {
     local adb
     adb="$(adb_path)"
     if [ -n "$adb" ] && device_attached; then
-        echo "Stopping the emulator..."
-        "$adb" emu kill >/dev/null 2>&1 || true
+        # Every attached emulator, not just the first: a pool leaves several running.
+        local serial
+        for serial in $("$adb" devices 2>/dev/null | awk 'NR > 1 && $2 == "device" { print $1 }'); do
+            echo "Stopping $serial..."
+            "$adb" -s "$serial" emu kill >/dev/null 2>&1 || true
+        done
         local waited=0
-        while [ "$waited" -lt 15 ] && device_attached; do
+        while [ "$waited" -lt 30 ] && device_attached; do
             sleep 1
             waited=$((waited + 1))
         done
@@ -519,37 +588,49 @@ cmd_status() {
         return 1
     fi
 
-    # Is an emulator/device actually started and booted? adb reports it as "device" (not "offline").
-    if ! "$adb" devices 2>/dev/null | awk 'NR > 1 && $2 == "device" { found = 1 } END { exit found ? 0 : 1 }'; then
+    # Every emulator/device that is started and booted. adb reports those as "device" (not "offline").
+    local serials
+    serials="$("$adb" devices 2>/dev/null | awk 'NR > 1 && $2 == "device" { print $1 }')"
+    if [ -z "$serials" ]; then
         echo "not ready"
         echo "  emulator not started"
         return 1
     fi
 
-    # Started. On the bridge = a 192.168.55.x address on wlan0. Retry a few times to ride out an adb
-    # hiccup or a brief wifi-association gap; a genuinely off-bridge guest never shows the address no
-    # matter how often we look. `|| true` keeps `set -o pipefail` from aborting.
-    local guest attempt
-    guest=""
-    attempt=0
-    while [ "$attempt" -lt 3 ]; do
-        guest="$(timeout 8 "$adb" shell ip addr show wlan0 2>/dev/null | tr -d '\r' | awk '/inet 192\.168\.55\./ { print $2 }' || true)"
+    # On the bridge = a 192.168.55.x address on wlan0. Checked per device, retrying a few times to
+    # ride out an adb hiccup or a brief wifi-association gap; a genuinely off-bridge guest never shows
+    # the address no matter how often we look. `|| true` keeps `set -o pipefail` from aborting.
+    local serial guest attempt ready_count
+    ready_count=0
+    for serial in $serials; do
+        guest=""
+        attempt=0
+        while [ "$attempt" -lt 3 ]; do
+            guest="$(timeout 8 "$adb" -s "$serial" shell ip addr show wlan0 2>/dev/null | tr -d '\r' | awk '/inet 192\.168\.55\./ { print $2 }' || true)"
+            if [ -n "$guest" ]; then
+                break
+            fi
+            sleep 1
+            attempt=$((attempt + 1))
+        done
+
         if [ -n "$guest" ]; then
-            break
+            echo "  $serial: on the lan bridge (wlan0 = $guest)"
+            ready_count=$((ready_count + 1))
+        else
+            echo "  $serial: NOT on the lan bridge (started, but wlan0 has no 192.168.55.x address)"
         fi
-        sleep 1
-        attempt=$((attempt + 1))
     done
 
-    if [ -n "$guest" ]; then
-        echo "ready"
-        echo "  emulator is started and on the lan bridge (wlan0 = $guest)"
-        return 0
+    if [ "$ready_count" -eq 0 ]; then
+        echo "not ready"
+        echo "  no emulator is on the lan bridge"
+        return 1
     fi
 
-    echo "not ready"
-    echo "  not on lan bridge (emulator started, but wlan0 has no 192.168.55.x address)"
-    return 1
+    echo "ready"
+    echo "  $ready_count emulator(s) started and on the lan bridge"
+    return 0
 }
 
 case "${1:-}" in

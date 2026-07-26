@@ -14,6 +14,7 @@
     "open": "bun run sync && cap open android",
     "run": "bun run sync && bash ./scripts/run-android.sh",
     "emu:up": "./scripts/emulator.sh up",
+    "emu:pool": "PHOTOSPHERE_EMULATOR_COUNT=5 ./scripts/emulator.sh up",
     "emu:down": "./scripts/emulator.sh down",
     "emu:restart": "./scripts/emulator.sh restart",
     "emu:status": "./scripts/emulator.sh status",
