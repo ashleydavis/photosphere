@@ -477,6 +477,38 @@ add_secret_via_ui() {
 }
 
 #
+# Runs a command under a wall-clock cap, so a wedged process cannot hang the whole suite.
+#
+# GNU `timeout` does not exist on macOS, where the iOS suite runs: invoking it there failed the
+# command outright with "timeout: command not found" rather than capping it. coreutils installs the
+# same tool as `gtimeout`, so prefer whichever is present, and fall back to a background process plus
+# a killer (the approach apps/desktop/smoke-tests.sh already uses) so the cap exists either way rather
+# than being silently dropped. Stdout passes straight through, so callers can capture it.
+# Usage: run_with_timeout <seconds> <command...>
+#
+run_with_timeout() {
+    local seconds="$1"
+    shift
+    if command -v timeout >/dev/null 2>&1; then
+        timeout --kill-after=5 "$seconds" "$@"
+        return $?
+    fi
+    if command -v gtimeout >/dev/null 2>&1; then
+        gtimeout --kill-after=5 "$seconds" "$@"
+        return $?
+    fi
+    "$@" &
+    local child_pid=$!
+    ( sleep "$seconds" && kill "$child_pid" 2>/dev/null ) &
+    local killer_pid=$!
+    wait "$child_pid"
+    local child_status=$?
+    kill "$killer_pid" 2>/dev/null
+    wait "$killer_pid" 2>/dev/null
+    return $child_status
+}
+
+#
 # Runs the psi CLI from source against a vault and config isolated under the test's own tmp dir, so a
 # test never reads or writes the developer's real OS keychain or database list. Both variables are
 # required for isolation: PHOTOSPHERE_VAULT_DIR alone still selects the keychain vault, because
@@ -493,7 +525,7 @@ run_cli() {
         PHOTOSPHERE_VAULT_TYPE="plaintext" \
         PHOTOSPHERE_VAULT_DIR="$tmp_dir/cli-vault" \
         PHOTOSPHERE_CONFIG_DIR="$tmp_dir/cli-config" \
-        timeout --kill-after=5 90 bun run start -- "$@" </dev/null
+        run_with_timeout 90 bun run start -- "$@" </dev/null
     )
 }
 
