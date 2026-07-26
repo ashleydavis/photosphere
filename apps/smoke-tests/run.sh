@@ -18,8 +18,23 @@ NC='\033[0m'
 # Sourcing common.sh also sources the platform launcher and defines the *_prepare/_build/etc.
 source "$SCRIPT_DIR/lib/common.sh"
 
+# The work queue and worker pool that spread the tests over the available devices.
+source "$SCRIPT_DIR/lib/runner.sh"
+
 discover_tests() {
     find "$SCRIPT_DIR/tests" -maxdepth 2 -name "test.sh" 2>/dev/null | sort -V
+}
+
+#
+# Clears the app's data from every device the run used. Runs from the EXIT trap, so it must not
+# leave ANDROID_SERIAL pointing at whichever device happened to be last.
+#
+cleanup_all_devices() {
+    local slot
+    for slot in "${RUNNER_SLOTS[@]}"; do
+        "${PLATFORM}_export_device" "$slot"
+        "${PLATFORM}_cleanup"
+    done
 }
 
 main() {
@@ -37,11 +52,29 @@ main() {
 
     "${PLATFORM}_prepare"
     "${PLATFORM}_build"
-    "${PLATFORM}_install"
 
-    # Clear the app's data from the device however the run ends, so the databases the tests seed and
-    # import into do not pile up until the device runs out of storage.
-    trap "${PLATFORM}_cleanup" EXIT
+    # One worker per device. The app is built once and installed onto each of them.
+    RUNNER_SLOTS=()
+    while IFS= read -r slot; do
+        RUNNER_SLOTS+=("$slot")
+    done < <("${PLATFORM}_device_slots")
+
+    if [ ${#RUNNER_SLOTS[@]} -eq 0 ]; then
+        log_error "No usable device found for $PLATFORM."
+        exit 1
+    fi
+
+    log_info "Running on ${#RUNNER_SLOTS[@]} device(s): ${RUNNER_SLOTS[*]}"
+
+    local slot
+    for slot in "${RUNNER_SLOTS[@]}"; do
+        "${PLATFORM}_export_device" "$slot"
+        "${PLATFORM}_install"
+    done
+
+    # Clear the app's data from every device however the run ends, so the databases the tests seed
+    # and import into do not pile up until a device runs out of storage.
+    trap 'cleanup_all_devices' EXIT
 
     local tests=()
     while IFS= read -r test_path; do
@@ -63,28 +96,44 @@ main() {
         exit 0
     fi
 
+    # The slowest test starts first, so it is not the last thing still running while every other
+    # worker sits idle.
+    local ordered=()
+    while IFS= read -r test_path; do
+        ordered+=("$test_path")
+    done < <(order_tests "${tests[@]}")
+
+    local results_dir
+    results_dir="$(mktemp -d)"
+    run_pool "$results_dir" "${ordered[@]}" || true
+
     local pass=0
     local fail=0
-    for test_path in "${tests[@]}"; do
-        local dir name
-        dir="$(dirname "$test_path")"
-        name="$(basename "$dir")"
-        rm -rf "$dir/tmp"
-        printf "${BLUE}RUN ${NC}  %s\n" "$name"
-        if bash "$test_path"; then
-            printf "${GREEN}PASS${NC}  %s\n" "$name"
+    local failed_names=()
+    local result_file verdict name
+    for result_file in "$results_dir"/*.result; do
+        [ -e "$result_file" ] || continue
+        verdict="$(awk '{ print $1 }' "$result_file")"
+        name="$(awk '{ print $2 }' "$result_file")"
+        if [ "$verdict" = "pass" ]; then
             pass=$((pass + 1))
         else
-            printf "${RED}FAIL${NC}  %s\n" "$name"
             fail=$((fail + 1))
+            failed_names+=("$name")
         fi
     done
+    rm -rf "$results_dir"
 
     echo ""
     if [ "$fail" -eq 0 ]; then
         printf "${GREEN}All %d tests passed${NC}\n" "$pass"
     else
+        # Workers interleave their output, so each failure's log path is printed here rather than
+        # leaving it to be hunted for in the scrollback.
         printf "${RED}%d of %d tests failed${NC}\n" "$fail" "$((pass + fail))"
+        for name in "${failed_names[@]}"; do
+            printf "${RED}  %s${NC}  (log: %s)\n" "$name" "$SCRIPT_DIR/tests/$name/tmp/test-run.log"
+        done
     fi
     return $((fail > 0 ? 1 : 0))
 }

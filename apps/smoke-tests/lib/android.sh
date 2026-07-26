@@ -46,6 +46,45 @@ android_require_ready() {
 }
 
 #
+# Prints one serial per line for every attached device that is on the LAN bridge, which is what the
+# smoke tests require. These are the devices the run spreads its work over, one worker each.
+#
+android_ready_devices() {
+    local serial
+    for serial in $(adb devices 2>/dev/null | awk 'NR > 1 && $2 == "device" { print $1 }'); do
+        if adb -s "$serial" shell ip addr show wlan0 2>/dev/null | tr -d '\r' | grep -q 'inet 192\.168\.55\.'; then
+            echo "$serial"
+        fi
+    done
+}
+
+#
+# Prints the device slots the pool should run on, one per line. Honours
+# PHOTOSPHERE_ANDROID_DEVICES (a space-separated serial list) so a run can be pinned to specific
+# emulators, for example to leave a hand-testing one alone.
+#
+android_device_slots() {
+    if [ -n "${PHOTOSPHERE_ANDROID_DEVICES:-}" ]; then
+        local serial
+        for serial in $PHOTOSPHERE_ANDROID_DEVICES; do
+            echo "$serial"
+        done
+        return 0
+    fi
+    android_ready_devices
+}
+
+#
+# Binds the calling shell to one device. Every adb invocation in this file and in the tests is bare,
+# and adb honours ANDROID_SERIAL from the environment, so this one export is what makes a worker's
+# whole test run target its own emulator.
+# Usage: android_export_device <serial>
+#
+android_export_device() {
+    export ANDROID_SERIAL="$1"
+}
+
+#
 # Returns 0 if the given Java home is a JDK 17 installation.
 #
 java_is_17() {
@@ -125,16 +164,23 @@ android_prepare() {
         return 1
     fi
 
-    if ! android_device_attached; then
-        local avd
-        avd="${ANDROID_AVD:-$(emulator -list-avds 2>/dev/null | head -1)}"
-        if [ -z "$avd" ]; then
-            log_error "No emulator attached and no AVD found. Create one in Android Studio's Device Manager."
-            return 1
-        fi
-        log_info "No device attached; booting emulator '$avd' (left running for faster reruns)..."
-        nohup emulator -avd "$avd" -no-boot-anim >/dev/null 2>&1 &
+    # Already-attached devices report "device" state, which means they have finished booting, so
+    # there is nothing to wait for. Checked before the boot path because the waits below target a
+    # single implicit device and fail outright with "more than one device/emulator" when a pool of
+    # them is attached.
+    if android_device_attached; then
+        log_info "$(adb devices | awk 'NR > 1 && $2 == "device"' | wc -l) device(s) already attached"
+        return 0
     fi
+
+    local avd
+    avd="${ANDROID_AVD:-$(emulator -list-avds 2>/dev/null | head -1)}"
+    if [ -z "$avd" ]; then
+        log_error "No emulator attached and no AVD found. Create one in Android Studio's Device Manager."
+        return 1
+    fi
+    log_info "No device attached; booting emulator '$avd' (left running for faster reruns)..."
+    nohup emulator -avd "$avd" -no-boot-anim >/dev/null 2>&1 &
 
     log_info "Waiting for an Android device/emulator..."
     adb wait-for-device

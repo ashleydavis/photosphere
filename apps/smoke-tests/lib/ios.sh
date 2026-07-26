@@ -55,6 +55,23 @@ ios_prepare() {
 }
 
 #
+# Prints the device slots the pool should run on, one per line. iOS is always a single slot: the
+# simulator ios_prepare already selected and booted. Exists so run.sh can stay platform-neutral and
+# drive Android's many devices and iOS's one through the same two hooks.
+#
+ios_device_slots() {
+    echo "${IOS_SIMULATOR_UDID:-}"
+}
+
+#
+# Binds the calling shell to one simulator. The iOS helpers all read IOS_SIMULATOR_UDID.
+# Usage: ios_export_device <udid>
+#
+ios_export_device() {
+    export IOS_SIMULATOR_UDID="$1"
+}
+
+#
 # Builds the web assets, syncs Capacitor, and builds the app for the simulator.
 #
 ios_build() {
