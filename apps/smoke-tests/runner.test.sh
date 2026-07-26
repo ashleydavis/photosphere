@@ -222,6 +222,56 @@ RUNNER_SLOTS=("" "")
 run_pool "$RESULTS" "$SHARED_ONE" "$SHARED_TWO" >/dev/null 2>&1
 check "two ordinary tests do run at the same time" "2" "$(cat "$SHARED_COUNTER/max")"
 
+echo "== claim_device_slots =="
+
+# Claims must be exclusive across processes: a second run may only take what the first left free.
+export PHOTOSPHERE_DEVICE_CLAIM_TIMEOUT=4
+CLAIM_HELPER="$WORK/claim.sh"
+# First argument is how long to keep holding the claim, so a test can outlast another run's
+# claim timeout and prove the wait really does give up.
+cat > "$CLAIM_HELPER" <<HELPER
+#!/bin/bash
+RED=''; GREEN=''; BLUE=''; NC=''
+log_info() { :; }
+source "$HERE/lib/runner.sh"
+hold="\$1"
+shift
+if claim_device_slots "\$@"; then
+    printf '%s\n' "\${CLAIMED_SLOTS[@]}"
+else
+    echo "TIMEOUT"
+fi
+sleep "\$hold"
+HELPER
+chmod +x "$CLAIM_HELPER"
+
+rm -f /tmp/photosphere-android-device-fakedev-*.lock
+# Held for 12s, well past the 4s claim timeout, so the waiting run must give up rather than
+# eventually inheriting the devices when the holder happens to finish.
+"$CLAIM_HELPER" 12 fakedev-a fakedev-b > "$WORK/claim-first" 2>/dev/null &
+first_pid=$!
+for _ in $(seq 1 40); do [ -s "$WORK/claim-first" ] && break; sleep 0.1; done
+"$CLAIM_HELPER" 0 fakedev-a fakedev-b > "$WORK/claim-second" 2>/dev/null
+check "the first run claims both free devices" "fakedev-a fakedev-b" "$(tr '\n' ' ' < "$WORK/claim-first" | sed 's/ $//')"
+check "the second run gets nothing while both are held" "TIMEOUT" "$(cat "$WORK/claim-second")"
+
+wait "$first_pid" 2>/dev/null
+
+# A run takes only what is free, leaving the rest to whoever holds them. Separate device names from
+# the scenario above, so a lingering holder there cannot skew this one.
+"$CLAIM_HELPER" 8 fakedev-c > "$WORK/claim-holder" 2>/dev/null &
+holder_pid=$!
+for _ in $(seq 1 60); do [ -s "$WORK/claim-holder" ] && break; sleep 0.1; done
+"$CLAIM_HELPER" 0 fakedev-c fakedev-d > "$WORK/claim-partial" 2>/dev/null
+check "a run claims only the devices left free" "fakedev-d" "$(tr '\n' ' ' < "$WORK/claim-partial" | sed 's/ $//')"
+wait "$holder_pid" 2>/dev/null
+
+# Once the holders exit their descriptors close, so the devices become claimable again.
+"$CLAIM_HELPER" 0 fakedev-a fakedev-b > "$WORK/claim-third" 2>/dev/null
+check "devices are claimable again after the holder exits" "fakedev-a fakedev-b" "$(tr '\n' ' ' < "$WORK/claim-third" | sed 's/ $//')"
+rm -f /tmp/photosphere-android-device-fakedev-*.lock
+unset PHOTOSPHERE_DEVICE_CLAIM_TIMEOUT
+
 echo "== run_pool =="
 
 ALL_PASS_ONE="$(make_stub pool-pass-one 0 0)"

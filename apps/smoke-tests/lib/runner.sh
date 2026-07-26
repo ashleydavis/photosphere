@@ -36,6 +36,57 @@ RUNNER_STREAM_OUTPUT=0
 QUEUE_LOCK_FD=7
 EXCLUSIVE_LOCK_FD=6
 
+# File descriptors of the per-device locks this run holds. Kept open for the run's whole life,
+# because a flock is released the moment its descriptor closes.
+CLAIMED_DEVICE_FDS=()
+
+# How long a run waits for at least one device to come free before giving up.
+DEVICE_CLAIM_TIMEOUT="${PHOTOSPHERE_DEVICE_CLAIM_TIMEOUT:-1800}"
+
+# The devices this run claimed. Set by claim_device_slots.
+CLAIMED_SLOTS=()
+
+#
+# Claims whichever of the given devices are not already in use by another run, leaving them in
+# CLAIMED_SLOTS. Each claim is a non-blocking flock on a per-device lock file held open for the rest
+# of the run, so two suites running at once take disjoint devices instead of colliding on the same
+# emulator. Waits until at least one device is free rather than failing immediately.
+#
+# The result comes back in a global rather than on stdout deliberately: a flock lives only as long as
+# its file descriptor, and calling this through `$(...)` or a process substitution would run it in a
+# subshell whose descriptors close on exit, releasing every lock the moment it returned.
+# Usage: claim_device_slots <serial...>
+#
+claim_device_slots() {
+    local waited=0
+    while true; do
+        local slot fd
+        CLAIMED_SLOTS=()
+        for slot in "$@"; do
+            exec {fd}<>"/tmp/photosphere-android-device-$slot.lock"
+            if flock -n "$fd"; then
+                CLAIMED_SLOTS+=("$slot")
+                CLAIMED_DEVICE_FDS+=("$fd")
+            else
+                exec {fd}>&-
+            fi
+        done
+
+        if [ ${#CLAIMED_SLOTS[@]} -gt 0 ]; then
+            return 0
+        fi
+
+        if [ "$waited" -ge "$DEVICE_CLAIM_TIMEOUT" ]; then
+            return 1
+        fi
+        if [ "$waited" -eq 0 ]; then
+            log_info "Every device is busy with another run; waiting for one to come free..."
+        fi
+        sleep 2
+        waited=$((waited + 2))
+    done
+}
+
 #
 # Writes the work list, one test path per line, replacing anything already there.
 # Usage: queue_init <queue_file> <test_path...>

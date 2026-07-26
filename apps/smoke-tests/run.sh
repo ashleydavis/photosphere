@@ -54,15 +54,24 @@ main() {
     "${PLATFORM}_build"
 
     # One worker per device. The app is built once and installed onto each of them.
-    RUNNER_SLOTS=()
+    local available=()
     while IFS= read -r slot; do
-        RUNNER_SLOTS+=("$slot")
+        available+=("$slot")
     done < <("${PLATFORM}_device_slots")
 
-    if [ ${#RUNNER_SLOTS[@]} -eq 0 ]; then
+    if [ ${#available[@]} -eq 0 ]; then
         log_error "No usable device found for $PLATFORM."
         exit 1
     fi
+
+    # Take only the devices no other run is using, so several suites can run at once on disjoint
+    # subsets rather than queueing behind one machine-wide lock. Called directly, never through a
+    # subshell, because the claims are file descriptors this shell has to keep open.
+    if ! claim_device_slots "${available[@]}"; then
+        log_error "Timed out waiting for a free device (all ${#available[@]} are in use by other runs)."
+        exit 1
+    fi
+    RUNNER_SLOTS=("${CLAIMED_SLOTS[@]}")
 
     log_info "Running on ${#RUNNER_SLOTS[@]} device(s): ${RUNNER_SLOTS[*]}"
 
