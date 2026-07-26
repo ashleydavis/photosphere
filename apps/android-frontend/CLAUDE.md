@@ -16,27 +16,37 @@ Reads are fine (`adb devices`, `adb shell ip addr ...`, `status`). Changes are n
 
 Host-to-device LAN sharing, and the smoke tests that exercise it (`26-receive-database`, `27-receive-secret`), only work when the emulator is on a real layer-2 segment shared with the host. `scripts/emulator.sh` manages the whole lifecycle (emulator + bridge). Full explanation in `scripts/emulator.md`. **These are for the human to run, not you** (see the rule above).
 
-- `bun run emu:and:up` - bring the emulator up on the LAN bridge and wait until ready. Sets the bridge up automatically (prompts for sudo only for that part). AVD auto-selected (override with `ANDROID_AVD`).
-- `bun run emu:and:down` - stop the emulator and tear the bridge down.
+- `bun run emu:and:up` - bring one writable emulator up on the LAN bridge and wait until ready. Sets the bridge up automatically (prompts for sudo only for that part). AVD auto-selected (override with `ANDROID_AVD`).
+- `bun run emu:and:down` - stop that emulator and remove its tap. Leaves a running pool alone.
 - `bun run emu:and:restart` - down then up.
+- `bun run emu:and:pool` - bring up a pool of emulators for the smoke tests (`PHOTOSPHERE_EMULATOR_COUNT`, default 5), each on its own writable clone of the base AVD and its own tap. Runs alongside `emu:and:up` without disturbing it.
+- `bun run emu:and:pool:down` - stop only the pool's emulators and remove only the pool's taps.
 - `bun run emu:and:status` - **read-only** readiness check (see below).
+
+The bridge, DHCP and NAT are shared between the single emulator and the pool, so they are only torn down once no taps are left. Each pool emulator needs its own AVD because an AVD's disk images are single-writer; the clones are about 8KB each, since the system image lives in the SDK and is shared.
 
 ## `status`: `ready` / `not ready`
 
 `status` prints one word on the first line and a reason on the next, and its exit code matches (0 = ready, non-zero = not). It reports the one thing that matters, whether the guest's `wlan0` has a `192.168.55.x` address, which is exactly what the smoke tests require. It is a read-only check; it never changes the emulator.
 
-- `ready` / `emulator is started and on the lan bridge` - good to run `test:and`.
+It prints one line per attached device saying whether that device is on the bridge, then a verdict:
+
+- `ready` / `N emulator(s) started and on the lan bridge` - good to run `test:and`, which will use all N.
 - `not ready` / `emulator not started` - no emulator/device attached.
-- `not ready` / `not on lan bridge` - emulator up, but its `wlan0` has no `192.168.55.x` address.
+- `not ready` / `no emulator is on the lan bridge` - emulators up, but none has a `192.168.55.x` address on `wlan0`.
 
 The guest address is timing-dependent (wifi associates/de-associates, adb is busy during a test), so `status` retries a few times. It is still a hint: the definitive check is running `bun run test:and`.
 
-## `test:and` gates on readiness, and the lock is its own script
+## `test:and` gates on readiness and shares the emulators
 
-`bun run test:and` runs `apps/smoke-tests/run.sh` **wrapped in the lock** (`apps/smoke-tests/android-lock.sh`, the single, definitive owner of the run-lock, every acquisition goes through it).
+`bun run test:and` runs `apps/smoke-tests/run.sh`. Several runs can go at once: the emulators are a shared pool rather than something one run reserves.
 
 - **Fails immediately if the emulator is not `ready`** (run.sh runs the same readiness check as `bun run emu:and:status`). It will not boot, build, or touch anything when not ready, it exits with the reason. You set the emulator up; the test just checks and runs. The one exception is `PHOTOSPHERE_NO_LAN_BRIDGE=1`, which declares that this run cannot have a bridge at all: it then requires only a started emulator, and `26-receive-database` / `27-receive-secret` log a `SKIP` line instead of failing. The release workflow sets it because its emulator is booted by an action that attaches no tap device. Do not set it locally: without a bridge you lose exactly the two tests that cover host-to-device LAN sharing.
-- **Serialized by one `flock` lock** (`/tmp/photosphere-test-and.lock`), so two runs never collide on the one emulator. Generous timeout (`PHOTOSPHERE_ANDROID_LOCK_TIMEOUT`, default 1800s); it announces the wait and gives up rather than hang.
+- **Uses the pool, and only the pool, when one is up**, so a hand-testing emulator is left alone. With no pool running it falls back to whatever bridge-ready emulator there is, which is what makes a single hand-started one work. Pin a run to particular devices with `PHOTOSPHERE_ANDROID_DEVICES="emulator-5556 emulator-5558"`.
+- **Takes an emulator per test, not per run**, under a `flock` on `/tmp/photosphere-android-device-<serial>.lock`, and hands it back immediately afterwards. Each suite is held to an even split of the emulators between the suites currently running, so one run alone uses all of them and three runs get a third each. A run with nothing free waits, giving up after `PHOTOSPHERE_DEVICE_CLAIM_TIMEOUT` (default 1800s).
+- **Reinstalls the app when another checkout's build is on the device.** Every worktree builds the same `applicationId`, so a run compares the installed APK's checksum against its own before each test and puts its build back if they differ. Without it a run silently tests another worktree's code.
+
+The old whole-run lock (`apps/smoke-tests/android-lock.sh`, `/tmp/photosphere-test-and.lock`) is no longer used by `test:and`, because it let only one run proceed at a time. The script and its stress test remain.
 
 Lock commands (run from repo root or `apps/smoke-tests`):
 
