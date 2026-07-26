@@ -35,7 +35,7 @@ The guest address is timing-dependent (wifi associates/de-associates, adb is bus
 
 `bun run test:and` runs `apps/smoke-tests/run.sh` **wrapped in the lock** (`apps/smoke-tests/android-lock.sh`, the single, definitive owner of the run-lock, every acquisition goes through it).
 
-- **Fails immediately if the emulator is not `ready`** (run.sh runs the same readiness check as `bun run emu:and:status`). It will not boot, build, or touch anything when not ready, it exits with the reason. You set the emulator up; the test just checks and runs.
+- **Fails immediately if the emulator is not `ready`** (run.sh runs the same readiness check as `bun run emu:and:status`). It will not boot, build, or touch anything when not ready, it exits with the reason. You set the emulator up; the test just checks and runs. The one exception is `PHOTOSPHERE_NO_LAN_BRIDGE=1`, which declares that this run cannot have a bridge at all: it then requires only a started emulator, and `26-receive-database` / `27-receive-secret` log a `SKIP` line instead of failing. The release workflow sets it because its emulator is booted by an action that attaches no tap device. Do not set it locally: without a bridge you lose exactly the two tests that cover host-to-device LAN sharing.
 - **Serialized by one `flock` lock** (`/tmp/photosphere-test-and.lock`), so two runs never collide on the one emulator. Generous timeout (`PHOTOSPHERE_ANDROID_LOCK_TIMEOUT`, default 1800s); it announces the wait and gives up rather than hang.
 
 Lock commands (run from repo root or `apps/smoke-tests`):

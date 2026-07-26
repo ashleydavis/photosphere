@@ -21,7 +21,22 @@ ANDROID_BRIDGE_SCRIPT="$ANDROID_FRONTEND_DIR/scripts/emulator.sh"
 # to the bridge script's `status` (exit 0 = ready). Never boots, restarts, wipes, reboots, or changes
 # any setting on the emulator: getting it ready is the human's job, not this script's.
 #
+# Only the two host-to-device LAN transfer tests need the bridge, and they check for it themselves
+# (require_lan_bridge). A run that has declared it cannot have a bridge, and so skips those two, only
+# needs the emulator started, so that is all this requires of it. Asking for the bridge in that case
+# would gate the whole suite on something it does not use.
+#
 android_require_ready() {
+    if [ "${PHOTOSPHERE_NO_LAN_BRIDGE:-}" = "1" ]; then
+        log_info "Checking the emulator is started (PHOTOSPHERE_NO_LAN_BRIDGE=1, so the LAN bridge is not required)..."
+        if ! adb devices 2>/dev/null | awk 'NR > 1 && $2 == "device" { found = 1 } END { exit found ? 0 : 1 }'; then
+            log_error "No started emulator or device is attached. test:and needs one."
+            log_error "Start it yourself, then rerun. This script will not touch the emulator."
+            exit 1
+        fi
+        return 0
+    fi
+
     log_info "Checking the emulator is ready (started + on the LAN bridge)..."
     if ! "$ANDROID_BRIDGE_SCRIPT" status; then
         log_error "Emulator not ready (see above). test:and needs it started and on the LAN bridge."

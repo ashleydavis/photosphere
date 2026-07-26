@@ -513,6 +513,14 @@ require_lan_bridge() {
         log_success "Emulator is on the host LAN bridge."
         return 0
     fi
+    # A run that has declared it cannot have a bridge skips these tests instead of failing, the same
+    # way 33-s3-database skips without S3 credentials. The release workflow sets this because its
+    # emulator is booted by an action that attaches no tap device, so the bridge cannot be built
+    # there at all. A developer who simply forgot to bring the bridge up still gets a hard failure.
+    if [ "${PHOTOSPHERE_NO_LAN_BRIDGE:-}" = "1" ]; then
+        log_info "SKIP: this test needs the host LAN bridge and PHOTOSPHERE_NO_LAN_BRIDGE=1 says this run has none. Skipping."
+        exit 0
+    fi
     log_error "The emulator is not on the host LAN bridge, so a host-to-device LAN transfer cannot work."
     log_error "Bring it up with: bun run emu:and:up"
     exit 1

@@ -1224,8 +1224,18 @@ jobs:
 
       # The emulator-runner boots an AVD, then runs the suite against it (run.sh detects the booted
       # device and builds/installs the app via Gradle/adb).
+      #
+      # PHOTOSPHERE_NO_LAN_BRIDGE declares that this run has no host LAN bridge. The emulator-runner
+      # boots a plain user-mode NAT emulator and attaches no tap device, so the 192.168.55.x segment
+      # that host-to-device LAN sharing needs cannot exist here. The two tests that need it
+      # (26-receive-database, 27-receive-secret) therefore skip with a logged SKIP line instead of
+      # failing, and the run only requires the emulator to be started. Everything else, including the
+      # device-to-device share tests and 28-host-emulator-comms (which works over NAT via 10.0.2.2),
+      # still runs. Those two paths are covered locally with `bun run emu:and:up`.
       - name: Run Android smoke tests
         uses: reactivecircus/android-emulator-runner@v2
+        env:
+          PHOTOSPHERE_NO_LAN_BRIDGE: "1"
         with:
           api-level: 33
           arch: x86_64
