@@ -76,6 +76,12 @@ send_command "$APP_PORT" click '{"dataId":"gallery-item-checkbox","nth":1}'
 log_info "Opening right sidebar..."
 send_command "$APP_PORT" click '{"dataId":"right-sidebar-button"}'
 
+# Wait until the sidebar reports both assets selected before downloading. The second item's checkbox
+# is display:none until the long press turns selecting mode on, so that click waits for the element
+# to appear, and the driver handles each command independently: on a slow runner the download click
+# overtook the still-waiting checkbox click and downloaded one asset instead of two.
+wait_for_value "$APP_PORT" "download-selected-button" "Download 2 assets"
+
 log_info "Clicking Download N assets..."
 send_command "$APP_PORT" click '{"dataId":"download-selected-button"}'
 

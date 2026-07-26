@@ -284,6 +284,32 @@ wait_for_log() {
 }
 
 #
+# Polls the test control server's get-value for the given data-id until its value contains the
+# expected substring. Fails the test on timeout. Use this to wait for a control to reach a known
+# state before acting on it: each command the driver receives is handled independently, so a command
+# sent into a UI that has not caught up yet can be overtaken by the one after it.
+# Usage: wait_for_value <port> <data-id> <expected-substring> [timeout]
+#
+wait_for_value() {
+    local port="$1"
+    local data_id="$2"
+    local expected="$3"
+    local timeout="${4:-$DEFAULT_WAIT_TIMEOUT}"
+    local elapsed=0
+    local response=""
+    while [ "$elapsed" -lt "$timeout" ]; do
+        response=$(curl -sf "http://localhost:$port/get-value?dataId=$data_id" 2>/dev/null || true)
+        if echo "$response" | grep -q "$expected"; then
+            return 0
+        fi
+        sleep 1
+        elapsed=$((elapsed + 1))
+    done
+    log_error "Timed out waiting for data-id '$data_id' to contain '$expected' (last response: $response)"
+    exit 1
+}
+
+#
 # Posts a JSON command to the test control server.
 # Usage: send_command <port> <endpoint> [json_body]
 #
