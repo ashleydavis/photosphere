@@ -34,7 +34,7 @@ Each step carries a checkbox and a status: `not started`, `completed`, or `aband
 
     In `apps/android-frontend/package.json`, remove `--rerun-tasks` from the `test:unit` script.
 
-6. [ ] **Enable Gradle caching and the daemon.** Status: not started. Keeps a warm JVM between builds and reuses cached task outputs, so a rebuild after a small change costs far less. **Impact: 10-30s on repeat builds. `org.gradle.parallel` does little here because the app is a single module.**
+6. [x] **Enable Gradle caching and the daemon.** Status: abandoned, change made then reverted. **Measured `:app:assembleDebug`: before 4368ms cold / 720ms warm, after 4044ms cold / 663ms warm. Saving 57ms on the warm build the test run actually performs, which is inside the noise and 0.02% of a 276s run.** The 10-30s estimate assumed there was idle build work to recover; there is not. The daemon is already on by default, caching gains nothing when 83 of 88 tasks are already up-to-date, and `org.gradle.parallel` does nothing for a single-module app. Keeps a warm JVM between builds and reuses cached task outputs, so a rebuild after a small change costs far less. **Impact: 10-30s on repeat builds. `org.gradle.parallel` does little here because the app is a single module.**
 
     In `apps/android-frontend/android/gradle.properties`, uncomment/set `org.gradle.parallel=true`, and add `org.gradle.caching=true` and `org.gradle.daemon=true`, each with a one-line comment. Complete when `bun run build:and` succeeds twice in a row and the second run is faster.
 
