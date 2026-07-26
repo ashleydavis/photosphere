@@ -280,13 +280,13 @@ android_reset_path() {
 #
 android_wait_for_file() {
     local rel="$1"
-    local elapsed=0
-    while [ "$elapsed" -lt "$DEFAULT_WAIT_TIMEOUT" ]; do
+    local ticks=$((DEFAULT_WAIT_TIMEOUT * POLL_TICKS_PER_SECOND))
+    while [ "$ticks" -gt 0 ]; do
         if adb shell run-as "$APP_ID" ls "files/$rel" 2>/dev/null | grep -q .; then
             return 0
         fi
-        sleep 1
-        elapsed=$((elapsed + 1))
+        sleep "$POLL_INTERVAL_SECONDS"
+        ticks=$((ticks - 1))
     done
     return 1
 }

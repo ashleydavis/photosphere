@@ -38,6 +38,13 @@ DEFAULT_WAIT_TIMEOUT=120
 # Shorter default (also doubled) for the bridge startup waits.
 DEFAULT_BRIDGE_TIMEOUT=40
 
+# How long each poll of a wait helper sleeps, and how many of those make a second. A one second poll
+# meant every wait overshot by half a second on average, and a test performs many waits, so most of a
+# run was spent asleep after the thing being waited for had already happened. Timeouts stay expressed
+# in seconds at every call site: the helpers convert them to ticks.
+POLL_INTERVAL_SECONDS=0.2
+POLL_TICKS_PER_SECOND=5
+
 # Clean up the app/bridge even when a run is interrupted (Ctrl-C) or the runner's timeout kills a
 # slow test (SIGTERM), not only on a normal exit. A bash EXIT trap does not fire on an uncaught
 # signal, so turn those signals into an exit here: that runs the per-test EXIT trap (stop_app),
@@ -94,14 +101,14 @@ load_platform() {
 #
 wait_for_bridge_port() {
     local port_file="$1"
-    local elapsed=0
-    while [ "$elapsed" -lt "$DEFAULT_BRIDGE_TIMEOUT" ]; do
+    local ticks=$((DEFAULT_BRIDGE_TIMEOUT * POLL_TICKS_PER_SECOND))
+    while [ "$ticks" -gt 0 ]; do
         if [ -s "$port_file" ]; then
             cat "$port_file"
             return 0
         fi
-        sleep 1
-        elapsed=$((elapsed + 1))
+        sleep "$POLL_INTERVAL_SECONDS"
+        ticks=$((ticks - 1))
     done
     log_error "Control bridge did not report a listening port within ${DEFAULT_BRIDGE_TIMEOUT}s"
     return 1
@@ -113,13 +120,13 @@ wait_for_bridge_port() {
 #
 wait_for_bridge() {
     local port="$1"
-    local elapsed=0
-    while [ "$elapsed" -lt "$DEFAULT_BRIDGE_TIMEOUT" ]; do
+    local ticks=$((DEFAULT_BRIDGE_TIMEOUT * POLL_TICKS_PER_SECOND))
+    while [ "$ticks" -gt 0 ]; do
         if curl -s -o /dev/null "http://localhost:$port/ready" 2>/dev/null; then
             return 0
         fi
-        sleep 1
-        elapsed=$((elapsed + 1))
+        sleep "$POLL_INTERVAL_SECONDS"
+        ticks=$((ticks - 1))
     done
     log_error "Control bridge did not start on port $port within ${DEFAULT_BRIDGE_TIMEOUT}s"
     exit 1
@@ -190,14 +197,14 @@ wait_for_ready() {
     local attempt=1
     log_info "Waiting for app to be ready on port $port..."
     while [ "$attempt" -le "$max_attempts" ]; do
-        local elapsed=0
-        while [ "$elapsed" -lt "$DEFAULT_WAIT_TIMEOUT" ]; do
+        local ticks=$((DEFAULT_WAIT_TIMEOUT * POLL_TICKS_PER_SECOND))
+        while [ "$ticks" -gt 0 ]; do
             if curl -sf "http://localhost:$port/ready" > /dev/null 2>&1; then
                 log_info "App is ready"
                 return 0
             fi
-            sleep 1
-            elapsed=$((elapsed + 1))
+            sleep "$POLL_INTERVAL_SECONDS"
+            ticks=$((ticks - 1))
         done
         log_error "Timed out waiting for app to be ready after ${DEFAULT_WAIT_TIMEOUT}s (attempt $attempt of $max_attempts)"
         if [ "$attempt" -lt "$max_attempts" ]; then
@@ -221,14 +228,14 @@ wait_for_log() {
     local tmp_dir="$1"
     local pattern="$2"
     local timeout="${3:-$DEFAULT_WAIT_TIMEOUT}"
-    local elapsed=0
+    local ticks=$((timeout * POLL_TICKS_PER_SECOND))
     local cursor_file="$tmp_dir/.log-cursor"
     local start_line=0
     if [ -f "$cursor_file" ]; then
         start_line=$(cat "$cursor_file")
     fi
     log_info "Waiting for log pattern: $pattern (after line $start_line)"
-    while [ "$elapsed" -lt "$timeout" ]; do
+    while [ "$ticks" -gt 0 ]; do
         if [ -f "$tmp_dir/app.log" ]; then
             local matched_line
             matched_line=$(awk -v start="$start_line" -v pat="$pattern" '
@@ -240,8 +247,8 @@ wait_for_log() {
                 return 0
             fi
         fi
-        sleep 1
-        elapsed=$((elapsed + 1))
+        sleep "$POLL_INTERVAL_SECONDS"
+        ticks=$((ticks - 1))
     done
     log_error "Timed out waiting for log pattern: $pattern"
     log_error "Last 30 lines of app.log:"
@@ -287,49 +294,6 @@ send_command() {
         return 1
     fi
     return 0
-}
-
-#
-# Reads the value of a data-id element via the control bridge's /get-value endpoint, echoing the raw
-# value string to stdout (empty when the element is absent, since the driver's getValue returns '').
-# A value-returning helper only: it never exits, so it is safe inside a command substitution. The
-# JSON "value" field is extracted with grep -oP rather than sed, because sed echoes its input
-# unchanged when the pattern does not match and so cannot signal an absent value.
-# Usage: read_value <port> <dataId>
-#
-read_value() {
-    local port="$1"
-    local data_id="$2"
-    local response
-    response=$(curl -sf "http://localhost:$port/get-value?dataId=$data_id" 2>/dev/null || true)
-    printf '%s' "$response" | grep -oP '"value":"\K[^"]*' || true
-}
-
-#
-# Polls /get-value until the element's value matches expected_regex, up to a timeout. An empty value
-# (a missing element, or a mistyped dataId) never matches, so it fails rather than passing. Exits 1
-# on timeout and prints nothing capturable, so it must be called as a statement, never inside a
-# command substitution (where exit would only kill the subshell and the failure would be swallowed).
-# Usage: wait_for_value <port> <dataId> <expected_regex> [timeout_seconds]
-#
-wait_for_value() {
-    local port="$1"
-    local data_id="$2"
-    local expected="$3"
-    local timeout="${4:-20}"
-    local elapsed=0
-    local value=""
-    while [ "$elapsed" -lt "$timeout" ]; do
-        value="$(read_value "$port" "$data_id")"
-        if [ -n "$value" ] && echo "$value" | grep -qE "$expected"; then
-            log_success "Value for '$data_id' matched /$expected/: $value"
-            return 0
-        fi
-        sleep 1
-        elapsed=$((elapsed + 1))
-    done
-    log_error "Timed out waiting for '$data_id' to match /$expected/ (last value: '$value')"
-    exit 1
 }
 
 #
@@ -405,16 +369,16 @@ wait_for_value() {
     local data_id="$2"
     local expected="$3"
     local timeout="${4:-$DEFAULT_WAIT_TIMEOUT}"
-    local elapsed=0
+    local ticks=$((timeout * POLL_TICKS_PER_SECOND))
     local value=""
-    while [ "$elapsed" -lt "$timeout" ]; do
+    while [ "$ticks" -gt 0 ]; do
         value=$(read_value "$port" "$data_id")
         if [ -n "$value" ] && echo "$value" | grep -qE "$expected"; then
             log_success "Value for '$data_id' matched /$expected/: $value"
             return 0
         fi
-        sleep 1
-        elapsed=$((elapsed + 1))
+        sleep "$POLL_INTERVAL_SECONDS"
+        ticks=$((ticks - 1))
     done
     log_error "Timed out waiting for '$data_id' to match /$expected/ (last value: '${value:-}')"
     exit 1
