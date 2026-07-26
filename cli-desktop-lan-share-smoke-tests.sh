@@ -20,7 +20,7 @@ DESKTOP_FRONTEND_DIR="$ROOT_DIR/apps/desktop-frontend"
 CLI_DIR="$ROOT_DIR/apps/cli"
 
 # Shared helpers: start_app, wait_for_ready, wait_for_log, send_command, stop_app,
-# find_free_port, log_info / log_success / log_error.
+# log_info / log_success / log_error.
 source "$DESKTOP_DIR/smoke-tests/lib/common.sh"
 
 TMP_ROOT="$ROOT_DIR/tmp-cli-desktop-lan-share"
@@ -294,9 +294,11 @@ test_cli_to_desktop_secret() {
 
     local code="1234"
     local app_port
-    app_port=$(find_free_port)
 
-    start_app "$app_port" "$test_tmp/desktop" 0
+    # start_app binds an OS-assigned port and publishes it as the APP_PORT global. Copy it into a
+    # local so a later launch in the suite cannot change the port this test is talking to.
+    start_app "$test_tmp/desktop" 0 || { mark_fail "$test_name" "$test_tmp/desktop/app.log"; return; }
+    app_port="$APP_PORT"
     wait_for_ready "$app_port" || { mark_fail "$test_name" "$test_tmp/desktop/app.log"; stop_app "$app_port" "$test_tmp/desktop"; return; }
 
     send_command "$app_port" navigate '{"page":"secrets"}'
@@ -351,9 +353,11 @@ test_cli_to_desktop_database() {
 
     local code="2345"
     local app_port
-    app_port=$(find_free_port)
 
-    start_app "$app_port" "$test_tmp/desktop" 0
+    # start_app binds an OS-assigned port and publishes it as the APP_PORT global. Copy it into a
+    # local so a later launch in the suite cannot change the port this test is talking to.
+    start_app "$test_tmp/desktop" 0 || { mark_fail "$test_name" "$test_tmp/desktop/app.log"; return; }
+    app_port="$APP_PORT"
     wait_for_ready "$app_port" || { mark_fail "$test_name" "$test_tmp/desktop/app.log"; stop_app "$app_port" "$test_tmp/desktop"; return; }
 
     send_command "$app_port" navigate '{"page":"databases"}'
@@ -410,9 +414,11 @@ test_desktop_to_cli_secret() {
     seed_secret "$test_tmp/desktop/vault" "desktop-api-key" "api-key" "API_VALUE_FROM_DESKTOP"
 
     local app_port
-    app_port=$(find_free_port)
 
-    start_app "$app_port" "$test_tmp/desktop" 0
+    # start_app binds an OS-assigned port and publishes it as the APP_PORT global. Copy it into a
+    # local so a later launch in the suite cannot change the port this test is talking to.
+    start_app "$test_tmp/desktop" 0 || { mark_fail "$test_name" "$test_tmp/desktop/app.log"; return; }
+    app_port="$APP_PORT"
     wait_for_ready "$app_port" || { mark_fail "$test_name" "$test_tmp/desktop/app.log"; stop_app "$app_port" "$test_tmp/desktop"; return; }
 
     send_command "$app_port" navigate '{"page":"secrets"}'
@@ -473,9 +479,11 @@ test_desktop_to_cli_database() {
     seed_databases_toml "$test_tmp/desktop/config" "desktop-shared-db" "s3:desktop-bucket:/photos" "s3-desktop-key" "enc-desktop-key"
 
     local app_port
-    app_port=$(find_free_port)
 
-    start_app "$app_port" "$test_tmp/desktop" 0
+    # start_app binds an OS-assigned port and publishes it as the APP_PORT global. Copy it into a
+    # local so a later launch in the suite cannot change the port this test is talking to.
+    start_app "$test_tmp/desktop" 0 || { mark_fail "$test_name" "$test_tmp/desktop/app.log"; return; }
+    app_port="$APP_PORT"
     wait_for_ready "$app_port" || { mark_fail "$test_name" "$test_tmp/desktop/app.log"; stop_app "$app_port" "$test_tmp/desktop"; return; }
 
     send_command "$app_port" navigate '{"page":"databases"}'
