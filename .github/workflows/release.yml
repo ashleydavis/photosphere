@@ -103,7 +103,9 @@ jobs:
             ${{ runner.os }}-bun-
 
       - name: Install dependencies
-        run: bun install
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
 
       - name: Run unit tests
         run: |
@@ -136,7 +138,9 @@ jobs:
             ${{ runner.os }}-bun-
 
       - name: Install dependencies
-        run: bun install
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
 
       - name: Run performance benchmarks
         run: bun run perf
@@ -167,7 +171,9 @@ jobs:
             ${{ runner.os }}-bun-
 
       - name: Install dependencies
-        run: bun install
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
 
       - name: Compile TypeScript
         run: bun run compile
@@ -198,13 +204,18 @@ jobs:
             ${{ runner.os }}-bun-
 
       - name: Install dependencies
-        run: bun install
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
 
       - name: Install media processing tools
-        run: |
-          echo "Installing ImageMagick, ffmpeg, and tree via apt..."
-          sudo apt update
-          sudo apt install -y imagemagick ffmpeg tree
+        uses: ./.github/actions/retry-install
+        with:
+          run: |
+            echo "Installing ImageMagick, ffmpeg, and tree via apt..."
+            sudo apt update
+            sudo apt install -y imagemagick ffmpeg tree
+          verify: magick|convert ffmpeg ffprobe
 
       - name: Run write lock smoke tests
         working-directory: ./apps/cli
@@ -253,7 +264,9 @@ jobs:
             ${{ runner.os }}-bun-
 
       - name: Install dependencies
-        run: bun install
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
 
       - name: Run hash cache concurrency smoke tests
         working-directory: ./apps/cli
@@ -291,13 +304,18 @@ jobs:
             ${{ runner.os }}-bun-
 
       - name: Install dependencies
-        run: bun install
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
 
       - name: Install media processing tools
-        run: |
-          echo "Installing ImageMagick, ffmpeg, and tree via apt..."
-          sudo apt update
-          sudo apt install -y imagemagick ffmpeg tree
+        uses: ./.github/actions/retry-install
+        with:
+          run: |
+            echo "Installing ImageMagick, ffmpeg, and tree via apt..."
+            sudo apt update
+            sudo apt install -y imagemagick ffmpeg tree
+          verify: magick|convert ffmpeg ffprobe
 
       - name: Run sync smoke tests
         working-directory: ./apps/cli
@@ -330,17 +348,24 @@ jobs:
             ${{ runner.os }}-bun-
 
       - name: Install dependencies
-        run: bun install
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
 
       - name: Install media processing tools
-        run: |
-          echo "Installing ImageMagick, ffmpeg, and tree via apt..."
-          sudo apt update
-          sudo apt install -y imagemagick ffmpeg tree
+        uses: ./.github/actions/retry-install
+        with:
+          run: |
+            echo "Installing ImageMagick, ffmpeg, and tree via apt..."
+            sudo apt update
+            sudo apt install -y imagemagick ffmpeg tree
+          verify: magick|convert ffmpeg ffprobe
 
       - name: Install keychain tools (Linux)
-        run: |
-          sudo apt-get install -y libsecret-tools gnome-keyring dbus-x11
+        uses: ./.github/actions/retry-install
+        with:
+          run: sudo apt-get install -y libsecret-tools gnome-keyring dbus-x11
+          verify: secret-tool dbus-run-session
 
       - name: Start keyring daemon (Linux)
         run: |
@@ -385,13 +410,18 @@ jobs:
             ${{ runner.os }}-bun-
 
       - name: Install dependencies
-        run: bun install
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
 
       - name: Install media processing tools
-        run: |
-          echo "Installing ImageMagick, ffmpeg, and tree via apt..."
-          sudo apt update
-          sudo apt install -y imagemagick ffmpeg tree
+        uses: ./.github/actions/retry-install
+        with:
+          run: |
+            echo "Installing ImageMagick, ffmpeg, and tree via apt..."
+            sudo apt update
+            sudo apt install -y imagemagick ffmpeg tree
+          verify: magick|convert ffmpeg ffprobe
 
       - name: Run encrypted smoke tests
         working-directory: ./apps/cli
@@ -429,7 +459,9 @@ jobs:
             ${{ runner.os }}-bun-
 
       - name: Install dependencies
-        run: bun install
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
 
       - name: Run LAN share smoke tests
         working-directory: ./apps/cli
@@ -501,13 +533,18 @@ jobs:
             ${{ runner.os }}-bun-
 
       - name: Install dependencies
-        run: bun install
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
 
       - name: Install media processing tools
-        run: |
-          echo "Installing ImageMagick, ffmpeg, and tree via apt..."
-          sudo apt update
-          sudo apt install -y imagemagick ffmpeg tree
+        uses: ./.github/actions/retry-install
+        with:
+          run: |
+            echo "Installing ImageMagick, ffmpeg, and tree via apt..."
+            sudo apt update
+            sudo apt install -y imagemagick ffmpeg tree
+          verify: magick|convert ffmpeg ffprobe
           
       - name: Verify media tool versions
         run: |
@@ -621,12 +658,17 @@ jobs:
             ${{ runner.os }}-bun-
 
       - name: Install dependencies
-        run: bun install
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
 
       - name: Install media processing tools
-        run: |
-          echo "Installing ImageMagick, ffmpeg, and tree via Chocolatey..."
-          choco install imagemagick ffmpeg tree -y
+        uses: ./.github/actions/retry-install
+        with:
+          run: |
+            echo "Installing ImageMagick, ffmpeg, and tree via Chocolatey..."
+            choco install imagemagick ffmpeg tree -y
+          verify: magick|convert ffmpeg ffprobe
 
       - name: Verify media tool versions
         run: |
@@ -738,7 +780,9 @@ jobs:
             ${{ runner.os }}-bun-
 
       - name: Install dependencies
-        run: bun install
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
 
       - name: Build Windows executable
         working-directory: ./apps/cli
@@ -811,12 +855,17 @@ jobs:
           echo "OS Version: $(sw_vers)"
 
       - name: Install dependencies
-        run: bun install
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
 
       - name: Install media processing tools
-        run: |
-          echo "Installing ImageMagick, ffmpeg, and tree via Homebrew..."
-          brew install imagemagick ffmpeg tree
+        uses: ./.github/actions/retry-install
+        with:
+          run: |
+            echo "Installing ImageMagick, ffmpeg, and tree via Homebrew..."
+            brew install imagemagick ffmpeg tree
+          verify: magick|convert ffmpeg ffprobe
 
       - name: Verify media tool versions
         run: |
@@ -941,12 +990,17 @@ jobs:
           echo "OS Version: $(sw_vers)"
 
       - name: Install dependencies
-        run: bun install
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
 
       - name: Install media processing tools
-        run: |
-          echo "Installing ImageMagick, ffmpeg, and tree via Homebrew..."
-          brew install imagemagick ffmpeg tree
+        uses: ./.github/actions/retry-install
+        with:
+          run: |
+            echo "Installing ImageMagick, ffmpeg, and tree via Homebrew..."
+            brew install imagemagick ffmpeg tree
+          verify: magick|convert ffmpeg ffprobe
 
       - name: Verify media tool versions
         run: |
@@ -1031,12 +1085,17 @@ jobs:
             ${{ runner.os }}-bun-
 
       - name: Install dependencies
-        run: bun install
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
 
       - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y xvfb imagemagick ffmpeg
+        uses: ./.github/actions/retry-install
+        with:
+          run: |
+            sudo apt-get update
+            sudo apt-get install -y xvfb imagemagick ffmpeg
+          verify: xvfb-run magick|convert ffmpeg ffprobe
 
       - name: Run Electron smoke tests
         working-directory: ./apps/desktop
@@ -1069,12 +1128,17 @@ jobs:
             ${{ runner.os }}-bun-
 
       - name: Install dependencies
-        run: bun install
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
 
       - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y xvfb
+        uses: ./.github/actions/retry-install
+        with:
+          run: |
+            sudo apt-get update
+            sudo apt-get install -y xvfb
+          verify: xvfb-run
 
       - name: Run CLI<->Desktop LAN share smoke tests
         run: xvfb-run -a ./cli-desktop-lan-share-smoke-tests.sh
@@ -1107,7 +1171,9 @@ jobs:
             ${{ runner.os }}-bun-
 
       - name: Install dependencies
-        run: bun install
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
 
       # AGP 8 requires JDK 17 (the Android build fails on the JDK 21 the runner defaults to).
       - name: Setup JDK 17
@@ -1118,14 +1184,19 @@ jobs:
 
       # ImageMagick/ffmpeg are needed by the CLI that builds the per-test database fixtures.
       - name: Install media processing tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y imagemagick ffmpeg
+        uses: ./.github/actions/retry-install
+        with:
+          run: |
+            sudo apt-get update
+            sudo apt-get install -y imagemagick ffmpeg
+          verify: magick|convert ffmpeg ffprobe
 
       # The native ImageMagick build (run_magick shim via CMake) and scripts/fetch-mobile-media-tools.sh
       # both require this exact NDK, which the android-frontend sync (run by test:and:unit) pulls in.
       - name: Install Android NDK
-        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;25.1.8937393" > /dev/null
+        uses: ./.github/actions/retry-install
+        with:
+          run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;25.1.8937393" > /dev/null
 
       # Engine-pool dispatcher, subtask routing, picker/path helpers, host functions.
       - name: Run Android native unit tests
@@ -1159,11 +1230,16 @@ jobs:
             ${{ runner.os }}-bun-
 
       - name: Install dependencies
-        run: bun install
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
 
       # ImageMagick/ffmpeg are needed by the CLI that builds the per-test database fixtures.
       - name: Install media processing tools
-        run: brew install imagemagick ffmpeg
+        uses: ./.github/actions/retry-install
+        with:
+          run: brew install imagemagick ffmpeg
+          verify: magick|convert ffmpeg ffprobe
 
       # Host bridge, engine pool, subtask routing, path sandbox, media host functions.
       - name: Run iOS native unit tests
@@ -1195,7 +1271,9 @@ jobs:
             ${{ runner.os }}-bun-
 
       - name: Install dependencies
-        run: bun install
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
 
       # AGP 8 requires JDK 17 (the Android build fails on the JDK 21 the runner defaults to).
       - name: Setup JDK 17
@@ -1206,14 +1284,19 @@ jobs:
 
       # ImageMagick/ffmpeg are needed by the CLI that builds the per-test database fixtures.
       - name: Install media processing tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y imagemagick ffmpeg
+        uses: ./.github/actions/retry-install
+        with:
+          run: |
+            sudo apt-get update
+            sudo apt-get install -y imagemagick ffmpeg
+          verify: magick|convert ffmpeg ffprobe
 
       # The native ImageMagick build (run_magick shim via CMake) and scripts/fetch-mobile-media-tools.sh
       # both require this exact NDK, which bun run test:and pulls in via bun run sync.
       - name: Install Android NDK
-        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;25.1.8937393" > /dev/null
+        uses: ./.github/actions/retry-install
+        with:
+          run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;25.1.8937393" > /dev/null
 
       # Allow the hardware-accelerated emulator to use KVM on the runner.
       - name: Enable KVM
@@ -1270,11 +1353,16 @@ jobs:
             ${{ runner.os }}-bun-
 
       - name: Install dependencies
-        run: bun install
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
 
       # ImageMagick/ffmpeg are needed by the CLI that builds the per-test database fixtures.
       - name: Install media processing tools
-        run: brew install imagemagick ffmpeg
+        uses: ./.github/actions/retry-install
+        with:
+          run: brew install imagemagick ffmpeg
+          verify: magick|convert ffmpeg ffprobe
 
       # run.sh boots an iOS simulator and builds/installs the app via xcrun/xcodebuild.
       - name: Run iOS smoke tests
@@ -1315,12 +1403,17 @@ jobs:
             ${{ runner.os }}-bun-
 
       - name: Install dependencies
-        run: bun install
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
 
       - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y xvfb imagemagick ffmpeg
+        uses: ./.github/actions/retry-install
+        with:
+          run: |
+            sudo apt-get update
+            sudo apt-get install -y xvfb imagemagick ffmpeg
+          verify: xvfb-run magick|convert ffmpeg ffprobe
 
       # --headless runs the Electron window under xvfb; the player shows the window by default.
       - name: Play the stories
@@ -1359,7 +1452,9 @@ jobs:
             ${{ runner.os }}-bun-
 
       - name: Install dependencies
-        run: bun install
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
 
       # AGP 8 requires JDK 17 (the Android build fails on the JDK 21 the runner defaults to).
       - name: Setup JDK 17
@@ -1369,14 +1464,19 @@ jobs:
           java-version: "17"
 
       - name: Install media processing tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y imagemagick ffmpeg
+        uses: ./.github/actions/retry-install
+        with:
+          run: |
+            sudo apt-get update
+            sudo apt-get install -y imagemagick ffmpeg
+          verify: magick|convert ffmpeg ffprobe
 
       # The native ImageMagick build (run_magick shim via CMake) and scripts/fetch-mobile-media-tools.sh
       # both require this exact NDK, which the android build pulls in via bun run sync.
       - name: Install Android NDK
-        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;25.1.8937393" > /dev/null
+        uses: ./.github/actions/retry-install
+        with:
+          run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;25.1.8937393" > /dev/null
 
       # Allow the hardware-accelerated emulator to use KVM on the runner.
       - name: Enable KVM
@@ -1430,10 +1530,15 @@ jobs:
             ${{ runner.os }}-bun-
 
       - name: Install dependencies
-        run: bun install
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
 
       - name: Install media processing tools
-        run: brew install imagemagick ffmpeg
+        uses: ./.github/actions/retry-install
+        with:
+          run: brew install imagemagick ffmpeg
+          verify: magick|convert ffmpeg ffprobe
 
       # The player boots an iOS simulator and builds/installs the app via xcrun/xcodebuild.
       - name: Play the stories
@@ -1535,7 +1640,9 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Install dependencies
-        run: bun install
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
 
       - name: Build Electron app
         run: bun run build
@@ -1547,17 +1654,26 @@ jobs:
 
       - name: Install smoke-test dependencies (Linux)
         if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y xvfb imagemagick ffmpeg
+        uses: ./.github/actions/retry-install
+        with:
+          run: |
+            sudo apt-get update
+            sudo apt-get install -y xvfb imagemagick ffmpeg
+          verify: xvfb-run magick|convert ffmpeg ffprobe
 
       - name: Install smoke-test dependencies (macOS)
         if: runner.os == 'macOS'
-        run: brew install imagemagick ffmpeg
+        uses: ./.github/actions/retry-install
+        with:
+          run: brew install imagemagick ffmpeg
+          verify: magick|convert ffmpeg ffprobe
 
       - name: Install smoke-test dependencies (Windows)
         if: runner.os == 'Windows'
-        run: choco install -y imagemagick ffmpeg
+        uses: ./.github/actions/retry-install
+        with:
+          run: choco install -y imagemagick ffmpeg
+          verify: magick|convert ffmpeg ffprobe
 
       - name: Run Electron smoke tests against binary (Linux)
         if: runner.os == 'Linux'
