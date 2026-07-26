@@ -14,7 +14,7 @@ On desktop and CLI the worker thread is a Node/Bun worker. On mobile there is no
 
 ## Mobile (embedded JS engine)
 
-> The infrastructure described here (the shared `packages/mobile-frontend` queue backend and platform wiring, the `packages/mobile-worker` runtime and host-bridge machinery, and the native `JsEngine` plugin with its engine pool/dispatcher) is in place. The Node.js APIs the task handlers use are **not** implemented for the engine in this layer: every Node.js call from a background task reports NOT IMPLEMENTED until a later layer supplies the native-backed implementations (storage `fs`, hashing, media tools).
+> The infrastructure described here (the shared `packages/mobile-frontend` queue backend and platform wiring, the `packages/mobile-worker` runtime and host-bridge machinery, and the native `JsEngine` plugin with its engine pool/dispatcher) is in place. All 30 host functions the task handlers use (storage `fs`, hashing, media tools, networking, crypto) are implemented on both platforms. The NOT IMPLEMENTED error in `host-functions.ts` is a live safety net for any Node.js call from a background task that falls outside that set; it currently catches nothing.
 
 On iOS and Android there is no Node or Bun runtime inside the app, so background tasks cannot run in a Node worker thread. Instead the same TypeScript task code runs inside an embedded JavaScript engine that lives in native code, off the WebView. The engine is JavaScriptCore on iOS and QuickJS on Android. The flow is identical on both platforms; only the engine implementation differs.
 

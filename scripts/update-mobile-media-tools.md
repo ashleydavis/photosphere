@@ -50,4 +50,4 @@ bun run test:and   # or: bun run test:ios
 
 ## Gotcha
 
-Keep the ImageMagick quantum depth consistent between the compiled library and the `-D` defines (`MAGICKCORE_QUANTUM_DEPTH` in `cpp/CMakeLists.txt` on Android; the `Q8HDRI` lib-name suffix and `OTHER_CFLAGS` on iOS). A mismatch after an update is the most common cause of a silent failure.
+Keep the ImageMagick quantum depth consistent between the compiled library and the `-D` defines (`MAGICKCORE_QUANTUM_DEPTH` in `cpp/CMakeLists.txt` on Android; the `Q16HDRI` lib-name suffix and `OTHER_CFLAGS` on iOS). A mismatch after an update is the most common cause of a silent failure.

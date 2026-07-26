@@ -54,7 +54,7 @@ interface ICapturedSend {
 // Dispatches the LAN database-sharing flow through the shared TaskQueue instead
 // of platform-specific IPC. On desktop the tasks run in the Electron utility
 // worker (full Node); on mobile they dispatch to the embedded JS engine, where
-// they fail because the handler is absent and Node networking is unimplemented.
+// the native networking host functions back them.
 //
 export function useLanShareTasks(): ILanShareTasks {
     // Lazily-created queue that all share tasks are dispatched through.

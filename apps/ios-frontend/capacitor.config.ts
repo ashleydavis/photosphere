@@ -11,7 +11,8 @@ const config: CapacitorConfig = {
     // Directory containing the built web assets that Capacitor copies into the native project.
     webDir: 'dist',
 
-    // No Capacitor plugins configured yet.
+    // No per-plugin config overrides needed here: @capacitor/network, the custom JsEngine
+    // plugin and the SecureStore plugin are installed and synced but require no entries.
     plugins: {},
 };
 

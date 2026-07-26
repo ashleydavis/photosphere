@@ -12,7 +12,7 @@ The iOS ImageMagick static libraries are built by `apps/ios-frontend/ios/build-i
 
 1. Edit the version variables at the top of that script: `IM_VERSION` (e.g. `7.1.1-43` -> the new tag), and `JPEG_URL` / `PNG_URL` if you also want newer delegates.
 2. Rebuild: `bun run vendor:imagemagick:ios` (macOS + Xcode command-line tools). It reinstalls into `apps/ios-frontend/ios/App/vendor/im/{device,sim}` (git-ignored).
-3. If the quantum depth or HDRI setting changed, the static-library filename suffix changes (currently `Q8HDRI`, from `--with-quantum-depth=8 --enable-hdri`). Update the App target's `OTHER_LDFLAGS` to match: `-lMagickWand-7.<SUFFIX> -lMagickCore-7.<SUFFIX> -ljpeg -lpng16 -lz`, and keep `OTHER_CFLAGS` `-DMAGICKCORE_QUANTUM_DEPTH` / `-DMAGICKCORE_HDRI_ENABLE` consistent.
+3. If the quantum depth or HDRI setting changed, the static-library filename suffix changes (currently `Q16HDRI`, from `--with-quantum-depth=16 --enable-hdri`, matching Android). Update the App target's `OTHER_LDFLAGS` to match: `-lMagickWand-7.<SUFFIX> -lMagickCore-7.<SUFFIX> -ljpeg -lpng16 -lz`, and keep `OTHER_CFLAGS` `-DMAGICKCORE_QUANTUM_DEPTH` / `-DMAGICKCORE_HDRI_ENABLE` consistent.
 4. Clean-build the app so the new headers/libs are picked up.
 
 ## 2. ImageMagick on Android (fetched from downstream, nothing committed)

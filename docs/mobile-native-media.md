@@ -15,7 +15,7 @@ Files: `apps/ios-frontend/ios/App/App/JsEngine/{run_magick.c,run_magick.h,MediaT
 1. Build ImageMagick static libraries (device arm64 + simulator) on macOS:
    `bash apps/ios-frontend/ios/build-imagemagick.sh`
    This installs headers/libs under `apps/ios-frontend/ios/App/vendor/im/{device,sim}` (git-ignored).
-2. In the App target build settings, point `HEADER_SEARCH_PATHS` and `LIBRARY_SEARCH_PATHS` at the matching `vendor/im` slice, add `OTHER_LDFLAGS = -lMagickWand-7.Q8HDRI -lMagickCore-7.Q8HDRI -ljpeg -lpng16 -lz`, and add `IMAGEMAGICK_LINKED` to `SWIFT_ACTIVE_COMPILATION_CONDITIONS`.
+2. In the App target build settings, point `HEADER_SEARCH_PATHS` and `LIBRARY_SEARCH_PATHS` at the matching `vendor/im` slice, add `OTHER_LDFLAGS = -lMagickWand-7.Q16HDRI -lMagickCore-7.Q16HDRI -ljpeg -lpng16 -lz`, and add `IMAGEMAGICK_LINKED` to `SWIFT_ACTIVE_COMPILATION_CONDITIONS`.
 3. Add the FFmpegKit SPM package `ffmpeg-kit-full-spm` (full variant, for the `mjpeg` screenshot encoder) and its "Embed Frameworks" run-script phase. `FfmpegKitRunner` activates automatically via `#if canImport(ffmpegkit)`.
 
 ## Android (fetched from downstream, nothing committed)

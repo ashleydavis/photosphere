@@ -446,7 +446,9 @@ public final class QuickJsTaskEngine implements TaskEngine {
             android.util.Log.e("QuickJsTaskEngine", "Failed to initialise secure store: " + error.getMessage());
         }
 
-        // QuickJS lacks setInterval/clearInterval; inject them as no-ops before the bundle.
+        // QuickJS lacks setInterval/clearInterval natively; inject them as no-ops here so any timer
+        // code degrades to a no-op rather than throwing before the bundle evaluates. The bundle
+        // itself (install-globals.ts) then overwrites both with real, idle-driven-queue implementations.
         context.evaluate("var setInterval = function () { return 0; }; var clearInterval = function () {};");
 
         // Build globalThis.host with the infrastructure callables and the NOT IMPLEMENTED sha256.

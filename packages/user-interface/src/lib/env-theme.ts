@@ -5,10 +5,11 @@
 // running any frontend to force the startup theme. Each frontend's Vite config
 // bakes the value in as the `__PHOTOSPHERE_THEME__` global; on startup the app
 // reads it here (resolveInitialTheme) and applies it with MUI Joy's setMode.
-// The override wins over the saved theme but is NEVER written to the config
-// file, so your saved theme is untouched and you can still change theme in the
-// app. With no env var set, the app starts from the saved theme (system by
-// default). Usage: docs/theme-override.md.
+// The override wins over the saved theme but is NEVER written back to persisted
+// settings (a config file on desktop, localStorage on web and mobile), so your
+// saved theme is untouched and you can still change theme in the app. With no
+// env var set, the app starts from the saved theme (system by default). Usage:
+// docs/theme-override.md.
 //
 
 //

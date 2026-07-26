@@ -1,11 +1,11 @@
 //
 // Mobile `fs/promises` shim backing the read path on native host functions.
 //
-// Only the functions the database READ path actually uses are implemented: `readFile`, `access`,
-// `stat`, and `readdir`. Each calls a synchronous `host.fs*` function and adapts the result to the
-// Node `fs/promises` shape the storage code expects. Everything the read path does not use
-// (`writeFile`, `mkdir`, `rename`, `unlink`, `rm`, `appendFile`, `copyFile`, ...) throws the loud
-// NOT IMPLEMENTED error rather than silently doing nothing, so an unaccounted-for write is obvious.
+// The read path (`readFile`, `access`, `stat`, `readdir`) and the write path (`writeFile`, `mkdir`,
+// `rename`, `unlink`, `rm`) are both implemented, each calling a synchronous `host.fs*` function and
+// adapting the result to the Node `fs/promises` shape the storage code expects. Functions neither
+// path uses (`appendFile`, `copyFile`, ...) throw the loud NOT IMPLEMENTED error rather than
+// silently doing nothing, so an unaccounted-for call is obvious.
 //
 
 import { Buffer } from "buffer";

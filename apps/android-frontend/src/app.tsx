@@ -30,7 +30,8 @@ const queueBackend = new EmbeddedJsQueueBackend();
 // Registers the native JsEngine event listeners, then installs the backend as the process
 // queue backend. Called from index.tsx before the app renders so a listener is always
 // registered before the first task can be dispatched. A failed init (for example running in
-// a browser preview without the native plugin) is logged but does not block the UI.
+// a browser preview without the native plugin) is logged, but the asset-server task then never
+// starts, so restApiUrl below never resolves and the app blocks on the spinner permanently.
 //
 export async function bootstrapMobileBackend(): Promise<void> {
     try {
@@ -43,8 +44,9 @@ export async function bootstrapMobileBackend(): Promise<void> {
 }
 
 //
-// Root mobile app. Mounts the real Photosphere UI backed by the stubbed mobile
-// platform provider. There is no WebSocket gate as on web — the UI renders immediately.
+// Root mobile app. Mounts the real Photosphere UI backed by the mobile platform provider.
+// There is no WebSocket gate as on web, but the UI shows a spinner until the asset-server
+// background task reports the port it bound (see restApiUrl below).
 //
 export function App() {
     // Start the asset-server background task (in the embedded engine) and use its bound localhost

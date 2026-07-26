@@ -104,12 +104,14 @@ export interface IPlatformProviderMobileProps {
 
 //
 // Mobile platform context provider.
-// Most native integrations are still stubbed (database, sync, file-picker); secrets are not, they are
-// stored one item per secret in the device keychain via the SecureStore plugin. The background-task
-// bindings (cancelTasks / onTaskMessage / onTaskComplete) are wired
+// The background-task bindings (cancelTasks / onTaskMessage / onTaskComplete) are wired
 // to the native JsEngine plugin so task-driven UI (notably the Job Manager) works on mobile.
-// Share/receive now run as background tasks via useLanShareTasks; these fail at runtime on
-// the embedded JS engine until native networking host functions exist.
+// The vault (all five secret methods, stored one item per secret in the device keychain via the
+// SecureStore plugin) and the file-picker (pickFiles reaches the real native picker) are
+// implemented, not stubbed. Share/receive run as background tasks via useLanShareTasks,
+// dispatched to the embedded JS engine, where the native networking host functions (TcpHost,
+// UdpHost, TlsHost) back them. openDatabase remains a no-op: there is no native database picker
+// on mobile yet.
 // Generic config is persisted to WebView localStorage so settings survive app restarts.
 //
 export function PlatformProviderMobile({ children }: IPlatformProviderMobileProps) {

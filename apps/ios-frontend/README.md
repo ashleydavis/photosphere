@@ -49,5 +49,7 @@ Run on iOS directly from the terminal:
 
 ```bash
 cd apps/ios-frontend
-bun run launch
+bun run run
 ```
+
+Or from the repo root: `bun run run:ios`.

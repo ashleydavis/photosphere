@@ -25,7 +25,7 @@ else()
   message(FATAL_ERROR "No ImageMagick config overlay for ABI ${ANDROID_ABI}")
 endif()
 
-# Prebuilt ImageMagick shared libraries (committed under jniLibs/<abi>).
+# Prebuilt ImageMagick shared libraries (git-ignored, fetched/built into jniLibs/<abi> at build time).
 set(JNILIBS ${CMAKE_CURRENT_SOURCE_DIR}/../jniLibs/${ANDROID_ABI})
 add_library(magickcore SHARED IMPORTED)
 set_target_properties(magickcore PROPERTIES IMPORTED_LOCATION ${JNILIBS}/libmagickcore-7.so)

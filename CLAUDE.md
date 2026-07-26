@@ -54,7 +54,7 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 
 - **Storage**: `packages/storage` abstracts filesystem (`fs:path`), S3-compatible (`s3:bucket:/path`), and encrypted storage.
 - **Frontend**: React 18 + TypeScript, Vite, shared UI in `packages/user-interface`.
-- **Mobile**: Capacitor wraps the frontend for iOS/Android. Background tasks run in an embedded JS engine (JavaScriptCore on iOS, QuickJS on Android) driven by the native `JsEngine` Capacitor plugin via a `host.*` bridge, off the WebView. Shared TypeScript lives in `packages/mobile-frontend` (the `EmbeddedJsQueueBackend`, the `JsEngine` plugin interface, the mobile platform provider) and `packages/mobile-worker` (the embedded worker runtime, host-bridge machinery, and `worker.bundle.js` build). Node.js APIs are not implemented for the engine: a background task that calls one reports NOT IMPLEMENTED until a later layer supplies the native implementation.
+- **Mobile**: Capacitor wraps the frontend for iOS/Android. Background tasks run in an embedded JS engine (JavaScriptCore on iOS, QuickJS on Android) driven by the native `JsEngine` Capacitor plugin via a `host.*` bridge, off the WebView. Shared TypeScript lives in `packages/mobile-frontend` (the `EmbeddedJsQueueBackend`, the `JsEngine` plugin interface, the mobile platform provider) and `packages/mobile-worker` (the embedded worker runtime, host-bridge machinery, and `worker.bundle.js` build). All 30 host functions the task handlers need (storage `fs`, hashing, media tools, networking, crypto) are implemented on both platforms; the NOT IMPLEMENTED error is a safety net for any Node.js API a background task calls outside that set.
 - **Desktop**: Electron embeds the frontend via `apps/desktop`.
 
 ## Guides

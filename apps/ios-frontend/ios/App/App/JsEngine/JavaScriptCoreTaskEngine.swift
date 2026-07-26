@@ -160,9 +160,10 @@ final class JavaScriptCoreTaskEngine: TaskEngine {
 
         let newContext = JSContext()!
 
-        // JSContext provides no setInterval/clearInterval and the bundle does not install them.
-        // Inject both as no-ops before evaluating the bundle so any timer code degrades to a no-op
-        // rather than throwing. setTimeout/queueMicrotask are installed by the bundle itself.
+        // JSContext provides no setInterval/clearInterval natively. Inject both as no-ops here so
+        // any timer code degrades to a no-op rather than throwing before the bundle evaluates; the
+        // bundle itself (install-globals.ts) then overwrites both with real, idle-driven-queue
+        // implementations, same as setTimeout/queueMicrotask.
         let noopInterval: @convention(block) () -> JSValue = {
             return JSValue(double: 0, in: newContext)
         }

@@ -337,7 +337,9 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
     //
     async function selectAndOpenDatabase(): Promise<void> {
         // Call platform.openDatabase which will trigger the platform to show the dialog
-        // and send a 'database-opened' event when a file is selected
+        // and send a 'database-opened' event when a file is selected. On mobile, openDatabase
+        // is currently a no-op (there is no native database picker yet), so this path opens
+        // a database on desktop only.
         await platform.openDatabase();
 
         // The database-opened event will be handled by the useEffect listener

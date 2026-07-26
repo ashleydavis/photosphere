@@ -63,6 +63,7 @@ Everything below is run from the repo root.
 | `bun run compile` | Compile all TypeScript. Optional, but the way to check a change still compiles. |
 | `bun run test` | Unit tests. |
 | `bun run test:all` | Unit tests plus the CLI and Electron smoke tests. |
+| `bun run test:and` / `bun run test:ios` | Mobile smoke tests, on the Android emulator/device or iOS simulator. `bun run test:and -- <n>` runs a single numbered test. |
 | `bun run build` | Production build of the Electron app for distribution. |
 | `bun run clean` | Remove build artifacts. |
 
@@ -88,7 +89,7 @@ Screenshots land in `stories-screenshots/<platform>/` with an `index.html` pairi
 
 ## Testing
 
-[docs/testing/](testing/README.md) covers the unit tests, the CLI and Electron smoke tests, the manual end-to-end scripts, and the UI stories. Add unit tests for new code. React components, contexts, and hooks are not unit tested: extract any real logic into a `lib/` function and test that.
+[docs/testing/](testing/README.md) covers the unit tests, the CLI/Electron/mobile smoke tests, the manual end-to-end scripts, and the UI stories. Add unit tests for new code. React components, contexts, and hooks are not unit tested: extract any real logic into a `lib/` function and test that.
 
 ## Platform notes
 

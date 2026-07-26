@@ -2,7 +2,7 @@
 
 `PHOTOSPHERE_THEME` forces the color theme the app starts in. Set it to `light`, `dark`, or `system` in the environment when you build or run a frontend.
 
-- It **overrides the saved theme on startup** but is **never written to the config file**, so your saved theme is untouched.
+- It **overrides the saved theme on startup** but is **never written back to persisted settings** (a config file on desktop, localStorage on web and mobile), so your saved theme is untouched.
 - You can still change the theme in the app afterwards (that change saves, as normal).
 - With the variable unset, the app starts from the saved theme (`system` by default).
 
@@ -26,9 +26,9 @@ Mobile (Capacitor builds and runs the frontend, so the same variable applies):
 
 ```
 # Android
-PHOTOSPHERE_THEME=dark bun run --filter=android-frontend launch
+PHOTOSPHERE_THEME=dark bun run run:and
 # iOS
-PHOTOSPHERE_THEME=dark bun run --filter=ios-frontend launch
+PHOTOSPHERE_THEME=dark bun run run:ios
 ```
 
 Because the theme is baked in at build time, changing `PHOTOSPHERE_THEME` requires a rebuild (re-run the command).

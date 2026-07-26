@@ -49,5 +49,7 @@ Run on Android directly from the terminal:
 
 ```bash
 cd apps/android-frontend
-bun run launch
+bun run run
 ```
+
+Or from the repo root: `bun run run:and`.

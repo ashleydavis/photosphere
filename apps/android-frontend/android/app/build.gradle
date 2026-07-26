@@ -91,7 +91,7 @@ dependencies {
     implementation project(':capacitor-cordova-android-plugins')
 }
 
-// Print failing/skipped tests and a run/passed/failed summary line so `bun run test:android:unit`
+// Print failing/skipped tests and a run/passed/failed summary line so `bun run test:and:unit`
 // output shows what actually ran, instead of only "BUILD SUCCESSFUL".
 tasks.withType(Test).configureEach {
     testLogging {

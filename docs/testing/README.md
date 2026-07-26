@@ -61,6 +61,21 @@ Run the hash cache concurrency smoke test, which proves that parallel processes 
 bun run test:cli:hash-cache
 ```
 
+Run the mobile smoke tests. Each test lives at `apps/smoke-tests/tests/<n>-<name>/test.sh`, numbered 0-39, and each `test.sh` is platform-neutral: the same file runs against the Android emulator/device and the iOS simulator:
+
+```bash
+bun run test:and   # Android emulator or attached device
+bun run test:ios   # iOS simulator (needs macOS with Xcode)
+```
+
+Run a single mobile smoke test by number:
+
+```bash
+bun run test:and -- 26
+```
+
+The assertion helpers the tests call (`wait_for_value`, `assert_value`, and the rest of `common.sh`) are fatal: a helper failure ends the test immediately rather than letting it continue past a bad assumption.
+
 Run every test across the monorepo via the shell script, which prints a summary of results. It does not run the tests in parallel, which makes it easier to see where a failure originates:
 
 ```bash
@@ -159,3 +174,4 @@ With an isolated config dir you start with no databases registered, so create or
 - [e2e/](e2e/) - End-to-end manual test scripts covering full user workflows
 - [screenshots.md](screenshots.md) - Capturing desktop app screenshots via the test control server
 - [stories README](../../packages/user-interface/src/stories/README.md) - The stories browser and the cross-platform story player
+- `apps/smoke-tests/tests/<n>-<name>/` - Mobile smoke tests (`bun run test:and` / `bun run test:ios`), platform-neutral and numbered 0-39
