@@ -16,22 +16,26 @@ print_test_header 32 "encrypted-database"
 TMP_DIR="$TEST_DIR/tmp"
 DB_NAME="enc-db"
 # The CLI's --key is a *vault key name*, not a file path: --generate-key stores the generated RSA
-# key pair in the host vault under this name and never writes a PEM file. Naming it per-test keeps
-# it from colliding with a real user key in the developer's vault.
+# key pair in the host vault under this name and never writes a PEM file. Every host CLI call here
+# goes through run_cli, which points the vault at this test's own tmp dir and selects the plaintext
+# vault, so the key never touches the real OS keychain. That isolation is also what lets this run on
+# CI at all: a runner has no usable keychain (no libsecret on Linux, and `security` unavailable on
+# the macOS image), which failed this test before every other test in the suite could even run.
 KEY_NAME="smoke-test-enc-db-key"
 DB_PATH="$TMP_DIR/$DB_NAME"
 
 mkdir -p "$TMP_DIR"
 
 # Remove any key left in the host vault by a previous run so --generate-key starts clean and the
-# test is rerunnable.
-( cd "$REPO_DIR/apps/cli" && bun run start -- secrets remove --name "$KEY_NAME" --yes ) >/dev/null 2>&1 || true
+# test is rerunnable. run_cli puts the vault under this test's tmp dir, so there is nothing to clean
+# on a fresh checkout; it still matters for a rerun that kept tmp.
+run_cli "$TMP_DIR" secrets remove --name "$KEY_NAME" --yes >/dev/null 2>&1 || true
 
 trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 
 # Create an encrypted database on the host: generate a key and add one asset through it.
-( cd "$REPO_DIR/apps/cli" && bun run start -- init --db "$DB_PATH" --generate-key --key "$KEY_NAME" --yes ) || exit 1
-( cd "$REPO_DIR/apps/cli" && bun run start -- add "$REPO_DIR/test/test.jpg" --db "$DB_PATH" --key "$KEY_NAME" --yes ) || exit 1
+run_cli "$TMP_DIR" init --db "$DB_PATH" --generate-key --key "$KEY_NAME" --yes || exit 1
+run_cli "$TMP_DIR" add "$REPO_DIR/test/test.jpg" --db "$DB_PATH" --key "$KEY_NAME" --yes || exit 1
 
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
@@ -66,7 +70,7 @@ TOML
 # add-secret UI (the real path a secret takes into the keychain). The worker vault (14b) then resolves
 # it by name. The key lives in the host vault, so read it back out with `secrets view --raw`; it is a
 # multi-line PEM, so the whole type-command payload is built with python's json so the PEM is escaped.
-KEY_PEM_RAW=$( cd "$REPO_DIR/apps/cli" && bun run start -- secrets view --name "$KEY_NAME" --raw --yes )
+KEY_PEM_RAW=$(run_cli "$TMP_DIR" secrets view --name "$KEY_NAME" --raw --yes)
 if [ -z "$KEY_PEM_RAW" ]; then
     log_error "Could not read encryption key \"$KEY_NAME\" back from the host vault"
     exit 1
