@@ -40,8 +40,22 @@ NETCARD_NAME="$NETCARD_PREFIX-0"
 # Prints the ids of every target adb can actually deploy to. Deliberately ignores "offline" and
 # "unauthorized" entries, which would otherwise be selected and then fail confusingly.
 #
+# Emulators belonging to the smoke-test pool are skipped, because they are not yours to deploy to:
+# a run in progress owns them, and installing over one corrupts that run. The smoke-test harness
+# already applies this rule in the other direction (android_pool_devices in
+# apps/smoke-tests/lib/android.sh leaves a hand-started emulator alone), so without this the rule
+# only held one way: any pool running in the background turned a single unambiguous choice into
+# "more than one target attached" and stopped hand testing dead.
+#
 attached_targets() {
-    "$ADB" devices | awk 'NR>1 && $2=="device" { print $1 }'
+    local serial avd
+    for serial in $("$ADB" devices | awk 'NR>1 && $2=="device" { print $1 }'); do
+        avd="$("$ADB" -s "$serial" emu avd name 2>/dev/null | head -1 | tr -d '\r')"
+        case "$avd" in
+            "$POOL_AVD_PREFIX"-*) ;;
+            *) echo "$serial" ;;
+        esac
+    done
 }
 
 #
