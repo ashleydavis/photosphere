@@ -73,7 +73,11 @@ active_suite_count() {
                 ;;
         esac
         pid="$(basename "$registration")"
-        if [ -d "/proc/$pid" ]; then
+        # /proc is Linux-only and there is none on macOS, where every registration would otherwise
+        # look dead and be swept away on sight. Both checks are kept rather than swapping one for the
+        # other, because neither is a superset: kill -0 works everywhere but says "dead" for a live
+        # process belonging to another user, and /proc gets that case right on Linux.
+        if kill -0 "$pid" 2>/dev/null || [ -d "/proc/$pid" ]; then
             count=$((count + 1))
         else
             rm -f "$registration" "$registration.held" "$registration.held.lock" 2>/dev/null || true
@@ -111,14 +115,21 @@ suite_share() {
 adjust_held() {
     local delta="$1"
     local fd held
-    exec {fd}<>"$SUITE_HELD_LOCK"
-    flock "$fd"
+    # The descriptor exists only to be locked, so it is opened only where there is a lock to take.
+    # bash 3.2, which is what /bin/bash is on macOS, has no {fd} allocation and fails on the line
+    # itself, so this cannot simply be opened and left unlocked.
+    if [ "$RUNNER_HAS_FLOCK" = "1" ]; then
+        exec {fd}<>"$SUITE_HELD_LOCK"
+        runner_flock "$fd"
+    fi
     held=$(( $(cat "$SUITE_HELD_FILE" 2>/dev/null || echo 0) + delta ))
     if [ "$held" -lt 0 ]; then
         held=0
     fi
     echo "$held" > "$SUITE_HELD_FILE"
-    exec {fd}>&-
+    if [ "$RUNNER_HAS_FLOCK" = "1" ]; then
+        exec {fd}>&-
+    fi
     echo "$held"
 }
 
@@ -139,7 +150,58 @@ EXCLUSIVE_LOCK_FILE="/tmp/photosphere-android-exclusive.lock"
 #
 # Keyed on the checkout, not the machine: two worktrees have separate project directories and cannot
 # corrupt each other's build, so making them queue would cost time for nothing.
-BUILD_LOCK_FILE="/tmp/photosphere-android-build-$(printf '%s' "$REPO_DIR" | md5sum | cut -c1-12).lock"
+# cksum rather than md5sum: md5sum is GNU coreutils and does not exist on macOS, where the iOS suite
+# runs, so sourcing this file there died with "md5sum: command not found" before a single test ran.
+# cksum is POSIX and present on both. It is only naming a lock file, so a weak hash is fine: the worst
+# a collision does is make two unrelated checkouts queue behind each other's build.
+BUILD_LOCK_FILE="/tmp/photosphere-android-build-$(printf '%s' "$REPO_DIR" | cksum | cut -d' ' -f1).lock"
+
+# Whether this platform has flock(1). It is Linux-only; macOS, where the iOS suite runs, has no such
+# command, so every lock below would fail there.
+#
+# Where it is missing the locks become no-ops rather than errors, which is what lets an iOS run work.
+# That is only sound for a run with ONE worker. Two of these locks guard against concurrent suites
+# (the build lock, the exclusive-test lock) and losing those merely costs correctness between runs,
+# but the queue lock guards a read-modify-write between the workers of a SINGLE run: without it two
+# workers pop the same entry and skip others, which the runner's own tests demonstrate. run.sh
+# therefore refuses to start on more than one device when this is 0, rather than producing a run
+# whose results cannot be trusted. An iOS run has a single simulator, so it is always in that case.
+# Plain echo rather than log_info: runner.test.sh sources this file on its own, without common.sh,
+# so log_info is not always defined by the time this runs. On stderr, because several functions here
+# return their result on stdout and a caller capturing one must not capture this as well.
+if command -v flock >/dev/null 2>&1; then
+    RUNNER_HAS_FLOCK=1
+else
+    RUNNER_HAS_FLOCK=0
+    echo "flock is not available on this platform; run-to-run device and build locking is disabled." >&2
+fi
+
+#
+# Caps a test's run time. GNU timeout does not exist on macOS, so this goes through common.sh's
+# run_with_timeout (which picks timeout, gtimeout, or a shell fallback) when it is available.
+# runner.test.sh sources this file on its own, without common.sh, and only ever runs on Linux, so
+# plain timeout stands in there rather than duplicating the portable version.
+#
+run_test_timeout() {
+    if command -v run_with_timeout >/dev/null 2>&1; then
+        run_with_timeout "$@"
+        return $?
+    fi
+    timeout "$@"
+}
+
+#
+# flock(1) where it exists, a no-op where it does not. Takes flock's own arguments. Returning success
+# when absent is what makes the callers degrade rather than fail: a non-blocking claim reports the
+# device as taken, and a blocking wait returns immediately.
+#
+runner_flock() {
+    if [ "$RUNNER_HAS_FLOCK" = "1" ]; then
+        flock "$@"
+        return $?
+    fi
+    return 0
+}
 
 # Per-test scratch directory for this run, relative to each test's own directory. Concurrent runs out
 # of one checkout must not share it: the wipe before each test would otherwise delete a live bridge
@@ -198,8 +260,17 @@ acquire_device() {
                     ACQUIRED_FD=""
                     return 0
                 fi
+                # Nothing else can be holding this device when there is no lock to hold it with:
+                # run.sh has already refused to start on more than one device in that case, so this
+                # run is the only claimant.
+                if [ "$RUNNER_HAS_FLOCK" != "1" ]; then
+                    ACQUIRED_DEVICE="$serial"
+                    ACQUIRED_FD=""
+                    adjust_held 1 >/dev/null
+                    return 0
+                fi
                 exec {fd}<>"/tmp/photosphere-android-device-$serial.lock"
-                if flock -n "$fd"; then
+                if runner_flock -n "$fd"; then
                     ACQUIRED_DEVICE="$serial"
                     ACQUIRED_FD="$fd"
                     adjust_held 1 >/dev/null
@@ -234,8 +305,13 @@ with_device() {
     fi
 
     local fd status=0
+    if [ "$RUNNER_HAS_FLOCK" != "1" ]; then
+        "${PLATFORM}_export_device" "$serial"
+        "$@" || status=$?
+        return "$status"
+    fi
     exec {fd}<>"/tmp/photosphere-android-device-$serial.lock"
-    flock "$fd"
+    runner_flock "$fd"
     "${PLATFORM}_export_device" "$serial"
     # Closed for the command and its children, so nothing it spawns can outlive it still holding the
     # device locked. See the note in run_worker.
@@ -250,10 +326,14 @@ with_device() {
 #
 with_build_lock() {
     local fd status=0
+    if [ "$RUNNER_HAS_FLOCK" != "1" ]; then
+        "$@" || status=$?
+        return "$status"
+    fi
     exec {fd}<>"$BUILD_LOCK_FILE"
-    if ! flock -n "$fd"; then
+    if ! runner_flock -n "$fd"; then
         log_info "Another suite is building; waiting for it to finish..."
-        flock "$fd"
+        runner_flock "$fd"
     fi
     # Closed for the build and its children, for the same reason as the device locks.
     "$@" {fd}>&- || status=$?
@@ -269,6 +349,13 @@ release_device() {
     if [ -n "$ACQUIRED_FD" ]; then
         exec {ACQUIRED_FD}>&-
         ACQUIRED_FD=""
+        adjust_held -1 >/dev/null
+    elif [ -n "$ACQUIRED_DEVICE" ]; then
+        # Claimed without a descriptor, which is what happens where there is no flock to hold one.
+        # The count still has to come back down: it is compared against the suite's share, so leaving
+        # it up makes the suite believe it is already at its limit and wait out the full claim
+        # timeout before every test after the first. Keying the release off the descriptor alone did
+        # exactly that, and turned a 20 minute iOS run into hours.
         adjust_held -1 >/dev/null
     fi
     ACQUIRED_DEVICE=""
@@ -302,7 +389,7 @@ queue_pop() {
     fi
 
     eval "exec $QUEUE_LOCK_FD<>\"\$queue_file.lock\""
-    flock "$QUEUE_LOCK_FD"
+    runner_flock "$QUEUE_LOCK_FD"
 
     local first=""
     if [ -s "$queue_file" ]; then
@@ -311,7 +398,7 @@ queue_pop() {
         mv "$queue_file.next" "$queue_file"
     fi
 
-    flock -u "$QUEUE_LOCK_FD"
+    runner_flock -u "$QUEUE_LOCK_FD"
     eval "exec $QUEUE_LOCK_FD>&-"
 
     if [ -n "$first" ]; then
@@ -368,10 +455,10 @@ run_test() {
     local status=0
 
     if [ "$RUNNER_STREAM_OUTPUT" = "1" ]; then
-        timeout "$PER_TEST_TIMEOUT" bash "$test_path" 2>&1 | tee "$log_file"
+        run_test_timeout "$PER_TEST_TIMEOUT" bash "$test_path" 2>&1 | tee "$log_file"
         status="${PIPESTATUS[0]}"
     else
-        timeout "$PER_TEST_TIMEOUT" bash "$test_path" > "$log_file" 2>&1
+        run_test_timeout "$PER_TEST_TIMEOUT" bash "$test_path" > "$log_file" 2>&1
         status=$?
     fi
 
@@ -451,9 +538,9 @@ run_worker() {
         local status=0
         if test_has_marker "$test_path" "$EXCLUSIVE_MARKER"; then
             eval "exec $EXCLUSIVE_LOCK_FD<>\"\$exclusive_lock\""
-            flock "$EXCLUSIVE_LOCK_FD"
+            runner_flock "$EXCLUSIVE_LOCK_FD"
             run_test_isolated "$test_path" "$log_file" "$duration_file" || status=$?
-            flock -u "$EXCLUSIVE_LOCK_FD"
+            runner_flock -u "$EXCLUSIVE_LOCK_FD"
             eval "exec $EXCLUSIVE_LOCK_FD>&-"
         else
             run_test_isolated "$test_path" "$log_file" "$duration_file" || status=$?

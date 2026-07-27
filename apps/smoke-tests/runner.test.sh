@@ -273,6 +273,38 @@ wait "$holder_pid" "$holder2_pid" 2>/dev/null
 "$ACQUIRE_HELPER" 0 fakedev-a fakedev-b > "$WORK/acq-fourth" 2>/dev/null
 check "a device is free again once its holder releases it" "fakedev-a" "$(cat "$WORK/acq-fourth")"
 
+# Claiming and releasing the same single device over and over must keep working. Where there is no
+# flock the claim takes no descriptor, and releasing keyed only off that descriptor left the suite's
+# held count climbing: it then believed it was at its share and waited out the full claim timeout
+# before every test after the first, which is hours rather than minutes. This walks several
+# claim/release cycles on one device and fails if any of them stops handing the device back.
+SUITE_HELD_FILE="$WORK/cycle-held"
+SUITE_HELD_LOCK="$WORK/cycle-held.lock"
+echo 0 > "$SUITE_HELD_FILE"
+: > "$SUITE_HELD_LOCK"
+SAVED_CLAIM_TIMEOUT="$DEVICE_CLAIM_TIMEOUT"
+# Short, so a regression reports a failure in seconds instead of stalling this suite for half an hour.
+DEVICE_CLAIM_TIMEOUT=3
+CYCLE_OK="yes"
+for cycle in 1 2 3; do
+    RUNNER_SLOTS=("fakedev-cycle")
+    if ! acquire_device; then
+        CYCLE_OK="claim failed on cycle $cycle"
+        break
+    fi
+    if [ "$ACQUIRED_DEVICE" != "fakedev-cycle" ]; then
+        CYCLE_OK="wrong device on cycle $cycle: $ACQUIRED_DEVICE"
+        break
+    fi
+    release_device
+    if [ "$(cat "$SUITE_HELD_FILE" 2>/dev/null || echo 0)" != "0" ]; then
+        CYCLE_OK="held count stuck at $(cat "$SUITE_HELD_FILE") after cycle $cycle"
+        break
+    fi
+done
+DEVICE_CLAIM_TIMEOUT="$SAVED_CLAIM_TIMEOUT"
+check "repeated claim/release on one device always hands it back" "yes" "$CYCLE_OK"
+
 rm -f /tmp/photosphere-android-device-fakedev-*.lock
 unset PHOTOSPHERE_DEVICE_CLAIM_TIMEOUT
 RUNNER_SLOTS=()

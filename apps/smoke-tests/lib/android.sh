@@ -60,12 +60,19 @@ android_require_ready() {
 # Prints one serial per line for every attached device the run may use. These are the devices the run
 # spreads its work over.
 #
-# That means devices on the LAN bridge, which is what the smoke tests require.
+# That means devices on the LAN bridge, which is what the smoke tests require, except on a run that
+# has declared it cannot have a bridge (PHOTOSPHERE_NO_LAN_BRIDGE=1): there a booted device is all
+# there is to ask for. Without that exception the release workflow found no usable device and failed
+# the whole suite, because its emulator is booted by an action that attaches no tap device, so no
+# device ever holds a 192.168.55.x address. The two tests that genuinely need the bridge check for it
+# themselves and skip (see require_lan_bridge); everything else reaches the host over NAT.
 #
 android_ready_devices() {
     local serial
     for serial in $(adb devices 2>/dev/null | awk 'NR > 1 && $2 == "device" { print $1 }'); do
-        if adb -s "$serial" shell ip addr show wlan0 2>/dev/null | tr -d '\r' | grep -q 'inet 192\.168\.55\.'; then
+        if [ "${PHOTOSPHERE_NO_LAN_BRIDGE:-}" = "1" ]; then
+            echo "$serial"
+        elif adb -s "$serial" shell ip addr show wlan0 2>/dev/null | tr -d '\r' | grep -q 'inet 192\.168\.55\.'; then
             echo "$serial"
         fi
     done

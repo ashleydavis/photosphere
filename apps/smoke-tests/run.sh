@@ -78,6 +78,17 @@ main() {
         exit 1
     fi
 
+    # Without flock there is nothing keeping two workers off the same queue entry or the same device,
+    # so more than one device would quietly run tests twice and skip others. One device means one
+    # worker, which needs no locking at all, and that is the case this platform is expected to be in
+    # (macOS has no flock, and an iOS run has a single simulator). Anything else has to stop here
+    # rather than produce a run whose results cannot be trusted.
+    if [ "$RUNNER_HAS_FLOCK" != "1" ] && [ ${#RUNNER_SLOTS[@]} -gt 1 ]; then
+        log_error "Found ${#RUNNER_SLOTS[@]} devices but this platform has no flock, so the work queue and"
+        log_error "device claims cannot be made safe. Run on one device, or on a platform with flock."
+        exit 1
+    fi
+
     log_info "Running on ${#RUNNER_SLOTS[@]} device(s): ${RUNNER_SLOTS[*]}"
 
     local slot
