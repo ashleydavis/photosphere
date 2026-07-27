@@ -456,7 +456,8 @@ add_secret_via_ui() {
 # command outright with "timeout: command not found" rather than capping it. coreutils installs the
 # same tool as `gtimeout`, so prefer whichever is present, and fall back to a background process plus
 # a killer (the approach apps/desktop/smoke-tests.sh already uses) so the cap exists either way rather
-# than being silently dropped. Stdout passes straight through, so callers can capture it.
+# than being silently dropped. Stdout passes straight through, so callers can capture it, and
+# nothing else this spawns is allowed to hold that stream open (see the note on the killer below).
 # Usage: run_with_timeout <seconds> <command...>
 #
 run_with_timeout() {
@@ -472,11 +473,19 @@ run_with_timeout() {
     fi
     "$@" &
     local child_pid=$!
-    ( sleep "$seconds" && kill "$child_pid" 2>/dev/null ) &
+    # The killer's own output goes to /dev/null, and this is load-bearing rather than tidiness. A
+    # background job inherits the caller's stdout, so when the caller is a pipeline or a $( ) capture
+    # the killer holds the write end of that pipe open. The reader then sees no end-of-file until the
+    # sleep expires, and the whole call takes the full timeout however fast the command was. That is
+    # what turned every iOS test into a flat 600 seconds and ran the job into its 90 minute limit.
+    ( sleep "$seconds" && kill "$child_pid" 2>/dev/null ) >/dev/null 2>&1 &
     local killer_pid=$!
     wait "$child_pid"
     local child_status=$?
     kill "$killer_pid" 2>/dev/null
+    # The sleep is a child of the killer and outlives it, so it is stopped too rather than left to
+    # expire in its own time.
+    pkill -P "$killer_pid" 2>/dev/null || true
     wait "$killer_pid" 2>/dev/null
     return $child_status
 }
