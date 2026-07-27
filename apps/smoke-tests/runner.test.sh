@@ -200,19 +200,6 @@ check "a name filter does not select an unrelated test" "1" "$?"
 test_matches_filter "2-create-database" "nonexistent"
 check "a name filter that matches nothing selects nothing" "1" "$?"
 
-echo "== order_tests =="
-
-PLAIN_ONE="$(make_stub plain-one 0 0)"
-SLOW_ONE="$(make_stub slow-one 0 0 .slow)"
-PLAIN_TWO="$(make_stub plain-two 0 0)"
-
-ORDERED="$(order_tests "$PLAIN_ONE" "$SLOW_ONE" "$PLAIN_TWO")"
-check "order_tests puts the slow test first" "$SLOW_ONE" "$(echo "$ORDERED" | head -1)"
-check "order_tests preserves the order of the rest" "$PLAIN_ONE $PLAIN_TWO" "$(echo "$ORDERED" | tail -n +2 | tr '\n' ' ' | sed 's/ $//')"
-
-UNMARKED_ORDER="$(order_tests "$PLAIN_ONE" "$PLAIN_TWO")"
-check "order_tests leaves a list with no markers unchanged" "$PLAIN_ONE $PLAIN_TWO" "$(echo "$UNMARKED_ORDER" | tr '\n' ' ' | sed 's/ $//')"
-
 echo "== run_test =="
 
 PASSING="$(make_stub passing 0 0)"

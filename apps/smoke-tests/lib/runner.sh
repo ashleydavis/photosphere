@@ -6,15 +6,13 @@
 # every device the run was given (one worker per device), pulling from a single shared queue so a
 # fast worker keeps taking work instead of idling behind a slow one.
 #
-# Two markers in a test's directory control scheduling (see tests/README.md):
+# Tests are dispatched in the order they are given. One marker in a test's directory controls
+# scheduling (see tests/README.md):
 #   .exclusive  Only one such test runs at a time across the whole pool. The LAN-share tests need
 #               this: discovery is a UDP broadcast on the segment every emulator shares, so two of
 #               them running at once see each other's traffic.
-#   .slow       Ordered to the front, so the longest test starts immediately rather than being the
-#               last thing left running while every other worker sits idle.
 
-# Marker file names, matched against a test's own directory.
-SLOW_MARKER=".slow"
+# Marker file name, matched against a test's own directory.
 EXCLUSIVE_MARKER=".exclusive"
 
 # Seconds a single test may run before the pool kills it, so one wedged test cannot hang the suite.
@@ -461,32 +459,6 @@ test_matches_filter() {
         *"$lower_filter"*) return 0 ;;
     esac
     return 1
-}
-
-#
-# Prints the tests with the .slow-marked ones first, otherwise preserving the given order.
-# Usage: order_tests <test_path...>
-#
-order_tests() {
-    local slow=()
-    local rest=()
-    local test_path
-    for test_path in "$@"; do
-        if test_has_marker "$test_path" "$SLOW_MARKER"; then
-            slow+=("$test_path")
-        else
-            rest+=("$test_path")
-        fi
-    done
-
-    # Printed separately, and only when non-empty: `printf '%s\n' "${empty[@]}"` under `set -u`
-    # either errors or emits a spurious blank line, which would become a bogus queue entry.
-    if [ ${#slow[@]} -gt 0 ]; then
-        printf '%s\n' "${slow[@]}"
-    fi
-    if [ ${#rest[@]} -gt 0 ]; then
-        printf '%s\n' "${rest[@]}"
-    fi
 }
 
 #

@@ -97,7 +97,7 @@ bun run emu:and:down        # stops only your own emulator
 
 Each pool emulator runs on a writable clone of your base AVD, about 8KB each, because two emulators cannot share one AVD. Set `PHOTOSPHERE_EMULATOR_COUNT` to change the pool size. Pin a run to particular devices with `PHOTOSPHERE_ANDROID_DEVICES="emulator-5556 emulator-5558"`, for example to leave your hand-testing emulator out of it.
 
-Two marker files in a test's own directory control scheduling, documented in [apps/smoke-tests/tests/README.md](../../apps/smoke-tests/tests/README.md): `.exclusive` serialises a test across the whole pool (the LAN-share tests need it, because discovery broadcasts on the segment every emulator shares), and `.slow` orders a test first so it is not the last one still running.
+Tests are dispatched in the order they are numbered. One marker file in a test's own directory changes scheduling, documented in [apps/smoke-tests/tests/README.md](../../apps/smoke-tests/tests/README.md): `.exclusive` serialises a test across the whole pool (the LAN-share tests need it, because discovery broadcasts on the segment every emulator shares).
 
 With more than one worker, each test's output goes to `tests/<name>/tmp/test-run.log` and only its status line is printed, since concurrent output would interleave. A single device keeps streaming to the terminal.
 

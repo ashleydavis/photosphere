@@ -134,16 +134,9 @@ main() {
     # an interrupted run does not leave a registration behind shrinking the other suites' shares.
     trap 'cleanup_all_devices; deregister_suite' EXIT
 
-    # The slowest test starts first, so it is not the last thing still running while every other
-    # worker sits idle.
-    local ordered=()
-    while IFS= read -r test_path; do
-        ordered+=("$test_path")
-    done < <(order_tests "${tests[@]}")
-
     local results_dir
     results_dir="$(mktemp -d)"
-    run_pool "$results_dir" "${ordered[@]}" || true
+    run_pool "$results_dir" "${tests[@]}" || true
 
     local pass=0
     local fail=0
