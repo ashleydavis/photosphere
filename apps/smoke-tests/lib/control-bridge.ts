@@ -418,10 +418,6 @@ export class ControlBridge {
             void this.forward("get-storage", { storageKey: req.query.storageKey as string }, res);
         });
 
-        this.expressApp.post("/lan-share-roundtrip", (_req: Request, res: Response) => {
-            void this.forward("lan-share-roundtrip", {}, res);
-        });
-
         this.expressApp.post("/create-database", (req: Request, res: Response) => {
             void this.forward("create-database", { path: req.body.path }, res);
         });

@@ -183,10 +183,10 @@ check "a leading zero on the filter still matches, and is not read as octal" "0"
 test_matches_filter "8-share-database" "2"
 check "a number does not select a test whose name contains it elsewhere" "1" "$?"
 
-# 9 and 17 are each used by two tests, so a numeric filter is allowed to select more than one.
-test_matches_filter "9-view-secret" "9"
+# 17 is used by two tests, so a numeric filter is allowed to select more than one.
+test_matches_filter "17-news-notifications" "17"
 check "a shared number selects the first test using it" "0" "$?"
-test_matches_filter "9-share-roundtrip" "9"
+test_matches_filter "17-replicate-database" "17"
 check "a shared number selects the second test using it too" "0" "$?"
 
 test_matches_filter "29-stale-recent-database" "29-stale-recent-database"
