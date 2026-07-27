@@ -21,6 +21,9 @@ wait_for_ready "$APP_PORT"
 send_command "$APP_PORT" reset-config '{}' || exit 1
 create_database "$TMP_DIR/test-db"
 "${PLATFORM}_seed_database" "$TMP_DIR/test-db" "test-db"
+# Recents are stored as names and resolved against the configured-databases list, so a recent with no
+# matching configured entry is dropped on read and never renders. Seed the entry as well as the recent.
+send_command "$APP_PORT" seed-databases '{"databases":[{"name":"test-db","path":"test-db"}]}' || exit 1
 send_command "$APP_PORT" seed-recent '{"recent":[{"name":"test-db","path":"test-db"}]}' || exit 1
 send_command "$APP_PORT" open-database '{"path":"test-db"}' || exit 1
 wait_for_log "$TMP_DIR" "Load assets task completed: 0 assets loaded"

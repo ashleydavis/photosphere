@@ -5,7 +5,8 @@ import {
 import type { IDatabaseSharePayload, IConflictResolution } from "lan-share-core";
 import {
     IKeyValueStore,
-    DATABASES_KEY,
+    IDatabasesConfig,
+    IDatabasesConfigFile,
     getDatabases,
 } from "../lib/mobile-config-store";
 import { MobileSecretStore, type ISecureStore } from "../lib/mobile-secure-store";
@@ -25,6 +26,18 @@ interface IMemoryStore {
 //
 // Creates an in-memory store.
 //
+//
+// Builds an in-memory databases.toml for the tests, standing in for the file the embedded worker
+// reads and writes on a device.
+//
+function memoryConfigFile(): IDatabasesConfigFile {
+    let config: IDatabasesConfig = { databases: [], recentDatabaseNames: [] };
+    return {
+        read: async () => ({ databases: [...config.databases], recentDatabaseNames: [...config.recentDatabaseNames] }),
+        write: async (updated: IDatabasesConfig) => { config = updated; },
+    };
+}
+
 function memoryStore(): IMemoryStore {
     const map = new Map<string, string>();
     const store: IKeyValueStore = {
@@ -81,12 +94,12 @@ function databasePayloadWithSecrets(): IDatabaseSharePayload {
 describe("mobile-share-receive database payload", () => {
 
     test("imports a database with all secrets and adds the entry", async () => {
-        const { store } = memoryStore();
+        const configFile = memoryConfigFile();
         const secretStore = memorySecretStore();
 
-        await importSharePayload(store, secretStore, databasePayloadWithSecrets(), {});
+        await importSharePayload(configFile, secretStore, databasePayloadWithSecrets(), {});
 
-        const databases = getDatabases(store);
+        const databases = await getDatabases(configFile);
         expect(databases).toHaveLength(1);
         expect(databases[0].name).toBe("shared-photos");
         expect(databases[0].path).toBe("shared-photos");
@@ -113,61 +126,62 @@ describe("mobile-share-receive database payload", () => {
     });
 
     test("secrets go to the keychain and only the database entry is written to the key/value store", async () => {
-        const { store, map } = memoryStore();
+        const { map } = memoryStore();
+        const configFile = memoryConfigFile();
         const secretStore = memorySecretStore();
 
-        await importSharePayload(store, secretStore, databasePayloadWithSecrets(), {});
+        await importSharePayload(configFile, secretStore, databasePayloadWithSecrets(), {});
 
         // The three secrets are held in the keychain (secret store), not in localStorage.
         expect((await secretStore.listSecrets()).map(secret => secret.name)).toEqual(
             expect.arrayContaining(["default:s3", "digital-ocean", "geocoding-key"]),
         );
-        // The database entry lives under DATABASES_KEY, and that is the ONLY key/value key touched: no
-        // secret is written to localStorage.
-        expect(map.has(DATABASES_KEY)).toBe(true);
-        expect([...map.keys()]).toEqual([DATABASES_KEY]);
+        // The database entry goes to databases.toml, so nothing at all is written to localStorage:
+        // no secret, and no database list either.
+        expect((await getDatabases(configFile)).map(database => database.name)).toEqual(["shared-photos"]);
+        expect([...map.keys()]).toEqual([]);
     });
 
     test("conflict reuse keeps the existing secret and does not overwrite it", async () => {
-        const { store } = memoryStore();
+        const configFile = memoryConfigFile();
         const secretStore = memorySecretStore();
         // An existing s3 secret of the same name.
         await secretStore.addSecret({ name: "default:s3", type: "s3-credentials" }, "EXISTING-VALUE");
 
         const resolutions: Record<string, IConflictResolution> = { "default:s3": { action: "reuse" } };
-        await importSharePayload(store, secretStore, databasePayloadWithSecrets(), resolutions);
+        await importSharePayload(configFile, secretStore, databasePayloadWithSecrets(), resolutions);
 
         // The existing secret value is untouched, and the entry references the original name.
         expect(await secretStore.getSecretValue("default:s3")).toBe("EXISTING-VALUE");
-        expect(getDatabases(store)[0].s3Key).toBe("default:s3");
+        expect((await getDatabases(configFile))[0].s3Key).toBe("default:s3");
         // There is still exactly one secret of that name.
         expect((await secretStore.listSecrets()).filter(secret => secret.name === "default:s3")).toHaveLength(1);
     });
 
     test("conflict rename stores the incoming secret under the new name and leaves the original", async () => {
-        const { store } = memoryStore();
+        const configFile = memoryConfigFile();
         const secretStore = memorySecretStore();
         await secretStore.addSecret({ name: "default:s3", type: "s3-credentials" }, "EXISTING-VALUE");
 
         const resolutions: Record<string, IConflictResolution> = {
             "default:s3": { action: "rename", newName: "default:s3-imported" },
         };
-        await importSharePayload(store, secretStore, databasePayloadWithSecrets(), resolutions);
+        await importSharePayload(configFile, secretStore, databasePayloadWithSecrets(), resolutions);
 
         // Original untouched; the incoming value is under the new name; the entry references it.
         expect(await secretStore.getSecretValue("default:s3")).toBe("EXISTING-VALUE");
         expect(await secretStore.getSecretValue("default:s3-imported")).toBeDefined();
         expect(JSON.parse((await secretStore.getSecretValue("default:s3-imported"))!).region).toBe("us-east-1");
-        expect(getDatabases(store)[0].s3Key).toBe("default:s3-imported");
+        expect((await getDatabases(configFile))[0].s3Key).toBe("default:s3-imported");
     });
 
     test("conflict replace overwrites the existing secret without throwing on the duplicate name", async () => {
-        const { store } = memoryStore();
+        const configFile = memoryConfigFile();
         const secretStore = memorySecretStore();
         await secretStore.addSecret({ name: "digital-ocean", type: "encryption-key" }, "OLD-PEM");
 
         const resolutions: Record<string, IConflictResolution> = { "digital-ocean": { action: "replace" } };
-        await importSharePayload(store, secretStore, databasePayloadWithSecrets(), resolutions);
+        await importSharePayload(configFile, secretStore, databasePayloadWithSecrets(), resolutions);
 
         // Overwritten in place; exactly one secret of that name remains.
         expect(await secretStore.getSecretValue("digital-ocean")).toBe("-----PRIVATE-----");
@@ -175,30 +189,30 @@ describe("mobile-share-receive database payload", () => {
     });
 
     test("a missing resolution defaults to replace (matching the desktop handler)", async () => {
-        const { store } = memoryStore();
+        const configFile = memoryConfigFile();
         const secretStore = memorySecretStore();
         await secretStore.addSecret({ name: "geocoding-key", type: "api-key" }, "OLD-GEO");
 
         // No resolution provided for the conflicting secret.
-        await importSharePayload(store, secretStore, databasePayloadWithSecrets(), {});
+        await importSharePayload(configFile, secretStore, databasePayloadWithSecrets(), {});
 
         expect(await secretStore.getSecretValue("geocoding-key")).toBe("geo-key-123");
         expect((await secretStore.listSecrets()).filter(secret => secret.name === "geocoding-key")).toHaveLength(1);
     });
 
     test("a duplicate database name throws the verbatim desktop message", async () => {
-        const { store } = memoryStore();
+        const configFile = memoryConfigFile();
         const secretStore = memorySecretStore();
         // Import once to seed the database entry.
-        await importSharePayload(store, secretStore, databasePayloadWithSecrets(), {});
+        await importSharePayload(configFile, secretStore, databasePayloadWithSecrets(), {});
 
         // A second import of the same database name must reject exactly as desktop's addDatabaseEntry does.
-        await expect(importSharePayload(store, secretStore, databasePayloadWithSecrets(), {}))
+        await expect(importSharePayload(configFile, secretStore, databasePayloadWithSecrets(), {}))
             .rejects.toThrow('A database named "shared-photos" already exists.');
     });
 
     test("imports a database with no secrets", async () => {
-        const { store } = memoryStore();
+        const configFile = memoryConfigFile();
         const secretStore = memorySecretStore();
         const payload: IDatabaseSharePayload = {
             type: "database",
@@ -207,18 +221,19 @@ describe("mobile-share-receive database payload", () => {
             path: "simple-db",
         };
 
-        await importSharePayload(store, secretStore, payload, {});
+        await importSharePayload(configFile, secretStore, payload, {});
 
-        expect(getDatabases(store)).toHaveLength(1);
+        expect(await getDatabases(configFile)).toHaveLength(1);
         expect(await secretStore.listSecrets()).toHaveLength(0);
-        expect(getDatabases(store)[0].s3Key).toBeUndefined();
+        expect((await getDatabases(configFile))[0].s3Key).toBeUndefined();
     });
 });
 
 describe("mobile-share-receive secret payload", () => {
 
     test("imports a standalone secret under the chosen save name", async () => {
-        const { store, map } = memoryStore();
+        const { map } = memoryStore();
+        const configFile = memoryConfigFile();
         const secretStore = memorySecretStore();
         const payload: IReceivedSecretPayload = {
             type: "secret",
@@ -228,7 +243,7 @@ describe("mobile-share-receive secret payload", () => {
             saveName: "received-s3",
         };
 
-        await importSharePayload(store, secretStore, payload, {});
+        await importSharePayload(configFile, secretStore, payload, {});
 
         expect(await secretStore.getSecretValue("received-s3")).toBe(payload.value);
         expect(await secretStore.listSecrets()).toEqual([{ name: "received-s3", type: "s3-credentials" }]);
@@ -237,7 +252,7 @@ describe("mobile-share-receive secret payload", () => {
     });
 
     test("importing a standalone secret over an existing name overwrites it", async () => {
-        const { store } = memoryStore();
+        const configFile = memoryConfigFile();
         const secretStore = memorySecretStore();
         await secretStore.addSecret({ name: "received-key", type: "api-key" }, "OLD");
 
@@ -249,7 +264,7 @@ describe("mobile-share-receive secret payload", () => {
             saveName: "received-key",
         };
 
-        await importSharePayload(store, secretStore, payload, {});
+        await importSharePayload(configFile, secretStore, payload, {});
 
         expect(await secretStore.getSecretValue("received-key")).toBe("NEW");
         expect((await secretStore.listSecrets()).filter(secret => secret.name === "received-key")).toHaveLength(1);

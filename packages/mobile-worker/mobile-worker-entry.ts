@@ -21,6 +21,7 @@ import { receiveShareHandler, findReceiverHandler, sendPayloadHandler } from "no
 import { checkDatabaseExistsHandler } from "node-api/src/lib/check-database-exists.worker";
 import { syncDatabaseHandler } from "node-api/src/lib/sync-database.worker";
 import { listS3DirsHandler } from "node-api/src/lib/list-s3-dirs.worker";
+import { readDatabasesConfigHandler, writeDatabasesConfigHandler } from "node-api/src/lib/databases-config.worker";
 import { installWorkerGlobal } from "./src/index";
 
 //
@@ -100,6 +101,12 @@ registerHandler("sync-database", syncDatabaseHandler);
 // and the keychain-backed credentials, so the WebView's S3 browser lists a real bucket rather than
 // rendering the empty-array stub.
 registerHandler("list-s3-dirs", listS3DirsHandler);
+
+// Register the databases.toml handlers: the app's database list and recents live in the same TOML
+// file desktop uses, in the storage sandbox. The WebView has no filesystem access, so these are how
+// the config is read and written.
+registerHandler("read-databases-config", readDatabasesConfigHandler);
+registerHandler("write-databases-config", writeDatabasesConfigHandler);
 
 // Expose the worker entry point (globalThis.__photosphereWorker = { runTask }).
 installWorkerGlobal();

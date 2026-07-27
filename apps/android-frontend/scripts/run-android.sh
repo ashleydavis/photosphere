@@ -13,14 +13,33 @@
 #    60 seconds later as "No sender connected". See emulator.md for why. Rather than leave
 #    that to memory, this starts it correctly when nothing is attached.
 #
-# Usage: apps/android-frontend/scripts/run-android.sh
+# Given a fixture it also copies one of the checked-in test databases into the app's storage and
+# registers it in the app's databases.toml, so it is in the database list when the app starts and is
+# opened by tapping it. That is the same thing registering a database in
+# ~/.config/photosphere/databases.toml does on desktop.
+#
+# Usage: apps/android-frontend/scripts/run-android.sh [fixture]
+#   [fixture]                    50 | 1 | 0, or a directory name under test/dbs (e.g. 1-video, v6)
 #   PHOTOSPHERE_ANDROID_TARGET   deploy to a specific target when several are attached
 #   PHOTOSPHERE_ANDROID_AVD      start a specific AVD (default: the only one, when there is one)
 #   PHOTOSPHERE_NO_LAN_BRIDGE=1  start the emulator normally, without the LAN bridge
+#
+# The fixture works the same on an emulator and on a plugged-in physical device: it goes over
+# `adb push` and `run-as`, which need only that the installed build is debuggable, and the debug APK
+# is. On a phone, plug it in with USB debugging authorised and it is chosen like any other target.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_DIR="$(cd "$APP_ROOT/../.." && pwd)"
+
+# Must match capacitor.config.ts. run-as addresses the app by this id.
+APP_ID="au.com.codecapers.photosphere"
+
+# The app's databases config, relative to its storage sandbox. The mobile counterpart of desktop's
+# ~/.config/photosphere/databases.toml, in the same format. Must match DATABASES_CONFIG_PATH in
+# packages/mobile-frontend/src/lib/mobile-databases-config-file.ts, which is what reads it.
+DATABASES_CONFIG="databases.toml"
 
 # Resolves JAVA_HOME (a JDK 17) and ANDROID_HOME, which both the Gradle build and native-run need.
 source "$SCRIPT_DIR/android-env.sh"
@@ -129,6 +148,106 @@ disable_guest_wifi() {
     echo "Disabled the emulator's wifi so it uses the LAN bridge."
 }
 
+#
+# Maps the short fixture names the package scripts use to the directories under test/dbs. Anything
+# not listed is passed through unchanged, so a fixture the shorthands do not cover (1-video, v6,
+# multi-set) still works without editing this script.
+#
+fixture_dir_name() {
+    case "$1" in
+        50) echo "50-assets" ;;
+        1)  echo "1-asset" ;;
+        0)  echo "no-assets" ;;
+        *)  echo "$1" ;;
+    esac
+}
+
+#
+# Returns 0 when the app is installed on the chosen target.
+#
+app_installed() {
+    "$ADB" -s "$target" shell pm list packages "$APP_ID" 2>/dev/null | tr -d '\r' | grep -q "^package:$APP_ID$"
+}
+
+#
+# Copies the fixture database into the app's private files directory: the sandbox root the native
+# PathSandbox resolves paths against, which is why the app opens it by a plain relative name.
+#
+# The host path is pushed to a world-readable temp location first, then copied in with run-as, which
+# is the only way to write app-private storage (and works because the debug build is debuggable).
+# Each step is a single adb shell command with no shell operators, because `adb shell` re-splits the
+# remote command on spaces and mangles `sh -c "...&&..."` quoting. run-as runs in the app's data
+# directory, so the destination is relative to that.
+#
+# This mirrors android_seed_database in apps/smoke-tests/lib/android.sh, written out again rather
+# than shared because that file is a smoke-test library that assumes the harness's environment
+# (ANDROID_SERIAL binding, log_info, APP_ID from common.sh). A dozen lines of overlap beats dragging
+# the whole harness into a hand-testing script.
+#
+seed_fixture() {
+    local tmp_remote="/data/local/tmp/$FIXTURE_DB"
+    echo "Seeding the '$FIXTURE_DB' database into the app's storage..."
+    "$ADB" -s "$target" shell rm -rf "$tmp_remote" >/dev/null 2>&1 || true
+    "$ADB" -s "$target" push "$FIXTURE_SRC" /data/local/tmp/ >/dev/null
+    "$ADB" -s "$target" shell run-as "$APP_ID" rm -rf "files/$FIXTURE_DB"
+    "$ADB" -s "$target" shell run-as "$APP_ID" cp -r "$tmp_remote" "files/$FIXTURE_DB"
+    "$ADB" -s "$target" shell rm -rf "$tmp_remote" >/dev/null 2>&1 || true
+}
+
+#
+# Registers the seeded database in the app's databases.toml, so it is in the database list when the
+# app starts and is opened by tapping it.
+#
+# This is the same move as registering a database in ~/.config/photosphere/databases.toml on desktop:
+# write the config, the app reads it. Mobile's copy lives in the app's storage sandbox, in the same
+# format (see packages/node-api/src/lib/databases-config-mobile.worker.ts).
+#
+# Existing entries are preserved and one matching this fixture's name is replaced, so running for one
+# fixture never drops another. The merge happens here because the file is rewritten whole either way,
+# and there is no TOML tooling on an emulator.
+#
+register_fixture() {
+    local registry="files/$DATABASES_CONFIG"
+    local existing tmp_local
+
+    # A missing file is the normal state of a device with no databases registered, and starts from
+    # empty. A file that exists but cannot be read is a different thing entirely, and stops the run:
+    # treating it as empty would rewrite the config having never seen what was in it.
+    if "$ADB" -s "$target" shell run-as "$APP_ID" ls "$registry" >/dev/null 2>&1; then
+        if ! existing="$("$ADB" -s "$target" shell run-as "$APP_ID" cat "$registry")"; then
+            echo "ERROR: $registry exists on $target but could not be read. Refusing to overwrite it." >&2
+            exit 1
+        fi
+    else
+        existing=""
+    fi
+
+    tmp_local="$(mktemp)"
+    FIXTURE_DB="$FIXTURE_DB" EXISTING="$existing" bun "$SCRIPT_DIR/write-databases-config.ts" "$tmp_local"
+
+    # Pushed via the shared temp directory, because adb push cannot write app-private storage directly.
+    "$ADB" -s "$target" push "$tmp_local" "/data/local/tmp/$DATABASES_CONFIG" >/dev/null
+    "$ADB" -s "$target" shell run-as "$APP_ID" cp "/data/local/tmp/$DATABASES_CONFIG" "$registry"
+    "$ADB" -s "$target" shell rm -f "/data/local/tmp/$DATABASES_CONFIG" >/dev/null 2>&1 || true
+    rm -f "$tmp_local"
+
+    echo "Registered 'test-$FIXTURE_DB' in the app's database list ($DATABASES_CONFIG)."
+}
+
+# Resolve the fixture before anything slow happens, so a bad name fails immediately rather than after
+# a full build and deploy.
+FIXTURE_DB=""
+FIXTURE_SRC=""
+if [ $# -gt 0 ]; then
+    FIXTURE_DB="$(fixture_dir_name "$1")"
+    FIXTURE_SRC="$REPO_DIR/test/dbs/$FIXTURE_DB"
+    if [ ! -d "$FIXTURE_SRC" ]; then
+        echo "ERROR: no fixture database at test/dbs/$FIXTURE_DB. Available:" >&2
+        ls "$REPO_DIR/test/dbs" | sed 's/^/  /' >&2
+        exit 1
+    fi
+fi
+
 targets="$(attached_targets)"
 target_count="$(echo "$targets" | grep -c . || true)"
 
@@ -156,6 +275,27 @@ fi
 
 echo "Deploying to $target"
 
+# Seeding needs the app installed, because run-as only works on an installed package. When it
+# already is (every run but the first on a given device) seed first, so the deploy stays the last
+# thing this script does. Otherwise the deploy has to come first and the seed follows it.
+seed_first=""
+if [ -n "$FIXTURE_DB" ] && app_installed; then
+    seed_fixture
+    register_fixture
+    seed_first="1"
+fi
+
 # cap must run from the frontend, which is where capacitor.config lives.
 cd "$APP_ROOT"
-exec bunx cap run android --target "$target"
+bunx cap run android --target "$target"
+
+if [ -n "$FIXTURE_DB" ] && [ -z "$seed_first" ]; then
+    seed_fixture
+    register_fixture
+fi
+
+if [ -n "$FIXTURE_DB" ]; then
+    echo
+    echo "'test-$FIXTURE_DB' is in the app's database list on $target. Tap it to open it."
+    echo
+fi

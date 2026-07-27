@@ -714,6 +714,13 @@ final class HostBridge {
     // host.fsRename(srcPath, destPath): renames/moves a sandboxed file, overwriting an existing
     // destination (Node semantics).
     //
+    // The destination is deliberately NOT removed first. Storage writes are write-to-.tmp-then-rename,
+    // so removing the destination left the real path missing for a moment and a concurrent reader that
+    // had already passed its access check then got ENOENT from stat, which made reads of databases.toml
+    // fail intermittently. The Android fix cannot be copied across: moveItem fails when the destination
+    // exists, so simply dropping removeItem would break the overwrite. replaceItemAt is the atomic
+    // replace and requires an existing destination, so each case takes the call that fits it.
+    //
     func fsRename(srcPath: String, destPath: String) throws {
         let source = try PathSandbox.resolveWithin(root: storageRoot, candidate: srcPath)
         let destination = try PathSandbox.resolveWithin(root: storageRoot, candidate: destPath)
@@ -724,9 +731,11 @@ final class HostBridge {
             try fileManager.createDirectory(at: parent, withIntermediateDirectories: true)
         }
         if fileManager.fileExists(atPath: destination.path) {
-            try fileManager.removeItem(at: destination)
+            _ = try fileManager.replaceItemAt(destination, withItemAt: source)
         }
-        try fileManager.moveItem(at: source, to: destination)
+        else {
+            try fileManager.moveItem(at: source, to: destination)
+        }
     }
 
     //

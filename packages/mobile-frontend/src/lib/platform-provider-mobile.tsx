@@ -13,6 +13,7 @@ import { MobileSecretStore } from "./mobile-secure-store";
 import { createCapacitorSecureStore } from "./secure-store-plugin";
 import { importSharePayload as importReceivedShare, type IReceivedSharePayload } from "./mobile-share-receive";
 import { MobileSyncScheduler, SYNC_TASK_TYPE } from "./mobile-sync-scheduler";
+import { mobileDatabasesConfigFile } from "./mobile-databases-config-file";
 import type { IConflictResolution } from "lan-share-core";
 
 //
@@ -163,9 +164,9 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
     const notifyDatabaseOpened = useCallback(async (databasePath: string): Promise<void> => {
         // Record the opened database as most-recent (look up its registered name, else use the path's
         // final segment) and log a line matching the desktop main process so smoke tests observe it.
-        const known = configStore.findDatabaseByPath(persistentStore, databasePath);
+        const known = await configStore.findDatabaseByPath(mobileDatabasesConfigFile, databasePath);
         const name = known?.name ?? configStore.databaseBasename(databasePath);
-        configStore.addRecentDatabase(persistentStore, known ?? { name, description: "", path: databasePath });
+        await configStore.addRecentDatabase(mobileDatabasesConfigFile, known ?? { name, description: "", path: databasePath });
         log.info(`Database opened: ${configStore.databaseBasename(databasePath)}`);
         // Point the sync scheduler at the newly opened database and start its periodic timer, so
         // subsequent edits and the periodic interval enqueue syncs for this database.
@@ -206,19 +207,19 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         // Test setup: seed the configured-databases list (mirrors desktop seeding databases.toml).
         const handleSeedDatabases = (event: Event) => {
             const databases = (event as CustomEvent<IDatabaseEntry[]>).detail || [];
-            configStore.seedDatabases(persistentStore, databases);
+            void configStore.seedDatabases(mobileDatabasesConfigFile, databases);
         };
         // Test setup: seed the recent-databases list.
         const handleSeedRecent = (event: Event) => {
             const databases = (event as CustomEvent<IDatabaseEntry[]>).detail || [];
-            configStore.seedRecentDatabases(persistentStore, databases);
+            void configStore.seedRecentDatabases(mobileDatabasesConfigFile, databases);
         };
         // Test setup: clear all persisted config for a deterministic starting state. Secrets live in the
         // keychain, not localStorage, so they are cleared from the keychain too (resetConfig only removes
         // localStorage keys, which no longer hold any secret).
         const handleResetConfig = (event: Event) => {
-            configStore.resetConfig(persistentStore);
             const detail = (event as CustomEvent<ITestResetConfigEventDetail>).detail;
+            detail.waitFor(configStore.resetConfig(persistentStore, mobileDatabasesConfigFile));
             detail.waitFor(secretStore.clearSecrets());
         };
         // Test setup: stage picked file paths so the next pickFiles resolves with them instead of
@@ -422,30 +423,30 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
     }, []);
 
     const getDatabases = useCallback(async (): Promise<IDatabaseEntry[]> => {
-        return configStore.getDatabases(persistentStore);
+        return configStore.getDatabases(mobileDatabasesConfigFile);
     }, []);
 
     const addDatabase = useCallback(async (entry: IDatabaseEntry): Promise<IDatabaseEntry> => {
-        const added = configStore.addDatabase(persistentStore, entry);
+        const added = await configStore.addDatabase(mobileDatabasesConfigFile, entry);
         // Matches the desktop main process so smoke tests observe the same log line.
         log.info("Database entry added");
         return added;
     }, []);
 
     const updateDatabase = useCallback(async (originalName: string, entry: IDatabaseEntry): Promise<void> => {
-        configStore.updateDatabase(persistentStore, originalName, entry);
+        await configStore.updateDatabase(mobileDatabasesConfigFile, originalName, entry);
     }, []);
 
     const setDatabaseOrigin = useCallback(async (databasePath: string, origin: string | undefined): Promise<void> => {
-        configStore.setDatabaseOrigin(persistentStore, databasePath, origin);
+        await configStore.setDatabaseOrigin(mobileDatabasesConfigFile, databasePath, origin);
     }, []);
 
     const removeDatabaseEntry = useCallback(async (name: string): Promise<void> => {
-        configStore.removeDatabase(persistentStore, name);
+        await configStore.removeDatabase(mobileDatabasesConfigFile, name);
     }, []);
 
     const findDatabase = useCallback(async (name: string): Promise<IDatabaseEntry | undefined> => {
-        return configStore.findDatabase(persistentStore, name);
+        return configStore.findDatabase(mobileDatabasesConfigFile, name);
     }, []);
 
     const pickFolder = useCallback(async (options?: IPickFolderOptions): Promise<string | undefined> => {
@@ -520,11 +521,11 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
     }, []);
 
     const getRecentDatabases = useCallback(async (): Promise<IDatabaseEntry[]> => {
-        return configStore.getRecentDatabases(persistentStore);
+        return configStore.getRecentDatabases(mobileDatabasesConfigFile);
     }, []);
 
     const removeRecentDatabaseName = useCallback(async (name: string): Promise<void> => {
-        configStore.removeRecentDatabase(persistentStore, name);
+        await configStore.removeRecentDatabase(mobileDatabasesConfigFile, name);
         // Matches the desktop main process so smoke tests observe the same log line.
         log.info(`Recent database removed: ${name}`);
     }, []);
@@ -551,7 +552,7 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
     const importSharePayload = useCallback(async (payload: unknown, conflictResolutions: Record<string, unknown>): Promise<void> => {
         // Imports a LAN-received database (into the config store) or secret (into the device keychain
         // via secretStore, per step 6b); see mobile-share-receive.ts.
-        await importReceivedShare(persistentStore, secretStore, payload as IReceivedSharePayload, conflictResolutions as Record<string, IConflictResolution>);
+        await importReceivedShare(mobileDatabasesConfigFile, secretStore, payload as IReceivedSharePayload, conflictResolutions as Record<string, IConflictResolution>);
     }, []);
 
     const markUpdateAsShown = useCallback(async (_version: string): Promise<void> => {

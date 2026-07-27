@@ -203,9 +203,19 @@ public final class HostFunctions {
     }
 
     //
-    // host.fsRename(srcPath, destPath): renames/moves a sandboxed file. Removes an existing
-    // destination first (Node rename overwrites), and falls back to copy+delete when a direct rename
-    // is not possible (for example across directories). Both paths are sandbox-validated.
+    // host.fsRename(srcPath, destPath): renames/moves a sandboxed file. Falls back to copy+delete when
+    // a direct rename is not possible (for example across directories). Both paths are sandbox-validated.
+    //
+    // The destination is deliberately NOT deleted first. Storage writes are write-to-.tmp-then-rename,
+    // so unlinking the destination left the real path missing for a moment and a concurrent reader that
+    // had already passed its access check then got ENOENT from stat. That is what made reads of
+    // databases.toml fail intermittently. On internal storage (ext4/f2fs) renameTo is a POSIX rename(2),
+    // which replaces an existing destination atomically, so the delete bought nothing. Note this rests
+    // on the platform rather than on the API contract: the File.renameTo Javadoc refuses to guarantee
+    // either overwrite or atomicity. Where renameTo does refuse, the copy fallback below still handles
+    // it, though that path opens the destination for writing and so truncates: a narrower window in
+    // which a reader can see a partial file rather than a missing one, not zero. Serialising config
+    // reads against writes is the proper fix and is out of scope here.
     //
     public static void fsRename(File storageRoot, String srcPath, String destPath) {
         File source = PathSandbox.resolveWithin(storageRoot, srcPath);
@@ -214,9 +224,6 @@ public final class HostFunctions {
         File parent = destination.getParentFile();
         if (parent != null && !parent.exists()) {
             parent.mkdirs();
-        }
-        if (destination.exists()) {
-            destination.delete();
         }
 
         if (source.renameTo(destination)) {

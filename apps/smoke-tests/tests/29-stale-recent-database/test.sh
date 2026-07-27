@@ -26,7 +26,11 @@ send_command "$APP_PORT" reset-config '{}' || exit 1
 # Seed a real database on the device so there is an open database to leave alone.
 create_database "$TMP_DIR/test-db"
 "${PLATFORM}_seed_database" "$TMP_DIR/test-db" "$DB_NAME"
-send_command "$APP_PORT" seed-databases "{\"databases\":[{\"name\":\"$DB_NAME\",\"path\":\"$DB_NAME\"}]}" || exit 1
+# The stale entry is configured too, because recents are stored as names and resolved against the
+# configured-databases list: an unconfigured recent is dropped on read and would never render, so the
+# stale case could not arise. Its files are still never staged on the device, which is what makes it
+# stale.
+send_command "$APP_PORT" seed-databases "{\"databases\":[{\"name\":\"$DB_NAME\",\"path\":\"$DB_NAME\"},{\"name\":\"stale-db\",\"path\":\"stale-db\"}]}" || exit 1
 
 # Seed the recent list with the real database (index 0) plus a stale entry (index 1) whose files were
 # never staged on the device, so checkDatabaseExists must report the stale entry absent.

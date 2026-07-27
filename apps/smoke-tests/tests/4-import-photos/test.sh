@@ -46,7 +46,9 @@ send_command "$APP_PORT" menu '{"itemId":"open-database"}' || exit 1
 wait_for_log "$TMP_DIR" "Open database dialog opened"
 
 send_command "$APP_PORT" click '{"dataId":"database-list-item-0"}' || exit 1
-wait_for_log "$TMP_DIR" "Database opened"
+# "Load assets task completed" is now logged before "Database opened", so waiting for the open first
+# would advance the log cursor past the load line and then time out. The load line already proves the
+# database opened, so it is the only wait needed.
 wait_for_log "$TMP_DIR" "Load assets task completed: 0 assets loaded"
 
 # Go to the import page.

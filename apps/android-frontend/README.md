@@ -52,4 +52,22 @@ cd apps/android-frontend
 bun run run
 ```
 
-Or from the repo root: `bun run run:and`.
+Or from the repo root: `bun run run:and`, or its alias `bun run and`.
+
+### Running with a test database
+
+A freshly installed app has no database in it, and there is no way to open one from the host. To get something to look at, pass a fixture: the run copies one of the checked-in databases from `test/dbs/` into the app's storage.
+
+```bash
+bun run and50   # 50 assets
+bun run and1    # 1 asset
+bun run and0    # an empty database
+```
+
+(`run:and:50`, `run:and:1` and `run:and:0` are the long names for the same thing.)
+
+The app opens the database itself. Once, per device: **Databases** page, menu, **Add database**, and give it the fixture's name (`50-assets`, `1-asset` or `no-assets`) as the path. Adding auto-opens it, and the entry is remembered from then on, so later runs just refresh the data underneath it.
+
+Any other directory under `test/dbs/` works too, by name: `bun run --filter=android-frontend run 1-video`.
+
+This works on a physical device as well as an emulator. The database goes over `adb push` and `run-as`, which need only a debuggable build, and the debug APK is one. Plug the phone in with USB debugging authorised and it is chosen as the target like any other device.

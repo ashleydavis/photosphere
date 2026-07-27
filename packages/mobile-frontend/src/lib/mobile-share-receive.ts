@@ -1,5 +1,5 @@
 import * as configStore from "./mobile-config-store";
-import type { IKeyValueStore } from "./mobile-config-store";
+import type { IDatabasesConfigFile } from "./mobile-config-store";
 import type { MobileSecretStore } from "./mobile-secure-store";
 import { importShareSecrets } from "lan-share-core";
 import type { IShareSecretStore, IDatabaseSharePayload, ISecretSharePayload, IConflictResolution, ConflictResolver } from "lan-share-core";
@@ -57,14 +57,14 @@ function resolverFromMap(conflictResolutions: Record<string, IConflictResolution
 // per-secret conflict resolutions) and adds the database entry referencing the resolved secret names.
 // Throws the exact desktop message when the database name already exists.
 //
-async function importDatabasePayload(store: IKeyValueStore, secretStore: MobileSecretStore, payload: IDatabaseSharePayload, conflictResolutions: Record<string, IConflictResolution>): Promise<void> {
+async function importDatabasePayload(configFile: IDatabasesConfigFile, secretStore: MobileSecretStore, payload: IDatabaseSharePayload, conflictResolutions: Record<string, IConflictResolution>): Promise<void> {
     const resolvedKeys = await importShareSecrets(payload, keychainSecretStore(secretStore), resolverFromMap(conflictResolutions));
 
-    if (configStore.findDatabase(store, payload.name)) {
+    if (await configStore.findDatabase(configFile, payload.name)) {
         throw new Error(`A database named "${payload.name}" already exists.`);
     }
 
-    configStore.addDatabase(store, {
+    await configStore.addDatabase(configFile, {
         name: payload.name,
         description: payload.description,
         path: payload.path,
@@ -89,9 +89,9 @@ async function importSecretPayload(secretStore: MobileSecretStore, payload: IRec
 // entries) and device keychain (secrets), applying per-secret conflict resolutions for a database
 // payload. This is the mobile counterpart of the desktop 'import-share-payload' IPC handler.
 //
-export async function importSharePayload(store: IKeyValueStore, secretStore: MobileSecretStore, payload: IReceivedSharePayload, conflictResolutions: Record<string, IConflictResolution>): Promise<void> {
+export async function importSharePayload(configFile: IDatabasesConfigFile, secretStore: MobileSecretStore, payload: IReceivedSharePayload, conflictResolutions: Record<string, IConflictResolution>): Promise<void> {
     if (payload.type === "database") {
-        await importDatabasePayload(store, secretStore, payload, conflictResolutions);
+        await importDatabasePayload(configFile, secretStore, payload, conflictResolutions);
     }
     else if (payload.type === "secret") {
         await importSecretPayload(secretStore, payload);
