@@ -418,6 +418,52 @@ test_has_marker() {
 }
 
 #
+# Returns 0 when a test's own directory name is selected by the given filter, so a single test can
+# be iterated on without the full build-install-every-test cycle. An empty filter selects every test.
+#
+# A filter of only digits selects by test number, matching the number in front of the directory name
+# exactly: `2` runs 2-create-database and not 12-edit-api-key, 22-edit-database-origin or any of the
+# other dozen-odd directories a plain substring match would drag in. Numbers are not unique here (9
+# and 17 are each used twice), so a numeric filter can legitimately select more than one test.
+#
+# Any other filter is a case-insensitive substring of the directory name, so `stale-recent`,
+# `29-stale-recent-database` and `Stale` all select the same test.
+# Usage: test_matches_filter <test_name> <filter>
+#
+test_matches_filter() {
+    local test_name="$1"
+    local filter="$2"
+
+    if [ -z "$filter" ]; then
+        return 0
+    fi
+
+    case "$filter" in
+        *[!0-9]*) ;;
+        *)
+            # Numeric filter: compare against the leading number only.
+            local number="${test_name%%-*}"
+            case "$number" in
+                ""|*[!0-9]*) return 1 ;;
+            esac
+            # 10# so a leading zero is not read as octal.
+            [ "$((10#$number))" -eq "$((10#$filter))" ]
+            return
+            ;;
+    esac
+
+    # Lowercased with tr rather than ${var,,}, which needs bash 4 and so is not available under the
+    # bash macOS ships for the iOS runs.
+    local lower_name lower_filter
+    lower_name="$(printf '%s' "$test_name" | tr '[:upper:]' '[:lower:]')"
+    lower_filter="$(printf '%s' "$filter" | tr '[:upper:]' '[:lower:]')"
+    case "$lower_name" in
+        *"$lower_filter"*) return 0 ;;
+    esac
+    return 1
+}
+
+#
 # Prints the tests with the .slow-marked ones first, otherwise preserving the given order.
 # Usage: order_tests <test_path...>
 #

@@ -49,10 +49,43 @@ cleanup_all_devices() {
 }
 
 main() {
-    # Optional first argument narrows the run to test dirs whose name contains it (e.g.
-    # "29-stale-recent-database" or "stale-recent"), so a single test can be iterated without the
-    # full build-install-27-tests cycle. An absent argument runs every test.
+    # Optional first argument narrows the run to one test, by number ("29") or by name
+    # ("29-stale-recent-database" or "stale-recent"), so it can be iterated on without the full
+    # build-install-every-test cycle. See test_matches_filter. An absent argument runs every test.
     local filter="${1:-}"
+
+    # Selected up front, before the emulator check and the build, so a filter that matches nothing
+    # fails in a second rather than after a full build-and-install.
+    local tests=()
+    local test_path test_name
+    while IFS= read -r test_path; do
+        test_name="$(basename "$(dirname "$test_path")")"
+        if test_matches_filter "$test_name" "$filter"; then
+            tests+=("$test_path")
+        fi
+    done < <(discover_tests)
+
+    if [ ${#tests[@]} -eq 0 ]; then
+        if [ -n "$filter" ]; then
+            # A filter that matches nothing is an error, not a silent zero-test pass. The available
+            # tests are listed because the usual cause is a mistyped name or a number that moved.
+            log_error "No tests matched: $filter"
+            echo "Available tests:"
+            discover_tests | while IFS= read -r test_path; do
+                echo "  $(basename "$(dirname "$test_path")")"
+            done
+            exit 1
+        fi
+        echo "No tests found in tests/"
+        exit 0
+    fi
+
+    if [ -n "$filter" ]; then
+        log_info "Selected ${#tests[@]} test(s) matching '$filter':"
+        for test_path in "${tests[@]}"; do
+            echo "  $(basename "$(dirname "$test_path")")"
+        done
+    fi
 
     # Android: fail immediately unless the emulator is already started and on the LAN bridge. This
     # never boots or changes the emulator; readiness is set up by hand. The single-run lock is taken
@@ -100,26 +133,6 @@ main() {
     # and import into do not pile up until a device runs out of storage. Deregistering here too, so
     # an interrupted run does not leave a registration behind shrinking the other suites' shares.
     trap 'cleanup_all_devices; deregister_suite' EXIT
-
-    local tests=()
-    while IFS= read -r test_path; do
-        local test_name
-        test_name="$(basename "$(dirname "$test_path")")"
-        if [ -n "$filter" ] && [[ "$test_name" != *"$filter"* ]]; then
-            continue
-        fi
-        tests+=("$test_path")
-    done < <(discover_tests)
-
-    if [ ${#tests[@]} -eq 0 ]; then
-        if [ -n "$filter" ]; then
-            # A filter that matches nothing is an error, not a silent zero-test pass.
-            echo "No tests matched filter: $filter"
-            exit 1
-        fi
-        echo "No tests found in tests/"
-        exit 0
-    fi
 
     # The slowest test starts first, so it is not the last thing still running while every other
     # worker sits idle.

@@ -165,6 +165,41 @@ check "test_has_marker is false for a directory without the marker" "1" "$?"
 test_has_marker "$WORK/tests/absent/test.sh" ".exclusive"
 check "test_has_marker is false for a missing directory" "1" "$?"
 
+echo "== test_matches_filter =="
+
+test_matches_filter "2-create-database" ""
+check "an empty filter selects every test" "0" "$?"
+
+test_matches_filter "2-create-database" "2"
+check "a number selects the test with that number" "0" "$?"
+test_matches_filter "12-edit-api-key" "2"
+check "a number does not select a test whose number merely contains it" "1" "$?"
+test_matches_filter "22-edit-database-origin" "2"
+check "a number does not select a test whose number repeats it" "1" "$?"
+test_matches_filter "29-stale-recent-database" "29"
+check "a two digit number selects the test with that number" "0" "$?"
+test_matches_filter "2-create-database" "02"
+check "a leading zero on the filter still matches, and is not read as octal" "0" "$?"
+test_matches_filter "8-share-database" "2"
+check "a number does not select a test whose name contains it elsewhere" "1" "$?"
+
+# 9 and 17 are each used by two tests, so a numeric filter is allowed to select more than one.
+test_matches_filter "9-view-secret" "9"
+check "a shared number selects the first test using it" "0" "$?"
+test_matches_filter "9-share-roundtrip" "9"
+check "a shared number selects the second test using it too" "0" "$?"
+
+test_matches_filter "29-stale-recent-database" "29-stale-recent-database"
+check "a full name selects that test" "0" "$?"
+test_matches_filter "29-stale-recent-database" "stale-recent"
+check "part of a name selects that test" "0" "$?"
+test_matches_filter "29-stale-recent-database" "STALE"
+check "a name filter ignores case" "0" "$?"
+test_matches_filter "2-create-database" "stale-recent"
+check "a name filter does not select an unrelated test" "1" "$?"
+test_matches_filter "2-create-database" "nonexistent"
+check "a name filter that matches nothing selects nothing" "1" "$?"
+
 echo "== order_tests =="
 
 PLAIN_ONE="$(make_stub plain-one 0 0)"

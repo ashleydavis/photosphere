@@ -63,7 +63,7 @@ Everything below is run from the repo root.
 | `bun run compile` | Compile all TypeScript. Optional, but the way to check a change still compiles. |
 | `bun run test` | Unit tests. |
 | `bun run test:all` | Unit tests plus the CLI and Electron smoke tests. |
-| `bun run test:and` / `bun run test:ios` | Mobile smoke tests, on the Android emulator/device or iOS simulator. `bun run test:and -- <n>` runs a single numbered test. |
+| `bun run test:and` / `bun run test:ios` | Mobile smoke tests, on the Android emulator/device or iOS simulator. `bun run test:and <n>` runs a single test by number, `bun run test:and <name>` by name. |
 | `bun run build` | Production build of the Electron app for distribution. |
 | `bun run clean` | Remove build artifacts. |
 

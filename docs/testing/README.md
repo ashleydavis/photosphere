@@ -68,11 +68,17 @@ bun run test:and   # Android emulator or attached device
 bun run test:ios   # iOS simulator (needs macOS with Xcode)
 ```
 
-Run a single mobile smoke test by number:
+Run a single mobile smoke test by number or by name:
 
 ```bash
-bun run test:and -- 26
+bun run test:and 26                     # by number
+bun run test:and receive-database       # by part of the name
+bun run test:and 26-receive-database    # by full directory name
 ```
+
+A number matches the number in front of the directory name exactly, so `2` runs `2-create-database` and not `12-edit-api-key` or `22-edit-database-origin`. Two tests share a number today (`9` and `17`), so those two numbers each select a pair. Anything that is not all digits is a case-insensitive substring of the directory name. The same argument works on `bun run test:ios`.
+
+Tests are selected before the emulator check and the build, so a mistyped name fails immediately and lists the available tests instead of wasting a build. `bun run test:and -- 26` also still works, if you prefer the explicit `--`.
 
 The assertion helpers the tests call (`wait_for_value`, `assert_value`, and the rest of `common.sh`) are fatal: a helper failure ends the test immediately rather than letting it continue past a bad assumption.
 
