@@ -174,27 +174,19 @@ final class TlsHost {
     }
 
     //
-    // host.tlsConnect(host, port, mode): opens a TLS client connection in the given trust mode, completes
-    // the handshake, and returns a JSON string { connectionId, peerCertBase64 } (the server's cert DER,
-    // base64) so the JS side can pin it. `mode` is REQUIRED: "pinned" trusts any certificate (LAN share
-    // pins it in JS by comparing it to the one in the UDP broadcast); "validated" validates the CA chain
-    // and the hostname against the system trust store (S3). An unknown mode is an error, so the S3 path
-    // can never accidentally downgrade to trust-all. Streams inbound bytes on the network queue. Returns
-    // an error envelope on failure.
+    // host.tlsConnect(host, port): opens a TLS client connection, completes the handshake, and returns a
+    // JSON string { connectionId, peerCertBase64 } (the server's cert DER, base64) so the JS side can pin
+    // it. Any server certificate is trusted at the transport level: LAN share, the only caller, presents
+    // a runtime self-signed cert and pins it in JS by comparing it to the one in the UDP broadcast.
+    // Streams inbound bytes on the network queue. Returns an error envelope on failure.
     //
-    func tlsConnect(host: String, port: Int, mode: String) -> String {
+    func tlsConnect(host: String, port: Int) -> String {
         guard let nwPort = NWEndpoint.Port(rawValue: UInt16(port)) else {
             return HostBridge.hostErrorEnvelope(NSError(domain: "tls", code: 0, userInfo: [NSLocalizedDescriptionKey: "tlsConnect: invalid port"]))
         }
 
-        let validated = mode == "validated"
-        if !validated && mode != "pinned" {
-            return HostBridge.hostErrorEnvelope(NSError(domain: "tls", code: 0, userInfo: [NSLocalizedDescriptionKey: "tlsConnect: unknown TLS mode '\(mode)'"]))
-        }
-
-        // Capture the server's leaf certificate during the handshake. In "pinned" mode any certificate is
-        // trusted (the JS side pins it); in "validated" mode the chain and hostname are evaluated against
-        // the system trust store, so a bad certificate fails the handshake.
+        // Capture the server's leaf certificate during the handshake and accept it; the JS side decides
+        // whether to keep the connection by comparing the fingerprint to the pinned one.
         let peerCertBox = PeerCertificateBox()
         let tlsOptions = NWProtocolTLS.Options()
         sec_protocol_options_set_verify_block(tlsOptions.securityProtocolOptions, { _, trust, complete in
@@ -202,15 +194,7 @@ final class TlsHost {
             if SecTrustGetCertificateCount(secTrust) > 0, let certificate = SecTrustGetCertificateAtIndex(secTrust, 0) {
                 peerCertBox.certificateDer = SecCertificateCopyData(certificate) as Data
             }
-            if validated {
-                SecTrustSetPolicies(secTrust, SecPolicyCreateSSL(true, host as CFString))
-                var evaluationError: CFError?
-                let trusted = SecTrustEvaluateWithError(secTrust, &evaluationError)
-                complete(trusted)
-            }
-            else {
-                complete(true)
-            }
+            complete(true)
         }, networkQueue)
 
         let parameters = NWParameters(tls: tlsOptions)

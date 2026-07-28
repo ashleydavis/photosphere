@@ -137,7 +137,7 @@ public final class TlsHostTest {
         assertFalse("listen is not an error envelope: " + listenJson, listenJson.startsWith("@@HOSTERR@@"));
         int port = portOf(listenJson);
 
-        String connectJson = tlsHost.tlsConnect("127.0.0.1", port, "pinned");
+        String connectJson = tlsHost.tlsConnect("127.0.0.1", port);
         assertFalse("connect is not an error envelope: " + connectJson, connectJson.startsWith("@@HOSTERR@@"));
         String clientConnId = jsonString(connectJson, "connectionId");
         String peerCertBase64 = jsonString(connectJson, "peerCertBase64");
@@ -174,20 +174,10 @@ public final class TlsHostTest {
     }
 
     @Test
-    public void validatedModeRejectsASelfSignedCertificate() throws Exception {
-        // The self-signed server certificate is not in the system trust store, so a "validated" connect
-        // must fail (fail-closed). This is the native half of the S3 bad-certificate test.
-        String listenJson = tlsHost.tlsListen("127.0.0.1", 0, CERT_PEM, KEY_PEM);
-        assertFalse("listen is not an error envelope: " + listenJson, listenJson.startsWith("@@HOSTERR@@"));
-        int port = portOf(listenJson);
-
-        String connectJson = tlsHost.tlsConnect("127.0.0.1", port, "validated");
-        assertTrue("validated connect to a self-signed server must fail: " + connectJson, connectJson.startsWith("@@HOSTERR@@"));
-    }
-
-    @Test
-    public void unknownModeIsAnError() {
-        String connectJson = tlsHost.tlsConnect("127.0.0.1", 1, "trust-all");
-        assertTrue("an unknown TLS mode must be an error envelope: " + connectJson, connectJson.startsWith("@@HOSTERR@@"));
+    public void aFailedConnectIsAnErrorEnvelope() {
+        // Nothing is listening on port 1, so the connect must surface as an error envelope rather than a
+        // half-built connection the JS side would treat as usable.
+        String connectJson = tlsHost.tlsConnect("127.0.0.1", 1);
+        assertTrue("a failed connect must be an error envelope: " + connectJson, connectJson.startsWith("@@HOSTERR@@"));
     }
 }

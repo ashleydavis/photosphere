@@ -123,7 +123,7 @@ public final class HostBridgeDelegationTest {
         assertTrue(listen.startsWith("@@HOSTERR@@"));
 
         // Connecting to a refused port exercises the delegation and returns an error envelope.
-        String connect = bridge.tlsConnect("127.0.0.1", 1, "pinned");
+        String connect = bridge.tlsConnect("127.0.0.1", 1);
         assertTrue(connect.startsWith("@@HOSTERR@@"));
     }
 

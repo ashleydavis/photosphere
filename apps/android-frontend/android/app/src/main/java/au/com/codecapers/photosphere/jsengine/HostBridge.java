@@ -131,12 +131,11 @@ public final class HostBridge {
     }
 
     //
-    // host.tlsConnect(host, port, mode): opens a cert-capturing TLS client in the given trust mode
-    // ("pinned" trusts any cert for JS-side pinning; "validated" validates the CA chain and hostname)
-    // and returns JSON { connectionId, peerCertBase64 }.
+    // host.tlsConnect(host, port): opens a cert-capturing TLS client that trusts any server certificate
+    // (the JS side pins it) and returns JSON { connectionId, peerCertBase64 }.
     //
-    public String tlsConnect(String host, int port, String mode) {
-        return tls.tlsConnect(host, port, mode);
+    public String tlsConnect(String host, int port) {
+        return tls.tlsConnect(host, port);
     }
 
     //

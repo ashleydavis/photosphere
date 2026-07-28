@@ -16,7 +16,7 @@
 
 import { Buffer } from "buffer";
 import { IncomingMessage, ServerResponse } from "./node-http";
-import { Server as TlsServer, connectClient, type TLSSocket, type ITlsServerOptions, type TlsConnectMode } from "./node-tls";
+import { Server as TlsServer, connectClient, type TLSSocket, type ITlsServerOptions } from "./node-tls";
 import type { Socket as NetSocket } from "./node-net";
 
 //
@@ -148,13 +148,13 @@ export class ClientRequest extends TinyEmitter {
     private aborted = false;
 
     //
-    // Builds the request, opens the TLS connection in the given trust mode, and schedules the send
-    // after the handshake. The mode is explicit: "pinned" for LAN share (the caller pins the cert),
-    // "validated" for S3 (native validates the CA chain and hostname).
+    // Builds the request, opens the TLS connection, and schedules the send after the handshake. The
+    // connection trusts any certificate at the transport level; the caller pins it in its
+    // `secureConnect` handler and destroys the request on a mismatch.
     //
-    constructor(options: IRequestOptions, callback: (response: IClientResponse) => void, tlsMode: TlsConnectMode) {
+    constructor(options: IRequestOptions, callback: (response: IClientResponse) => void) {
         super();
-        this.socket = connectClient(options.port, options.hostname, tlsMode);
+        this.socket = connectClient(options.port, options.hostname);
 
         // Sequence the events so a `socket` handler that attaches a `secureConnect` listener observes
         // the handshake, then send the request only if the caller did not abort during pinning.
@@ -431,25 +431,18 @@ export function createServer(options: ITlsServerOptions, requestListener: (req: 
 }
 
 //
-// Makes an HTTPS request, mirroring https.request(options, callback). Returns a ClientRequest. This is
-// the LAN-share path: the connection uses "pinned" trust (native trusts any cert; the caller pins it).
+// Makes an HTTPS request, mirroring https.request(options, callback). Returns a ClientRequest.
+//
+// LAN share is the only caller. It pins the peer certificate itself, so the connection trusts any
+// certificate at the transport level and validation is left to the caller's `secureConnect` handler.
 //
 export function request(options: IRequestOptions, callback: (response: IClientResponse) => void): ClientRequest {
-    return new ClientRequest(options, callback, "pinned");
-}
-
-//
-// Makes an HTTPS request over a "validated" TLS connection (native validates the CA chain and
-// hostname). This is the S3 path, and it is a separate entry point so the S3 client can NEVER select
-// the trust-all/pinned mode: an S3 request is validated by construction.
-//
-export function requestValidated(options: IRequestOptions, callback: (response: IClientResponse) => void): ClientRequest {
-    return new ClientRequest(options, callback, "validated");
+    return new ClientRequest(options, callback);
 }
 
 //
 // The default export mirrors `import https from "https"`.
 //
-const httpsModule = { Server, ClientRequest, createServer, request, requestValidated };
+const httpsModule = { Server, ClientRequest, createServer, request };
 
 export default httpsModule;

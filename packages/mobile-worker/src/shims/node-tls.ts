@@ -17,15 +17,6 @@ import { Buffer } from "buffer";
 import { callHost } from "./host-access";
 
 //
-// The TLS client trust mode, chosen explicitly per connection (no default):
-//   - "pinned": native installs a trust-all manager and the JS side pins the peer cert itself (LAN
-//     share, which presents a runtime self-signed cert).
-//   - "validated": native performs real CA-chain and hostname validation (S3 over public HTTPS).
-// This is a required argument so the S3 path can never accidentally downgrade to trust-all.
-//
-export type TlsConnectMode = "pinned" | "validated";
-
-//
 // The subset of native host functions the tls shim calls. Synchronous native callables following the
 // same error-envelope convention as the other host functions; tlsListen/tlsConnect return JSON strings.
 //
@@ -33,9 +24,9 @@ export interface ITlsHost {
     // Binds a TLS listener using the given PEM cert/key and returns a JSON string { listenerId, port }.
     tlsListen: (host: string, port: number, certPem: string, keyPem: string) => string;
 
-    // Opens a TLS client connection in the given trust mode ("pinned" trusts any cert; "validated"
-    // validates the CA chain and hostname) and returns a JSON string { connectionId, peerCertBase64 }.
-    tlsConnect: (host: string, port: number, mode: string) => string;
+    // Opens a TLS client connection, trusting any server certificate so the JS side can pin it, and
+    // returns a JSON string { connectionId, peerCertBase64 }.
+    tlsConnect: (host: string, port: number) => string;
 
     // Writes base64-encoded bytes to a TLS connection.
     tlsWrite: (connectionId: string, base64: string) => string | null;
@@ -434,12 +425,12 @@ export function createServer(options: ITlsServerOptions, connectionListener?: (s
 // optional `secureConnect` callback. The handshake completes synchronously in native (tlsConnect
 // returns the peer cert), so `secureConnect` is emitted on a microtask.
 //
-export function connect(port: number, host: string, mode: TlsConnectMode, options?: (() => void) | Record<string, unknown>, callback?: () => void): TLSSocket {
+export function connect(port: number, host: string, options?: (() => void) | Record<string, unknown>, callback?: () => void): TLSSocket {
     const actualHost = typeof host === "string" ? host : "127.0.0.1";
     const actualCallback = typeof options === "function" ? options : callback;
 
     const tlsHost = getTlsHost();
-    const resultJson = callHost(() => tlsHost.tlsConnect(actualHost, port, mode)) as string;
+    const resultJson = callHost(() => tlsHost.tlsConnect(actualHost, port)) as string;
     const result = JSON.parse(resultJson) as ITlsConnectResult;
     const socket = new TLSSocket(result.connectionId, result.peerCertBase64);
     activeTlsSockets.set(result.connectionId, socket);
@@ -456,15 +447,15 @@ export function connect(port: number, host: string, mode: TlsConnectMode, option
 }
 
 //
-// Opens a TLS client connection in the given trust mode and returns the connected socket WITHOUT
-// scheduling a `secureConnect` event. The handshake has already completed in native (the peer cert is
-// available immediately), so the caller drives the `secureConnect` timing itself. Used by the `https`
-// shim, which must emit the request's `socket` event before firing `secureConnect` so a pinning
-// listener attached in the `socket` handler observes the handshake.
+// Opens a TLS client connection and returns the connected socket WITHOUT scheduling a `secureConnect`
+// event. The handshake has already completed in native (the peer cert is available immediately), so
+// the caller drives the `secureConnect` timing itself. Used by the `https` shim, which must emit the
+// request's `socket` event before firing `secureConnect` so a pinning listener attached in the
+// `socket` handler observes the handshake.
 //
-export function connectClient(port: number, host: string, mode: TlsConnectMode): TLSSocket {
+export function connectClient(port: number, host: string): TLSSocket {
     const tlsHost = getTlsHost();
-    const resultJson = callHost(() => tlsHost.tlsConnect(host, port, mode)) as string;
+    const resultJson = callHost(() => tlsHost.tlsConnect(host, port)) as string;
     const result = JSON.parse(resultJson) as ITlsConnectResult;
     const socket = new TLSSocket(result.connectionId, result.peerCertBase64);
     activeTlsSockets.set(result.connectionId, socket);

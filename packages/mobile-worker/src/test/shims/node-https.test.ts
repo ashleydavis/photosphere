@@ -1,5 +1,5 @@
 import { Buffer } from "buffer";
-import { createServer, request, requestValidated } from "../../shims/node-https";
+import { createServer, request } from "../../shims/node-https";
 
 //
 // The server certificate DER the loopback mock reports to a connecting client.
@@ -137,22 +137,13 @@ describe("https shim end-to-end (loopback)", () => {
         expect(JSON.parse(body).success).toBe(true);
     });
 
-    test("requestValidated connects in validated mode, so the S3 path can never select trust-all", () => {
-        const tlsConnect = jest.fn().mockReturnValue(JSON.stringify({ connectionId: "C-validated", peerCertBase64: "" }));
-        (globalThis as any).host = { platform: "android", tlsConnect, tlsWrite: () => null, tlsClose: () => null };
-
-        requestValidated({ hostname: "s3.amazonaws.com", port: 443, path: "/bucket", method: "GET" }, () => { /* no response needed */ });
-
-        expect(tlsConnect).toHaveBeenCalledWith("s3.amazonaws.com", 443, "validated");
-    });
-
-    test("request connects in pinned mode, keeping the two entry points distinct", () => {
+    test("request opens the TLS connection through tlsConnect at the requested host and port", () => {
         const tlsConnect = jest.fn().mockReturnValue(JSON.stringify({ connectionId: "C-pinned", peerCertBase64: "" }));
         (globalThis as any).host = { platform: "android", tlsConnect, tlsWrite: () => null, tlsClose: () => null };
 
         request({ hostname: "127.0.0.1", port: 8443, path: "/", method: "GET" }, () => { /* no response needed */ });
 
-        expect(tlsConnect).toHaveBeenCalledWith("127.0.0.1", 8443, "pinned");
+        expect(tlsConnect).toHaveBeenCalledWith("127.0.0.1", 8443);
     });
 
 });

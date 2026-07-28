@@ -400,9 +400,9 @@ final class HostBridge {
         }
         host.setValue(JSValue(object: tlsListen, in: context), forProperty: "tlsListen")
 
-        let tlsConnect: @convention(block) (String, Int, String) -> JSValue = { [weak self] host, port, mode in
+        let tlsConnect: @convention(block) (String, Int) -> JSValue = { [weak self] host, port in
             guard let self = self else { return JSValue(nullIn: context) }
-            return JSValue(object: self.tls.tlsConnect(host: host, port: port, mode: mode), in: context)
+            return JSValue(object: self.tls.tlsConnect(host: host, port: port), in: context)
         }
         host.setValue(JSValue(object: tlsConnect, in: context), forProperty: "tlsConnect")
 

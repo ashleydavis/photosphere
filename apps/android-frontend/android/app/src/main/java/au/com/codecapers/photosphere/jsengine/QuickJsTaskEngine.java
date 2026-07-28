@@ -537,7 +537,7 @@ public final class QuickJsTaskEngine implements TaskEngine {
         host.setProperty("tlsListen", (JSCallFunction) args -> safeString(() ->
             hostBridge.tlsListen((String) args[0], ((Number) args[1]).intValue(), (String) args[2], (String) args[3])));
         host.setProperty("tlsConnect", (JSCallFunction) args -> safeString(() ->
-            hostBridge.tlsConnect((String) args[0], ((Number) args[1]).intValue(), (String) args[2])));
+            hostBridge.tlsConnect((String) args[0], ((Number) args[1]).intValue())));
         host.setProperty("tlsWrite", (JSCallFunction) args -> safeString(() ->
             hostBridge.tlsWrite((String) args[0], (String) args[1])));
         host.setProperty("tlsClose", (JSCallFunction) args -> safeString(() ->

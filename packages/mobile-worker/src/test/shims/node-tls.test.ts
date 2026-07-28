@@ -30,8 +30,8 @@ describe("tls shim", () => {
         const certDer = Buffer.from("fake-cert-der");
         const host = installHost({ listenerId: "L", port: 1, connectionId: "TC-1", peerCertBase64: certDer.toString("base64") });
 
-        const socket = connect(4433, "127.0.0.1", "pinned");
-        expect(host.tlsConnect).toHaveBeenCalledWith("127.0.0.1", 4433, "pinned");
+        const socket = connect(4433, "127.0.0.1");
+        expect(host.tlsConnect).toHaveBeenCalledWith("127.0.0.1", 4433);
 
         let secured = false;
         socket.on("secureConnect", () => { secured = true; });
@@ -83,7 +83,7 @@ describe("tls shim", () => {
 
     test("an inbound close event emits end then close", () => {
         installHost({ listenerId: "L-close", port: 1, connectionId: "TC-c", peerCertBase64: "" });
-        const socket = connect(4433, "127.0.0.1", "pinned");
+        const socket = connect(4433, "127.0.0.1");
 
         const events: string[] = [];
         socket.on("end", () => events.push("end"));
@@ -101,21 +101,25 @@ describe("tls shim", () => {
         expect(host.tlsStopListening).toHaveBeenCalledWith("L-stop");
     });
 
-    test("connectClient connects in the requested mode and returns the socket", () => {
+    test("connectClient opens the connection through tlsConnect and returns the socket", () => {
         const host = installHost({ listenerId: "L-cc", port: 4433, connectionId: "C-cc", peerCertBase64: "" });
 
-        const socket = connectClient(4433, "s3.example.com", "validated");
+        const socket = connectClient(4433, "127.0.0.1");
 
-        expect(host.tlsConnect).toHaveBeenCalledWith("s3.example.com", 4433, "validated");
+        expect(host.tlsConnect).toHaveBeenCalledWith("127.0.0.1", 4433);
         expect(socket).toBeInstanceOf(TLSSocket);
     });
 
-    test("connectClient passes the pinned mode through unchanged", () => {
-        const host = installHost({ listenerId: "L-cp", port: 4433, connectionId: "C-cp", peerCertBase64: "" });
+    test("connectClient does not schedule secureConnect, leaving that timing to the caller", async () => {
+        installHost({ listenerId: "L-cp", port: 4433, connectionId: "C-cp", peerCertBase64: "" });
 
-        connectClient(4433, "127.0.0.1", "pinned");
+        const socket = connectClient(4433, "127.0.0.1");
+        let handshakeSeen = false;
+        socket.on("secureConnect", () => { handshakeSeen = true; });
+        await Promise.resolve();
+        await Promise.resolve();
 
-        expect(host.tlsConnect).toHaveBeenCalledWith("127.0.0.1", 4433, "pinned");
+        expect(handshakeSeen).toBe(false);
     });
 
     test("installTlsInbound installs the native event entry point on the given scope", () => {

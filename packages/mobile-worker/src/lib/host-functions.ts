@@ -98,12 +98,10 @@ export interface IHost {
     // Binds a TLS listener using the given PEM cert/key and returns a JSON string { listenerId, port }.
     tlsListen: (host: string, port: number, certPem: string, keyPem: string) => string;
 
-    // Opens a TLS client connection and returns a JSON string { connectionId, peerCertBase64 }. `mode`
-    // is a REQUIRED explicit trust mode: "pinned" installs a trust-all manager so the JS side can pin
-    // the cert itself (LAN share); "validated" performs real CA-chain and hostname validation (S3).
-    // There is deliberately no default: an omitted/unknown mode is a native error, so the S3 path can
-    // never accidentally downgrade to trust-all.
-    tlsConnect: (host: string, port: number, mode: string) => string;
+    // Opens a TLS client connection and returns a JSON string { connectionId, peerCertBase64 }. The
+    // connection trusts any server certificate: LAN share, its only caller, presents a runtime
+    // self-signed cert and pins it in JS against the fingerprint from the UDP broadcast.
+    tlsConnect: (host: string, port: number) => string;
 
     // Writes base64-encoded bytes to an accepted or connected TLS connection.
     tlsWrite: (connectionId: string, base64: string) => string | null;
