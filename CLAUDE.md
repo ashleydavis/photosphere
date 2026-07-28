@@ -8,6 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - YOU ARE RESPONSIBLE FOR THE CODE IN THIS REPO. IT DOESN'T MATTER "IF IT WAS ALREADY LIKE THAT" - YOU ARE EXPECTED TO FIX IT.
 - IF YOU DON'T KNOW WHO WROTE THE CODE, IT MEANS YOU (CLAUDE) WROTE THE CODE.
 - IT IS ALWAYS YOUR RESPONSIBILTY TO FIX COMPILE ERRORS AND FAILING TESTS. NEVER USE THE "PREEXISTING" EXCUSE.
+- ANY addition of "test only" scaffolding to the app code must be approved by the human user first, or not added at all. That means anything shipped in the app that exists solely to let tests set up or inspect state: seeding functions, injection points, test-only commands, events or globals. If a test needs state, set it up from outside the app (write the config file, place the data on disk) the way the desktop tests do. If you believe there is no way to do that, stop and ask the user before writing any of it.
 - NEVER USE EM DASHES.
 - Never use memory.
 - All Claude configuration goes in this repository only, not in the home directory.
