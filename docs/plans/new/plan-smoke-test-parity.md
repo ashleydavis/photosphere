@@ -54,9 +54,27 @@ Statuses: **Implemented** (exists and matches the other platform), **Requires ch
 
 ## Issues
 
+## Rules for this work
+
+These override the step list. They exist because an earlier attempt at this plan failed on all three counts.
+
+**1. Product code is off limits without approval.** This is a test plan. If a test cannot be made to pass without changing the app, **stop and report it before changing anything.** Say which test, which app change would be needed, and why. Wait for an answer.
+
+That includes changes that look harmless: adding a `data-id`, adding a log line, changing a shared component, adding a helper to a shared package. It especially includes fixing a bug the parity work exposes, however real the bug is. A real bug found here is a finding to report and a candidate for its own plan, not licence to fix it inside this one. An earlier run of this plan made around ten product changes this way, including a new networking module, none of them asked for.
+
+**2. Fix causes, not symptoms.** If something blocks a test, find out why before working around it. A workaround applied in a second place is proof the cause needs fixing: stop and report rather than applying it again. Do not make a test pass by weakening its assertion, by skipping it, or by giving it a different element to drive.
+
+**3. Keep every change minimal and easy to diff.** One concern per change. Do not reformat, do not tidy neighbouring code, do not rename things that are not part of the step. A reviewer must be able to see what each change does without reading around it.
+
+**4. Renumbering goes last, in its own commit.** Renumbering touches every `test.sh` in both suites and drowns everything else in the diff. Do all content work first at existing numbers, get it approved and committed, then renumber as a separate mechanical change that alters no assertions. Steps 3 to 7 below are the renumbering work and move to the end of the sequence.
+
+**5. Prove each test actually runs before comparing it to anything.** Several tests in both suites report a pass without executing their body, so aligning against them aligns against nothing. See `plan-audit-vacuous-tests.md` and `plan-remove-test-skipping.md`. At minimum, before treating any test as the reference for its counterpart, confirm it fails when the behaviour it covers is broken.
+
 ## Steps
 
-Each step is complete when `bun run compile` is clean, `bun run test` passes, and the tests it touches pass on their own (`bun run test:electron -- <n>` for Electron, `bun run test:and -- <n>` for mobile). The renumbering steps come first so every later step creates or edits a test at its final number.
+Each step is complete when `bun run compile` is clean, `bun run test` passes, and the tests it touches pass on their own (`bun run test:electron -- <n>` for Electron, `bun run test:and -- <n>` for mobile).
+
+Steps 3 to 7 are the renumbering. Per rule 4 they run **last**, after the content steps are approved and committed, not first. Until then every step works at the numbers the tests already have.
 
 1. Stop the mobile runner streaming test output to the terminal, matching how the Electron runner handles logs. Delete the `RUNNER_STREAM_OUTPUT` variable from `apps/smoke-tests/lib/runner.sh` (its declaration near the top, the branch in `run_pool` that sets it to 1 for a single worker, and the `tee` branch in `run_test`), leaving `run_test` to always redirect the test to its log file the way `apps/desktop/smoke-tests.sh` does. The reporting skeleton already exists: `run_worker` prints a `RUN` line per test, then `PASS` or `FAIL` with a log path on failure, and `run.sh` repeats every failing test's log path under the summary. Step 2 extends what those two places print. Do not copy the Electron runner's end-of-run `cat` of each failed log (`FAILED_TEST_LOGS` in `apps/desktop/smoke-tests.sh`), because that puts full test output back into the main output, which is what this step removes. Update the sentence in `docs/testing/README.md` that says a single device keeps streaming to the terminal.
 2. Capture the device log for each mobile test, and make a failure reference every log it produced. Today a failing test names only `test-run.log`, `app.log` is never mentioned even though it sits beside it, and nothing off the device is kept at all, so a native crash, an ANR, a Java or Kotlin stack trace, or the embedded engine dying leaves no trace on the host. Three parts:
@@ -121,7 +139,8 @@ The plan is almost entirely smoke tests: eight new Electron tests (steps 8-15), 
 ## Notes
 
 - The unified list is 1 to 39 with no gaps. Each suite runs the subset it implements, so the Electron directory listing starts at 2 and has holes. Both runners discover tests by scanning directories and sorting, so holes are fine.
-- Renumbering churns nearly every file in both suites. It is worth doing once: today the number 17 means two different tests, mobile 21 and Electron 21 are different tests, and there is no way to talk about "test 12" without naming the platform.
+- Renumbering churns nearly every file in both suites. It is worth doing once: today the number 17 means two different tests, mobile 21 and Electron 21 are different tests, and there is no way to talk about "test 12" without naming the platform. Per rule 4 it is the **last** change, on its own, after the content work is approved and committed. Doing it first buries every real change under a rename of every file in both suites.
+- **What went wrong last time, so it is not repeated.** An earlier run of this plan delivered the parity but also: a hand-written reimplementation of an S3 client left in place rather than reported, roughly ten unrequested product changes including a new networking module in `packages/lan-share-network`, a certificate authority and TLS proxy added to the repository to serve one test, and the same queue-cancellation workaround applied twice instead of the cause being fixed once. Every one of those is covered by a rule above. The parity itself was fine; the unrequested work around it was not.
 - Mobile tests read much shorter than their Electron counterparts largely because `apps/smoke-tests/lib/common.sh` has more helpers (`create_database`, `add_secret_via_ui`, `run_cli`, `assert_value`) while Electron tests inline their cleanup and shell out to `python3` for host file assertions. Length is not the gap. The gap is the missing assertions called out in the table.
 - Mobile cannot run two app instances on one device, which is why mobile 8 and 9 stopped at the pairing code. Step 18 closes that with the CLI as the second party, which is a stronger test than the app talking to itself: it puts two independent implementations of the protocol on the wire.
 - Tests 31 and 38 are deliberately mobile-only, and 1, 27, 28, 29 and 39 deliberately have no Electron counterpart. The table is the record of why.
