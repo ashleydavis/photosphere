@@ -19,11 +19,13 @@ It should not exist:
 - This repository cannot afford to maintain a copy of the AWS SDK, and the same goes for Azure Storage, Google Cloud Storage and Dropbox. A solution that works for S3 but would need the same treatment again for the next provider has not solved the problem.
 - Reaching the outcome by any other route (a "small" client, a trimmed fork, a vendored copy, a wrapper that still signs requests) is a failure of this plan, not a shortcut through it. If no real SDK can be made to work, stop and report that rather than writing one.
 
-Two routes satisfy this, and step 2 decides which. Step 2's outcome A uses the real JavaScript AWS SDK inside the engine and is the better one, because a single SDK then serves every platform. Steps 3 and 4 are the fallback and use each platform's real, vendor-maintained native SDK: still no protocol code here, but two vendor SDKs to keep in step instead of one, so that route is taken only if outcome A proves impossible.
+**The route is decided: the real JavaScript AWS SDK runs inside the engine.** One vendor SDK then serves web, desktop, CLI, iOS and Android, and a second provider later arrives the same way, as that vendor's own JavaScript SDK bundled into the worker.
+
+The rejected alternative was a native SDK per platform behind provider-agnostic `host.cloud*` functions. It satisfies the requirement too, but costs two vendor SDKs to keep in step instead of one, new native code on both platforms, and a fresh round of the same work for every provider added later. It is not in this plan.
 
 ## Issues
 
-- [ ] Confirm which cloud SDK versions work on the pinned iOS toolchain (macOS 12.7.6 / Xcode 14.2) before committing to step 3. No version bumps. This does not block steps 1 and 2.
+None.
 
 ## Steps
 
@@ -59,49 +61,20 @@ Expected state at the end of this step:
 - `bun run test` passes, minus the two deleted shim test files.
 - Mobile S3 fails. The desktop S3 test still passes, because the desktop always used the real SDK.
 
-### Step 2: Measure whether the real JavaScript SDK loads in the engine
+### Step 2: Make the real JavaScript SDK run in the engine
 
-With the aliases gone, the engine now resolves `@aws-sdk/client-s3` to the real package. The shim was written when the engine had almost no shims; it now has `http`, `https`, `net`, `tls`, `crypto`, `stream`, `zlib`, `util` and more, so the real SDK may simply work.
+With the aliases gone, the engine resolves `@aws-sdk/client-s3` to the real package. The shim was written when the engine had almost no shims; it now has `http`, `https`, `net`, `tls`, `crypto`, `stream`, `zlib`, `util` and more, so most of what the SDK needs is already there.
 
-1. Build the worker bundle (`bun run --filter=mobile-worker build:bundle`) and record what breaks: a bundle error, a missing Node built-in, or a runtime failure inside the engine.
-2. Run the mobile S3 smoke test and record the result.
+Build the worker bundle (`bun run --filter=mobile-worker build:bundle`) and run the mobile S3 smoke test. Fix whatever they surface, working from these two rules:
 
-Outcome A: it works. Go to step 5. Steps 3 and 4 are not needed, and this is the better outcome: one SDK then serves every platform.
+- **A missing Node built-in is answered by extending an existing shim**, or adding one for that built-in. That is what the shims are for. Note that `zlib`, `stream`, `crypto` and the rest already exist and are more likely to need a few extra exports than wholesale replacement.
+- **Nothing in this repository may sign a request or parse a cloud response.** If a fix starts to look like reimplementing part of the SDK, stop and report it rather than writing it.
 
-Outcome B: it does not. Write down the exact failure, including which module or built-in was missing. That failure is the justification for step 3 and must be written into this plan before any of step 3 is started. A missing Node built-in may be answerable by extending an existing shim, which is a smaller change than step 3 and must be considered first.
+One obstacle is already known. `bundle.ts` targets `browser`, so Bun honours the `browser` field in the AWS SDK's package.json files and selects variants written for a DOM: a `fetch`-based HTTP handler, `ReadableStream`, `TextEncoder`, `btoa`. The engine has none of those; what it has is Node-shaped shims. The SDK's node variants are the ones that fit, and the vendor already ships both, so this is a resolution problem, not a missing-capability one.
 
-### Step 3: Add provider-agnostic storage host functions
+The engine also has no outbound plain-TCP transport: `node-net.ts` can accept connections but not open one. An `http://` endpoint needs one, so expect to add it alongside the existing `tcpListen`.
 
-Only if step 2 gives outcome B.
-
-Mirror how the filesystem already works: the engine calls `host.fs*`, native does the work. Add the cloud equivalent, named for storage rather than for S3, so a second provider needs no new bridge:
-
-- `cloudList(location, prefix, delimiter, max, next)`
-- `cloudInfo(location, path)`
-- `cloudRead(location, path, rangeStart, rangeEnd)`
-- `cloudWrite(location, path, contentType, data)`
-- `cloudDelete(location, path)`
-- `cloudCopy(location, srcPath, destPath)`
-
-`location` carries the provider and target (`s3:bucket`, later `azure:container`), so the switch on provider lives in native code, once.
-
-Files:
-
-- `packages/mobile-worker/src/lib/host-functions.ts`: add the six names to `EXPECTED_HOST_FUNCTIONS` and their types.
-- `apps/android-frontend/.../jsengine/CloudHost.java` (new), registered in `HostBridge.java`, alongside `TcpHost`/`TlsHost`.
-- `apps/ios-frontend/.../JsEngine/CloudHost.swift` (new), registered the same way.
-- Native implementations call the real, vendor-maintained SDK on each platform (AWS SDK for Android, AWS SDK for Swift on iOS). They are thin adapters onto that SDK and nothing more: no request is signed, and no response is parsed, by code in this repository. If the pinned iOS toolchain cannot build a supported version, stop and report it rather than filling the gap by hand.
-
-### Step 4: Make mobile `CloudStorage` a thin adapter
-
-Only if step 2 gives outcome B.
-
-- Add `packages/mobile-worker/src/shims/cloud-storage.ts`: an `IStorage` implementation over the six host functions, the same shape as the existing filesystem path.
-- Change `aliasMap` in `bundle.ts` to alias `packages/storage`'s cloud storage to it. It must not alias any vendor SDK.
-
-The engine then speaks no cloud protocol at all.
-
-### Step 5: Clear the TLS coupling the shim forced
+### Step 3: Clear the TLS coupling the shim forced
 
 The deleted client stripped the URL scheme and always opened a validated TLS connection, whatever the user typed. Nothing forces that now, so an `http://` endpoint must reach an `http://` server.
 
@@ -110,15 +83,12 @@ The deleted client stripped the URL scheme and always opened a validated TLS con
 
 No certificate authority, trust anchor, TLS proxy or generated certificate is to be added to make the tests work. If any of that starts to look necessary, the scheme is still being overridden somewhere and that is the bug to fix.
 
-### Step 6: Prove a second provider costs nothing
-
-Only if step 2 gives outcome B, since outcome A already reaches every provider through the vendor's own JavaScript SDK.
-
-Add a stub provider behind the same six host functions and confirm no JavaScript changes are needed to reach it. This is the check that the architecture actually fixed the problem rather than moving it.
-
 ## Unit Tests
 
-- `packages/mobile-worker/src/test/cloud-storage.test.ts`: the new `IStorage` adapter against a fake host object, covering each method and the error envelope, in the style of the existing host-function tests.
+There is no new storage abstraction to test: `packages/storage`'s `CloudStorage` is unchanged and already covered. The tests belong to whatever shim work step 2 turns out to need.
+
+- Every shim function added or changed in step 2 gets unit tests against a mock host, in the style of the existing `src/test/shims` suites.
+- The trust-mode rule from step 3 gets a test in each direction: an ordinary request validates, and only an explicit opt-out gets the caller-pins-it behaviour LAN share relies on.
 - No unit tests for the native code; it is covered by the smoke tests, as the other host functions are.
 
 ## Smoke Tests
@@ -135,14 +105,13 @@ Steps 2 onward, once the removal has been reviewed:
 - `bun run test:and` and `bun run test:electron` are fully green.
 - `packages/mobile-worker/src/shims/aws-s3.ts` and `aws-lib-storage.ts` no longer exist.
 - Every cloud request is made by a real, vendor-maintained SDK. Nothing in this repository signs a request or parses a cloud response: no SigV4, no credential-derivation, no XML/JSON response parsing for any provider.
-- `packages/mobile-worker/bundle.ts` aliases no `@aws-sdk/*` module, and no alias replaces any other cloud vendor's SDK.
-- Adding a second provider needs no new protocol code here, only configuration and a native call onto that provider's own SDK.
+- `packages/mobile-worker/bundle.ts` aliases no `@aws-sdk/*` or `@smithy/*` module, and no alias replaces any other cloud vendor's SDK. Choosing between variants the vendor already ships is not aliasing it away.
+- Adding a second provider needs no new protocol code and no new native code: it arrives as that vendor's own JavaScript SDK, bundled the same way, on every platform at once.
 - The repository contains no certificate authority and no TLS proxy for testing.
 
 ## Notes
 
 - **Step 1 deletes and stops.** Removal is reviewed as a diff that only takes things away, before anything is put back. Do not fold the replacement into the same change; a diff that removes 1600 lines and adds an SDK integration at once cannot be reviewed for what it removed.
-- Step 2 may make steps 3, 4 and 6 unnecessary. Do not write them before running it.
 - Roughly 1637 lines go in step 1: 995 (`aws-s3.ts`) + 112 (`aws-lib-storage.ts`) + 425 and 105 (their tests), plus three lines in `bundle.ts`. Use the real counts at the time, not these.
-- The iOS toolchain is pinned at Xcode 14.2 / macOS 12.7.6. If the only usable native SDK needs newer, stop and ask rather than bumping.
 - Mobile S3 is broken between step 1 and the end of step 2. That is expected and short-lived. It is not a reason to keep a copy of the deleted client anywhere, including commented out or on a branch "just in case": the file is in git history if it is ever wanted.
+- The mobile worker currently has no CA-validated TLS path at all: the validated mode went with the deleted client, leaving only LAN share's caller-pins-it mode. Step 2 needs validated TLS back, as a new capability rather than a leftover recovered.
