@@ -187,6 +187,47 @@ start_app() {
     log_info "App started (PID $(cat "$tmp_dir/app.pid"), port $actual_port)"
 }
 
+#
+# Prints the given process and every process descended from it, deepest first.
+#
+# The list is gathered before anything is killed, on purpose: once a parent dies its children are
+# reparented to init, so walking the tree afterwards finds nothing and the survivors are invisible.
+#
+process_tree_pids() {
+    local pid="$1"
+    local child
+    for child in $(pgrep -P "$pid" 2>/dev/null); do
+        process_tree_pids "$child"
+    done
+    echo "$pid"
+}
+
+#
+# Stops the given process and everything it started, politely first and then not.
+#
+# The recorded app pid is the xvfb-run wrapper, not the app. xvfb-run runs its command as a child
+# rather than exec'ing it, and starts Xvfb as another child of its own, so signalling that one pid
+# leaves both Electron and Xvfb alive and orphaned to init. A SIGKILL to the wrapper is worse than a
+# SIGTERM, because it skips xvfb-run's `trap clean_up EXIT`, which is the only thing that would have
+# stopped Xvfb.
+#
+# Left unfixed this leaks a whole Electron process tree and an X server per launch. They accumulated
+# across runs and worktrees until the machine ran out of memory and systemd-oomd killed 354 processes
+# in one go, which took the Android emulator pool with it and failed a test run that was otherwise fine.
+#
+kill_app_tree() {
+    local pid="$1"
+    local tree_pid tree_pids
+    tree_pids="$(process_tree_pids "$pid")"
+    for tree_pid in $tree_pids; do
+        kill -TERM "$tree_pid" 2>/dev/null || true
+    done
+    sleep 1
+    for tree_pid in $tree_pids; do
+        kill -KILL "$tree_pid" 2>/dev/null || true
+    done
+}
+
 # Kills the app process recorded in <tmp_dir>/app.pid. Used by the wait_for_ready relaunch path.
 _kill_app() {
     local tmp_dir="$1"
@@ -195,9 +236,7 @@ _kill_app() {
         local pid
         pid=$(cat "$pid_file")
         if kill -0 "$pid" 2>/dev/null; then
-            kill "$pid" 2>/dev/null || true
-            sleep 1
-            kill -9 "$pid" 2>/dev/null || true
+            kill_app_tree "$pid"
         fi
     fi
 }
@@ -349,9 +388,7 @@ stop_app() {
         local pid
         pid=$(cat "$pid_file")
         if kill -0 "$pid" 2>/dev/null; then
-            kill "$pid" 2>/dev/null || true
-            sleep 1
-            kill -9 "$pid" 2>/dev/null || true
+            kill_app_tree "$pid"
         fi
     fi
 }

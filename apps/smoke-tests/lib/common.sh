@@ -127,17 +127,68 @@ wait_for_bridge_port() {
 # Polls the control bridge port until it accepts HTTP connections (any response, including the
 # 503 returned by /ready before the app is up).
 #
+# Also watches the bridge process itself, and says what actually went wrong.
+#
+# Without that this reports "Control bridge did not start" for a bridge that demonstrably did start:
+# bridge.log holds its own "Control bridge listening on port N" line and bridge.port holds the port it
+# bound, yet the message sends you looking for a startup or a port-binding problem that never happened.
+# That has cost four separate investigations. The two cases are now told apart: a bridge that exited is
+# reported immediately with whatever it printed, rather than after a 40 second wait for a process that
+# is not there to answer; a bridge still running when the clock runs out is reported as unreachable,
+# which is a different fault with a different cause.
+#
+# curl's exit status is kept from the last attempt and printed, because "unreachable" covers connection
+# refused, a name that would not resolve and a hang, and those are not the same problem either.
+#
+# Usage: wait_for_bridge <port> <tmp_dir>
+#
 wait_for_bridge() {
     local port="$1"
+    local tmp_dir="${2:-}"
+    local pid_file="$tmp_dir/bridge.pid"
     local ticks=$((DEFAULT_BRIDGE_TIMEOUT * POLL_TICKS_PER_SECOND))
+    local curl_status=0
+    local bridge_pid=""
+
+    if [ -n "$tmp_dir" ] && [ -f "$pid_file" ]; then
+        bridge_pid="$(cat "$pid_file" 2>/dev/null)"
+    fi
+
     while [ "$ticks" -gt 0 ]; do
         if curl -s -o /dev/null "http://localhost:$port/ready" 2>/dev/null; then
             return 0
         fi
+        curl_status=$?
+
+        if [ -n "$bridge_pid" ] && ! kill -0 "$bridge_pid" 2>/dev/null; then
+            log_error "The control bridge (PID $bridge_pid) exited before it answered on port $port."
+            if [ -s "$tmp_dir/bridge.log" ]; then
+                log_error "What the bridge printed before it went:"
+                while IFS= read -r bridge_line; do
+                    echo "  $bridge_line"
+                done < "$tmp_dir/bridge.log"
+            else
+                log_error "It printed nothing to $tmp_dir/bridge.log."
+            fi
+            exit 1
+        fi
+
         sleep "$POLL_INTERVAL_SECONDS"
         ticks=$((ticks - 1))
     done
-    log_error "Control bridge did not start on port $port within ${DEFAULT_BRIDGE_TIMEOUT}s"
+
+    if [ -n "$bridge_pid" ] && kill -0 "$bridge_pid" 2>/dev/null; then
+        log_error "The control bridge (PID $bridge_pid) is still running but did not answer on port $port within ${DEFAULT_BRIDGE_TIMEOUT}s (last curl exit $curl_status)."
+        if [ -s "$tmp_dir/bridge.log" ]; then
+            log_error "What the bridge printed:"
+            while IFS= read -r bridge_line; do
+                echo "  $bridge_line"
+            done < "$tmp_dir/bridge.log"
+        fi
+        exit 1
+    fi
+
+    log_error "Control bridge did not start on port $port within ${DEFAULT_BRIDGE_TIMEOUT}s (last curl exit $curl_status)"
     exit 1
 }
 
@@ -186,7 +237,7 @@ start_app() {
     APP_PORT="$actual_port"
     log_info "Control bridge started (PID $bridge_pid, port $actual_port)"
 
-    wait_for_bridge "$actual_port"
+    wait_for_bridge "$actual_port" "$tmp_dir"
 
     # The platform launcher installs and launches the app pointed at the bridge port.
     "${PLATFORM}_launch" "$actual_port"
