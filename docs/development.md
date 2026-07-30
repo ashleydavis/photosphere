@@ -52,6 +52,14 @@ cd photosphere
 bun install
 ```
 
+Then install the git hooks, which stop a commit that does not compile and a push whose tests fail:
+
+```bash
+bash scripts/install-hooks.sh
+```
+
+This is once per clone and nothing does it for you, because git will not run a hook out of the repository until it is told where to look. See [Git hooks](git-hooks.md) for what each hook runs, how to bypass one, and how to check they are active.
+
 Everything below is run from the repo root.
 
 ## Common commands
@@ -62,7 +70,8 @@ Everything below is run from the repo root.
 | `bun run dev:web` | Start the dev server and web frontend together (no Electron). |
 | `bun run compile` | Compile all TypeScript. Optional, but the way to check a change still compiles. |
 | `bun run test` | Unit tests. |
-| `bun run test:all` | Unit tests plus the CLI and Electron smoke tests. |
+| `bun run test:all` | Unit tests plus the CLI and Electron smoke tests, one after another. **Covers no mobile suite**, so it can pass while the mobile app is broken. Not the full set despite the name. |
+| `bun run test:everything` (or `bun run tev`) | The actual full set for your platform, all at once: compile, unit, CLI, Electron, and both mobile suites. About three and a half minutes rather than eleven, and it stops the moment anything fails. This is what the git hooks run. Pass script names to run only those, still in parallel. |
 | `bun run test:and` / `bun run test:ios` | Mobile smoke tests, on the Android emulator/device or iOS simulator. `bun run test:and <n>` runs a single test by number, `bun run test:and <name>` by name. |
 | `bun run build` | Production build of the Electron app for distribution. |
 | `bun run clean` | Remove build artifacts. |
@@ -101,6 +110,7 @@ The local iOS environment is pinned to macOS 12.7.6 / Xcode 14.2, which is why t
 
 - [UI stories](../packages/user-interface/src/stories/README.md) - The stories browser and the cross-platform story player.
 - [Testing](testing/README.md) - Running the tests, the manual e2e scripts, and the stories.
+- [Git hooks](git-hooks.md) - The local commit and push gate, and how to install it.
 - [Background tasks](background-tasks.md) - Adding a new background task type.
 - [Mobile native media tools](mobile-native-media.md) - How the bundled mobile ImageMagick/ffmpeg are wired up.
 - [Updating mobile ImageMagick/ffmpeg](updating-mobile-imagemagick-ffmpeg.md) - Updating the bundled versions.

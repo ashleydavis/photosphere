@@ -20,6 +20,8 @@
     "test": "bun --filter '*' test",
     "test:watch": "bun --filter '*' test:watch",
     "test:all": "bun run test && bun run test:cli && bun run test:cli:encrypted && bun run test:cli:lan-share && bun run test:electron",
+    "test:everything": "./scripts/test-everything-parallel.sh",
+    "tev": "bun run test:everything",
     "t": "bun run test",
     "tw": "bun run test:watch",
     "ta": "bun run test:all",

@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Refuses a commit that does not compile or whose unit tests fail.
+#
+# Deliberately only the two cheap checks, run in parallel. The full set takes minutes and drives the
+# emulators, and a gate slow enough to be routinely bypassed is worse than no gate, because the
+# repository then looks guarded when it is not. The expensive suites are in .githooks/pre-push instead.
+#
+# Nothing here fixes or stages anything: it reports and refuses, leaving the working copy alone.
+#
+# Bypass with `git commit --no-verify` (git handles that natively; there is no flag here).
+#
+# See docs/git-hooks.md.
+#
+# Named without a .sh extension against the repository's usual convention because git only recognises
+# hooks by these exact filenames.
+set -uo pipefail
+
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(cd "$HOOK_DIR/.." && pwd)"
+
+cd "$REPO_DIR"
+
+echo "pre-commit: compile and unit tests"
+
+# Runs the given scripts through `bun run test:everything`, going through mise when it is available so
+# the pinned toolchain versions are used rather than whatever happens to be first on PATH.
+run_everything() {
+    if command -v mise >/dev/null 2>&1; then
+        mise exec -- bun run test:everything "$@"
+    else
+        bun run test:everything "$@"
+    fi
+}
+
+if ! run_everything compile test; then
+    echo "" >&2
+    echo "pre-commit FAILED. Commit anyway with: git commit --no-verify" >&2
+    exit 1
+fi
+
+echo "pre-commit: passed"

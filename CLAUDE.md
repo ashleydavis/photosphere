@@ -39,7 +39,8 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 
 ### Run from repo root:
 - `bun run compile` - Compile all TypeScript
-- `bun run test:all` - Run ALL tests (unit tests + all smoke tests). Use this when asked to run "all tests".
+- `bun run test:everything` (alias `bun run tev`) - Run the genuine full set for this platform, all at once (compile, unit, CLI, Electron, and both mobile suites). Use this when asked to run "all tests". Pass script names to run only those, still in parallel. This is what the git hooks run; see `docs/git-hooks.md`.
+- `bun run test:all` - Unit tests plus the CLI and Electron smoke tests, one after another. Despite the name it covers NO mobile suite, so it can pass while the mobile app is broken. Any change under `packages/mobile-frontend/`, `packages/mobile-worker/`, `apps/android-frontend/`, `apps/ios-frontend/` or `apps/smoke-tests/` requires `bun run test:and` (or `bun run test:ios` on macOS) before it is committed.
 - `bun run test` - Run unit tests only
 - `bun run test -- <test-name-or-pattern>` - Run a single test by name or pattern.
 - `bun run clean` - Clean all build artifacts

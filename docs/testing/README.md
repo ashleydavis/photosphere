@@ -12,6 +12,16 @@ Run everything (unit tests plus all smoke tests):
 bun run test:all
 ```
 
+Note that `test:all` covers no mobile suite, so it can pass while the mobile app is broken. For the genuine full set for your platform, all at once and in about a third of the time:
+
+```bash
+bun run test:everything
+```
+
+Or `bun run tev` for short.
+
+That is also what the checked-in git hooks run. They gate commits and pushes locally, and they have to be installed once per clone. See [Git hooks](../git-hooks.md).
+
 Run all unit tests:
 
 ```bash
