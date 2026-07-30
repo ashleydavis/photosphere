@@ -102,6 +102,63 @@ For a push touching no mobile code, an absent device drops the mobile suites wit
 
 A push that creates a new remote branch has no previous remote state to compare against, so its changed paths cannot be worked out. That case is treated as touching mobile code, gating harder rather than softer.
 
+## Checking they actually work
+
+These hooks carry no automated tests, deliberately, and `CLAUDE.md` freezes them for that reason. Testing one means faking `bun`, `uname` and the device check, at which point what you have proven is the branching rather than the gate: a stub standing in for "the tests failed" is not evidence that anything would really be refused. So the only thing behind these files is that a person ran them and watched them work.
+
+This is that procedure. Work through it once after installing, and again after any change to the hooks, which should not happen.
+
+Everything here is safe. Nothing pushes anywhere real, and every step tells you how to undo itself.
+
+**1. Confirm they are wired up.**
+
+```
+git config core.hooksPath
+```
+
+Must print `.githooks`. Anything else and nothing below is testing what you think.
+
+**2. Watch pre-commit pass.**
+
+Make a trivial change, stage it, commit. You should see `pre-commit: compile and unit tests`, then the two scripts running, then `pre-commit: passed`, then the commit. If it commits instantly with no output, the hook is not running: go back to step 1.
+
+**3. Watch pre-commit refuse.** This is the important one.
+
+Break the build on purpose, for example add a line reading `this is not valid typescript` to any `.ts` file, then try to commit. Expect the compile to fail, `pre-commit FAILED`, the exact command to re-run, and **no new commit**. Confirm with `git log`. Then undo the breakage.
+
+A gate you have never seen refuse anything is not a gate. If this step commits, stop and fix it before trusting any of it.
+
+**4. Confirm the bypass works.**
+
+With the breakage still in place, `git commit --no-verify`. It should commit with no hook output at all. Undo the commit and the breakage afterwards.
+
+**5. Watch pre-push run the full set.**
+
+Do not test this against a real remote. Push to a throwaway local one:
+
+```
+git init --bare /tmp/hook-test-remote.git
+git push /tmp/hook-test-remote.git HEAD:refs/heads/test
+```
+
+Expect the platform line, then the lanes, then the whole set running for real, about three and a half minutes. `rm -rf /tmp/hook-test-remote.git` when done.
+
+**6. Watch the mobile rule refuse.**
+
+With no emulator or simulator running, commit a change touching any of the mobile paths listed below, then push to the throwaway remote again. Expect a refusal naming the mandatory suites and listing the paths, with no suite run at all. Start a device and repeat: it should now run them.
+
+This is the rule that exists because of a specific failure, so it is worth seeing refuse with your own eyes rather than assuming.
+
+**7. Run the hook by hand if you want to see one case without a push.**
+
+`pre-push` reads the refs from stdin, so you can feed it a range directly:
+
+```
+echo "refs/heads/x $(git rev-parse HEAD) refs/heads/x $(git rev-parse HEAD~1)" | bash .githooks/pre-push
+```
+
+It runs the real suites and reports as it would during a push, without pushing.
+
 ## Bypassing
 
 ```

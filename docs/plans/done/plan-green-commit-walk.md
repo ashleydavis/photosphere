@@ -287,3 +287,36 @@ Getting this onto `mobile` is the human's job. Do not push, do not merge, do not
 - **A latent race is deliberately out of scope.** `handleSeedDatabases` and `handleSeedRecent` in `packages/mobile-frontend/src/lib/platform-provider-mobile.tsx` fire-and-forget with `void`, so the command returns before the config write lands and two back-to-back seeds are an unserialised read-modify-write on one file. It did not bite in the verified-green run, and `docs/plans/new/plan-remove-test-only-scaffolding.md` deletes those handlers entirely, so fixing it here is work thrown away.
 - **Three options for the gate, to choose between at review.** (a) Hooks only (steps 4 and 6): checked in, opt-in per clone, bypassable with `--no-verify`, and does nothing about an agent that commits having never run the tests. (b) Hooks plus the agent guard (step 5): closes the actual failure mode, at the cost of a `PreToolUse` hook constraining every commit in every future session, which will occasionally be wrong. (c) CI-side only: require the `release.yml` jobs to pass before merge, which catches things eventually but does not stop a red commit landing on a branch, which is exactly what happened here. The plan writes (a) and (b); (c) alone would not have caught this.
 - **The pre-push hook will be slow.** Only the Android suite has a measured time (113s across six emulators). The Electron, CLI, encrypted and LAN-share suites in `test:all` are unmeasured. If the total is long enough that the hook gets routinely bypassed it is worse than useless, and the pre-commit / pre-push split needs revisiting with real numbers.
+
+## Getting this onto `mobile`
+
+Written after the walk finished, from the state it actually left behind. Not run: this is the human's to do, and every command below rewrites history or moves a branch.
+
+**Where things stand.** The walk ran on `green-commit-walk` in a worktree, starting from `mobile` as it was at the time. The two have since diverged at `ecdefe2f`: `mobile` carries seven commits from there, the branch carries ten. They are the same work, rewritten, so this is a replacement rather than a merge and `git merge --ff-only` will refuse it.
+
+Three things make it more than a branch move, and all three are worth checking are still true before starting, because they were true at the moment this was written and nothing keeps them that way:
+
+- **The remote is behind the rewrite.** `origin/mobile` sat at `61ac4cee`, which the walk rewrote into a new commit with the same subject. Publishing therefore means a force-push, and that is a decision rather than a step.
+- **`mobile` gained two commits the walk never saw**, `Updated plan` and `New plan.`, made after the branch was taken. A plain replacement destroys them.
+- **Three other worktrees descend from the old history**, `fix-test-driver` and both worktrees sitting on `153564a3`. Rewriting orphans all three, and they need rebasing onto the new commits or abandoning.
+
+Also check `git status` in the main clone first. The replacement options below use `git reset --hard`, which takes uncommitted work with it.
+
+**Option A, keep everything.** Replay the two later commits onto the walked branch and move `mobile` there:
+
+```
+git rebase --onto green-commit-walk <sha of the commit those two sit on> mobile
+```
+
+Both are docs-only so conflicts are unlikely, with one exception: the walk moved this plan file from `docs/plans/new/` to `docs/plans/done/` while `mobile` still has it at the old path, so expect to resolve that one.
+
+**Option B, replace outright**, only if those two commits genuinely do not matter:
+
+```
+git checkout mobile
+git reset --hard green-commit-walk
+```
+
+Option A is the better default. Option B is simpler and throws work away, which is the thing this whole plan exists to stop doing.
+
+**Afterwards**, in either case: rebase or abandon the three descendant worktrees, and decide separately about the force-push. Do not delete the `green-commit-walk` worktree until `mobile` is where you want it and you have run the tests from it, because until then it is the only place the walked history exists.
