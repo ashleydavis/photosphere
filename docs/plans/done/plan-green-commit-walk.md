@@ -42,10 +42,10 @@ The first attempt was abandoned partway and its worktree thrown away. It got as 
 
 Two sets, by host platform. There is no new aggregate command and no change to existing scripts.
 
-- **Linux (this machine):** `bun run test`, `bun run test:cli`, `bun run test:cli:encrypted`, `bun run test:cli:lan-share`, `bun run test:electron`, `bun run test:and`, `bun run test:and:unit`.
-- **macOS:** the same five host commands, plus `bun run test:ios` and `bun run test:ios:unit`.
+- **Linux (this machine):** `bun run test`, `bun run test:cli`, `bun run test:electron`, `bun run test:and`.
+- **macOS:** the same four host commands, plus `bun run test:ios`.
 
-**Start all of them at once, wait for all of them, report all of them.** They are listed individually rather than as `bun run test:all` because `test:all` chains its five parts one after another, and the parts are independent: unit tests run in-process, the three CLI suites each own a separate `test/tmp*` directory (`test/tmp`, `test/tmp-encrypted`, `test/tmp-lan-share`), Electron drives its own app with a per-test `tmp/`, and the mobile suites drive the emulators. Running them in sequence makes each commit take the sum of all of them instead of the longest one, and the walk runs this nine times. The coverage is identical: `test:all` is exactly `test` plus those four smoke suites.
+**Start all of them at once, wait for all of them, report all of them.** They are listed individually rather than as `bun run test:all` because `test:all` chains its parts one after another. Running them in sequence makes each commit take the sum of all of them instead of the longest one, and the walk runs this nine times.
 
 Note that `test:all` includes no mobile suite, which is the mechanical reason this breakage was never seen: the command named "all" never touched the code that broke.
 
@@ -261,7 +261,7 @@ Getting this onto `mobile` is the human's job. Do not push, do not merge, do not
 ## Verify
 
 - `bun run compile` clean.
-- `bun run test:all`, `bun run test:and` and `bun run test:and:unit` all passing at every one of the 8 replayed commits, and at the Part B commit on top.
+- `bun run test`, `bun run test:cli`, `bun run test:electron` and `bun run test:and` all passing at every one of the 8 replayed commits, and at the Part B commit on top.
 - `bash scripts/hooks.test.sh` passing.
 - `git log --oneline bb7cc09d..<captured-branch>` shows 9 commits: the 8 original subjects, unchanged, plus the Part B commit.
 - `git diff <pre-walk-tip-sha> <captured-branch>` limited to the fixes made during the walk plus the Part B files, with no unrelated changes.
