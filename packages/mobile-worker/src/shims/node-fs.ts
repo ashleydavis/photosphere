@@ -8,18 +8,142 @@
 
 import { getFsHost, codedError, base64ToBuffer, callHost } from "./host-access";
 import { Readable, Writable } from "./node-stream";
+import fsPromisesModule from "./node-fs-promises";
+
+//
+// Mirrors `fs.promises`, so a caller reaching the promise API through the `fs` module gets the same
+// implementation as one importing `fs/promises` directly. The AWS SDK's SSO token writer does this.
+//
+export const promises = fsPromisesModule;
+
+//
+// A file-backed readable stream. It carries the path it was opened from, which is what Node's
+// `ReadStream` exposes and what the AWS SDK's body-length helper reads to size a file-backed body.
+//
+export class ReadStream extends Readable {
+    //
+    // The path this stream was opened from.
+    //
+    readonly path: string;
+
+    //
+    // Builds a stream over the whole contents of the file at the given path.
+    //
+    constructor(path: string, contents: Buffer) {
+        super(contents);
+        this.path = path;
+    }
+}
+
+//
+// The file metadata the sync stat calls return.
+//
+export class Stats {
+    //
+    // File size in bytes.
+    //
+    readonly size: number;
+
+    //
+    // Last-modified time.
+    //
+    readonly mtime: Date;
+
+    //
+    // Whether this path is a regular file.
+    //
+    private readonly file: boolean;
+
+    //
+    // Whether this path is a directory.
+    //
+    private readonly directory: boolean;
+
+    //
+    // Builds Stats from the native stat fields.
+    //
+    constructor(size: number, mtimeMs: number, file: boolean, directory: boolean) {
+        this.size = size;
+        this.mtime = new Date(mtimeMs);
+        this.file = file;
+        this.directory = directory;
+    }
+
+    //
+    // Returns true when the path is a regular file.
+    //
+    isFile(): boolean {
+        return this.file;
+    }
+
+    //
+    // Returns true when the path is a directory.
+    //
+    isDirectory(): boolean {
+        return this.directory;
+    }
+}
 
 //
 // Creates a readable stream over a file by reading the whole file through the host bridge and
 // emitting it as a single chunk. Matches the whole-file read model used across the mobile worker.
 //
-export function createReadStream(path: string): Readable {
+export function createReadStream(path: string): ReadStream {
     const base64 = callHost(() => getFsHost().fsReadFile(path));
     if (base64 === null || base64 === undefined) {
         throw codedError("ENOENT", `ENOENT: no such file or directory, open '${path}'`);
     }
 
-    return new Readable(base64ToBuffer(base64));
+    return new ReadStream(path, base64ToBuffer(base64));
+}
+
+//
+// Reads a whole file, throwing an ENOENT-coded error when it does not exist. Mirrors fs.readFileSync:
+// with an encoding it returns a string, without one the raw bytes. The native read is synchronous, so
+// this needs no separate machinery.
+//
+export function readFileSync(path: string, encoding?: string): Buffer | string {
+    const base64 = callHost(() => getFsHost().fsReadFile(path));
+    if (base64 === null || base64 === undefined) {
+        throw codedError("ENOENT", `ENOENT: no such file or directory, open '${path}'`);
+    }
+
+    const contents = base64ToBuffer(base64);
+    if (encoding) {
+        return contents.toString(encoding as BufferEncoding);
+    }
+
+    return contents;
+}
+
+//
+// Returns metadata for a path, throwing an ENOENT-coded error when it does not exist. Mirrors
+// fs.statSync; the native stat call is synchronous, so this needs no separate machinery.
+//
+export function statSync(path: string): Stats {
+    const json = callHost(() => getFsHost().fsStat(path));
+    if (json === null || json === undefined) {
+        throw codedError("ENOENT", `ENOENT: no such file or directory, stat '${path}'`);
+    }
+
+    const parsed = JSON.parse(json);
+    return new Stats(parsed.size, parsed.mtimeMs, parsed.isFile, parsed.isDirectory);
+}
+
+//
+// Returns metadata for a path without following a symlink. The host bridge does not distinguish the
+// two, so this is statSync, which matches fs.lstatSync for every non-symlink path.
+//
+export function lstatSync(path: string): Stats {
+    return statSync(path);
+}
+
+//
+// Returns metadata for an open file descriptor. The host bridge is path-based and hands out no file
+// descriptors, so nothing can hold one; reaching this means a caller opened a file some other way.
+//
+export function fstatSync(fd: number): Stats {
+    throw new Error(`fstatSync is NOT IMPLEMENTED in the mobile worker (called with fd ${fd}); the host bridge is path-based and issues no file descriptors.`);
 }
 
 //
@@ -36,6 +160,6 @@ export function createWriteStream(path: string): Writable {
 //
 // The default export mirrors `import fs from "fs"` (only the backed members are real).
 //
-const fsModule = { createReadStream, createWriteStream };
+const fsModule = { createReadStream, createWriteStream, promises, readFileSync, statSync, lstatSync, fstatSync, ReadStream, Stats };
 
 export default fsModule;

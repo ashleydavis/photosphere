@@ -1,4 +1,4 @@
-import { createReadStream, createWriteStream } from "../../shims/node-fs";
+import { createReadStream, createWriteStream, fstatSync, lstatSync, promises, readFileSync, ReadStream, statSync } from "../../shims/node-fs";
 import { pipeline } from "../../shims/node-stream-promises";
 
 //
@@ -64,5 +64,65 @@ describe("node-fs shim", () => {
 
         await pipeline(createReadStream("db/src"), createWriteStream("db/dest"));
         expect(writes["db/dest"].toString("utf8")).toBe("copy me");
+    });
+
+    test("createReadStream returns a ReadStream carrying the path it was opened from", () => {
+        const stream = createReadStream("db/file");
+
+        expect(stream).toBeInstanceOf(ReadStream);
+        expect(stream.path).toBe("db/file");
+    });
+
+    test("readFileSync returns the raw bytes, or a string when an encoding is given", () => {
+        expect((readFileSync("db/file") as Buffer).toString("utf8")).toBe("file contents");
+        expect(readFileSync("db/file", "utf8")).toBe("file contents");
+    });
+
+    test("readFileSync throws ENOENT for a missing file", () => {
+        expect(() => readFileSync("db/missing")).toThrow(
+            expect.objectContaining({ code: "ENOENT" })
+        );
+    });
+
+    test("statSync reports the size and kind the native stat returned", () => {
+        (globalThis as any).host = {
+            platform: "android",
+            fsStat: (path: string): string | null => path === "db/file"
+                ? JSON.stringify({ size: 13, mtimeMs: 1000, isFile: true, isDirectory: false })
+                : null,
+        };
+
+        const stats = statSync("db/file");
+
+        expect(stats.size).toBe(13);
+        expect(stats.isFile()).toBe(true);
+        expect(stats.isDirectory()).toBe(false);
+        expect(stats.mtime.getTime()).toBe(1000);
+    });
+
+    test("statSync throws ENOENT for a missing path", () => {
+        (globalThis as any).host = { platform: "android", fsStat: (): string | null => null };
+
+        expect(() => statSync("db/missing")).toThrow(
+            expect.objectContaining({ code: "ENOENT" })
+        );
+    });
+
+    test("lstatSync matches statSync, since the host bridge does not distinguish symlinks", () => {
+        (globalThis as any).host = {
+            platform: "android",
+            fsStat: (): string => JSON.stringify({ size: 7, mtimeMs: 2000, isFile: true, isDirectory: false }),
+        };
+
+        expect(lstatSync("db/file").size).toBe(statSync("db/file").size);
+    });
+
+    test("fstatSync refuses by name, because the host bridge issues no file descriptors", () => {
+        expect(() => fstatSync(3)).toThrow(/NOT IMPLEMENTED/);
+    });
+
+    test("promises exposes the same implementation as the fs/promises shim", () => {
+        expect(typeof promises.readFile).toBe("function");
+        expect(typeof promises.stat).toBe("function");
     });
 });

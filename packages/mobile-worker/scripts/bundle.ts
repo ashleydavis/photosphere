@@ -4,20 +4,22 @@
 // The target is the bare embedded engine (QuickJS on Android, JavaScriptCore on iOS), which has no
 // Node runtime. Node built-in imports are redirected to the mobile shims in `src/shims` (fs backed by
 // the native host bridge; pure-JS path/os/stream/crypto), and the native-only packages the
-// load-assets module graph imports (`@aws-sdk/*`, `vault`, `tools`) are redirected to their mobile
-// shims. These redirects must apply to imports made deep inside the other workspace packages
+// load-assets module graph imports (`vault`, `tools`) are redirected to their mobile shims. The AWS
+// SDK is NOT redirected: the real, vendor-maintained package is bundled and runs on those shims.
+// These redirects must apply to imports made deep inside the other workspace packages
 // (node-api/node-utils/storage/vault), so they run as a Bun `onResolve` plugin over the whole graph
 // (a package.json `browser` field or tsconfig `paths` only affect the owning package's own files).
 //
-// Run with: bun bundle.ts  (wired as the `build:bundle` script).
+// Run with: bun scripts/bundle.ts  (wired as the `build:bundle` script).
 //
 
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 //
-// The directory containing this script (packages/mobile-worker).
+// The mobile-worker package root, one level above this script's own `scripts/` directory. Every path
+// below (the shims, the entry point, the bundle output) is resolved against it.
 //
-const scriptDir = import.meta.dir;
+const packageDir = join(import.meta.dir, "..");
 
 //
 // Maps a module specifier to the shim file (relative to this script) it should resolve to. Node
@@ -45,6 +47,28 @@ const aliasMap: Record<string, string> = {
 };
 
 //
+// The node_modules directories whose internal imports must resolve to the vendor's node variants
+// rather than its browser variants: the AWS SDK and the Smithy runtime it is built on.
+//
+const VENDOR_NODE_VARIANT_PACKAGES = [
+    "/node_modules/@aws-sdk/",
+    "/node_modules/@smithy/",
+];
+
+//
+// The few modules inside those packages that are better off as their browser variant, because the
+// vendor's browser implementation is pure JavaScript while its node one reaches for a Node built-in
+// the engine does not have. Matched against the end of the import specifier.
+//
+// `getCrc32ChecksumAlgorithmFunction` is the case: the node variant calls `zlib.crc32` (a native Node
+// function), while the browser variant uses the vendor's own pure-JS `@aws-crypto/crc32`. Taking the
+// browser one keeps the checksum in vendor code instead of putting a CRC implementation in this repo.
+//
+const VENDOR_BROWSER_VARIANT_MODULES = [
+    "getCrc32ChecksumAlgorithmFunction",
+];
+
+//
 // A Bun bundler plugin that redirects the aliased specifiers to their shim files. It matches the
 // exact specifier (after stripping a leading `node:`), so unrelated imports resolve normally.
 //
@@ -61,7 +85,26 @@ const aliasPlugin: import("bun").BunPlugin = {
                 return undefined;
             }
 
-            return { path: join(scriptDir, target) };
+            return { path: join(packageDir, target) };
+        });
+
+        // The bundle targets "browser" so Bun supplies polyfills for the Node built-ins the shims do
+        // not cover. That target also makes Bun honour the `browser` field in the AWS SDK's
+        // package.json files, which swaps in variants written for a DOM: `fetch`, `ReadableStream`,
+        // `TextEncoder`, `btoa`. The engine has none of those; what it has is the Node-shaped shims
+        // above. So resolve the SDK's own internal imports the way Node would, which selects the node
+        // variants the vendor already ships and lands them on those shims. This only chooses between
+        // files the vendor supplies; nothing here reimplements any part of the SDK.
+        build.onResolve({ filter: /^\.\.?\// }, args => {
+            if (!VENDOR_NODE_VARIANT_PACKAGES.some(vendorDir => args.importer.includes(vendorDir))) {
+                return undefined;
+            }
+
+            if (VENDOR_BROWSER_VARIANT_MODULES.some(moduleName => args.path.endsWith(moduleName))) {
+                return undefined;
+            }
+
+            return { path: Bun.resolveSync(args.path, dirname(args.importer)) };
         });
     },
 };
@@ -71,7 +114,7 @@ const aliasPlugin: import("bun").BunPlugin = {
 //
 async function main(): Promise<void> {
     const result = await Bun.build({
-        entrypoints: [join(scriptDir, "mobile-worker-entry.ts")],
+        entrypoints: [join(packageDir, "mobile-worker-entry.ts")],
         target: "browser",
         format: "iife",
         plugins: [aliasPlugin],
@@ -86,7 +129,7 @@ async function main(): Promise<void> {
 
     const artifact = result.outputs[0];
     const code = await artifact.text();
-    await Bun.write(join(scriptDir, "worker.bundle.js"), code);
+    await Bun.write(join(packageDir, "worker.bundle.js"), code);
     console.log(`Built worker.bundle.js (${code.length} bytes)`);
 }
 

@@ -29,6 +29,14 @@ export function platform(): string {
 }
 
 //
+// Returns the OS release string. The engine cannot see the real kernel version, and the only caller
+// is the AWS SDK building its user-agent header, which just needs a string.
+//
+export function release(): string {
+    return "0.0.0";
+}
+
+//
 // The end-of-line marker.
 //
 export const EOL = "\n";
@@ -36,6 +44,6 @@ export const EOL = "\n";
 //
 // The default export mirrors `import os from "os"`.
 //
-const osModule = { tmpdir, homedir, platform, EOL };
+const osModule = { tmpdir, homedir, platform, release, EOL };
 
 export default osModule;

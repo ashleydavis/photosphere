@@ -343,6 +343,23 @@ export function createSign(_algorithm: string): ISign {
 }
 
 //
+// Signs data in one call, mirroring Node's `crypto.sign(algorithm, data, key)`. It runs through the
+// same native SHA256withRSA signer `createSign` uses, so SHA-256 is the only algorithm it accepts;
+// anything else is refused rather than signed with the wrong digest.
+//
+export function sign(algorithm: string, data: Buffer | Uint8Array, key: KeyInput): Buffer {
+    if (algorithm.toLowerCase().replace("-", "") !== "sha256") {
+        throw new Error(`crypto.sign only supports sha256 in the mobile worker (was asked for ${algorithm}); the native signer is SHA256withRSA.`);
+    }
+
+    const host = getCryptoHost();
+    const privateKeyPem = pemFromKeyInput(key);
+    const dataBase64 = Buffer.from(data).toString("base64");
+    const signatureBase64 = callHost(() => host.cryptoSignSha256(privateKeyPem, dataBase64)) as string;
+    return Buffer.from(signatureBase64, "base64");
+}
+
+//
 // Creates a symmetric cipher (AES-256-CBC on the encryption path). Pure JS via `browserify-aes`, which
 // implements Node's createCipheriv exactly (PKCS#7 padding, CBC), so the on-disk format is unambiguous.
 //
@@ -430,6 +447,7 @@ const cryptoModule = {
     createHash,
     createHmac,
     createSign,
+    sign,
     createPrivateKey,
     createPublicKey,
     generateKeyPairSync,

@@ -441,8 +441,70 @@ export function request(options: IRequestOptions, callback: (response: IClientRe
 }
 
 //
+// The options an Agent is constructed with.
+//
+export interface IAgentOptions {
+    // Whether to hold connections open between requests.
+    keepAlive?: boolean;
+
+    // How often to probe a held-open connection, in milliseconds.
+    keepAliveMsecs?: number;
+
+    // The most connections to open per origin.
+    maxSockets?: number;
+}
+
+//
+// The connection-options holder Node calls an Agent. This shim opens one connection per request and
+// closes it, so there is no pool: the object exists to be constructed, inspected and passed along,
+// which is all the AWS SDK does with it.
+//
+export class Agent {
+    //
+    // Whether the caller asked for keep-alive. Reported back but not acted on.
+    //
+    readonly keepAlive: boolean;
+
+    //
+    // The keep-alive interval the caller asked for. Reported back but not acted on.
+    //
+    readonly keepAliveMsecs: number;
+
+    //
+    // The socket ceiling the caller asked for. Reported back but not acted on.
+    //
+    readonly maxSockets: number;
+
+    //
+    // Live sockets per origin. Always empty, since no connection outlives its request.
+    //
+    readonly sockets: Record<string, unknown[]> = {};
+
+    //
+    // Queued requests per origin. Always empty, since no request ever waits for a socket.
+    //
+    readonly requests: Record<string, unknown[]> = {};
+
+    //
+    // Builds an agent from the options a caller supplies.
+    //
+    constructor(options?: IAgentOptions) {
+        this.keepAlive = options?.keepAlive === true;
+        this.keepAliveMsecs = options?.keepAliveMsecs === undefined ? 1000 : options.keepAliveMsecs;
+        this.maxSockets = options?.maxSockets === undefined ? Infinity : options.maxSockets;
+    }
+
+    //
+    // Releases the agent's connections. There are none, so this does nothing.
+    //
+    destroy(): void {
+        // No pooled connections exist to close.
+    }
+}
+
+//
 // The default export mirrors `import https from "https"`.
 //
-const httpsModule = { Server, ClientRequest, createServer, request };
+const httpsModule = { Server, ClientRequest, Agent, createServer, request };
 
 export default httpsModule;

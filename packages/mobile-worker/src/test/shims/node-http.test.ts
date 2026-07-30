@@ -1,5 +1,5 @@
 import { Buffer } from "buffer";
-import { createServer, type IncomingMessage, type ServerResponse } from "../../shims/node-http";
+import { createServer, request, type IncomingMessage, type ServerResponse } from "../../shims/node-http";
 import { installMockTcpHost, uninstallMockTcpHost, roundTripRequest } from "./tcp-mock-host";
 
 //
@@ -74,5 +74,21 @@ describe("http shim", () => {
         await roundTripRequest(mock, requestBytes);
 
         expect(body!.toString()).toBe(payload);
+    });
+});
+
+//
+// Unit tests for the outbound client half. It is deliberately not implemented: the host bridge has no
+// outbound plain-TCP connect, so the export exists only because the AWS SDK's instance-metadata
+// credential provider imports it at module load. The test pins that it refuses loudly rather than
+// hanging or quietly doing nothing, so the gap cannot be mistaken for working code.
+//
+describe("http shim outbound request", () => {
+
+    test("request refuses by name, naming the missing transport", () => {
+        expect(() => request({ hostname: "169.254.169.254", port: 80, path: "/latest/meta-data" }))
+            .toThrow(/NOT IMPLEMENTED/);
+        expect(() => request({ hostname: "169.254.169.254", port: 80, path: "/latest/meta-data" }))
+            .toThrow(/outbound plain-TCP connect/);
     });
 });

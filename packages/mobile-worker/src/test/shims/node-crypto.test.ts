@@ -13,6 +13,7 @@ import {
     createHash,
     createHmac,
     createSign,
+    sign,
     generateKeyPairSync,
     createCipheriv,
     createDecipheriv,
@@ -138,6 +139,30 @@ describe("node-crypto shim RSA keygen/sign", () => {
 
         expect(cryptoSignSha256).toHaveBeenCalledWith("PRIVATE-KEY-PEM", Buffer.from("hello world").toString("base64"));
         expect(signature.equals(signatureBytes)).toBe(true);
+    });
+
+    test("sign() signs in one call through the same native signer, decoding the signature", () => {
+        const signatureBytes = Buffer.from("one-shot-signature");
+        const cryptoSignSha256 = jest.fn().mockReturnValue(signatureBytes.toString("base64"));
+        (globalThis as any).host = { cryptoSignSha256 };
+
+        const signature = sign("sha256", Buffer.from("payload"), "PRIVATE-KEY-PEM");
+
+        expect(cryptoSignSha256).toHaveBeenCalledWith("PRIVATE-KEY-PEM", Buffer.from("payload").toString("base64"));
+        expect(signature.equals(signatureBytes)).toBe(true);
+    });
+
+    test("sign() accepts the SHA-256 spellings Node accepts", () => {
+        (globalThis as any).host = { cryptoSignSha256: (): string => Buffer.from("s").toString("base64") };
+
+        expect(() => sign("SHA256", Buffer.from("x"), "PEM")).not.toThrow();
+        expect(() => sign("sha-256", Buffer.from("x"), "PEM")).not.toThrow();
+    });
+
+    test("sign() refuses a digest the native signer cannot produce, rather than signing wrongly", () => {
+        (globalThis as any).host = { cryptoSignSha256: (): string => "" };
+
+        expect(() => sign("sha512", Buffer.from("x"), "PEM")).toThrow(/sha256/);
     });
 });
 

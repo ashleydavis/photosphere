@@ -1,5 +1,5 @@
 import { Buffer } from "buffer";
-import { createServer, request } from "../../shims/node-https";
+import { Agent, createServer, request } from "../../shims/node-https";
 
 //
 // The server certificate DER the loopback mock reports to a connecting client.
@@ -146,4 +146,36 @@ describe("https shim end-to-end (loopback)", () => {
         expect(tlsConnect).toHaveBeenCalledWith("127.0.0.1", 8443);
     });
 
+});
+
+//
+// Unit tests for the Agent the AWS SDK constructs and passes along. This shim opens one connection
+// per request, so the agent holds nothing; the tests pin that it reports its options back and stays
+// empty rather than silently pretending to pool.
+//
+describe("https shim Agent", () => {
+
+    test("reports back the options it was built with", () => {
+        const agent = new Agent({ keepAlive: true, keepAliveMsecs: 500, maxSockets: 50 });
+
+        expect(agent.keepAlive).toBe(true);
+        expect(agent.keepAliveMsecs).toBe(500);
+        expect(agent.maxSockets).toBe(50);
+    });
+
+    test("defaults to no keep-alive and an unbounded socket count", () => {
+        const agent = new Agent();
+
+        expect(agent.keepAlive).toBe(false);
+        expect(agent.keepAliveMsecs).toBe(1000);
+        expect(agent.maxSockets).toBe(Infinity);
+    });
+
+    test("holds no sockets or queued requests, and destroy() is a no-op", () => {
+        const agent = new Agent({ keepAlive: true });
+
+        expect(agent.sockets).toEqual({});
+        expect(agent.requests).toEqual({});
+        expect(() => agent.destroy()).not.toThrow();
+    });
 });

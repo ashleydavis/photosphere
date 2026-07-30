@@ -702,8 +702,25 @@ export const METHODS: string[] = [
 ];
 
 //
+// Makes an outbound plain-HTTP request, mirroring `http.request(options, callback)`.
+//
+// NOT IMPLEMENTED, and deliberately so. An outbound plain-TCP connection needs a native host function
+// the bridge does not have: `net` can accept connections but not open one. The only caller reaching
+// this today is the AWS SDK's EC2 instance-metadata credential provider, which cannot work on a phone
+// regardless. Honouring an `http://` endpoint end to end is step 3 of the plan, and that is where the
+// transport belongs.
+//
+// It exists as an export because `@smithy/credential-provider-imds` imports it at module load, and it
+// throws rather than returning something inert so a caller that actually needs plain HTTP fails by
+// name instead of hanging or silently doing nothing.
+//
+export function request(options: unknown, callback?: unknown): never {
+    throw new Error("http.request is NOT IMPLEMENTED in the mobile worker: the host bridge has no outbound plain-TCP connect. Use https, or add the transport.");
+}
+
+//
 // The default export mirrors `import http from "http"`.
 //
-const httpModule = { createServer, Server, IncomingMessage, ServerResponse, STATUS_CODES, METHODS };
+const httpModule = { createServer, Server, IncomingMessage, ServerResponse, STATUS_CODES, METHODS, request };
 
 export default httpModule;

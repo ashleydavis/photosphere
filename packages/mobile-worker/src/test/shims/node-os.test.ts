@@ -1,4 +1,4 @@
-import os, { tmpdir, homedir, platform, EOL } from "../../shims/node-os";
+import os, { tmpdir, homedir, platform, release, EOL } from "../../shims/node-os";
 
 //
 // Unit tests for the os shim. The values are sandbox-relative so derived config paths stay inside
@@ -18,9 +18,15 @@ describe("node-os shim", () => {
         expect(platform()).toBe("android");
     });
 
+    test("release returns a non-empty string, which is all the AWS SDK's user-agent needs", () => {
+        expect(typeof release()).toBe("string");
+        expect(release().length).toBeGreaterThan(0);
+    });
+
     test("EOL is a newline and the default export carries the functions", () => {
         expect(EOL).toBe("\n");
         expect(os.tmpdir()).toBe("tmp");
         expect(os.homedir()).toBe("");
+        expect(os.release()).toBe(release());
     });
 });
