@@ -40,6 +40,22 @@ IOS_FRONTEND_DIR="$REPO_DIR/apps/ios-frontend"
 APP_ID="au.com.codecapers.photosphere"
 BUNDLE_ID="au.com.codecapers.photosphere"
 
+# The address every host-side command uses to reach the control bridge. This is the literal IPv4
+# loopback address and must never be the name "localhost".
+#
+# The bridge listens on 0.0.0.0, which is IPv4 only. curl carries its own built-in mapping of the
+# name "localhost" to both ::1 and 127.0.0.1 and tries IPv6 first, whatever /etc/hosts and
+# getaddrinfo say, so the name and the literal are not interchangeable here.
+#
+# The bridge binds an OS-assigned port from the ephemeral range, and each Android emulator's QEMU
+# process holds console ports on [::1] drawn from that same range. Binding 0.0.0.0:P while [::1]:P is
+# already held succeeds, because they are different address families, so the two legitimately end up
+# sharing a port number. Probing by name then reaches the emulator console rather than the bridge:
+# the connection succeeds, so curl never falls back to IPv4, and the console is not an HTTP server,
+# so every probe fails for the full timeout while the bridge sits there healthy. That is the
+# BRIDGE-START-BIND flake in docs/flaky-tests-registry.md, reproduced 7 times.
+BRIDGE_HOST="127.0.0.1"
+
 # Default seconds a wait tolerates before failing, doubled from the standalone value so a concurrent
 # suite run sharing the machine (which slows everything) does not trip a spurious timeout.
 DEFAULT_WAIT_TIMEOUT=120
@@ -124,6 +140,103 @@ wait_for_bridge_port() {
 }
 
 #
+# Dumps everything known about a bridge port that would not answer, so the cause is recorded at the
+# moment of failure rather than guessed at afterwards. Prints curl's own message for one last
+# verbose probe, what is actually bound to the port and by which process, what the bridge process is
+# doing, what localhost resolved to, and the machine's load and memory.
+#
+# Every occurrence of this failure so far has left nothing behind but "did not answer", which is not
+# enough to tell "the socket is gone" from "the socket is listening but something else owns it" from
+# "the probe never reached it". Those are three different bugs.
+#
+# Usage: dump_bridge_failure_evidence <port> <bridge_pid>
+#
+dump_bridge_failure_evidence() {
+    local port="$1"
+    local bridge_pid="$2"
+
+    log_error "--- bridge failure evidence for port $port ---"
+
+    # One last probe with curl's stderr kept, so its own words are recorded alongside the exit code.
+    # The polling loop above discards output; this single attempt does not.
+    local verbose_output
+    verbose_output=$(curl -sS -o /dev/null "http://localhost:$port/ready" 2>&1)
+    log_error "curl via localhost: exit $? -- $(echo "$verbose_output" | tr '\n' ' ')"
+
+    # The same probe against the literal loopback address. The bridge binds 0.0.0.0, so if this
+    # succeeds where the name did not, the fault is in what localhost resolved to.
+    verbose_output=$(curl -sS -o /dev/null "http://127.0.0.1:$port/ready" 2>&1)
+    log_error "curl via 127.0.0.1: exit $? -- $(echo "$verbose_output" | tr '\n' ' ')"
+
+    # And explicitly over IPv6. curl carries its own built-in mapping of the name localhost to both
+    # ::1 and 127.0.0.1 and tries IPv6 first, whatever /etc/hosts and getaddrinfo say, so the name
+    # and the IPv4 literal are not interchangeable here. The bridge listens on 0.0.0.0, which is
+    # IPv4 only, so anything answering on ::1 at this port is a different process.
+    verbose_output=$(curl -sS -o /dev/null "http://[::1]:$port/ready" 2>&1)
+    log_error "curl via [::1]: exit $? -- $(echo "$verbose_output" | tr '\n' ' ')"
+
+    # Everything bound to that port, listening or otherwise, with the owning process. This is what
+    # separates a vanished socket from a socket owned by a process that is not the bridge.
+    if command -v ss > /dev/null 2>&1; then
+        log_error "ss -ltnp on port $port:"
+        ss -ltnp "sport = :$port" 2>&1 | while IFS= read -r socket_line; do
+            echo "  $socket_line"
+        done
+        log_error "ss -tnp (any state) on port $port:"
+        ss -tnp "sport = :$port or dport = :$port" 2>&1 | while IFS= read -r socket_line; do
+            echo "  $socket_line"
+        done
+    elif command -v netstat > /dev/null 2>&1; then
+        log_error "netstat -ltnp filtered to port $port:"
+        netstat -ltnp 2>&1 | grep ":$port " | while IFS= read -r socket_line; do
+            echo "  $socket_line"
+        done
+    else
+        log_error "Neither ss nor netstat is available, so socket state was not captured."
+    fi
+
+    if command -v lsof > /dev/null 2>&1; then
+        log_error "lsof -i :$port:"
+        lsof -nP -i ":$port" 2>&1 | while IFS= read -r socket_line; do
+            echo "  $socket_line"
+        done
+    fi
+
+    # What the bridge process itself is doing. A process in D state, or one against its descriptor
+    # limit, is a different fault from one sitting idle in S with a socket nobody can reach.
+    if [ -n "$bridge_pid" ]; then
+        log_error "ps for bridge PID $bridge_pid:"
+        ps -o pid,ppid,stat,wchan:20,etime,rss,args -p "$bridge_pid" 2>&1 | while IFS= read -r process_line; do
+            echo "  $process_line"
+        done
+        if [ -r "/proc/$bridge_pid/status" ]; then
+            log_error "/proc/$bridge_pid/status (State, Threads, FDSize):"
+            grep -E '^(State|Threads|FDSize):' "/proc/$bridge_pid/status" 2>&1 | while IFS= read -r status_line; do
+                echo "  $status_line"
+            done
+            log_error "open descriptors: $(ls "/proc/$bridge_pid/fd" 2>/dev/null | wc -l)"
+        else
+            log_error "No /proc/$bridge_pid/status on this platform, so process state was not captured."
+        fi
+    fi
+
+    # What localhost resolved to for this run. The bridge binds IPv4 only.
+    if command -v getent > /dev/null 2>&1; then
+        log_error "getent hosts localhost: $(getent hosts localhost 2>&1 | tr '\n' ' ')"
+    elif command -v dscacheutil > /dev/null 2>&1; then
+        log_error "dscacheutil localhost: $(dscacheutil -q host -a name localhost 2>&1 | tr '\n' ' ')"
+    else
+        log_error "No getent or dscacheutil, so localhost resolution was not captured."
+    fi
+
+    # The load the failure happened under, so "the machine was hammered" can be settled rather than
+    # argued about.
+    log_error "loadavg: $(cat /proc/loadavg 2>/dev/null || uptime)"
+    log_error "memory: $(free -m 2>/dev/null | awk '/^Mem:/ { print "mem used " $3 "M free " $4 "M avail " $7 "M" } /^Swap:/ { print "swap used " $3 "M free " $4 "M" }' | tr '\n' ' ')"
+    log_error "--- end bridge failure evidence ---"
+}
+
+#
 # Polls the control bridge port until it accepts HTTP connections (any response, including the
 # 503 returned by /ready before the app is up).
 #
@@ -149,15 +262,25 @@ wait_for_bridge() {
     local ticks=$((DEFAULT_BRIDGE_TIMEOUT * POLL_TICKS_PER_SECOND))
     local curl_status=0
     local bridge_pid=""
+    # How many probes actually ran, and when the wait began. The timeout is 40s at a 0.2s poll, which
+    # is 200 attempts only if each probe returns promptly. curl here has no timeout of its own, so a
+    # probe that connects and then waits forever for a reply blocks the loop, and the whole 40s is
+    # one hung attempt rather than 200 refused ones. Those are opposite faults: the first means the
+    # bridge accepted the connection and never answered, the second means nothing accepted it at all.
+    # Counting the attempts is what tells them apart.
+    local attempts=0
+    local started_at=$SECONDS
 
     if [ -n "$tmp_dir" ] && [ -f "$pid_file" ]; then
         bridge_pid="$(cat "$pid_file" 2>/dev/null)"
     fi
 
     while [ "$ticks" -gt 0 ]; do
-        if curl -s -o /dev/null "http://localhost:$port/ready" 2>/dev/null; then
-            return 0
-        fi
+        attempts=$((attempts + 1))
+        # curl's status has to be captured from the condition itself. Reading $? on the line after
+        # `fi` reads the status of the `if` compound command (0 when the condition failed and there
+        # is no else), so every failure used to report "last curl exit 0", which is impossible.
+        curl -s -o /dev/null "http://$BRIDGE_HOST:$port/ready" 2>/dev/null && return 0
         curl_status=$?
 
         if [ -n "$bridge_pid" ] && ! kill -0 "$bridge_pid" 2>/dev/null; then
@@ -178,17 +301,19 @@ wait_for_bridge() {
     done
 
     if [ -n "$bridge_pid" ] && kill -0 "$bridge_pid" 2>/dev/null; then
-        log_error "The control bridge (PID $bridge_pid) is still running but did not answer on port $port within ${DEFAULT_BRIDGE_TIMEOUT}s (last curl exit $curl_status)."
+        log_error "The control bridge (PID $bridge_pid) is still running but did not answer on port $port within ${DEFAULT_BRIDGE_TIMEOUT}s (last curl exit $curl_status, $attempts probes in $((SECONDS - started_at))s)."
         if [ -s "$tmp_dir/bridge.log" ]; then
             log_error "What the bridge printed:"
             while IFS= read -r bridge_line; do
                 echo "  $bridge_line"
             done < "$tmp_dir/bridge.log"
         fi
+        dump_bridge_failure_evidence "$port" "$bridge_pid"
         exit 1
     fi
 
-    log_error "Control bridge did not start on port $port within ${DEFAULT_BRIDGE_TIMEOUT}s (last curl exit $curl_status)"
+    log_error "Control bridge did not start on port $port within ${DEFAULT_BRIDGE_TIMEOUT}s (last curl exit $curl_status, $attempts probes in $((SECONDS - started_at))s)"
+    dump_bridge_failure_evidence "$port" "$bridge_pid"
     exit 1
 }
 
@@ -259,7 +384,7 @@ wait_for_ready() {
     while [ "$attempt" -le "$max_attempts" ]; do
         local ticks=$((DEFAULT_WAIT_TIMEOUT * POLL_TICKS_PER_SECOND))
         while [ "$ticks" -gt 0 ]; do
-            if curl -sf "http://localhost:$port/ready" > /dev/null 2>&1; then
+            if curl -sf "http://$BRIDGE_HOST:$port/ready" > /dev/null 2>&1; then
                 log_info "App is ready"
                 return 0
             fi
@@ -333,7 +458,7 @@ send_command() {
     # bridge does not register returns Express's 404 HTML page, which curl reports as success and which
     # contains no '"ok":false', so an unimplemented command silently "passed" and the test only failed
     # later on the effect that never happened.
-    response=$(curl -s -w '\n%{http_code}' -X POST "http://localhost:$port/$endpoint" \
+    response=$(curl -s -w '\n%{http_code}' -X POST "http://$BRIDGE_HOST:$port/$endpoint" \
         -H "Content-Type: application/json" \
         -d "$body" 2>&1)
     local exit_code=$?
@@ -413,7 +538,7 @@ read_value() {
     local port="$1"
     local data_id="$2"
     local response
-    response=$(curl -sf "http://localhost:$port/get-value?dataId=$data_id" 2>/dev/null || true)
+    response=$(curl -sf "http://$BRIDGE_HOST:$port/get-value?dataId=$data_id" 2>/dev/null || true)
     # grep -o only prints matches, so on no match nothing is echoed (avoiding sed's echo-on-no-match).
     echo "$response" | grep -o '"value":"[^"]*"' | head -n1 | sed 's/^"value":"//; s/"$//'
 }

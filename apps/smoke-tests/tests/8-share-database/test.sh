@@ -63,7 +63,7 @@ log_info "Waiting for pairing code..."
 code=""
 elapsed=0
 while [ "$elapsed" -lt 20 ]; do
-    response=$(curl -sf "http://localhost:$APP_PORT/get-value?dataId=share-pairing-code" 2>/dev/null || true)
+    response=$(curl -sf "http://$BRIDGE_HOST:$APP_PORT/get-value?dataId=share-pairing-code" 2>/dev/null || true)
     code=$(echo "$response" | sed 's/.*"value":"\([^"]*\)".*/\1/')
     if [ -n "$code" ] && echo "$code" | grep -qE '^[0-9]{4}$'; then
         break

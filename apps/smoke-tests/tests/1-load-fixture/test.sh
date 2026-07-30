@@ -51,7 +51,11 @@ if [ "$PLATFORM" = "android" ]; then
     # pre-picking one that a parallel run could grab in the gap before the forward is set.
     HOST_PORT="$(adb forward tcp:0 "tcp:$SERVER_PORT")"
     THUMB_OUT="$TMP_DIR/served-thumb.bin"
-    HTTP_CODE="$(curl -s -o "$THUMB_OUT" -w '%{http_code}' --max-time 10 "http://localhost:$HOST_PORT/asset?id=$ASSET_ID&type=thumb&db=$DB_NAME")"
+    # The literal loopback address, never the name: adb assigns this forward a port from the same
+    # ephemeral range the emulators draw their [::1] console ports from, and curl resolves the name
+    # "localhost" to ::1 first, which would reach the emulator console instead of the forward. See
+    # BRIDGE_HOST in lib/common.sh.
+    HTTP_CODE="$(curl -s -o "$THUMB_OUT" -w '%{http_code}' --max-time 10 "http://$BRIDGE_HOST:$HOST_PORT/asset?id=$ASSET_ID&type=thumb&db=$DB_NAME")"
     adb forward --remove "tcp:$HOST_PORT" >/dev/null 2>&1 || true
     if [ "$HTTP_CODE" != "200" ]; then
         log_error "Asset server returned HTTP $HTTP_CODE for thumbnail $ASSET_ID"
@@ -61,7 +65,7 @@ if [ "$PLATFORM" = "android" ]; then
         log_error "Asset server did not return JPEG thumbnail bytes (got: $(file "$THUMB_OUT"))"
         exit 1
     fi
-    log_success "Asset server served a JPEG thumbnail over localhost:$SERVER_PORT"
+    log_success "Asset server served a JPEG thumbnail over $BRIDGE_HOST:$HOST_PORT"
 fi
 
 log_success "Test 1 passed: load-fixture"

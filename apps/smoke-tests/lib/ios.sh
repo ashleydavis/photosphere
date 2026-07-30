@@ -119,8 +119,11 @@ ios_install() {
 #
 ios_launch() {
     local port="$1"
+    # The literal loopback address, never the name: the bridge listens on 0.0.0.0, which is IPv4
+    # only, so an app that resolved "localhost" to ::1 would not reach it. See BRIDGE_HOST in
+    # lib/common.sh.
     SIMCTL_CHILD_PHOTOSPHERE_TEST_MODE=1 \
-    SIMCTL_CHILD_PHOTOSPHERE_TEST_HOST=localhost \
+    SIMCTL_CHILD_PHOTOSPHERE_TEST_HOST="$BRIDGE_HOST" \
     SIMCTL_CHILD_PHOTOSPHERE_TEST_PORT="$port" \
     xcrun simctl launch --terminate-running-process "${IOS_SIMULATOR_UDID:-booted}" "$BUNDLE_ID"
 }

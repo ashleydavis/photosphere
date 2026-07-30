@@ -45,7 +45,7 @@ log_info "Waiting for the pairing code that marks the start of the search..."
 code=""
 waited=0
 while [ "$waited" -lt 20 ]; do
-    response=$(curl -sf "http://localhost:$APP_PORT/get-value?dataId=share-pairing-code" 2>/dev/null || true)
+    response=$(curl -sf "http://$BRIDGE_HOST:$APP_PORT/get-value?dataId=share-pairing-code" 2>/dev/null || true)
     code=$(echo "$response" | sed 's/.*"value":"\([^"]*\)".*/\1/')
     if [ -n "$code" ] && echo "$code" | grep -qE '^[0-9]{4}$'; then
         break
@@ -67,7 +67,7 @@ log_info "Search started with pairing code $code. Waiting for it to give up..."
 message=""
 waited=0
 while [ "$waited" -lt 120 ]; do
-    response=$(curl -sf "http://localhost:$APP_PORT/get-value?dataId=share-error-message" 2>/dev/null || true)
+    response=$(curl -sf "http://$BRIDGE_HOST:$APP_PORT/get-value?dataId=share-error-message" 2>/dev/null || true)
     message=$(echo "$response" | sed 's/.*"value":"\([^"]*\)".*/\1/')
     if [ -n "$message" ]; then
         break

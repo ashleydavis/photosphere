@@ -23,7 +23,7 @@ read_local_storage() {
     local port="$1"
     local key="$2"
     local response
-    response=$(curl -sf "http://localhost:$port/get-storage?storageKey=$key" 2>/dev/null || true)
+    response=$(curl -sf "http://$BRIDGE_HOST:$port/get-storage?storageKey=$key" 2>/dev/null || true)
     echo "$response" | sed 's/.*"value":"\([^"]*\)".*/\1/'
 }
 
@@ -32,7 +32,7 @@ read_value() {
     local port="$1"
     local data_id="$2"
     local response
-    response=$(curl -sf "http://localhost:$port/get-value?dataId=$data_id" 2>/dev/null || true)
+    response=$(curl -sf "http://$BRIDGE_HOST:$port/get-value?dataId=$data_id" 2>/dev/null || true)
     echo "$response" | sed 's/.*"value":"\([^"]*\)".*/\1/'
 }
 

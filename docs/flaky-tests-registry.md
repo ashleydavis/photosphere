@@ -18,20 +18,38 @@ A repo-wide record of every known intermittent (flaky) failure mode across the t
 
 ### BRIDGE-START-BIND
 
-- [x] Fixed and verified (10x clean)
+- [ ] Fixed and verified (10x clean)
 - Suite: mobile smoke tests (`bun run test:and` / `bun run test:ios`)
 - Pattern: `Control bridge did not start on port \d+ within \d+s`
+- Also matches (same mode, message since reworded): `is still running but did not answer on port \d+`
 - Cascade symptom (same mode, not a new entry): `Timed out waiting for app to be ready after \d+s`
-- Fix commit: apps/smoke-tests/lib/control-bridge.ts, `start()` retries `listen()` on a transient `EADDRINUSE` instead of letting the process die (uncommitted working change; record the commit hash here once committed).
+- Fix commit: none. The entry previously named an uncommitted working change as the fix, so nothing ever landed and the mode stayed live.
 - First seen: 2026-07-06, local 10x loop, run 10 of 10, test 3 (open-database). Runs 1 to 9 passed.
 - Recurrences:
   - 2026-07-06, skill loop iteration 7 of 100 (`bun run test:and`), failed on run 10 of 10 with `Control bridge did not start on port N within 20s`.
   - 2026-07-07, skill loop iteration 15 of 100 (`bun run test:and`), failed on run 7 of 10 with the same bridge bind failure.
   - 2026-07-07, skill loop iteration 18 of 100 (`bun run test:and`), failed on run 2 of 10 with the same bridge bind failure.
   - 2026-07-07, skill loop iteration 21 of 100 (`bun run test:and`), failed on run 7 of 10 with the same bridge bind failure.
-- Verified: 2026-07-09, 0 recurrences of the bridge bind failure across 40 consecutive runs after the fix; accepted as fixed by the user. Short of the 100-run target because the runner kept aborting early on OPEN-DB-LIST-ITEM-NOT-RENDERED.
-- Root cause: the host control-bridge Bun process fails to bind its assigned port, so the app has nothing to connect to and never becomes ready. Three compounding factors: (a) leaked bridge processes from a previously failed test keep holding ports (a live leaked process, PID 106755, was observed still running after the loop stopped); (b) `find_free_port` binds port 0, closes the probe socket, then prints the port, leaving a reuse window in which another process can take it; (c) `ControlBridge.start()` wires only the `listening` callback and no `error` handler, so a bind collision hangs silently until `wait_for_bridge` times out at 20s instead of failing fast.
-- Evidence: `Control bridge did not start on port 43227 within 20s` then two `Timed out waiting for app to be ready after 60s` attempts, then `1 of 25 tests failed`; `pgrep control-bridge-main` showed leaked PID 106755 still alive.
+  - 2026-07-30, five occurrences in one day under `bun run test:everything` (tests 13, 17, 11, 2 and 31; five different ports, five different PIDs, never the same test twice).
+  - 2026-07-30, reproduced deliberately 7 times with full evidence: once in `bun run test:and` (test 19, port 42071) and 6 times across 4000 instrumented bridge starts (ports 42691, 35793, 33303, 42329, 40939, 42329). Root cause established, see below. No fix applied.
+- Verified: the 2026-07-09 "verified" claim stands only against the old explanation. The real cause below was never addressed, and the mode recurred.
+- Root cause: **the probe talks to the Android emulator instead of the bridge, because `localhost` is not `127.0.0.1` as far as curl is concerned.**
+  - `ControlBridge.start()` calls `httpServer.listen(0, "0.0.0.0")`, so the bridge listens on **IPv4 only** and the OS assigns a port from the ephemeral range (`net.ipv4.ip_local_port_range` = 32768-60999).
+  - Each Android emulator's QEMU process holds several listeners on **`[::1]`** (its console and QMP ports), drawn from that same ephemeral range. With the 5-emulator pool up there are ~25 of them.
+  - Binding `0.0.0.0:P` while `[::1]:P` is already held **succeeds**, because they are different address families. Verified directly: every other combination (`127.0.0.1:P` vs `0.0.0.0:P` in either order, `[::]:P` vs `0.0.0.0:P`) is refused with `EADDRINUSE`. So the bridge legitimately ends up sharing a port number with a QEMU console.
+  - `wait_for_bridge` probes `http://localhost:$port/ready`. **curl carries its own built-in mapping of the name `localhost` to both `::1` and `127.0.0.1`, and tries IPv6 first**, regardless of `/etc/hosts` or `getaddrinfo`. On this machine `getent hosts localhost` and `getaddrinfo` both return `127.0.0.1` only (there is no `::1 localhost` line), which is why the IPv6 explanation was wrongly dismissed in earlier investigations.
+  - So the probe connects to `[::1]:P`, which is the emulator console, not the bridge. The TCP connection **succeeds**, so curl never falls back to IPv4. The console speaks its own protocol, so curl fails at the HTTP layer with exit 1 (`Received HTTP/0.9 when not allowed`) or exit 56 (`Recv failure: Connection reset by peer`).
+  - This is deterministic for the whole 40s: all 200 probes hit the console. The bridge is alive, listening and healthy throughout, and answers instantly on `127.0.0.1`.
+  - Rate: ~25 QEMU `[::1]` listeners over a 28232-port range is 1 collision per ~1129 bridge starts. The Android suite performs 38 bridge starts per run, so ~3.4% of runs. Observed 6 failures in 4000 starts against 3.5 predicted.
+- Evidence (2026-07-30, all 7 reproductions identical in shape):
+  - `The control bridge (PID 1634885) is still running but did not answer on port 42071 within 40s (last curl exit 1, 200 probes in 43s).` The probe count is measured, not assumed: it is 200 fast failures, not one hung curl.
+  - `curl via localhost: exit 1 -- curl: (1) Received HTTP/0.9 when not allowed`
+  - `curl via 127.0.0.1: exit 0` (the bridge answers immediately, in the same second)
+  - `curl via [::1]: exit 1 -- curl: (1) Received HTTP/0.9 when not allowed` (identical to the name, which is the point)
+  - `lsof -i :42071` shows both owners at once: `bun 1634885 IPv4 TCP *:42071 (LISTEN)` and `qemu-syst 3156721 IPv6 TCP [::1]:42071 (LISTEN)`.
+  - The bridge process is `S`/`ep_poll` with 13 open descriptors: idle and healthy, not blocked, not out of descriptors.
+  - Confirmed in isolation: with a listener bound only on `[::1]:P` and nothing on `127.0.0.1:P`, `curl http://localhost:P/` reaches it and reports `Received HTTP/0.9 when not allowed`, while `curl http://127.0.0.1:P/` gets connection refused.
+- Note on the earlier explanation: the process is not dying and there is no `EADDRINUSE`. The bind always succeeds. The previous entry's three "compounding factors" describe a different failure that a retry-on-EADDRINUSE would not have touched.
 
 ### OPEN-DB-LIST-ITEM-NOT-RENDERED
 
