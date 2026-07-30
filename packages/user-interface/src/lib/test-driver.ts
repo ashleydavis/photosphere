@@ -182,6 +182,40 @@ export async function waitForElement(dataId: string, nth: number, timeoutMs: num
 }
 
 //
+// Selects a radio or checkbox input, the two controls that only change state when the input itself
+// is clicked.
+//
+const TOGGLE_INPUT_SELECTOR = 'input[type="radio"], input[type="checkbox"]';
+
+//
+// Reports whether an element is a radio or checkbox input.
+//
+export function isToggleInput(element: Element): boolean {
+    return element.matches(TOGGLE_INPUT_SELECTOR);
+}
+
+//
+// The element a click should actually land on. Joy puts the `data-id` on a wrapper `<span>` and the
+// real form control inside it, so clicking a Joy `<Radio>` by its `data-id` clicks the wrapper and
+// selects nothing: the test then asserts against a screen that never changed and passes.
+//
+// The redirect is deliberately conservative, because returning the element unchanged is always the
+// safe answer and behaves exactly as the driver does today. An element that is already clickable in
+// its own right (a button, a link, a bare toggle input) is never redirected, and a wrapper is only
+// redirected when it contains exactly one toggle input, so anything ambiguous is left alone.
+//
+export function clickTarget(element: HTMLElement): HTMLElement {
+    if (element.matches(`button, a, ${TOGGLE_INPUT_SELECTOR}`)) {
+        return element;
+    }
+    const toggles = element.querySelectorAll(TOGGLE_INPUT_SELECTOR);
+    if (toggles.length === 1) {
+        return toggles[0] as HTMLElement;
+    }
+    return element;
+}
+
+//
 // Clicks the element with the given `data-id`. When several elements share the id, `nth`
 // selects which one (defaults to the first).
 //
@@ -189,8 +223,11 @@ export function doClick(dataId: string, nth?: number): void {
     const index = nth ?? 0;
     const element = findElement(dataId, index);
     if (element) {
-        console.log(`test-click: clicking element data-id="${dataId}" nth=${index}`);
-        element.click();
+        const target = clickTarget(element);
+        // Report a redirect, so a future failure shows what was actually clicked rather than what was asked for.
+        const redirect = target === element ? '' : ` (redirected to nested <${target.tagName.toLowerCase()} type="${(target as HTMLInputElement).type}">)`;
+        console.log(`test-click: clicking element data-id="${dataId}" nth=${index}${redirect}`);
+        target.click();
     }
     else {
         console.warn(`test-click: element not found data-id="${dataId}" nth=${index}`);
@@ -343,8 +380,14 @@ export function doStagePickFolder(result: string | null): void {
 }
 
 //
-// Reads the current value of the element with the given `data-id`, preferring its input
-// value and falling back to its text content. Returns an empty string when not found.
+// Reads the current value of the element with the given `data-id`: its own value when it is a form
+// control, otherwise its text, otherwise the value of an input nested inside it. Returns an empty
+// string when not found.
+//
+// Text comes ahead of the nested input on purpose. A container that happens to hold a Joy `<Switch>`
+// contains a hidden checkbox whose value is the string "on" by default, and "on" is truthy, so
+// reading the nested input first reported "on" for any panel or row with a switch in it. A test
+// waiting for that container's text then waited for something that could never be returned.
 //
 export function getValue(dataId: string): string {
     // The visible one: on mobile a closed drawer keeps its content in the DOM, so reading the first
@@ -353,17 +396,24 @@ export function getValue(dataId: string): string {
     if (!element) {
         return '';
     }
-    const inputValue = (element as HTMLInputElement).value;
-    if (inputValue) {
-        return inputValue;
+    // The element is itself a form control, so its own value is the unambiguous answer.
+    if (element.matches('input, textarea, select')) {
+        return (element as HTMLInputElement).value;
     }
-    // Joy's Input carries the data-id on its wrapper and the value on the input nested inside it,
-    // so fall back to that before text content.
-    const nestedInput = element.querySelector('input');
-    if (nestedInput && nestedInput.value) {
-        return nestedInput.value;
+    // A container's text is what a test asking for its value means. Emptiness is judged on the
+    // trimmed text so the whitespace between a wrapper's tags does not count as a value, but the
+    // text is returned as-is to keep what existing tests already read from it.
+    const textContent = element.textContent || '';
+    if (textContent.trim()) {
+        return textContent;
     }
-    return element.textContent || '';
+    // Joy's Input carries the data-id on its wrapper, which holds no text of its own, and the value
+    // on the input nested inside it.
+    const nestedInput = element.querySelector('input, textarea');
+    if (nestedInput) {
+        return (nestedInput as HTMLInputElement).value;
+    }
+    return '';
 }
 
 //

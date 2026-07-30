@@ -4,6 +4,8 @@
 
 import {
     doClick,
+    isToggleInput,
+    clickTarget,
     waitForElement,
     isElementVisible,
     doLongPressClick,
@@ -103,140 +105,6 @@ describe("hidden elements are not actionable", () => {
     });
 });
 
-//
-// Regression guard for the create-database smoke-test failure caused by commit fa673c6b (mobile
-// dialogs became Joy Drawers). A closed Joy Drawer stays in the DOM with visibility:hidden, and a
-// dialog mounted in several places matches its data-id several times, all but one hidden. The driver
-// must act only on the visible one; before this it took the first in DOM order (a hidden drawer), so
-// it typed into an invisible form and the visible one stayed empty.
-//
-describe("hidden elements are not actionable", () => {
-
-    // A hidden wrapper (a closed drawer) followed by a visible one, both carrying the same data-id.
-    function twoWrappers(): void {
-        document.body.innerHTML = `
-            <div id="closed" style="visibility: hidden;">
-                <div data-id="field"><input type="text" /></div>
-                <button data-id="confirm">Confirm</button>
-            </div>
-            <div id="open">
-                <div data-id="field"><input type="text" /></div>
-                <button data-id="confirm">Confirm</button>
-            </div>`;
-    }
-
-    test("isElementVisible reports a visibility:hidden subtree as not visible", () => {
-        document.body.innerHTML = `<div style="visibility: hidden;"><span data-id="x">x</span></div>`;
-        expect(isElementVisible(document.querySelector(`[data-id="x"]`)!)).toBe(false);
-    });
-
-    test("isElementVisible reports a display:none subtree as not visible", () => {
-        document.body.innerHTML = `<div style="display: none;"><span data-id="x">x</span></div>`;
-        expect(isElementVisible(document.querySelector(`[data-id="x"]`)!)).toBe(false);
-    });
-
-    test("isElementVisible reports a plain element as visible", () => {
-        document.body.innerHTML = `<span data-id="x">x</span>`;
-        expect(isElementVisible(document.querySelector(`[data-id="x"]`)!)).toBe(true);
-    });
-
-    test("doType types into the visible input, not the hidden one that comes first", () => {
-        twoWrappers();
-        const hiddenInput = document.querySelector(`#closed [data-id="field"] input`) as HTMLInputElement;
-        const visibleInput = document.querySelector(`#open [data-id="field"] input`) as HTMLInputElement;
-        doType("field", "typed-value");
-        expect(visibleInput.value).toBe("typed-value");
-        expect(hiddenInput.value).toBe("");
-    });
-
-    test("doClick clicks the visible element, not the hidden one that comes first", () => {
-        twoWrappers();
-        let hiddenClicks = 0;
-        let visibleClicks = 0;
-        (document.querySelector(`#closed [data-id="confirm"]`) as HTMLElement).addEventListener("click", () => { hiddenClicks += 1; });
-        (document.querySelector(`#open [data-id="confirm"]`) as HTMLElement).addEventListener("click", () => { visibleClicks += 1; });
-        doClick("confirm");
-        expect(visibleClicks).toBe(1);
-        expect(hiddenClicks).toBe(0);
-    });
-
-    test("waitForElement ignores a hidden match and waits for a visible one", async () => {
-        document.body.innerHTML = `<div style="visibility: hidden;"><span data-id="late">x</span></div>`;
-        setTimeout(() => {
-            document.body.innerHTML += `<span data-id="late">x</span>`;
-        }, 80);
-        await waitForElement("late", 0, 2000);
-        expect(document.querySelectorAll(`[data-id="late"]`).length).toBe(2);
-    });
-});
-
-//
-// Regression guard for the create-database smoke-test failure caused by commit fa673c6b (mobile
-// dialogs became Joy Drawers). A closed Joy Drawer stays in the DOM with visibility:hidden, and a
-// dialog mounted in several places matches its data-id several times, all but one hidden. The driver
-// must act only on the visible one; before this it took the first in DOM order (a hidden drawer), so
-// it typed into an invisible form and the visible one stayed empty.
-//
-describe("hidden elements are not actionable", () => {
-
-    // A hidden wrapper (a closed drawer) followed by a visible one, both carrying the same data-id.
-    function twoWrappers(): void {
-        document.body.innerHTML = `
-            <div id="closed" style="visibility: hidden;">
-                <div data-id="field"><input type="text" /></div>
-                <button data-id="confirm">Confirm</button>
-            </div>
-            <div id="open">
-                <div data-id="field"><input type="text" /></div>
-                <button data-id="confirm">Confirm</button>
-            </div>`;
-    }
-
-    test("isElementVisible reports a visibility:hidden subtree as not visible", () => {
-        document.body.innerHTML = `<div style="visibility: hidden;"><span data-id="x">x</span></div>`;
-        expect(isElementVisible(document.querySelector(`[data-id="x"]`)!)).toBe(false);
-    });
-
-    test("isElementVisible reports a display:none subtree as not visible", () => {
-        document.body.innerHTML = `<div style="display: none;"><span data-id="x">x</span></div>`;
-        expect(isElementVisible(document.querySelector(`[data-id="x"]`)!)).toBe(false);
-    });
-
-    test("isElementVisible reports a plain element as visible", () => {
-        document.body.innerHTML = `<span data-id="x">x</span>`;
-        expect(isElementVisible(document.querySelector(`[data-id="x"]`)!)).toBe(true);
-    });
-
-    test("doType types into the visible input, not the hidden one that comes first", () => {
-        twoWrappers();
-        const hiddenInput = document.querySelector(`#closed [data-id="field"] input`) as HTMLInputElement;
-        const visibleInput = document.querySelector(`#open [data-id="field"] input`) as HTMLInputElement;
-        doType("field", "typed-value");
-        expect(visibleInput.value).toBe("typed-value");
-        expect(hiddenInput.value).toBe("");
-    });
-
-    test("doClick clicks the visible element, not the hidden one that comes first", () => {
-        twoWrappers();
-        let hiddenClicks = 0;
-        let visibleClicks = 0;
-        (document.querySelector(`#closed [data-id="confirm"]`) as HTMLElement).addEventListener("click", () => { hiddenClicks += 1; });
-        (document.querySelector(`#open [data-id="confirm"]`) as HTMLElement).addEventListener("click", () => { visibleClicks += 1; });
-        doClick("confirm");
-        expect(visibleClicks).toBe(1);
-        expect(hiddenClicks).toBe(0);
-    });
-
-    test("waitForElement ignores a hidden match and waits for a visible one", async () => {
-        document.body.innerHTML = `<div style="visibility: hidden;"><span data-id="late">x</span></div>`;
-        setTimeout(() => {
-            document.body.innerHTML += `<span data-id="late">x</span>`;
-        }, 80);
-        await waitForElement("late", 0, 2000);
-        expect(document.querySelectorAll(`[data-id="late"]`).length).toBe(2);
-    });
-});
-
 describe("doClick", () => {
 
     test("clicks the element with the matching data-id", () => {
@@ -265,6 +133,106 @@ describe("doClick", () => {
     test("does nothing when the element is missing", () => {
         document.body.innerHTML = ``;
         expect(() => doClick("missing")).not.toThrow();
+    });
+
+    //
+    // Regression guard for the replication smoke test, which appeared to cover both replication modes
+    // but only ever covered partial. Joy's Radio puts the data-id on a wrapper span with the real
+    // input nested inside, so clicking the wrapper selected nothing, the mode stayed on its default,
+    // and the test asserted against a screen that had not changed.
+    //
+    test("selects the radio nested inside a Joy-style wrapper carrying the data-id", () => {
+        document.body.innerHTML = `
+            <span data-id="mode-partial"><input type="radio" name="mode" value="partial" checked /></span>
+            <span data-id="mode-full"><input type="radio" name="mode" value="full" /></span>`;
+        const fullInput = document.querySelector(`[data-id="mode-full"] input`) as HTMLInputElement;
+        doClick("mode-full");
+        expect(fullInput.checked).toBe(true);
+    });
+});
+
+describe("isToggleInput", () => {
+
+    //
+    // The element carrying the given data-id in the document.
+    //
+    function element(dataId: string): HTMLElement {
+        return document.querySelector(`[data-id="${dataId}"]`) as HTMLElement;
+    }
+
+    test("is true for a radio input", () => {
+        document.body.innerHTML = `<input data-id="radio" type="radio" />`;
+        expect(isToggleInput(element("radio"))).toBe(true);
+    });
+
+    test("is true for a checkbox input", () => {
+        document.body.innerHTML = `<input data-id="checkbox" type="checkbox" />`;
+        expect(isToggleInput(element("checkbox"))).toBe(true);
+    });
+
+    test("is false for a text input", () => {
+        document.body.innerHTML = `<input data-id="text" type="text" />`;
+        expect(isToggleInput(element("text"))).toBe(false);
+    });
+
+    test("is false for a button", () => {
+        document.body.innerHTML = `<button data-id="button">go</button>`;
+        expect(isToggleInput(element("button"))).toBe(false);
+    });
+
+    test("is false for a div", () => {
+        document.body.innerHTML = `<div data-id="div">text</div>`;
+        expect(isToggleInput(element("div"))).toBe(false);
+    });
+});
+
+describe("clickTarget", () => {
+
+    //
+    // The element carrying the given data-id in the document.
+    //
+    function element(dataId: string): HTMLElement {
+        return document.querySelector(`[data-id="${dataId}"]`) as HTMLElement;
+    }
+
+    test("returns a button unchanged", () => {
+        document.body.innerHTML = `<button data-id="button">go</button>`;
+        const button = element("button");
+        expect(clickTarget(button)).toBe(button);
+    });
+
+    test("returns a bare radio input unchanged", () => {
+        document.body.innerHTML = `<input data-id="radio" type="radio" />`;
+        const radio = element("radio");
+        expect(clickTarget(radio)).toBe(radio);
+    });
+
+    test("returns the nested radio when the wrapper contains exactly one", () => {
+        document.body.innerHTML = `<span data-id="mode"><input type="radio" /></span>`;
+        expect(clickTarget(element("mode"))).toBe(document.querySelector(`[data-id="mode"] input`));
+    });
+
+    test("returns the nested checkbox when the wrapper contains exactly one", () => {
+        document.body.innerHTML = `<span data-id="toggle"><input type="checkbox" /></span>`;
+        expect(clickTarget(element("toggle"))).toBe(document.querySelector(`[data-id="toggle"] input`));
+    });
+
+    test("returns the wrapper unchanged when it contains no toggle", () => {
+        document.body.innerHTML = `<div data-id="row"><input type="text" /><span>label</span></div>`;
+        const row = element("row");
+        expect(clickTarget(row)).toBe(row);
+    });
+
+    test("returns the wrapper unchanged when it contains two toggles", () => {
+        document.body.innerHTML = `<div data-id="group"><input type="radio" /><input type="radio" /></div>`;
+        const group = element("group");
+        expect(clickTarget(group)).toBe(group);
+    });
+
+    test("returns a button unchanged even when it contains a toggle", () => {
+        document.body.innerHTML = `<button data-id="button"><input type="checkbox" /></button>`;
+        const button = element("button");
+        expect(clickTarget(button)).toBe(button);
     });
 });
 
@@ -471,6 +439,29 @@ describe("getValue", () => {
     test("falls back to text content for non-inputs", () => {
         document.body.innerHTML = `<span data-id="label">the label</span>`;
         expect(getValue("label")).toBe("the label");
+    });
+
+    //
+    // Regression guard for containers holding a Joy Switch. The switch's hidden checkbox has the
+    // value "on" by default, which is truthy, so reading the nested input ahead of the text reported
+    // "on" for the whole container and a test waiting for its text waited forever.
+    //
+    test("returns a container's text ahead of a nested checkbox's \"on\"", () => {
+        document.body.innerHTML = `<div data-id="panel">Encryption enabled<span><input type="checkbox" /></span></div>`;
+        expect(getValue("panel")).toBe("Encryption enabled");
+    });
+
+    test("returns a nested input's value when the wrapper has no text of its own", () => {
+        document.body.innerHTML = `<div data-id="name"><input type="text" value="my-database" /></div>`;
+        expect(getValue("name")).toBe("my-database");
+    });
+
+    test("returns a nested textarea's value when the wrapper has no text of its own", () => {
+        document.body.innerHTML = `<div data-id="key"><textarea></textarea></div>`;
+        // Set through the property, not the markup: a textarea's markup content is also its parent's
+        // text content, which would make the text path answer and leave this path unexercised.
+        (document.querySelector(`[data-id="key"] textarea`) as HTMLTextAreaElement).value = "PEM";
+        expect(getValue("key")).toBe("PEM");
     });
 
     test("returns an empty string when the element is missing", () => {
