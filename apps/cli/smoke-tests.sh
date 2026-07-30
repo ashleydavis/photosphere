@@ -497,6 +497,33 @@ run_parallel() {
                 local_start=$SECONDS
                 ISOLATED_TEST_TMP_DIR="${TEST_TMP_DIR}/${dir_name}" timeout 300 bash "$test_sh" >"$log_file" 2>&1
                 local_exit=$?
+
+                # Retry once, and only when Bun itself crashed rather than a test failing an assertion.
+                #
+                # Bun 1.3.14 intermittently dies inside its own runtime while the CLI is using worker
+                # threads, printing "Bun has crashed. This indicates a bug in Bun, not your code" and a
+                # panic line, then killing the process with SIGILL or SIGSEGV. It has hit six different
+                # tests across three different commands at roughly one run in six, so it is neither any one
+                # test nor this repository's code, and there is no newer Bun to move to.
+                #
+                # The match is on that crash signature in the test's own log, not on the exit code: the
+                # crash happens to a `bun run` child inside the test, which the test catches and reports as
+                # an ordinary failure exiting 1, so an exit code cannot tell the two apart. An assertion
+                # failure leaves no panic line and is never retried, so a real regression still fails the
+                # run exactly as it did before.
+                #
+                # The retry is announced rather than silent, and the crashed run's log is kept alongside as
+                # .signal-death. A suite that quietly re-runs things until they pass is worse than one that
+                # fails, because it hides a rising failure rate.
+                if [ "$local_exit" -ne 0 ] && grep -qE "Bun has crashed|panic: |terminated by signal SIG(ILL|SEGV|BUS|ABRT)" "$log_file" 2>/dev/null; then
+                    printf "${YELLOW}RETRY${NC} %2s  %s hit a Bun runtime crash (not an assertion), retrying once\n" "$num" "$name"
+                    mv "$log_file" "$log_file.signal-death" 2>/dev/null || true
+                    rm -rf "${TEST_TMP_DIR:?}/${dir_name}"
+                    mkdir -p "${TEST_TMP_DIR}/${dir_name}"
+                    ISOLATED_TEST_TMP_DIR="${TEST_TMP_DIR}/${dir_name}" timeout 300 bash "$test_sh" >"$log_file" 2>&1
+                    local_exit=$?
+                fi
+
                 echo $((SECONDS - local_start)) > "$dir/tmp/test-duration.txt"
                 exit $local_exit
             ) &

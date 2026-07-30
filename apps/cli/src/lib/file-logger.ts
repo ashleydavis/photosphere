@@ -1,5 +1,5 @@
 import * as fs from "fs/promises";
-import { ensureDirSync } from "node-utils";
+import { ensureDirSync, getProcessTmpDir } from "node-utils";
 import path from "path";
 import os from "os";
 import { ILog, ILogDetails, formatErrorChain } from "utils";
@@ -41,8 +41,16 @@ export class FileLogger implements ILog {
     static async create(consoleLogger: ILog, command: string): Promise<FileLogger> {
         const startTime = new Date();
         
-        // Create logs directory in Photosphere temp
-        const photosphereTempDir = path.join(os.tmpdir(), 'photosphere');
+        // Create logs directory in Photosphere temp.
+        //
+        // getProcessTmpDir rather than os.tmpdir, so the logs land wherever the rest of this process's
+        // temporary state lives. Under test that is the per-test TEST_TMP_DIR, which matters because
+        // `hash-cache clear` deletes <tmp>/photosphere outright: with os.tmpdir every CLI process in the
+        // suite shared /tmp/photosphere/logs, so one process clearing the cache pulled the log directory
+        // out from under every other one. writeLogHeader below shells out three times for tool versions
+        // between creating this directory and writing to it, which is a wide enough window that two CLI
+        // smoke tests died on ENOENT opening their own log file.
+        const photosphereTempDir = path.join(getProcessTmpDir(), 'photosphere');
         const logsDir = path.join(photosphereTempDir, 'logs');
         ensureDirSync(logsDir);
         

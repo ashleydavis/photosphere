@@ -4,7 +4,7 @@ import path from "path";
 import os from "os";
 import open from "open";
 import pc from "picocolors";
-import { exit } from "node-utils";
+import { exit, getProcessTmpDir } from "node-utils";
 import { text, isCancel, intro, outro } from '../lib/clack/prompts';
 import { Image, Video } from "tools";
 import { version } from "config";
@@ -258,7 +258,7 @@ async function getToolVersions() {
 
 function getLatestLogFile(): string | null {
     try {
-        const logsDir = path.join(os.tmpdir(), 'photosphere', 'logs');
+        const logsDir = path.join(getProcessTmpDir(), 'photosphere', 'logs');
         if (!existsSync(logsDir)) {
             return null;
         }

@@ -80,7 +80,7 @@ export async function versionCommand(): Promise<void> {
     const configDir = join(os.homedir(), '.config', 'photosphere');
     log.info(`  ${pc.bold('Config')}: ${pc.cyan(configDir)}`);
     log.info(`  ${pc.bold('Temp')}: ${pc.cyan(join(getProcessTmpDir(), 'photosphere'))}`);
-    log.info(`  ${pc.bold('Log files')}: ${pc.cyan(join(os.tmpdir(), 'photosphere', 'logs'))}`);
+    log.info(`  ${pc.bold('Log files')}: ${pc.cyan(join(getProcessTmpDir(), 'photosphere', 'logs'))}`);
     log.info(`  ${pc.bold('Hash cache')}: ${pc.cyan(join(getProcessTmpDir(), 'photosphere', 'hash-cache-x.dat'))}`);
     log.info('');
     
