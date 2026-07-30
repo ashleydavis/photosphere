@@ -1,6 +1,6 @@
 # Git hooks
 
-The local test gate. Two hooks stop a commit that does not compile and stop a push whose tests fail. They are checked in, but they are **not** active until you install them once per clone.
+The local test gate. One hook refuses a commit whose tests do not pass. It is checked in, but it is **not** active until you install it once per clone.
 
 ## How git hooks work, in general
 
@@ -10,7 +10,7 @@ Three things about them are worth knowing up front, because they explain the who
 
 - **Hooks are not version controlled.** Git only ever runs hooks from one directory, and by default that is `.git/hooks`, which is not part of the repository. So you cannot commit a hook and have it work for everyone. A fresh clone of this repository has git's stock `*.sample` files there and nothing else, which means nothing runs at any point.
 - **`core.hooksPath` is the way round that.** Setting it tells git to look somewhere else, so the scripts can live in the repository as ordinary tracked files. That setting is per clone and is not itself committed, which is why installing is a manual step and why anyone who already cloned has to run it too.
-- **`--no-verify` always wins.** `git commit --no-verify` and `git push --no-verify` skip the hook entirely. That is git's own behaviour, not something these scripts implement, and it cannot be disabled. A hook is a convenience for the person running it, never a security control.
+- **`--no-verify` always wins.** `git commit --no-verify` skips the hook entirely. That is git's own behaviour, not something this script implements, and it cannot be disabled. A hook is a convenience for the person running it, never a security control.
 
 ## Installing them
 
@@ -32,23 +32,13 @@ It should print `.githooks`. Anything else, including no output, means the hooks
 
 The path is set relative rather than absolute so it resolves against whichever working tree git is running in. That matters because a git worktree shares one config file with the main clone, and a relative path lets both use their own checked-in copy.
 
-## What each hook runs
+## What it runs
 
-Both hooks delegate to `bun run test:everything`, so what they run is the same set you can run by hand.
-
-**`.githooks/pre-commit`** runs two things:
-
-```
-bun run compile
-bun run test
-```
-
-That is all. It is meant to be quick enough that you never want to skip it.
-
-**`.githooks/pre-push`** runs the full set for your platform:
+There is one hook, `.githooks/pre-commit`. It delegates to `bun run test:everything`, so what it runs is exactly the set you can run by hand:
 
 | | Linux | macOS |
 | --- | --- | --- |
+| Compile | `bun run compile` | `bun run compile` |
 | Unit tests | `bun run test` | `bun run test` |
 | CLI smoke tests | `bun run test:cli` | `bun run test:cli` |
 | Electron smoke tests | `bun run test:electron` | `bun run test:electron` |
@@ -57,9 +47,19 @@ That is all. It is meant to be quick enough that you never want to skip it.
 
 The platform is detected with `uname`. The mobile toolchains do not exist on the other platform, so there is no way to run both sets from one machine.
 
-## Why the split
+## Why there is no pre-push
 
-The full set is far too slow to run on every commit, and the mobile suites need a device or emulator attached. A gate slow enough to be bypassed as a matter of routine is worse than no gate, because the repository then looks guarded when it is not. So the cheap checks guard every commit and the expensive ones guard the push, which happens far less often.
+There used to be one. `pre-commit` held compile and the unit tests, and `pre-push` held the expensive suites, on the reasoning that the full set is too slow to run on every commit.
+
+That split checked at the wrong moment. It let a broken commit exist and only complained later, at a point where the history already has the problem in it and fixing it means amending or adding a commit on top. The commit is the thing worth keeping honest, so the whole set now runs there and nothing runs at push time.
+
+## What this costs you
+
+The mobile suites need a device or emulator attached. With none running, **every** commit is refused, including a docs-only one, because `test:and` fails immediately with `emulator not started`.
+
+Use `--no-verify` for those. That is a normal part of using this, not a workaround.
+
+The upside of putting everything at commit time is that a commit which passed the hook has actually been tested, on every platform suite this machine can run. That was never true of the old `pre-commit`.
 
 ## Why everything runs in parallel
 
@@ -84,33 +84,23 @@ Two things to be aware of when running everything at once:
 
 Neither has caused a failure in practice, but if you see a build error that makes no sense, re-run the one script on its own before believing it.
 
-## The mobile rule
+## Why the mobile suites are always included
 
-**Changes to mobile code cannot be pushed without running the mobile suites.** If the push touches any of these paths, `pre-push` runs them, and refuses the push if no device is attached rather than skipping them:
+There is no changed-paths rule and no way to opt out of the mobile suites. Every commit runs them, whatever it touches.
 
-```
-packages/mobile-frontend/
-packages/mobile-worker/
-apps/android-frontend/
-apps/ios-frontend/
-apps/smoke-tests/
-```
+The old `pre-push` had a rule that made them mandatory only for changes under `packages/mobile-frontend/`, `packages/mobile-worker/`, `apps/android-frontend/`, `apps/ios-frontend/` and `apps/smoke-tests/`, and dropped them otherwise. That rule is gone with the hook it lived in. Running them every time is simpler and strictly stronger, at the cost of needing a device for every commit.
 
-The reason is specific. Unit tests cannot see embedded-worker task ordering or the on-device config file, and those are exactly what commit `61ac4cee` broke: it moved the mobile database list into `databases.toml` and broke 8 of 37 Android smoke tests, and it was committed and pushed without the mobile suite ever being run. `bun run test:all` would not have caught it either, because `test:all` covers no mobile suite at all.
-
-For a push touching no mobile code, an absent device drops the mobile suites with a printed notice instead of failing.
-
-A push that creates a new remote branch has no previous remote state to compare against, so its changed paths cannot be worked out. That case is treated as touching mobile code, gating harder rather than softer.
+The reason they matter at all is specific. Unit tests cannot see embedded-worker task ordering or the on-device config file, and those are exactly what commit `61ac4cee` broke: it moved the mobile database list into `databases.toml` and broke 8 of 37 Android smoke tests, and it was committed and pushed without the mobile suite ever being run. `bun run test:all` would not have caught it either, because `test:all` covers no mobile suite at all.
 
 ## Checking they actually work
 
-These hooks carry no automated tests, deliberately, and `CLAUDE.md` freezes them for that reason. Testing one means faking `bun`, `uname` and the device check, at which point what you have proven is the branching rather than the gate: a stub standing in for "the tests failed" is not evidence that anything would really be refused. So the only thing behind these files is that a person ran them and watched them work.
+The hook carries no automated tests, deliberately, and `CLAUDE.md` freezes it for that reason. Testing it means faking `bun`, at which point what you have proven is the branching rather than the gate: a stub standing in for "the tests failed" is not evidence that anything would really be refused. So the only thing behind this file is that a person ran it and watched it work.
 
 This is that procedure. Work through it once after installing, and again after any change to the hooks, which should not happen.
 
 Everything here is safe. Nothing pushes anywhere real, and every step tells you how to undo itself.
 
-**1. Confirm they are wired up.**
+**1. Confirm it is wired up.**
 
 ```
 git config core.hooksPath
@@ -118,52 +108,44 @@ git config core.hooksPath
 
 Must print `.githooks`. Anything else and nothing below is testing what you think.
 
-**2. Watch pre-commit pass.**
+**2. Start the device.** The mobile suites need one, and without it every commit is refused. On Linux: `bun run emu:and:pool`, then `bun run emu:and:status` until it says ready.
 
-Make a trivial change, stage it, commit. You should see `pre-commit: compile and unit tests`, then the two scripts running, then `pre-commit: passed`, then the commit. If it commits instantly with no output, the hook is not running: go back to step 1.
+**3. Watch it pass.**
 
-**3. Watch pre-commit refuse.** This is the important one.
+Make a trivial change, stage it, commit. Expect `pre-commit: running the full test set for this platform`, then the lanes, then every script reported PASS, then `pre-commit: passed`, then the commit. About three and a half minutes.
 
-Break the build on purpose, for example add a line reading `this is not valid typescript` to any `.ts` file, then try to commit. Expect the compile to fail, `pre-commit FAILED`, the exact command to re-run, and **no new commit**. Confirm with `git log`. Then undo the breakage.
+If it commits instantly with no output, the hook is not running: go back to step 1.
+
+**4. Watch it refuse.** This is the important one.
+
+Break the build on purpose, for example add a line reading `this is not valid typescript` to any `.ts` file, then try to commit. Expect compile to fail, the other lanes to be cancelled, `pre-commit FAILED`, and **no new commit**. Confirm with `git log`. It should come back in seconds rather than minutes, because it stops at the first failure.
 
 A gate you have never seen refuse anything is not a gate. If this step commits, stop and fix it before trusting any of it.
 
-**4. Confirm the bypass works.**
+**5. Watch it refuse for a failing test, not just a failing compile.**
 
-With the breakage still in place, `git commit --no-verify`. It should commit with no hook output at all. Undo the commit and the breakage afterwards.
+Undo the compile breakage. Make a unit test fail instead, for example by changing an expected value in any test under `src/test/`. Commit. Expect the same refusal, this time naming `test`, with the failing test's output printed. Then undo it.
 
-**5. Watch pre-push run the full set.**
+Compile failures and test failures reach the hook by different paths, so seeing only one of them prove the point is half a test.
 
-Do not test this against a real remote. Push to a throwaway local one:
+**6. Confirm the bypass works.**
 
-```
-git init --bare /tmp/hook-test-remote.git
-git push /tmp/hook-test-remote.git HEAD:refs/heads/test
-```
+With a breakage still in place, `git commit --no-verify`. It should commit with no hook output at all. Undo the commit and the breakage afterwards.
 
-Expect the platform line, then the lanes, then the whole set running for real, about three and a half minutes. `rm -rf /tmp/hook-test-remote.git` when done.
+**7. Confirm what happens with no device.**
 
-**6. Watch the mobile rule refuse.**
+Stop the emulators (`bun run emu:and:pool:down`) and try to commit anything, even a docs change. Expect a refusal naming `test:and`, with `emulator not started`. This is the cost of running the mobile suites on every commit, and it is worth seeing once so it is not a surprise later.
 
-With no emulator or simulator running, commit a change touching any of the mobile paths listed below, then push to the throwaway remote again. Expect a refusal naming the mandatory suites and listing the paths, with no suite run at all. Start a device and repeat: it should now run them.
-
-This is the rule that exists because of a specific failure, so it is worth seeing refuse with your own eyes rather than assuming.
-
-**7. Run the hook by hand if you want to see one case without a push.**
-
-`pre-push` reads the refs from stdin, so you can feed it a range directly:
+You can also run the whole thing without committing at all, which is the same set the hook runs:
 
 ```
-echo "refs/heads/x $(git rev-parse HEAD) refs/heads/x $(git rev-parse HEAD~1)" | bash .githooks/pre-push
+bun run tev
 ```
-
-It runs the real suites and reports as it would during a push, without pushing.
 
 ## Bypassing
 
 ```
 git commit --no-verify
-git push --no-verify
 ```
 
 Legitimate reasons: a docs-only commit, or a work-in-progress push to your own branch.
@@ -172,6 +154,6 @@ Not a legitimate reason: "the emulator was not running". That is the case the mo
 
 ## Where this sits
 
-These hooks are the fast local gate. `.github/workflows/release.yml` is the slow authoritative one, and it is what decides whether a change is actually good. The hooks exist to tell you in minutes what CI would have told you later.
+This hook is the fast local gate. `.github/workflows/release.yml` is the slow authoritative one, and it is what decides whether a change is actually good. The hook exists to tell you in minutes what CI would have told you later.
 
-Neither hook fixes anything, stages anything, or amends anything. They report and refuse, and leave your working copy exactly as it was.
+It fixes nothing, stages nothing, and amends nothing. It reports and refuses, and leaves your working copy exactly as it was.

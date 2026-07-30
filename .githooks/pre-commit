@@ -1,9 +1,17 @@
 #!/usr/bin/env bash
-# Refuses a commit that does not compile or whose unit tests fail.
+# Refuses a commit whose tests do not pass.
 #
-# Deliberately only the two cheap checks, run in parallel. The full set takes minutes and drives the
-# emulators, and a gate slow enough to be routinely bypassed is worse than no gate, because the
-# repository then looks guarded when it is not. The expensive suites are in .githooks/pre-push instead.
+# Runs the whole set for this platform, all at once, via `bun run test:everything`: compile, the unit
+# tests, the CLI and Electron smoke suites, and both mobile suites. In parallel that is about three and
+# a half minutes rather than the eleven it would take one after another, and it stops the moment
+# anything fails, so a broken commit is refused in seconds rather than at the end of the slowest suite.
+#
+# This is the only hook. There was a pre-push as well, holding the expensive suites while this one kept
+# to compile and the unit tests. That split is gone: checking at push time lets a broken commit exist
+# and only complains later, and the commit is the thing worth keeping honest.
+#
+# Note what this means in practice. The mobile suites need a device or emulator attached, so with none
+# running every commit is refused, including a docs-only one. Use --no-verify for those.
 #
 # Nothing here fixes or stages anything: it reports and refuses, leaving the working copy alone.
 #
@@ -20,19 +28,19 @@ REPO_DIR="$(cd "$HOOK_DIR/.." && pwd)"
 
 cd "$REPO_DIR"
 
-echo "pre-commit: compile and unit tests"
+echo "pre-commit: running the full test set for this platform"
 
-# Runs the given scripts through `bun run test:everything`, going through mise when it is available so
-# the pinned toolchain versions are used rather than whatever happens to be first on PATH.
+# Runs the set through `bun run test:everything`, going through mise when it is available so the pinned
+# toolchain versions are used rather than whatever happens to be first on PATH.
 run_everything() {
     if command -v mise >/dev/null 2>&1; then
-        mise exec -- bun run test:everything "$@"
+        mise exec -- bun run test:everything
     else
-        bun run test:everything "$@"
+        bun run test:everything
     fi
 }
 
-if ! run_everything compile test; then
+if ! run_everything; then
     echo "" >&2
     echo "pre-commit FAILED. Commit anyway with: git commit --no-verify" >&2
     exit 1
