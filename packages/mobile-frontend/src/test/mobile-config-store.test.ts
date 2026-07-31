@@ -12,10 +12,6 @@ import {
     getRecentDatabases,
     addRecentDatabase,
     removeRecentDatabase,
-    seedRecentDatabases,
-    seedDatabases,
-    resetConfig,
-    LEGACY_PLAINTEXT_SECRETS_KEY,
     seedNews,
     getShownNewsIds,
     addShownNewsId,
@@ -24,7 +20,6 @@ import {
     databaseBasename,
     getConfigValue,
     setConfigValue,
-    resetConfig as resetConfigForNews,
 } from "../lib/mobile-config-store";
 
 //
@@ -147,25 +142,13 @@ describe("mobile-config-store databases", () => {
         expect(((await findDatabase(configFile, "Alpha")) as any).origin).toBe("s3:bucket:/x");
     });
 
-    test("seedDatabases replaces the whole list and resetConfig clears it", async () => {
+    test("a config written from outside the app is read back as the database and recent lists", async () => {
+        // The smoke-test harness establishes this state by writing databases.toml into the app's
+        // storage sandbox before launch, so the app must take the file as it finds it.
         const configFile = memoryConfigFile();
-        await addDatabase(configFile, entry("Old", "o"));
-        await seedDatabases(configFile, [entry("Seed", "s")]);
+        await configFile.write({ databases: [entry("Seed", "s")], recentDatabaseNames: ["Seed"] });
         expect((await getDatabases(configFile)).map(database => database.name)).toEqual(["Seed"]);
-        await resetConfig(memoryStore(), configFile);
-        expect(await getDatabases(configFile)).toEqual([]);
-    });
-});
-
-describe("mobile-config-store secrets", () => {
-
-    test("resetConfig clears the legacy plaintext secrets entry", async () => {
-        const store = memoryStore();
-        // Written by an earlier build that kept secrets in plaintext localStorage. Nothing writes this
-        // key any more, but a device that ran that build still has it, so reset must remove it.
-        store.setItem(LEGACY_PLAINTEXT_SECRETS_KEY, JSON.stringify([{ entry: { name: "api", type: "api-key" }, value: "v1" }]));
-        await resetConfig(store, memoryConfigFile());
-        expect(store.getItem(LEGACY_PLAINTEXT_SECRETS_KEY)).toBeNull();
+        expect((await getRecentDatabases(configFile)).map(database => database.name)).toEqual(["Seed"]);
     });
 });
 
@@ -190,13 +173,11 @@ describe("mobile-config-store news", () => {
         expect(getShownNewsIds(store)).toEqual(["n1"]);
     });
 
-    test("resetConfig clears news and shown ids", async () => {
+    test("seedNews replaces the whole feed", () => {
         const store = memoryStore();
         seedNews(store, [{ id: "n1", message: "first" }]);
-        addShownNewsId(store, "n0");
-        await resetConfigForNews(store, memoryConfigFile());
-        expect(firstUnshownNews(store)).toBeUndefined();
-        expect(getShownNewsIds(store)).toEqual([]);
+        seedNews(store, [{ id: "n2", message: "second" }]);
+        expect(firstUnshownNews(store)?.id).toBe("n2");
     });
 
     test("buildNewsNotification maps a news item to the toast payload with defaults", () => {
@@ -252,12 +233,12 @@ describe("mobile-config-store recent databases", () => {
         expect((await findDatabase(configFile, "Alpha"))?.path).toBe("a");
     });
 
-    test("seedRecentDatabases replaces the recent list", async () => {
+    test("a recent name written from outside the app with no matching entry is dropped on read", async () => {
+        // The harness can write any recents list into databases.toml, so the resolve-against-the-
+        // configured-list rule has to hold for a file it never wrote itself.
         const configFile = memoryConfigFile();
-        await addRecentDatabase(configFile, entry("Old", "o"));
-        await seedDatabases(configFile, [entry("Seed", "s")]);
-        await seedRecentDatabases(configFile, [entry("Seed", "s")]);
-        expect((await getRecentDatabases(configFile)).map(database => database.name)).toEqual(["Seed"]);
+        await configFile.write({ databases: [entry("Alpha", "a")], recentDatabaseNames: ["Alpha", "Gone"] });
+        expect((await getRecentDatabases(configFile)).map(database => database.name)).toEqual(["Alpha"]);
     });
 });
 
@@ -266,18 +247,19 @@ describe("mobile-config-store concurrent operations", () => {
     //
     // Each mutating operation reads the whole config and writes the whole config back, over two async
     // round-trips. Started together and left to interleave, both read the same starting config and the
-    // second write discards the field the first one changed. The test-setup handlers start them exactly
-    // this way, which is how seeding the databases list and then the recents list ended up losing one
-    // of the two and leaving the sidebar with no recents at all.
+    // second write discards the field the first one changed, which is how one operation on the
+    // databases list and one on the recents list used to lose one of the two and leave the sidebar
+    // with no recents at all.
     //
-    test("seeding databases and recents together keeps both", async () => {
+    test("changing the databases list and the recents list together keeps both changes", async () => {
         const configFile = memoryConfigFile();
+        await configFile.write({ databases: [entry("Alpha", "a")], recentDatabaseNames: ["Alpha"] });
         await Promise.all([
-            seedDatabases(configFile, [entry("Seed", "s")]),
-            seedRecentDatabases(configFile, [entry("Seed", "s")]),
+            addDatabase(configFile, entry("Beta", "b")),
+            removeRecentDatabase(configFile, "Alpha"),
         ]);
-        expect((await getDatabases(configFile)).map(database => database.name)).toEqual(["Seed"]);
-        expect((await getRecentDatabases(configFile)).map(database => database.name)).toEqual(["Seed"]);
+        expect((await getDatabases(configFile)).map(database => database.name)).toEqual(["Alpha", "Beta"]);
+        expect(await getRecentDatabases(configFile)).toEqual([]);
     });
 
     test("adding several databases together keeps every one", async () => {
@@ -301,7 +283,7 @@ describe("mobile-config-store concurrent operations", () => {
             }
             await realWrite(updated);
         };
-        const rejected = seedDatabases(configFile, [entry("Lost", "lost")]);
+        const rejected = addDatabase(configFile, entry("Lost", "lost"));
         const queued = addDatabase(configFile, entry("Kept", "kept"));
         await expect(rejected).rejects.toThrow("write failed");
         await queued;

@@ -216,19 +216,6 @@ describe("mobile secret store", () => {
         expect(await store.listSecrets()).toEqual([]);
     });
 
-    test("clearSecrets removes every secret item and leaves unrelated keychain items alone", async () => {
-        const keychain = new FakeSecureStore();
-        const store = new MobileSecretStore(keychain);
-        await store.addSecret(secretEntry("api", "api-key"), "v1");
-        await store.addSecret(secretEntry("s3", "s3-credentials"), "{}");
-        keychain.backing.set("something.else", "not-a-secret");
-
-        await store.clearSecrets();
-
-        expect(await store.listSecrets()).toEqual([]);
-        expect(Array.from(keychain.backing.keys())).toEqual(["something.else"]);
-    });
-
     test("a secret name containing the type prefix does not confuse the enumeration", async () => {
         const store = new MobileSecretStore(new FakeSecureStore());
 

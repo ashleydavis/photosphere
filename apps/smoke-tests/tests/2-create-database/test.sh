@@ -14,12 +14,15 @@ TMP_DIR="$TEST_DIR/$TEST_TMP_NAME"
 
 trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 
+# Wipe everything the app has stored on the device (its storage sandbox, the WebView's
+# localStorage and the keychain) so this test starts from a known state. Done before launch,
+# with the app stopped, so nothing can write state back underneath it.
+"${PLATFORM}_reset_app_state" || exit 1
+
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
-# Start from a clean state: clear the persisted config (so the name is not seen as a duplicate from
-# a previous test) and remove any existing files at the target path (create requires an empty dir).
-send_command "$APP_PORT" reset-config '{}' || exit 1
+# Remove any existing files at the target path (create requires an empty dir).
 "${PLATFORM}_reset_path" "test-db"
 
 send_command "$APP_PORT" menu '{"itemId":"new-database"}' || exit 1

@@ -22,21 +22,15 @@ import {
     doNavigate,
     doMenu,
     doOpenDatabase,
-    doSeedDatabases,
-    doSeedRecent,
     doSeedNews,
-    doResetConfig,
     doNotifyDatabaseEdited,
     installTestDriver,
     TEST_MENU_EVENT,
     TEST_OPEN_DATABASE_EVENT,
-    TEST_SEED_DATABASES_EVENT,
-    TEST_SEED_RECENT_EVENT,
     TEST_SEED_NEWS_EVENT,
-    TEST_RESET_CONFIG_EVENT,
     TEST_NOTIFY_DATABASE_EDITED_EVENT,
 } from "../../lib/test-driver";
-import type { ITestTransport, ITestCommandPayload, ITestResetConfigEventDetail } from "../../lib/test-driver";
+import type { ITestTransport, ITestCommandPayload } from "../../lib/test-driver";
 
 //
 // Regression guard for the create-database smoke-test failure caused by commit fa673c6b (mobile
@@ -635,54 +629,9 @@ describe("mobile config-seeding driver commands", () => {
         return detail;
     }
 
-    test("doSeedDatabases dispatches the databases to seed", () => {
-        const databases = [{ name: "db", description: "", path: "db" }];
-        expect(captureEvent(TEST_SEED_DATABASES_EVENT, () => doSeedDatabases(databases))).toEqual(databases);
-    });
-
-    test("doResetConfig awaits the keychain clear a listener registers", async () => {
-        let resolveClear: (() => void) | undefined;
-        const listener = (event: Event) => {
-            const detail = (event as CustomEvent<ITestResetConfigEventDetail>).detail;
-            detail.waitFor(new Promise<void>(resolve => { resolveClear = resolve; }));
-        };
-        window.addEventListener(TEST_RESET_CONFIG_EVENT, listener);
-        try {
-            let settled = false;
-            const pending = doResetConfig().then(() => { settled = true; });
-            // Not resolved until the registered clear completes.
-            await Promise.resolve();
-            expect(settled).toBe(false);
-            resolveClear!();
-            await pending;
-            expect(settled).toBe(true);
-        }
-        finally {
-            window.removeEventListener(TEST_RESET_CONFIG_EVENT, listener);
-        }
-    });
-
-    test("doSeedRecent dispatches the recent databases to seed", () => {
-        const recent = [{ name: "r", description: "", path: "r" }];
-        expect(captureEvent(TEST_SEED_RECENT_EVENT, () => doSeedRecent(recent))).toEqual(recent);
-    });
-
     test("doSeedNews dispatches the news items to seed", () => {
         const news = [{ id: "n1", message: "hello" }];
         expect(captureEvent(TEST_SEED_NEWS_EVENT, () => doSeedNews(news))).toEqual(news);
-    });
-
-    test("doResetConfig dispatches the reset-config event", () => {
-        let fired = false;
-        const listener = () => { fired = true; };
-        window.addEventListener(TEST_RESET_CONFIG_EVENT, listener);
-        try {
-            void doResetConfig();
-        }
-        finally {
-            window.removeEventListener(TEST_RESET_CONFIG_EVENT, listener);
-        }
-        expect(fired).toBe(true);
     });
 
     test("doNotifyDatabaseEdited dispatches the database-edited event", () => {
@@ -723,7 +672,7 @@ describe("mobile config-seeding driver commands", () => {
         expect(editedFired).toBe(true);
     });
 
-    test("installTestDriver routes seed/reset commands to their handlers", async () => {
+    test("installTestDriver routes the seed-news command to its handler", async () => {
         let handler: ((command: string, payload: ITestCommandPayload) => Promise<string | undefined>) | undefined;
         const transport: ITestTransport = {
             onCommand: (incoming) => { handler = incoming; },
@@ -735,16 +684,23 @@ describe("mobile config-seeding driver commands", () => {
             void handler!("seed-news", { news: [{ id: "n1", message: "hi" }] });
         });
         expect(seeded).toEqual([{ id: "n1", message: "hi" }]);
+    });
 
-        let resetFired = false;
-        const resetListener = () => { resetFired = true; };
-        window.addEventListener(TEST_RESET_CONFIG_EVENT, resetListener);
-        try {
-            await handler!("reset-config", {});
+    //
+    // The database list and the recents are seeded by the harness writing databases.toml before the
+    // app launches, so the app carries no command for them any more. A command that came back would
+    // be scaffolding in shipped code, which this guards against.
+    //
+    test("installTestDriver rejects the removed config-seeding commands", async () => {
+        let handler: ((command: string, payload: ITestCommandPayload) => Promise<string | undefined>) | undefined;
+        const transport: ITestTransport = {
+            onCommand: (incoming) => { handler = incoming; },
+            sendLog: () => { /* unused */ },
+        };
+        installTestDriver(transport);
+
+        for (const command of ["seed-databases", "seed-recent", "reset-config"]) {
+            await expect(handler!(command, {})).rejects.toThrow(`Test command not implemented on this platform: ${command}`);
         }
-        finally {
-            window.removeEventListener(TEST_RESET_CONFIG_EVENT, resetListener);
-        }
-        expect(resetFired).toBe(true);
     });
 });

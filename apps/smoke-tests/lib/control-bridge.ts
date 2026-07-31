@@ -85,12 +85,6 @@ interface IBridgePayload {
     // Database path (create/open-database).
     path?: string;
 
-    // Database entries to seed into the mobile config store (seed-databases).
-    databases?: Array<{ name: string; description?: string; path: string }>;
-
-    // Database entries to seed into the recent-databases list (seed-recent).
-    recent?: Array<{ name: string; description?: string; path: string }>;
-
     // News items to seed into the mobile config store (seed-news).
     news?: Array<{ id: string; message: string; color?: string }>;
 
@@ -434,20 +428,14 @@ export class ControlBridge {
             void this.forward("data", req.body, res);
         });
 
-        this.expressApp.post("/seed-databases", (req: Request, res: Response) => {
-            void this.forward("seed-databases", { databases: req.body.databases }, res);
-        });
-
-        this.expressApp.post("/seed-recent", (req: Request, res: Response) => {
-            void this.forward("seed-recent", { recent: req.body.recent }, res);
-        });
-
+        //
+        // Seeds the news feed. This is the only state a test still sets up through the app: the news
+        // items live in WebView localStorage, which the harness cannot write from the host. Every
+        // other precondition is established before launch (see apps/smoke-tests/lib/android.sh and
+        // ios.sh), the way the desktop tests pre-write ~/.config/photosphere/databases.toml.
+        //
         this.expressApp.post("/seed-news", (req: Request, res: Response) => {
             void this.forward("seed-news", { news: req.body.news }, res);
-        });
-
-        this.expressApp.post("/reset-config", (req: Request, res: Response) => {
-            void this.forward("reset-config", {}, res);
         });
 
         //

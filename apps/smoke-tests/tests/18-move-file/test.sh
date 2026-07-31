@@ -15,17 +15,21 @@ TMP_DIR="$TEST_DIR/$TEST_TMP_NAME"
 
 trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 
+# Wipe everything the app has stored on the device (its storage sandbox, the WebView's
+# localStorage and the keychain) so this test starts from a known state. Done before launch,
+# with the app stopped, so nothing can write state back underneath it.
+"${PLATFORM}_reset_app_state" || exit 1
+
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
 # Create a source database with one asset and an empty destination database (under tmp), copy both
 # into the sandbox, and register both so the right sidebar offers "dest-db" as a move target.
-send_command "$APP_PORT" reset-config '{}' || exit 1
 create_database "$TMP_DIR/source-db" "$REPO_DIR/test/multiple-files/test-1.jpeg"
 create_database "$TMP_DIR/dest-db"
 "${PLATFORM}_seed_database" "$TMP_DIR/source-db" "source-db"
 "${PLATFORM}_seed_database" "$TMP_DIR/dest-db" "dest-db"
-send_command "$APP_PORT" seed-databases '{"databases":[{"name":"source-db","path":"source-db"},{"name":"dest-db","path":"dest-db"}]}' || exit 1
+"${PLATFORM}_seed_databases_config" '[{"name":"source-db","path":"source-db"},{"name":"dest-db","path":"dest-db"}]' || exit 1
 
 send_command "$APP_PORT" open-database '{"path":"source-db"}' || exit 1
 # Assets load incrementally: the streamed asset messages render the gallery and the load-assets task

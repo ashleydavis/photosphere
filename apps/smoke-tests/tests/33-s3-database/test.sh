@@ -27,10 +27,13 @@ fi
 
 trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 
+# Wipe everything the app has stored on the device (its storage sandbox, the WebView's
+# localStorage and the keychain) so this test starts from a known state. Done before launch,
+# with the app stopped, so nothing can write state back underneath it.
+"${PLATFORM}_reset_app_state" || exit 1
+
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
-
-send_command "$APP_PORT" reset-config '{}' || exit 1
 
 # Add valid S3 credentials to the device keychain as an s3-credentials secret, through the app's own
 # add-secret UI (the real path a secret takes into the keychain). s3-credentials is the dialog's

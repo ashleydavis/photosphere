@@ -171,6 +171,56 @@ ios_seed_database() {
 }
 
 #
+# Writes the app's databases.toml into its Documents directory, registering the given databases and
+# recent-database names. Mirrors android_seed_databases_config's contract: the state goes in from
+# outside the app, before it launches, the way a desktop smoke test pre-writes
+# ~/.config/photosphere/databases.toml.
+#
+# Both arguments are JSON: the databases as an array of {name, path} (description optional), the
+# recents as an array of names. An omitted recents argument writes an empty recents list.
+# Usage: ios_seed_databases_config '<databases json>' ['<recent names json>']
+#
+ios_seed_databases_config() {
+    local databases_json="$1"
+    local recent_json="${2:-[]}"
+    local container
+    container="$(ios_app_container)"
+    if [ -z "$container" ]; then
+        log_error "Could not resolve iOS app data container for $BUNDLE_ID (is the app installed?)"
+        return 1
+    fi
+    mkdir -p "$container/Documents"
+    if ! DATABASES="$databases_json" RECENT="$recent_json" bun "$LIB_DIR/write-databases-config.ts" "$container/Documents/$DATABASES_CONFIG_FILE"; then
+        log_error "Could not render the app's database list (see the error above)."
+        return 1
+    fi
+    log_info "Wrote the app's database list to Documents/$DATABASES_CONFIG_FILE"
+}
+
+#
+# Wipes everything the app has stored on the simulator: its storage sandbox (Documents), the WebKit
+# website data the WebView's localStorage lives in (Library), and the simulator keychain holding the
+# secrets.
+#
+# This is what gives a test a deterministic start, and it replaces the app-side reset-config command.
+# The app's keychain items are not in its container (they live in the simulator's own keychain), so
+# emptying the container is not enough on its own; `simctl keychain reset` is what clears them. Call
+# this BEFORE start_app, so nothing can write state back underneath it.
+#
+ios_reset_app_state() {
+    local container
+    container="$(ios_app_container)"
+    if [ -n "$container" ]; then
+        rm -rf "$container/Documents/"* "$container/Library/"* "$container/tmp/"* 2>/dev/null || true
+    fi
+    if ! xcrun simctl keychain "${IOS_SIMULATOR_UDID:-booted}" reset >/dev/null 2>&1; then
+        log_error "Could not reset the simulator keychain; a secret from an earlier test may still be present."
+        return 1
+    fi
+    log_info "Cleared the app's stored data (container, WebKit storage, keychain)"
+}
+
+#
 # Removes a path under the app's Documents directory (the storage sandbox root), so a test that
 # creates fresh state at that path is rerunnable. No-op when the app/container is not present yet.
 # Usage: ios_reset_path <relative_path_under_documents>

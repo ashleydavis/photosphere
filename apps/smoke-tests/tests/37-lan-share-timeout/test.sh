@@ -20,11 +20,15 @@ TMP_DIR="$TEST_DIR/$TEST_TMP_NAME"
 
 trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 
+# Wipe everything the app has stored on the device (its storage sandbox, the WebView's
+# localStorage and the keychain) so this test starts from a known state. Done before launch,
+# with the app stopped, so nothing can write state back underneath it.
+"${PLATFORM}_reset_app_state" || exit 1
+
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
-# Clean slate, then add a secret so the Secrets page has a row with a Share button to click.
-send_command "$APP_PORT" reset-config '{}' || exit 1
+# Add a secret so the Secrets page has a row with a Share button to click.
 
 send_command "$APP_PORT" navigate '{"page":"secrets"}' || exit 1
 wait_for_log "$TMP_DIR" "Secrets page loaded"

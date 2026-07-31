@@ -204,6 +204,19 @@ export PHOTOSPHERE_VAULT_TYPE=plaintext
 
 With an isolated config dir you start with no databases registered, so create or open one from the UI (or pre-create one with the CLI) as the test directs. This is the same isolation pattern the Electron smoke tests use (`apps/desktop/smoke-tests/lib/common.sh`).
 
+## How a mobile smoke test sets up its state
+
+Set state up from outside the app, before it launches. Do not add a command, an event or a seeding function to the app so a test can reach in and set state up: that is scaffolding shipped to users which serves none of them, and adding it needs the human's approval first (see the rule in `CLAUDE.md`).
+
+The two helpers to reach for, both defined per platform in `apps/smoke-tests/lib/android.sh` and `apps/smoke-tests/lib/ios.sh`:
+
+- `"${PLATFORM}_reset_app_state"` - wipes everything the app has stored on the device: its storage sandbox, the WebView's localStorage and the keychain. Call it before `start_app`, so the app starts from a known state and nothing can write state back underneath it. On Android this is `pm clear`; on iOS it empties the app's data container and resets the simulator keychain.
+- `"${PLATFORM}_seed_databases_config" '<databases json>' '<recent names json>'` - writes the app's `databases.toml` into its storage sandbox, registering the configured databases and the recents. This is the mobile equivalent of the desktop smoke tests pre-writing `~/.config/photosphere/databases.toml`. The file is rendered on the host by `apps/smoke-tests/lib/write-databases-config.ts`, through the same `node-api` function the app writes it with, so the two cannot drift.
+
+Alongside those, `"${PLATFORM}_seed_database"` copies a database fixture into the sandbox and `"${PLATFORM}_reset_path"` removes a path under it.
+
+The one exception is the news feed. `POST /seed-news` still goes through the app, because the news items live in WebView localStorage and no host-side tool can write that. The other commands that stay in the app (`pick-files`, `stage-export`, `stage-pick-folder`) stand in for native interactions a test cannot drive, not for state it could write itself.
+
 ## Structure
 
 - [e2e/](e2e/) - End-to-end manual test scripts covering full user workflows

@@ -37,23 +37,26 @@ trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 run_cli "$TMP_DIR" init --db "$DB_PATH" --generate-key --key "$KEY_NAME" --yes || exit 1
 run_cli "$TMP_DIR" add "$REPO_DIR/test/test.jpg" --db "$DB_PATH" --key "$KEY_NAME" --yes || exit 1
 
+# Wipe everything the app has stored on the device (its storage sandbox, the WebView's
+# localStorage and the keychain) so this test starts from a known state. Done before launch,
+# with the app stopped, so nothing can write state back underneath it.
+"${PLATFORM}_reset_app_state" || exit 1
+
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
-send_command "$APP_PORT" reset-config '{}' || exit 1
-
 # Seed the encrypted database files into the sandbox and its config entry.
 "${PLATFORM}_seed_database" "$DB_PATH" "$DB_NAME"
-send_command "$APP_PORT" seed-databases "{\"databases\":[{\"name\":\"$DB_NAME\",\"path\":\"$DB_NAME\"}]}" || exit 1
+"${PLATFORM}_seed_databases_config" "[{\"name\":\"$DB_NAME\",\"path\":\"$DB_NAME\"}]" || exit 1
 
 # Seed the *worker-side* database registry too. resolve-storage-credentials.ts decides whether to
 # open a database encrypted by looking up the path in the registry that node-api's getDatabases()
 # reads, and taking that entry's encryption_key as the vault secret name. That registry is
 # databases.toml under the config dir, which on device resolves sandbox-relative to
 # .config/photosphere/databases.toml (the mobile `os.homedir()` shim returns ""). The app's own
-# database list lives in the WebView's key-value store, which the embedded worker cannot read, so
-# without this file the worker finds no entry, hasAnyEncryptionSource stays false, and the database
-# opens as plain storage and reads still-encrypted bytes instead of decrypting.
+# database list is a different file (databases.toml at the sandbox root), so without this one the
+# worker finds no entry, hasAnyEncryptionSource stays false, and the database opens as plain storage
+# and reads still-encrypted bytes instead of decrypting.
 CONFIG_SEED="$TMP_DIR/config-seed"
 rm -rf "$CONFIG_SEED"
 mkdir -p "$CONFIG_SEED/photosphere"

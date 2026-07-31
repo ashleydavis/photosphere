@@ -89,12 +89,9 @@ export async function writeDatabasesConfigHandler(data: IWriteDatabasesConfigDat
         throw new Error("configPath is required");
     }
 
-    const toml: ITomlDatabasesConfig = {
-        databases: data.databases.map(databaseEntryToToml),
-        recent_database_names: data.recentDatabaseNames,
-    };
+    const contents = buildDatabasesConfigToml(data.databases, data.recentDatabaseNames);
     const storage = new FileStorage("fs:");
-    await storage.write(data.configPath, "application/toml", Buffer.from(stringifyToml(toml), "utf8"));
+    await storage.write(data.configPath, "application/toml", Buffer.from(contents, "utf8"));
 }
 
 //
@@ -142,5 +139,23 @@ export function registerDatabaseInConfig(existingToml: string, databasePath: str
 
     databases.push({ name: TEST_DATABASE_PREFIX + databasePath, description: "", path: databasePath });
 
-    return stringifyToml({ recent_database_names: recentDatabaseNames, databases } satisfies ITomlDatabasesConfig) + "\n";
+    return buildDatabasesConfigToml(databases.map(tomlEntryToDatabaseEntry), recentDatabaseNames);
+}
+
+//
+// Renders a whole databases config as the TOML text of a databases.toml, returning it rather than
+// writing it anywhere.
+//
+// This is the same rendering writeDatabasesConfigHandler performs before it writes the file, factored
+// out so a host-side script can produce a file the handlers read back exactly. The mobile smoke-test
+// harness uses it to seed a device's database list from outside the app (see
+// apps/smoke-tests/lib/write-databases-config.ts), which is how a mobile test establishes the state
+// desktop tests establish by pre-writing ~/.config/photosphere/databases.toml.
+//
+export function buildDatabasesConfigToml(databases: IDatabaseEntry[], recentDatabaseNames: string[]): string {
+    const toml: ITomlDatabasesConfig = {
+        recent_database_names: recentDatabaseNames,
+        databases: databases.map(databaseEntryToToml),
+    };
+    return stringifyToml(toml) + "\n";
 }

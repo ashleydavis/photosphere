@@ -15,12 +15,16 @@ TMP_DIR="$TEST_DIR/$TEST_TMP_NAME"
 
 trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 
+# Wipe everything the app has stored on the device (its storage sandbox, the WebView's
+# localStorage and the keychain) so this test starts from a known state. Done before launch,
+# with the app stopped, so nothing can write state back underneath it.
+"${PLATFORM}_reset_app_state" || exit 1
+
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
-# Clean slate, place an empty database in the sandbox (add auto-opens it), and add an api-key secret
+# Place an empty database in the sandbox (add auto-opens it), and add an api-key secret
 # through the real Add Secret UI to attach as the geocoding key.
-send_command "$APP_PORT" reset-config '{}' || exit 1
 create_database "$TMP_DIR/test-db"
 "${PLATFORM}_seed_database" "$TMP_DIR/test-db" "test-db"
 

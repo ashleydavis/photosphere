@@ -175,18 +175,4 @@ export class MobileSecretStore {
         return value;
     }
 
-    //
-    // Removes every stored secret from the keychain (used by test setup to start from a clean state on a
-    // device whose keychain persists between test runs). Only this app's secret items are touched: keys
-    // written by anything else under the same keychain service are left alone.
-    //
-    async clearSecrets(): Promise<void> {
-        const storedKeys = await this.secureStore.keys();
-
-        for (const storedKey of storedKeys) {
-            if (storedKey.startsWith(SECRET_VALUE_KEY_PREFIX) || storedKey.startsWith(SECRET_TYPE_KEY_PREFIX)) {
-                await this.secureStore.delete(storedKey);
-            }
-        }
-    }
 }

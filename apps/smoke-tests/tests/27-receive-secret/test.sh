@@ -27,11 +27,13 @@ trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 log_info "Seeding the host CLI with the secret to send..."
 run_cli "$TMP_DIR" secrets add --yes --name received-secret --type api-key --value received-secret-value >/dev/null 2>&1
 
+# Wipe everything the app has stored on the device (its storage sandbox, the WebView's
+# localStorage and the keychain) so this test starts from a known state. Done before launch,
+# with the app stopped, so nothing can write state back underneath it.
+"${PLATFORM}_reset_app_state" || exit 1
+
 start_app "$TMP_DIR" || exit 1
 wait_for_ready "$APP_PORT" || exit 1
-
-# Clean slate so no pre-existing secret collides with the received one.
-send_command "$APP_PORT" reset-config '{}' || exit 1
 
 send_command "$APP_PORT" navigate '{"page":"secrets"}' || exit 1
 wait_for_log "$TMP_DIR" "Secrets page loaded"

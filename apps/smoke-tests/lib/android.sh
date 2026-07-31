@@ -387,6 +387,64 @@ android_seed_database() {
 }
 
 #
+# Writes the app's databases.toml into its private files directory, registering the given databases
+# and recent-database names.
+#
+# This is the mobile equivalent of a desktop smoke test pre-writing ~/.config/photosphere/databases.toml:
+# the state goes in from outside the app, before it launches, rather than the app carrying a seeding
+# command for the tests to call. The file is rendered on the host by lib/write-databases-config.ts,
+# which uses the same node-api function the app itself writes the file through.
+#
+# Both arguments are JSON: the databases as an array of {name, path} (description optional), the
+# recents as an array of names. An omitted recents argument writes an empty recents list.
+# Usage: android_seed_databases_config '<databases json>' ['<recent names json>']
+#
+android_seed_databases_config() {
+    local databases_json="$1"
+    local recent_json="${2:-[]}"
+    local tmp_local
+    tmp_local="$(mktemp)"
+
+    if ! DATABASES="$databases_json" RECENT="$recent_json" bun "$LIB_DIR/write-databases-config.ts" "$tmp_local"; then
+        log_error "Could not render the app's database list (see the error above)."
+        rm -f "$tmp_local"
+        return 1
+    fi
+
+    # Pushed via the shared temp directory, because adb push cannot write app-private storage directly.
+    adb push "$tmp_local" "/data/local/tmp/$DATABASES_CONFIG_FILE" >/dev/null
+    adb shell run-as "$APP_ID" mkdir -p files
+    adb shell run-as "$APP_ID" cp "/data/local/tmp/$DATABASES_CONFIG_FILE" "files/$DATABASES_CONFIG_FILE"
+    adb shell rm -f "/data/local/tmp/$DATABASES_CONFIG_FILE" >/dev/null 2>&1 || true
+    rm -f "$tmp_local"
+
+    log_info "Wrote the app's database list to files/$DATABASES_CONFIG_FILE"
+}
+
+#
+# Wipes everything the app has stored on the device: its storage sandbox (the seeded databases and
+# databases.toml), the WebView's localStorage (the news feed and the generic config values) and the
+# Keystore-backed keychain the secrets live in.
+#
+# This is what gives a test a deterministic start, and it replaces the app-side reset-config command.
+# `pm clear` removes the app's whole data directory, so it reaches the WebView and keychain state no
+# host-side file copy can, and it runs with the app stopped, so nothing can write state back
+# underneath it. Call it BEFORE start_app.
+#
+android_reset_app_state() {
+    local result
+    result="$(adb shell pm clear "$APP_ID" 2>&1 | tr -d '\r')"
+    # `pm clear` prints "Success" and exits 0; a failure is reported in its output, so the text is
+    # what has to be checked. Failing here rather than carrying on is deliberate: a test that ran on
+    # state left by an earlier one would pass or fail for reasons that have nothing to do with it.
+    if [ "$result" != "Success" ]; then
+        log_error "Could not clear the app's stored data on ${ANDROID_SERIAL:-this device}: $result"
+        return 1
+    fi
+    log_info "Cleared the app's stored data (sandbox, WebView storage, keychain)"
+}
+
+#
 # Removes a path under the app's private files directory (the storage sandbox root), so a test that
 # creates fresh state at that path is rerunnable. No-op when the app is not installed yet.
 # Usage: android_reset_path <relative_path_under_files>

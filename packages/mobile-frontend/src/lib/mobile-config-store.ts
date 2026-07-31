@@ -18,8 +18,8 @@ import type { IDatabaseEntry, IShowNotificationData } from "user-interface";
 //
 // localStorage key an earlier build kept the secrets list under, values and all, in plaintext. Secrets
 // now live one-per-item in the device keychain (see mobile-secure-store.ts) and nothing writes this key
-// any more. It is retained solely so resetConfig and the startup purge can delete a plaintext copy left
-// behind on a device that ran that earlier build.
+// any more. It is retained solely so the startup purge can delete a plaintext copy left behind on a
+// device that ran that earlier build.
 //
 export const LEGACY_PLAINTEXT_SECRETS_KEY = "photosphere.secrets";
 
@@ -265,26 +265,6 @@ export async function removeRecentDatabase(configFile: IDatabasesConfigFile, nam
 }
 
 //
-// Replaces the configured-databases list wholesale (used by test setup to seed a known state).
-//
-export async function seedDatabases(configFile: IDatabasesConfigFile, databases: IDatabaseEntry[]): Promise<void> {
-    return withConfigLock(async () => {
-        const config = await configFile.read();
-        await configFile.write({ ...config, databases });
-    });
-}
-
-//
-// Replaces the recent-databases list wholesale (used by test setup to seed a known recent state).
-//
-export async function seedRecentDatabases(configFile: IDatabasesConfigFile, databases: IDatabaseEntry[]): Promise<void> {
-    return withConfigLock(async () => {
-        const config = await configFile.read();
-        await configFile.write({ ...config, recentDatabaseNames: databases.map(entry => entry.name) });
-    });
-}
-
-//
 // A news item that can be shown as a toast notification.
 //
 export interface INewsItemRecord {
@@ -399,19 +379,3 @@ export function setConfigValue<ValueT>(store: IKeyValueStore, key: string, value
     store.setItem(CONFIG_KEY_PREFIX + key, JSON.stringify(value));
 }
 
-//
-// Clears all persisted config, used by test setup to start from a clean, deterministic state on a device
-// whose storage persists between test runs. Secrets are NOT in localStorage any more (they are in the
-// device keychain), so this clears only the legacy plaintext key; the platform provider clears the
-// keychain secrets alongside this call.
-//
-export async function resetConfig(store: IKeyValueStore, configFile: IDatabasesConfigFile): Promise<void> {
-    store.removeItem(LEGACY_PLAINTEXT_SECRETS_KEY);
-    store.removeItem(NEWS_KEY);
-    store.removeItem(SHOWN_NEWS_KEY);
-    // Takes the lock so a reset cannot land between another operation's read and write, which would
-    // otherwise be undone by that operation writing its pre-reset config back.
-    await withConfigLock(async () => {
-        await configFile.write({ databases: [], recentDatabaseNames: [] });
-    });
-}

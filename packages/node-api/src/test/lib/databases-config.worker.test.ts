@@ -2,7 +2,7 @@ import * as os from "os";
 import * as path from "path";
 import * as fs from "fs/promises";
 import { parse as parseToml } from "smol-toml";
-import { readDatabasesConfigHandler, writeDatabasesConfigHandler, registerDatabaseInConfig } from "../../lib/databases-config.worker";
+import { readDatabasesConfigHandler, writeDatabasesConfigHandler, registerDatabaseInConfig, buildDatabasesConfigToml } from "../../lib/databases-config.worker";
 
 //
 // Tests for the mobile databases.toml handlers.
@@ -247,5 +247,38 @@ describe("registering a test database in a config", () => {
         const read = await readDatabasesConfigHandler({ configPath: "databases.toml" }, context);
         expect(read.databases.map(entry => entry.name)).toEqual(["My photos", "Holiday", "test-50-assets"]);
         expect(read.recentDatabaseNames).toEqual(["My photos"]);
+    });
+});
+
+//
+// buildDatabasesConfigToml is what the mobile smoke-test harness renders a device's database list
+// with, before the app is launched (apps/smoke-tests/lib/write-databases-config.ts). The file it
+// produces has to be exactly what the app reads back, which is what these assert.
+//
+describe("buildDatabasesConfigToml", () => {
+
+    test("renders the entries and recents in the on-disk snake_case shape", () => {
+        const toml = parseToml(buildDatabasesConfigToml(
+            [{ name: "Alpha", description: "", path: "alpha", encryptionKey: "alpha-key" }],
+            ["Alpha"],
+        )) as any;
+        expect(toml.databases).toEqual([{ name: "Alpha", description: "", path: "alpha", encryption_key: "alpha-key" }]);
+        expect(toml.recent_database_names).toEqual(["Alpha"]);
+    });
+
+    test("renders empty lists for a config with nothing in it", () => {
+        const toml = parseToml(buildDatabasesConfigToml([], [])) as any;
+        expect(toml.databases).toEqual([]);
+        expect(toml.recent_database_names).toEqual([]);
+    });
+
+    test("the result is readable by the handler that reads it on device", async () => {
+        await fs.writeFile(
+            path.join(tempDir, "databases.toml"),
+            buildDatabasesConfigToml([{ name: "Alpha", description: "", path: "alpha" }], ["Alpha"]),
+            "utf8");
+        const read = await readDatabasesConfigHandler({ configPath: "databases.toml" }, context);
+        expect(read.databases).toEqual([{ name: "Alpha", description: "", path: "alpha" }]);
+        expect(read.recentDatabaseNames).toEqual(["Alpha"]);
     });
 });

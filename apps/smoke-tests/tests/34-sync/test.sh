@@ -18,10 +18,13 @@ ORIGIN_NAME="sync-origin"
 
 trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 
+# Wipe everything the app has stored on the device (its storage sandbox, the WebView's
+# localStorage and the keychain) so this test starts from a known state. Done before launch,
+# with the app stopped, so nothing can write state back underneath it.
+"${PLATFORM}_reset_app_state" || exit 1
+
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
-
-send_command "$APP_PORT" reset-config '{}' || exit 1
 
 # Seed a local database and a local origin to sync against (a second on-device database), so the sync
 # runs end to end without needing S3 credentials.
@@ -38,7 +41,7 @@ printf '{"origin":"%s"}\n' "$ORIGIN_NAME" > "$LOCAL_FIXTURE/.db/config.json"
 
 "${PLATFORM}_seed_database" "$LOCAL_FIXTURE" "$DB_NAME"
 "${PLATFORM}_seed_database" "$REPO_DIR/test/dbs/50-assets" "$ORIGIN_NAME"
-send_command "$APP_PORT" seed-databases "{\"databases\":[{\"name\":\"$DB_NAME\",\"path\":\"$DB_NAME\"}]}" || exit 1
+"${PLATFORM}_seed_databases_config" "[{\"name\":\"$DB_NAME\",\"path\":\"$DB_NAME\"}]" || exit 1
 
 send_command "$APP_PORT" menu '{"itemId":"open-database"}' || exit 1
 wait_for_log "$TMP_DIR" "Open database dialog opened"

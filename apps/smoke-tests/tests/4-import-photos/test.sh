@@ -31,15 +31,19 @@ trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 mkdir -p "$STAGE_DIR"
 cp "$IMAGES_DIR/test-1.jpeg" "$IMAGES_DIR/test-2.png" "$STAGE_DIR/"
 
+# Wipe everything the app has stored on the device (its storage sandbox, the WebView's
+# localStorage and the keychain) so this test starts from a known state. Done before launch,
+# with the app stopped, so nothing can write state back underneath it.
+"${PLATFORM}_reset_app_state" || exit 1
+
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
-# Deterministic start, then seed the empty database, the two images into the sandbox import temp
-# directory, and the database's config-list entry.
-send_command "$APP_PORT" reset-config '{}' || exit 1
+# Seed the empty database, the two images into the sandbox import temp directory, and the
+# database's config-list entry.
 "${PLATFORM}_seed_database" "$REPO_DIR/test/dbs/no-assets" "$DB_NAME"
 "${PLATFORM}_seed_database" "$STAGE_DIR" ".import-tmp"
-send_command "$APP_PORT" seed-databases "{\"databases\":[{\"name\":\"$DB_NAME\",\"path\":\"$DB_NAME\"}]}" || exit 1
+"${PLATFORM}_seed_databases_config" "[{\"name\":\"$DB_NAME\",\"path\":\"$DB_NAME\"}]" || exit 1
 
 # Open the seeded database.
 send_command "$APP_PORT" menu '{"itemId":"open-database"}' || exit 1

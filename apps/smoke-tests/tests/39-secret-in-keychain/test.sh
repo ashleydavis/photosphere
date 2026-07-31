@@ -40,11 +40,13 @@ trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 
 # --- First launch: add the secret, prove it is not in plaintext localStorage. ---
 
+# Wipe everything the app has stored on the device (its storage sandbox, the WebView's
+# localStorage and the keychain) so this test starts from a known state. Done before launch,
+# with the app stopped, so nothing can write state back underneath it.
+"${PLATFORM}_reset_app_state" || exit 1
+
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
-
-# Clean slate (also clears any keychain secret from a previous run so the name is unique).
-send_command "$APP_PORT" reset-config '{}' || exit 1
 
 send_command "$APP_PORT" navigate '{"page":"secrets"}' || exit 1
 wait_for_log "$TMP_DIR" "Secrets page loaded"

@@ -29,11 +29,13 @@ log_info "Seeding the host CLI with the database to send..."
 run_cli "$TMP_DIR" secrets add --yes --name received-geo-key --type api-key --value received-geo-value >/dev/null 2>&1
 run_cli "$TMP_DIR" dbs add --yes --name received-db --description "Received over LAN" --path "$TMP_DIR/received-db" --geocoding-key received-geo-key >/dev/null 2>&1
 
+# Wipe everything the app has stored on the device (its storage sandbox, the WebView's
+# localStorage and the keychain) so this test starts from a known state. Done before launch,
+# with the app stopped, so nothing can write state back underneath it.
+"${PLATFORM}_reset_app_state" || exit 1
+
 start_app "$TMP_DIR" || exit 1
 wait_for_ready "$APP_PORT" || exit 1
-
-# Clean slate so no pre-existing database or secret collides with the received one.
-send_command "$APP_PORT" reset-config '{}' || exit 1
 
 send_command "$APP_PORT" navigate '{"page":"databases"}' || exit 1
 wait_for_log "$TMP_DIR" "Databases page loaded"

@@ -20,17 +20,23 @@ TMP_DIR="$TEST_DIR/$TEST_TMP_NAME"
 
 trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 
+# Wipe everything the app has stored on the device (its storage sandbox, the WebView's
+# localStorage and the keychain) so this test starts from a known state. Done before launch,
+# with the app stopped, so nothing can write state back underneath it.
+"${PLATFORM}_reset_app_state" || exit 1
+
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
-# Clean slate, then create a source database with one real asset so it has something to summarise.
-send_command "$APP_PORT" reset-config '{}' || exit 1
+# Create a source database with one real asset so it has something to summarise.
 create_database "$TMP_DIR/source-db" "$REPO_DIR/test/multiple-files/test-1.jpeg"
 "${PLATFORM}_seed_database" "$TMP_DIR/source-db" "source-db"
 
 # Open the source database so a database is current (the sidebar "Database Info" link only shows when
-# a database is open) and load-assets runs.
-send_command "$APP_PORT" seed-recent '{"recent":[{"name":"source-db","path":"source-db"}]}' || exit 1
+# a database is open) and load-assets runs. The recent name is written with no matching configured
+# entry, exactly as before: it resolves to nothing on read, and opening the database is what puts a
+# real entry in both lists.
+"${PLATFORM}_seed_databases_config" '[]' '["source-db"]' || exit 1
 send_command "$APP_PORT" open-database '{"path":"source-db"}' || exit 1
 wait_for_log "$TMP_DIR" "Load assets task completed"
 

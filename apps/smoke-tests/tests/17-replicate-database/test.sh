@@ -15,13 +15,17 @@ TMP_DIR="$TEST_DIR/$TEST_TMP_NAME"
 
 trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 
+# Wipe everything the app has stored on the device (its storage sandbox, the WebView's
+# localStorage and the keychain) so this test starts from a known state. Done before launch,
+# with the app stopped, so nothing can write state back underneath it.
+"${PLATFORM}_reset_app_state" || exit 1
+
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
-# Clean slate, then create an empty source database (under tmp) and copy it into the sandbox
+# Create an empty source database (under tmp) and copy it into the sandbox
 # (adding it auto-opens it). Also clear any replica from a previous run so the destination starts
 # empty (replicating onto an unrelated existing database is refused without --force).
-send_command "$APP_PORT" reset-config '{}' || exit 1
 "${PLATFORM}_reset_path" "dest-partial"
 create_database "$TMP_DIR/source-db"
 "${PLATFORM}_seed_database" "$TMP_DIR/source-db" "source-db"

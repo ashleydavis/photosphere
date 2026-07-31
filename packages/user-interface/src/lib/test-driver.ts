@@ -34,12 +34,6 @@ export interface ITestCommandPayload {
     // Database path (open-database command).
     path?: string;
 
-    // Database entries to seed into the mobile config store (seed-databases command).
-    databases?: ISeedDatabaseEntry[];
-
-    // Database entries to seed into the recent-databases list (seed-recent command).
-    recent?: ISeedDatabaseEntry[];
-
     // News items to seed into the mobile config store (seed-news command).
     news?: ISeedNewsItem[];
 
@@ -67,22 +61,6 @@ export interface ISeedNewsItem {
 
     // Optional toast colour variant.
     color?: string;
-}
-
-
-//
-// A database entry the test harness seeds into the mobile config store. Mirrors the subset of
-// IDatabaseEntry the seeding needs; kept local so the driver has no dependency on the platform types.
-//
-export interface ISeedDatabaseEntry {
-    // Display name (unique, case-insensitive).
-    name: string;
-
-    // Optional description.
-    description?: string;
-
-    // Database path (sandbox-relative on mobile).
-    path: string;
 }
 
 //
@@ -458,34 +436,14 @@ export const TEST_MENU_EVENT = "photosphere-test:menu";
 export const TEST_OPEN_DATABASE_EVENT = "photosphere-test:open-database";
 
 //
-// Window event name used to seed the mobile config store's databases list (test setup).
-//
-export const TEST_SEED_DATABASES_EVENT = "photosphere-test:seed-databases";
-
-//
-// Window event name used to seed the mobile config store's recent-databases list (test setup).
-//
-export const TEST_SEED_RECENT_EVENT = "photosphere-test:seed-recent";
-
-//
 // Window event name used to seed the mobile config store's news items (test setup).
 //
+// This is the one piece of state a mobile smoke test cannot set up from outside the app: the news
+// feed lives in WebView localStorage, which no host-side tool can write. Everything else a test
+// needs (the database list, the recents, the secrets) is established by the harness before launch,
+// by writing the app's databases.toml and clearing its stored data (see apps/smoke-tests/lib).
+//
 export const TEST_SEED_NEWS_EVENT = "photosphere-test:seed-news";
-
-//
-// Window event name used to clear the mobile config store (test setup).
-//
-export const TEST_RESET_CONFIG_EVENT = "photosphere-test:reset-config";
-
-//
-// Detail for the reset-config event. The listener's keychain clear is asynchronous and is registered via
-// waitFor so the dispatcher awaits it, ensuring the reset-config command resolves only once the clear has
-// completed (a shell with no listener registers nothing and resolves immediately).
-//
-export interface ITestResetConfigEventDetail {
-    // Registers an async operation the dispatcher must await before the command resolves.
-    waitFor: (operation: Promise<void>) => void;
-}
 
 //
 // Window event name used to signal that the database was edited, scheduling a background sync.
@@ -509,44 +467,6 @@ export function doNotifyDatabaseEdited(): void {
 export function doSeedNews(news: ISeedNewsItem[]): void {
     console.log(`test-seed-news: seeding ${news.length} news item(s)`);
     window.dispatchEvent(new CustomEvent(TEST_SEED_NEWS_EVENT, { detail: news }));
-}
-
-//
-// Seeds the recent-databases list by dispatching a window event the mobile platform provider
-// listens for. Used by smoke tests that need a pre-existing recent entry.
-//
-export function doSeedRecent(databases: ISeedDatabaseEntry[]): void {
-    console.log(`test-seed-recent: seeding ${databases.length} recent database(s)`);
-    window.dispatchEvent(new CustomEvent(TEST_SEED_RECENT_EVENT, { detail: databases }));
-}
-
-//
-// Seeds the configured-databases list by dispatching a window event the mobile platform provider
-// listens for. Used by smoke tests to establish a known database list (the desktop equivalent is
-// writing databases.toml). A no-op on shells without a listener.
-//
-export function doSeedDatabases(databases: ISeedDatabaseEntry[]): void {
-    console.log(`test-seed-databases: seeding ${databases.length} database(s)`);
-    window.dispatchEvent(new CustomEvent(TEST_SEED_DATABASES_EVENT, { detail: databases }));
-}
-
-//
-// Clears the mobile config store (databases, recent databases, secrets) by dispatching a window
-// event the mobile platform provider listens for. Used by smoke tests for a deterministic start.
-//
-export async function doResetConfig(): Promise<void> {
-    console.log(`test-reset-config: clearing persisted config`);
-    const pending: Promise<void>[] = [];
-    const detail: ITestResetConfigEventDetail = {
-        waitFor: (operation: Promise<void>): void => {
-            pending.push(operation);
-        },
-    };
-    // dispatchEvent is synchronous, so a listener has registered its keychain clear in `pending` by the
-    // time this returns. Awaiting it makes the reset-config command resolve only once the clear has
-    // completed, so a secret added or read right after starts from a genuinely cleared store.
-    window.dispatchEvent(new CustomEvent(TEST_RESET_CONFIG_EVENT, { detail }));
-    await Promise.all(pending);
 }
 
 //
@@ -610,17 +530,8 @@ export function installTestDriver(transport: ITestTransport): void {
             case 'open-database':
                 doOpenDatabase(payload.path!);
                 return undefined;
-            case 'seed-databases':
-                doSeedDatabases(payload.databases!);
-                return undefined;
-            case 'seed-recent':
-                doSeedRecent(payload.recent!);
-                return undefined;
             case 'seed-news':
                 doSeedNews(payload.news!);
-                return undefined;
-            case 'reset-config':
-                await doResetConfig();
                 return undefined;
             case 'notify-database-edited':
                 doNotifyDatabaseEdited();

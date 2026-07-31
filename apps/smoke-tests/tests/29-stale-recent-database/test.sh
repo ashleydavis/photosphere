@@ -17,24 +17,26 @@ DB_NAME="test-db"
 
 trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 
+# Wipe everything the app has stored on the device (its storage sandbox, the WebView's
+# localStorage and the keychain) so this test starts from a known state. Done before launch,
+# with the app stopped, so nothing can write state back underneath it.
+"${PLATFORM}_reset_app_state" || exit 1
+
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
-
-# Deterministic start.
-send_command "$APP_PORT" reset-config '{}' || exit 1
 
 # Seed a real database on the device so there is an open database to leave alone.
 create_database "$TMP_DIR/test-db"
 "${PLATFORM}_seed_database" "$TMP_DIR/test-db" "$DB_NAME"
-# The stale entry is configured too, because recents are stored as names and resolved against the
-# configured-databases list: an unconfigured recent is dropped on read and would never render, so the
-# stale case could not arise. Its files are still never staged on the device, which is what makes it
-# stale.
-send_command "$APP_PORT" seed-databases "{\"databases\":[{\"name\":\"$DB_NAME\",\"path\":\"$DB_NAME\"},{\"name\":\"stale-db\",\"path\":\"stale-db\"}]}" || exit 1
 
-# Seed the recent list with the real database (index 0) plus a stale entry (index 1) whose files were
-# never staged on the device, so checkDatabaseExists must report the stale entry absent.
-send_command "$APP_PORT" seed-recent "{\"recent\":[{\"name\":\"$DB_NAME\",\"path\":\"$DB_NAME\"},{\"name\":\"stale-db\",\"path\":\"stale-db\"}]}" || exit 1
+# The recent list holds the real database (index 0) plus a stale entry (index 1) whose files were
+# never staged on the device, so checkDatabaseExists must report the stale entry absent. The stale
+# entry is configured too, because recents are stored as names and resolved against the
+# configured-databases list: an unconfigured recent is dropped on read and would never render, so the
+# stale case could not arise.
+"${PLATFORM}_seed_databases_config" \
+    "[{\"name\":\"$DB_NAME\",\"path\":\"$DB_NAME\"},{\"name\":\"stale-db\",\"path\":\"stale-db\"}]" \
+    "[\"$DB_NAME\",\"stale-db\"]" || exit 1
 
 # Open the real database (the direct-open path, which the sidebar's database-opened event refreshes
 # the recent list from).

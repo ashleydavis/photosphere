@@ -40,6 +40,11 @@ IOS_FRONTEND_DIR="$REPO_DIR/apps/ios-frontend"
 APP_ID="au.com.codecapers.photosphere"
 BUNDLE_ID="au.com.codecapers.photosphere"
 
+# Name of the app's database-list config inside its storage sandbox, the mobile counterpart of
+# desktop's ~/.config/photosphere/databases.toml. Must match DATABASES_CONFIG_PATH in
+# packages/mobile-frontend/src/lib/mobile-databases-config-file.ts, which is what the app reads.
+DATABASES_CONFIG_FILE="databases.toml"
+
 # The address every host-side command uses to reach the control bridge. This is the literal IPv4
 # loopback address and must never be the name "localhost".
 #

@@ -45,7 +45,36 @@ The test driver itself stays. So do the injection points for things a test canno
 
 ## Notes
 
-- The inventory and the replacement decisions are deliberately not in this plan yet. Steps 1 and 2 produce them, and the plan should be updated in place with what they find before step 3 begins.
+### Step 1: inventory
+
+| Symbol | File | Called by | State it sets up | Class |
+| --- | --- | --- | --- | --- |
+| `seedDatabases` | `packages/mobile-frontend/src/lib/mobile-config-store.ts` | `handleSeedDatabases` in `platform-provider-mobile.tsx` | The `databases` list in `databases.toml` | REMOVE |
+| `seedRecentDatabases` | `packages/mobile-frontend/src/lib/mobile-config-store.ts` | `handleSeedRecent` in `platform-provider-mobile.tsx` | The `recentDatabaseNames` list in `databases.toml` | REMOVE |
+| `resetConfig` | `packages/mobile-frontend/src/lib/mobile-config-store.ts` | `handleResetConfig` in `platform-provider-mobile.tsx` | Empties `databases.toml`; removes the news, shown-news and legacy plaintext-secrets keys from WebView localStorage | REMOVE |
+| `seedNews` | `packages/mobile-frontend/src/lib/mobile-config-store.ts` | `handleSeedNews` in `platform-provider-mobile.tsx` | The `photosphere.news` list in WebView localStorage | KEEP |
+| `handleSeedDatabases`, `handleSeedRecent`, `handleResetConfig` | `packages/mobile-frontend/src/lib/platform-provider-mobile.tsx` | The window events below | As above | REMOVE |
+| `handleSeedNews` | `packages/mobile-frontend/src/lib/platform-provider-mobile.tsx` | `TEST_SEED_NEWS_EVENT` | As above | KEEP |
+| `TEST_SEED_DATABASES_EVENT`, `doSeedDatabases`, `ITestCommandPayload.databases`, `ISeedDatabaseEntry` | `packages/user-interface/src/lib/test-driver.ts` | `seed-databases` driver command | As above | REMOVE |
+| `TEST_SEED_RECENT_EVENT`, `doSeedRecent`, `ITestCommandPayload.recent` | `packages/user-interface/src/lib/test-driver.ts` | `seed-recent` driver command | As above | REMOVE |
+| `TEST_RESET_CONFIG_EVENT`, `doResetConfig`, `ITestResetConfigEventDetail` | `packages/user-interface/src/lib/test-driver.ts` | `reset-config` driver command | As above | REMOVE |
+| `TEST_SEED_NEWS_EVENT`, `doSeedNews`, `ISeedNewsItem`, `ITestCommandPayload.news` | `packages/user-interface/src/lib/test-driver.ts` | `seed-news` driver command | As above | KEEP |
+| `POST /seed-databases`, `POST /seed-recent`, `POST /reset-config` and their payload fields | `apps/smoke-tests/lib/control-bridge.ts` | 34 smoke tests | As above | REMOVE |
+| `POST /seed-news` and its payload field | `apps/smoke-tests/lib/control-bridge.ts` | `17-news-notifications` | As above | KEEP |
+| `get-storage` command and `GET /get-storage` | `test-driver.ts`, `control-bridge.ts` | `39-secret-in-keychain` | Reads nothing; asserts a localStorage key is absent | KEEP |
+| `setInjectedPickedFiles`, `setInjectedExportOutcome`, `setInjectedPickFolderResult`, `TEST_MENU_EVENT`, `TEST_OPEN_DATABASE_EVENT`, `TEST_NOTIFY_DATABASE_EDITED_EVENT`, `cycle-advance`, `installTestDriver`, `signalTestAppReady` | `test-driver.ts`, `platform-provider-mobile.tsx` | Every mobile smoke test | Native interactions and the driver transport | KEEP (plan scope boundary) |
+| Desktop equivalents | `apps/desktop/src` | none | none | None exist: the desktop tests already pre-write `~/.config/photosphere/databases.toml`, so there is nothing to remove |
+
+### Step 2: replacements
+
+| REMOVE entry | How the test sets that state up instead |
+| --- | --- |
+| `seed-databases` | `${PLATFORM}_seed_databases_config '<databases json>' '<recent names json>'` writes `databases.toml` into the app's storage sandbox before the app launches, the same move as desktop pre-writing `~/.config/photosphere/databases.toml`. Added to `apps/smoke-tests/lib/android.sh` and `ios.sh`; the TOML text comes from `buildDatabasesConfigToml` in `packages/node-api/src/lib/databases-config.worker.ts`, the same module `registerDatabaseInConfig` (used by `run-android.sh`) writes through. |
+| `seed-recent` | The same helper: recents are the second argument, because both lists live in the one file and a test seeding both wrote it twice. |
+| `reset-config` | `${PLATFORM}_reset_app_state` before `start_app`. On Android `adb shell pm clear` wipes the app's whole data directory (storage sandbox, WebView localStorage and the Keystore-backed keychain). On iOS the app's data container is emptied and `xcrun simctl keychain <udid> reset` clears the simulator keychain. This resets strictly more than `resetConfig` did (it also clears the keychain, which the app-side reset needed a separate `secretStore.clearSecrets()` call for), and it runs with the app stopped, so nothing can write state back underneath it. |
+
+`seedNews` is reclassified KEEP. News lives only in `photosphere.news` / `photosphere.shownNews` in WebView localStorage, which no host-side tool can write: on Android it is inside the WebView's own storage database and on iOS inside the WebKit website-data store. Moving the news feed to a file the worker reads would be a change to how the feature works in production, which the plan already calls out as separate work. `reset_app_state` does clear those keys (it wipes the WebView's storage), so the seeding is the only part that stays.
+
 - Scope boundary: the driver transport (`installTestDriver`, `startTestDriverFromGlobal`, `signalTestAppReady`, the WebSocket bridge) and the native-interaction injection points (`setInjectedPickedFiles`, `setInjectedExportOutcome`, `setInjectedPickFolderResult`, the deterministic uuid generator) stay. Removing them stops all mobile and Electron smoke tests from functioning.
 - `seedNews` is the one REMOVE candidate expected to have no file to write: news lives in `photosphere.news` and `photosphere.shownNews` in localStorage, with no desktop file equivalent. Step 2 should decide whether it becomes KEEP, or whether news config moves to a file first as separate work.
 - The rule this plan follows is now in `CLAUDE.md`: test-only scaffolding in app code needs the human user's approval or is not added at all.

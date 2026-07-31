@@ -1,7 +1,7 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
 import eruda from "eruda";
 import { Network } from "@capacitor/network";
-import { PlatformContextProvider, ConfigContextProvider, createConfig, useLanShareTasks, readBrowserNetworkStatus, subscribeBrowserNetworkStatus, signalTestAppReady, TEST_MENU_EVENT, TEST_OPEN_DATABASE_EVENT, TEST_SEED_DATABASES_EVENT, TEST_SEED_RECENT_EVENT, TEST_SEED_NEWS_EVENT, TEST_RESET_CONFIG_EVENT, TEST_PICK_FILES_EVENT, TEST_STAGE_EXPORT_EVENT, TEST_STAGE_PICK_FOLDER_EVENT, TEST_NOTIFY_DATABASE_EDITED_EVENT, type ITestResetConfigEventDetail, type IPlatformContext, type IPlatformEvent, type INetworkStatus, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions, type ISaveDownloadResult, UuidGeneratorProvider } from "user-interface";
+import { PlatformContextProvider, ConfigContextProvider, createConfig, useLanShareTasks, readBrowserNetworkStatus, subscribeBrowserNetworkStatus, signalTestAppReady, TEST_MENU_EVENT, TEST_OPEN_DATABASE_EVENT, TEST_SEED_NEWS_EVENT, TEST_PICK_FILES_EVENT, TEST_STAGE_EXPORT_EVENT, TEST_STAGE_PICK_FOLDER_EVENT, TEST_NOTIFY_DATABASE_EDITED_EVENT, type IPlatformContext, type IPlatformEvent, type INetworkStatus, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions, type ISaveDownloadResult, UuidGeneratorProvider } from "user-interface";
 import { TaskQueue, TaskStatus, getQueueBackend } from "task-queue";
 import type { ITaskResult } from "task-queue";
 import type { ISaveAssetItem } from "api";
@@ -204,24 +204,6 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
             const databasePath = (event as CustomEvent<string>).detail;
             openedCallbacksRef.current.forEach(callback => callback(databasePath));
         };
-        // Test setup: seed the configured-databases list (mirrors desktop seeding databases.toml).
-        const handleSeedDatabases = (event: Event) => {
-            const databases = (event as CustomEvent<IDatabaseEntry[]>).detail || [];
-            void configStore.seedDatabases(mobileDatabasesConfigFile, databases);
-        };
-        // Test setup: seed the recent-databases list.
-        const handleSeedRecent = (event: Event) => {
-            const databases = (event as CustomEvent<IDatabaseEntry[]>).detail || [];
-            void configStore.seedRecentDatabases(mobileDatabasesConfigFile, databases);
-        };
-        // Test setup: clear all persisted config for a deterministic starting state. Secrets live in the
-        // keychain, not localStorage, so they are cleared from the keychain too (resetConfig only removes
-        // localStorage keys, which no longer hold any secret).
-        const handleResetConfig = (event: Event) => {
-            const detail = (event as CustomEvent<ITestResetConfigEventDetail>).detail;
-            detail.waitFor(configStore.resetConfig(persistentStore, mobileDatabasesConfigFile));
-            detail.waitFor(secretStore.clearSecrets());
-        };
         // Test setup: stage picked file paths so the next pickFiles resolves with them instead of
         // opening the native picker (which cannot be automated in a smoke test).
         const handlePickFiles = (event: Event) => {
@@ -246,9 +228,6 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         };
         window.addEventListener(TEST_MENU_EVENT, handleMenu);
         window.addEventListener(TEST_OPEN_DATABASE_EVENT, handleOpenDatabase);
-        window.addEventListener(TEST_SEED_DATABASES_EVENT, handleSeedDatabases);
-        window.addEventListener(TEST_SEED_RECENT_EVENT, handleSeedRecent);
-        window.addEventListener(TEST_RESET_CONFIG_EVENT, handleResetConfig);
         window.addEventListener(TEST_PICK_FILES_EVENT, handlePickFiles);
         window.addEventListener(TEST_STAGE_EXPORT_EVENT, handleStageExport);
         window.addEventListener(TEST_STAGE_PICK_FOLDER_EVENT, handleStagePickFolder);
@@ -261,9 +240,6 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         return () => {
             window.removeEventListener(TEST_MENU_EVENT, handleMenu);
             window.removeEventListener(TEST_OPEN_DATABASE_EVENT, handleOpenDatabase);
-            window.removeEventListener(TEST_SEED_DATABASES_EVENT, handleSeedDatabases);
-            window.removeEventListener(TEST_SEED_RECENT_EVENT, handleSeedRecent);
-            window.removeEventListener(TEST_RESET_CONFIG_EVENT, handleResetConfig);
             window.removeEventListener(TEST_PICK_FILES_EVENT, handlePickFiles);
             window.removeEventListener(TEST_STAGE_EXPORT_EVENT, handleStageExport);
             window.removeEventListener(TEST_STAGE_PICK_FOLDER_EVENT, handleStagePickFolder);
