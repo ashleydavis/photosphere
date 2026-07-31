@@ -11,6 +11,7 @@ import {
     ListObjectsV2CommandOutput,
 } from "@aws-sdk/client-s3";
 import { S3RangeReadableStream } from "./s3-range-readable-stream";
+import { parseS3ListPath } from "./s3-path";
 import { Upload } from "@aws-sdk/lib-storage";
 import { IFileInfo, IListResult, IStorage, IWriteLockInfo } from "./storage";
 import { WrappedError } from "utils";
@@ -112,7 +113,7 @@ export class CloudStorage implements IStorage {
     //
     async listFiles(path: string, max: number, next?: string): Promise<IListResult> {
 
-        let { bucket, key } = this.parsePath(path);
+        let { bucket, key } = parseS3ListPath(path);
 
         if (key === "") {
             // Empty path is ok.
@@ -166,7 +167,7 @@ export class CloudStorage implements IStorage {
     //
     async listDirs(path: string, max: number, next?: string): Promise<IListResult> {
 
-        let { bucket, key } = this.parsePath(path);
+        let { bucket, key } = parseS3ListPath(path);
 
         if (key === "") {
             // Empty path is ok.

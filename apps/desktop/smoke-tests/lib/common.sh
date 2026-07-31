@@ -349,6 +349,21 @@ wait_for_value() {
 }
 
 #
+# Reads the current value of the element with the given data-id, echoing it to stdout (empty when the
+# element is absent). Value-returning helper: it prints and never exits, so it is safe inside $(...)
+# and safe to call after a failed assertion to report what the screen actually said.
+# Usage: read_value <port> <data-id>
+#
+read_value() {
+    local port="$1"
+    local data_id="$2"
+    local response
+    response=$(curl -sf "http://localhost:$port/get-value?dataId=$data_id" 2>/dev/null || true)
+    # grep -o only prints matches, so on no match nothing is echoed.
+    echo "$response" | grep -o '"value":"[^"]*"' | head -n1 | sed 's/^"value":"//; s/"$//'
+}
+
+#
 # Posts a JSON command to the test control server.
 # Usage: send_command <port> <endpoint> [json_body]
 #
@@ -394,14 +409,24 @@ stop_app() {
 }
 
 #
-# Greps app.log for [ERROR] lines and fails if any are found.
-# Usage: check_no_errors <tmp_dir>
+# Greps app.log for [ERROR] lines and fails if any are found. An optional second argument is an
+# extended-regex of [ERROR] lines to ignore, for an error a test provokes on purpose (the S3 test
+# deliberately browses with bad credentials and asserts the failure is surfaced); any remaining
+# [ERROR] line still fails the check. Mirrors the mobile harness's check_no_errors.
+# Usage: check_no_errors <tmp_dir> [ignore_regex]
 #
 check_no_errors() {
     local tmp_dir="$1"
-    if grep -q '\[ERROR\]' "$tmp_dir/app.log" 2>/dev/null; then
+    local ignore_pattern="${2:-}"
+    local errors
+    if [ -n "$ignore_pattern" ]; then
+        errors=$(grep '\[ERROR\]' "$tmp_dir/app.log" 2>/dev/null | grep -Ev "$ignore_pattern")
+    else
+        errors=$(grep '\[ERROR\]' "$tmp_dir/app.log" 2>/dev/null)
+    fi
+    if [ -n "$errors" ]; then
         log_error "Errors found in app.log:"
-        grep '\[ERROR\]' "$tmp_dir/app.log" | while IFS= read -r line; do
+        echo "$errors" | while IFS= read -r line; do
             echo "  $line"
         done
         # Fatal by construction: signalling failure by return let a test print [FAIL], fall through to

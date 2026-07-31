@@ -182,13 +182,14 @@ export function AddDatabaseModal({ open, onClose }: IAddDatabaseModalProps) {
         label: string,
         secretType: string,
         chosenName: string | undefined,
+        chosenNameDataId: string | undefined,
         buttonDataId: string
     ): React.ReactNode {
         return (
             <FormControl sx={{ mb: 1 }}>
                 <FormLabel>{label}</FormLabel>
                 <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                    <Typography level="body-sm" sx={{ flexGrow: 1 }}>
+                    <Typography data-id={chosenNameDataId} level="body-sm" sx={{ flexGrow: 1 }}>
                         {chosenName ?? 'None selected'}
                     </Typography>
                     <Button
@@ -239,13 +240,14 @@ export function AddDatabaseModal({ open, onClose }: IAddDatabaseModalProps) {
                             <Select
                                 value={form.storageType}
                                 onChange={(_event, value) => setForm(prev => ({ ...prev, storageType: value as StorageType, path: '', s3Key: undefined }))}
+                                slotProps={{ button: { 'data-id': 'database-storage-type-select' } }}
                             >
                                 <Option value="filesystem">File system</Option>
-                                <Option value="s3">S3</Option>
+                                <Option data-id="database-storage-type-option-s3" value="s3">S3</Option>
                             </Select>
                         </FormControl>
 
-                        {form.storageType === 's3' && renderSecretButton('S3 Credentials', 's3-credentials', s3SecretName, 'select-s3-button')}
+                        {form.storageType === 's3' && renderSecretButton('S3 Credentials', 's3-credentials', s3SecretName, 'chosen-s3-secret', 'select-s3-button')}
 
                         <FormControl sx={{ mb: 2 }}>
                             <FormLabel>Path</FormLabel>
@@ -257,6 +259,7 @@ export function AddDatabaseModal({ open, onClose }: IAddDatabaseModalProps) {
                                     onChange={event => setForm(prev => ({ ...prev, path: event.target.value }))}
                                 />
                                 <Button
+                                    data-id="database-browse-button"
                                     variant="outlined"
                                     disabled={browseDisabled}
                                     onClick={() => handleBrowse().catch(err => log.exception('Browse error:', err as Error))}
@@ -276,12 +279,12 @@ export function AddDatabaseModal({ open, onClose }: IAddDatabaseModalProps) {
                             </Box>
                         </FormControl>
 
-                        {form.encrypted && renderSecretButton('Encryption Key', 'encryption-key', encryptionSecretName, 'select-encryption-button')}
+                        {form.encrypted && renderSecretButton('Encryption Key', 'encryption-key', encryptionSecretName, undefined, 'select-encryption-button')}
 
-                        {renderSecretButton('Geocoding API Key (optional)', 'api-key', geocodingSecretName, 'select-geocoding-button')}
+                        {renderSecretButton('Geocoding API Key (optional)', 'api-key', geocodingSecretName, undefined, 'select-geocoding-button')}
                     </DialogContent>
                     <DialogActions>
-                        <Button variant="plain" onClick={onClose}>Cancel</Button>
+                        <Button data-id="add-database-cancel" variant="plain" onClick={onClose}>Cancel</Button>
                         <Button
                             data-id="add-database-confirm"
                             disabled={!form.path}

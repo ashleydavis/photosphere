@@ -182,16 +182,19 @@ export function CreateDatabaseModal({ open, onClose }: ICreateDatabaseModalProps
     function renderSecretButton(
         label: string,
         secretType: string,
-        chosenName: string | undefined
+        chosenName: string | undefined,
+        chosenNameDataId: string | undefined,
+        buttonDataId: string
     ): React.ReactNode {
         return (
             <FormControl sx={{ mb: 1 }}>
                 <FormLabel>{label}</FormLabel>
                 <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                    <Typography level="body-sm" sx={{ flexGrow: 1 }}>
+                    <Typography data-id={chosenNameDataId} level="body-sm" sx={{ flexGrow: 1 }}>
                         {chosenName ?? 'None selected'}
                     </Typography>
                     <Button
+                        data-id={buttonDataId}
                         variant="outlined"
                         size="sm"
                         onClick={() => setSelectSecretType(secretType)}
@@ -246,13 +249,14 @@ export function CreateDatabaseModal({ open, onClose }: ICreateDatabaseModalProps
                         <Select
                             value={form.storageType}
                             onChange={(_event, value) => setForm(prev => ({ ...prev, storageType: value as StorageType, path: '', s3Key: undefined }))}
+                            slotProps={{ button: { 'data-id': 'database-storage-type-select' } }}
                         >
                             <Option value="filesystem">File system</Option>
-                            <Option value="s3">S3</Option>
+                            <Option data-id="database-storage-type-option-s3" value="s3">S3</Option>
                         </Select>
                     </FormControl>
 
-                    {form.storageType === 's3' && renderSecretButton('S3 Credentials', 's3-credentials', s3SecretName)}
+                    {form.storageType === 's3' && renderSecretButton('S3 Credentials', 's3-credentials', s3SecretName, 'chosen-s3-secret', 'select-s3-button')}
 
                     <FormControl sx={{ mb: 2 }}>
                         <FormLabel>Path</FormLabel>
@@ -284,12 +288,12 @@ export function CreateDatabaseModal({ open, onClose }: ICreateDatabaseModalProps
                         </Box>
                     </FormControl>
 
-                    {form.encrypted && renderSecretButton('Encryption Key', 'encryption-key', encryptionSecretName)}
+                    {form.encrypted && renderSecretButton('Encryption Key', 'encryption-key', encryptionSecretName, undefined, 'select-encryption-button')}
 
-                    {renderSecretButton('Geocoding API Key (optional)', 'api-key', geocodingSecretName)}
+                    {renderSecretButton('Geocoding API Key (optional)', 'api-key', geocodingSecretName, undefined, 'select-geocoding-button')}
                 </DialogContent>
                 <DialogActions>
-                    <Button variant="plain" onClick={onClose}>Cancel</Button>
+                    <Button data-id="create-database-cancel" variant="plain" onClick={onClose}>Cancel</Button>
                     <Button
                         data-id="create-database-confirm"
                         disabled={!form.path || nameError !== undefined}

@@ -49,6 +49,7 @@
     "stories": "./scripts/story-player.sh --platform electron",
     "stories:and": "./scripts/story-player.sh --platform android",
     "stories:ios": "./scripts/story-player.sh --platform ios",
+    "s3-emulator": "./scripts/s3-emulator.sh",
     "test:and": "cd ./apps/smoke-tests && PLATFORM=android ./run.sh",
     "tan": "bun run test:and",
     "test:and:lock": "bun run --filter=smoke-tests test:and:lock",

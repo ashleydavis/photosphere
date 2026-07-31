@@ -272,7 +272,7 @@ export async function createDatabase(
     databaseId?: string
 ): Promise<void> {
 
-    if (!await assetStorage.isEmpty("./")) {
+    if (!await assetStorage.isEmpty("/")) {
         throw new Error(`Cannot create new media file database in ${assetStorage.location}. This storage location already contains files! Please create your database in a new empty directory.`);
     }
 

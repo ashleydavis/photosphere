@@ -27,8 +27,18 @@ const uuidGenerator: IUuidGenerator = isTestMode ? new TestUuidGenerator() : new
 let erudaInitialised = false;
 let erudaVisible = false;
 
-// Source tag grouping the S3-directory-listing background tasks so they can be cancelled together.
-const LIST_S3_DIRS_SOURCE = "list-s3-dirs";
+// Prefix of the source tag identifying an S3-directory-listing background task. Each listing gets its
+// own tag built from this plus a fresh id, rather than every listing sharing one fixed tag.
+//
+// This is a WORKAROUND, not a fix. The engine pool never un-cancels a source: cancelledSources is
+// only emptied by a full pool shutdown. Each listing creates a TaskQueue and shuts it down when it
+// finishes, and that shutdown cancels the source, so with a single fixed tag the first listing in an
+// app session worked and every later one was dropped in the pool's addTask, leaving the S3 browser
+// showing an empty bucket with no error. The cause is in the pool (a task queued fresh from the
+// WebView should not be treated as a straggler of a cancelled batch) and it will resurface in any
+// other feature that creates a queue per use. Fixing it there is a change to the shared dispatcher
+// for every task type, so it is deliberately left alone here.
+const LIST_S3_DIRS_SOURCE_PREFIX = "list-s3-dirs";
 
 //
 // The fields of a completed task result the provider inspects. The native taskCompleted event
@@ -510,7 +520,8 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         // The WebView has no S3 client or vault access, so list directories via a background task on the
         // embedded worker (which has both). A failure (bad credentials, unreachable bucket) rejects here,
         // so the S3 browser shows a real error rather than the empty-array stub's fake empty bucket.
-        const queue = new TaskQueue(new RandomUuidGenerator(), LIST_S3_DIRS_SOURCE);
+        const uuidGenerator = new RandomUuidGenerator();
+        const queue = new TaskQueue(uuidGenerator, `${LIST_S3_DIRS_SOURCE_PREFIX}-${uuidGenerator.generate()}`);
         try {
             const taskId = queue.addTask("list-s3-dirs", { s3Key, bucket, prefix });
             const result = await queue.awaitTask(taskId);

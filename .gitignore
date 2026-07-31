@@ -55,6 +55,8 @@ stories-tmp/
 stories-screenshots/
 apps/desktop/screenshots/out/
 ux-review/
+# Cached MinIO binary downloaded on demand by scripts/s3-emulator.sh for the S3 smoke tests.
+.s3-emulator-cache/
 .claude/worktrees/
 .claude/permissions-log/
 .claude/permissions-debug.log

@@ -113,6 +113,18 @@ ios_install() {
 }
 
 #
+# Prints the address the simulator uses to reach this host.
+#
+# The simulator shares the host's network stack, so the host is simply loopback. This is the iOS
+# counterpart of android_host_address, so a test needing to point the app at a host-side server (the
+# S3 emulator, for one) can ask for the address the same way on either platform. The literal IPv4
+# address, never the name: see BRIDGE_HOST in lib/common.sh.
+#
+ios_host_address() {
+    echo "$BRIDGE_HOST"
+}
+
+#
 # Launches the app in test mode, passing the bridge address via SIMCTL_CHILD_* env vars (which
 # arrive in the app's environment without the prefix).
 # Usage: ios_launch <port>

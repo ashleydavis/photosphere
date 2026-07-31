@@ -1,6 +1,7 @@
 export * from "./lib/storage";
 export * from "./lib/cloud-storage";
 export * from "./lib/s3-range-readable-stream";
+export * from "./lib/s3-path";
 export * from "./lib/file-storage";
 export * from "./lib/encrypted-storage";
 export * from "./lib/storage-prefix-wrapper";

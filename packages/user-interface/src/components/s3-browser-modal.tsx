@@ -147,6 +147,7 @@ export function S3BrowserModal({ open, s3Key, onClose, onSelect }: IS3BrowserMod
                 <FormControl sx={{ mb: 2 }}>
                     <FormLabel>Bucket</FormLabel>
                     <Input
+                        data-id="s3-browser-bucket-input"
                         value={bucket}
                         onChange={event => handleBucketChange(event.target.value)}
                         placeholder="my-bucket-name"
@@ -156,16 +157,19 @@ export function S3BrowserModal({ open, s3Key, onClose, onSelect }: IS3BrowserMod
                 {bucket && renderBreadcrumbs()}
 
                 {listError && (
-                    <Typography level="body-sm" color="danger" sx={{ mb: 1 }}>
+                    <Typography data-id="s3-browser-error" level="body-sm" color="danger" sx={{ mb: 1 }}>
                         {listError}
                     </Typography>
                 )}
 
                 {entries.length > 0 && (
                     <List size="sm" sx={{ maxHeight: 300, overflowY: 'auto' }}>
-                        {entries.map(dirName => (
+                        {entries.map((dirName, entryIndex) => (
                             <ListItem key={dirName}>
-                                <ListItemButton onClick={() => handleNavigate(dirName)}>
+                                <ListItemButton
+                                    data-id={`s3-browser-dir-${entryIndex}`}
+                                    onClick={() => handleNavigate(dirName)}
+                                    >
                                     {dirName}/
                                 </ListItemButton>
                             </ListItem>
@@ -180,7 +184,7 @@ export function S3BrowserModal({ open, s3Key, onClose, onSelect }: IS3BrowserMod
                 )}
             </DialogContent>
             <DialogActions>
-                <Button variant="plain" onClick={onClose}>Cancel</Button>
+                <Button data-id="s3-browser-cancel" variant="plain" onClick={onClose}>Cancel</Button>
                 <Button
                     disabled={!bucket}
                     onClick={handleSelectLocation}
