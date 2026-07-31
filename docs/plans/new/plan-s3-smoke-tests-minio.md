@@ -2,7 +2,7 @@
 
 ## Overview
 
-There is no working S3 smoke test on either platform. `apps/smoke-tests/tests/33-s3-database/test.sh` exists but opens with a `TEST_S3_BUCKET` guard and exits successfully when it is unset, so it has never run in a normal `bun run test:and` and reports a pass while asserting nothing. The desktop suite has no S3 test at all. That gap let real faults sit in the S3 code path unnoticed.
+There is no S3 smoke test on either platform. The mobile one, `apps/smoke-tests/tests/33-s3-database/test.sh`, has been deleted. It opened with a `TEST_S3_BUCKET` guard and exited successfully when it was unset, so it never ran in a normal `bun run test:and` and reported a pass while asserting nothing. When it was finally forced to run it turned out to be driving a screen that does not exist: it typed into `s3-browser-bucket-input`, clicked `s3-browser-list-button` and waited on `s3-browser-dir-0`, none of which appear anywhere in the codebase, and it navigated to an `/s3-browser` route that was never built. The desktop suite has no S3 test at all. That gap let real faults sit in the S3 code path unnoticed.
 
 This plan provisions the infrastructure locally instead of asking for credentials: a cached MinIO binary started by the test itself on a free port over plain HTTP, seeded through the S3 API. The test then needs nothing configured, runs on every machine, and can never skip. The same test exists on desktop and mobile and asserts the same things.
 
@@ -19,10 +19,12 @@ Every step that changes code must leave `bun run compile` clean and `bun run tes
 Verify the SDK conversion actually landed:
 
 - `packages/mobile-worker/src/shims/aws-s3.ts` and `aws-lib-storage.ts` do not exist.
-- `packages/mobile-worker/bundle.ts` has no `@aws-sdk/*` entry in its `aliasMap`.
+- `packages/mobile-worker/scripts/bundle.ts` (the build script moved into `scripts/`) aliases no `@aws-sdk/*` or `@smithy/*` module. Choosing between the node and browser variants the vendor already ships is not aliasing.
 - The repository contains no certificate authority, TLS proxy, or Android trust anchor added for testing.
 
 If any of these fail, stop and report. Do not work around a surviving hand-written client; this plan's plain-HTTP approach depends on the real SDK.
+
+At the time of writing all three hold: the conversion landed, and the real SDK has been driven end to end from the Android worker against a local MinIO over plain HTTP. Re-check rather than assume.
 
 ### Step 2: Fix bucket-root listing in `packages/storage`
 
@@ -40,6 +42,8 @@ With a custom endpoint the SDK defaults to virtual-host addressing and builds a 
 
 - Add `packages/storage/src/lib/s3-addressing.ts` exporting `requiresPathStyleAddressing(endpoint: string): boolean`, true for an IPv4 or IPv6 literal host, `localhost`, or `127.0.0.1`, false for a DNS name.
 - In `cloud-storage.ts`, set `forcePathStyle` from it when building the client. Real provider endpoints must be unaffected.
+
+This step is confirmed still needed after the SDK conversion. Driving the real SDK at a MinIO on `192.168.55.1` produced requests to `photosphere-adhoc.192.168.55.1`, which does not resolve. It was only reachable by giving the endpoint a hostname whose wildcard DNS resolved, which is not something a test or a user should have to do.
 
 ### Step 4: Add the MinIO runner script
 
@@ -67,6 +71,9 @@ The S3 browser and the New Database dialog have no way to be driven. Add attribu
 
 - `packages/user-interface/src/components/s3-browser-modal.tsx`: the bucket input, the error text, each listed directory (indexed), and the Cancel button.
 - `packages/user-interface/src/components/create-database-modal.tsx`: the storage-type select button, the S3 option, the chosen-secret label and the select-secret button (both keyed by secret type), and the Cancel button.
+- `packages/user-interface/src/components/add-database-modal.tsx`: the same set. This is the dialog the mobile flow opens, and only its confirm button, name and path inputs carry a `data-id` today; the storage-type select in particular has none, so S3 cannot be chosen from a test.
+
+Only add these if step 8 chooses the browser-driving route. If the mobile test seeds `databases.toml` instead, the mobile half needs none of them and this step covers the desktop test alone.
 
 These are React components, so they are covered by the smoke tests rather than unit tests.
 
@@ -82,13 +89,20 @@ Create `apps/desktop/smoke-tests/<next-number>-s3-database/test.sh`, numbered af
 - Then edit the secret to bad keys through the edit-secret UI, browse again, and assert an error is shown rather than an empty list. An empty list is the failure this test exists to catch.
 - On a failed assertion, log the browser's own error text. Without that the only evidence is an empty element.
 
-### Step 8: Replace the mobile test
+### Step 8: Write the mobile test
 
-Rewrite `apps/smoke-tests/tests/33-s3-database/test.sh` to assert exactly what the desktop test asserts, and delete the `TEST_S3_BUCKET` guard and its early exit entirely. Also remove the third assertion in the existing file about a bad server certificate failing closed: it tested the hand-written client's TLS behaviour, which no longer exists.
+Create `apps/smoke-tests/tests/<next-number>-s3-database/test.sh`. There is nothing to rewrite: the old file has been deleted, and none of it should be brought back. It carried a `TEST_S3_BUCKET` guard, an assertion about a bad server certificate failing closed that only ever tested the deleted client's TLS behaviour, and element ids for a screen that was never built.
+
+**Drive only what exists.** Before writing a single `send_command`, open the component and read the `data-id` attributes off it. The mobile app has no `/s3-browser` route: the S3 browser is a modal (`packages/user-interface/src/components/s3-browser-modal.tsx`) reached from the add-database and create-database dialogs, and it has no `data-id` attributes until step 6 adds them.
+
+Two routes are available, and the second is the one already proven to work:
+
+- Drive the browser UI as the desktop test does, which requires step 6's attributes on the mobile-reachable dialog (`add-database-modal.tsx` as well as `create-database-modal.tsx`).
+- Or skip the browser entirely: seed the database entry from outside the app and assert the assets load. `de37a0eb` removed the app's test-only seeding and reset commands and replaced them with harness helpers, `reset_app_state` and `seed_databases_config`, which write `databases.toml` into the app's storage sandbox before it launches. Seed an entry whose `s3_key` names the vault secret, add that `s3-credentials` secret through the app's own add-secret UI, then drive the existing `open-database` command and assert the seeded assets appear. This path has been run by hand against MinIO and works end to end.
+
+Prefer the second unless the browser listing itself is what you mean to cover, and say in the test's header comment which behaviour it asserts.
 
 The only difference from the desktop test is the endpoint. The emulator runs on the host and the app runs on the device, so the app must reach it at the host's address on the device's network, not at `localhost`. Use the existing per-platform host-address helper in `apps/smoke-tests/lib/`.
-
-Renumber to match the desktop test's number only if the mobile suite's numbering allows it without disturbing other tests; otherwise leave the number and note the mismatch.
 
 ### Step 9: Verify the mobile queue-source behaviour
 
@@ -110,7 +124,7 @@ Search both suites for skip guards and environment gates around S3, and remove t
 ## Smoke Tests
 
 - `apps/desktop/smoke-tests/<n>-s3-database/test.sh` (new).
-- `apps/smoke-tests/tests/33-s3-database/test.sh` (rewritten).
+- `apps/smoke-tests/tests/<n>-s3-database/test.sh` (new; the old test 33 was deleted, not rewritten).
 
 Both assert the same two behaviours: a populated bucket lists its seeded directories by name, and a bad credential surfaces an error rather than an empty list.
 
@@ -121,7 +135,8 @@ Both must run with no environment variables set and must not be skippable.
 - `bun run compile` is clean.
 - `bun run test` passes.
 - `bun run test:all` passes, including the new desktop S3 test.
-- `bun run test:and` passes with every test green, including the rewritten mobile S3 test.
+- `bun run test:and` passes with every test green, including the new mobile S3 test.
+- Every `data-id` the new tests drive is present in a component in `packages/user-interface/src/`. Grep each one: a `data-id` that appears only in a test script is a test asserting against a screen that does not exist.
 - Running the desktop S3 test twice in a row passes both times, proving the emulator is cleaned up between runs.
 - Two suites started at the same moment both pass, proving the dynamic port works.
 - `grep -ri "TEST_S3_BUCKET" apps/ scripts/` returns nothing.
@@ -138,3 +153,5 @@ Both must run with no environment variables set and must not be skippable.
 - Step 9 is listed as verify-then-fix rather than fix, because the engine-pool behaviour may already be correct depending on what else has landed. Read the code first.
 - The seeded prefixes must be directories, not just objects, because the browser lists directories. Two are enough to assert on ordering.
 - Deleting the `TEST_S3_BUCKET` guard removes the only reason the mobile test could pass without a server. Expect it to fail the first time it genuinely runs; that failure is information, not a reason to reinstate the guard.
+- **Do not configure the emulator for virtual-host addressing.** MinIO can be told to accept `bucket.host` requests by setting `MINIO_DOMAIN`, and that does make an unfixed client work. It is the wrong fix: it papers over step 3, leaves every real user pointing at an IP-address endpoint broken, and makes the test pass for a reason the product does not share. If the emulator seems to need `MINIO_DOMAIN`, step 3 is not working.
+- **Read the component before writing an assertion.** The deleted test 33 is the cautionary case: its element ids and its `/s3-browser` route were invented to fit the feature as imagined, and because the test skipped by default nothing ever contradicted them. Any `data-id` a test drives must be greppable in `packages/user-interface/src/`.
