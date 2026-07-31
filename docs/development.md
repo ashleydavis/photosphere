@@ -38,6 +38,8 @@ Photosphere is a Bun-workspaces monorepo with web, desktop (Electron), mobile (i
         - user-interface - Shared React UI components
         - utils - General utility functions
         - vault - Cross-platform secrets management with multiple vault backends
+    - tools/
+        - what-changed - Decides which test scripts still need to run, by hashing the working tree
     - test - Data for testing.
 
 ## Setup
@@ -71,7 +73,8 @@ Everything below is run from the repo root.
 | `bun run compile` | Compile all TypeScript. Optional, but the way to check a change still compiles. |
 | `bun run test` | Unit tests. |
 | `bun run test:all` | Unit tests plus the CLI and Electron smoke tests, one after another. **Covers no mobile suite**, so it can pass while the mobile app is broken. Not the full set despite the name. |
-| `bun run test:everything` (or `bun run tev`) | The actual full set for your platform, all at once: compile, unit, CLI, Electron, and both mobile suites. About three and a half minutes rather than eleven, and it stops the moment anything fails. This is what the git hooks run. Pass script names to run only those, still in parallel. |
+| `bun run test:everything` (or `bun run tev`) | The actual full set for your platform, all at once: compile, unit, CLI, Electron, both mobile suites, and the what-changed smoke tests. About three and a half minutes rather than eleven, and it stops the moment anything fails. This is what the git hooks run. Only the scripts whose watched paths changed since they last passed actually run, so a docs-only change runs nothing; add `-- --force` to run everything, `-- --plan` to see the decision. Pass script names to consider only those, still in parallel. |
+| `bun run test:everything:all` | The ungated parallel runner, bypassing what-changed. |
 | `bun run test:and` / `bun run test:ios` | Mobile smoke tests, on the Android emulator/device or iOS simulator. `bun run test:and <n>` runs a single test by number, `bun run test:and <name>` by name. |
 | `bun run build` | Production build of the Electron app for distribution. |
 | `bun run clean` | Remove build artifacts. |

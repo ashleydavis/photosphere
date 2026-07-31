@@ -45,7 +45,19 @@ There is one hook, `.githooks/pre-commit`. It delegates to `bun run test:everyth
 | Mobile smoke tests | `bun run test:and` | `bun run test:ios` |
 | Mobile native unit tests | `bun run test:and:unit` | `bun run test:ios:unit` |
 
-The platform is detected with `uname`. The mobile toolchains do not exist on the other platform, so there is no way to run both sets from one machine.
+There is also `bun run test:what-changed`, the smoke suite for what-changed itself, which is fast enough to run every time it is asked for.
+
+The platform split is decided by `what-changed.json`, and matches what the parallel runner used to decide with `uname`. The mobile toolchains do not exist on the other platform, so there is no way to run both sets from one machine.
+
+**The set above is filtered by what changed.** `bun run test:everything` no longer runs everything unconditionally. It goes through `tools/what-changed`, which hashes the working tree and asks the parallel runner only for the scripts whose watched paths differ from what they saw the last time they passed. A docs-only change runs nothing at all. Pass `--force` to run the whole set regardless:
+
+```
+bun run test:everything -- --force      # run everything, changed or not
+bun run test:everything -- --plan       # print what would run, run nothing
+bun run test:everything:all             # the ungated parallel runner, bypassing the gate
+```
+
+The full rules are in the section below.
 
 ## Why there is no pre-push
 
@@ -55,25 +67,27 @@ That split checked at the wrong moment. It let a broken commit exist and only co
 
 ## What this costs you
 
-The mobile suites need a device or emulator attached. With none running, **every** commit is refused, including a docs-only one, because `test:and` fails immediately with `emulator not started`.
+The mobile suites need a device or emulator attached. With none running, any commit that touches a path they watch is refused, because `test:and` fails immediately with `emulator not started`. A commit that touches only `docs/` or `.claude/` no longer asks for them at all, so it goes through without a device.
 
-Use `--no-verify` for those. That is a normal part of using this, not a workaround.
+Use `--no-verify` when you do need to commit a mobile-touching change without a device. That is a normal part of using this, not a workaround.
 
-The upside of putting everything at commit time is that a commit which passed the hook has actually been tested, on every platform suite this machine can run. That was never true of the old `pre-commit`.
+The upside of putting everything at commit time is that a commit which passed the hook has actually been tested, on every platform suite this machine can run and every suite the change could plausibly affect. That was never true of the old `pre-commit`.
 
 ## Why everything runs in parallel
 
-`bun run test:everything` (which runs `scripts/test-everything-parallel.sh`) starts every script at once, waits for all of them, and reports each result separately. Run one after another the same set takes around eleven minutes; started together it takes about as long as the slowest one, roughly three and a half. That difference is the difference between a hook people leave switched on and a hook people bypass.
+`bun run test:everything` decides what needs to run and then hands those script names to `scripts/test-everything-parallel.sh`, which starts them all at once, waits for all of them, and reports each result separately. Run one after another the full set takes around eleven minutes; started together it takes about as long as the slowest one, roughly three and a half. That difference is the difference between a hook people leave switched on and a hook people bypass.
 
 You can run it yourself, which is the fastest way to see where you stand before pushing:
 
 ```
-bun run test:everything                 # the whole set for this platform
+bun run test:everything                 # whatever changed, for this platform
 bun run tev                             # the same thing, shorter
-bun run test:everything compile test    # just those two, still in parallel
+bun run test:everything compile test    # just those two, still gated and still in parallel
+bun run tev -- --force                  # everything, changed or not
+bun run tev -- --plan                   # print the decision, run nothing
 ```
 
-With no arguments it runs the whole platform set. With script names it runs exactly those. Every script's output is captured separately, and only the failures are printed at the end, each followed by the single command to re-run on its own. Working on one failure at a time beats re-running the whole set.
+With no arguments it considers every target for this platform. With script names it considers exactly those. Every script's output is captured separately, and only the failures are printed at the end, each followed by the single command to re-run on its own. Working on one failure at a time beats re-running the whole set.
 
 **It stops as soon as anything fails.** The remaining scripts are killed rather than left to finish, along with everything they started, so a failure comes back in seconds instead of after the slowest suite has run its course. There is no point waiting for an answer that is already "no", and one failure is enough to stop a commit or a push. The trade is that a run tells you about the first failure rather than all of them: anything still running is reported as cancelled with its result unknown, so a second failure elsewhere only surfaces once the first is fixed.
 
@@ -84,13 +98,45 @@ Two things to be aware of when running everything at once:
 
 Neither has caused a failure in practice, but if you see a build error that makes no sense, re-run the one script on its own before believing it.
 
-## Why the mobile suites are always included
+## When a suite is skipped
 
-There is no changed-paths rule and no way to opt out of the mobile suites. Every commit runs them, whatever it touches.
+`what-changed.json` at the repository root is the whole rule. It lists one target per script, the paths that target watches, and the platforms it can run on. The gate hashes every file git considers part of the working tree (tracked files plus untracked files no ignore rule matches), builds a directory hash tree over them, and compares each target's watched paths against the hashes recorded the last time that target passed. A target runs when any watched path differs, when it has never passed, or when `--force` was given.
 
-The old `pre-push` had a rule that made them mandatory only for changes under `packages/mobile-frontend/`, `packages/mobile-worker/`, `apps/android-frontend/`, `apps/ios-frontend/` and `apps/smoke-tests/`, and dropped them otherwise. That rule is gone with the hook it lived in. Running them every time is simpler and strictly stronger, at the cost of needing a device for every commit.
+The watched paths as they stand:
 
-The reason they matter at all is specific. Unit tests cannot see embedded-worker task ordering or the on-device config file, and those are exactly what commit `61ac4cee` broke: it moved the mobile database list into `databases.toml` and broke 8 of 37 Android smoke tests, and it was committed and pushed without the mobile suite ever being run. `bun run test:all` would not have caught it either, because `test:all` covers no mobile suite at all.
+| Target | Watches | Platforms |
+| --- | --- | --- |
+| `compile` | `packages`, `apps`, `tools` | any |
+| `test` | `packages`, `apps`, `tools` | any |
+| `test:cli` | `apps/cli`, `packages` | any |
+| `test:electron` | `apps/desktop`, `apps/desktop-frontend`, `packages` | any |
+| `test:and`, `test:and:unit` | `apps/android-frontend`, `apps/smoke-tests`, `packages` | Linux |
+| `test:ios`, `test:ios:unit` | `apps/ios-frontend`, `apps/smoke-tests`, `packages` | macOS |
+| `test:what-changed` | `tools/what-changed` | any |
+
+Every target also watches `alwaysPaths`: `package.json`, `bun.lock`, `mise.toml`, `what-changed.json`, `scripts` and `.githooks`. Anything that changes how every suite runs makes every suite run.
+
+`ignoreExtensions` is `.md`, `.txt` and `.log`. Files of those types are left out of the file list entirely, so a documentation change runs nothing and never appears in `bun run what-changed`. That drops the watched set from about 2195 files to about 1970.
+
+The umbrella `packages` entry is deliberate. Narrowing a target to the packages it actually depends on is a config edit with no code change, but a wrong narrowing silently skips a suite that should have run, so the config does not guess. What it already buys is real: a change confined to `docs/`, `apps/cli/`, `apps/desktop/` or `.claude/` no longer runs the mobile suites, and a docs-only or plan-only change runs nothing at all.
+
+**A failing run records nothing.** The parallel runner kills the remaining lanes at the first failure, so there is no trustworthy per-script result to record. Nothing is written unless the whole run passes, which means a target that passed inside a failing run will run again next time. That wastes some time and cannot produce a wrong answer, which is the right way round.
+
+**The gate cannot see changes outside the working tree.** If a suite passed and then the environment changed (a different emulator, a new SDK, a changed environment variable), the gate will still skip it. That is what `--force` is for.
+
+The hashes live in `.cache/what-changed/`, which is gitignored. Deleting that directory makes the next run a full one.
+
+`bun run what-changed:baseline` marks the current tree as the baseline without running anything, for when you already know it is good. It is an assertion, not a check.
+
+Two commands answer "why": `bun run everything:plan` prints the per-target decision without running anything, naming the watched paths that changed. `bun run what-changed` lists the individual files that differ from the last passing run, with their hashes. Neither records anything, so both are free to run.
+
+The tool itself is `tools/what-changed`, and it is deliberately free of anything Photosphere-specific so it can be lifted into another project. Everything in this section comes from `what-changed.json` at the repository root, not from the tool. See [its README](../tools/what-changed/README.md) for the config format and [docs/HOW_IT_WORKS.md](../tools/what-changed/docs/HOW_IT_WORKS.md) for the internals.
+
+## Why the mobile suites matter
+
+The mobile suites are in the default set on the platform that can run them, and only the path rules above take them out.
+
+Unit tests cannot see embedded-worker task ordering or the on-device config file, and those are exactly what commit `61ac4cee` broke: it moved the mobile database list into `databases.toml` and broke 8 of 37 Android smoke tests, and it was committed and pushed without the mobile suite ever being run. `bun run test:all` would not have caught it either, because `test:all` covers no mobile suite at all. That is why anything under `packages/`, `apps/android-frontend/`, `apps/ios-frontend/` or `apps/smoke-tests/` still pulls them in.
 
 ## Checking they actually work
 
@@ -134,7 +180,7 @@ With a breakage still in place, `git commit --no-verify`. It should commit with 
 
 **7. Confirm what happens with no device.**
 
-Stop the emulators (`bun run emu:and:pool:down`) and try to commit anything, even a docs change. Expect a refusal naming `test:and`, with `emulator not started`. This is the cost of running the mobile suites on every commit, and it is worth seeing once so it is not a surprise later.
+Stop the emulators (`bun run emu:and:pool:down`) and try to commit a change under `packages/`. Expect a refusal naming `test:and`, with `emulator not started`. Then try a change under `docs/` only: expect the gate to report every target as unchanged and the commit to go through with no suite run at all. Both are worth seeing once so neither is a surprise later.
 
 You can also run the whole thing without committing at all, which is the same set the hook runs:
 

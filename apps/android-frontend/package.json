@@ -8,7 +8,7 @@
     "c": "bun run compile",
     "bundle": "vite build",
     "bundle:worker": "bun --filter=mobile-worker build:bundle && bun --filter=mobile-worker copy:bundle",
-    "fetch:media": "bash ../../scripts/fetch-mobile-media-tools.sh android",
+    "fetch:media": "bash -c 'source ./scripts/android-env.sh && bash ../../scripts/fetch-mobile-media-tools.sh android'",
     "clean": "rm -rf dist build tsconfig.tsbuildinfo && rm -f android/app/src/main/assets/worker.bundle.js",
     "sync": "bun run fetch:media && bun run bundle:worker && vite build && cap sync android",
     "open": "bun run sync && cap open android",

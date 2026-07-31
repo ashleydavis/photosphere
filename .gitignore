@@ -44,6 +44,9 @@ packages/serialization/build/
 # the native projects by `copy:bundle` (both run by each mobile app's `sync`). Never committed.
 packages/mobile-worker/worker.bundle.js
 packages/adb/src/test/perf/results/
+# Where what-changed records the hashes of the tree it last saw pass. Must stay ignored: the gate
+# enumerates untracked files too, so an un-ignored cache would make every run see itself as a change.
+.cache/
 tmp/
 bundle/
 release/

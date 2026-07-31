@@ -290,6 +290,69 @@ jobs:
           echo "Hash cache tests exit code: $HASH_CACHE_EXIT_CODE" >> hash-cache-test-logs/hash-cache-tests-output.log
           exit $HASH_CACHE_EXIT_CODE
 
+  # Unit and smoke tests for tools/what-changed, the tool that decides which test scripts still need
+  # to run. Deliberately NOT in create-release's `needs` list: what-changed only chooses what gets
+  # run locally and ships in no artifact, so a failure here must never hold up a release. It is here
+  # to be visible, not to be a gate.
+  what-changed-tests:
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Compile what-changed
+        run: bun run --filter=what-changed compile
+
+      - name: Run what-changed unit tests
+        run: |
+          mkdir -p what-changed-test-logs
+          bun run --filter=what-changed test:coverage 2>&1 | tee what-changed-test-logs/unit-tests-output.log
+          UNIT_EXIT_CODE=${PIPESTATUS[0]}
+          echo "what-changed unit tests exit code: $UNIT_EXIT_CODE"
+          echo "what-changed unit tests exit code: $UNIT_EXIT_CODE" >> what-changed-test-logs/unit-tests-output.log
+          exit $UNIT_EXIT_CODE
+
+      - name: Run what-changed smoke tests
+        run: |
+          mkdir -p what-changed-test-logs
+          bun run test:what-changed 2>&1 | tee what-changed-test-logs/smoke-tests-output.log
+          SMOKE_EXIT_CODE=${PIPESTATUS[0]}
+          echo "what-changed smoke tests exit code: $SMOKE_EXIT_CODE"
+          echo "what-changed smoke tests exit code: $SMOKE_EXIT_CODE" >> what-changed-test-logs/smoke-tests-output.log
+          exit $SMOKE_EXIT_CODE
+
+      - name: Upload what-changed test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: what-changed-test-logs
+          path: what-changed-test-logs/
+          retention-days: 7
+
   sync-tests:
     timeout-minutes: 20
     runs-on: ubuntu-latest

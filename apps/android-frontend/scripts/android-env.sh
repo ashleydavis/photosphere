@@ -50,9 +50,22 @@ export PATH="$JAVA_HOME/bin:$PATH"
 # Resolve the Android SDK. Gradle can find it via android/local.properties, but native-run (which
 # `cap run` shells out to for the deploy) only reads the environment, so this must be exported or
 # `cap run` dies with ERR_SDK_NOT_FOUND even when Gradle builds fine.
-export ANDROID_HOME="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}}"
-if [ ! -d "$ANDROID_HOME" ]; then
-    echo "ERROR: Android SDK not found at '$ANDROID_HOME'. Set ANDROID_HOME to your SDK location." >&2
+#
+# The default location differs by platform, so both are tried rather than only the Linux one. This
+# mirrors what apps/smoke-tests/lib/android.sh already does, so `test:and` and `test:and:unit` resolve
+# the SDK the same way instead of one working on a Mac and the other not.
+#
+export ANDROID_HOME="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+if [ -z "$ANDROID_HOME" ]; then
+    for candidate in "$HOME/Android/Sdk" "$HOME/Library/Android/sdk"; do
+        if [ -d "$candidate" ]; then
+            export ANDROID_HOME="$candidate"
+            break
+        fi
+    done
+fi
+if [ -z "$ANDROID_HOME" ] || [ ! -d "$ANDROID_HOME" ]; then
+    echo "ERROR: Android SDK not found at '$ANDROID_HOME' (tried \$HOME/Android/Sdk and \$HOME/Library/Android/sdk). Set ANDROID_HOME to your SDK location." >&2
     exit 1
 fi
 

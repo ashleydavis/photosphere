@@ -20,6 +20,8 @@ bun run test:everything
 
 Or `bun run tev` for short.
 
+Runs are gated on changed paths: a script is only run when the paths it watches (listed in `what-changed.json`) differ from what they were the last time that script passed, so a docs-only change runs nothing. Add `-- --force` to run everything regardless, or `-- --plan` to print the decision without running anything. `bun run test:everything:all` is the ungated runner.
+
 That is also what the checked-in git hooks run. They gate commits and pushes locally, and they have to be installed once per clone. See [Git hooks](../git-hooks.md).
 
 Run all unit tests:

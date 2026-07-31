@@ -1,0 +1,102 @@
+{
+    "cacheDir": ".cache/what-changed",
+    "runnerCommand": [
+        "./scripts/test-everything-parallel.sh"
+    ],
+    "alwaysPaths": [
+        "package.json",
+        "bun.lock",
+        "mise.toml",
+        "what-changed.json",
+        "scripts",
+        ".githooks"
+    ],
+    "ignoreExtensions": [
+        ".md",
+        ".txt",
+        ".log"
+    ],
+    "targets": [
+        {
+            "name": "compile",
+            "paths": [
+                "packages",
+                "apps",
+                "tools"
+            ]
+        },
+        {
+            "name": "test",
+            "paths": [
+                "packages",
+                "apps",
+                "tools"
+            ]
+        },
+        {
+            "name": "test:cli",
+            "paths": [
+                "apps/cli",
+                "packages"
+            ]
+        },
+        {
+            "name": "test:electron",
+            "paths": [
+                "apps/desktop",
+                "apps/desktop-frontend",
+                "packages"
+            ]
+        },
+        {
+            "name": "test:and",
+            "paths": [
+                "apps/android-frontend",
+                "apps/smoke-tests",
+                "packages"
+            ],
+            "platforms": [
+                "linux"
+            ]
+        },
+        {
+            "name": "test:and:unit",
+            "paths": [
+                "apps/android-frontend",
+                "apps/smoke-tests",
+                "packages"
+            ],
+            "platforms": [
+                "linux"
+            ]
+        },
+        {
+            "name": "test:ios",
+            "paths": [
+                "apps/ios-frontend",
+                "apps/smoke-tests",
+                "packages"
+            ],
+            "platforms": [
+                "darwin"
+            ]
+        },
+        {
+            "name": "test:ios:unit",
+            "paths": [
+                "apps/ios-frontend",
+                "apps/smoke-tests",
+                "packages"
+            ],
+            "platforms": [
+                "darwin"
+            ]
+        },
+        {
+            "name": "test:what-changed",
+            "paths": [
+                "tools/what-changed"
+            ]
+        }
+    ]
+}
