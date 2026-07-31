@@ -67,6 +67,7 @@ function createMockHost(sessionId: string): IMockHost {
         fsUnlink: () => { /* no-op */ },
         fsRm: () => { /* no-op */ },
         tcpListen: () => JSON.stringify({ listenerId: "L1", port: 0 }),
+        tcpConnect: () => JSON.stringify({ connectionId: "C1" }),
         tcpWrite: () => null,
         tcpClose: () => null,
         tcpStopListening: () => null,

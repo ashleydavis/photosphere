@@ -11,7 +11,9 @@ import org.junit.Test;
 
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
@@ -118,6 +120,86 @@ public final class TcpHostTest {
         assertTrue(tcpHost.hasLiveListeners());
         tcpHost.tcpStopListening(listenerId);
         assertFalse(tcpHost.hasLiveListeners());
+    }
+
+    //
+    // The outbound half of the socket layer. This is what makes an `http://` endpoint reachable as
+    // plain HTTP with no TLS in the path, so it is covered against a real loopback server socket.
+    //
+    @Test
+    public void connectSendsAndReceivesOverAnOutboundConnection() throws Exception {
+        try (ServerSocket peer = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))) {
+            String connect = tcpHost.tcpConnect("127.0.0.1", peer.getLocalPort());
+            assertFalse("connect is not an error envelope", connect.startsWith("@@HOSTERR@@"));
+            String connectionId = stringField(connect, "connectionId");
+            assertTrue("a connection id was allocated", connectionId.length() > 0);
+
+            Socket accepted = peer.accept();
+            accepted.setSoTimeout(3000);
+
+            // Worker -> peer: tcpWrite reaches the remote end.
+            byte[] request = "GET / HTTP/1.1\r\n\r\n".getBytes(StandardCharsets.UTF_8);
+            assertNull(tcpHost.tcpWrite(connectionId, Base64.getEncoder().encodeToString(request)));
+
+            InputStream acceptedIn = accepted.getInputStream();
+            byte[] received = new byte[request.length];
+            int offset = 0;
+            while (offset < received.length) {
+                int read = acceptedIn.read(received, offset, received.length - offset);
+                assertTrue("stream did not close early", read != -1);
+                offset += read;
+            }
+            assertEquals("GET / HTTP/1.1\r\n\r\n", new String(received, StandardCharsets.UTF_8));
+
+            // Peer -> worker: the read loop turns inbound bytes into a base64 data event.
+            OutputStream acceptedOut = accepted.getOutputStream();
+            acceptedOut.write("HTTP/1.1 200 OK\r\n\r\n".getBytes(StandardCharsets.UTF_8));
+            acceptedOut.flush();
+
+            String dataEvent = tcpHost.awaitInboundEvent(3000);
+            assertNotNull("a data event arrived", dataEvent);
+            assertTrue(dataEvent.contains("\"kind\":\"data\""));
+            assertEquals(connectionId, stringField(dataEvent, "connectionId"));
+            assertEquals("HTTP/1.1 200 OK\r\n\r\n",
+                new String(Base64.getDecoder().decode(stringField(dataEvent, "base64")), StandardCharsets.UTF_8));
+
+            // Peer close -> the worker sees a close event for that connection.
+            accepted.close();
+            String closeEvent = tcpHost.awaitInboundEvent(3000);
+            assertNotNull("a close event arrived", closeEvent);
+            assertTrue(closeEvent.contains("\"kind\":\"close\""));
+            assertEquals(connectionId, stringField(closeEvent, "connectionId"));
+        }
+    }
+
+    //
+    // A refused connection must report the failure rather than hand back a connection id that never
+    // carries any bytes.
+    //
+    @Test
+    public void connectToAClosedPortReturnsAnErrorEnvelope() throws Exception {
+        ServerSocket peer = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"));
+        int closedPort = peer.getLocalPort();
+        peer.close();
+
+        String connect = tcpHost.tcpConnect("127.0.0.1", closedPort);
+
+        assertTrue("connect reports an error envelope", connect.startsWith("@@HOSTERR@@"));
+    }
+
+    //
+    // Closing an outbound connection releases it, so a later write to the same id is a no-op rather
+    // than reaching a socket that should be gone.
+    //
+    @Test
+    public void closeReleasesAnOutboundConnection() throws Exception {
+        try (ServerSocket peer = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))) {
+            String connectionId = stringField(tcpHost.tcpConnect("127.0.0.1", peer.getLocalPort()), "connectionId");
+            peer.accept();
+
+            assertNull(tcpHost.tcpClose(connectionId));
+            assertNull(tcpHost.tcpWrite(connectionId, Base64.getEncoder().encodeToString("x".getBytes(StandardCharsets.UTF_8))));
+        }
     }
 
     @Test

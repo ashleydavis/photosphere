@@ -68,6 +68,9 @@ export interface IHost {
     // Binds a loopback TCP listener and returns a JSON string { listenerId, port } (port resolved when 0 was requested).
     tcpListen: (host: string, port: number) => string;
 
+    // Opens an outbound TCP connection and returns a JSON string { connectionId }. This is what makes an `http://` endpoint reachable as plain HTTP, with no TLS in the path.
+    tcpConnect: (host: string, port: number) => string;
+
     // Writes base64-encoded bytes to an accepted connection.
     tcpWrite: (connectionId: string, base64: string) => string | null;
 
@@ -98,10 +101,11 @@ export interface IHost {
     // Binds a TLS listener using the given PEM cert/key and returns a JSON string { listenerId, port }.
     tlsListen: (host: string, port: number, certPem: string, keyPem: string) => string;
 
-    // Opens a TLS client connection and returns a JSON string { connectionId, peerCertBase64 }. The
-    // connection trusts any server certificate: LAN share, its only caller, presents a runtime
-    // self-signed cert and pins it in JS against the fingerprint from the UDP broadcast.
-    tlsConnect: (host: string, port: number) => string;
+    // Opens a TLS client connection and returns a JSON string { connectionId, peerCertBase64 }.
+    // `rejectUnauthorized` is Node's option: true validates the chain and hostname against the system
+    // trust store; false accepts any certificate, which LAN share uses because it pins the fingerprint
+    // itself against the one from the UDP broadcast.
+    tlsConnect: (host: string, port: number, rejectUnauthorized: boolean) => string;
 
     // Writes base64-encoded bytes to an accepted or connected TLS connection.
     tlsWrite: (connectionId: string, base64: string) => string | null;
@@ -163,6 +167,7 @@ export const EXPECTED_HOST_FUNCTIONS: string[] = [
     "fsUnlink",
     "fsRm",
     "tcpListen",
+    "tcpConnect",
     "tcpWrite",
     "tcpClose",
     "tcpStopListening",

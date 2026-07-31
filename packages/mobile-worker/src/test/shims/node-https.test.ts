@@ -73,7 +73,7 @@ describe("https shim end-to-end (loopback)", () => {
         let body = "";
         let pinnedFingerprintSource: Buffer | undefined = undefined;
 
-        const req = request({ hostname: "127.0.0.1", port: 8443, path: "/pairing-code-hash", method: "GET" }, response => {
+        const req = request({ hostname: "127.0.0.1", port: 8443, path: "/pairing-code-hash", method: "GET", rejectUnauthorized: false }, response => {
             statusCode = response.statusCode;
             response.on("data", (chunk: Buffer) => { body += chunk.toString(); });
         });
@@ -122,6 +122,7 @@ describe("https shim end-to-end (loopback)", () => {
             port: 8443,
             path: "/share-payload",
             method: "POST",
+            rejectUnauthorized: false,
             headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
         }, response => {
             statusCode = response.statusCode;
@@ -137,13 +138,31 @@ describe("https shim end-to-end (loopback)", () => {
         expect(JSON.parse(body).success).toBe(true);
     });
 
-    test("request opens the TLS connection through tlsConnect at the requested host and port", () => {
+    test("request validates the certificate by default, so an ordinary request cannot get trust-all", () => {
+        const tlsConnect = jest.fn().mockReturnValue(JSON.stringify({ connectionId: "C-validated", peerCertBase64: "" }));
+        (globalThis as any).host = { platform: "android", tlsConnect, tlsWrite: () => null, tlsClose: () => null };
+
+        request({ hostname: "s3.amazonaws.com", port: 443, path: "/bucket", method: "GET" }, () => { /* no response needed */ });
+
+        expect(tlsConnect).toHaveBeenCalledWith("s3.amazonaws.com", 443, true);
+    });
+
+    test("request validates when rejectUnauthorized is explicitly true", () => {
+        const tlsConnect = jest.fn().mockReturnValue(JSON.stringify({ connectionId: "C-explicit", peerCertBase64: "" }));
+        (globalThis as any).host = { platform: "android", tlsConnect, tlsWrite: () => null, tlsClose: () => null };
+
+        request({ hostname: "s3.amazonaws.com", port: 443, path: "/", method: "GET", rejectUnauthorized: true }, () => { /* no response needed */ });
+
+        expect(tlsConnect).toHaveBeenCalledWith("s3.amazonaws.com", 443, true);
+    });
+
+    test("request skips validation only when the caller opts out, which is LAN share's pinned path", () => {
         const tlsConnect = jest.fn().mockReturnValue(JSON.stringify({ connectionId: "C-pinned", peerCertBase64: "" }));
         (globalThis as any).host = { platform: "android", tlsConnect, tlsWrite: () => null, tlsClose: () => null };
 
-        request({ hostname: "127.0.0.1", port: 8443, path: "/", method: "GET" }, () => { /* no response needed */ });
+        request({ hostname: "127.0.0.1", port: 8443, path: "/", method: "GET", rejectUnauthorized: false }, () => { /* no response needed */ });
 
-        expect(tlsConnect).toHaveBeenCalledWith("127.0.0.1", 8443);
+        expect(tlsConnect).toHaveBeenCalledWith("127.0.0.1", 8443, false);
     });
 
 });

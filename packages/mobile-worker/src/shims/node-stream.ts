@@ -61,7 +61,7 @@ export class Readable {
     //
     // Listeners registered per event name.
     //
-    private listeners: Map<string, StreamListener[]> = new Map();
+    protected listeners: Map<string, StreamListener[]> = new Map();
 
     //
     // The bytes this stream will emit.
@@ -71,7 +71,7 @@ export class Readable {
     //
     // True once destroy() has been called; suppresses pending emission.
     //
-    private destroyed = false;
+    protected destroyed = false;
 
     //
     // True once emission has been scheduled, so it only happens once.
@@ -133,23 +133,31 @@ export class Readable {
     }
 
     //
-    // Emits an event to all registered listeners.
+    // Emits an event to all registered listeners, with `this` bound to the stream as Node's
+    // EventEmitter does (the AWS SDK's collector reads `this.bufferedBytes` from its listener).
     //
-    private emit(eventName: string, ...args: any[]): void {
+    // An `error` with nobody listening is thrown rather than dropped, which is what Node does and what
+    // keeps a failure (a checksum mismatch, say) from disappearing into a stream nobody is watching.
+    //
+    protected emit(eventName: string, ...args: any[]): void {
         const handlers = this.listeners.get(eventName);
-        if (!handlers) {
+        if (!handlers || handlers.length === 0) {
+            if (eventName === "error") {
+                throw args[0] instanceof Error ? args[0] : new Error(`Unhandled stream error: ${String(args[0])}`);
+            }
             return;
         }
 
         for (const handler of handlers.slice()) {
-            handler(...args);
+            handler.call(this, ...args);
         }
     }
 
     //
-    // Schedules the single data+end emission once, on a microtask.
+    // Schedules the single data+end emission once, on a microtask. Overridden by Duplex, whose bytes
+    // arrive through push() rather than from a fixed payload.
     //
-    private scheduleEmit(): void {
+    protected scheduleEmit(): void {
         if (this.scheduled) {
             return;
         }
@@ -200,8 +208,22 @@ export class Writable {
     //
     // Buffers a chunk. Returns true (never applies backpressure, since it is in-memory).
     //
+    // A subclass that implements Node's `_write` hook gets the chunk through that instead, which is
+    // how the AWS SDK's response collector (a Writable subclass whose only body is `_write`) gathers
+    // the bytes. Without this its buffer stays empty and every S3 response reads as zero-length.
+    //
     write(chunk: Buffer | Uint8Array | string): boolean {
-        this.chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : Buffer.from(chunk));
+        const buffer = typeof chunk === "string" ? Buffer.from(chunk) : Buffer.from(chunk);
+        const writeHook = (this as any)._write;
+        if (typeof writeHook === "function") {
+            writeHook.call(this, buffer, "buffer", (error?: Error) => {
+                if (error) {
+                    this.emit("error", error);
+                }
+            });
+            return true;
+        }
+        this.chunks.push(buffer);
         return true;
     }
 
@@ -212,6 +234,24 @@ export class Writable {
     end(chunk?: Buffer | Uint8Array | string): void {
         if (chunk !== undefined) {
             this.write(chunk);
+        }
+        const finalHook = (this as any)._final;
+        if (typeof finalHook === "function") {
+            finalHook.call(this, (error?: Error) => {
+                if (error) {
+                    this.emit("error", error);
+                    return;
+                }
+                this.emit("finish");
+            });
+            return;
+        }
+        if (!this.onFinish && this.chunks.length > 0) {
+            // Bytes were written to a stream with no `_write` hook and no onFinish sink, so there is
+            // nowhere for them to go. Dropping them silently would look like a successful write of
+            // data that never landed anywhere.
+            throw new Error(`Writable received ${Buffer.concat(this.chunks).length} bytes but has no destination: `
+                + `it was constructed without an onFinish sink and the subclass implements no _write hook.`);
         }
         try {
             if (this.onFinish) {
@@ -246,15 +286,20 @@ export class Writable {
     }
 
     //
-    // Emits an event to all registered listeners.
+    // Emits an event to all registered listeners, with `this` bound to the stream as Node's
+    // EventEmitter does (the AWS SDK's collector reads `this.bufferedBytes` from its listener).
     //
-    private emit(eventName: string, ...args: any[]): void {
+    protected emit(eventName: string, ...args: any[]): void {
         const handlers = this.listeners.get(eventName);
-        if (!handlers) {
+        if (!handlers || handlers.length === 0) {
+            // An error with nobody listening is thrown rather than dropped, as Node does.
+            if (eventName === "error") {
+                throw args[0] instanceof Error ? args[0] : new Error(`Unhandled stream error: ${String(args[0])}`);
+            }
             return;
         }
         for (const handler of handlers.slice()) {
-            handler(...args);
+            handler.call(this, ...args);
         }
     }
 }
@@ -441,18 +486,190 @@ transformPrototype.scheduleDrain = function (): void {
 };
 
 //
-// See Transform.
+// A working duplex stream: readable on one side, writable on the other.
 //
-export const Duplex = function Duplex(this: any): void {
-    // No-op base constructor.
-} as unknown as { new (): any };
+// The AWS SDK's `ChecksumStream` extends this to verify a response checksum, so it has to be real
+// rather than a no-op base. It must also be an instance of `Readable`, because `sdkStreamMixin`
+// decides between its Node and web code paths with `stream instanceof Readable` and throws
+// "Unexpected stream implementation" when the check fails.
+//
+// The readable half is push-driven (the payload emission Readable schedules is suppressed), and the
+// writable half calls the subclass's `_write` / `_final` hooks the way Node does.
+//
+export class Duplex extends Readable {
+    //
+    // True once push(null) has ended the readable side, so `end` is emitted once.
+    //
+    private readableEnded = false;
+
+    //
+    // True once a consumer has attached a `data` listener. Until then the readable side is paused and
+    // pushed bytes are buffered, as Node's is.
+    //
+    private flowing = false;
+
+    //
+    // Bytes pushed before a consumer started reading.
+    //
+    private buffered: Buffer[] = [];
+
+    //
+    // True once push(null) has been called but the buffered bytes have not been flushed yet, so `end`
+    // fires after the last `data`.
+    //
+    private endPending = false;
+
+    //
+    // Guards against scheduling more than one deferred flush.
+    //
+    private flushScheduled = false;
+
+    //
+    // Builds a duplex with no fixed payload; its bytes arrive through push().
+    //
+    constructor() {
+        super(Buffer.alloc(0));
+    }
+
+    //
+    // Suppresses Readable's payload emission: a Duplex has no payload to emit.
+    //
+    protected scheduleEmit(): void {
+        // No-op: push() drives emission instead.
+    }
+
+    //
+    // Registers a listener, and starts the stream flowing when the first `data` listener attaches.
+    //
+    // The flush is deferred to a microtask so listeners the consumer attaches immediately afterwards
+    // (the AWS SDK's collector attaches `error` and `finish` right after piping) are in place before
+    // any event fires.
+    //
+    on(eventName: string, listener: StreamListener): this {
+        super.on(eventName, listener);
+        if (eventName === "data" && !this.flowing) {
+            this.flowing = true;
+            this.scheduleFlush();
+        }
+        return this;
+    }
+
+    //
+    // Emits a chunk to the readable side, or ends it when passed null.
+    //
+    // While no consumer is reading the bytes are buffered rather than emitted. The AWS SDK relies on
+    // this: its checksum stream receives the whole response body while it is being verified, and only
+    // afterwards does the SDK attach the collector that consumes it. Emitting on push would deliver
+    // every byte to nobody, and the read would hang until the retry timeout.
+    //
+    push(chunk: Buffer | null): boolean {
+        if (this.destroyed) {
+            return false;
+        }
+        if (chunk === null) {
+            this.endPending = true;
+            this.scheduleFlush();
+            return false;
+        }
+        this.buffered.push(chunk);
+        this.scheduleFlush();
+        return true;
+    }
+
+    //
+    // Flushes buffered bytes (and then `end`) to a reading consumer, once, on a microtask.
+    //
+    private scheduleFlush(): void {
+        if (!this.flowing || this.flushScheduled) {
+            return;
+        }
+        this.flushScheduled = true;
+
+        Promise.resolve().then(() => {
+            this.flushScheduled = false;
+            if (this.destroyed) {
+                return;
+            }
+
+            const pending = this.buffered.splice(0);
+            for (const chunk of pending) {
+                this.emit("data", chunk);
+            }
+
+            if (this.endPending && !this.readableEnded) {
+                this.readableEnded = true;
+                this.emit("end");
+            }
+        });
+    }
+
+    //
+    // Accepts a chunk on the writable side, handing it to the subclass's `_write` hook. `encoding`
+    // and `callback` are the remaining arguments of Node's signature; a caller such as `pipe()`
+    // passes neither.
+    //
+    write(chunk: Buffer | Uint8Array | string, encoding?: string, callback?: (error?: Error) => void): boolean {
+        const buffer = typeof chunk === "string" ? Buffer.from(chunk) : Buffer.from(chunk);
+        const writeHook = (this as any)._write;
+        const done = (error?: Error) => {
+            if (error) {
+                this.emit("error", error);
+            }
+            if (callback) {
+                callback(error);
+            }
+        };
+        if (typeof writeHook === "function") {
+            writeHook.call(this, buffer, encoding || "buffer", done);
+        }
+        else {
+            this.push(buffer);
+            done();
+        }
+        return true;
+    }
+
+    //
+    // Ends the writable side, running the subclass's `_final` hook so it can flush (which is where
+    // ChecksumStream compares the digest) before the readable side is ended.
+    //
+    end(chunk?: Buffer | Uint8Array | string): void {
+        if (chunk !== undefined) {
+            this.write(chunk);
+        }
+        const finalHook = (this as any)._final;
+        if (typeof finalHook === "function") {
+            finalHook.call(this, (error?: Error) => {
+                if (error) {
+                    this.emit("error", error);
+                    return;
+                }
+                this.push(null);
+                this.emit("finish");
+            });
+            return;
+        }
+        this.push(null);
+        this.emit("finish");
+    }
+}
 
 //
-// See Transform.
+// A duplex that republishes whatever is written to it, matching Node's PassThrough.
 //
-export const PassThrough = function PassThrough(this: any): void {
-    // No-op base constructor.
-} as unknown as { new (): any };
+// `@smithy/util-stream`'s `splitStream` constructs one of these for every retryable request body, so
+// an upload from the mobile worker runs through it. While it was a no-op base constructor it had no
+// write, push or pipe at all, and the first upload to reach it would have failed on a missing method.
+//
+export class PassThrough extends Duplex {
+    //
+    // Forwards a written chunk straight to the readable side.
+    //
+    _write(chunk: Buffer, encoding: string, callback: (error?: Error) => void): void {
+        this.push(chunk);
+        callback();
+    }
+}
 
 //
 // The base `Stream` constructor. In Node `require("stream")` IS this constructor (with Readable,

@@ -15,7 +15,7 @@
 //
 
 import { Buffer } from "buffer";
-import { createServer as netCreateServer, type Server as NetServer, type Socket } from "./node-net";
+import { connect as netConnect, createServer as netCreateServer, type Server as NetServer, type Socket } from "./node-net";
 
 //
 // A registered event listener.
@@ -341,9 +341,23 @@ export class IncomingMessage extends HttpEmitter {
     }
 
     //
-    // No-op pipe; the body parsers used here consume via `data`/`end` events, not piping.
+    // Forwards the body into a writable destination and returns it, so `source.pipe(dest)` behaves as
+    // Node's does.
+    //
+    // The inbound server parsers consume via `data`/`end` events and never call this, but the AWS SDK
+    // pipes a response body into its checksum stream. While this was a no-op that returned the
+    // destination untouched, no bytes ever reached that stream: the response never ended, the SDK's
+    // collector never finished, and an S3 read simply hung until the 30s retry timeout fired.
     //
     pipe(destination: any): any {
+        this.on("data", (chunk: Buffer) => {
+            destination.write(chunk);
+        });
+        this.on("end", () => {
+            if (destination.end) {
+                destination.end();
+            }
+        });
         return destination;
     }
 
@@ -702,25 +716,380 @@ export const METHODS: string[] = [
 ];
 
 //
-// Makes an outbound plain-HTTP request, mirroring `http.request(options, callback)`.
+// The transport surface the client needs from a socket. Both `node-net`'s Socket and `node-tls`'s
+// TLSSocket satisfy it, which is what lets one client serve http and https.
 //
-// NOT IMPLEMENTED, and deliberately so. An outbound plain-TCP connection needs a native host function
-// the bridge does not have: `net` can accept connections but not open one. The only caller reaching
-// this today is the AWS SDK's EC2 instance-metadata credential provider, which cannot work on a phone
-// regardless. Honouring an `http://` endpoint end to end is step 3 of the plan, and that is where the
-// transport belongs.
+export interface IClientTransport {
+    // Sends bytes over the connection.
+    write(chunk: Buffer | Uint8Array | string): boolean;
+
+    // Closes the connection.
+    destroy(): void;
+
+    // Registers a listener for `data`, `end` or `close`.
+    on(eventName: string, listener: (...args: any[]) => void): any;
+
+    // Raises an event on the transport (used to signal the TLS handshake to a pinning listener).
+    emit(eventName: string, ...args: any[]): void;
+}
+
 //
-// It exists as an export because `@smithy/credential-provider-imds` imports it at module load, and it
-// throws rather than returning something inert so a caller that actually needs plain HTTP fails by
-// name instead of hanging or silently doing nothing.
+// A client HTTP response: an IncomingMessage carrying the numeric status code from the response line.
 //
-export function request(options: unknown, callback?: unknown): never {
-    throw new Error("http.request is NOT IMPLEMENTED in the mobile worker: the host bridge has no outbound plain-TCP connect. Use https, or add the transport.");
+export interface IClientResponse extends IncomingMessage {
+    // The HTTP status code from the response status line.
+    statusCode: number;
+}
+
+//
+// The request options the client accepts, matching the subset its callers pass.
+//
+export interface IClientRequestOptions {
+    // The target host. Node accepts either spelling; `hostname` wins when both are given.
+    hostname?: string;
+
+    // The target host, as `@smithy/node-http-handler` spells it.
+    host?: string;
+
+    // The target port. Defaults to the scheme's standard port.
+    port?: number;
+
+    // The request target (path and query string).
+    path?: string;
+
+    // The HTTP method.
+    method?: string;
+
+    // Outbound headers.
+    headers?: Record<string, string | number | undefined>;
+
+    // Accepted and ignored: one connection is opened per request, so there is no pool to configure.
+    agent?: unknown;
+
+    // Accepted and ignored; no caller sends HTTP basic auth.
+    auth?: string;
+
+    // Node's TLS trust option. Only the https shim acts on it; over plain TCP there is nothing to
+    // validate, so it is accepted and ignored here.
+    rejectUnauthorized?: boolean;
+}
+
+//
+// Parsed response head: the status line plus the headers before the blank line.
+//
+interface IParsedResponseHead {
+    // The numeric HTTP status code.
+    statusCode: number;
+
+    // Lowercased header name to value map.
+    headers: Record<string, string>;
+}
+
+//
+// Parses the response status line and headers out of the head text.
+//
+function parseResponseHead(headerText: string): IParsedResponseHead {
+    const lines = headerText.split("\r\n");
+    const statusLine = lines[0] || "HTTP/1.1 200 OK";
+    const parts = statusLine.split(" ");
+    const statusCode = parseInt(parts[1] || "200", 10);
+
+    const headers: Record<string, string> = {};
+    for (let index = 1; index < lines.length; index++) {
+        const line = lines[index];
+        const colon = line.indexOf(":");
+        if (colon > 0) {
+            headers[line.slice(0, colon).trim().toLowerCase()] = line.slice(colon + 1).trim();
+        }
+    }
+
+    return { statusCode: Number.isNaN(statusCode) ? 200 : statusCode, headers };
+}
+
+//
+// Opens the connection a request will run over. The https shim supplies a TLS one; plain http uses
+// net.connect. Keeping it a parameter is what lets the scheme pick the transport without this module
+// knowing anything about TLS.
+//
+export type ClientSocketFactory = (port: number, hostname: string) => IClientTransport;
+
+//
+// An outbound client request over a native transport, shared by the http and https shims. Body bytes
+// written before the connection is ready are buffered and flushed once it is.
+//
+export class ClientRequest extends HttpEmitter {
+    //
+    // The connection this request is sent over.
+    //
+    private socket: IClientTransport;
+
+    //
+    // Buffered request body chunks, flushed when the request is sent.
+    //
+    private bodyChunks: Buffer[] = [];
+
+    //
+    // True once the request has been aborted via destroy().
+    //
+    private aborted = false;
+
+    //
+    // Opens the connection and schedules the send. `socket` and, for TLS, `secureConnect` are raised on
+    // microtasks before the request goes out, so a caller that pins the certificate can attach its
+    // listener and abort in time.
+    //
+    constructor(options: IClientRequestOptions, callback: ((response: IClientResponse) => void) | undefined,
+                socketFactory: ClientSocketFactory, signalsHandshake: boolean) {
+        super();
+        const hostname = options.hostname || options.host || "";
+        this.socket = socketFactory(resolvePort(options, signalsHandshake), hostname);
+
+        Promise.resolve().then(() => {
+            this.emit("socket", this.socket);
+            Promise.resolve().then(() => {
+                if (signalsHandshake) {
+                    this.socket.emit("secureConnect");
+                }
+                Promise.resolve().then(() => {
+                    if (this.aborted) {
+                        return;
+                    }
+                    this.sendRequest(options, callback, signalsHandshake);
+                });
+            });
+        });
+    }
+
+    //
+    // Buffers a request body chunk.
+    //
+    write(chunk: Buffer | Uint8Array | string): boolean {
+        this.bodyChunks.push(typeof chunk === "string" ? Buffer.from(chunk, "utf8") : Buffer.from(chunk));
+        return true;
+    }
+
+    //
+    // Optionally buffers a final body chunk. The send happens after the connection sequence.
+    //
+    end(chunk?: Buffer | Uint8Array | string): void {
+        if (chunk !== undefined && chunk !== null) {
+            this.write(chunk);
+        }
+    }
+
+    //
+    // Registers an inactivity timeout callback. The native transports report no socket-level timeout,
+    // so the caller's own timer enforces the deadline; this only records the listener.
+    //
+    setTimeout(timeoutMs: number, callback?: (...args: any[]) => void): this {
+        if (callback) {
+            this.on("timeout", callback);
+        }
+        return this;
+    }
+
+    //
+    // Aborts the request, closing the connection and emitting `error` when a reason is given.
+    //
+    destroy(error?: Error): void {
+        if (this.aborted) {
+            return;
+        }
+        this.aborted = true;
+        this.socket.destroy();
+        if (error) {
+            this.emit("error", error);
+        }
+    }
+
+    //
+    // Whether the request has been aborted.
+    //
+    get destroyed(): boolean {
+        return this.aborted;
+    }
+
+    //
+    // Writes the request line, headers and body to the transport, then parses the response off the
+    // inbound bytes and dispatches it.
+    //
+    private sendRequest(options: IClientRequestOptions, callback: ((response: IClientResponse) => void) | undefined,
+                        signalsHandshake: boolean): void {
+        const body = Buffer.concat(this.bodyChunks);
+        const method = (options.method || "GET").toUpperCase();
+        const port = resolvePort(options, signalsHandshake);
+        const hostname = options.hostname || options.host || "";
+
+        let head = `${method} ${options.path || "/"} HTTP/1.1\r\n`;
+        const headers = options.headers || {};
+        // Only supply a Host header when the caller has not. The AWS SDK sets its own `host` header and
+        // signs it, and sending both spellings puts two Host headers on the wire, which a conforming
+        // server rejects outright (MinIO answers 400 Bad Request). The comparison is case-insensitive
+        // because the header name is.
+        const callerSuppliedHost = Object.keys(headers).some(name => name.toLowerCase() === "host");
+        if (!callerSuppliedHost) {
+            // Omit the port from the Host header when it is the scheme's default, so an AWS SigV4 signature
+            // (which canonicalises the host without the default port) matches the header that is sent.
+            // Non-default ports (LAN share) keep the explicit `:port`.
+            head += `Host: ${port === 443 || port === 80 ? hostname : `${hostname}:${port}`}\r\n`;
+        }
+        for (const name of Object.keys(headers)) {
+            const value = headers[name];
+            if (value !== undefined) {
+                head += `${name}: ${value}\r\n`;
+            }
+        }
+        head += "Connection: close\r\n\r\n";
+
+        this.setupResponseParsing(callback, method);
+
+        this.socket.write(Buffer.from(head, "utf8"));
+        if (body.length > 0) {
+            this.socket.write(body);
+        }
+    }
+
+    //
+    // Accumulates inbound bytes, parses the response head once the blank line arrives, dispatches the
+    // response, then feeds the body until Content-Length is satisfied.
+    //
+    private setupResponseParsing(callback: ((response: IClientResponse) => void) | undefined, method: string): void {
+        let buffer = Buffer.alloc(0);
+        let headParsed = false;
+        let response: IClientResponse | undefined = undefined;
+        let bodyRemaining = 0;
+        // A HEAD response carries the object's Content-Length header but NO body, so never wait for
+        // body bytes on a HEAD request (S3's HeadObject would otherwise hang the response forever).
+        const expectsBody = method !== "HEAD";
+
+        const feedBody = (chunk: Buffer): void => {
+            if (!response) {
+                return;
+            }
+            if (bodyRemaining > 0) {
+                const take = chunk.subarray(0, bodyRemaining);
+                response.push(take);
+                bodyRemaining -= take.length;
+            }
+            if (bodyRemaining <= 0) {
+                response.push(null);
+            }
+        };
+
+        this.socket.on("data", (chunk: Buffer) => {
+            if (headParsed) {
+                feedBody(chunk);
+                return;
+            }
+            buffer = Buffer.concat([buffer, chunk]);
+            const terminator = buffer.indexOf("\r\n\r\n");
+            if (terminator === -1) {
+                return;
+            }
+            const headerText = buffer.subarray(0, terminator).toString("utf8");
+            const remainder = buffer.subarray(terminator + 4);
+            const parsed = parseResponseHead(headerText);
+            headParsed = true;
+
+            response = new IncomingMessage("", "", parsed.headers, this.socket as unknown as Socket) as IClientResponse;
+            response.statusCode = parsed.statusCode;
+
+            const contentLength = parseInt(parsed.headers["content-length"] || "0", 10);
+            bodyRemaining = expectsBody && !Number.isNaN(contentLength) ? contentLength : 0;
+
+            this.emit("response", response);
+            if (callback) {
+                callback(response);
+            }
+
+            if (bodyRemaining > 0 && remainder.length > 0) {
+                feedBody(remainder);
+            }
+            else if (bodyRemaining <= 0) {
+                response.push(null);
+            }
+        });
+
+        this.socket.on("end", () => {
+            if (response && bodyRemaining > 0) {
+                response.push(null);
+            }
+        });
+    }
+}
+
+//
+// Resolves the target port, defaulting to the scheme's standard port when the caller gave none.
+//
+function resolvePort(options: IClientRequestOptions, isTls: boolean): number {
+    if (options.port !== undefined && options.port !== null) {
+        const port = typeof options.port === "string" ? parseInt(options.port, 10) : options.port;
+        if (!Number.isNaN(port)) {
+            return port;
+        }
+    }
+    return isTls ? 443 : 80;
+}
+
+//
+// Makes an outbound plain-HTTP request, mirroring `http.request(options, callback)`. The connection is
+// plain TCP through the native bridge, so an `http://` endpoint is reached as `http://` with no TLS
+// anywhere in the path.
+//
+export function request(options: IClientRequestOptions, callback?: (response: IClientResponse) => void): ClientRequest {
+    return new ClientRequest(options, callback, (port, hostname) => netConnect(port, hostname) as unknown as IClientTransport, false);
+}
+
+//
+// The connection-options holder Node calls an Agent. One connection is opened per request and closed,
+// so there is no pool: the object exists to be constructed, inspected and passed along.
+//
+export class Agent {
+    //
+    // Whether the caller asked for keep-alive. Reported back but not acted on.
+    //
+    readonly keepAlive: boolean;
+
+    //
+    // The keep-alive interval the caller asked for. Reported back but not acted on.
+    //
+    readonly keepAliveMsecs: number;
+
+    //
+    // The socket ceiling the caller asked for. Reported back but not acted on.
+    //
+    readonly maxSockets: number;
+
+    //
+    // Live sockets per origin. Always empty, since no connection outlives its request.
+    //
+    readonly sockets: Record<string, unknown[]> = {};
+
+    //
+    // Queued requests per origin. Always empty, since no request ever waits for a socket.
+    //
+    readonly requests: Record<string, unknown[]> = {};
+
+    //
+    // Builds an agent from the options a caller supplies.
+    //
+    constructor(options?: { keepAlive?: boolean; keepAliveMsecs?: number; maxSockets?: number }) {
+        this.keepAlive = options?.keepAlive === true;
+        this.keepAliveMsecs = options?.keepAliveMsecs === undefined ? 1000 : options.keepAliveMsecs;
+        this.maxSockets = options?.maxSockets === undefined ? Infinity : options.maxSockets;
+    }
+
+    //
+    // Releases the agent's connections. There are none, so this does nothing.
+    //
+    destroy(): void {
+        // No pooled connections exist to close.
+    }
 }
 
 //
 // The default export mirrors `import http from "http"`.
 //
-const httpModule = { createServer, Server, IncomingMessage, ServerResponse, STATUS_CODES, METHODS, request };
+const httpModule = { createServer, Server, IncomingMessage, ServerResponse, STATUS_CODES, METHODS, request, Agent, ClientRequest };
 
 export default httpModule;

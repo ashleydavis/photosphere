@@ -2,6 +2,10 @@
 // bson selects its byte-utils based on globalThis.Buffer at import time).
 import "./src/lib/install-globals";
 
+// Then the WHATWG URL globals the AWS SDK builds every request URL through. Imported second because
+// whatwg-url's dependency tree reads TextEncoder at module-init time, which install-globals provides.
+import "./src/lib/install-url";
+
 import { registerHandler } from "task-queue";
 import { loadAssetsHandler } from "node-api/src/lib/load-assets.worker";
 import { createDatabaseHandler } from "node-api/src/lib/create-database.worker";

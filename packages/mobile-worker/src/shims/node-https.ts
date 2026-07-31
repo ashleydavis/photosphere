@@ -15,294 +15,18 @@
 //
 
 import { Buffer } from "buffer";
-import { IncomingMessage, ServerResponse } from "./node-http";
+import { ClientRequest, IncomingMessage, ServerResponse, type IClientRequestOptions, type IClientResponse, type IClientTransport } from "./node-http";
 import { Server as TlsServer, connectClient, type TLSSocket, type ITlsServerOptions } from "./node-tls";
 import type { Socket as NetSocket } from "./node-net";
 
-//
-// A registered event listener.
-//
-type HttpsListener = (...args: any[]) => void;
+export { ClientRequest };
+export type { IClientResponse };
 
 //
-// A tiny event emitter for the client request object (mirrors the other shims' emitters).
+// The request options this shim accepts. Identical to the http client's, since the only difference
+// between the two schemes is the transport and whether `rejectUnauthorized` is acted on.
 //
-class TinyEmitter {
-    //
-    // Listeners registered per event name.
-    //
-    private httpsListeners: Map<string, HttpsListener[]> = new Map();
-
-    //
-    // Registers a listener for an event.
-    //
-    on(eventName: string, listener: HttpsListener): this {
-        const existing = this.httpsListeners.get(eventName);
-        if (existing) {
-            existing.push(listener);
-        }
-        else {
-            this.httpsListeners.set(eventName, [listener]);
-        }
-        return this;
-    }
-
-    //
-    // Emits an event to all registered listeners.
-    //
-    emit(eventName: string, ...args: any[]): void {
-        const handlers = this.httpsListeners.get(eventName);
-        if (!handlers) {
-            return;
-        }
-        for (const handler of handlers.slice()) {
-            handler(...args);
-        }
-    }
-}
-
-//
-// Parses an HTTP response head (status line + headers) from the text before the blank line.
-//
-interface IParsedResponseHead {
-    // The numeric HTTP status code.
-    statusCode: number;
-
-    // Lowercased header name to value map.
-    headers: Record<string, string>;
-}
-
-//
-// Parses the response status line and headers.
-//
-function parseResponseHead(headerText: string): IParsedResponseHead {
-    const lines = headerText.split("\r\n");
-    const statusLine = lines[0] || "HTTP/1.1 200 OK";
-    const parts = statusLine.split(" ");
-    const statusCode = parseInt(parts[1] || "200", 10);
-
-    const headers: Record<string, string> = {};
-    for (let index = 1; index < lines.length; index++) {
-        const line = lines[index];
-        const colon = line.indexOf(":");
-        if (colon > 0) {
-            const name = line.slice(0, colon).trim().toLowerCase();
-            const value = line.slice(colon + 1).trim();
-            headers[name] = value;
-        }
-    }
-
-    return { statusCode: Number.isNaN(statusCode) ? 200 : statusCode, headers };
-}
-
-//
-// A client HTTP response: an IncomingMessage extended with the numeric statusCode the response line
-// carried (LAN-share reads response.statusCode and the body via data/end).
-//
-export interface IClientResponse extends IncomingMessage {
-    // The HTTP status code from the response status line.
-    statusCode: number;
-}
-
-//
-// The subset of request options this shim supports (matching what LAN-share passes).
-//
-export interface IRequestOptions {
-    // The target host.
-    hostname: string;
-
-    // The target port.
-    port: number;
-
-    // The request path (with query).
-    path: string;
-
-    // The HTTP method.
-    method: string;
-
-    // Outbound headers.
-    headers?: Record<string, string | number>;
-
-    // Ignored here (the tls shim never validates the cert; pinning is done by the caller).
-    rejectUnauthorized?: boolean;
-}
-
-//
-// An outbound client request. Buffers the body from write()/end(), then (after `socket`/`secureConnect`
-// are emitted so the caller can pin) writes the HTTP request and parses the response.
-//
-export class ClientRequest extends TinyEmitter {
-    //
-    // The underlying TLS connection.
-    //
-    private socket: TLSSocket;
-
-    //
-    // Buffered request body chunks, flushed when the request is sent.
-    //
-    private bodyChunks: Buffer[] = [];
-
-    //
-    // True once the request has been aborted via destroy().
-    //
-    private aborted = false;
-
-    //
-    // Builds the request, opens the TLS connection, and schedules the send after the handshake. The
-    // connection trusts any certificate at the transport level; the caller pins it in its
-    // `secureConnect` handler and destroys the request on a mismatch.
-    //
-    constructor(options: IRequestOptions, callback: (response: IClientResponse) => void) {
-        super();
-        this.socket = connectClient(options.port, options.hostname);
-
-        // Sequence the events so a `socket` handler that attaches a `secureConnect` listener observes
-        // the handshake, then send the request only if the caller did not abort during pinning.
-        Promise.resolve().then(() => {
-            this.emit("socket", this.socket);
-            Promise.resolve().then(() => {
-                this.socket.emit("secureConnect");
-                Promise.resolve().then(() => {
-                    if (this.aborted) {
-                        return;
-                    }
-                    this.sendRequest(options, callback);
-                });
-            });
-        });
-    }
-
-    //
-    // Buffers a request body chunk.
-    //
-    write(chunk: Buffer | Uint8Array | string): boolean {
-        this.bodyChunks.push(typeof chunk === "string" ? Buffer.from(chunk, "utf8") : Buffer.from(chunk));
-        return true;
-    }
-
-    //
-    // Optionally buffers a final body chunk. The actual send happens after the pinning handshake.
-    //
-    end(chunk?: Buffer | Uint8Array | string): void {
-        if (chunk !== undefined && chunk !== null) {
-            this.write(chunk);
-        }
-    }
-
-    //
-    // Aborts the request, closing the socket and emitting `error` (LAN-share calls this on a pinning
-    // mismatch and rejects via the `error` listener).
-    //
-    destroy(error?: Error): void {
-        if (this.aborted) {
-            return;
-        }
-        this.aborted = true;
-        this.socket.destroy();
-        if (error) {
-            this.emit("error", error);
-        }
-    }
-
-    //
-    // Whether the request has been aborted.
-    //
-    get destroyed(): boolean {
-        return this.aborted;
-    }
-
-    //
-    // Writes the HTTP request line, headers, and body to the TLS socket, then parses the response off
-    // the socket's inbound bytes and dispatches it to the response callback.
-    //
-    private sendRequest(options: IRequestOptions, callback: (response: IClientResponse) => void): void {
-        const body = Buffer.concat(this.bodyChunks);
-
-        let head = `${options.method} ${options.path} HTTP/1.1\r\n`;
-        // Omit the port from the Host header when it is the HTTPS/HTTP default, so an AWS SigV4
-        // signature (which canonicalises the host without the default port) matches the sent header.
-        // Non-default ports (LAN share) keep the explicit `:port`.
-        const hostHeader = options.port === 443 || options.port === 80 ? options.hostname : `${options.hostname}:${options.port}`;
-        head += `Host: ${hostHeader}\r\n`;
-        const headers = options.headers || {};
-        for (const name of Object.keys(headers)) {
-            head += `${name}: ${headers[name]}\r\n`;
-        }
-        head += "Connection: close\r\n\r\n";
-
-        this.setupResponseParsing(callback, options.method);
-
-        this.socket.write(Buffer.from(head, "utf8"));
-        if (body.length > 0) {
-            this.socket.write(body);
-        }
-    }
-
-    //
-    // Accumulates inbound bytes from the TLS socket, parses the response head once the blank line
-    // arrives, builds the response, dispatches it, and feeds the body until Content-Length is satisfied.
-    //
-    private setupResponseParsing(callback: (response: IClientResponse) => void, method: string): void {
-        let buffer = Buffer.alloc(0);
-        let headParsed = false;
-        let response: IClientResponse | undefined = undefined;
-        let bodyRemaining = 0;
-        // A HEAD response carries the object's Content-Length header but NO body, so never wait for
-        // body bytes on a HEAD request (S3's HeadObject would otherwise hang the response forever).
-        const expectsBody = method.toUpperCase() !== "HEAD";
-
-        const feedBody = (chunk: Buffer): void => {
-            if (!response) {
-                return;
-            }
-            if (bodyRemaining > 0) {
-                const take = chunk.subarray(0, bodyRemaining);
-                response.push(take);
-                bodyRemaining -= take.length;
-            }
-            if (bodyRemaining <= 0) {
-                response.push(null);
-            }
-        };
-
-        this.socket.on("data", (chunk: Buffer) => {
-            if (headParsed) {
-                feedBody(chunk);
-                return;
-            }
-            buffer = Buffer.concat([buffer, chunk]);
-            const terminator = buffer.indexOf("\r\n\r\n");
-            if (terminator === -1) {
-                return;
-            }
-            const headerText = buffer.subarray(0, terminator).toString("utf8");
-            const remainder = buffer.subarray(terminator + 4);
-            const parsed = parseResponseHead(headerText);
-            headParsed = true;
-
-            response = new IncomingMessage("", "", parsed.headers, this.socket as unknown as NetSocket) as IClientResponse;
-            response.statusCode = parsed.statusCode;
-
-            const contentLength = parseInt(parsed.headers["content-length"] || "0", 10);
-            bodyRemaining = expectsBody && !Number.isNaN(contentLength) ? contentLength : 0;
-
-            callback(response);
-
-            if (bodyRemaining > 0 && remainder.length > 0) {
-                feedBody(remainder);
-            }
-            else if (bodyRemaining <= 0) {
-                response.push(null);
-            }
-        });
-
-        this.socket.on("end", () => {
-            if (response && bodyRemaining > 0) {
-                response.push(null);
-            }
-        });
-    }
-}
+export type IRequestOptions = IClientRequestOptions;
 
 //
 // An HTTPS server: a TLS server that parses one HTTP request per accepted connection and dispatches it
@@ -433,11 +157,22 @@ export function createServer(options: ITlsServerOptions, requestListener: (req: 
 //
 // Makes an HTTPS request, mirroring https.request(options, callback). Returns a ClientRequest.
 //
-// LAN share is the only caller. It pins the peer certificate itself, so the connection trusts any
-// certificate at the transport level and validation is left to the caller's `secureConnect` handler.
+// Trust follows Node's own option rather than the caller's identity: without `rejectUnauthorized:
+// false` the certificate chain and hostname are validated natively, so an ordinary request (the AWS
+// SDK's, say) is safe by default and cannot silently get trust-all. LAN share passes false because it
+// presents a runtime self-signed cert and pins the fingerprint itself.
 //
-export function request(options: IRequestOptions, callback: (response: IClientResponse) => void): ClientRequest {
-    return new ClientRequest(options, callback);
+// The framing and response parsing are the http shim's; only the transport differs, and `true` tells
+// the client to raise `secureConnect` so a pinning caller sees the handshake before the request goes.
+//
+export function request(options: IRequestOptions, callback?: (response: IClientResponse) => void): ClientRequest {
+    const rejectUnauthorized = options.rejectUnauthorized !== false;
+    return new ClientRequest(
+        options,
+        callback,
+        (port, hostname) => connectClient(port, hostname, rejectUnauthorized) as unknown as IClientTransport,
+        true,
+    );
 }
 
 //

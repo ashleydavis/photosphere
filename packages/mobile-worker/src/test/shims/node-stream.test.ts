@@ -64,15 +64,17 @@ describe("node-stream Readable shim", () => {
         expect(finished).toBe(true);
     });
 
-    test("Duplex/Transform/PassThrough are ES5-style bases (constructible and callable via .call)", () => {
-        // Constructible with `new`.
-        expect(new (Duplex as any)()).toBeDefined();
+    test("Transform is an ES5-style base, so cipher-base can inherit from it via .call", () => {
         expect(new (Transform as any)()).toBeDefined();
-        expect(new (PassThrough as any)()).toBeDefined();
         // Callable as `Base.call(this)` (the cipher-base / create-hash inheritance pattern) without
         // the "class constructors must be invoked with 'new'" error an ES6 class would throw.
         const target: any = {};
         expect(() => (Transform as any).call(target)).not.toThrow();
+    });
+
+    test("Duplex and PassThrough are constructible", () => {
+        expect(new (Duplex as any)()).toBeDefined();
+        expect(new (PassThrough as any)()).toBeDefined();
     });
 
     test("pipe forwards the payload into a destination and ends it", async () => {
@@ -200,4 +202,318 @@ describe("node-stream Transform shim", () => {
         expect(sawEnd).toBe(false);
     });
 
+});
+
+//
+// Unit tests for the Duplex the AWS SDK's ChecksumStream extends. Every S3 read runs through it: the
+// response body is written into it, verified, and read back out by the SDK's collector.
+//
+describe("node-stream Duplex shim", () => {
+
+    //
+    // A Duplex subclass shaped like the AWS SDK's ChecksumStream: it takes bytes on the writable side
+    // through _write, republishes them to the readable side, and finishes through _final.
+    //
+    class PassThroughDuplex extends Duplex {
+        // Chunks seen by the writable side, so a test can assert what was written.
+        readonly written: Buffer[] = [];
+
+        // Receives a written chunk and forwards it to the readable side.
+        _write(chunk: Buffer, encoding: string, callback: (error?: Error) => void): void {
+            this.written.push(chunk);
+            this.push(chunk);
+            callback();
+        }
+
+        // Ends the writable side.
+        _final(callback: (error?: Error) => void): void {
+            callback();
+        }
+    }
+
+    //
+    // Awaits enough microtasks for the deferred flush to run.
+    //
+    async function flush(): Promise<void> {
+        for (let index = 0; index < 5; index++) {
+            await Promise.resolve();
+        }
+    }
+
+    test("is an instance of Readable, which is how the AWS SDK picks its Node code path", () => {
+        expect(new PassThroughDuplex()).toBeInstanceOf(Readable);
+    });
+
+    test("routes written chunks through the _write hook", async () => {
+        const duplex = new PassThroughDuplex();
+
+        duplex.write(Buffer.from("payload"));
+
+        expect(duplex.written.map(chunk => chunk.toString())).toEqual(["payload"]);
+    });
+
+    test("buffers pushed bytes until a consumer reads, so a late reader still gets them", async () => {
+        const duplex = new PassThroughDuplex();
+
+        // Everything is written and ended BEFORE any listener attaches, which is the order the AWS SDK
+        // uses: its checksum stream consumes the whole response before the collector is piped on.
+        duplex.write(Buffer.from("hello "));
+        duplex.write(Buffer.from("world"));
+        duplex.end();
+
+        const received: Buffer[] = [];
+        let ended = false;
+        duplex.on("data", (chunk: Buffer) => received.push(chunk));
+        duplex.on("end", () => { ended = true; });
+        await flush();
+
+        expect(Buffer.concat(received).toString()).toBe("hello world");
+        expect(ended).toBe(true);
+    });
+
+    test("emits data then end in order for a reader attached up front", async () => {
+        const duplex = new PassThroughDuplex();
+        const events: string[] = [];
+        duplex.on("data", () => events.push("data"));
+        duplex.on("end", () => events.push("end"));
+
+        duplex.write(Buffer.from("one"));
+        await flush();
+        duplex.end();
+        await flush();
+
+        expect(events).toEqual(["data", "end"]);
+    });
+
+    test("end runs the _final hook before ending the readable side", async () => {
+        const order: string[] = [];
+        class FinalOrderDuplex extends Duplex {
+            // Records that the flush hook ran.
+            _final(callback: (error?: Error) => void): void {
+                order.push("final");
+                callback();
+            }
+        }
+        const duplex = new FinalOrderDuplex();
+        // A `data` listener is what starts the stream flowing, as in Node; an `end` listener alone
+        // leaves it paused and nothing is delivered.
+        duplex.on("data", () => { /* consuming is what lets `end` fire */ });
+        duplex.on("end", () => order.push("end"));
+
+        duplex.end();
+        await flush();
+
+        expect(order).toEqual(["final", "end"]);
+    });
+
+    test("a _final error is emitted as an error rather than ending the stream", async () => {
+        class FailingFinalDuplex extends Duplex {
+            // Reports a flush failure, as a checksum mismatch does.
+            _final(callback: (error?: Error) => void): void {
+                callback(new Error("checksum mismatch"));
+            }
+        }
+        const duplex = new FailingFinalDuplex();
+        let errorMessage = "";
+        let ended = false;
+        duplex.on("error", (error: Error) => { errorMessage = error.message; });
+        duplex.on("end", () => { ended = true; });
+
+        duplex.end();
+        await flush();
+
+        expect(errorMessage).toBe("checksum mismatch");
+        expect(ended).toBe(false);
+    });
+
+    test("invokes listeners with `this` bound to the stream, as Node's EventEmitter does", async () => {
+        const duplex = new PassThroughDuplex();
+        let boundTo: any = undefined;
+        duplex.on("data", function (this: any) { boundTo = this; });
+
+        duplex.write(Buffer.from("x"));
+        await flush();
+
+        expect(boundTo).toBe(duplex);
+    });
+});
+
+//
+// Unit tests for the Writable hooks the AWS SDK's response collector relies on. The collector is a
+// Writable subclass whose only body is `_write`; without the hook its buffer stays empty and every S3
+// response reads as zero bytes.
+//
+describe("node-stream Writable shim hooks", () => {
+
+    test("routes written chunks through a subclass's _write hook", () => {
+        const collected: Buffer[] = [];
+        class CollectingWritable extends Writable {
+            // Gathers a written chunk, as the AWS SDK's collector does.
+            _write(chunk: Buffer, encoding: string, callback: () => void): void {
+                collected.push(chunk);
+                callback();
+            }
+        }
+        const writable = new CollectingWritable();
+
+        writable.write(Buffer.from("part-one"));
+        writable.write(Buffer.from("part-two"));
+
+        expect(Buffer.concat(collected).toString()).toBe("part-onepart-two");
+    });
+
+    test("runs a subclass's _final hook before emitting finish", () => {
+        const order: string[] = [];
+        class FinalWritable extends Writable {
+            // Records that the flush hook ran.
+            _final(callback: () => void): void {
+                order.push("final");
+                callback();
+            }
+        }
+        const writable = new FinalWritable();
+        writable.on("finish", () => order.push("finish"));
+
+        writable.end();
+
+        expect(order).toEqual(["final", "finish"]);
+    });
+
+    test("invokes listeners with `this` bound to the stream, as Node's EventEmitter does", () => {
+        const collected: Buffer[] = [];
+        class CollectingWritable extends Writable {
+            // The buffer the finish listener reads back off `this`.
+            readonly bufferedBytes: Buffer[] = [];
+
+            // Gathers a written chunk.
+            _write(chunk: Buffer, encoding: string, callback: () => void): void {
+                this.bufferedBytes.push(chunk);
+                callback();
+            }
+        }
+        const writable = new CollectingWritable();
+        writable.on("finish", function (this: any) { collected.push(...this.bufferedBytes); });
+
+        writable.write(Buffer.from("bound"));
+        writable.end();
+
+        expect(Buffer.concat(collected).toString()).toBe("bound");
+    });
+
+    test("still buffers to onFinish when the subclass supplies no hooks", () => {
+        let flushed = "";
+        const writable = new Writable(data => { flushed = data.toString(); });
+
+        writable.write(Buffer.from("whole "));
+        writable.end(Buffer.from("file"));
+
+        expect(flushed).toBe("whole file");
+    });
+});
+
+//
+// Unit tests for the failure paths. A stream that swallows an error or drops bytes reports success for
+// work that never happened, which is the failure mode that cost the most to track down here.
+//
+describe("node-stream shim failure reporting", () => {
+
+    //
+    // Awaits enough microtasks for the deferred flush to run.
+    //
+    async function flush(): Promise<void> {
+        for (let index = 0; index < 5; index++) {
+            await Promise.resolve();
+        }
+    }
+
+    test("a Duplex error with no listener is thrown rather than dropped", () => {
+        class FailingFinalDuplex extends Duplex {
+            // Reports a flush failure, as a checksum mismatch does.
+            _final(callback: (error?: Error) => void): void {
+                callback(new Error("checksum mismatch"));
+            }
+        }
+        const duplex = new FailingFinalDuplex();
+
+        expect(() => duplex.end()).toThrow("checksum mismatch");
+    });
+
+    test("a Writable error with no listener is thrown rather than dropped", () => {
+        const writable = new Writable(() => { throw new Error("disk full"); });
+        writable.write(Buffer.from("bytes"));
+
+        expect(() => writable.end()).toThrow("disk full");
+    });
+
+    test("writing to a Writable with no destination fails loudly instead of discarding the bytes", () => {
+        const writable = new Writable(undefined as any);
+        writable.write(Buffer.from("bytes that would vanish"));
+
+        expect(() => writable.end()).toThrow(/no destination/);
+    });
+
+    test("an empty Writable with no destination still ends cleanly, since nothing is lost", () => {
+        const writable = new Writable(undefined as any);
+        let finished = false;
+        writable.on("finish", () => { finished = true; });
+
+        writable.end();
+
+        expect(finished).toBe(true);
+    });
+});
+
+//
+// Unit tests for PassThrough. `@smithy/util-stream`'s splitStream builds one for every retryable
+// upload body, so this is on the write path from the mobile worker to S3.
+//
+describe("node-stream PassThrough shim", () => {
+
+    //
+    // Awaits enough microtasks for the deferred flush to run.
+    //
+    async function flush(): Promise<void> {
+        for (let index = 0; index < 5; index++) {
+            await Promise.resolve();
+        }
+    }
+
+    test("republishes written bytes to a reader", async () => {
+        const passThrough = new PassThrough();
+        const received: Buffer[] = [];
+        passThrough.on("data", (chunk: Buffer) => received.push(chunk));
+
+        passThrough.write(Buffer.from("upload "));
+        passThrough.write(Buffer.from("body"));
+        await flush();
+
+        expect(Buffer.concat(received).toString()).toBe("upload body");
+    });
+
+    test("ends the readable side when the writable side ends", async () => {
+        const passThrough = new PassThrough();
+        let ended = false;
+        passThrough.on("data", () => { /* consuming is what lets `end` fire */ });
+        passThrough.on("end", () => { ended = true; });
+
+        passThrough.end(Buffer.from("last"));
+        await flush();
+
+        expect(ended).toBe(true);
+    });
+
+    test("pipes into a destination, which is how splitStream feeds a request body", async () => {
+        const passThrough = new PassThrough();
+        const collected: Buffer[] = [];
+        const destination = {
+            write: (chunk: Buffer) => { collected.push(chunk); return true; },
+            end: () => { /* nothing to flush */ },
+        };
+
+        passThrough.pipe(destination as any);
+        passThrough.write(Buffer.from("piped"));
+        await flush();
+
+        expect(Buffer.concat(collected).toString()).toBe("piped");
+    });
 });

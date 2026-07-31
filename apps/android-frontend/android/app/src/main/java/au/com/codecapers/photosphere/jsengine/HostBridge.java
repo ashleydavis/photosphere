@@ -70,6 +70,13 @@ public final class HostBridge {
     }
 
     //
+    // host.tcpConnect(host, port): opens an outbound TCP connection and returns JSON { connectionId }.
+    //
+    public String tcpConnect(String host, int port) {
+        return tcp.tcpConnect(host, port);
+    }
+
+    //
     // host.tcpWrite(connectionId, base64): writes bytes to an accepted connection.
     //
     public String tcpWrite(String connectionId, String base64) {
@@ -131,11 +138,12 @@ public final class HostBridge {
     }
 
     //
-    // host.tlsConnect(host, port): opens a cert-capturing TLS client that trusts any server certificate
-    // (the JS side pins it) and returns JSON { connectionId, peerCertBase64 }.
+    // host.tlsConnect(host, port, rejectUnauthorized): opens a cert-capturing TLS client and returns
+    // JSON { connectionId, peerCertBase64 }. rejectUnauthorized is Node's option: true validates the
+    // chain and hostname, false trusts any certificate so the JS side can pin it.
     //
-    public String tlsConnect(String host, int port) {
-        return tls.tlsConnect(host, port);
+    public String tlsConnect(String host, int port, boolean rejectUnauthorized) {
+        return tls.tlsConnect(host, port, rejectUnauthorized);
     }
 
     //

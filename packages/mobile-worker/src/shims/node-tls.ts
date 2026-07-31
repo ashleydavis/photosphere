@@ -24,9 +24,10 @@ export interface ITlsHost {
     // Binds a TLS listener using the given PEM cert/key and returns a JSON string { listenerId, port }.
     tlsListen: (host: string, port: number, certPem: string, keyPem: string) => string;
 
-    // Opens a TLS client connection, trusting any server certificate so the JS side can pin it, and
-    // returns a JSON string { connectionId, peerCertBase64 }.
-    tlsConnect: (host: string, port: number) => string;
+    // Opens a TLS client connection and returns a JSON string { connectionId, peerCertBase64 }.
+    // `rejectUnauthorized` is Node's option: true validates the chain and hostname against the system
+    // trust store, false accepts any certificate so the JS side can pin it.
+    tlsConnect: (host: string, port: number, rejectUnauthorized: boolean) => string;
 
     // Writes base64-encoded bytes to a TLS connection.
     tlsWrite: (connectionId: string, base64: string) => string | null;
@@ -429,8 +430,12 @@ export function connect(port: number, host: string, options?: (() => void) | Rec
     const actualHost = typeof host === "string" ? host : "127.0.0.1";
     const actualCallback = typeof options === "function" ? options : callback;
 
+    // Matches Node: validation is on unless the caller explicitly turns it off.
+    const optionsObject = typeof options === "object" && options !== null ? options : {};
+    const rejectUnauthorized = optionsObject.rejectUnauthorized !== false;
+
     const tlsHost = getTlsHost();
-    const resultJson = callHost(() => tlsHost.tlsConnect(actualHost, port)) as string;
+    const resultJson = callHost(() => tlsHost.tlsConnect(actualHost, port, rejectUnauthorized)) as string;
     const result = JSON.parse(resultJson) as ITlsConnectResult;
     const socket = new TLSSocket(result.connectionId, result.peerCertBase64);
     activeTlsSockets.set(result.connectionId, socket);
@@ -447,15 +452,16 @@ export function connect(port: number, host: string, options?: (() => void) | Rec
 }
 
 //
-// Opens a TLS client connection and returns the connected socket WITHOUT scheduling a `secureConnect`
+// Opens a TLS client connection in the given trust mode and returns the connected socket WITHOUT
+// scheduling a `secureConnect`
 // event. The handshake has already completed in native (the peer cert is available immediately), so
 // the caller drives the `secureConnect` timing itself. Used by the `https` shim, which must emit the
 // request's `socket` event before firing `secureConnect` so a pinning listener attached in the
 // `socket` handler observes the handshake.
 //
-export function connectClient(port: number, host: string): TLSSocket {
+export function connectClient(port: number, host: string, rejectUnauthorized: boolean): TLSSocket {
     const tlsHost = getTlsHost();
-    const resultJson = callHost(() => tlsHost.tlsConnect(host, port)) as string;
+    const resultJson = callHost(() => tlsHost.tlsConnect(host, port, rejectUnauthorized)) as string;
     const result = JSON.parse(resultJson) as ITlsConnectResult;
     const socket = new TLSSocket(result.connectionId, result.peerCertBase64);
     activeTlsSockets.set(result.connectionId, socket);

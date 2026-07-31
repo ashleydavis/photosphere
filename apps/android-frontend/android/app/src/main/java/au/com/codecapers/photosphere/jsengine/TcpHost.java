@@ -33,6 +33,11 @@ public final class TcpHost {
     private static final String LOG_TAG = "JsEngineTcp";
 
     //
+    // How long an outbound connect may take before it is abandoned, in milliseconds.
+    //
+    private static final int CONNECT_TIMEOUT_MS = 10000;
+
+    //
     // Inbound events (connection / data / close) as JSON strings, drained by the engine worker thread.
     //
     private final LinkedBlockingQueue<String> inboundEvents = new LinkedBlockingQueue<>();
@@ -127,6 +132,33 @@ public final class TcpHost {
         }
         finally {
             enqueue("{\"kind\":\"close\",\"connectionId\":\"" + connectionId + "\"}");
+        }
+    }
+
+    //
+    // host.tcpConnect(host, port): opens an outbound TCP connection, registers it, and starts reading
+    // its inbound bytes on a background thread. Returns a JSON string { connectionId }, or an error
+    // envelope on failure.
+    //
+    // This is the outbound half of the socket layer, and it is what lets an `http://` endpoint be
+    // reached as plain HTTP with no TLS in the path. Unlike the listener it targets a remote address,
+    // so it is not restricted to loopback.
+    //
+    public String tcpConnect(String host, int port) {
+        try {
+            Socket socket = new Socket();
+            socket.connect(new InetSocketAddress(host, port), CONNECT_TIMEOUT_MS);
+            final String connectionId = "C" + nextId.getAndIncrement();
+            connections.put(connectionId, socket);
+
+            Thread readThread = new Thread(() -> readLoop(connectionId, socket), "tcp-read-" + connectionId);
+            readThread.setDaemon(true);
+            readThread.start();
+
+            return "{\"connectionId\":\"" + connectionId + "\"}";
+        }
+        catch (IOException error) {
+            return HostFunctions.hostErrorEnvelope(error);
         }
     }
 

@@ -29,6 +29,9 @@ export interface ITcpHost {
     // Binds a loopback TCP listener and returns a JSON string { listenerId, port } (port resolved when 0 was requested).
     tcpListen: (host: string, port: number) => string;
 
+    // Opens an outbound TCP connection and returns a JSON string { connectionId }.
+    tcpConnect: (host: string, port: number) => string;
+
     // Writes base64-encoded bytes to an accepted connection.
     tcpWrite: (connectionId: string, base64: string) => string | null;
 
@@ -48,6 +51,14 @@ interface ITcpListenResult {
 
     // The actual bound port (resolved even when port 0 was requested).
     port: number;
+}
+
+//
+// The JSON shape native returns from tcpConnect.
+//
+interface ITcpConnectResult {
+    // The opaque id of the newly opened outbound connection.
+    connectionId: string;
 }
 
 //
@@ -344,6 +355,32 @@ export interface IServerAddress {
 }
 
 //
+// Opens an outbound TCP connection and returns the connected socket, mirroring net.connect. Native
+// completes the connect before returning, so the socket is usable immediately; `connect` is still
+// emitted on a microtask for a caller that attaches its listener straight after this returns.
+//
+// This is what lets an `http://` endpoint be reached as plain HTTP, with no TLS anywhere in the path.
+//
+export function connect(port: number, host: string): Socket {
+    const tcpHost = getTcpHost();
+    const resultJson = callHost(() => tcpHost.tcpConnect(host, port)) as string;
+    const result = JSON.parse(resultJson) as ITcpConnectResult;
+    if (typeof result.connectionId !== "string" || result.connectionId.length === 0) {
+        // Without an id the socket has nothing to write to and every send would vanish, so refuse here
+        // rather than hand back a connection that looks open and silently discards the request.
+        throw new Error(`host.tcpConnect(${host}, ${port}) returned no connectionId: ${resultJson}`);
+    }
+    const socket = new Socket(result.connectionId);
+    activeSockets.set(result.connectionId, socket);
+
+    Promise.resolve().then(() => {
+        socket.emit("connect");
+    });
+
+    return socket;
+}
+
+//
 // Creates a server, optionally registering a `connection` listener (matching net.createServer).
 //
 export function createServer(connectionListener?: (socket: Socket) => void): Server {
@@ -422,6 +459,6 @@ export function isIP(input: string): number {
 //
 // The default export mirrors `import net from "net"`.
 //
-const netModule = { AddressInfo, Server, Socket, createServer, installTcpInbound, isIP };
+const netModule = { AddressInfo, Server, Socket, connect, createServer, installTcpInbound, isIP };
 
 export default netModule;

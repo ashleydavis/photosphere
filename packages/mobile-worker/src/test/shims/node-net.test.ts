@@ -1,5 +1,5 @@
 import { Buffer } from "buffer";
-import { createServer, installTcpInbound, isIP, Server, Socket } from "../../shims/node-net";
+import { connect, createServer, installTcpInbound, isIP, Server, Socket } from "../../shims/node-net";
 
 //
 // Builds a mock native TCP host with jest mocks for each function.
@@ -124,6 +124,52 @@ describe("net shim", () => {
         expect(typeof scope.__tcpEvent).toBe("function");
         // An event for a connection that no longer exists is ignored rather than throwing.
         expect(() => scope.__tcpEvent(JSON.stringify({ kind: "data", connectionId: "gone", base64: "" }))).not.toThrow();
+    });
+
+    test("connect opens an outbound connection via tcpConnect and emits `connect`", async () => {
+        const tcpConnect = jest.fn().mockReturnValue(JSON.stringify({ connectionId: "C-out" }));
+        (globalThis as any).host = { tcpConnect, tcpWrite: jest.fn().mockReturnValue(null), tcpClose: jest.fn().mockReturnValue(null) };
+
+        const socket = connect(9000, "minio.test");
+        let connected = false;
+        socket.on("connect", () => { connected = true; });
+        await Promise.resolve();
+
+        expect(tcpConnect).toHaveBeenCalledWith("minio.test", 9000);
+        expect(socket.connectionId).toBe("C-out");
+        expect(connected).toBe(true);
+    });
+
+    test("an outbound connection is registered, so inbound data reaches it", () => {
+        (globalThis as any).host = { tcpConnect: () => JSON.stringify({ connectionId: "C-data" }), tcpWrite: () => null, tcpClose: () => null };
+
+        const socket = connect(9000, "minio.test");
+        const received: Buffer[] = [];
+        socket.on("data", (chunk: Buffer) => received.push(chunk));
+        pushEvent({ kind: "data", connectionId: "C-data", base64: Buffer.from("hello").toString("base64") });
+
+        expect(Buffer.concat(received).toString()).toBe("hello");
+    });
+
+    test("writes on an outbound connection go out through tcpWrite", () => {
+        const tcpWrite = jest.fn().mockReturnValue(null);
+        (globalThis as any).host = { tcpConnect: () => JSON.stringify({ connectionId: "C-w" }), tcpWrite, tcpClose: () => null };
+
+        connect(9000, "minio.test").write(Buffer.from("GET / HTTP/1.1"));
+
+        expect(tcpWrite).toHaveBeenCalledWith("C-w", Buffer.from("GET / HTTP/1.1").toString("base64"));
+    });
+
+    test("connect refuses a host result with no connectionId, rather than a socket that discards writes", () => {
+        (globalThis as any).host = { tcpConnect: () => JSON.stringify({}), tcpWrite: () => null, tcpClose: () => null };
+
+        expect(() => connect(9000, "minio.test")).toThrow(/no connectionId/);
+    });
+
+    test("connect surfaces a host error envelope instead of returning a dead socket", () => {
+        (globalThis as any).host = { tcpConnect: () => "@@HOSTERR@@ECONNREFUSED:connect() failed", tcpWrite: () => null, tcpClose: () => null };
+
+        expect(() => connect(9000, "minio.test")).toThrow(/connect\(\) failed/);
     });
 
     test("isIP classifies IPv4, IPv6 and non-addresses", () => {

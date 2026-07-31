@@ -174,19 +174,23 @@ final class TlsHost {
     }
 
     //
-    // host.tlsConnect(host, port): opens a TLS client connection, completes the handshake, and returns a
-    // JSON string { connectionId, peerCertBase64 } (the server's cert DER, base64) so the JS side can pin
-    // it. Any server certificate is trusted at the transport level: LAN share, the only caller, presents
-    // a runtime self-signed cert and pins it in JS by comparing it to the one in the UDP broadcast.
-    // Streams inbound bytes on the network queue. Returns an error envelope on failure.
+    // host.tlsConnect(host, port, rejectUnauthorized): opens a TLS client connection, completes the
+    // handshake, and returns a JSON string { connectionId, peerCertBase64 } (the server's cert DER,
+    // base64) so the JS side can pin it. Streams inbound bytes on the network queue. Returns an error
+    // envelope on failure.
     //
-    func tlsConnect(host: String, port: Int) -> String {
+    // `rejectUnauthorized` is Node's own option, passed straight through rather than reinterpreted:
+    // true evaluates the chain and the hostname against the system trust store, which is Node's default
+    // and what any ordinary HTTPS client gets. False accepts any certificate, which is what LAN share
+    // asks for because it presents a runtime self-signed cert and pins the fingerprint itself in JS.
+    //
+    func tlsConnect(host: String, port: Int, rejectUnauthorized: Bool) -> String {
         guard let nwPort = NWEndpoint.Port(rawValue: UInt16(port)) else {
             return HostBridge.hostErrorEnvelope(NSError(domain: "tls", code: 0, userInfo: [NSLocalizedDescriptionKey: "tlsConnect: invalid port"]))
         }
 
-        // Capture the server's leaf certificate during the handshake and accept it; the JS side decides
-        // whether to keep the connection by comparing the fingerprint to the pinned one.
+        // Capture the server's leaf certificate during the handshake so the JS side can pin it, then
+        // either evaluate the trust chain or accept whatever was presented, per rejectUnauthorized.
         let peerCertBox = PeerCertificateBox()
         let tlsOptions = NWProtocolTLS.Options()
         sec_protocol_options_set_verify_block(tlsOptions.securityProtocolOptions, { _, trust, complete in
@@ -194,7 +198,16 @@ final class TlsHost {
             if SecTrustGetCertificateCount(secTrust) > 0, let certificate = SecTrustGetCertificateAtIndex(secTrust, 0) {
                 peerCertBox.certificateDer = SecCertificateCopyData(certificate) as Data
             }
-            complete(true)
+            if rejectUnauthorized {
+                // SecPolicyCreateSSL(true, host) checks the hostname as well as the chain, so a
+                // certificate valid for another host fails the handshake.
+                SecTrustSetPolicies(secTrust, SecPolicyCreateSSL(true, host as CFString))
+                var evaluationError: CFError?
+                complete(SecTrustEvaluateWithError(secTrust, &evaluationError))
+            }
+            else {
+                complete(true)
+            }
         }, networkQueue)
 
         let parameters = NWParameters(tls: tlsOptions)

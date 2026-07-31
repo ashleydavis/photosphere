@@ -31,7 +31,7 @@ describe("tls shim", () => {
         const host = installHost({ listenerId: "L", port: 1, connectionId: "TC-1", peerCertBase64: certDer.toString("base64") });
 
         const socket = connect(4433, "127.0.0.1");
-        expect(host.tlsConnect).toHaveBeenCalledWith("127.0.0.1", 4433);
+        expect(host.tlsConnect).toHaveBeenCalledWith("127.0.0.1", 4433, true);
 
         let secured = false;
         socket.on("secureConnect", () => { secured = true; });
@@ -101,19 +101,43 @@ describe("tls shim", () => {
         expect(host.tlsStopListening).toHaveBeenCalledWith("L-stop");
     });
 
-    test("connectClient opens the connection through tlsConnect and returns the socket", () => {
+    test("connectClient passes the caller's trust choice through to native", () => {
         const host = installHost({ listenerId: "L-cc", port: 4433, connectionId: "C-cc", peerCertBase64: "" });
 
-        const socket = connectClient(4433, "127.0.0.1");
+        const socket = connectClient(4433, "127.0.0.1", true);
 
-        expect(host.tlsConnect).toHaveBeenCalledWith("127.0.0.1", 4433);
+        expect(host.tlsConnect).toHaveBeenCalledWith("127.0.0.1", 4433, true);
         expect(socket).toBeInstanceOf(TLSSocket);
+    });
+
+    test("connectClient asks native to skip validation only when told to", () => {
+        const host = installHost({ listenerId: "L-cu", port: 4433, connectionId: "C-cu", peerCertBase64: "" });
+
+        connectClient(4433, "127.0.0.1", false);
+
+        expect(host.tlsConnect).toHaveBeenCalledWith("127.0.0.1", 4433, false);
+    });
+
+    test("connect validates by default, matching Node", () => {
+        const host = installHost({ listenerId: "L-cd", port: 4433, connectionId: "C-cd", peerCertBase64: "" });
+
+        connect(4433, "127.0.0.1");
+
+        expect(host.tlsConnect).toHaveBeenCalledWith("127.0.0.1", 4433, true);
+    });
+
+    test("connect skips validation when the caller passes rejectUnauthorized false", () => {
+        const host = installHost({ listenerId: "L-cn", port: 4433, connectionId: "C-cn", peerCertBase64: "" });
+
+        connect(4433, "127.0.0.1", { rejectUnauthorized: false });
+
+        expect(host.tlsConnect).toHaveBeenCalledWith("127.0.0.1", 4433, false);
     });
 
     test("connectClient does not schedule secureConnect, leaving that timing to the caller", async () => {
         installHost({ listenerId: "L-cp", port: 4433, connectionId: "C-cp", peerCertBase64: "" });
 
-        const socket = connectClient(4433, "127.0.0.1");
+        const socket = connectClient(4433, "127.0.0.1", true);
         let handshakeSeen = false;
         socket.on("secureConnect", () => { handshakeSeen = true; });
         await Promise.resolve();

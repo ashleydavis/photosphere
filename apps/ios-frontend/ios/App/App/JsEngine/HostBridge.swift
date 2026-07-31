@@ -335,6 +335,12 @@ final class HostBridge {
         }
         host.setValue(JSValue(object: tcpListen, in: context), forProperty: "tcpListen")
 
+        let tcpConnect: @convention(block) (String, Int) -> JSValue = { [weak self] host, port in
+            guard let self = self else { return JSValue(nullIn: context) }
+            return JSValue(object: self.tcp.tcpConnect(host: host, port: port), in: context)
+        }
+        host.setValue(JSValue(object: tcpConnect, in: context), forProperty: "tcpConnect")
+
         let tcpWrite: @convention(block) (String, String) -> JSValue = { [weak self] connectionId, base64 in
             guard let self = self else { return JSValue(nullIn: context) }
             if let envelope = self.tcp.tcpWrite(connectionId: connectionId, base64: base64) {
@@ -400,9 +406,9 @@ final class HostBridge {
         }
         host.setValue(JSValue(object: tlsListen, in: context), forProperty: "tlsListen")
 
-        let tlsConnect: @convention(block) (String, Int) -> JSValue = { [weak self] host, port in
+        let tlsConnect: @convention(block) (String, Int, Bool) -> JSValue = { [weak self] host, port, rejectUnauthorized in
             guard let self = self else { return JSValue(nullIn: context) }
-            return JSValue(object: self.tls.tlsConnect(host: host, port: port), in: context)
+            return JSValue(object: self.tls.tlsConnect(host: host, port: port, rejectUnauthorized: rejectUnauthorized), in: context)
         }
         host.setValue(JSValue(object: tlsConnect, in: context), forProperty: "tlsConnect")
 

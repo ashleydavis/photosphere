@@ -19,6 +19,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLServerSocket;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.TrustManager;
@@ -144,16 +145,28 @@ public final class TlsHost {
     }
 
     //
-    // host.tlsConnect(host, port): opens a TLS client connection, completes the handshake, and returns a
-    // JSON string { connectionId, peerCertBase64 } (the server's cert DER, base64) so the JS side can pin
-    // it. Any server certificate is trusted at the transport level: LAN share, the only caller, presents
-    // a runtime self-signed cert and pins it in JS. A read thread streams inbound bytes. Returns an error
-    // envelope on failure.
+    // host.tlsConnect(host, port, rejectUnauthorized): opens a TLS client connection, completes the
+    // handshake, and returns a JSON string { connectionId, peerCertBase64 } (the server's cert DER,
+    // base64) so the JS side can pin it. A read thread streams inbound bytes. Returns an error envelope
+    // on failure.
     //
-    public String tlsConnect(String host, int port) {
+    // `rejectUnauthorized` is Node's own option, passed straight through rather than reinterpreted:
+    // true validates the certificate chain against the platform trust store and checks the hostname,
+    // which is Node's default and what any ordinary HTTPS client gets. False trusts any certificate,
+    // which is what LAN share asks for because it presents a runtime self-signed cert and pins the
+    // fingerprint itself in JS.
+    //
+    public String tlsConnect(String host, int port, boolean rejectUnauthorized) {
         try {
-            SSLContext sslContext = buildTrustAllClientContext();
+            SSLContext sslContext = rejectUnauthorized ? buildValidatedClientContext() : buildTrustAllClientContext();
             SSLSocket socket = (SSLSocket) sslContext.getSocketFactory().createSocket(host, port);
+            if (rejectUnauthorized) {
+                // A plain SSLSocket validates the chain but NOT the hostname. Endpoint identification
+                // "HTTPS" adds the hostname check, so a certificate valid for another host is refused.
+                SSLParameters sslParameters = socket.getSSLParameters();
+                sslParameters.setEndpointIdentificationAlgorithm("HTTPS");
+                socket.setSSLParameters(sslParameters);
+            }
             socket.startHandshake();
 
             Certificate[] peerCertificates = socket.getSession().getPeerCertificates();
@@ -175,9 +188,21 @@ public final class TlsHost {
     }
 
     //
-    // Builds a client SSLContext that trusts any server certificate. LAN-share pins the certificate
-    // itself (by comparing the SHA-256 fingerprint to the one in the UDP broadcast), so transport-level
-    // validation is intentionally disabled here.
+    // Builds a client SSLContext that validates the server certificate against the platform's default
+    // trust store (the system CA chain). Combined with the "HTTPS" endpoint-identification algorithm set
+    // on the socket, this gives real CA-chain and hostname validation.
+    //
+    private SSLContext buildValidatedClientContext() throws Exception {
+        SSLContext sslContext = SSLContext.getInstance("TLS");
+        // Null trust managers select the platform default, which validates against the system CA store.
+        sslContext.init(null, null, null);
+        return sslContext;
+    }
+
+    //
+    // Builds a client SSLContext that trusts any server certificate. Used only when the caller passed
+    // rejectUnauthorized: false, which means it takes responsibility for the certificate itself:
+    // LAN-share compares the SHA-256 fingerprint to the one in the UDP broadcast.
     //
     private SSLContext buildTrustAllClientContext() throws Exception {
         TrustManager[] trustAll = new TrustManager[] {

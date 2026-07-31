@@ -503,6 +503,8 @@ public final class QuickJsTaskEngine implements TaskEngine {
         // tcpWrite/tcpClose/tcpStopListening return null on success.
         host.setProperty("tcpListen", (JSCallFunction) args -> safeString(() ->
             hostBridge.tcpListen((String) args[0], ((Number) args[1]).intValue())));
+        host.setProperty("tcpConnect", (JSCallFunction) args -> safeString(() ->
+            hostBridge.tcpConnect((String) args[0], ((Number) args[1]).intValue())));
         host.setProperty("tcpWrite", (JSCallFunction) args -> safeString(() ->
             hostBridge.tcpWrite((String) args[0], (String) args[1])));
         host.setProperty("tcpClose", (JSCallFunction) args -> safeString(() ->
@@ -537,7 +539,7 @@ public final class QuickJsTaskEngine implements TaskEngine {
         host.setProperty("tlsListen", (JSCallFunction) args -> safeString(() ->
             hostBridge.tlsListen((String) args[0], ((Number) args[1]).intValue(), (String) args[2], (String) args[3])));
         host.setProperty("tlsConnect", (JSCallFunction) args -> safeString(() ->
-            hostBridge.tlsConnect((String) args[0], ((Number) args[1]).intValue())));
+            hostBridge.tlsConnect((String) args[0], ((Number) args[1]).intValue(), (Boolean) args[2])));
         host.setProperty("tlsWrite", (JSCallFunction) args -> safeString(() ->
             hostBridge.tlsWrite((String) args[0], (String) args[1])));
         host.setProperty("tlsClose", (JSCallFunction) args -> safeString(() ->

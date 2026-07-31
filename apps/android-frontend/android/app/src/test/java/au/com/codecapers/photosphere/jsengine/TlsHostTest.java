@@ -137,7 +137,7 @@ public final class TlsHostTest {
         assertFalse("listen is not an error envelope: " + listenJson, listenJson.startsWith("@@HOSTERR@@"));
         int port = portOf(listenJson);
 
-        String connectJson = tlsHost.tlsConnect("127.0.0.1", port);
+        String connectJson = tlsHost.tlsConnect("127.0.0.1", port, false);
         assertFalse("connect is not an error envelope: " + connectJson, connectJson.startsWith("@@HOSTERR@@"));
         String clientConnId = jsonString(connectJson, "connectionId");
         String peerCertBase64 = jsonString(connectJson, "peerCertBase64");
@@ -174,10 +174,37 @@ public final class TlsHostTest {
     }
 
     @Test
+    public void validatingConnectRejectsASelfSignedCertificate() throws Exception {
+        // The server presents a runtime self-signed certificate, which is not in the system trust
+        // store. With rejectUnauthorized true the handshake must fail closed rather than succeed:
+        // this is what stops an ordinary HTTPS request (the AWS SDK's) silently getting trust-all.
+        String listenJson = tlsHost.tlsListen("127.0.0.1", 0, CERT_PEM, KEY_PEM);
+        assertFalse("listen is not an error envelope: " + listenJson, listenJson.startsWith("@@HOSTERR@@"));
+        int port = portOf(listenJson);
+
+        String connectJson = tlsHost.tlsConnect("127.0.0.1", port, true);
+        assertTrue("a validating connect to a self-signed server must fail: " + connectJson,
+            connectJson.startsWith("@@HOSTERR@@"));
+    }
+
+    @Test
+    public void nonValidatingConnectAcceptsTheSameSelfSignedCertificate() throws Exception {
+        // The mirror of the test above: the very same server is reachable when the caller opts out,
+        // which is the LAN-share path. Together these pin that the flag is what decides, not the host.
+        String listenJson = tlsHost.tlsListen("127.0.0.1", 0, CERT_PEM, KEY_PEM);
+        assertFalse("listen is not an error envelope: " + listenJson, listenJson.startsWith("@@HOSTERR@@"));
+        int port = portOf(listenJson);
+
+        String connectJson = tlsHost.tlsConnect("127.0.0.1", port, false);
+        assertFalse("a non-validating connect must succeed: " + connectJson,
+            connectJson.startsWith("@@HOSTERR@@"));
+    }
+
+    @Test
     public void aFailedConnectIsAnErrorEnvelope() {
         // Nothing is listening on port 1, so the connect must surface as an error envelope rather than a
         // half-built connection the JS side would treat as usable.
-        String connectJson = tlsHost.tlsConnect("127.0.0.1", 1);
+        String connectJson = tlsHost.tlsConnect("127.0.0.1", 1, false);
         assertTrue("a failed connect must be an error envelope: " + connectJson, connectJson.startsWith("@@HOSTERR@@"));
     }
 }

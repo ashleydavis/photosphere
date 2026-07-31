@@ -181,6 +181,53 @@ final class TcpHost {
     }
 
     //
+    // host.tcpConnect(host, port): opens an outbound TCP connection, registers it, and starts reading
+    // its inbound bytes on a background queue. Returns a JSON string { connectionId }, or an error
+    // envelope on failure.
+    //
+    // This is the outbound half of the socket layer, and it is what lets an `http://` endpoint be
+    // reached as plain HTTP with no TLS in the path. Unlike the listener it targets a remote address,
+    // so the host name is resolved before connecting.
+    //
+    func tcpConnect(host: String, port: Int) -> String {
+        var hints = addrinfo()
+        hints.ai_family = AF_UNSPEC
+        hints.ai_socktype = SOCK_STREAM
+
+        var addressList: UnsafeMutablePointer<addrinfo>?
+        let resolveResult = getaddrinfo(host, String(port), &hints, &addressList)
+        if resolveResult != 0 || addressList == nil {
+            return HostBridge.hostErrorEnvelope(NSError(domain: "tcp", code: Int(resolveResult), userInfo: [NSLocalizedDescriptionKey: "could not resolve \(host)"]))
+        }
+        defer { freeaddrinfo(addressList) }
+
+        // Try each resolved address in turn, so a host publishing both IPv6 and IPv4 still connects
+        // when only one of them is reachable.
+        var candidate = addressList
+        while let address = candidate {
+            let connectSocket = socket(address.pointee.ai_family, address.pointee.ai_socktype, address.pointee.ai_protocol)
+            if connectSocket >= 0 {
+                if connect(connectSocket, address.pointee.ai_addr, address.pointee.ai_addrlen) == 0 {
+                    let connectionId = makeId("C")
+                    lock.lock()
+                    connections[connectionId] = connectSocket
+                    lock.unlock()
+
+                    readQueue.async { [weak self] in
+                        self?.readLoop(connectionId: connectionId, connectionSocket: connectSocket)
+                    }
+
+                    return "{\"connectionId\":\"\(connectionId)\"}"
+                }
+                close(connectSocket)
+            }
+            candidate = address.pointee.ai_next
+        }
+
+        return HostBridge.hostErrorEnvelope(NSError(domain: "tcp", code: Int(errno), userInfo: [NSLocalizedDescriptionKey: "connect() to \(host):\(port) failed"]))
+    }
+
+    //
     // host.tcpWrite(connectionId, base64): writes base64-decoded bytes to an accepted connection.
     // Returns nil on success or an error envelope on failure.
     //
