@@ -23,8 +23,8 @@ It does not bridge your physical NIC, and does not need to, because the emulator
 
 Bring the emulator up on the bridge and wait until it is ready. This sets the LAN bridge up
 automatically (prompting for sudo only for the privileged bridge parts) and starts the emulator
-attached to it. Run as your normal user, not root. The AVD is auto-selected (override with
-`ANDROID_AVD`):
+attached to it. Run as your normal user, not root. It runs on an AVD of its own, `psphere-single`,
+cloned from an auto-selected base AVD (override the base with `ANDROID_AVD`):
 
 ```
 bun run emu:and:up
@@ -39,6 +39,19 @@ bun run emu:and:status
 `ready` means the guest has a `192.168.55.x` address on `wlan0`. If it stays `not ready` / `not on
 lan bridge`, the emulator ignored `-wifi-tap` and is still behind the virtual router (`10.0.2.16`);
 `bun run emu:and:restart` for a clean bridged boot, then see troubleshooting below.
+
+### Why it has its own AVD name
+
+The hand-testing emulator and the smoke-test pool (`bun run emu:and:pool`) run side by side, so each
+side has to be able to say which emulators are its own. Both run on clones of the same base AVD, and
+the clone's name is what identifies it: `psphere-single` for this one, `psphere-pool-N` for the
+pool's. `up`, `down` and `restart` act only on `psphere-single`, and never on the pool or on an
+emulator you started yourself.
+
+This used to work the other way round: the hand-testing emulator was "the attached emulator that is
+not one of the pool's". A running pool then looked exactly like a running hand-testing emulator, so
+`up` decided one was already there, printed `ready` with the pool's five emulators listed, and
+started nothing at all.
 
 Tear it all down (stops the emulator and removes the bridge) when you are finished:
 

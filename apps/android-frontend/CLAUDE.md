@@ -16,8 +16,8 @@ Reads are fine (`adb devices`, `adb shell ip addr ...`, `status`). Changes are n
 
 Host-to-device LAN sharing, and the smoke tests that exercise it (`26-receive-database`, `27-receive-secret`), only work when the emulator is on a real layer-2 segment shared with the host. `scripts/emulator.sh` manages the whole lifecycle (emulator + bridge). Full explanation in `scripts/emulator.md`. **These are for the human to run, not you** (see the rule above).
 
-- `bun run emu:and:up` - bring one writable emulator up on the LAN bridge and wait until ready. Sets the bridge up automatically (prompts for sudo only for that part). AVD auto-selected (override with `ANDROID_AVD`).
-- `bun run emu:and:down` - stop that emulator and remove its tap. Leaves a running pool alone.
+- `bun run emu:and:up` - bring the hand-testing emulator up on the LAN bridge and wait until ready. Sets the bridge up automatically (prompts for sudo only for that part). It runs on its own AVD, `psphere-single`, cloned from an auto-selected base AVD (override the base with `ANDROID_AVD`). That name is how it is told apart from a pool emulator: `up` used to ask only whether *any* device was attached, so a running pool made it report success and start nothing.
+- `bun run emu:and:down` - stop that emulator (the one running `psphere-single`, and only that one) and remove its tap. Leaves a running pool alone, and leaves an emulator you started yourself alone too.
 - `bun run emu:and:restart` - down then up.
 - `bun run emu:and:pool` - bring up a pool of emulators for the smoke tests (`PHOTOSPHERE_EMULATOR_COUNT`, default 5), each on its own writable clone of the base AVD and its own tap. Runs alongside `emu:and:up` without disturbing it.
 - `bun run emu:and:pool:down` - stop only the pool's emulators and remove only the pool's taps.

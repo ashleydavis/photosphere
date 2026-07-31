@@ -93,7 +93,17 @@ start_emulator() {
     local avd="${PHOTOSPHERE_ANDROID_AVD:-}"
     if [ -z "$avd" ]; then
         local avds
-        avds="$("$EMULATOR" -list-avds 2>/dev/null | grep -v '^$' || true)"
+        # The pool's clones are excluded for the same reason attached_targets excludes the emulators
+        # running them: they belong to a smoke-test run, not to hand testing. Without this a cloned
+        # pool turns a single unambiguous choice into "several AVDs exist" and stops hand testing.
+        avds="$("$EMULATOR" -list-avds 2>/dev/null | grep -v '^$' | grep -v "^$POOL_AVD_PREFIX-" || true)"
+
+        # The hand-testing AVD wins outright when it exists, since that is the one emu:and:up runs
+        # and so the one that has the app's state on it.
+        if echo "$avds" | grep -qx "$SINGLE_AVD_NAME"; then
+            avds="$SINGLE_AVD_NAME"
+        fi
+
         local avd_count
         avd_count="$(echo "$avds" | grep -c . || true)"
         if [ "$avd_count" -eq 0 ]; then

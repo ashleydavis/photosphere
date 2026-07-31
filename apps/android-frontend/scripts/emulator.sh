@@ -471,8 +471,9 @@ ensure_base_avd() {
 }
 
 #
-# Prints the name of the AVD the pool clones from: ANDROID_AVD when set, otherwise the first AVD
-# that is not itself a pool clone. Prints nothing when the machine has no AVD at all.
+# Prints the name of the AVD that `up` and `pool` clone from: ANDROID_AVD when set, otherwise the
+# first AVD that is not itself one of the clones they create. Prints nothing when the machine has no
+# AVD at all.
 #
 base_avd_name() {
     local emulator
@@ -484,7 +485,7 @@ base_avd_name() {
         echo "$ANDROID_AVD"
         return 0
     fi
-    "$emulator" -list-avds 2>/dev/null | grep -v '^$' | grep -v "^$POOL_AVD_PREFIX-" | head -1
+    "$emulator" -list-avds 2>/dev/null | grep -v '^$' | grep -v "^$POOL_AVD_PREFIX-" | grep -v "^${SINGLE_AVD_NAME}$" | head -1
 }
 
 #
@@ -537,32 +538,48 @@ clone_avd() {
 }
 
 #
-# Prints the serials of attached emulators whose AVD is one of the pool's clones. Used so the pool
-# only ever stops emulators it started, never the single hand-testing one.
+# Prints "<serial> <avd-name>" for every attached emulator that adb reports as "device", meaning it
+# has finished booting and is usable. This is the only place that asks adb what is attached and what
+# each one is running, so the filters below cannot drift apart. A real phone has no AVD name and
+# prints an empty second field, which matches neither filter.
 #
-pool_serials() {
+attached_emulators() {
     local adb serial avd
     adb="$(adb_path)"
     if [ -z "$adb" ]; then
         return 0
     fi
     for serial in $("$adb" devices 2>/dev/null | awk 'NR > 1 && $2 == "device" { print $1 }'); do
-        avd="$("$adb" -s "$serial" emu avd name 2>/dev/null | head -1 | tr -d '\r')"
-        case "$avd" in
-            "$POOL_AVD_PREFIX"-*)
-                echo "$serial"
-                ;;
-        esac
+        # Capped, because this is on the polling path of every wait: an adb call that wedges here
+        # would hang the wait rather than fail it, and a wait that never returns looks like a
+        # machine that has locked up.
+        avd="$(timeout 8 "$adb" -s "$serial" emu avd name 2>/dev/null | head -1 | tr -d '\r')"
+        echo "$serial $avd"
     done
 }
 
 #
-# True when an emulator/device is attached and reporting "device" (booted, usable) state.
+# Prints the serials of every attached emulator/device, whatever it happens to be running.
 #
-device_attached() {
-    local adb
-    adb="$(adb_path)"
-    [ -n "$adb" ] && "$adb" devices 2>/dev/null | awk 'NR > 1 && $2 == "device" { found = 1 } END { exit found ? 0 : 1 }'
+attached_serials() {
+    attached_emulators | awk '{ print $1 }'
+}
+
+#
+# Prints the serials of attached emulators running one of the pool's clone AVDs. Used so the pool
+# only ever stops emulators it started, never the single hand-testing one.
+#
+pool_serials() {
+    attached_emulators | awk -v prefix="$POOL_AVD_PREFIX-" 'index($2, prefix) == 1 { print $1 }'
+}
+
+#
+# Prints the serials of attached emulators running the single hand-testing AVD, which is recognised
+# by its own name rather than by being "not a pool clone". That distinction is the whole point: a
+# running pool is not the hand-testing emulator, and treating it as one made `up` do nothing.
+#
+single_serials() {
+    attached_emulators | awk -v name="$SINGLE_AVD_NAME" '$2 == name { print $1 }'
 }
 
 #
@@ -614,9 +631,13 @@ start_emulator_bg() {
 }
 
 #
-# Prints how many attached devices are on the LAN bridge. Read-only.
+# Prints how many of the emulators listed by <serial_source> are on the LAN bridge. The source is
+# the name of a function that prints serials, so the count can be narrowed to just the pool or just
+# the hand-testing emulator; it defaults to every attached device. Read-only.
+# Usage: ready_device_count [serial_source_function]
 #
 ready_device_count() {
+    local serial_source="${1:-attached_serials}"
     local adb serial count
     adb="$(adb_path)"
     count=0
@@ -624,7 +645,7 @@ ready_device_count() {
         echo 0
         return 0
     fi
-    for serial in $("$adb" devices 2>/dev/null | awk 'NR > 1 && $2 == "device" { print $1 }'); do
+    for serial in $("$serial_source"); do
         if timeout 8 "$adb" -s "$serial" shell ip addr show wlan0 2>/dev/null | tr -d '\r' | grep -q 'inet 192\.168\.55\.'; then
             count=$((count + 1))
         fi
@@ -633,17 +654,20 @@ ready_device_count() {
 }
 
 #
-# Polls until at least <wanted> emulators are ready (started AND on the bridge), or the timeout
-# passes. Usage: wait_for_ready <timeout_seconds> <wanted_count>
+# Polls until at least <wanted> of the emulators listed by <serial_source> are ready (started AND on
+# the bridge), or the timeout passes. The source is re-read on every poll, so an emulator that has
+# not started yet is picked up as soon as it appears.
+# Usage: wait_for_ready <timeout_seconds> <wanted_count> [serial_source_function]
 #
 wait_for_ready() {
     local timeout="${1:-180}"
     local wanted="${2:-1}"
+    local serial_source="${3:-attached_serials}"
     local start="$SECONDS"
     local elapsed=0
     local last_note=0
     while [ "$elapsed" -lt "$timeout" ]; do
-        if [ "$(ready_device_count)" -ge "$wanted" ]; then
+        if [ "$(ready_device_count "$serial_source")" -ge "$wanted" ]; then
             return 0
         fi
 
@@ -683,32 +707,40 @@ cmd_up() {
         sudo GUEST_DNS="$GUEST_DNS" PSPHERE_TAPS="$netcard" "$0" __bridge-up
     fi
 
-    if device_attached; then
-        # An emulator is attached. If it is already on the bridge we are done. If it is off the
-        # bridge we cannot attach it: -wifi-tap is bound at launch, so a running emulator that is
-        # off the bridge can never join it. Do NOT kill it here (up is non-destructive); report it
-        # and tell the user to restart. Give a short grace first to ride out a transient gap.
-        echo "An emulator is attached; checking whether it is on the bridge..."
-        if wait_for_ready 25 1; then
+    # Only the hand-testing emulator counts here, recognised by its own AVD name. A running pool is
+    # deliberately not counted: it has its own AVDs and its own taps and is not this emulator. When
+    # this asked "is any device attached?" instead, a running pool answered yes, so `up` took the
+    # branch below, reported the pool as ready and started nothing.
+    if [ -n "$(single_serials)" ]; then
+        # It is already running. If it is on the bridge we are done. If it is off the bridge we
+        # cannot attach it: -wifi-tap is bound at launch, so a running emulator that is off the
+        # bridge can never join it. Do NOT kill it here (up is non-destructive); report it and tell
+        # the user to restart. Give a short grace first to ride out a transient gap.
+        echo "The '$SINGLE_AVD_NAME' emulator is attached; checking whether it is on the bridge..."
+        if wait_for_ready 25 1 single_serials; then
             cmd_status
             return 0
         fi
         echo "" >&2
-        echo "The attached emulator is not on the bridge and cannot be added to it: the -wifi-tap" >&2
-        echo "attachment is fixed at launch, so a running emulator that is off the bridge can never" >&2
-        echo "join it. This is unrecoverable without a restart." >&2
+        echo "The '$SINGLE_AVD_NAME' emulator is not on the bridge and cannot be added to it: the" >&2
+        echo "-wifi-tap attachment is fixed at launch, so a running emulator that is off the bridge" >&2
+        echo "can never join it. This is unrecoverable without a restart." >&2
         echo "Run: bun run emu:and:restart   (or: bun run emu:and:down then bun run emu:and:up)" >&2
         cmd_status >&2 || true
         exit 1
     fi
 
-    local avd
-    avd="$(ensure_base_avd)" || exit 1
+    # Run on a clone of the base AVD rather than on the base AVD itself, exactly as the pool does,
+    # because that is what gives this emulator a name of its own to be identified by. The clone is
+    # about 8KB and is writable, so state kept in it survives between runs.
+    local base
+    base="$(ensure_base_avd)" || exit 1
+    clone_avd "$base" "$SINGLE_AVD_NAME" || exit 1
 
-    start_emulator_bg "$avd" "$netcard" "single"
+    start_emulator_bg "$SINGLE_AVD_NAME" "$netcard" "single"
 
     echo "Waiting for the emulator to be ready on the bridge (up to 180s)..."
-    if wait_for_ready 180 1; then
+    if wait_for_ready 180 1 single_serials; then
         cmd_status
     else
         echo "Timed out waiting for the emulator to reach the bridge." >&2
@@ -808,33 +840,35 @@ cmd_pool_down() {
 }
 
 #
-# Brings everything down: stops the emulator, then tears down the LAN bridge (privileged, via sudo).
+# Stops the hand-testing emulator (if it is running) and waits for adb to drop it. Leaves the bridge
+# alone; both cmd_down (full teardown) and cmd_restart use this.
 #
-# Stop the running emulator (if any) and wait for adb to drop it. Leaves the bridge alone;
-# both cmd_down (full teardown) and cmd_up (cold-restart of an off-bridge emulator) use this.
+# It is picked out by its AVD name, so a running pool is left alone (use `pool-down` for that), and
+# so is any emulator you started yourself outside this script, which is not ours to kill.
+#
 stop_emulator() {
-    local adb
+    local adb serial waited
     adb="$(adb_path)"
-    if [ -n "$adb" ] && device_attached; then
-        # Only the emulators that are NOT part of the pool: `down` is the single emulator's
-        # teardown, and it must leave a running pool alone. Use `pool-down` for the pool.
-        local serial pool_list
-        pool_list="$(pool_serials)"
-        for serial in $("$adb" devices 2>/dev/null | awk 'NR > 1 && $2 == "device" { print $1 }'); do
-            if echo "$pool_list" | grep -qx "$serial"; then
-                continue
-            fi
-            echo "Stopping $serial..."
-            "$adb" -s "$serial" emu kill >/dev/null 2>&1 || true
-        done
-        local waited=0
-        while [ "$waited" -lt 30 ] && [ -n "$("$adb" devices 2>/dev/null | awk 'NR > 1 && $2 == "device" { print $1 }' | grep -vxF "$pool_list" || true)" ]; do
-            sleep 1
-            waited=$((waited + 1))
-        done
+    if [ -z "$adb" ]; then
+        return 0
     fi
+
+    for serial in $(single_serials); do
+        echo "Stopping $serial..."
+        "$adb" -s "$serial" emu kill >/dev/null 2>&1 || true
+    done
+
+    waited=0
+    while [ "$waited" -lt 30 ] && [ -n "$(single_serials)" ]; do
+        sleep 1
+        waited=$((waited + 1))
+    done
 }
 
+#
+# Brings everything down: stops the hand-testing emulator, then tears down the LAN bridge
+# (privileged, via sudo), leaving a running pool and its taps alone.
+#
 cmd_down() {
     stop_emulator
 
@@ -948,7 +982,8 @@ case "${1:-}" in
     *)
         echo "Usage: $0 {up|down|restart|status|pool|pool-down}"
         echo ""
-        echo "  up          Bring one writable emulator up on the LAN bridge and wait until ready."
+        echo "  up          Bring the '$SINGLE_AVD_NAME' emulator up on the LAN bridge and wait"
+        echo "              until ready. Runs alongside 'pool' without disturbing it."
         echo "  down        Stop that emulator and remove its tap. Leaves a running pool alone."
         echo "  restart     down then up."
         echo "  status      Print each attached device and whether it is on the bridge (exit 0 if any is)."
@@ -957,7 +992,8 @@ case "${1:-}" in
         echo "  pool-down   Stop only the pool's emulators and remove only the pool's taps."
         echo ""
         echo "The bridge, DHCP and NAT are shared: they are only torn down once no taps are left."
-        echo "The AVD is auto-selected (override with ANDROID_AVD). See apps/android-frontend/scripts/emulator.md."
+        echo "Both 'up' and 'pool' run on clones of a base AVD, which is auto-selected (override with"
+        echo "ANDROID_AVD). See apps/android-frontend/scripts/emulator.md."
         exit 1
         ;;
 esac
