@@ -14,11 +14,7 @@ TMP_DIR="$TEST_DIR/tmp"
 
 cleanup() {
     if [ -f "$TMP_DIR/app.pid" ]; then
-        local pid
-        pid=$(cat "$TMP_DIR/app.pid")
-        kill "$pid" 2>/dev/null || true
-        sleep 0.5
-        kill -9 "$pid" 2>/dev/null || true
+        kill_app_tree "$(cat "$TMP_DIR/app.pid")"
     fi
 }
 trap cleanup EXIT

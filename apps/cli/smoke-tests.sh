@@ -140,7 +140,11 @@ handle_interrupt() {
     exit 130
 }
 
+# TERM as well as INT: the parallel runner enforces its per-suite timeout with SIGTERM, and with no
+# handler for it this script died leaving its batch subshells and the CLI processes they had started
+# running.
 trap handle_interrupt INT
+trap handle_interrupt TERM
 
 # Helper functions shared with check-tools.sh
 log_info() {
