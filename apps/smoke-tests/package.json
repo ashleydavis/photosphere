@@ -12,9 +12,9 @@
     "c": "bun run compile",
     "compile": "tsc --noEmit",
     "clean": "rm -rf build dist coverage tsconfig.tsbuildinfo",
-    "test:and:lock": "./android-lock.sh hold",
-    "test:and:lock-status": "./android-lock.sh status",
-    "test:and:unlock": "./android-lock.sh unlock"
+    "test:and:lock": "bash ./android-lock.sh hold",
+    "test:and:lock-status": "bash ./android-lock.sh status",
+    "test:and:unlock": "bash ./android-lock.sh unlock"
   },
   "keywords": [],
   "author": "ashley@codecapers.com.au",

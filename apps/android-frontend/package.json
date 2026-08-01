@@ -13,12 +13,12 @@
     "sync": "bun run fetch:media && bun run bundle:worker && vite build && cap sync android",
     "open": "bun run sync && cap open android",
     "run": "bun run sync && bash ./scripts/run-android.sh",
-    "emu:up": "./scripts/emulator.sh up",
-    "emu:pool": "./scripts/emulator.sh pool",
-    "emu:pool:down": "./scripts/emulator.sh pool-down",
-    "emu:down": "./scripts/emulator.sh down",
-    "emu:restart": "./scripts/emulator.sh restart",
-    "emu:status": "./scripts/emulator.sh status",
+    "emu:up": "bash ./scripts/emulator.sh up",
+    "emu:pool": "bash ./scripts/emulator.sh pool",
+    "emu:pool:down": "bash ./scripts/emulator.sh pool-down",
+    "emu:down": "bash ./scripts/emulator.sh down",
+    "emu:restart": "bash ./scripts/emulator.sh restart",
+    "emu:status": "bash ./scripts/emulator.sh status",
     "test:unit": "bun run sync && bash ./scripts/android-gradle.sh :app:testDebugUnitTest --rerun-tasks"
   },
   "dependencies": {
