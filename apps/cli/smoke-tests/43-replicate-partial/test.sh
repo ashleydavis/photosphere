@@ -105,6 +105,10 @@ test_replicate_partial() {
     local origin_value=$(echo "$origin_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
     expect_value "$origin_value" "$source_db_dir" "Partial replica origin matches source path"
 
+    # The summary must report which kind of database each one is.
+    expect_output_string "$replica_summary" "Mode:.*partial" "Partial replica summary reports partial mode"
+    expect_output_string "$source_summary" "Mode:.*full" "Source database summary reports full mode"
+
     rm -rf "$test_dir"
     test_passed
 }

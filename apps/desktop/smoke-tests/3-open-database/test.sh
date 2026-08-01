@@ -35,6 +35,19 @@ wait_for_log "$TMP_DIR" "Open database dialog opened"
 send_command "$APP_PORT" click '{"dataId":"database-list-item-0"}'
 wait_for_log "$TMP_DIR" "Database opened"
 
+# Open the Database Summary page through the sidebar's "Database Info" link and check it reports the
+# database mode. The database was just created by the CLI and holds all its files, so full is the
+# only correct answer.
+log_info "Opening the left sidebar..."
+send_command "$APP_PORT" click '{"dataId":"sidebar-toggle-button"}'
+
+# Wait for the drawer to mount and its links to render.
+sleep 1
+
+send_command "$APP_PORT" click '{"dataId":"sidebar-database-summary"}'
+wait_for_log "$TMP_DIR" "Database summary loaded:"
+wait_for_value "$APP_PORT" database-mode "full"
+
 check_no_errors "$TMP_DIR"
 
 log_success "Test 3 passed: open-database"

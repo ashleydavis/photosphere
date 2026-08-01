@@ -49,6 +49,10 @@ send_command "$APP_PORT" click '{"dataId":"sidebar-database-summary"}' || exit 1
 # error would set the page's error state and never emit this line.
 wait_for_log "$TMP_DIR" "Database summary loaded:"
 
+# The page reports the database mode. This database was created by the CLI and holds all its files,
+# so full is the only correct answer.
+wait_for_value "$APP_PORT" database-mode "full"
+
 # Thumbnail fetches require the not-yet-built mobile asset-serving layer; ignore only those errors.
 check_no_errors "$TMP_DIR" 'Failed to load asset: thumb:|Network Error' || exit 1
 

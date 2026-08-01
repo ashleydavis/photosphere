@@ -69,7 +69,19 @@ export const DISPLAY_MIN_SIZE = 1000;
 //
 export const DISPLAY_QUALITY = 95;
 
+//
+// Whether the database holds every asset or only a partial set.
+// "partial" means only the thumb directory's assets are present locally and the rest are fetched
+// lazily from the database's origin.
+//
+export type DatabaseMode = "full" | "partial";
+
 export interface IDatabaseSummary {
+    //
+    // Whether this database is a full copy or a partial replica.
+    //
+    mode: DatabaseMode;
+
     //
     // Total number of files imported into the database.
     //
@@ -337,6 +349,7 @@ export async function getDatabaseSummary(assetStorage: IStorage): Promise<IDatab
     }
     
     return {
+        mode: merkleTree.databaseMetadata?.isPartial === true ? "partial" : "full",
         totalImports: filesImported,
         totalFiles: merkleTree.sort?.leafCount || 0,
         totalSize: merkleTree.sort?.size || 0,

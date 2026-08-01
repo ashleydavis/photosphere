@@ -212,6 +212,8 @@ test_database_summary() {
     invoke_command "Display database summary" "$(get_cli_command) summary --db $TEST_DB_DIR --yes" 0 "summary_output"
 
     # Check that summary contains expected fields
+    expect_output_string "$summary_output" "Mode:" "Summary contains database mode"
+    expect_output_string "$summary_output" "Mode:.*full" "Summary reports a freshly initialised database as full"
     expect_output_string "$summary_output" "Files imported:" "Summary contains files imported count"
     expect_output_string "$summary_output" "Total files:" "Summary contains total files count"
     expect_output_string "$summary_output" "Total size:" "Summary contains total size"

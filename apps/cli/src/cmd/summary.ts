@@ -20,6 +20,7 @@ export async function summaryCommand(context: ICommandContext, options: ISummary
     log.info('');
     log.info(pc.bold(pc.blue(`📊 Database Summary`)));
     log.info('');
+    log.info(`Mode:             ${pc.green(summary.mode)}`);
     log.info(`Files imported:   ${pc.green(summary.totalImports.toString())}`);
     log.info(`Total files:      ${pc.green(summary.totalFiles.toString())}`);
     log.info(`Total size:       ${pc.green(formatBytes(summary.totalSize))}`);

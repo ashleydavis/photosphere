@@ -37,6 +37,7 @@ function makeContext(): ITaskContext {
 // A representative summary the mocked getDatabaseSummary returns.
 //
 const SAMPLE_SUMMARY: IDatabaseSummary = {
+    mode: "full",
     totalImports: 12,
     totalFiles: 34,
     totalSize: 5678,

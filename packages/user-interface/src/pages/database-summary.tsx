@@ -80,6 +80,9 @@ function StatTile({ label, value, icon }: IStatTileProps) {
 // Props for a single labelled row of detail.
 //
 interface ISummaryRowProps {
+    // Identifies the row to the smoke-test driver, rendered as the row's `data-id`.
+    dataId: string;
+
     // Label for the row.
     label: string;
 
@@ -92,9 +95,9 @@ interface ISummaryRowProps {
 // side-by-side row leaves a phone with a 48px-wide column for a value that is often a long path or
 // a 64-character hash.
 //
-function SummaryRow({ label, value }: ISummaryRowProps) {
+function SummaryRow({ dataId, label, value }: ISummaryRowProps) {
     return (
-        <Box sx={{ py: 1.25, borderBottom: '1px solid', borderColor: 'divider' }}>
+        <Box data-id={dataId} sx={{ py: 1.25, borderBottom: '1px solid', borderColor: 'divider' }}>
             <Typography level="body-xs" sx={{ color: 'text.tertiary', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                 {label}
             </Typography>
@@ -256,19 +259,22 @@ export function DatabaseSummaryPage() {
                         }
 
                         <SummarySection title="Location">
-                            <SummaryRow label="Path" value={databasePath} />
-                            <SummaryRow label="Storage type" value={getStorageType(databasePath)} />
+                            <SummaryRow dataId="database-path" label="Path" value={databasePath} />
+                            <SummaryRow dataId="database-storage-type" label="Storage type" value={getStorageType(databasePath)} />
+                            {summary
+                                && <SummaryRow dataId="database-mode" label="Mode" value={summary.mode} />
+                            }
                         </SummarySection>
 
                         {summary
                             && <SummarySection title="Integrity">
                                 {summary.filesHash
-                                    && <SummaryRow label="Files hash" value={summary.filesHash} />
+                                    && <SummaryRow dataId="database-files-hash" label="Files hash" value={summary.filesHash} />
                                 }
                                 {summary.databaseHash
-                                    && <SummaryRow label="Database hash" value={summary.databaseHash} />
+                                    && <SummaryRow dataId="database-database-hash" label="Database hash" value={summary.databaseHash} />
                                 }
-                                <SummaryRow label="Full hash" value={summary.fullHash} />
+                                <SummaryRow dataId="database-full-hash" label="Full hash" value={summary.fullHash} />
                             </SummarySection>
                         }
                     </>
