@@ -6,6 +6,9 @@
 # Absolute path to the smoke-tests/ directory (one level above lib/).
 SMOKE_TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/.."
 
+# Absolute path to the repository root, for reaching the helper scripts under scripts/.
+REPO_ROOT="$(cd "$SMOKE_TESTS_DIR/../../.." && pwd)"
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -755,16 +758,16 @@ seed_vault_secret() {
 
     mkdir -p "$PHOTOSPHERE_VAULT_DIR"
     local encoded_name
-    encoded_name=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$secret_name', safe=''))")
+    # encodeURIComponent, because that is exactly what the vault itself names files with
+    # (packages/vault/src/lib/plaintext-vault.ts). Anything else and the app looks for a different file.
+    encoded_name=$(printf '%s' "$secret_name" | bun "$REPO_ROOT/scripts/json-encode.ts" --url-segment -)
     local file_path="${PHOTOSPHERE_VAULT_DIR}/${encoded_name}.json"
 
-    cat > "$file_path" <<VAULT_EOF
-{
-  "name": "$secret_name",
-  "type": "$secret_type",
-  "value": $(echo "$secret_value" | python3 -c "import sys,json; print(json.dumps(sys.stdin.read().strip()))")
-}
-VAULT_EOF
+    bun "$REPO_ROOT/scripts/write-vault-secret.ts" \
+        --file "$file_path" \
+        --name "$secret_name" \
+        --type "$secret_type" \
+        --value "$secret_value"
     chmod 600 "$file_path"
 }
 

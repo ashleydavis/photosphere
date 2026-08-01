@@ -32,7 +32,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # /check-flaky-tests menu is built from the live scripts instead of a hardcoded (stale-prone) list.
 # Watch-mode targets are excluded because they never terminate and are not suites to flaky-check.
 if [ "${1:-}" = "--list" ]; then
-    node -e "const s=require('$ROOT/package.json').scripts||{}; for (const k of Object.keys(s)) if (/(^|:)(test|smoke)/.test(k) && !/watch/.test(k)) console.log(k)"
+    bun "$ROOT/scripts/list-test-scripts.ts" --file "$ROOT/package.json"
     exit 0
 fi
 

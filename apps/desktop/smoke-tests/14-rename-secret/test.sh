@@ -4,6 +4,7 @@ TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$TEST_DIR/../lib/common.sh"
 TEST_DIR="$(cd "$(dirname "$0")" && native_pwd)"
 DESKTOP_DIR="$(cd "$TEST_DIR/../.." && native_pwd)"
+REPO_ROOT="$(cd "$TEST_DIR/../../../.." && native_pwd)"
 
 print_test_header 14 "rename-secret"
 
@@ -20,12 +21,11 @@ mkdir -p "$TMP_DIR/vault"
 
 # Seed the vault with an api-key whose vault key matches its name.
 RAW_KEY="sk-rename-me"
-RAW_KEY="$RAW_KEY" python3 -c "
-import json, os
-secret = {'name': 'old-name', 'type': 'api-key', 'value': os.environ['RAW_KEY']}
-with open('$TMP_DIR/vault/old-name.json', 'w') as f:
-    json.dump(secret, f)
-"
+bun "$REPO_ROOT/scripts/write-vault-secret.ts" \
+    --file "$TMP_DIR/vault/old-name.json" \
+    --name old-name \
+    --type api-key \
+    --value "$RAW_KEY"
 
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
@@ -53,12 +53,7 @@ if [ ! -f "$TMP_DIR/vault/new-name.json" ]; then
     exit 1
 fi
 
-NEW_VALUE=$(python3 -c "
-import json
-with open('$TMP_DIR/vault/new-name.json') as f:
-    data = json.load(f)
-print(data['value'], end='')
-")
+NEW_VALUE=$(bun "$REPO_ROOT/scripts/read-json-field.ts" --file "$TMP_DIR/vault/new-name.json" --field value)
 
 if [ "$NEW_VALUE" != "$RAW_KEY" ]; then
     log_error "Renamed entry's value was not preserved"

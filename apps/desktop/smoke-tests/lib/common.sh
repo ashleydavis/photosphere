@@ -149,7 +149,7 @@ start_app() {
         launch_args+=("$(get_release_binary)")
     else
         local electron_bin
-        electron_bin=$(cd "$DESKTOP_DIR" && node -e "process.stdout.write(require('electron'))")
+        electron_bin=$(bun "$DESKTOP_DIR/../../scripts/resolve-electron-binary.ts" --from "$DESKTOP_DIR")
         launch_args+=("$electron_bin" "$DESKTOP_DIR")
     fi
 

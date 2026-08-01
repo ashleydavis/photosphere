@@ -4,6 +4,7 @@ TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$TEST_DIR/../lib/common.sh"
 TEST_DIR="$(cd "$(dirname "$0")" && native_pwd)"
 DESKTOP_DIR="$(cd "$TEST_DIR/../.." && native_pwd)"
+REPO_ROOT="$(cd "$TEST_DIR/../../../.." && native_pwd)"
 
 print_test_header 12 "edit-api-key"
 
@@ -21,12 +22,11 @@ mkdir -p "$TMP_DIR/vault"
 # Seed the vault with a raw api-key (no JSON envelope), edit it via the
 # UI and verify the round-trip preserves the raw-string format.
 RAW_KEY="sk-test-1234567890ABCDEF"
-RAW_KEY="$RAW_KEY" python3 -c "
-import json, os
-secret = {'name': 'api-key-1', 'type': 'api-key', 'value': os.environ['RAW_KEY']}
-with open('$TMP_DIR/vault/api-key-1.json', 'w') as f:
-    json.dump(secret, f)
-"
+bun "$REPO_ROOT/scripts/write-vault-secret.ts" \
+    --file "$TMP_DIR/vault/api-key-1.json" \
+    --name api-key-1 \
+    --type api-key \
+    --value "$RAW_KEY"
 
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
@@ -43,12 +43,7 @@ send_command "$APP_PORT" click '{"dataId":"add-secret-confirm"}'
 wait_for_log "$TMP_DIR" "Secret updated"
 
 # Assert the vault still contains the raw key string (not a JSON envelope).
-SAVED_VALUE=$(python3 -c "
-import json
-with open('$TMP_DIR/vault/api-key-1.json') as f:
-    data = json.load(f)
-print(data['value'], end='')
-")
+SAVED_VALUE=$(bun "$REPO_ROOT/scripts/read-json-field.ts" --file "$TMP_DIR/vault/api-key-1.json" --field value)
 
 if [ "$SAVED_VALUE" != "$RAW_KEY" ]; then
     log_error "Vault value is no longer the raw API key"

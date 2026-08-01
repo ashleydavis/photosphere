@@ -4,6 +4,7 @@ TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$TEST_DIR/../lib/common.sh"
 TEST_DIR="$(cd "$(dirname "$0")" && native_pwd)"
 DESKTOP_DIR="$(cd "$TEST_DIR/../.." && native_pwd)"
+REPO_ROOT="$(cd "$TEST_DIR/../../../.." && native_pwd)"
 
 print_test_header 15 "duplicate-name"
 
@@ -19,17 +20,21 @@ trap cleanup EXIT
 mkdir -p "$TMP_DIR/vault"
 
 # Pre-create a secret with the name "dup-secret".
-python3 -c "
-import json
-inner = json.dumps({'region': '', 'accessKeyId': '', 'secretAccessKey': ''})
-secret = {'name': 'dup-secret', 'type': 's3-credentials', 'value': inner}
-with open('$TMP_DIR/vault/dup-secret.json', 'w') as f:
-    json.dump(secret, f)
-"
+bun "$REPO_ROOT/scripts/write-vault-secret.ts" \
+    --file "$TMP_DIR/vault/dup-secret.json" \
+    --name dup-secret \
+    --type s3-credentials \
+    --value '{"region":"","accessKeyId":"","secretAccessKey":""}'
 
 # Capture the original file's modification timestamp so we can verify
 # the duplicate-add does not overwrite it.
-ORIG_MTIME=$(python3 -c "import os; print(os.path.getmtime('$TMP_DIR/vault/dup-secret.json'))")
+# Modification time, sub-second, so a rewrite inside the same second is still caught. GNU stat
+# (Linux, Git Bash) and BSD stat (macOS) spell it differently, hence the fallback.
+file_mtime() {
+    stat -c %y "$1" 2>/dev/null || stat -f %Fm "$1"
+}
+
+ORIG_MTIME=$(file_mtime "$TMP_DIR/vault/dup-secret.json")
 
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
@@ -57,7 +62,7 @@ fi
 
 # Assert the original file's modification timestamp is unchanged
 # (i.e. the duplicate add did not overwrite it).
-NEW_MTIME=$(python3 -c "import os; print(os.path.getmtime('$TMP_DIR/vault/dup-secret.json'))")
+NEW_MTIME=$(file_mtime "$TMP_DIR/vault/dup-secret.json")
 if [ "$ORIG_MTIME" != "$NEW_MTIME" ]; then
     log_error "Original vault file was overwritten by duplicate-add"
     log_error "Original mtime: $ORIG_MTIME, new mtime: $NEW_MTIME"

@@ -223,18 +223,15 @@ test_share_database() {
         '{"region":"us-east-1","accessKeyId":"AKIATEST","secretAccessKey":"secret123","endpoint":"http://localhost:9000"}'
 
     # Generate a real RSA-2048 PEM so resolveDatabaseSharePayload can derive the public key.
-    # The vault file is JSON, so we let python build the file directly to handle PEM newlines.
+    # The vault file is JSON, so the file is built directly rather than by templating, to handle PEM newlines.
     local pem_file="${TEST_TMP_DIR}/encsndr1.pem"
     mkdir -p "$TEST_TMP_DIR" "$SENDER_VAULT_DIR"
     openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$pem_file" 2>/dev/null
-    PEM_FILE="$pem_file" VAULT_FILE="${SENDER_VAULT_DIR}/encsndr1.json" python3 -c "
-import json, os
-with open(os.environ['PEM_FILE']) as keyFile:
-    pem = keyFile.read()
-secret = {'name': 'encsndr1', 'type': 'encryption-key', 'value': pem}
-with open(os.environ['VAULT_FILE'], 'w') as outFile:
-    json.dump(secret, outFile)
-"
+    bun ../../scripts/write-vault-secret.ts \
+        --file "${SENDER_VAULT_DIR}/encsndr1.json" \
+        --name encsndr1 \
+        --type encryption-key \
+        --value-file "$pem_file"
     chmod 600 "${SENDER_VAULT_DIR}/encsndr1.json"
 
     seed_databases_config "$SENDER_CONFIG_DIR" \

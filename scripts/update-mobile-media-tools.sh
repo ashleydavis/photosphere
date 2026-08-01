@@ -75,10 +75,13 @@ Notes:
 USAGE
 }
 
-# Portable in-place edit (works on GNU and BSD/macOS): rewrite $1 by piping through perl.
+# Portable in-place regex replace (GNU and BSD/macOS spell `sed -i` differently, so neither is used).
+# Usage: edit_in_place <file> <pattern> <replacement>
 edit_in_place() {
-    local file="$1"; shift
-    perl -pi -e "$@" "$file"
+    local file="$1"
+    local pattern="$2"
+    local replacement="$3"
+    bun "$REPO_ROOT/scripts/replace-in-file.ts" --file "$file" --pattern "$pattern" --replacement "$replacement"
 }
 
 log() { printf '\033[0;34m==>\033[0m %s\n' "$1"; }
@@ -88,7 +91,7 @@ die() { printf '\033[0;31merror:\033[0m %s\n' "$1" >&2; exit 1; }
 update_imagemagick_version() {
     [ -f "$IM_BUILD_SCRIPT" ] || die "not found: $IM_BUILD_SCRIPT"
     log "Setting iOS ImageMagick version to $IMAGEMAGICK_VERSION in build-imagemagick.sh"
-    edit_in_place "$IM_BUILD_SCRIPT" 's/^IM_VERSION=".*"/IM_VERSION="'"$IMAGEMAGICK_VERSION"'"/'
+    edit_in_place "$IM_BUILD_SCRIPT" '^IM_VERSION=".*"' 'IM_VERSION="'"$IMAGEMAGICK_VERSION"'"'
     grep -nE '^IM_VERSION=' "$IM_BUILD_SCRIPT"
 }
 
@@ -102,7 +105,7 @@ update_android_ffmpeg_version() {
     [ -f "$ANDROID_GRADLE" ] || die "not found: $ANDROID_GRADLE"
     if grep -qE "ffmpeg-kit[^:'\"]*:" "$ANDROID_GRADLE"; then
         log "Bumping Android FFmpegKit version to $ANDROID_FFMPEG_VERSION in app/build.gradle"
-        edit_in_place "$ANDROID_GRADLE" 's/(ffmpeg-kit[^:'\''"]*:)[0-9][^'\''"]*/${1}'"$ANDROID_FFMPEG_VERSION"'/'
+        edit_in_place "$ANDROID_GRADLE" '(ffmpeg-kit[^:'\''"]*:)[0-9][^'\''"]*' '$1'"$ANDROID_FFMPEG_VERSION"
         grep -nE "ffmpeg-kit" "$ANDROID_GRADLE"
     else
         warn "No ffmpeg-kit dependency found in app/build.gradle. Add it first, e.g.:"

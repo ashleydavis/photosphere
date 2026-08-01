@@ -6,6 +6,9 @@
 # Absolute path to the smoke-tests/ directory (one level above lib/).
 SMOKE_TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/.."
 
+# Absolute path to the repository root, for reaching the helper scripts under scripts/.
+REPO_ROOT="$(cd "$SMOKE_TESTS_DIR/../../.." && pwd)"
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -755,24 +758,14 @@ seed_vault_secret() {
 
     mkdir -p "$PHOTOSPHERE_VAULT_DIR"
     local encoded_name
-    encoded_name=$(bun -e "process.stdout.write(encodeURIComponent('$secret_name'))")
+    encoded_name=$(printf '%s' "$secret_name" | bun "$REPO_ROOT/scripts/json-encode.ts" --url-segment -)
     local file_path="${PHOTOSPHERE_VAULT_DIR}/${encoded_name}.json"
 
-    local escaped_value
-    escaped_value=$(printf '%s' "$secret_value" | bun -e "
-        const chunks = [];
-        for await (const chunk of Bun.stdin.stream()) { chunks.push(chunk); }
-        const text = Buffer.concat(chunks).toString().trim();
-        process.stdout.write(JSON.stringify(text));
-    ")
-
-    cat > "$file_path" <<VAULT_EOF
-{
-  "name": "$secret_name",
-  "type": "$secret_type",
-  "value": $escaped_value
-}
-VAULT_EOF
+    bun "$REPO_ROOT/scripts/write-vault-secret.ts" \
+        --file "$file_path" \
+        --name "$secret_name" \
+        --type "$secret_type" \
+        --value "$secret_value"
     chmod 600 "$file_path"
 }
 

@@ -104,15 +104,11 @@ seed_encryption_key() {
     mkdir -p "$vault_dir"
     local pem_file="$vault_dir/$secret_name.pem"
     openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$pem_file" 2>/dev/null
-    PEM_FILE="$pem_file" VAULT_FILE="$vault_dir/$secret_name.json" SECRET_NAME="$secret_name" python3 <<'PY'
-import json
-import os
-with open(os.environ['PEM_FILE']) as keyFile:
-    pem = keyFile.read()
-secret = {"name": os.environ['SECRET_NAME'], "type": "encryption-key", "value": pem}
-with open(os.environ['VAULT_FILE'], 'w') as outFile:
-    json.dump(secret, outFile)
-PY
+    bun "$ROOT_DIR/scripts/write-vault-secret.ts" \
+        --file "$vault_dir/$secret_name.json" \
+        --name "$secret_name" \
+        --type encryption-key \
+        --value-file "$pem_file"
     chmod 600 "$vault_dir/$secret_name.json"
     rm -f "$pem_file"
 }

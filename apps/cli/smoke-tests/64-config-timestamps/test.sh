@@ -16,41 +16,7 @@ read_state_field() {
     local db_dir="$1"
     local field_name="$2"
 
-    bun -e "
-        const fs = require('node:fs');
-        const statePath = '$db_dir/.db/state.dat';
-        let out = '';
-        if (fs.existsSync(statePath)) {
-            const buffer = fs.readFileSync(statePath);
-            if (buffer.length >= 40 && buffer.subarray(4, 8).toString('ascii') === 'DBST') {
-                let position = 8;
-                const readBuffer = () => {
-                    const length = buffer.readUInt32LE(position);
-                    position += 4;
-                    const bytes = buffer.subarray(position, position + length);
-                    position += length;
-                    return bytes;
-                };
-                const readString = () => {
-                    const length = buffer.readUInt32LE(position);
-                    position += 4;
-                    const text = buffer.toString('utf8', position, position + length);
-                    position += length;
-                    return text;
-                };
-                const fields = {};
-                fields.contentHash = readBuffer();
-                fields.lastModifiedAt = readString();
-                fields.lastSyncedAt = readString();
-                fields.lastReplicatedAt = readString();
-                const value = fields['$field_name'];
-                if (typeof value === 'string') {
-                    out = value;
-                }
-            }
-        }
-        process.stdout.write(out);
-    "
+    bun "$REPO_ROOT/scripts/read-database-state-field.ts" --file "$db_dir/.db/state.dat" --field "$field_name"
 }
 
 #
@@ -60,15 +26,10 @@ expect_valid_iso_date() {
     local value="$1"
     local description="$2"
 
-    bun -e "
-        const value = '$value';
-        const parsed = Date.parse(value);
-        if (!value || Number.isNaN(parsed)) {
-            console.error('expected valid ISO date, got: ' + JSON.stringify(value));
-            process.exit(1);
-        }
-    "
-    if [ $? -eq 0 ]; then
+    # Matched against the ISO 8601 date-time shape directly. This is stricter than the Date.parse
+    # check it replaces, which also accepted plenty of strings that are not ISO 8601 at all.
+    local iso_pattern='^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[+-][0-9]{2}:?[0-9]{2})$'
+    if [[ "$value" =~ $iso_pattern ]]; then
         log_success "$description: $value"
     else
         log_error "$description: $value is not a valid ISO date"

@@ -4,6 +4,7 @@ TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$TEST_DIR/../lib/common.sh"
 TEST_DIR="$(cd "$(dirname "$0")" && native_pwd)"
 DESKTOP_DIR="$(cd "$TEST_DIR/../.." && native_pwd)"
+REPO_ROOT="$(cd "$TEST_DIR/../../../.." && native_pwd)"
 REPO_DIR="$(cd "$DESKTOP_DIR/../.." && native_pwd)"
 CLI_DIR="$REPO_DIR/apps/cli"
 
@@ -55,18 +56,13 @@ if [ ! -f "$CONFIG_PATH" ]; then
     exit 1
 fi
 
-NEW_ORIGIN="$NEW_ORIGIN" CONFIG_PATH="$CONFIG_PATH" python3 -c "
-import json, os, sys
-with open(os.environ['CONFIG_PATH']) as f:
-    config = json.load(f)
-expected = os.environ['NEW_ORIGIN']
-actual = config.get('origin')
-if actual != expected:
-    print(f'FAIL: .db/config.json origin mismatch', file=sys.stderr)
-    print(f'Expected: {expected!r}', file=sys.stderr)
-    print(f'Actual:   {actual!r}', file=sys.stderr)
-    sys.exit(1)
-" || exit 1
+SAVED_ORIGIN=$(bun "$REPO_ROOT/scripts/read-json-field.ts" --file "$CONFIG_PATH" --field origin)
+if [ "$SAVED_ORIGIN" != "$NEW_ORIGIN" ]; then
+    log_error ".db/config.json origin mismatch"
+    log_error "Expected: $NEW_ORIGIN"
+    log_error "Actual:   $SAVED_ORIGIN"
+    exit 1
+fi
 
 check_no_errors "$TMP_DIR"
 

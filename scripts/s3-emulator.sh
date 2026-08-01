@@ -119,13 +119,7 @@ ensure_minio_binary() {
 # would make two of them fight over the same server.
 #
 find_free_port() {
-    python3 -c "
-import socket
-probe = socket.socket()
-probe.bind(('127.0.0.1', 0))
-print(probe.getsockname()[1])
-probe.close()
-"
+    bun "$REPO_ROOT/scripts/find-free-port.ts"
 }
 
 #

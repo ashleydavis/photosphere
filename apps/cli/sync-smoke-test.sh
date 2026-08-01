@@ -174,8 +174,6 @@ log_warning() {
 generate_uuid() {
     if command -v uuidgen &> /dev/null; then
         uuidgen
-    elif command -v python3 &> /dev/null; then
-        python3 -c "import uuid; print(uuid.uuid4())"
     else
         # Fallback: generate a simple random string
         cat /dev/urandom | tr -dc 'a-f0-9' | fold -w 32 | head -n 1 | sed 's/\(........\)\(....\)\(....\)\(....\)\(............\)/\1-\2-\3-\4-\5/'

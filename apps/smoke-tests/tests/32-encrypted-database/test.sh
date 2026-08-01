@@ -72,13 +72,15 @@ TOML
 # Add the private key into the device keychain as an encryption-key secret, through the app's own
 # add-secret UI (the real path a secret takes into the keychain). The worker vault (14b) then resolves
 # it by name. The key lives in the host vault, so read it back out with `secrets view --raw`; it is a
-# multi-line PEM, so the whole type-command payload is built with python's json so the PEM is escaped.
+# multi-line PEM, so the whole type-command payload is built with JSON.stringify so the PEM is escaped.
 KEY_PEM_RAW=$(run_cli "$TMP_DIR" secrets view --name "$KEY_NAME" --raw --yes)
 if [ -z "$KEY_PEM_RAW" ]; then
     log_error "Could not read encryption key \"$KEY_NAME\" back from the host vault"
     exit 1
 fi
-PEM_TYPE_PAYLOAD=$(KEY_PEM_RAW="$KEY_PEM_RAW" python3 -c "import json,os;print(json.dumps({'dataId':'secret-private-key-input','text':os.environ['KEY_PEM_RAW']}))")
+printf '%s' "$KEY_PEM_RAW" > "$TMP_DIR/key.pem"
+PEM_TYPE_ESCAPED=$(bun "$REPO_DIR/scripts/json-encode.ts" --string "$TMP_DIR/key.pem")
+PEM_TYPE_PAYLOAD="{\"dataId\":\"secret-private-key-input\",\"text\":$PEM_TYPE_ESCAPED}"
 
 send_command "$APP_PORT" navigate '{"page":"secrets"}' || exit 1
 wait_for_log "$TMP_DIR" "Secrets page loaded"

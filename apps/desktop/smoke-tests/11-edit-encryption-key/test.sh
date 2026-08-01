@@ -4,6 +4,7 @@ TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$TEST_DIR/../lib/common.sh"
 TEST_DIR="$(cd "$(dirname "$0")" && native_pwd)"
 DESKTOP_DIR="$(cd "$TEST_DIR/../.." && native_pwd)"
+REPO_ROOT="$(cd "$TEST_DIR/../../../.." && native_pwd)"
 
 print_test_header 11 "edit-encryption-key"
 
@@ -25,12 +26,12 @@ export RAW_PEM="-----BEGIN PRIVATE KEY-----
 MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQ
 -----END PRIVATE KEY-----
 "
-python3 -c "
-import json, os
-secret = {'name': 'enc-key-1', 'type': 'encryption-key', 'value': os.environ['RAW_PEM']}
-with open('$TMP_DIR/vault/enc-key-1.json', 'w') as f:
-    json.dump(secret, f)
-"
+printf '%s' "$RAW_PEM" > "$TMP_DIR/raw.pem"
+bun "$REPO_ROOT/scripts/write-vault-secret.ts" \
+    --file "$TMP_DIR/vault/enc-key-1.json" \
+    --name enc-key-1 \
+    --type encryption-key \
+    --value-file "$TMP_DIR/raw.pem"
 
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
@@ -47,22 +48,19 @@ send_command "$APP_PORT" click '{"dataId":"add-secret-confirm"}'
 wait_for_log "$TMP_DIR" "Secret updated"
 
 # Assert the vault still contains the raw PEM (not a JSON envelope).
-# Compare in Python because bash command substitution strips trailing newlines.
-RAW_PEM="$RAW_PEM" python3 -c "
-import json, os, sys
-with open('$TMP_DIR/vault/enc-key-1.json') as f:
-    data = json.load(f)
-expected = os.environ['RAW_PEM']
-actual = data['value']
-if actual != expected:
-    print('FAIL: vault value differs from the raw PEM', file=sys.stderr)
-    print('Expected (repr):', repr(expected), file=sys.stderr)
-    print('Actual   (repr):', repr(actual), file=sys.stderr)
-    sys.exit(1)
-if data.get('type') != 'encryption-key':
-    print('FAIL: type field changed:', data.get('type'), file=sys.stderr)
-    sys.exit(1)
-" || exit 1
+# Compared with cmp against a file, not as a shell string, because command substitution strips
+# trailing newlines and the PEM's trailing newline is exactly what this checks survived the round trip.
+bun "$REPO_ROOT/scripts/read-json-field.ts" --file "$TMP_DIR/vault/enc-key-1.json" --field value > "$TMP_DIR/saved.pem"
+if ! cmp -s "$TMP_DIR/raw.pem" "$TMP_DIR/saved.pem"; then
+    log_error "Vault value differs from the raw PEM"
+    exit 1
+fi
+
+SAVED_TYPE=$(bun "$REPO_ROOT/scripts/read-json-field.ts" --file "$TMP_DIR/vault/enc-key-1.json" --field type)
+if [ "$SAVED_TYPE" != "encryption-key" ]; then
+    log_error "Type field changed: $SAVED_TYPE"
+    exit 1
+fi
 
 check_no_errors "$TMP_DIR"
 
