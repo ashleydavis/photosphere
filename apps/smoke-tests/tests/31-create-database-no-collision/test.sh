@@ -34,6 +34,10 @@ wait_for_log "$TMP_DIR" "Create database dialog opened"
 send_command "$APP_PORT" type '{"dataId":"database-name-input","text":"db-one"}' || exit 1
 send_command "$APP_PORT" stage-pick-folder '{"folderResult":"db-one"}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"database-browse-button"}' || exit 1
+# Browse fills the path field from an async handler, and Create stays disabled while the field is
+# empty, so a Create click sent before the path lands is swallowed by the disabled button and nothing
+# happens at all: no database, no error, just a timeout on "Database created".
+wait_for_value "$APP_PORT" "database-path-input" "^db-one$"
 send_command "$APP_PORT" click '{"dataId":"create-database-confirm"}' || exit 1
 wait_for_log "$TMP_DIR" "Database created"
 
@@ -43,6 +47,9 @@ wait_for_log "$TMP_DIR" "Create database dialog opened"
 send_command "$APP_PORT" type '{"dataId":"database-name-input","text":"db-two"}' || exit 1
 send_command "$APP_PORT" stage-pick-folder '{"folderResult":"db-two"}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"database-browse-button"}' || exit 1
+# Same wait, and here it carries the test's own assertion too: the field has to read "db-two", so a
+# Browse that handed back the first database's path again fails here rather than further downstream.
+wait_for_value "$APP_PORT" "database-path-input" "^db-two$"
 send_command "$APP_PORT" click '{"dataId":"create-database-confirm"}' || exit 1
 wait_for_log "$TMP_DIR" "Database created"
 
