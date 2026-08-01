@@ -59,8 +59,11 @@ resolve_platform() {
     case "$(uname -s)" in
         Linux*)  osName="linux" ;;
         Darwin*) osName="darwin" ;;
+        # The smoke suites run under Git Bash on Windows, which reports MINGW64_NT. MinIO publishes a
+        # windows-amd64 build at the same URL shape as the others.
+        MINGW*|MSYS*|CYGWIN*) osName="windows" ;;
         *)
-            echo "ERROR: the S3 emulator supports Linux and macOS only; this is $(uname -s)." >&2
+            echo "ERROR: the S3 emulator supports Linux, macOS and Windows only; this is $(uname -s)." >&2
             return 1
             ;;
     esac
@@ -83,9 +86,15 @@ resolve_platform() {
 # binary and tries to execute.
 #
 ensure_minio_binary() {
-    local platform binaryPath partialPath
+    local platform binaryExtension binaryPath partialPath
     platform="$(resolve_platform)"
-    binaryPath="$CACHE_DIR/minio-$platform-$MINIO_VERSION"
+    # Windows decides what it will execute from the file extension, and the published artifact carries
+    # none, so the cached copy is named .exe there. Elsewhere the execute bit set below is enough.
+    binaryExtension=""
+    if [ "${platform%%-*}" = "windows" ]; then
+        binaryExtension=".exe"
+    fi
+    binaryPath="$CACHE_DIR/minio-$platform-$MINIO_VERSION$binaryExtension"
 
     if [ -x "$binaryPath" ]; then
         echo "$binaryPath"
