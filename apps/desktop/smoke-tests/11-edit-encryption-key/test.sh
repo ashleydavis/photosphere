@@ -47,7 +47,12 @@ wait_for_log "$TMP_DIR" "Secret updated"
 # Assert the vault still contains the raw PEM (not a JSON envelope).
 # Compared with cmp against a file, not as a shell string, because command substitution strips
 # trailing newlines and the PEM's trailing newline is exactly what this checks survived the round trip.
-jq -j '.value' "$TMP_DIR/vault/enc-key-1.json" > "$TMP_DIR/saved.pem"
+#
+# -b keeps jq's output in binary mode. On Windows jq writes stdout in text mode by default, which
+# turns each of the PEM's newlines into CRLF on the way into this file and makes the comparison
+# below fail even when the value round-tripped perfectly. The flag is accepted and does nothing on
+# Linux and macOS, where output is already byte-exact.
+jq -jb '.value' "$TMP_DIR/vault/enc-key-1.json" > "$TMP_DIR/saved.pem"
 if ! cmp -s "$TMP_DIR/raw.pem" "$TMP_DIR/saved.pem"; then
     log_error "Vault value differs from the raw PEM"
     exit 1
