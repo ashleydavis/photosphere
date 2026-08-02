@@ -1316,6 +1316,14 @@ jobs:
           run: brew install imagemagick ffmpeg
           verify: magick|convert ffmpeg ffprobe
 
+      # Shares the key, and so the cache entry, with the other iOS jobs. See the note on this step in
+      # ios-smoke-tests for why the build is worth caching.
+      - name: Cache iOS ImageMagick build
+        uses: actions/cache@v4
+        with:
+          path: apps/ios-frontend/ios/App/vendor/im
+          key: ${{ runner.os }}-ios-imagemagick-${{ hashFiles('apps/ios-frontend/ios/build-imagemagick.sh') }}
+
       # Host bridge, engine pool, subtask routing, path sandbox, media host functions.
       - name: Run iOS native unit tests
         run: bun run test:ios:unit
@@ -1401,8 +1409,9 @@ jobs:
           script: bun run test:and
 
   ios-smoke-tests:
-    # Higher than the other mobile jobs because `bun run test:ios` builds ImageMagick from source
-    # (vendor/im, ~20 min) and resolves the FFmpegKit Swift Package on a clean checkout.
+    # Higher than the other mobile jobs because `bun run test:ios` resolves the FFmpegKit Swift
+    # Package on a clean checkout and, whenever the ImageMagick cache below misses, builds
+    # ImageMagick from source as well. That build has taken 37 minutes on a slow runner.
     timeout-minutes: 90
     runs-on: macos-14
     steps:
@@ -1438,6 +1447,21 @@ jobs:
         with:
           run: brew install imagemagick ffmpeg
           verify: magick|convert ffmpeg ffprobe
+
+      # ImageMagick has no prebuilt iOS release to download, so scripts/fetch-mobile-media-tools.sh
+      # compiles it from source into this git-ignored directory, once for the device slice and once
+      # for the simulator. It is the longest thing in the job by a wide margin and its cost swings
+      # wildly with the runner: in one run this took 37 minutes here while the same build took 2.5
+      # minutes in ios-unit-tests. Everything the build produces is decided by build-imagemagick.sh,
+      # which pins the versions and the source URLs, so hashing that one file is a complete key.
+      #
+      # A partial restore is safe: the fetch script only skips the build when both slices' libraries
+      # are present, and rebuilds from scratch otherwise.
+      - name: Cache iOS ImageMagick build
+        uses: actions/cache@v4
+        with:
+          path: apps/ios-frontend/ios/App/vendor/im
+          key: ${{ runner.os }}-ios-imagemagick-${{ hashFiles('apps/ios-frontend/ios/build-imagemagick.sh') }}
 
       # run.sh boots an iOS simulator and builds/installs the app via xcrun/xcodebuild.
       - name: Run iOS smoke tests
@@ -1614,6 +1638,14 @@ jobs:
         with:
           run: brew install imagemagick ffmpeg
           verify: magick|convert ffmpeg ffprobe
+
+      # Shares the key, and so the cache entry, with the other iOS jobs. See the note on this step in
+      # ios-smoke-tests for why the build is worth caching.
+      - name: Cache iOS ImageMagick build
+        uses: actions/cache@v4
+        with:
+          path: apps/ios-frontend/ios/App/vendor/im
+          key: ${{ runner.os }}-ios-imagemagick-${{ hashFiles('apps/ios-frontend/ios/build-imagemagick.sh') }}
 
       # The player boots an iOS simulator and builds/installs the app via xcrun/xcodebuild.
       - name: Play the stories
