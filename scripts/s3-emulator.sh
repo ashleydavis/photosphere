@@ -8,7 +8,7 @@
 # regressed to a client that ignores the URL scheme.
 #
 # The MinIO binary is downloaded once into a git-ignored repo-level cache and reused. The server
-# binds an OS-assigned free port, so several suites can run at the same moment without colliding.
+# binds a randomly chosen free port, so several suites can run at the same moment without colliding.
 #
 # Usage:
 #   scripts/s3-emulator.sh start <state-dir>   Starts a server, seeds its bucket, writes <state-dir>/env.
@@ -36,10 +36,17 @@ EMULATOR_PREFIXES="alpha-dir,beta-dir"
 # Seconds to wait for the server to report healthy before giving up.
 HEALTH_TIMEOUT_SECONDS=60
 
-# How many times to retry the whole start when the server never becomes healthy. A free port is
-# chosen, released, and only then bound by MinIO, so another process can take it in between; a fresh
+# How many times to retry the whole start when the server never becomes healthy. A port is checked
+# for being free and only then bound by MinIO, so another process can take it in between; a fresh
 # port on the next attempt is the fix for that narrow race.
 START_ATTEMPTS=3
+
+# The range a candidate port is drawn from, and how many candidates to try before giving up. The
+# range sits above the registered ports in common use and below 32768, where Linux begins its
+# ephemeral range, so nothing else is being handed these numbers automatically.
+PORT_RANGE_START=20000
+PORT_RANGE_SIZE=12768
+PORT_ATTEMPTS=50
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
@@ -113,13 +120,28 @@ ensure_minio_binary() {
 }
 
 #
-# Prints a port the OS says is free, by binding port 0 and reading back what was assigned.
+# Prints a port nothing is listening on, by picking a random one and trying to connect to it with
+# bash's /dev/tcp. A refused connection means the port is free.
 #
 # Never a hardcoded number: several smoke suites run at once out of one checkout, and a fixed port
 # would make two of them fight over the same server.
 #
+# The range stops below 32768, where Linux starts handing out ephemeral ports, so a port picked here
+# cannot also be handed to an unrelated process as the local end of an outgoing connection.
+#
 find_free_port() {
-    bun "$REPO_ROOT/scripts/find-free-port.ts"
+    local port attempt
+    attempt=1
+    while [ "$attempt" -le "$PORT_ATTEMPTS" ]; do
+        port=$(( PORT_RANGE_START + RANDOM % PORT_RANGE_SIZE ))
+        if ! (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null; then
+            echo "$port"
+            return 0
+        fi
+        attempt=$((attempt + 1))
+    done
+    echo "ERROR: no free port found in $PORT_ATTEMPTS attempts between $PORT_RANGE_START and $((PORT_RANGE_START + PORT_RANGE_SIZE - 1))." >&2
+    return 1
 }
 
 #
