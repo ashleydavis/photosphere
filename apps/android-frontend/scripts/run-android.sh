@@ -47,6 +47,14 @@ source "$SCRIPT_DIR/android-env.sh"
 ADB="$ANDROID_HOME/platform-tools/adb"
 EMULATOR="$ANDROID_HOME/emulator/emulator"
 
+# Where the deploy's output is kept, so a failed deploy can be read after the fact. It stays on
+# screen as well, because the deploy is the slow part of a run.
+CAP_RUN_LOG="/tmp/photosphere-cap-run.log"
+
+# The APK the Gradle build inside `cap run` produces. Checked against what is on the device to tell
+# whether a deploy that reported failure actually installed this build.
+APK_PATH="$APP_ROOT/android/app/build/outputs/apk/debug/app-debug.apk"
+
 # The network card the emulator plugs into to reach the host, from the one file that defines it.
 #
 # This used to be a local copy reading "tap-psphere", which the bridge script has never created. The
@@ -180,6 +188,30 @@ app_installed() {
 }
 
 #
+# Prints the checksum of the APK this run built. Matches android_apk_checksum in
+# apps/smoke-tests/lib/android.sh, which identifies a build the same way for the same reason: the
+# bytes are the only thing that says which build this is, since every checkout produces the same
+# applicationId and version.
+#
+built_apk_checksum() {
+    sha256sum "$APK_PATH" | cut -d' ' -f1
+}
+
+#
+# Prints the checksum of the APK installed on the chosen target, computed on the device, or nothing
+# when the app is not installed or the device cannot be reached. `adb install` copies the APK
+# unchanged, so this is comparable with built_apk_checksum byte for byte.
+#
+installed_apk_checksum() {
+    local remote_apk
+    remote_apk="$("$ADB" -s "$target" shell pm path "$APP_ID" 2>/dev/null | tr -d '\r' | head -1 | sed 's/^package://')"
+    if [ -z "$remote_apk" ]; then
+        return 0
+    fi
+    "$ADB" -s "$target" shell sha256sum "$remote_apk" 2>/dev/null | tr -d '\r' | cut -d' ' -f1
+}
+
+#
 # Copies the fixture database into the app's private files directory: the sandbox root the native
 # PathSandbox resolves paths against, which is why the app opens it by a plain relative name.
 #
@@ -296,8 +328,57 @@ if [ -n "$FIXTURE_DB" ] && app_installed; then
 fi
 
 # cap must run from the frontend, which is where capacitor.config lives.
+#
+# The deploy is judged by the state it leaves the device in, not by its exit code. `cap run` shells
+# out to native-run, which puts a hard-coded 5 second timeout on every adb call it makes, including
+# the `am start -W` that waits for the activity to be displayed. This app takes longer than that to
+# start after an install (measured at about 6 seconds), so native-run decides adb is unresponsive,
+# runs `adb kill-server` and `adb start-server`, and retries against a device that has not finished
+# re-authorizing. That retry fails, so cap run exits non-zero having built, installed and launched
+# the app successfully.
+#
+# So a failure is only accepted when the device is demonstrably in the state a successful deploy
+# leaves it in: this run's APK installed, compared byte for byte, and the app running. That is a
+# check on the outcome rather than on the wording of native-run's error, which matters because the
+# 5 second timeout also covers calls made before the install (`adb devices`, `getprop`): matching
+# the error text alone would accept a run that never installed anything and leave you hand-testing
+# whatever build happened to be on the device already.
 cd "$APP_ROOT"
-bunx cap run android --target "$target"
+cap_status=0
+bunx cap run android --target "$target" 2>&1 | tee "$CAP_RUN_LOG" || cap_status=$?
+
+if [ "$cap_status" -ne 0 ]; then
+    # native-run restarts the adb server on its way out, so the device is part way through
+    # re-authorizing and cannot be asked anything yet. Bounded, because an unbounded wait turns a
+    # device that never comes back into a run that hangs rather than one that fails; the checks
+    # below report the failure either way.
+    timeout 60 "$ADB" -s "$target" wait-for-device || true
+
+    built_checksum="$(built_apk_checksum)"
+    installed_checksum=""
+    deploy_verified=""
+    for _attempt in $(seq 1 15); do
+        installed_checksum="$(installed_apk_checksum)"
+        if [ "$installed_checksum" = "$built_checksum" ] && "$ADB" -s "$target" shell pidof "$APP_ID" >/dev/null 2>&1; then
+            deploy_verified="1"
+            break
+        fi
+        sleep 2
+    done
+
+    if [ -z "$deploy_verified" ]; then
+        echo "ERROR: the deploy to $target failed. Output: $CAP_RUN_LOG" >&2
+        if [ "$installed_checksum" != "$built_checksum" ]; then
+            echo "The APK on $target is not the one this run built (installed: ${installed_checksum:-none}, built: $built_checksum)." >&2
+        else
+            echo "This run's APK is installed on $target but the app is not running." >&2
+        fi
+        exit "$cap_status"
+    fi
+
+    echo "cap run reported a failure, but this run's APK is installed on $target and the app is running."
+    echo "(native-run's 5s adb timeout is shorter than this app's start; see $CAP_RUN_LOG.)"
+fi
 
 if [ -n "$FIXTURE_DB" ] && [ -z "$seed_first" ]; then
     seed_fixture
