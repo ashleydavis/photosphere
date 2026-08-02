@@ -33,7 +33,15 @@ set -euo pipefail
 BRIDGE_NAME="br-psphere"
 
 # How many emulators the pool brings up. Only `pool-up` reads this; `up` is always a single emulator.
-PHOTOSPHERE_EMULATOR_COUNT="${PHOTOSPHERE_EMULATOR_COUNT:-5}"
+#
+# Reduced from 5 to 3 to lighten the load on the development machine. Five emulators sat at roughly
+# 5GB resident each once warm, which together with the test suite left the machine with very little
+# headroom, and a run in that state saw four of the five die inside ten minutes. Three is enough for
+# the mobile smoke suite to keep running several tests at once; it is slower than five, not broken.
+#
+# Override with the environment variable to go back up, for example
+# PHOTOSPHERE_EMULATOR_COUNT=5 bun run emu:and:pool
+PHOTOSPHERE_EMULATOR_COUNT="${PHOTOSPHERE_EMULATOR_COUNT:-3}"
 
 # The tap and AVD names, shared with the smoke-test harness and the run script. Sourced rather than
 # repeated, so a rename cannot leave one side looking for an interface or an AVD the other never
@@ -457,8 +465,8 @@ hw.ramSize=2048
 hw.lcd.width=1080
 hw.lcd.height=2400
 hw.lcd.density=440
-hw.gpu.enabled=yes
-hw.gpu.mode=auto
+hw.gpu.enabled=no
+hw.gpu.mode=off
 hw.keyboard=yes
 disk.dataPartition.size=6G
 CONFIG
@@ -630,6 +638,19 @@ ensure_pool_slice() {
         exit 1
     fi
 
+    # The copy in this repository is the source of truth, so it is installed whenever the installed
+    # copy is missing or has drifted from it.
+    #
+    # This used to install only when nothing was there, and print a note when the two differed. That
+    # left the checked-in file unable to reach the machine after the first install: the limits in the
+    # repository could be changed, reviewed and committed while every machine carried on running
+    # whatever it happened to have, and the only thing standing between them was a note somebody had
+    # to read and act on. In practice one machine ran for a day on 30G/36G while the repository said
+    # 20G/26G. A source of truth that cannot reach the thing it governs is not one.
+    #
+    # A local edit is overwritten, which is the point: change the limits here, where they are
+    # reviewed, rather than on one machine. The previous contents are printed first so an
+    # intentional local change is visible rather than silently lost.
     if [ ! -f "$installed" ]; then
         mkdir -p "$POOL_SLICE_INSTALL_DIR"
         cp "$POOL_SLICE_SOURCE" "$installed"
@@ -639,8 +660,11 @@ ensure_pool_slice() {
     fi
 
     if ! cmp -s "$POOL_SLICE_SOURCE" "$installed"; then
-        echo "NOTE: $installed differs from the copy in this repo; leaving yours as it is." >&2
-        echo "      Copy $POOL_SLICE_SOURCE over it yourself if you want the repo's limits." >&2
+        echo "$installed differed from the copy in this repo. Replacing it with the repo's copy."
+        echo "  limits it had:  $(grep -hE '^Memory(High|Max)=' "$installed" | tr '\n' ' ')"
+        echo "  limits it gets: $(grep -hE '^Memory(High|Max)=' "$POOL_SLICE_SOURCE" | tr '\n' ' ')"
+        cp "$POOL_SLICE_SOURCE" "$installed"
+        systemctl --user daemon-reload
     fi
 }
 
@@ -725,6 +749,24 @@ start_emulator_bg() {
     # ${setenv_args[@]+"${setenv_args[@]}"} rather than "${setenv_args[@]}" because this script runs
     # under `set -u`, where expanding an empty array is an unbound-variable error on older bash. The
     # + form expands to nothing at all when the array is empty, which is what is wanted.
+    # -gpu off disables GPU emulation.
+    #
+    # With the mode left at "auto" the emulator selected software rendering anyway (Vulkan
+    # 'lavapipe', GLES 'swangle'), and four of the five pool emulators crashed inside ten minutes
+    # while the test suite was running. Each of their logs ends in Crashpad handler output
+    # (process_snapshot_linux.cc "Couldn't read exception info", ptrace "No such process") and a
+    # minidump was written under /tmp/android-ash/emu-crash-*.db/completed/. That is a crash, not an
+    # out-of-memory kill: 48GB was free at the time and journalctl -k recorded no OOM. Emulators
+    # dying underneath the suite turned a 4-minute run into a 103-minute one and failed four tests
+    # that had nothing wrong with them.
+    #
+    # Passed on the command line as well as set in the AVD config above, because the command line
+    # overrides the config and an AVD cloned before this change would otherwise keep the old setting.
+    #
+    # This has NOT been shown to stop the crashes. There is no stack trace (no minidump symboliser is
+    # installed), so "it was doing software graphics when it died" is a correlation. If emulators
+    # keep crashing with the GPU off, that rules this out. If rendering-dependent tests start failing
+    # instead, the flag is too blunt and -gpu swiftshader_indirect is the next thing to try.
     systemd-run --user --unit="$unit" \
         --slice="$POOL_SLICE" \
         --description="Photosphere emulator: $avd on $netcard" \
@@ -733,7 +775,7 @@ start_emulator_bg() {
         -p StandardOutput="file:/tmp/psphere-emulator-$log_suffix.log" \
         -p StandardError="file:/tmp/psphere-emulator-$log_suffix.log" \
         ${setenv_args[@]+"${setenv_args[@]}"} \
-        "$emulator" -avd "$avd" -no-snapshot -no-boot-anim -wifi-tap "$netcard"
+        "$emulator" -avd "$avd" -no-snapshot -no-boot-anim -gpu off -wifi-tap "$netcard"
 }
 
 #
