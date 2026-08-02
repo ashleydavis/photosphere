@@ -50,13 +50,13 @@ wait_for_log "$TMP_DIR" "Secret updated"
 # Assert the vault still contains the raw PEM (not a JSON envelope).
 # Compared with cmp against a file, not as a shell string, because command substitution strips
 # trailing newlines and the PEM's trailing newline is exactly what this checks survived the round trip.
-bun "$REPO_ROOT/scripts/read-json-field.ts" --file "$TMP_DIR/vault/enc-key-1.json" --field value > "$TMP_DIR/saved.pem"
+jq -j '.value' "$TMP_DIR/vault/enc-key-1.json" > "$TMP_DIR/saved.pem"
 if ! cmp -s "$TMP_DIR/raw.pem" "$TMP_DIR/saved.pem"; then
     log_error "Vault value differs from the raw PEM"
     exit 1
 fi
 
-SAVED_TYPE=$(bun "$REPO_ROOT/scripts/read-json-field.ts" --file "$TMP_DIR/vault/enc-key-1.json" --field type)
+SAVED_TYPE=$(jq -j '.type' "$TMP_DIR/vault/enc-key-1.json")
 if [ "$SAVED_TYPE" != "encryption-key" ]; then
     log_error "Type field changed: $SAVED_TYPE"
     exit 1

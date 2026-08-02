@@ -4,7 +4,6 @@ TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$TEST_DIR/../lib/common.sh"
 TEST_DIR="$(cd "$(dirname "$0")" && native_pwd)"
 DESKTOP_DIR="$(cd "$TEST_DIR/../.." && native_pwd)"
-REPO_ROOT="$(cd "$TEST_DIR/../../../.." && native_pwd)"
 REPO_DIR="$(cd "$DESKTOP_DIR/../.." && native_pwd)"
 CLI_DIR="$REPO_DIR/apps/cli"
 
@@ -56,7 +55,7 @@ if [ ! -f "$CONFIG_PATH" ]; then
     exit 1
 fi
 
-SAVED_ORIGIN=$(bun "$REPO_ROOT/scripts/read-json-field.ts" --file "$CONFIG_PATH" --field origin)
+SAVED_ORIGIN=$(jq -j '.origin' "$CONFIG_PATH")
 if [ "$SAVED_ORIGIN" != "$NEW_ORIGIN" ]; then
     log_error ".db/config.json origin mismatch"
     log_error "Expected: $NEW_ORIGIN"

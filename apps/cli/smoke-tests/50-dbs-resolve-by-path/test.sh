@@ -25,7 +25,7 @@ test_dbs_resolve_by_path() {
     # Extract the private key PEM from the CLI vault and store it as a shared secret.
     local cli_key_file="${PHOTOSPHERE_VAULT_DIR}/${key_name}.json"
     local key_value
-    key_value=$(bun "$REPO_ROOT/scripts/read-json-field.ts" --file "$cli_key_file" --field value)
+    key_value=$(jq -j '.value' "$cli_key_file")
     seed_vault_secret "enc00002" "encryption-key" "$key_value"
 
     # Register the database with path and shared encryption key.

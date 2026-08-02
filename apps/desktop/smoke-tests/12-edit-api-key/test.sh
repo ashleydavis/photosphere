@@ -43,7 +43,7 @@ send_command "$APP_PORT" click '{"dataId":"add-secret-confirm"}'
 wait_for_log "$TMP_DIR" "Secret updated"
 
 # Assert the vault still contains the raw key string (not a JSON envelope).
-SAVED_VALUE=$(bun "$REPO_ROOT/scripts/read-json-field.ts" --file "$TMP_DIR/vault/api-key-1.json" --field value)
+SAVED_VALUE=$(jq -j '.value' "$TMP_DIR/vault/api-key-1.json")
 
 if [ "$SAVED_VALUE" != "$RAW_KEY" ]; then
     log_error "Vault value is no longer the raw API key"

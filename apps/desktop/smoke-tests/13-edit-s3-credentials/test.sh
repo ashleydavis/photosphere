@@ -45,24 +45,25 @@ wait_for_log "$TMP_DIR" "Secret updated"
 
 # Assert the vault contains JSON with the four credential fields and no `label`.
 # The secret's value is itself a JSON document, so it is read out to its own file and then read
-# field by field, rather than parsed twice in one go.
-READ_FIELD="$REPO_ROOT/scripts/read-json-field.ts"
-bun "$READ_FIELD" --file "$TMP_DIR/vault/s3-creds-1.json" --field value > "$TMP_DIR/credentials.json"
+# field by field, rather than parsed twice in one go. `jq -j` writes the string value raw and adds no
+# trailing newline, so the file holds exactly the bytes the app stored.
+jq -j '.value' "$TMP_DIR/vault/s3-creds-1.json" > "$TMP_DIR/credentials.json"
 
-# read-json-field exits non-zero when the field is absent, which is what "no label key" means here.
-if bun "$READ_FIELD" --file "$TMP_DIR/credentials.json" --field label > /dev/null 2>&1; then
+# `has` is false when the key is absent, which is what "no label key" means here, and jq -e exits
+# non-zero on a false result.
+if jq -e 'has("label")' "$TMP_DIR/credentials.json" > /dev/null 2>&1; then
     log_error "Vault value still contains a label key"
     exit 1
 fi
 
-SAVED_REGION=$(bun "$READ_FIELD" --file "$TMP_DIR/credentials.json" --field region)
+SAVED_REGION=$(jq -j '.region' "$TMP_DIR/credentials.json")
 if [ "$SAVED_REGION" != "eu-west-1" ]; then
     log_error "Region was not updated, got: $SAVED_REGION"
     exit 1
 fi
 
-SAVED_ACCESS_KEY=$(bun "$READ_FIELD" --file "$TMP_DIR/credentials.json" --field accessKeyId)
-SAVED_SECRET_KEY=$(bun "$READ_FIELD" --file "$TMP_DIR/credentials.json" --field secretAccessKey)
+SAVED_ACCESS_KEY=$(jq -j '.accessKeyId' "$TMP_DIR/credentials.json")
+SAVED_SECRET_KEY=$(jq -j '.secretAccessKey' "$TMP_DIR/credentials.json")
 if [ "$SAVED_ACCESS_KEY" != "AKIAOLD" ] || [ "$SAVED_SECRET_KEY" != "OLDSECRET" ]; then
     log_error "Other s3 fields were not preserved: accessKeyId=$SAVED_ACCESS_KEY secretAccessKey=$SAVED_SECRET_KEY"
     exit 1

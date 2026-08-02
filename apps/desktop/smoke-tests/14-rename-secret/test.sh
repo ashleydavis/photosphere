@@ -53,7 +53,7 @@ if [ ! -f "$TMP_DIR/vault/new-name.json" ]; then
     exit 1
 fi
 
-NEW_VALUE=$(bun "$REPO_ROOT/scripts/read-json-field.ts" --file "$TMP_DIR/vault/new-name.json" --field value)
+NEW_VALUE=$(jq -j '.value' "$TMP_DIR/vault/new-name.json")
 
 if [ "$NEW_VALUE" != "$RAW_KEY" ]; then
     log_error "Renamed entry's value was not preserved"
