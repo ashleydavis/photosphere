@@ -390,7 +390,6 @@ Every script in the repository, one row each, in path order. Categories are A (g
 | `.githooks/pre-commit` | none |
 | `run-cloud-storage-tests.sh` | E 80: `node scripts/clear-s3-bucket.js "$TEST_S3_BUCKET"` |
 | `run-tests.sh` | none |
-| `scripts/check-flaky-tests.sh` | none directly; line 69 runs an arbitrary caller-supplied command (`mise exec -- bash -c "$*"`), so whatever that command destroys is reached from here |
 | `scripts/fetch-mobile-media-tools.sh` | B 85: `rm -rf "$IM_DIR/include"`<br>B 99: `rm -rf "$buildDir"`<br>B 121: `rm -rf "$unpack"; mkdir -p "$unpack"` |
 | `scripts/install-hooks.sh` | A 31: `git config core.hooksPath .githooks` |
 | `scripts/s3-emulator.sh` | B 97: `rm -f "$partialPath"`<br>F 101: `chmod +x "$partialPath"`<br>C 102: `mv "$partialPath" "$binaryPath"`<br>B 153: `rm -f "$stateDir/minio.log"`<br>B 171: `rm -f "$stateDir/minio.pid" "$stateDir/minio.port"`<br>B 190: `rm -rf "$stateDir/data" "$stateDir/env"`<br>B 254: `rm -f "$pidFile" "$stateDir/minio.port"` |

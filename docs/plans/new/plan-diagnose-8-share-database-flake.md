@@ -170,10 +170,10 @@ Every step runs from the repository root through `mise exec --`. No step may mod
 
 ### 10. Prove the fix with 100 consecutive green runs
 
-- Run the existing fixed runner: `RUNS=100 mise exec -- scripts/check-flaky-tests.sh bun run test:electron -- 8`. Do not modify `scripts/check-flaky-tests.sh`.
-- It bombs out at the first failing run, so a clean finish means 100 green runs. Capture its `LOG=<path>` output line.
+- Run `mise exec -- bun run test:electron -- 8` one hundred times, stopping at the first failing run. There is no runner for this in the repository, so the loop has to be written as part of doing this step.
+- Stopping at the first failure means a clean finish is 100 green runs. Capture the output of every run to a file.
 - Because the production failure needed the relaunch path and a plain 100x of test 8 will almost certainly never take it, also run `RUNS=100` over the deterministic reproduction from step 3, converted for this purpose into a pass/fail check: the harness must exit 0 only when the command sent after `wait_for_ready` succeeds. That is the run that actually exercises the fixed path 100 times.
-- Also run `RUNS=100 mise exec -- scripts/check-flaky-tests.sh bun run test:electron -- 7 8` if the fix touched test 7, so both share tests are covered.
+- Also run `mise exec -- bun run test:electron -- 7 8` one hundred times if the fix touched test 7, so both share tests are covered.
 - Copy the final summary of each 100x run into `docs/investigations/electron-8-share-database-flake/hundred-run-proof.log` and reference it from the README's `Fix and proof` section.
 - **If any run in any of the 100x loops fails**: revert the fix (`git checkout` is not permitted without an explicit instruction, so undo the edit with `Edit` back to the original text), record the failing run's log in the evidence directory under `failed-attempt-<n>.log`, write down in the README why the fix did not work, and return to step 2 with what that failure taught. Do not patch over the new failure; do not add retries; do not raise a timeout to make it pass.
 
@@ -209,7 +209,7 @@ The end-to-end checks that must pass:
 - `bun run test:electron -- 8` passes standalone.
 - `bun run test:electron -- 7 8` passes, covering both share tests in sequence, which is the order that ran in production when the failure appeared.
 - `bun run test:electron` passes in full, in the default mixed parallel and sequential mode, so the fix is exercised under the load pattern that produced the original failure.
-- `RUNS=100 scripts/check-flaky-tests.sh bun run test:electron -- 8` completes without bombing out.
+- One hundred consecutive runs of `bun run test:electron -- 8` complete without a failure.
 - The deterministic relaunch reproduction, run 100 times, passes every time.
 
 ## Verify
@@ -221,11 +221,11 @@ Run everything from the repository root through `mise exec --`.
 - `mise exec -- bun run test:smoke-lib` (from `apps/desktop`) passes, and the relaunch regression test in it fails when run against the pre-fix `common.sh`, proving it actually tests the bug.
 - `mise exec -- bun run test:electron -- 8` passes.
 - `mise exec -- bun run test:electron` passes in full.
-- `RUNS=100 mise exec -- scripts/check-flaky-tests.sh bun run test:electron -- 8` exits 0.
+- One hundred consecutive runs of `mise exec -- bun run test:electron -- 8` all exit 0.
 - The 100x deterministic reproduction loop exits 0.
 - `docs/investigations/electron-8-share-database-flake/` exists and contains `README.md`, `observed-failure.log`, `reproduction.log` and `hundred-run-proof.log`, and the README's `Root cause` section states one falsifiable cause with pointers into those files.
 - `docs/flaky-tests-registry.md` has a new entry for this mode, with the `Fixed` box ticked and a real commit hash in `Fix commit`, or unticked with the reason stated.
-- `git diff --stat` does not list `.githooks/pre-commit`, `scripts/install-hooks.sh`, `scripts/test-everything-parallel.sh` or `scripts/check-flaky-tests.sh`.
+- `git diff --stat` does not list `.githooks/pre-commit`, `scripts/install-hooks.sh` or `scripts/test-everything-parallel.sh`.
 - `git diff --stat` lists no file under `apps/desktop/src/`, `packages/` or any other application source directory. If it does, the change over-reached and must be reduced.
 
 ## Notes
@@ -233,7 +233,7 @@ Run everything from the repository root through `mise exec --`.
 - **The distinction this plan turns on.** The wedge that stops an Electron instance reaching `/ready` is the trigger. The reason a triggered relaunch turns into a test failure is the root cause. `wait_for_ready` was built to recover from the wedge, and it does recover: the transcript shows the relaunched app healthy and answering. Something after that point throws the recovery away. That "something" is what to find and fix. Fixing the wedge instead would be a much larger change with a much weaker proof.
 - **Why 100 runs of test 8 alone is not sufficient proof on its own.** The relaunch path fires rarely (once in the sample so far). A hundred ordinary runs of test 8 would very likely take the happy path a hundred times and prove nothing about the fixed code. That is why step 10 requires 100 runs of the deterministic reproduction as well: that is the loop that actually exercises the repaired path every time.
 - **`send_command` signals failure with `return`, not `exit`.** Other helpers in `common.sh` (`wait_for_log`, `wait_for_value`, `check_no_errors`, `wait_for_ready`) deliberately `exit` so a failure is fatal, and their comments explain that returning caused false passes in the past. `send_command` is the odd one out, and that is why the observed failure produced a confusing cascade: the real error was the curl failure, and the reported error was a log timeout 120 seconds later. Changing that is tempting and is **out of scope** unless the evidence proves it is part of the cause. If it is not, note it in the report as an observation for a separate decision.
-- **`.flaky-check/` is not in `.gitignore`.** `scripts/check-flaky-tests.sh` writes its captures there and its header comment claims the directory is gitignored, which is not currently true. Do not fix that as part of this plan. Note it in the report and copy only the curated summaries into `docs/investigations/`, so nothing large or transient lands in the repository by accident.
+- **Keep the run logs out of the repository.** The hundred-run loop produces a lot of output. Copy only the curated summaries into `docs/investigations/`, so nothing large or transient lands in the repository by accident.
 - **Evidence lives in the repository, not in the session.** The scratchpad copy of the original `bun run smoke` output will not survive. Step 1 exists to get the transcript into a tracked file before anything else happens, so the investigation cannot lose the one failure it has.
 - **Tests 7 and 8 both carry `.sequential` markers**, so they run one at a time after the parallel batch rather than alongside it. Whatever load caused the wedge was therefore not simple in-suite parallelism from the Electron suite itself. Candidates worth recording, not chasing: leftover processes from the parallel batch, another suite running concurrently on the same machine, or xvfb server startup contention.
 - **`PER_TEST_TIMEOUT` in `apps/desktop/smoke-tests.sh` is 300 seconds** and its comment says it must accommodate two `DEFAULT_WAIT_TIMEOUT` waits (120 each) plus the test's own actions. Two full waits plus a two-instance share test does not fit comfortably in 300 seconds. This is an observation, not a licence to change either number.

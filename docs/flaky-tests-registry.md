@@ -1,6 +1,6 @@
 # Flaky-test failure registry
 
-A repo-wide record of every known intermittent (flaky) failure mode across the test suites in this repo (unit, CLI smoke, Electron smoke, mobile smoke, LAN-share, and any future suite). Each entry captures the mode's stable signature, which suite it came from, its root cause, and whether it is believed fixed. The `/check-flaky-tests` command runs any suite 10x and matches a failure's output against the patterns below, so a recurrence of a checked (fixed) mode is caught as a regression and its fix removed.
+A repo-wide record of every known intermittent (flaky) failure mode across the test suites in this repo (unit, CLI smoke, Electron smoke, mobile smoke, LAN-share, and any future suite). Each entry captures the mode's stable signature, which suite it came from, its root cause, and whether it is believed fixed. Match a failure's output against the patterns below, so a recurrence of a checked (fixed) mode is caught as a regression and its fix removed.
 
 ## Rules for categorizing a flaky failure
 
@@ -9,10 +9,10 @@ A repo-wide record of every known intermittent (flaky) failure mode across the t
 3. Normalize out volatile tokens before matching. Strip ports, PIDs, timestamps, file paths, correlation/command ids, durations, attempt counts, and hashes. Keep only the invariant words.
 4. One entry per distinct root cause. Same wording but a different root cause is a different entry. Different wording but the same root cause is one entry that lists both patterns.
 5. Every entry carries: id, a Fixed checkbox, suite (the test suite and command it was seen in), pattern (a regex over the invariant text), fix commit, first seen, recurrences, root cause, and evidence.
-6. A mode's Fixed box stays unchecked until a fix has landed AND the `/check-flaky-tests` 10x loop passes clean. Only then tick the box and record the fixing commit hash in Fix commit.
+6. A mode's Fixed box stays unchecked until a fix has landed AND a repeated run of the suite passes clean. Only then tick the box and record the fixing commit hash in Fix commit.
 7. Recurrence rule: if a new failure matches the pattern of a checked entry, that fix is disproven. Untick the box, append the recurrence date, and remove the failed fix commit so a fresh fix can be tried. A checked box is only as good as the next matching failure.
 8. The pattern must match invariant text only. Use `port \d+`, never `port 43227`.
-9. Checked means the Fixed box is ticked AND Fix commit records the commit hash that fixed it. The `/check-flaky-tests` command uses that commit to know what to remove if the mode ever recurs.
+9. Checked means the Fixed box is ticked AND Fix commit records the commit hash that fixed it. That commit is what to remove if the mode ever recurs.
 
 ## Registry
 

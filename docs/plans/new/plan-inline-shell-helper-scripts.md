@@ -20,7 +20,6 @@ The AI agent presents the table below to the human and waits for a decision on e
 |---|--------|-----------|--------------------|--------------------|
 | 1 | `scripts/find-free-port.ts` | 1 (`scripts/s3-emulator.sh`) | Inline | `bash` `/dev/tcp` probe over a `$RANDOM`-picked high port, retrying until one is closed |
 | 2 | `scripts/json-encode.ts` | 3 (`apps/cli/smoke-tests/lib/common.sh`, `apps/cli/smoke-tests-key-chain/lib/common.sh`, `apps/smoke-tests/tests/32-encrypted-database/test.sh`) | Split: inline `--url-segment`, assess `--string` | Percent-encoding loop in shell for the URL segment; JSON string escaping is the harder half |
-| 3 | `scripts/list-test-scripts.ts` | 1 (`scripts/check-flaky-tests.sh`) | Assess | Needs JSON key extraction from `package.json`; check whether a non-parsing answer exists |
 | 4 | `scripts/read-database-state-field.ts` | 1 (`apps/cli/smoke-tests/64-config-timestamps/test.sh`) | Assess, leaning keep | Little-endian binary decode; `od` can do it but `--endian` is GNU-only |
 | 5 | `scripts/read-json-field.ts` | 9 (five Electron tests, two CLI tests) | Keep | None: reads values that are multi-line PEMs and embedded JSON |
 | 6 | `scripts/replace-in-file.ts` | 1 (`scripts/update-mobile-media-tools.sh`) | Inline, subject to the note below | `sed` to a temporary file then replace the original |
@@ -104,7 +103,6 @@ No new smoke tests are written. Each worktree runs the existing suites that exer
 
 - Helper 1 (`find-free-port`): the S3 smoke tests, which start MinIO through `scripts/s3-emulator.sh`. Also run `bash scripts/s3-emulator.sh start <dir>` followed by `stop` directly and confirm the port written to `<dir>/env` is the one the server is listening on.
 - Helper 2 (`json-encode`): `bun run test:cli` for the URL-segment path via `seed_vault_secret`. The key-chain suite and mobile test 32 cannot run in this environment (keyring, emulator); the worktree records them as unrun rather than claiming them.
-- Helper 3 (`list-test-scripts`): `bash scripts/check-flaky-tests.sh --list` and compare its output line for line against the current output captured before the change.
 - Helper 4 (`read-database-state-field`): `bun run test:cli -- 64`.
 - Helper 5 (`read-json-field`): `bun run test:electron` (covers tests 11, 12, 13, 14, 22) and `bun run test:cli -- 49` and `bun run test:cli -- 50`.
 - Helper 6 (`replace-in-file`): there is no automated test. `scripts/update-mobile-media-tools.sh` is run against a copy of the target build file in the worktree's own temporary directory, and the result diffed against what the current helper produces for the same input.
