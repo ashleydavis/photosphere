@@ -5,9 +5,9 @@
   "main": "src/index.ts",
   "type": "module",
   "scripts": {
-    "t": "bun run test",
+    "t": "bun run test:unit",
     "tw": "bun run test:watch",
-    "test": "jest",
+    "test:unit": "jest",
     "test:coverage": "jest --coverage",
     "test:watch": "jest --watch",
     "perf": "bun run perf-tests/run.ts",
