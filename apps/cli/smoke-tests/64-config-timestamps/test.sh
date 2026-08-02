@@ -6,6 +6,17 @@ source "$SCRIPT_DIR/../lib/common.sh"
 trap cleanup_and_show_summary EXIT
 
 #
+# Decodes the 32-bit little-endian length prefix that starts at byte offset $2 of the file $1.
+# One decimal number per byte, combined by hand, so this does not depend on od's --endian flag,
+# which is GNU-only and absent from the od macOS ships.
+#
+read_state_length() {
+    local length_bytes
+    length_bytes=($(od -An -v -tu1 -j "$2" -N 4 "$1"))
+    echo $(( length_bytes[0] + length_bytes[1] * 256 + length_bytes[2] * 65536 + length_bytes[3] * 16777216 ))
+}
+
+#
 # Reads a string field from a database's binary state file (.db/state.dat).
 # The file layout is [version 4][type 4 "DBST"][payload][checksum 32]; the payload is a
 # length-prefixed content-hash buffer followed by three length-prefixed UTF-8 strings
@@ -15,8 +26,44 @@ trap cleanup_and_show_summary EXIT
 read_state_field() {
     local db_dir="$1"
     local field_name="$2"
+    local state_file="$db_dir/.db/state.dat"
 
-    bun "$REPO_ROOT/scripts/read-database-state-field.ts" --file "$db_dir/.db/state.dat" --field "$field_name"
+    if [ ! -f "$state_file" ]; then
+        return 0
+    fi
+
+    # Shorter than a header plus an empty payload plus a checksum, so it cannot be a state record.
+    local state_size
+    state_size=$(wc -c < "$state_file")
+    if [ "$(( state_size ))" -lt 40 ]; then
+        return 0
+    fi
+
+    # The "DBST" type marker at offset 4 identifies a state file. Nulls are stripped so a file that
+    # is not one cannot put a null byte into the comparison.
+    local type_marker
+    type_marker=$(tail -c +5 "$state_file" | head -c 4 | LC_ALL=C tr -d '\0')
+    if [ "$type_marker" != "DBST" ]; then
+        return 0
+    fi
+
+    # Skip the length-prefixed content hash, which is raw bytes rather than text, to reach the timestamps.
+    local position=8
+    position=$(( position + 4 + $(read_state_length "$state_file" "$position") ))
+
+    local candidate_name
+    local field_length
+    for candidate_name in lastModifiedAt lastSyncedAt lastReplicatedAt; do
+        field_length=$(read_state_length "$state_file" "$position")
+        position=$(( position + 4 ))
+        if [ "$candidate_name" = "$field_name" ]; then
+            if [ "$field_length" -gt 0 ]; then
+                tail -c "+$(( position + 1 ))" "$state_file" | head -c "$field_length"
+            fi
+            return 0
+        fi
+        position=$(( position + field_length ))
+    done
 }
 
 #
