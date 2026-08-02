@@ -231,9 +231,10 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
                                     storageType: (value as StorageType) ?? 'filesystem',
                                     destPath: '',
                                 }))}
+                                slotProps={{ button: { 'data-id': 'replicate-dest-type-select' } }}
                             >
-                                <Option value="filesystem">File system</Option>
-                                <Option value="s3">S3</Option>
+                                <Option data-id="replicate-dest-type-option-filesystem" value="filesystem">File system</Option>
+                                <Option data-id="replicate-dest-type-option-s3" value="s3">S3</Option>
                             </Select>
                         </FormControl>
 

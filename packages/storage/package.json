@@ -8,6 +8,7 @@
     "t": "bun run test",
     "tw": "bun run test:watch",
     "test": "jest",
+    "test:integration": "bun test integration-tests",
     "test:coverage": "jest --coverage",
     "test:watch": "jest --watch",
     "c": "bun run compile",

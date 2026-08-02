@@ -30,20 +30,12 @@ SECRET_NAME="smoke-test-s3"
 
 # Stop the app AND the emulator, so a failed assertion never leaves a MinIO server running. The
 # emulator's stop is safe to call when nothing was started, so it goes in unconditionally.
-trap 'stop_app "$APP_PORT" "$TMP_DIR"; (cd "$REPO_DIR" && bun run s3-emulator stop "$S3_STATE_DIR") >/dev/null 2>&1 || true' EXIT
+trap 'stop_app "$APP_PORT" "$TMP_DIR"; stop_s3_emulator "$S3_STATE_DIR"' EXIT
 
 mkdir -p "$TMP_DIR"
 
 # Start the S3 server and read back the port it bound, the bucket it seeded and its credentials.
-if ! (cd "$REPO_DIR" && bun run s3-emulator start "$S3_STATE_DIR"); then
-    log_error "Could not start the local S3 emulator"
-    exit 1
-fi
-# shellcheck disable=SC1090
-source "$S3_STATE_DIR/env"
-S3_HOST="$("${PLATFORM}_host_address")"
-S3_ENDPOINT="http://$S3_HOST:$S3_EMULATOR_PORT"
-log_info "S3 emulator reachable from the device at $S3_ENDPOINT, bucket $S3_EMULATOR_BUCKET"
+start_s3_emulator "$S3_STATE_DIR"
 
 # Wipe everything the app has stored on the device (its storage sandbox, the WebView's
 # localStorage and the keychain) so this test starts from a known state. Done before launch,
@@ -57,15 +49,7 @@ wait_for_ready "$APP_PORT"
 # driven field by field rather than through add_secret_via_ui, which only fills the region.
 send_command "$APP_PORT" navigate '{"page":"secrets"}' || exit 1
 wait_for_log "$TMP_DIR" "Secrets page loaded"
-send_command "$APP_PORT" click '{"dataId":"add-secret-button"}' || exit 1
-wait_for_log "$TMP_DIR" "Add secret dialog opened"
-send_command "$APP_PORT" type "{\"dataId\":\"secret-name-input\",\"text\":\"$SECRET_NAME\"}" || exit 1
-send_command "$APP_PORT" type "{\"dataId\":\"secret-s3-endpoint-input\",\"text\":\"$S3_ENDPOINT\"}" || exit 1
-send_command "$APP_PORT" type '{"dataId":"secret-s3-region-input","text":"us-east-1"}' || exit 1
-send_command "$APP_PORT" type "{\"dataId\":\"secret-s3-access-key-input\",\"text\":\"$S3_EMULATOR_ACCESS_KEY\"}" || exit 1
-send_command "$APP_PORT" type "{\"dataId\":\"secret-s3-secret-key-input\",\"text\":\"$S3_EMULATOR_SECRET_KEY\"}" || exit 1
-send_command "$APP_PORT" click '{"dataId":"add-secret-confirm"}' || exit 1
-wait_for_log "$TMP_DIR" "Secret added"
+add_s3_secret_via_ui "$APP_PORT" "$SECRET_NAME" "$S3_ENDPOINT" "us-east-1" "$S3_EMULATOR_ACCESS_KEY" "$S3_EMULATOR_SECRET_KEY" || exit 1
 
 #
 # Opens the Add Database dialog, switches it to S3, picks the secret, and opens the S3 browser on the

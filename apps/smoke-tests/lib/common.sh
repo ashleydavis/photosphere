@@ -677,6 +677,73 @@ add_secret_via_ui() {
 }
 
 #
+# Starts the local MinIO S3 emulator in the given state directory and reads back what it bound.
+#
+# On return S3_EMULATOR_PORT, S3_EMULATOR_BUCKET, S3_EMULATOR_ACCESS_KEY and S3_EMULATOR_SECRET_KEY
+# are exported (from the emulator's own env file), along with S3_ENDPOINT, the http:// URL the device
+# reaches the host at. The server runs on the host, so the endpoint uses "${PLATFORM}_host_address"
+# (192.168.55.1 on a bridged emulator, 10.0.2.2 under NAT, loopback on the iOS simulator), never
+# "localhost", which on a device means the device itself.
+#
+# A failure to start is fatal: an S3 test that cannot get a server must fail, never skip.
+# Usage: start_s3_emulator <state-dir>
+#
+start_s3_emulator() {
+    local state_dir="$1"
+
+    mkdir -p "$state_dir"
+    if ! (cd "$REPO_DIR" && bun run s3-emulator start "$state_dir"); then
+        log_error "Could not start the local S3 emulator"
+        exit 1
+    fi
+    # shellcheck disable=SC1090
+    source "$state_dir/env"
+    local host_address
+    host_address="$("${PLATFORM}_host_address")"
+    export S3_ENDPOINT="http://$host_address:$S3_EMULATOR_PORT"
+    log_info "S3 emulator reachable from the device at $S3_ENDPOINT, bucket $S3_EMULATOR_BUCKET"
+}
+
+#
+# Stops the S3 emulator recorded in the given state directory. Never fails, including when nothing
+# was ever started, so it is safe in an unconditional trap.
+# Usage: stop_s3_emulator <state-dir>
+#
+stop_s3_emulator() {
+    local state_dir="$1"
+    (cd "$REPO_DIR" && bun run s3-emulator stop "$state_dir") >/dev/null 2>&1 || true
+    return 0
+}
+
+#
+# Adds an s3-credentials secret through the app's own Add Secret dialog, the way a user would. Every
+# field is filled: add_secret_via_ui only fills the region, and a secret carrying only a region cannot
+# reach a server, so the tests that actually connect need all five.
+#
+# The secrets page must already be showing, and the type defaults to s3-credentials so no type switch
+# is needed. Expects TMP_DIR to be set, as wait_for_log takes it.
+# Usage: add_s3_secret_via_ui <port> <name> <endpoint> <region> <access-key> <secret-key>
+#
+add_s3_secret_via_ui() {
+    local port="$1"
+    local name="$2"
+    local endpoint="$3"
+    local region="$4"
+    local access_key="$5"
+    local secret_key="$6"
+
+    send_command "$port" click '{"dataId":"add-secret-button"}' || return 1
+    wait_for_log "$TMP_DIR" "Add secret dialog opened"
+    send_command "$port" type "{\"dataId\":\"secret-name-input\",\"text\":\"$name\"}" || return 1
+    send_command "$port" type "{\"dataId\":\"secret-s3-endpoint-input\",\"text\":\"$endpoint\"}" || return 1
+    send_command "$port" type "{\"dataId\":\"secret-s3-region-input\",\"text\":\"$region\"}" || return 1
+    send_command "$port" type "{\"dataId\":\"secret-s3-access-key-input\",\"text\":\"$access_key\"}" || return 1
+    send_command "$port" type "{\"dataId\":\"secret-s3-secret-key-input\",\"text\":\"$secret_key\"}" || return 1
+    send_command "$port" click '{"dataId":"add-secret-confirm"}' || return 1
+    wait_for_log "$TMP_DIR" "Secret added"
+}
+
+#
 # Runs a command under a wall-clock cap, so a wedged process cannot hang the whole suite.
 #
 # GNU `timeout` does not exist on macOS, where the iOS suite runs: invoking it there failed the

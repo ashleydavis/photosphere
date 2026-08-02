@@ -22,6 +22,10 @@ source "$REPO_DIR/scripts/lib/allocate-test-temp-dir.sh"
 # suite run sharing the machine (which slows everything) does not trip a spurious timeout.
 DEFAULT_WAIT_TIMEOUT=120
 
+# Absolute path to the repository root, for reaching the helper scripts under scripts/. Resolved from
+# this file's own location (apps/desktop/smoke-tests/lib) so it does not depend on the caller's cwd.
+SMOKE_REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+
 # Clean up the app even when a run is interrupted (Ctrl-C) or the runner's timeout kills a slow test
 # (SIGTERM), not only on a normal exit. A bash EXIT trap does not fire on an uncaught signal, so turn
 # those signals into an exit here: that runs the per-test EXIT trap (stop_app), leaving nothing
@@ -389,6 +393,20 @@ wait_for_log() {
 }
 
 #
+# Resets wait_for_log's cursor back to the start of app.log.
+#
+# start_app redirects the app's output to app.log with `>`, which truncates it, so a test that stops
+# the app and starts it again gets a log that begins at line 1 while the cursor still points at
+# wherever the previous run finished. Every wait after that would then look past the end of the file
+# and time out on lines that are plainly there. Call this straight after restarting the app.
+# Usage: reset_log_cursor <tmp_dir>
+#
+reset_log_cursor() {
+    local tmp_dir="$1"
+    echo "0" > "$tmp_dir/.log-cursor"
+}
+
+#
 # Polls the test control server's get-value for the given data-id until its value contains the
 # expected substring. Fails the test on timeout. Use this to wait for a control to reach a known
 # state before acting on it: each command the driver receives is handled independently, so a command
@@ -472,6 +490,71 @@ stop_app() {
             kill_app_tree "$pid"
         fi
     fi
+}
+
+#
+# Starts the local MinIO S3 emulator in the given state directory and reads back what it bound.
+#
+# On return S3_EMULATOR_PORT, S3_EMULATOR_BUCKET, S3_EMULATOR_ACCESS_KEY and S3_EMULATOR_SECRET_KEY
+# are exported (from the emulator's own env file), along with S3_ENDPOINT, the http:// URL the app
+# reaches it at. The endpoint is addressed by IP, never "localhost": without path-style addressing
+# the SDK puts the bucket into the hostname, which on a machine that resolves *.localhost reaches the
+# server but names no bucket, so a listing comes back empty rather than failing.
+#
+# A failure to start is fatal: an S3 test that cannot get a server must fail, never skip.
+# Usage: start_s3_emulator <state-dir>
+#
+start_s3_emulator() {
+    local state_dir="$1"
+
+    mkdir -p "$state_dir"
+    if ! (cd "$SMOKE_REPO_ROOT" && bun run s3-emulator start "$state_dir"); then
+        log_error "Could not start the local S3 emulator"
+        exit 1
+    fi
+    # shellcheck disable=SC1090
+    source "$state_dir/env"
+    export S3_ENDPOINT="http://127.0.0.1:$S3_EMULATOR_PORT"
+    log_info "S3 emulator at $S3_ENDPOINT, bucket $S3_EMULATOR_BUCKET"
+}
+
+#
+# Stops the S3 emulator recorded in the given state directory. Never fails, including when nothing
+# was ever started, so it is safe in an unconditional trap.
+# Usage: stop_s3_emulator <state-dir>
+#
+stop_s3_emulator() {
+    local state_dir="$1"
+    (cd "$SMOKE_REPO_ROOT" && bun run s3-emulator stop "$state_dir") >/dev/null 2>&1 || true
+    return 0
+}
+
+#
+# Adds an s3-credentials secret through the app's own Add Secret dialog, the way a user would, rather
+# than writing the vault file directly. Every field is filled: a secret carrying only a region cannot
+# reach a server, so the tests that actually connect need all five.
+#
+# The secrets page must already be showing, and the type defaults to s3-credentials so no type switch
+# is needed. Expects TMP_DIR to be set, as wait_for_log takes it.
+# Usage: add_s3_secret_via_ui <port> <name> <endpoint> <region> <access-key> <secret-key>
+#
+add_s3_secret_via_ui() {
+    local port="$1"
+    local name="$2"
+    local endpoint="$3"
+    local region="$4"
+    local access_key="$5"
+    local secret_key="$6"
+
+    send_command "$port" click '{"dataId":"add-secret-button"}'
+    wait_for_log "$TMP_DIR" "Add secret dialog opened"
+    send_command "$port" type "{\"dataId\":\"secret-name-input\",\"text\":\"$name\"}"
+    send_command "$port" type "{\"dataId\":\"secret-s3-endpoint-input\",\"text\":\"$endpoint\"}"
+    send_command "$port" type "{\"dataId\":\"secret-s3-region-input\",\"text\":\"$region\"}"
+    send_command "$port" type "{\"dataId\":\"secret-s3-access-key-input\",\"text\":\"$access_key\"}"
+    send_command "$port" type "{\"dataId\":\"secret-s3-secret-key-input\",\"text\":\"$secret_key\"}"
+    send_command "$port" click '{"dataId":"add-secret-confirm"}'
+    wait_for_log "$TMP_DIR" "Secret added"
 }
 
 #

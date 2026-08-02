@@ -787,6 +787,59 @@ seed_vault_secret() {
     chmod 600 "$vault_file"
 }
 
+# Starts the local MinIO S3 emulator in the given state directory and reads back what it bound.
+#
+# On return S3_EMULATOR_PORT, S3_EMULATOR_BUCKET, S3_EMULATOR_ACCESS_KEY and S3_EMULATOR_SECRET_KEY
+# are exported (from the emulator's own env file), along with S3_ENDPOINT, the http:// URL the CLI
+# reaches it at. The endpoint is addressed by IP, never "localhost": without path-style addressing
+# the SDK puts the bucket into the hostname, which on a machine that resolves *.localhost reaches the
+# server but names no bucket, so the database reads back empty instead of failing.
+#
+# A failure to start is fatal: an S3 test that cannot get a server must fail, never skip.
+# Usage: start_s3_emulator <state-dir>
+start_s3_emulator() {
+    local state_dir="$1"
+
+    mkdir -p "$state_dir"
+    if ! (cd "$REPO_ROOT" && bun run s3-emulator start "$state_dir"); then
+        log_error "Could not start the local S3 emulator"
+        exit 1
+    fi
+    # shellcheck disable=SC1090
+    source "$state_dir/env"
+    export S3_ENDPOINT="http://127.0.0.1:$S3_EMULATOR_PORT"
+    log_info "S3 emulator at $S3_ENDPOINT, bucket $S3_EMULATOR_BUCKET"
+}
+
+# Stops the S3 emulator recorded in the given state directory. Never fails, including when nothing
+# was ever started, so it is safe in an unconditional trap.
+# Usage: stop_s3_emulator <state-dir>
+stop_s3_emulator() {
+    local state_dir="$1"
+    (cd "$REPO_ROOT" && bun run s3-emulator stop "$state_dir") >/dev/null 2>&1 || true
+    return 0
+}
+
+# Exports the emulator's credentials as the AWS_* variables the CLI falls back to when the database
+# entry names no vault secret. This is the "point the CLI at a bucket" path a user takes with a
+# self-hosted server. Requires start_s3_emulator to have run first.
+export_s3_env_credentials() {
+    export AWS_ACCESS_KEY_ID="$S3_EMULATOR_ACCESS_KEY"
+    export AWS_SECRET_ACCESS_KEY="$S3_EMULATOR_SECRET_KEY"
+    export AWS_ENDPOINT="$S3_ENDPOINT"
+    export AWS_REGION="us-east-1"
+}
+
+# Writes the emulator's credentials into the vault as an s3-credentials secret, which is the
+# credential path the desktop and mobile apps actually use. Requires start_s3_emulator to have run.
+# Usage: seed_s3_vault_secret <secret-name>
+seed_s3_vault_secret() {
+    local secret_name="$1"
+
+    seed_vault_secret "$secret_name" "s3-credentials" \
+        "{\"region\":\"us-east-1\",\"accessKeyId\":\"$S3_EMULATOR_ACCESS_KEY\",\"secretAccessKey\":\"$S3_EMULATOR_SECRET_KEY\",\"endpoint\":\"$S3_ENDPOINT\"}"
+}
+
 # Populate a pre-initialized database with the 5 standard test files (PNG, JPG, MP4, 2 from multiple-files).
 populate_db_with_5_files() {
     local db_dir="$1"

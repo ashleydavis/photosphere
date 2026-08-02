@@ -15,7 +15,6 @@ DESCRIPTION="Create, populate and read back a database on S3"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 TEST_NUMBER="${1:-65}"
 S3_STATE_DIR="$(get_test_dir "$TEST_NUMBER")/s3"
@@ -25,7 +24,7 @@ S3_STATE_DIR="$(get_test_dir "$TEST_NUMBER")/s3"
 # unconditionally.
 cleanup_s3_and_show_summary() {
     local exit_code=$?
-    (cd "$REPO_ROOT" && bun run s3-emulator stop "$S3_STATE_DIR") >/dev/null 2>&1 || true
+    stop_s3_emulator "$S3_STATE_DIR"
     return $exit_code
 }
 trap 'cleanup_s3_and_show_summary; cleanup_and_show_summary' EXIT
@@ -34,23 +33,11 @@ test_s3_database() {
     local test_number="$1"
     print_test_header "$test_number" "S3 DATABASE"
 
-    mkdir -p "$(dirname "$S3_STATE_DIR")"
-
-    # Start the S3 server and read back the port it bound, the bucket it seeded and its credentials.
-    if ! (cd "$REPO_ROOT" && bun run s3-emulator start "$S3_STATE_DIR"); then
-        log_error "Could not start the local S3 emulator"
-        exit 1
-    fi
-    # shellcheck disable=SC1090
-    source "$S3_STATE_DIR/env"
+    start_s3_emulator "$S3_STATE_DIR"
 
     # The CLI reads S3 credentials from these when the database entry names no vault secret, so this
     # is the plain "point the CLI at a bucket" path a user takes with a self-hosted server.
-    export AWS_ACCESS_KEY_ID="$S3_EMULATOR_ACCESS_KEY"
-    export AWS_SECRET_ACCESS_KEY="$S3_EMULATOR_SECRET_KEY"
-    export AWS_ENDPOINT="http://127.0.0.1:$S3_EMULATOR_PORT"
-    export AWS_REGION="us-east-1"
-    log_info "S3 emulator at $AWS_ENDPOINT, bucket $S3_EMULATOR_BUCKET"
+    export_s3_env_credentials
 
     local s3_db="s3:$S3_EMULATOR_BUCKET/cli-smoke-test"
     log_info "Database path: $s3_db"

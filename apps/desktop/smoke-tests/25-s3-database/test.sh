@@ -20,7 +20,6 @@ TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$TEST_DIR/../lib/common.sh"
 TEST_DIR="$(cd "$(dirname "$0")" && native_pwd)"
 DESKTOP_DIR="$(cd "$TEST_DIR/../.." && native_pwd)"
-REPO_ROOT="$(cd "$TEST_DIR/../../../.." && native_pwd)"
 
 print_test_header 25 "s3-database"
 
@@ -33,38 +32,23 @@ cleanup() {
     if [ -f "$TMP_DIR/app.pid" ]; then
         kill_app_tree "$(cat "$TMP_DIR/app.pid")"
     fi
-    (cd "$REPO_ROOT" && bun run s3-emulator stop "$S3_STATE_DIR") >/dev/null 2>&1 || true
+    stop_s3_emulator "$S3_STATE_DIR"
 }
 trap cleanup EXIT
 
 mkdir -p "$TMP_DIR"
 
 # Start the S3 server and read back the port it bound, the bucket it seeded and its credentials.
-if ! (cd "$REPO_ROOT" && bun run s3-emulator start "$S3_STATE_DIR"); then
-    log_error "Could not start the local S3 emulator"
-    exit 1
-fi
-# shellcheck disable=SC1090
-source "$S3_STATE_DIR/env"
-S3_ENDPOINT="http://127.0.0.1:$S3_EMULATOR_PORT"
-log_info "S3 emulator at $S3_ENDPOINT, bucket $S3_EMULATOR_BUCKET"
+start_s3_emulator "$S3_STATE_DIR"
 
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
 # Add the S3 credentials through the app's own Add Secret UI, the way a user would, rather than
-# writing the vault file directly. The type defaults to s3-credentials, so no type switch is needed.
+# writing the vault file directly.
 send_command "$APP_PORT" navigate '{"page":"secrets"}'
 wait_for_log "$TMP_DIR" "Secrets page loaded"
-send_command "$APP_PORT" click '{"dataId":"add-secret-button"}'
-wait_for_log "$TMP_DIR" "Add secret dialog opened"
-send_command "$APP_PORT" type "{\"dataId\":\"secret-name-input\",\"text\":\"$SECRET_NAME\"}"
-send_command "$APP_PORT" type "{\"dataId\":\"secret-s3-endpoint-input\",\"text\":\"$S3_ENDPOINT\"}"
-send_command "$APP_PORT" type '{"dataId":"secret-s3-region-input","text":"us-east-1"}'
-send_command "$APP_PORT" type "{\"dataId\":\"secret-s3-access-key-input\",\"text\":\"$S3_EMULATOR_ACCESS_KEY\"}"
-send_command "$APP_PORT" type "{\"dataId\":\"secret-s3-secret-key-input\",\"text\":\"$S3_EMULATOR_SECRET_KEY\"}"
-send_command "$APP_PORT" click '{"dataId":"add-secret-confirm"}'
-wait_for_log "$TMP_DIR" "Secret added"
+add_s3_secret_via_ui "$APP_PORT" "$SECRET_NAME" "$S3_ENDPOINT" "us-east-1" "$S3_EMULATOR_ACCESS_KEY" "$S3_EMULATOR_SECRET_KEY"
 
 #
 # Opens the New Database dialog, switches it to S3, picks the secret, and opens the S3 browser on the

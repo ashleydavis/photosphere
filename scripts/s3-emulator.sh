@@ -36,6 +36,16 @@ EMULATOR_PREFIXES="alpha-dir,beta-dir"
 # Seconds to wait for the server to report healthy before giving up.
 HEALTH_TIMEOUT_SECONDS=60
 
+# How many times to try seeding the bucket, and how long to wait between tries.
+#
+# The health endpoint answers as soon as the process is listening, which is before MinIO has finished
+# formatting its erasure pool. A request in that window comes back
+# "XMinioServerNotInitialized: Server not initialized yet, please try again", which is the server
+# telling the client to retry rather than a real failure. Without this the seed failed outright and
+# took the whole test with it, seen twice while writing the S3 tests.
+SEED_ATTEMPTS=10
+SEED_RETRY_DELAY_SECONDS=1
+
 # How many times to retry the whole start when the server never becomes healthy. A port is checked
 # for being free and only then bound by MinIO, so another process can take it in between; a fresh
 # port on the next attempt is the fix for that narrow race.
@@ -207,7 +217,7 @@ start_one_server() {
 #
 start_emulator() {
     local stateDir="$1"
-    local minioBinary port attempt
+    local minioBinary port attempt seedAttempt
 
     mkdir -p "$stateDir"
     # A stale server from an earlier run of this same state directory would otherwise be orphaned.
@@ -233,17 +243,26 @@ start_emulator() {
     port="$(cat "$stateDir/minio.port")"
 
     log "Seeding bucket $EMULATOR_BUCKET with prefixes $EMULATOR_PREFIXES..."
-    if ! bun "$REPO_ROOT/scripts/seed-s3-bucket.ts" \
-        --endpoint "http://127.0.0.1:$port" \
-        --bucket "$EMULATOR_BUCKET" \
-        --access-key "$EMULATOR_ACCESS_KEY" \
-        --secret-key "$EMULATOR_SECRET_KEY" \
-        --prefixes "$EMULATOR_PREFIXES" >&2; then
-        log "Seeding failed. Server log:"
-        cat "$stateDir/minio.log" >&2 || true
-        stop_emulator "$stateDir"
-        return 1
-    fi
+    seedAttempt=1
+    while true; do
+        if bun "$REPO_ROOT/scripts/seed-s3-bucket.ts" \
+            --endpoint "http://127.0.0.1:$port" \
+            --bucket "$EMULATOR_BUCKET" \
+            --access-key "$EMULATOR_ACCESS_KEY" \
+            --secret-key "$EMULATOR_SECRET_KEY" \
+            --prefixes "$EMULATOR_PREFIXES" >&2; then
+            break
+        fi
+        if [ "$seedAttempt" -ge "$SEED_ATTEMPTS" ]; then
+            log "Seeding failed after $SEED_ATTEMPTS attempts. Server log:"
+            cat "$stateDir/minio.log" >&2 || true
+            stop_emulator "$stateDir"
+            return 1
+        fi
+        log "Seeding attempt $seedAttempt failed; retrying in ${SEED_RETRY_DELAY_SECONDS}s..."
+        sleep "$SEED_RETRY_DELAY_SECONDS"
+        seedAttempt=$((seedAttempt + 1))
+    done
 
     cat > "$stateDir/env" <<ENV
 export S3_EMULATOR_PORT="$port"
