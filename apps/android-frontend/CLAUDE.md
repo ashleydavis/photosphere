@@ -19,8 +19,9 @@ Host-to-device LAN sharing, and the smoke tests that exercise it (`26-receive-da
 - `bun run emu:and:up` - bring the hand-testing emulator up on the LAN bridge and wait until ready. Sets the bridge up automatically (prompts for sudo only for that part). It runs on its own AVD, `psphere-single`, cloned from an auto-selected base AVD (override the base with `ANDROID_AVD`). That name is how it is told apart from a pool emulator: `up` used to ask only whether *any* device was attached, so a running pool made it report success and start nothing.
 - `bun run emu:and:down` - stop that emulator (the one running `psphere-single`, and only that one) and remove its tap. Leaves a running pool alone, and leaves an emulator you started yourself alone too.
 - `bun run emu:and:restart` - down then up.
-- `bun run emu:and:pool` - bring up a pool of emulators for the smoke tests (`PHOTOSPHERE_EMULATOR_COUNT`, default 5), each on its own writable clone of the base AVD and its own tap. Runs alongside `emu:and:up` without disturbing it.
+- `bun run emu:and:pool:up` - bring up a pool of emulators for the smoke tests (`PHOTOSPHERE_EMULATOR_COUNT`, default 5), each on its own writable clone of the base AVD and its own tap. Runs alongside `emu:and:up` without disturbing it.
 - `bun run emu:and:pool:down` - stop only the pool's emulators and remove only the pool's taps.
+- `bun run emu:and:pool:restart` - pool down then pool up, leaving the hand-testing emulator alone. This is how a change to the pool's memory limits takes effect, since the limits are read when an emulator starts.
 - `bun run emu:and:status` - **read-only** readiness check (see below).
 
 The bridge, DHCP and NAT are shared between the single emulator and the pool, so they are only torn down once no taps are left. Each pool emulator needs its own AVD because an AVD's disk images are single-writer; the clones are about 8KB each, since the system image lives in the SDK and is shared.

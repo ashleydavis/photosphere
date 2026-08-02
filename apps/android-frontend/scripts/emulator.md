@@ -40,9 +40,26 @@ bun run emu:and:status
 lan bridge`, the emulator ignored `-wifi-tap` and is still behind the virtual router (`10.0.2.16`);
 `bun run emu:and:restart` for a clean bridged boot, then see troubleshooting below.
 
+### Memory limits
+
+Every emulator is started as a transient systemd user service inside a slice called `psphere-pool.slice`, which is what stops a pool of them exhausting the machine. A "slice" is a named group of processes that the kernel applies a resource limit to as a group, so the limit covers all the emulators added together rather than each one separately. Without it, a pool was able to use up all of the machine's memory and its swap, at which point `systemd-oomd` killed the terminal the pool had been started from, and every shell in it.
+
+The limits live in `psphere-pool.slice`, next to `emulator.sh`, which is commented with the numbers and the reasoning. `emulator.sh` installs that file into your systemd user unit directory the first time it starts an emulator, and never overwrites it afterwards, so a copy you have tuned by hand is left alone; it prints a note when the installed copy and the repository copy differ. To adopt a changed copy, copy it over yourself and run `systemctl --user daemon-reload`.
+
+The limits are read when an emulator starts, so a change only reaches emulators started afterwards. Use `bun run emu:and:pool:restart` to apply one to the pool.
+
+Check what is in effect, and what the pool is using right now:
+
+```
+systemctl --user show psphere-pool.slice -p MemoryHigh -p MemoryMax
+systemd-cgtop -m
+```
+
+An emulator started any other way (Android Studio, a bare `emulator -avd`, `run-android.sh`) is outside the slice and is not limited by any of this.
+
 ### Why it has its own AVD name
 
-The hand-testing emulator and the smoke-test pool (`bun run emu:and:pool`) run side by side, so each
+The hand-testing emulator and the smoke-test pool (`bun run emu:and:pool:up`) run side by side, so each
 side has to be able to say which emulators are its own. Both run on clones of the same base AVD, and
 the clone's name is what identifies it: `psphere-single` for this one, `psphere-pool-N` for the
 pool's. `up`, `down` and `restart` act only on `psphere-single`, and never on the pool or on an

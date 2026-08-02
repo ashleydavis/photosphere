@@ -12,7 +12,7 @@
 # an AVD's disk images are single-writer and every pool emulator has to be writable.
 POOL_AVD_PREFIX="psphere-pool"
 
-# Name of the AVD created automatically when the machine has none, so `up` and `pool` work on a fresh
+# Name of the AVD created automatically when the machine has none, so `up` and `pool-up` work on a fresh
 # machine without anyone opening Android Studio first. An AVD made by hand is preferred over this one
 # when it exists.
 DEFAULT_BASE_AVD="psphere-base"

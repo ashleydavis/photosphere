@@ -101,10 +101,11 @@ The assertion helpers the tests call (`wait_for_value`, `assert_value`, and the 
 Bring up a pool of five alongside your own emulator:
 
 ```bash
-bun run emu:and:up          # one writable emulator, keeps its state, for hand testing
-bun run emu:and:pool        # five more, each on its own cloned AVD and its own tap
-bun run emu:and:pool:down   # stops only the pool
-bun run emu:and:down        # stops only your own emulator
+bun run emu:and:up             # one writable emulator, keeps its state, for hand testing
+bun run emu:and:pool:up        # five more, each on its own cloned AVD and its own tap
+bun run emu:and:pool:down      # stops only the pool
+bun run emu:and:pool:restart   # pool:down then pool:up, leaving your own emulator alone
+bun run emu:and:down           # stops only your own emulator
 ```
 
 Each pool emulator runs on a writable clone of your base AVD, about 8KB each, because two emulators cannot share one AVD. Set `PHOTOSPHERE_EMULATOR_COUNT` to change the pool size. Pin a run to particular devices with `PHOTOSPHERE_ANDROID_DEVICES="emulator-5556 emulator-5558"`, for example to leave your hand-testing emulator out of it.

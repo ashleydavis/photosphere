@@ -32,7 +32,7 @@ set -euo pipefail
 # Name of the bridge (the virtual switch). Prefixed so it is obvious what created it.
 BRIDGE_NAME="br-psphere"
 
-# How many emulators the pool brings up. Only `pool` reads this; `up` is always a single emulator.
+# How many emulators the pool brings up. Only `pool-up` reads this; `up` is always a single emulator.
 PHOTOSPHERE_EMULATOR_COUNT="${PHOTOSPHERE_EMULATOR_COUNT:-5}"
 
 # The tap and AVD names, shared with the smoke-test harness and the run script. Sourced rather than
@@ -100,6 +100,27 @@ IP_FORWARD_STATE_FILE="/run/psphere-emulator-ip-forward.orig"
 # owns, so this must be your login user, not root. SUDO_USER is set to the real user when the script
 # is run under sudo, which is the normal case here.
 TARGET_USER="${SUDO_USER:-$(id -un)}"
+
+# The systemd user slice every emulator is started inside, the copy of its unit file kept next to this
+# script, and where that unit has to be installed for the user manager to read it.
+#
+# A "slice" is a named group of processes that systemd and the kernel treat as one thing for resource
+# limits, so a memory limit on the slice applies to everything in it added together rather than to any
+# one process. psphere-pool.slice, next to this script, is where those limits are written and is
+# commented at length; read that file for the numbers and the reasoning behind them.
+#
+# The slice is what bounds the pool. Each emulator also carries its own limit, but per-emulator limits
+# alone bound nothing, because five of them within their individual limits still add up to more than
+# the machine has. Without this, a test run was able to exhaust both the machine's memory and all of
+# its swap, five emulators accounting for close to 30GB of it, and systemd-oomd answered by killing
+# the whole terminal's cgroup rather than any one emulator, taking every shell in it with it.
+#
+# Note that the slice would still exist without its unit file, because systemd creates a slice named
+# by --slice implicitly, but it would carry no limits whatsoever. That is why ensure_pool_slice runs
+# before the first emulator starts.
+POOL_SLICE="psphere-pool.slice"
+POOL_SLICE_SOURCE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$POOL_SLICE"
+POOL_SLICE_INSTALL_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 
 #
 # True when the DHCP server we started is still alive.
@@ -454,7 +475,7 @@ CONFIG
 
 #
 # Prints the AVD to use, creating one first when the machine has none. This is what lets `up` and
-# `pool` work on a fresh machine that has never had an emulator.
+# `pool-up` work on a fresh machine that has never had an emulator.
 #
 ensure_base_avd() {
     local existing
@@ -471,7 +492,7 @@ ensure_base_avd() {
 }
 
 #
-# Prints the name of the AVD that `up` and `pool` clone from: ANDROID_AVD when set, otherwise the
+# Prints the name of the AVD that `up` and `pool-up` clone from: ANDROID_AVD when set, otherwise the
 # first AVD that is not itself one of the clones they create. Prints nothing when the machine has no
 # AVD at all.
 #
@@ -593,9 +614,49 @@ bridge_is_up() {
 }
 
 #
+# Installs the pool's slice unit into the user's systemd unit directory, so the memory limits in it
+# actually apply, and reloads the user manager so it is read.
+#
+# Only ever creates the file. An installed unit that differs from the one in the repo is left exactly
+# as it is and reported instead, because it may have been tuned by hand for this machine and quietly
+# replacing it would throw that away with nothing to say it happened.
+#
+ensure_pool_slice() {
+    local installed="$POOL_SLICE_INSTALL_DIR/$POOL_SLICE"
+
+    if ! command -v systemd-run >/dev/null 2>&1; then
+        echo "ERROR: systemd-run not found, so the emulator's memory cannot be bounded." >&2
+        echo "       This script starts each emulator as a transient systemd user service." >&2
+        exit 1
+    fi
+
+    if [ ! -f "$installed" ]; then
+        mkdir -p "$POOL_SLICE_INSTALL_DIR"
+        cp "$POOL_SLICE_SOURCE" "$installed"
+        echo "Installed $POOL_SLICE into $POOL_SLICE_INSTALL_DIR."
+        systemctl --user daemon-reload
+        return 0
+    fi
+
+    if ! cmp -s "$POOL_SLICE_SOURCE" "$installed"; then
+        echo "NOTE: $installed differs from the copy in this repo; leaving yours as it is." >&2
+        echo "      Copy $POOL_SLICE_SOURCE over it yourself if you want the repo's limits." >&2
+    fi
+}
+
+#
 # Starts one writable emulator in the background on the given tap, so it lands on the bridge. Must
-# run as your user, not root: the emulator can only open a tap it owns. Detached so it outlives this
-# script. Nothing here is ever -read-only, so every emulator keeps its own state.
+# run as your user, not root: the emulator can only open a tap it owns. Nothing here is ever
+# -read-only, so every emulator keeps its own state.
+#
+# The emulator runs as its own transient systemd user service inside the pool's slice, which is what
+# bounds its memory. An emulator costs far more on the host than the AVD's hw.ramSize suggests: with
+# hw.ramSize at 2GB, measured emulators have held between 4GB and 6.4GB each. A pool of them is
+# enough to drive the whole session into systemd-oomd's kill path.
+#
+# A service also detaches by itself, so setsid is no longer needed, and captures the process's output
+# itself, so the shell redirect is gone with it. Each emulator is a separate unit, so one that dies
+# leaves the rest running.
 # Usage: start_emulator_bg <avd_name> <tap_name> <log_suffix>
 #
 start_emulator_bg() {
@@ -620,14 +681,59 @@ start_emulator_bg() {
         exit 1
     fi
 
-    echo "Starting emulator '$avd' on $netcard (cold boot, so wifi associates to the bridge)..."
+    ensure_pool_slice
+
+    # A transient unit starts from the user manager's environment rather than this shell's, so
+    # anything the emulator needs that was exported from a shell profile has to be handed over
+    # explicitly. The SDK variables are the ones that matter: an emulator that cannot see a
+    # non-default ANDROID_AVD_HOME looks in the default AVD directory and finds nothing. The emulator
+    # binary itself is passed as the absolute path emulator_path prints, so PATH does not come into
+    # it.
+    local setenv_args=()
+    local variable_name
+    for variable_name in ANDROID_HOME ANDROID_SDK_ROOT ANDROID_AVD_HOME; do
+        if [ -n "${!variable_name:-}" ]; then
+            setenv_args+=(--setenv="$variable_name=${!variable_name}")
+        fi
+    done
+
+    local unit="psphere-emu-$log_suffix"
+
+    # A transient unit disappears once it has stopped, but one whose emulator exited non-zero stays
+    # behind in the failed state, and starting this name again would collide with it. This clears
+    # that leftover record and nothing else: it cannot stop an emulator that is running.
+    systemctl --user reset-failed "$unit" 2>/dev/null || true
+
+    echo "Starting emulator '$avd' on $netcard as $unit (cold boot, so wifi associates to the bridge)..."
 
     # -no-snapshot forces a cold boot. A quick-boot snapshot restores the guest's
     # previous network state (behind the 10.0.2.x virtual router), so wlan0 never
     # re-associates to the freshly created tap and stays NO-CARRIER. A cold boot
     # brings wifi up fresh and associates it to -wifi-tap, which is the whole point.
-    setsid "$emulator" -avd "$avd" -no-snapshot -no-boot-anim -wifi-tap "$netcard" \
-        >"/tmp/psphere-emulator-$log_suffix.log" 2>&1 </dev/null &
+    #
+    # MemoryHigh rather than MemoryMax per emulator: MemoryHigh throttles the emulator and reclaims
+    # from it, where MemoryMax would have the kernel kill it outright, and an emulator sits close
+    # enough to any ceiling worth setting that a hard kill would be a coin toss. The slice's own
+    # MemoryMax is the hard backstop, and it covers the pool rather than one member of it.
+    #
+    # 5G is a per-emulator sanity check, not the real limit: it sits within the 4GB to 6.4GB range
+    # measured of a working emulator, so an emulator behaving normally barely notices it and one
+    # running away is slowed down on its own rather than at the expense of the other four. What
+    # bounds a test run is the slice, in psphere-pool.slice. Change that file, not this number, to
+    # give the pool more or less room.
+    #
+    # ${setenv_args[@]+"${setenv_args[@]}"} rather than "${setenv_args[@]}" because this script runs
+    # under `set -u`, where expanding an empty array is an unbound-variable error on older bash. The
+    # + form expands to nothing at all when the array is empty, which is what is wanted.
+    systemd-run --user --unit="$unit" \
+        --slice="$POOL_SLICE" \
+        --description="Photosphere emulator: $avd on $netcard" \
+        -p MemoryHigh=5G \
+        -p MemorySwapMax=2G \
+        -p StandardOutput="file:/tmp/psphere-emulator-$log_suffix.log" \
+        -p StandardError="file:/tmp/psphere-emulator-$log_suffix.log" \
+        ${setenv_args[@]+"${setenv_args[@]}"} \
+        "$emulator" -avd "$avd" -no-snapshot -no-boot-anim -wifi-tap "$netcard"
 }
 
 #
@@ -757,7 +863,7 @@ cmd_up() {
 #
 cmd_pool_up() {
     if [ "$(id -u)" -eq 0 ]; then
-        echo "ERROR: run 'pool' as your user (it uses sudo only for the bridge)." >&2
+        echo "ERROR: run 'pool-up' as your user (it uses sudo only for the bridge)." >&2
         exit 1
     fi
 
@@ -890,6 +996,17 @@ cmd_restart() {
 }
 
 #
+# Stops the pool and brings it straight back up. Only the pool: the hand-testing emulator is left
+# running, exactly as pool-down leaves it, and so is the bridge, which pool-up finds already in
+# place. This is the way to pick up a change to the emulators' memory limits, since the limits are
+# read when an emulator starts and cannot be applied to one already running.
+#
+cmd_pool_restart() {
+    cmd_pool_down
+    cmd_pool_up
+}
+
+#
 # Prints a one-word verdict on the first line -- "ready" or "not ready" -- with a short reason on
 # the next line, and sets the exit code to match (0 = ready, non-zero = not ready) so callers such
 # as `test:and` can gate on it.
@@ -966,11 +1083,14 @@ case "${1:-}" in
     status)
         cmd_status
         ;;
-    pool)
+    pool-up)
         cmd_pool_up
         ;;
     pool-down)
         cmd_pool_down
+        ;;
+    pool-restart)
+        cmd_pool_restart
         ;;
     # Internal: the privileged bridge steps, run with sudo by up/down/pool. Not for direct use.
     __bridge-up)
@@ -980,19 +1100,20 @@ case "${1:-}" in
         bridge_down
         ;;
     *)
-        echo "Usage: $0 {up|down|restart|status|pool|pool-down}"
+        echo "Usage: $0 {up|down|restart|status|pool-up|pool-down|pool-restart}"
         echo ""
         echo "  up          Bring the '$SINGLE_AVD_NAME' emulator up on the LAN bridge and wait"
-        echo "              until ready. Runs alongside 'pool' without disturbing it."
+        echo "              until ready. Runs alongside 'pool-up' without disturbing it."
         echo "  down        Stop that emulator and remove its tap. Leaves a running pool alone."
         echo "  restart     down then up."
         echo "  status      Print each attached device and whether it is on the bridge (exit 0 if any is)."
-        echo "  pool        Bring up PHOTOSPHERE_EMULATOR_COUNT writable emulators, each on its own"
+        echo "  pool-up     Bring up PHOTOSPHERE_EMULATOR_COUNT writable emulators, each on its own"
         echo "              cloned AVD and its own tap. Runs alongside 'up' without disturbing it."
         echo "  pool-down   Stop only the pool's emulators and remove only the pool's taps."
+        echo "  pool-restart pool-down then pool-up. Leaves the hand-testing emulator alone."
         echo ""
         echo "The bridge, DHCP and NAT are shared: they are only torn down once no taps are left."
-        echo "Both 'up' and 'pool' run on clones of a base AVD, which is auto-selected (override with"
+        echo "Both 'up' and 'pool-up' run on clones of a base AVD, which is auto-selected (override with"
         echo "ANDROID_AVD). See apps/android-frontend/scripts/emulator.md."
         exit 1
         ;;

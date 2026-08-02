@@ -154,7 +154,7 @@ git config core.hooksPath
 
 Must print `.githooks`. Anything else and nothing below is testing what you think.
 
-**2. Start the device.** The mobile suites need one, and without it every commit is refused. On Linux: `bun run emu:and:pool`, then `bun run emu:and:status` until it says ready.
+**2. Start the device.** The mobile suites need one, and without it every commit is refused. On Linux: `bun run emu:and:pool:up`, then `bun run emu:and:status` until it says ready.
 
 **3. Watch it pass.**
 

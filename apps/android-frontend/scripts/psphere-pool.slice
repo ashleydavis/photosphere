@@ -1,0 +1,53 @@
+[Unit]
+Description=Photosphere Android emulator pool
+
+# WHAT THIS FILE IS
+#
+# A systemd slice unit. A "slice" is a named group of processes that systemd and the kernel treat as
+# one thing for the purpose of resource limits, so a limit written here applies to everything in the
+# group added together rather than to any single process. `.slice` is a standard systemd unit type,
+# the same family as `.service` and `.timer`; the psphere-pool part is ours.
+#
+# HOW IT IS USED
+#
+# systemd only reads this once it is installed in the systemd user unit directory
+# ($XDG_CONFIG_HOME/systemd/user, which is under .config in your home directory by default). It does
+# not read it from this repository. ensure_pool_slice in emulator.sh installs it there, if it is not
+# already there, before starting the first emulator.
+#
+# start_emulator_bg in the same script then starts each emulator as a transient systemd service with
+# --slice=psphere-pool.slice, which is what puts the emulators in this group. Nothing else does. An
+# emulator started any other way (Android Studio, a bare `emulator -avd`, run-android.sh) is outside
+# this group and is not limited by anything here.
+#
+# WHY IT EXISTS
+#
+# The emulators are the largest thing a test run puts on the machine, by a wide margin, and until
+# this existed nothing bounded them. A run was able to exhaust both the machine's memory and all of
+# its swap. The kernel's task dump at the kill recorded five emulators holding 29.6GB between them,
+# the single biggest consumer on the machine. systemd-oomd answered by killing the terminal's cgroup,
+# which took every shell in that terminal window with it, including the ones doing the work.
+#
+# WHY THESE NUMBERS
+#
+# MemoryHigh is a soft limit: crossing it does not kill anything, it makes the kernel reclaim memory
+# from the group, so the emulators page and slow down instead of the whole machine thrashing.
+# MemoryMax is the hard ceiling behind it, and crossing that does kill something in the group.
+#
+# 20G is deliberately BELOW what the pool actually uses (the 29.6GB above). A limit set higher than
+# real usage would only ever catch a runaway, and would have changed nothing about the run that
+# filled the machine: the point here is to make the ordinary case give memory back, not to guard
+# against an imagined one. Raise it if the emulators become unusably slow, but measure the pool's
+# real usage first and keep the limit under it.
+#
+# HOW TO CHECK IT IS IN EFFECT
+#
+#   systemctl --user show psphere-pool.slice -p MemoryHigh -p MemoryMax
+#       What systemd thinks the limits are. Reports 0 or infinity if the unit was never installed.
+#
+#   systemd-cgtop -m
+#       What the group is using right now, live, next to everything else on the machine.
+#
+[Slice]
+MemoryHigh=20G
+MemoryMax=26G
