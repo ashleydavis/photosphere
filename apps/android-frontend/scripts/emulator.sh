@@ -465,8 +465,8 @@ hw.ramSize=2048
 hw.lcd.width=1080
 hw.lcd.height=2400
 hw.lcd.density=440
-hw.gpu.enabled=no
-hw.gpu.mode=off
+hw.gpu.enabled=yes
+hw.gpu.mode=swiftshader_indirect
 hw.keyboard=yes
 disk.dataPartition.size=6G
 CONFIG
@@ -749,24 +749,33 @@ start_emulator_bg() {
     # ${setenv_args[@]+"${setenv_args[@]}"} rather than "${setenv_args[@]}" because this script runs
     # under `set -u`, where expanding an empty array is an unbound-variable error on older bash. The
     # + form expands to nothing at all when the array is empty, which is what is wanted.
-    # -gpu off disables GPU emulation.
+    # -gpu swiftshader_indirect pins software rendering.
     #
-    # With the mode left at "auto" the emulator selected software rendering anyway (Vulkan
-    # 'lavapipe', GLES 'swangle'), and four of the five pool emulators crashed inside ten minutes
-    # while the test suite was running. Each of their logs ends in Crashpad handler output
-    # (process_snapshot_linux.cc "Couldn't read exception info", ptrace "No such process") and a
-    # minidump was written under /tmp/android-ash/emu-crash-*.db/completed/. That is a crash, not an
-    # out-of-memory kill: 48GB was free at the time and journalctl -k recorded no OOM. Emulators
-    # dying underneath the suite turned a 4-minute run into a 103-minute one and failed four tests
-    # that had nothing wrong with them.
+    # Two settings have been tried here and both are recorded, because the second was chosen on
+    # evidence produced by the first.
+    #
+    # "auto", the original, let the emulator pick a backend at runtime. It chose software rendering
+    # anyway (Vulkan 'lavapipe', GLES 'swangle'), and four of five pool emulators crashed inside ten
+    # minutes during a suite run, each log ending in crash-handler output with a minidump written.
+    #
+    # "off" was tried next. It removed GPU emulation entirely and produced a new, repeatable failure:
+    # the app started, its WebView took fifteen seconds to bring up a sandboxed rendering process,
+    # and the main thread then hung with an ANR. Two separate occurrences, both inside WebView
+    # start-up, one blocked on a mutex in WebView class initialisation. The devices were healthy
+    # throughout, so this was the app hanging rather than the emulator dying. "off" leaves Chromium
+    # with no GL path at all, which is what its start-up needs.
+    #
+    # "swiftshader_indirect" keeps rendering in software, so nothing depends on the host GPU and the
+    # backend no longer varies between emulators, while still giving the WebView something to render
+    # on. It is the usual choice for unattended runs.
     #
     # Passed on the command line as well as set in the AVD config above, because the command line
     # overrides the config and an AVD cloned before this change would otherwise keep the old setting.
     #
-    # This has NOT been shown to stop the crashes. There is no stack trace (no minidump symboliser is
-    # installed), so "it was doing software graphics when it died" is a correlation. If emulators
-    # keep crashing with the GPU off, that rules this out. If rendering-dependent tests start failing
-    # instead, the flag is too blunt and -gpu swiftshader_indirect is the next thing to try.
+    # None of this has been shown to stop the original crashes. There is no stack trace for those (no
+    # minidump symboliser is installed), and the dump has been kept for that. What is established is
+    # narrower: "off" causes WebView start-up hangs, and this setting exists to avoid them without
+    # going back to a backend chosen at runtime.
     systemd-run --user --unit="$unit" \
         --slice="$POOL_SLICE" \
         --description="Photosphere emulator: $avd on $netcard" \
@@ -775,7 +784,7 @@ start_emulator_bg() {
         -p StandardOutput="file:/tmp/psphere-emulator-$log_suffix.log" \
         -p StandardError="file:/tmp/psphere-emulator-$log_suffix.log" \
         ${setenv_args[@]+"${setenv_args[@]}"} \
-        "$emulator" -avd "$avd" -no-snapshot -no-boot-anim -gpu off -wifi-tap "$netcard"
+        "$emulator" -avd "$avd" -no-snapshot -no-boot-anim -gpu swiftshader_indirect -wifi-tap "$netcard"
 }
 
 #
