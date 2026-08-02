@@ -1274,6 +1274,21 @@ jobs:
           run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;25.1.8937393" > /dev/null
 
       # Engine-pool dispatcher, subtask routing, picker/path helpers, host functions.
+      # Gradle re-downloads its distribution and every dependency on a clean runner, and it runs
+      # inside the test step rather than as a step of its own, so its cost is hidden inside that
+      # step's total. Keyed on the Gradle build files and the wrapper properties, which is what
+      # decides the distribution and the dependency set; restore-keys lets a near-miss still reuse
+      # most of it, which is the normal way to cache Gradle.
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('apps/android-frontend/android/**/*.gradle*', 'apps/android-frontend/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
       - name: Run Android native unit tests
         run: bun run test:and:unit
 
@@ -1398,6 +1413,18 @@ jobs:
       # failing, and the run only requires the emulator to be started. Everything else, including the
       # device-to-device share tests and 28-host-emulator-comms (which works over NAT via 10.0.2.2),
       # still runs. Those two paths are covered locally with `bun run emu:and:up`.
+      # Shares the key, and so the cache entry, with the other Android jobs. See the note on this
+      # step in android-unit-tests for why Gradle is worth caching.
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('apps/android-frontend/android/**/*.gradle*', 'apps/android-frontend/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
       - name: Run Android smoke tests
         uses: reactivecircus/android-emulator-runner@v2
         env:
@@ -1584,6 +1611,18 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
+      # Shares the key, and so the cache entry, with the other Android jobs. See the note on this
+      # step in android-unit-tests for why Gradle is worth caching.
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('apps/android-frontend/android/**/*.gradle*', 'apps/android-frontend/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
       # The emulator-runner boots an AVD, then the player detects the booted device and
       # builds/installs the app via Gradle/adb before playing the stories on it.
       - name: Play the stories
@@ -1750,6 +1789,28 @@ jobs:
         uses: ./.github/actions/retry-install
         with:
           run: bun install
+
+      # electron-builder downloads the Electron binary for the target platform, plus its own helper
+      # binaries, every time it runs, and the build step costs between 107 and 156 seconds in each of
+      # the four matrix legs. Those downloads are the part of it worth keeping. The paths differ per
+      # platform and this job is a matrix over all of them, so every location is listed here; a path
+      # that does not exist on a given runner is ignored rather than being an error.
+      #
+      # bun.lock pins the Electron version, so hashing it invalidates the cache exactly when the
+      # downloaded binaries would change.
+      - name: Cache Electron downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+            ~/AppData/Local/electron/Cache
+            ~/AppData/Local/electron-builder/Cache
+          key: ${{ runner.os }}-electron-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-
 
       - name: Build Electron app
         run: bun run build
