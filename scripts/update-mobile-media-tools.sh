@@ -75,21 +75,48 @@ Notes:
 USAGE
 }
 
-# Portable in-place regex replace (GNU and BSD/macOS spell `sed -i` differently, so neither is used).
+log() { printf '\033[0;34m==>\033[0m %s\n' "$1"; }
+warn() { printf '\033[0;33mwarn:\033[0m %s\n' "$1"; }
+die() { printf '\033[0;31merror:\033[0m %s\n' "$1" >&2; exit 1; }
+
+# Portable in-place regex replace (GNU and BSD/macOS spell `sed -i` differently, so neither is used:
+# the edit is written to a temporary file beside the target and then moved over it).
+# The pattern is a POSIX extended regular expression and the replacement uses sed's syntax, so a
+# capture group is referred to as \1. Every match is replaced. Nothing is written when the pattern
+# matches nothing, so a pattern that has gone stale fails loudly rather than silently emptying the
+# file. `|` is the substitution delimiter, so neither the pattern nor the replacement may contain it.
 # Usage: edit_in_place <file> <pattern> <replacement>
 edit_in_place() {
     local file="$1"
     local pattern="$2"
     local replacement="$3"
-    bun "$REPO_ROOT/scripts/replace-in-file.ts" --file "$file" --pattern "$pattern" --replacement "$replacement"
+    [ -n "$file" ] || die "edit_in_place was given an empty file path"
+    [ -f "$file" ] || die "not found: $file"
+    case "$pattern$replacement" in
+        *"|"*) die "edit_in_place cannot handle a '|' in the pattern or replacement: $pattern -> $replacement" ;;
+    esac
+    grep -Eq "$pattern" "$file" || die "pattern $pattern matched nothing in \"$file\", so the file was left alone."
+    local temp="$file.edit-in-place.$$"
+    # cp -p first so the temporary file carries the target's permissions across the move.
+    cp -p "$file" "$temp"
+    sed -E "s|$pattern|$replacement|g" "$file" > "$temp"
+    mv "$temp" "$file"
 }
 
-log() { printf '\033[0;34m==>\033[0m %s\n' "$1"; }
-warn() { printf '\033[0;33mwarn:\033[0m %s\n' "$1"; }
-die() { printf '\033[0;31merror:\033[0m %s\n' "$1" >&2; exit 1; }
+# Rejects a version string containing anything that is special to sed's replacement text (`&`, `\`)
+# or to the `|` delimiter edit_in_place uses, so a bad argument fails loudly instead of corrupting
+# the file it is written into.
+check_version() {
+    local name="$1"
+    local version="$2"
+    case "$version" in
+        *[!A-Za-z0-9._-]*) die "$name must contain only letters, digits, dots, underscores and dashes: $version" ;;
+    esac
+}
 
 update_imagemagick_version() {
     [ -f "$IM_BUILD_SCRIPT" ] || die "not found: $IM_BUILD_SCRIPT"
+    check_version --imagemagick-version "$IMAGEMAGICK_VERSION"
     log "Setting iOS ImageMagick version to $IMAGEMAGICK_VERSION in build-imagemagick.sh"
     edit_in_place "$IM_BUILD_SCRIPT" '^IM_VERSION=".*"' 'IM_VERSION="'"$IMAGEMAGICK_VERSION"'"'
     grep -nE '^IM_VERSION=' "$IM_BUILD_SCRIPT"
@@ -103,9 +130,10 @@ build_ios_imagemagick() {
 
 update_android_ffmpeg_version() {
     [ -f "$ANDROID_GRADLE" ] || die "not found: $ANDROID_GRADLE"
+    check_version --android-ffmpeg-version "$ANDROID_FFMPEG_VERSION"
     if grep -qE "ffmpeg-kit[^:'\"]*:" "$ANDROID_GRADLE"; then
         log "Bumping Android FFmpegKit version to $ANDROID_FFMPEG_VERSION in app/build.gradle"
-        edit_in_place "$ANDROID_GRADLE" '(ffmpeg-kit[^:'\''"]*:)[0-9][^'\''"]*' '$1'"$ANDROID_FFMPEG_VERSION"
+        edit_in_place "$ANDROID_GRADLE" '(ffmpeg-kit[^:'\''"]*:)[0-9][^'\''"]*' '\1'"$ANDROID_FFMPEG_VERSION"
         grep -nE "ffmpeg-kit" "$ANDROID_GRADLE"
     else
         warn "No ffmpeg-kit dependency found in app/build.gradle. Add it first, e.g.:"
