@@ -162,8 +162,10 @@ Each test runs `psi secrets remove --name <name> --yes` with `PHOTOSPHERE_VAULT_
 **`scripts/s3-emulator.sh:190`, a caller-named state directory.**
 `rm -rf "$stateDir/data" "$stateDir/env"` where `stateDir` is the script's second argument. The literal `/data` and `/env` suffixes contain the damage to two named children, but the parent is arbitrary. Reached from `apps/cli/smoke-tests/65-s3-database/test.sh`, `apps/desktop/smoke-tests/25-s3-database/test.sh` and `apps/smoke-tests/tests/40-s3-database/test.sh`, all of which pass a path under their own tmp directory.
 
-**`scripts/update-mobile-media-tools.sh:81, 138, 151`, in-place edits of tracked repository files.**
-`perl -pi -e` rewrites `apps/ios-frontend/ios/build-imagemagick.sh` and `apps/android-frontend/android/app/build.gradle` in place, and `cp`/`cp -R` overwrite the vendored `.so` files and the ImageMagick headers. Deliberate: that is what the script is for. Unproven because `--android-so-dir` and `--android-headers-dir` take arbitrary source directories whose contents are copied over repository files.
+**`scripts/update-mobile-media-tools.sh:101-103, 138, 151`, in-place edits of tracked repository files.**
+`edit_in_place` rewrites `apps/ios-frontend/ios/build-imagemagick.sh` and `apps/android-frontend/android/app/build.gradle` by copying the target with `cp -p`, writing `sed -E` output to that copy, and moving it back over the original. `cp`/`cp -R` overwrite the vendored `.so` files and the ImageMagick headers. Deliberate: that is what the script is for. Unproven because `--android-so-dir` and `--android-headers-dir` take arbitrary source directories whose contents are copied over repository files.
+
+The path comes from the function's own argument and the run stops when it does not exist or the pattern is not found, so a stale pattern fails loudly rather than rewriting a file to itself. `check_version` rejects a version string containing anything outside `[A-Za-z0-9._-]`, because `&` and `\` are live syntax in `sed`'s replacement text.
 
 **Trap-ordering: `$APP_PORT` referenced before it is assigned.**
 `apps/desktop/screenshots/capture-ux.sh:27`, `apps/desktop/smoke-tests/3-open-database/test.sh:14`, `4-import-photos/test.sh:15`, `18-move-file/test.sh:15`, `19-download-single-asset/test.sh:34`, `20-download-multiple-assets/test.sh:33` and every `apps/smoke-tests/tests/*/test.sh` install `trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT`, and `scripts/story-player.sh:488` installs `trap cleanup EXIT` where `cleanup` calls `stop_app "$APP_PORT"` at line 473. All of them do so before `start_app` assigns `APP_PORT` (`apps/desktop/smoke-tests/lib/common.sh:182`, `apps/smoke-tests/lib/common.sh:367`). The trap body is single-quoted, so the expansion happens when the trap fires. If the script exits before `start_app` returns, the trap runs with `APP_PORT` unset. Nothing destructive follows from that here (`stop_app` posts to a URL and reads a pid file), but it is the exact placement the plan flags: a trap whose target is not assigned on every path that reaches it.
@@ -395,7 +397,7 @@ Every script in the repository, one row each, in path order. Categories are A (g
 | `scripts/s3-emulator.sh` | B 97: `rm -f "$partialPath"`<br>F 101: `chmod +x "$partialPath"`<br>C 102: `mv "$partialPath" "$binaryPath"`<br>B 153: `rm -f "$stateDir/minio.log"`<br>B 171: `rm -f "$stateDir/minio.pid" "$stateDir/minio.port"`<br>B 190: `rm -rf "$stateDir/data" "$stateDir/env"`<br>B 254: `rm -f "$pidFile" "$stateDir/minio.port"` |
 | `scripts/story-player.sh` | B 463: `rm -rf "$TMP_DIR"`<br>B 493: `rm -rf "$SCREENSHOTS_DIR"` |
 | `scripts/test-everything-parallel.sh` | B 120: `rm -rf "$LOG_DIR"` |
-| `scripts/update-mobile-media-tools.sh` | C 81: `perl -pi -e "$@" "$file"` |
+| `scripts/update-mobile-media-tools.sh` | F 101: `cp -p "$file" "$temp"`<br>C 102: `sed -E "s\|$pattern\|$replacement\|g" "$file" > "$temp"`<br>C 103: `mv "$temp" "$file"` |
 | `test/test-cli-commands.sh` | C 37: `> /tmp/summary_${db//\//_}.log`<br>C 48: `> /tmp/verify_${db//\//_}.log` (clobbers fixed-name files in the shared /tmp) |
 | `tools/what-changed/smoke-tests.sh` | B 36: `rm -rf "$WORK_DIR"`<br>B 139: `rm -f "$WORK_DIR/what-changed.json"` |
 
