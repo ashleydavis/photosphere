@@ -91,12 +91,6 @@
             "platforms": [
                 "darwin"
             ]
-        },
-        {
-            "name": "test:what-changed",
-            "paths": [
-                "tools/what-changed"
-            ]
         }
     ]
 }
