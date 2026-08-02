@@ -106,6 +106,34 @@ get_release_binary() {
 }
 
 #
+# Prints the absolute path of the Electron executable the app in <app-directory> would launch.
+#
+# The electron npm package records the executable's platform-specific relative path in its path.txt
+# ("electron" on Linux, "Electron.app/Contents/MacOS/Electron" on macOS, "electron.exe" on Windows)
+# and unpacks the binary under dist/, so the executable is <package>/dist/<contents of path.txt>.
+# That is exactly what requiring the package returns.
+#
+# Bun may hoist the package to the workspace root or keep it in the app's own node_modules, so both
+# are checked, nearest first, the way node's resolver would.
+#
+# Usage: resolve_electron_binary <app-directory>
+#
+resolve_electron_binary() {
+    local app_dir="$1"
+    local candidate_dir
+    local package_dir
+    for candidate_dir in "$app_dir/node_modules/electron" "$app_dir/../../node_modules/electron"; do
+        if [ -f "$candidate_dir/path.txt" ]; then
+            package_dir=$(cd "$candidate_dir" && native_pwd)
+            echo "$package_dir/dist/$(cat "$candidate_dir/path.txt")"
+            return 0
+        fi
+    done
+    log_error "Could not find the electron package from $app_dir: no path.txt in $app_dir/node_modules/electron or $app_dir/../../node_modules/electron" >&2
+    return 1
+}
+
+#
 # Waits for the app to publish the OS-assigned port its test control server bound and prints it.
 # The app binds port 0 and writes the actual port to $tmp_dir/test-control.port. Diagnostics go to
 # stderr so callers can capture the port from stdout.
@@ -149,7 +177,7 @@ start_app() {
         launch_args+=("$(get_release_binary)")
     else
         local electron_bin
-        electron_bin=$(bun "$DESKTOP_DIR/../../scripts/resolve-electron-binary.ts" --from "$DESKTOP_DIR")
+        electron_bin=$(resolve_electron_binary "$DESKTOP_DIR") || exit 1
         launch_args+=("$electron_bin" "$DESKTOP_DIR")
     fi
 
