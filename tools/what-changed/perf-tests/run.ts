@@ -22,7 +22,14 @@ const FILE_SIZE_BYTES = 512;
 // The slowest a single warm check is allowed to be, in milliseconds per file. A warm check is one
 // `stat` and a map lookup, so anything approaching a millisecond per file means something is wrong.
 //
-const WARM_BUDGET_MS_PER_FILE = 0.05;
+// 0.05 was set against a development machine, which measures about 0.008ms per file at every size. A
+// shared CI runner is far slower at the same work, measuring between 0.044 and 0.058ms per file, so
+// the old budget sat inside the runner's ordinary spread and this benchmark failed intermittently on
+// whichever run happened to draw a slow machine. 0.15 clears the slowest run observed by roughly
+// three times while still being an order of magnitude under the millisecond that would mean the warm
+// path had stopped being a stat and a map lookup.
+//
+const WARM_BUDGET_MS_PER_FILE = 0.15;
 
 //
 // One measured result, ready to be printed as a row.
