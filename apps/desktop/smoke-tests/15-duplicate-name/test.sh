@@ -4,8 +4,6 @@ TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$TEST_DIR/../lib/common.sh"
 TEST_DIR="$(cd "$(dirname "$0")" && native_pwd)"
 DESKTOP_DIR="$(cd "$TEST_DIR/../.." && native_pwd)"
-REPO_ROOT="$(cd "$TEST_DIR/../../../.." && native_pwd)"
-
 print_test_header 15 "duplicate-name"
 
 TMP_DIR="$TEST_DIR/tmp"
@@ -20,11 +18,8 @@ trap cleanup EXIT
 mkdir -p "$TMP_DIR/vault"
 
 # Pre-create a secret with the name "dup-secret".
-bun "$REPO_ROOT/scripts/write-vault-secret.ts" \
-    --file "$TMP_DIR/vault/dup-secret.json" \
-    --name dup-secret \
-    --type s3-credentials \
-    --value '{"region":"","accessKeyId":"","secretAccessKey":""}'
+write_vault_secret "$TMP_DIR/vault/dup-secret.json" dup-secret s3-credentials \
+    '{"region":"","accessKeyId":"","secretAccessKey":""}'
 
 # Capture the original file's modification timestamp so we can verify
 # the duplicate-add does not overwrite it.

@@ -465,3 +465,37 @@ check_no_errors() {
     log_success "No errors in app.log"
     return 0
 }
+
+#
+# Writes one plaintext-vault secret file, the JSON envelope the vault stores a secret in
+# (an object with name, type and value, where value is always a string). For an s3-credentials
+# secret that string is itself JSON, so pass the already-encoded JSON document as the value.
+#
+# jq --arg passes every value in as data, never as text spliced into a template, so a name or
+# value containing a quote, a backslash or a newline is escaped by jq rather than becoming syntax.
+# jq prints a trailing newline that the vault's own writer does not, so printf strips it.
+# Usage: write_vault_secret <file> <name> <type> <value>
+#
+write_vault_secret() {
+    local file_path="$1"
+    local secret_name="$2"
+    local secret_type="$3"
+    local secret_value="$4"
+    printf '%s' "$(jq -cn --arg name "$secret_name" --arg type "$secret_type" --arg value "$secret_value" \
+        '{name: $name, type: $type, value: $value}')" > "$file_path"
+}
+
+#
+# The same, with the secret's value read verbatim from a file, newlines and all, which is how a
+# multi-line PEM gets in. jq --rawfile keeps the file's exact bytes, including any trailing newline,
+# which $(cat ...) would strip.
+# Usage: write_vault_secret_from_file <file> <name> <type> <value-file>
+#
+write_vault_secret_from_file() {
+    local file_path="$1"
+    local secret_name="$2"
+    local secret_type="$3"
+    local value_file="$4"
+    printf '%s' "$(jq -cn --arg name "$secret_name" --arg type "$secret_type" --rawfile value "$value_file" \
+        '{name: $name, type: $type, value: $value}')" > "$file_path"
+}

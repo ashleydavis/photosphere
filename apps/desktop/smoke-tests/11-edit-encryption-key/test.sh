@@ -27,11 +27,8 @@ MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQ
 -----END PRIVATE KEY-----
 "
 printf '%s' "$RAW_PEM" > "$TMP_DIR/raw.pem"
-bun "$REPO_ROOT/scripts/write-vault-secret.ts" \
-    --file "$TMP_DIR/vault/enc-key-1.json" \
-    --name enc-key-1 \
-    --type encryption-key \
-    --value-file "$TMP_DIR/raw.pem"
+write_vault_secret_from_file "$TMP_DIR/vault/enc-key-1.json" \
+    enc-key-1 encryption-key "$TMP_DIR/raw.pem"
 
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"

@@ -227,11 +227,11 @@ test_share_database() {
     local pem_file="${TEST_TMP_DIR}/encsndr1.pem"
     mkdir -p "$TEST_TMP_DIR" "$SENDER_VAULT_DIR"
     openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$pem_file" 2>/dev/null
-    bun ../../scripts/write-vault-secret.ts \
-        --file "${SENDER_VAULT_DIR}/encsndr1.json" \
-        --name encsndr1 \
-        --type encryption-key \
-        --value-file "$pem_file"
+    # jq --rawfile reads the PEM's exact bytes (trailing newline included, which $(cat ...) would
+    # strip) and escapes them as JSON data, so nothing is spliced into a template. jq prints a
+    # trailing newline the vault's own writer does not, so printf strips it.
+    printf '%s' "$(jq -cn --arg name encsndr1 --arg type encryption-key --rawfile value "$pem_file" \
+        '{name: $name, type: $type, value: $value}')" > "${SENDER_VAULT_DIR}/encsndr1.json"
     chmod 600 "${SENDER_VAULT_DIR}/encsndr1.json"
 
     seed_databases_config "$SENDER_CONFIG_DIR" \

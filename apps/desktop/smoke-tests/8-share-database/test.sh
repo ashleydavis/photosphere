@@ -4,8 +4,6 @@ TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$TEST_DIR/../lib/common.sh"
 TEST_DIR="$(cd "$(dirname "$0")" && native_pwd)"
 DESKTOP_DIR="$(cd "$TEST_DIR/../.." && native_pwd)"
-REPO_ROOT="$(cd "$TEST_DIR/../../../.." && native_pwd)"
-
 print_test_header 8 "share-database"
 
 TMP_DIR="$TEST_DIR/tmp"
@@ -29,11 +27,8 @@ EOF
 
 # Seed sender vault with encryption key (raw PEM — receiver derives the public key)
 openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$TMP_DIR/sender/test-enc-key.pem" 2>/dev/null
-bun "$REPO_ROOT/scripts/write-vault-secret.ts" \
-    --file "$TMP_DIR/sender/vault/test-enc-key.json" \
-    --name test-enc-key \
-    --type encryption-key \
-    --value-file "$TMP_DIR/sender/test-enc-key.pem"
+write_vault_secret_from_file "$TMP_DIR/sender/vault/test-enc-key.json" \
+    test-enc-key encryption-key "$TMP_DIR/sender/test-enc-key.pem"
 
 # Seed sender databases config (TOML format)
 cat > "$TMP_DIR/sender/config/databases.toml" << 'EOF'

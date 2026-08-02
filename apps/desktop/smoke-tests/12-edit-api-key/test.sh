@@ -22,11 +22,7 @@ mkdir -p "$TMP_DIR/vault"
 # Seed the vault with a raw api-key (no JSON envelope), edit it via the
 # UI and verify the round-trip preserves the raw-string format.
 RAW_KEY="sk-test-1234567890ABCDEF"
-bun "$REPO_ROOT/scripts/write-vault-secret.ts" \
-    --file "$TMP_DIR/vault/api-key-1.json" \
-    --name api-key-1 \
-    --type api-key \
-    --value "$RAW_KEY"
+write_vault_secret "$TMP_DIR/vault/api-key-1.json" api-key-1 api-key "$RAW_KEY"
 
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"

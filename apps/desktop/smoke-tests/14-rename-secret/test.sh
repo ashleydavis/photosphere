@@ -21,11 +21,7 @@ mkdir -p "$TMP_DIR/vault"
 
 # Seed the vault with an api-key whose vault key matches its name.
 RAW_KEY="sk-rename-me"
-bun "$REPO_ROOT/scripts/write-vault-secret.ts" \
-    --file "$TMP_DIR/vault/old-name.json" \
-    --name old-name \
-    --type api-key \
-    --value "$RAW_KEY"
+write_vault_secret "$TMP_DIR/vault/old-name.json" old-name api-key "$RAW_KEY"
 
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"

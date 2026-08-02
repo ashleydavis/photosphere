@@ -22,11 +22,8 @@ mkdir -p "$TMP_DIR/vault"
 # Seed the vault with an s3-credentials secret stored as a JSON value
 # containing only the credential fields (no `label`). Edit a field via
 # the UI, save, and assert the value is still JSON with no `label`.
-bun "$REPO_ROOT/scripts/write-vault-secret.ts" \
-    --file "$TMP_DIR/vault/s3-creds-1.json" \
-    --name s3-creds-1 \
-    --type s3-credentials \
-    --value '{"region":"us-east-1","accessKeyId":"AKIAOLD","secretAccessKey":"OLDSECRET"}'
+write_vault_secret "$TMP_DIR/vault/s3-creds-1.json" s3-creds-1 s3-credentials \
+    '{"region":"us-east-1","accessKeyId":"AKIAOLD","secretAccessKey":"OLDSECRET"}'
 
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"

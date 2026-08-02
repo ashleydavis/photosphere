@@ -761,11 +761,11 @@ seed_vault_secret() {
     encoded_name=$(printf '%s' "$secret_name" | bun "$REPO_ROOT/scripts/json-encode.ts" --url-segment -)
     local file_path="${PHOTOSPHERE_VAULT_DIR}/${encoded_name}.json"
 
-    bun "$REPO_ROOT/scripts/write-vault-secret.ts" \
-        --file "$file_path" \
-        --name "$secret_name" \
-        --type "$secret_type" \
-        --value "$secret_value"
+    # jq --arg passes each value in as data, never as text spliced into a template, so a name or
+    # value containing a quote, a backslash or a newline is escaped by jq rather than becoming
+    # syntax. jq prints a trailing newline the vault's own writer does not, so printf strips it.
+    printf '%s' "$(jq -cn --arg name "$secret_name" --arg type "$secret_type" --arg value "$secret_value" \
+        '{name: $name, type: $type, value: $value}')" > "$file_path"
     chmod 600 "$file_path"
 }
 

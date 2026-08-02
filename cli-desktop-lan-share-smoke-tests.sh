@@ -104,11 +104,11 @@ seed_encryption_key() {
     mkdir -p "$vault_dir"
     local pem_file="$vault_dir/$secret_name.pem"
     openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$pem_file" 2>/dev/null
-    bun "$ROOT_DIR/scripts/write-vault-secret.ts" \
-        --file "$vault_dir/$secret_name.json" \
-        --name "$secret_name" \
-        --type encryption-key \
-        --value-file "$pem_file"
+    # jq --rawfile reads the PEM's exact bytes (trailing newline included, which $(cat ...) would
+    # strip) and --arg passes the name in as data, so nothing is spliced into a template. jq prints
+    # a trailing newline the vault's own writer does not, so printf strips it.
+    printf '%s' "$(jq -cn --arg name "$secret_name" --arg type encryption-key --rawfile value "$pem_file" \
+        '{name: $name, type: $type, value: $value}')" > "$vault_dir/$secret_name.json"
     chmod 600 "$vault_dir/$secret_name.json"
     rm -f "$pem_file"
 }
