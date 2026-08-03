@@ -207,6 +207,36 @@ runner_flock() {
 # down, else plain "tmp" as a single run has always used.
 RUN_TMP_NAME="${PHOTOSPHERE_TEST_TMP:-tmp}"
 
+# The address every device must be able to reach for any mobile test to work: this host, on the LAN
+# bridge. Matches BRIDGE_HOST's reasoning in common.sh, from the guest's side rather than the host's.
+DEVICE_HEALTH_HOST="192.168.55.1"
+
+# How long a health probe is given before it counts as a failure, and how long a withdrawn device is
+# left alone before being re-probed.
+#
+# 30s to recover rather than something shorter because these outages have been measured recovering on
+# their own: one device lost its route to the host, kept its address, services and adb connection
+# throughout, and was answering again minutes later. Re-probing too eagerly just burns adb calls.
+DEVICE_HEALTH_TIMEOUT_SECONDS=10
+DEVICE_RECOVERY_WAIT_SECONDS=30
+
+# How often the link to the device is sampled while a test runs. Short enough to catch the
+# one-to-four second outages that make up most of what has been measured.
+DEVICE_HEALTH_SAMPLE_SECONDS=2
+
+# How many times one test may be put back on the queue because the device under it went unreachable.
+#
+# Bounded on purpose. Without a cap, a pool that never recovers would hand the same test round for
+# ever and the run would never end. When the cap is reached the test is recorded as a real failure,
+# because at that point the evidence no longer says "the device was briefly unreachable", it says the
+# test could not be run at all and somebody needs to know.
+MAX_DEVICE_REQUEUES_PER_TEST=3
+
+# Where withdrawn devices are recorded, one file per serial holding the time it was withdrawn. A file
+# rather than a variable because the pool's workers are separate subshells and cannot share state any
+# other way, which is the same reason the work queue and the held count are files.
+RUNNER_QUARANTINE_DIR=""
+
 # Set to 1 by run_pool when there is only one worker, so a single-device run keeps streaming test
 # output to the terminal exactly as it did before the pool existed. With several workers the output
 # would interleave into nonsense, so it goes to per-test log files instead.
@@ -239,6 +269,114 @@ ACQUIRED_FD=""
 # its file descriptor, so returning it through $(...) or a process substitution would run this in a
 # subshell whose descriptors close on return, releasing the lock immediately.
 #
+#
+# Whether a device can still reach this host.
+#
+# Every mobile test depends on this and nothing else checks it: the app talks to the host's control
+# bridge over the LAN bridge, so a device that cannot reach the host fails every test given to it
+# while adb still reports it as present and healthy. Measured directly rather than inferred, and
+# read-only: it pings and nothing else.
+#
+# Usage: device_can_reach_host <serial>
+#
+device_can_reach_host() {
+    local serial="$1"
+    [ -n "$serial" ] || return 0
+    timeout "$DEVICE_HEALTH_TIMEOUT_SECONDS" adb -s "$serial" shell \
+        "ping -c 1 -W 1 $DEVICE_HEALTH_HOST" >/dev/null 2>&1
+}
+
+#
+# Withdraws a device from service, recording when.
+# Usage: quarantine_device <serial> <reason>
+#
+quarantine_device() {
+    local serial="$1"
+    local reason="$2"
+    mkdir -p "$RUNNER_QUARANTINE_DIR"
+    date +%s > "$RUNNER_QUARANTINE_DIR/$serial"
+    log_info "Withdrawing $serial from this run: $reason. It will be re-checked in ${DEVICE_RECOVERY_WAIT_SECONDS}s."
+}
+
+#
+# Whether a device is currently withdrawn. Returns 0 (true, skip it) while it is.
+#
+# A withdrawn device is left alone for DEVICE_RECOVERY_WAIT_SECONDS and then re-probed. These
+# outages have been observed to clear on their own, so a device is given back its work rather than
+# written off: the point is to stop feeding tests to a device that cannot run them, not to shrink
+# the pool permanently. Nothing here restarts or otherwise touches a device.
+#
+# Usage: device_is_quarantined <serial>
+#
+device_is_quarantined() {
+    local serial="$1"
+    local since_file="$RUNNER_QUARANTINE_DIR/$serial"
+    [ -f "$since_file" ] || return 1
+
+    local since now
+    since="$(cat "$since_file" 2>/dev/null || echo 0)"
+    now="$(date +%s)"
+    if [ $((now - since)) -lt "$DEVICE_RECOVERY_WAIT_SECONDS" ]; then
+        return 0
+    fi
+
+    if device_can_reach_host "$serial"; then
+        rm -f "$since_file"
+        log_info "$serial can reach the host again after $((now - since))s; returning it to service."
+        return 1
+    fi
+
+    date +%s > "$since_file"
+    return 0
+}
+
+#
+# Watches a device's link to the host for the duration of one test, leaving a marker if it ever
+# breaks. Prints the watcher's pid so the caller can stop it.
+#
+# A check made after a test has failed is not good enough, and the measurements say why. These
+# outages are mostly seconds long: of fifteen recorded on one device, most lasted 1 to 4 seconds and
+# only one ran to 339. A test waits up to 240 seconds for the app, so by the time it gives up and
+# anything asks "can this device reach the host", the answer is usually yes again. The failure looks
+# like the app's fault and the outage leaves no trace. Sampling throughout is the only way to catch
+# one that has already healed.
+#
+# Read-only: it pings, nothing else.
+#
+# Usage: start_device_health_watch <serial> <marker_file>
+#
+start_device_health_watch() {
+    local serial="$1"
+    local marker_file="$2"
+
+    rm -f "$marker_file"
+    if [ -z "$serial" ]; then
+        return 0
+    fi
+
+    (
+        while true; do
+            if ! timeout "$DEVICE_HEALTH_TIMEOUT_SECONDS" adb -s "$serial" shell \
+                "ping -c 1 -W 1 $DEVICE_HEALTH_HOST" >/dev/null 2>&1; then
+                date -Is > "$marker_file"
+            fi
+            sleep "$DEVICE_HEALTH_SAMPLE_SECONDS"
+        done
+    ) >/dev/null 2>&1 &
+    echo $!
+}
+
+#
+# Stops a health watcher started above.
+# Usage: stop_device_health_watch <pid>
+#
+stop_device_health_watch() {
+    local watcher_pid="$1"
+    [ -n "$watcher_pid" ] || return 0
+    kill "$watcher_pid" 2>/dev/null || true
+    wait "$watcher_pid" 2>/dev/null || true
+}
+
 acquire_device() {
     local waited=0
     while true; do
@@ -251,6 +389,10 @@ acquire_device() {
         if [ "$held" -lt "$share" ]; then
             local serial fd
             for serial in "${RUNNER_SLOTS[@]}"; do
+                # Withdrawn devices are passed over until they can reach the host again.
+                if [ -n "$serial" ] && device_is_quarantined "$serial"; then
+                    continue
+                fi
                 # An empty slot means the caller is not binding tests to devices at all, so there is
                 # nothing to lock.
                 if [ -z "$serial" ]; then
@@ -380,6 +522,25 @@ queue_init() {
 # the queue file is mutated.
 # Usage: queue_pop <queue_file>
 #
+#
+# Puts a test back on the front of the queue, so it is retried rather than lost.
+# Usage: queue_push_front <queue_file> <test_path>
+#
+queue_push_front() {
+    local queue_file="$1"
+    local test_path="$2"
+
+    eval "exec $QUEUE_LOCK_FD<>\"\$queue_file.lock\""
+    runner_flock "$QUEUE_LOCK_FD"
+
+    printf '%s\n' "$test_path" > "$queue_file.next"
+    cat "$queue_file" >> "$queue_file.next" 2>/dev/null || true
+    mv "$queue_file.next" "$queue_file"
+
+    runner_flock -u "$QUEUE_LOCK_FD"
+    eval "exec $QUEUE_LOCK_FD>&-"
+}
+
 queue_pop() {
     local queue_file="$1"
     if [ ! -f "$queue_file" ]; then
@@ -553,6 +714,12 @@ run_worker() {
             printf "${BLUE}RUN ${NC}  %s\n" "$name"
         fi
 
+        # Watch the link to the device for as long as the test runs, so an outage that heals before
+        # the test finishes still leaves evidence.
+        local health_marker health_watcher
+        health_marker="$results_dir/.unreachable-$name"
+        health_watcher="$(start_device_health_watch "$ACQUIRED_DEVICE" "$health_marker")"
+
         local status=0
         if test_has_marker "$test_path" "$EXCLUSIVE_MARKER"; then
             eval "exec $EXCLUSIVE_LOCK_FD<>\"\$exclusive_lock\""
@@ -562,6 +729,44 @@ run_worker() {
             eval "exec $EXCLUSIVE_LOCK_FD>&-"
         else
             run_test_isolated "$test_path" "$log_file" "$duration_file" || status=$?
+        fi
+
+        # A test that failed on a device which can no longer reach the host tells us nothing about
+        # the test: the app cannot talk to the control bridge without the host, so it was never
+        # given a chance to run. Recording that as a failure would blame the code for the network,
+        # so the result is discarded and the test goes back on the queue for a healthy device.
+        #
+        # The device check runs only when the test failed, so a passing test is never second-guessed,
+        # and the discard needs the device to be provably unreachable now. A test that failed for its
+        # own reasons on a healthy device is recorded as a failure exactly as before.
+        stop_device_health_watch "$health_watcher"
+
+        # Discard when the device lost the host at any point during the test, or has lost it now.
+        # The marker covers an outage that has already healed, which is the common case; the live
+        # check covers one that is still going.
+        if [ "$status" -ne 0 ] && [ -n "$ACQUIRED_DEVICE" ] \
+            && { [ -f "$health_marker" ] || ! device_can_reach_host "$ACQUIRED_DEVICE"; }; then
+            local requeue_file requeues
+            requeue_file="$results_dir/.requeues-$name"
+            requeues="$(cat "$requeue_file" 2>/dev/null || echo 0)"
+
+            if [ "$requeues" -lt "$MAX_DEVICE_REQUEUES_PER_TEST" ]; then
+                echo $((requeues + 1)) > "$requeue_file"
+                local why="it could not reach $DEVICE_HEALTH_HOST when $name failed on it"
+                if [ -f "$health_marker" ]; then
+                    why="it lost $DEVICE_HEALTH_HOST while $name was running (first seen $(cat "$health_marker" 2>/dev/null))"
+                fi
+                quarantine_device "$ACQUIRED_DEVICE" "$why"
+                printf "${BLUE}RETRY${NC} %-32s  discarded: %s could not reach the host (attempt %s of %s)\n" \
+                    "$name" "$ACQUIRED_DEVICE" "$((requeues + 1))" "$MAX_DEVICE_REQUEUES_PER_TEST"
+                queue_push_front "$queue_file" "$test_path"
+                release_device
+                continue
+            fi
+
+            # Out of retries. Recorded as a real failure below, with the reason made plain, because a
+            # test that could never be run is something to report rather than to keep hiding.
+            log_error "$name has been discarded $requeues time(s) for unreachable devices; recording it as a failure."
         fi
 
         release_device
@@ -587,6 +792,10 @@ run_worker() {
 run_pool() {
     local results_dir="$1"
     shift
+
+    # Per-run, so every run starts by judging the devices fresh rather than inheriting a verdict.
+    RUNNER_QUARANTINE_DIR="$results_dir/.withdrawn-devices"
+    mkdir -p "$RUNNER_QUARANTINE_DIR"
 
     if [ ${#RUNNER_SLOTS[@]} -eq 0 ]; then
         RUNNER_SLOTS=("")
