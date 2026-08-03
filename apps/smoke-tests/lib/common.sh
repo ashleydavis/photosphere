@@ -75,6 +75,14 @@ DEFAULT_BRIDGE_TIMEOUT=40
 POLL_INTERVAL_SECONDS=0.2
 POLL_TICKS_PER_SECOND=5
 
+# How many times require_lan_bridge samples wlan0 before it decides the emulator is not on the host
+# LAN bridge, and how long it waits between samples. The bridge does not come and go during a run, so
+# these only exist to stop a single unlucky sample from failing a test on an emulator that is on the
+# bridge before and after. A bridge that was never brought up misses every sample and still fails
+# fast, at the cost of a few seconds.
+LAN_BRIDGE_PROBE_ATTEMPTS=5
+LAN_BRIDGE_PROBE_INTERVAL_SECONDS=1
+
 # Clean up the app/bridge even when a run is interrupted (Ctrl-C) or the runner's timeout kills a
 # slow test (SIGTERM), not only on a normal exit. A bash EXIT trap does not fire on an uncaught
 # signal, so turn those signals into an exit here: that runs the per-test EXIT trap (stop_app),
@@ -728,10 +736,25 @@ require_lan_bridge() {
     if [ "$PLATFORM" != "android" ]; then
         return 0
     fi
-    if adb shell ip addr show wlan0 2>/dev/null | tr -d '\r' | grep -q 'inet 192\.168\.55\.'; then
-        log_success "Emulator is on the host LAN bridge."
-        return 0
-    fi
+    # Being on the bridge is a static property of the emulator, so one unlucky sample must not decide
+    # it. A single probe was doing exactly that: it threw stderr away, so an adb hiccup or a momentary
+    # gap in the interface read identically to a bridge that was never brought up, and the test died
+    # instantly claiming the developer had forgotten emu:and:up. Seen once as a mid-run failure on an
+    # emulator the run's own pre-flight check had already found on the bridge, and which went on to
+    # pass later tests. Sampling a few times keeps the hard failure a genuinely absent bridge deserves
+    # (it stays absent for every sample) while removing the false negative, and the last output is
+    # kept so a real failure reports what was actually seen.
+    local attempt=0
+    local probe_output=""
+    while [ "$attempt" -lt "$LAN_BRIDGE_PROBE_ATTEMPTS" ]; do
+        probe_output=$(adb shell ip addr show wlan0 2>&1 | tr -d '\r')
+        if echo "$probe_output" | grep -q 'inet 192\.168\.55\.'; then
+            log_success "Emulator is on the host LAN bridge."
+            return 0
+        fi
+        attempt=$((attempt + 1))
+        sleep "$LAN_BRIDGE_PROBE_INTERVAL_SECONDS"
+    done
     # A run that has declared it cannot have a bridge skips these tests instead of failing, the same
     # way 33-s3-database skips without S3 credentials. The release workflow sets this because its
     # emulator is booted by an action that attaches no tap device, so the bridge cannot be built
@@ -741,6 +764,7 @@ require_lan_bridge() {
         exit 0
     fi
     log_error "The emulator is not on the host LAN bridge, so a host-to-device LAN transfer cannot work."
+    log_error "Probed wlan0 $LAN_BRIDGE_PROBE_ATTEMPTS times; adb last reported: ${probe_output:-<no output>}"
     log_error "Bring it up with: bun run emu:and:up"
     exit 1
 }
