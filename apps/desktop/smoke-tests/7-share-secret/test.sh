@@ -29,7 +29,12 @@ EOF
 # Start sender app
 start_app "$TMP_DIR/sender" 0
 SENDER_PORT="$APP_PORT"
-wait_for_ready "$SENDER_PORT"
+# The variable name is passed as a second argument so wait_for_ready can write back the port the app
+# is actually on. Fixes the intermittent failure where a relaunched app was addressed on its old port: when the first
+# launch times out, wait_for_ready relaunches the app, which binds a new OS-assigned port. Without
+# the write-back the caller kept posting to the dead port and the test failed with
+# "curl failed (exit N) posting to ..." followed by an unrelated-looking log-pattern timeout.
+wait_for_ready "$SENDER_PORT" SENDER_PORT
 
 send_command "$SENDER_PORT" navigate '{"page":"secrets"}'
 wait_for_log "$TMP_DIR/sender" "Secrets page loaded"
@@ -60,7 +65,7 @@ log_info "Pairing code: $code"
 # Start receiver app
 start_app "$TMP_DIR/receiver" 960
 RECEIVER_PORT="$APP_PORT"
-wait_for_ready "$RECEIVER_PORT"
+wait_for_ready "$RECEIVER_PORT" RECEIVER_PORT
 
 send_command "$RECEIVER_PORT" navigate '{"page":"secrets"}'
 wait_for_log "$TMP_DIR/receiver" "Secrets page loaded"

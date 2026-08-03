@@ -277,14 +277,27 @@ _kill_app() {
 # <port> argument is accepted for call compatibility but the live port is always APP_PORT.
 # Usage: wait_for_ready <port>
 #
+# Takes the caller's port variable name so it can write back the port the app actually ended up on.
+# Fixes the intermittent failure where a relaunched app was addressed on its old port: on a timeout this relaunches the
+# app, which binds a new OS-assigned port, and without the write-back the caller went on posting to
+# the port of the instance that never became ready. The visible failure was
+# "curl failed (exit N) posting to <command>", followed by a log-pattern timeout that looked
+# unrelated.
 wait_for_ready() {
     local max_attempts=2
     local attempt=1
+    # The relaunch path below starts a new app instance on a new OS-assigned port, which start_app
+    # writes to the APP_PORT global. A test that snapshotted APP_PORT into its own variable before
+    # calling this (tests 7 and 8 must, because they run two instances) would otherwise keep driving
+    # the instance that was just killed, and every later send_command posts to a dead port. Naming
+    # that variable here lets the live port be written back into it.
+    local port_var="${2:-APP_PORT}"
     log_info "Waiting for app to be ready on port $APP_PORT..."
     while [ "$attempt" -le "$max_attempts" ]; do
         local elapsed=0
         while [ "$elapsed" -lt "$DEFAULT_WAIT_TIMEOUT" ]; do
             if curl -sf "http://localhost:$APP_PORT/ready" > /dev/null 2>&1; then
+                printf -v "$port_var" '%s' "$APP_PORT"
                 log_info "App is ready"
                 return 0
             fi
