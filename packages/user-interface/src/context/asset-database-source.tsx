@@ -383,7 +383,7 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
     //
     // Whether an accessible database lives at the given path. Runs the check as a worker task (the same
     // check-database-exists handler registered on desktop and mobile) rather than a per-platform call, so
-    // "exists" means the same thing everywhere: checkConnectivity reports a directory that holds no
+    // "exists" means the same thing everywhere: checkDatabaseExists reports a directory that holds no
     // database as absent.
     //
     // The queue is tagged with a unique throwaway source, never dbPath: shutdown() cancels the source and
@@ -412,7 +412,24 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
     // changing state so the previously open database stays loaded.
     //
     async function openDatabase(dbPath: string): Promise<void> {
-        const exists = await checkDatabaseExists(dbPath);
+        // A database that cannot be reached is a different problem from one that is not there, and
+        // saying "not found" for an unreachable bucket tells the user their photos are gone when they
+        // are merely out of reach. checkDatabaseExists throws for anything that stopped it getting an
+        // answer, and only reports false when the storage answered and held no database.
+        let exists: boolean;
+        try {
+            exists = await checkDatabaseExists(dbPath);
+        }
+        catch (err) {
+            log.exception(`Could not reach the database at ${dbPath}`, err as Error);
+            addToast({
+                message: `Could not reach the database: ${dbPath}`,
+                color: 'danger',
+                duration: 8000,
+            });
+            return;
+        }
+
         if (!exists) {
             addToast({
                 message: `Database not found: ${dbPath}`,

@@ -7,7 +7,7 @@ import { checkDatabaseExistsHandler } from "../../lib/check-database-exists.work
 //
 // Unit tests for the check-database-exists worker handler.
 //
-// The handler reuses checkConnectivity, which builds FileStorage for the path and checks for the
+// The handler reuses checkDatabaseExists, which builds FileStorage for the path and checks for the
 // database's merkle tree file (.db/files.dat). On device that file access routes through the fs shim's
 // fsAccess host function; in this jest env node-api's storage uses the real fs, so the tests drive it
 // against a real temp directory. The semantics under test are identical either way: a path with a

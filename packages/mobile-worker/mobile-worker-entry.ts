@@ -92,7 +92,7 @@ registerHandler("find-receiver", findReceiverHandler);
 registerHandler("send-payload", sendPayloadHandler);
 
 // Register the check-database-exists handler: probes whether an accessible database lives at a path
-// (via node-api's checkConnectivity). Desktop registers the same handler through initTaskHandlers, so
+// (via node-api's checkDatabaseExists). Desktop registers the same handler through initTaskHandlers, so
 // the shared openDatabase guard runs the identical check on both platforms.
 registerHandler("check-database-exists", checkDatabaseExistsHandler);
 

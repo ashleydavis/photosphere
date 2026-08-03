@@ -660,21 +660,26 @@ export async function createLazyDatabaseStorage(
 }
 
 //
-// Returns true if the database at the given path is accessible.
-// Works for any storage path (local filesystem, S3, network).
-// Used by sync scheduling to avoid queuing tasks when the target is unreachable.
+// Returns true when a database exists at the given path. Works for any storage path (local
+// filesystem, S3, network).
 //
-export async function checkConnectivity(databasePath: string): Promise<boolean> {
-    try {
-        // Open storage the same way the load path does: openStorage resolves S3/encryption credentials
-        // from the database's own config, so the existence check and the actual load agree on what is
-        // reachable rather than probing with no credentials.
-        const { storage } = await openStorage(databasePath);
-        return await merkleTreeExists(storage);
-    }
-    catch {
-        return false;
-    }
+// This answers existence, not connectivity: it is reached through the check-database-exists task and
+// its answer decides whether the app opens a database or tells the user there is none there. Whether
+// an automatic sync may run is a separate question, decided by computeSyncAllowed from the platform's
+// reported network status.
+//
+export async function checkDatabaseExists(databasePath: string): Promise<boolean> {
+    // Open storage the same way the load path does: openStorage resolves S3/encryption credentials
+    // from the database's own config, so the existence check and the actual load agree on what is
+    // reachable rather than probing with no credentials.
+    //
+    // Storage errors are deliberately NOT caught. A bucket that cannot be reached, a credential that
+    // does not work and a DNS failure are all different from "there is no database here", and this
+    // used to report every one of them as the latter: the app told the user their database was not
+    // found when it simply could not get to it. Reaching the storage and finding no merkle tree is
+    // the only thing that returns false.
+    const { storage } = await openStorage(databasePath);
+    return await merkleTreeExists(storage);
 }
 
 //
