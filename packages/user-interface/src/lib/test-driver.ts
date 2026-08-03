@@ -140,6 +140,52 @@ function findNestedInput(dataId: string): HTMLInputElement | HTMLTextAreaElement
 }
 
 //
+// The clock the driver measures deadlines against and waits on. It exists so a unit test can drive
+// the driver's waits deliberately instead of racing the machine: waitForElement polls against a
+// deadline, so a test that schedules a late render and then waits for it fails whenever the machine
+// stalls past the deadline, which it did under the full parallel suite. Replacing the global timers
+// with jest fake timers would fix that too, but fake timers are installed for the whole file and
+// break every later test that needs real time, so the clock is swapped here instead.
+//
+export interface ITestDriverClock {
+    // The current time in milliseconds, used to work out when a poll has run out of time.
+    now(): number;
+
+    // Resolves once the given number of milliseconds have passed.
+    sleep(milliseconds: number): Promise<void>;
+}
+
+//
+// Wall-clock time and real timers. This is what the app always runs with; only tests replace it.
+//
+export const realTestDriverClock: ITestDriverClock = {
+    now(): number {
+        return Date.now();
+    },
+
+    sleep(milliseconds: number): Promise<void> {
+        return new Promise<void>((resolve) => {
+            setTimeout(resolve, milliseconds);
+        });
+    },
+};
+
+//
+// The clock currently in use. Module state rather than a parameter so no call site has to thread a
+// clock through; setTestDriverClock is the only thing that changes it.
+//
+let currentTestDriverClock: ITestDriverClock = realTestDriverClock;
+
+//
+// Replaces the clock the driver measures and waits on, and returns nothing. Only tests call this,
+// and a test that calls it must put realTestDriverClock back afterwards, or the driver keeps waiting
+// on a clock that nothing advances.
+//
+export function setTestDriverClock(clock: ITestDriverClock): void {
+    currentTestDriverClock = clock;
+}
+
+//
 // Waits up to `timeoutMs` for the `nth` VISIBLE element with the given `data-id` to exist, polling
 // briefly. Test targets that render asynchronously (for example a database list item populated after
 // its dialog opens) may not be present the instant the command arrives; without this a click fires
@@ -148,14 +194,12 @@ function findNestedInput(dataId: string): HTMLInputElement | HTMLTextAreaElement
 //
 export async function waitForElement(dataId: string, nth: number, timeoutMs: number): Promise<void> {
     const intervalMs = 50;
-    const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline) {
+    const deadline = currentTestDriverClock.now() + timeoutMs;
+    while (currentTestDriverClock.now() < deadline) {
         if (findElement(dataId, nth)) {
             return;
         }
-        await new Promise<void>((resolve) => {
-            setTimeout(resolve, intervalMs);
-        });
+        await currentTestDriverClock.sleep(intervalMs);
     }
 }
 
@@ -258,9 +302,7 @@ export async function doLongPress(dataId: string, nth?: number): Promise<void> {
     const clientX = rect.left + rect.width / 2;
     const clientY = rect.top + rect.height / 2;
     element.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0, clientX, clientY }));
-    await new Promise<void>((resolve) => {
-        setTimeout(resolve, LONG_PRESS_HOLD_MS);
-    });
+    await currentTestDriverClock.sleep(LONG_PRESS_HOLD_MS);
     element.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, button: 0, clientX, clientY }));
 }
 

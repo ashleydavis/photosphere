@@ -29,8 +29,68 @@ import {
     TEST_OPEN_DATABASE_EVENT,
     TEST_SEED_NEWS_EVENT,
     TEST_NOTIFY_DATABASE_EDITED_EVENT,
+    setTestDriverClock,
+    realTestDriverClock,
 } from "../../lib/test-driver";
-import type { ITestTransport, ITestCommandPayload } from "../../lib/test-driver";
+import type { ITestTransport, ITestCommandPayload, ITestDriverClock } from "../../lib/test-driver";
+
+//
+// A sleep the ManualClock below has not yet woken.
+//
+interface IPendingSleep {
+    // The virtual time, in milliseconds, at which this sleep comes due.
+    dueAt: number;
+
+    // Wakes the caller that is sleeping.
+    wake: () => void;
+}
+
+//
+// A clock the test moves forward by hand, so the driver's polling waits are driven deliberately
+// instead of racing the machine. Given to the driver with setTestDriverClock.
+//
+class ManualClock implements ITestDriverClock {
+
+    // The current virtual time in milliseconds. Starts at zero, and only advance() moves it.
+    private currentTime: number = 0;
+
+    // Sleeps that have been asked for but have not yet come due.
+    private pendingSleeps: IPendingSleep[] = [];
+
+    //
+    // The current virtual time, which the driver uses to work out its poll deadline.
+    //
+    now(): number {
+        return this.currentTime;
+    }
+
+    //
+    // Records a sleep that advance() will wake once virtual time reaches it.
+    //
+    sleep(milliseconds: number): Promise<void> {
+        return new Promise<void>((resolve) => {
+            this.pendingSleeps.push({ dueAt: this.currentTime + milliseconds, wake: resolve });
+        });
+    }
+
+    //
+    // Moves virtual time forward and wakes every sleep that has come due, then hands control back to
+    // the event loop so the woken code runs before the caller asserts on what it did. The yield uses
+    // a real timer, which is safe because this clock replaces the driver's waits only, leaving the
+    // global timers alone.
+    //
+    async advance(milliseconds: number): Promise<void> {
+        this.currentTime += milliseconds;
+        const dueSleeps = this.pendingSleeps.filter(pendingSleep => pendingSleep.dueAt <= this.currentTime);
+        this.pendingSleeps = this.pendingSleeps.filter(pendingSleep => pendingSleep.dueAt > this.currentTime);
+        for (const dueSleep of dueSleeps) {
+            dueSleep.wake();
+        }
+        await new Promise<void>((resolve) => {
+            setTimeout(resolve, 0);
+        });
+    }
+}
 
 //
 // Regression guard for the create-database smoke-test failure caused by commit fa673c6b (mobile
@@ -39,7 +99,19 @@ import type { ITestTransport, ITestCommandPayload } from "../../lib/test-driver"
 // must act only on the visible one; before this it took the first in DOM order (a hidden drawer), so
 // it typed into an invisible form and the visible one stayed empty.
 //
+// The late-render tests below give the driver a ManualClock rather than letting it wait on the
+// machine. Fixes the intermittent unit-test failure where a late render lost the race against the
+// poll deadline: waitForElement polls against a deadline, so when a loaded machine stalled past it,
+// the poll gave up while the render it was waiting for had not happened, and the test saw 1 element
+// instead of 2. A hand-driven clock removes the dependence on machine speed; the real waitForElement
+// still runs, and these tests were confirmed to go red when it and isElementVisible were each broken.
 describe("hidden elements are not actionable", () => {
+
+    // One test here swaps the driver's clock, so put the real one back even when that test fails.
+    // Left installed, a clock nothing advances would hang every later test that waits on the driver.
+    afterEach(() => {
+        setTestDriverClock(realTestDriverClock);
+    });
 
     // A hidden wrapper (a closed drawer) followed by a visible one, both carrying the same data-id.
     function twoWrappers(): void {
@@ -90,11 +162,22 @@ describe("hidden elements are not actionable", () => {
     });
 
     test("waitForElement ignores a hidden match and waits for a visible one", async () => {
+        // A hand-driven clock, because waitForElement polls against a deadline. Left on the real
+        // clock, a machine stall longer than the timeout makes the deadline expire inside the poll
+        // wait, and the loop then returns before the late render has happened, so the test fails for
+        // load rather than for a bug.
+        const clock = new ManualClock();
+        setTestDriverClock(clock);
         document.body.innerHTML = `<div style="visibility: hidden;"><span data-id="late">x</span></div>`;
-        setTimeout(() => {
-            document.body.innerHTML += `<span data-id="late">x</span>`;
-        }, 80);
-        await waitForElement("late", 0, 2000);
+        let resolved = false;
+        const waiting = waitForElement("late", 0, 2000).then(() => { resolved = true; });
+        // One poll interval with only the hidden match present: it must not satisfy the wait.
+        await clock.advance(50);
+        expect(resolved).toBe(false);
+        document.body.innerHTML += `<span data-id="late">x</span>`;
+        await clock.advance(50);
+        await waiting;
+        expect(resolved).toBe(true);
         expect(document.querySelectorAll(`[data-id="late"]`).length).toBe(2);
     });
 });
@@ -144,6 +227,12 @@ describe("doClick", () => {
         expect(fullInput.checked).toBe(true);
     });
 });
+
+//
+// Regression guard for the create-database smoke-test flake: the test clicked Create while it was
+// still disabled (Browse had not yet filled the path), the click was swallowed with no handler run
+// and nothing logged, and the test then timed out waiting for a database that was never created.
+//
 
 describe("isToggleInput", () => {
 
@@ -232,6 +321,12 @@ describe("clickTarget", () => {
 
 describe("waitForElement", () => {
 
+    // The late-render tests here swap the driver's clock, so put the real one back even when one of
+    // them fails. Left installed, a clock nothing advances would hang every later test that waits.
+    afterEach(() => {
+        setTestDriverClock(realTestDriverClock);
+    });
+
     test("resolves when the element is already present", async () => {
         document.body.innerHTML = `<button data-id="go">go</button>`;
         await waitForElement("go", 0, 1000);
@@ -239,11 +334,18 @@ describe("waitForElement", () => {
     });
 
     test("resolves once an element that renders later appears", async () => {
+        // A hand-driven clock: see the note on the hidden-match test above.
+        const clock = new ManualClock();
+        setTestDriverClock(clock);
         document.body.innerHTML = ``;
-        setTimeout(() => {
-            document.body.innerHTML = `<button data-id="late">late</button>`;
-        }, 100);
-        await waitForElement("late", 0, 2000);
+        let resolved = false;
+        const waiting = waitForElement("late", 0, 2000).then(() => { resolved = true; });
+        await clock.advance(50);
+        expect(resolved).toBe(false);
+        document.body.innerHTML = `<button data-id="late">late</button>`;
+        await clock.advance(50);
+        await waiting;
+        expect(resolved).toBe(true);
         expect(document.querySelector(`[data-id="late"]`)).not.toBeNull();
     });
 
@@ -254,13 +356,22 @@ describe("waitForElement", () => {
     });
 
     test("waits for the nth element when several share a data-id", async () => {
+        // A hand-driven clock: see the note on the hidden-match test above.
+        const clock = new ManualClock();
+        setTestDriverClock(clock);
         document.body.innerHTML = `<div data-id="row">0</div>`;
-        setTimeout(() => {
-            document.body.innerHTML = `
-                <div data-id="row">0</div>
-                <div data-id="row">1</div>`;
-        }, 100);
-        await waitForElement("row", 1, 2000);
+        let resolved = false;
+        const waiting = waitForElement("row", 1, 2000).then(() => { resolved = true; });
+        // One poll interval, while only the first row exists: the nth wait must not be satisfied by
+        // an element that is not there yet.
+        await clock.advance(50);
+        expect(resolved).toBe(false);
+        document.body.innerHTML = `
+            <div data-id="row">0</div>
+            <div data-id="row">1</div>`;
+        await clock.advance(50);
+        await waiting;
+        expect(resolved).toBe(true);
         expect(document.querySelectorAll(`[data-id="row"]`)).toHaveLength(2);
     });
 });
