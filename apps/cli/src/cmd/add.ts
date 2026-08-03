@@ -118,5 +118,13 @@ export async function addCommand(context: ICommandContext, paths: string[], opti
     log.info(`    # Synchronize changes between two databases that have been independently changed`);
     log.info(`    psi sync --db ${databaseDir} --dest <path>`);
 
-    await exit(0);
+    // A file that failed to import did not make it into the database, so the command did not do what
+    // it was asked. The counts above say so on screen, but a script or a scheduled backup only reads
+    // the exit code, and reporting success there is how an incomplete import goes unnoticed.
+    if (addSummary.filesFailed > 0) {
+        await exit(1);
+    }
+    else {
+        await exit(0);
+    }
 }

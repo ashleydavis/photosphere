@@ -85,13 +85,23 @@ test_s3_failures() {
     invoke_command "Initialize a database for the mid-import test" \
         "$(get_cli_command) init --db \"$mid_import_db\" --yes" 0
 
+    # The import needs to still be running when the server is taken away, and the five standard
+    # fixtures are small enough to finish in well under a second, which made this a race that the
+    # import usually won. A large generated video takes several seconds to upload, so stopping the
+    # server part way through it lands comfortably inside the import rather than after it.
+    local big_fixture="$TEST_DIR/mid-import-video.mp4"
+    log_info "Generating a large video so the import takes long enough to interrupt..."
+    if ! ffmpeg -y -f lavfi -i "color=c=black:s=1280x720:r=30:d=3,noise=alls=100:allf=t+u" \
+        -c:v libx264 -preset ultrafast -qp 0 -pix_fmt yuv420p "$big_fixture" >/dev/null 2>&1; then
+        log_error "ffmpeg could not generate the large test video"
+        exit 1
+    fi
+    log_info "Generated $big_fixture ($(wc -c < "$big_fixture") bytes)"
+
     local import_log="$TEST_DIR/mid-import.log"
     log_info "Starting an import and stopping the server underneath it"
 
-    # The import runs in the background; the emulator is stopped a moment later, while the import is
-    # still working through the directory. A short wait is all it takes: the import has to transcode
-    # and upload several files, which takes far longer than this.
-    NODE_ENV=testing $(get_cli_command) add "$MULTIPLE_IMAGES_DIR/" --db "$mid_import_db" --yes > "$import_log" 2>&1 &
+    NODE_ENV=testing $(get_cli_command) add "$big_fixture" --db "$mid_import_db" --yes > "$import_log" 2>&1 &
     local import_pid=$!
     sleep 2
     stop_s3_emulator "$MID_IMPORT_STATE_DIR"
