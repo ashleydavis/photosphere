@@ -579,15 +579,39 @@ wait_for_value() {
 # after the path. Mirrors how the desktop smoke tests pre-create their databases (the CLI does the
 # host-side image processing the mobile device cannot do yet). The database is created under the
 # test's own tmp dir and then seeded onto the device with ${PLATFORM}_seed_database.
+#
+# Fixes the intermittent failure where a fixture database was built with no assets. It is also what
+# made two later intermittent failures diagnosable rather than silent: one suite deleting the
+# shared temp directory another was using, and an image resize producing no output file. In both
+# cases the CLI's own error is now printed at the point it happens.
+#
+# Every CLI call is checked and its output printed on failure. This used to discard both the exit
+# status and the output of `init` and `add`, so a failed import produced a database with no assets
+# and the test carried on regardless. What the test then reported, two minutes later, was
+# "Timed out waiting for log pattern: Gallery items rendered", which is a symptom of an empty gallery
+# and says nothing about the import that never happened. The give-away in the log was the seed
+# pushing 5 files and 1530 bytes where a working run pushes 15 files and 34KB.
+#
 # Usage: create_database <db_path> [image ...]
 #
 create_database() {
     local db_path="$1"
     shift
-    ( cd "$REPO_DIR/apps/cli" && bun run start -- init --db "$db_path" --yes ) >/dev/null 2>&1
+
+    local cli_output
+    if ! cli_output="$( cd "$REPO_DIR/apps/cli" && bun run start -- init --db "$db_path" --yes 2>&1 )"; then
+        log_error "Creating the database at $db_path failed. The CLI said:"
+        echo "$cli_output" | sed 's/^/  /'
+        exit 1
+    fi
+
     local image
     for image in "$@"; do
-        ( cd "$REPO_DIR/apps/cli" && bun run start -- add "$image" --db "$db_path" --yes ) >/dev/null 2>&1
+        if ! cli_output="$( cd "$REPO_DIR/apps/cli" && bun run start -- add "$image" --db "$db_path" --yes 2>&1 )"; then
+            log_error "Adding $image to the database at $db_path failed. The CLI said:"
+            echo "$cli_output" | sed 's/^/  /'
+            exit 1
+        fi
     done
 }
 
