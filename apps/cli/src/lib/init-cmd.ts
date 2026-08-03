@@ -967,8 +967,25 @@ export async function createDatabase(
 
     const metaPath = pathJoin(dbDir, '.db');
 
-    if (dbDir.startsWith('s3:') || metaPath.startsWith('s3:')) {
-        await configureS3IfNeeded(nonInteractive);
+    // S3 credentials registered against this database in the database list, when it is already
+    // registered there. Resolved once here and reused when the storage is created below.
+    let resolvedSecrets: IResolvedDatabaseSecrets | undefined;
+
+    // True when the database lives in a bucket rather than on the filesystem.
+    const isCloudStorage = dbDir.startsWith('s3:');
+    if (isCloudStorage) {
+        // A registered database carries its own S3 credential, so look that up before falling back
+        // to configureS3IfNeeded, which only knows about the AWS_* environment variables and the
+        // shared 'default:s3' keychain entry. Without this, creating a database that names a working
+        // credential secret failed asking for AWS_ACCESS_KEY_ID. loadDatabase resolves the entry the
+        // same way before reaching for the prompt.
+        const matchedEntry = await resolveDatabaseEntry(dbDir);
+        if (matchedEntry) {
+            resolvedSecrets = await resolveSecretsFromEntry(matchedEntry);
+        }
+        if (!resolvedSecrets?.s3Config) {
+            await configureS3IfNeeded(nonInteractive);
+        }
     }
 
     // Load encryption key pair from vault
@@ -1009,7 +1026,17 @@ export async function createDatabase(
 
     const { options: storageOptions, isEncrypted } = await loadEncryptionKeysFromPem(keyPems);
 
-    const s3Config = dbDir.startsWith('s3:') ? await getDefaultS3Config() : undefined;
+    // The database's own registered credential wins over the shared 'default:s3' keychain entry. When
+    // neither exists this stays undefined and CloudStorage falls back to the AWS SDK's own
+    // environment-variable provider, which is the plain "point the CLI at a bucket" path.
+    let s3Config: IS3Credentials | undefined;
+    if (resolvedSecrets?.s3Config) {
+        s3Config = resolvedSecrets.s3Config;
+    }
+    else if (isCloudStorage) {
+        s3Config = await getDefaultS3Config();
+    }
+
     const { storage: assetStorage, rawStorage: rawAssetStorage } = createStorage(dbDir, s3Config, storageOptions);
 
     // Check the requested directory is empty or non-existent using the storage interface.
