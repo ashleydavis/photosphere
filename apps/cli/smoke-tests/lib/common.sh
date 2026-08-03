@@ -857,11 +857,9 @@ seed_databases_config() {
     local databases_json="$1"
 
     mkdir -p "$PHOTOSPHERE_CONFIG_DIR"
-    rm -f "${PHOTOSPHERE_CONFIG_DIR}/databases.toml"
-    cat > "${PHOTOSPHERE_CONFIG_DIR}/databases.json" <<CONFIG_EOF
-{
-  "databases": $databases_json,
-  "recentDatabasePaths": []
-}
-CONFIG_EOF
+    # Rendered by the mobile harness's helper, which goes through node-api's own
+    # buildDatabasesConfigToml: the same function the app writes the file with, so a seeded config
+    # cannot drift from the format the app reads.
+    DATABASES="$databases_json" RECENT="[]" \
+        bun "$REPO_ROOT/apps/smoke-tests/lib/write-databases-config.ts" "${PHOTOSPHERE_CONFIG_DIR}/databases.toml"
 }

@@ -1,6 +1,6 @@
 import * as os from "os";
 import * as path from "path";
-import { readJson, readToml, writeToml, pathExists, remove } from "node-utils";
+import { readToml, writeToml, pathExists } from "node-utils";
 import { databaseEntryToToml, tomlEntryToDatabaseEntry, type IDatabaseEntry, type ITomlDatabasesConfig } from "./databases-config-format";
 
 // Re-exported: this module has always been where the codebase imports the entry type from. The
@@ -21,9 +21,21 @@ interface IDatabasesConfig {
     recentDatabaseNames: string[];
 }
 
-const CONFIG_DIR = process.env.PHOTOSPHERE_CONFIG_DIR || path.join(os.homedir(), ".config", "photosphere");
+//
+// The directory holding databases.toml.
+//
+// Desktop and the CLI keep it under the user's home directory. A device has no home directory: the
+// mobile `os` shim returns an empty string from homedir() precisely so derived paths stay inside the
+// storage sandbox, and the app's database list sits at the root of that sandbox. Reading homedir()
+// therefore tells this module which platform it is on without either side having to configure it.
+//
+// Getting this wrong is not harmless. It previously always appended ".config/photosphere", so on a
+// device the lookup resolved to a file that cannot exist, every credential lookup found an empty
+// list, and S3 databases failed with "Region is missing" while working perfectly on desktop.
+//
+const HOME_DIR = os.homedir();
+const CONFIG_DIR = process.env.PHOTOSPHERE_CONFIG_DIR || (HOME_DIR ? path.join(HOME_DIR, ".config", "photosphere") : ".");
 const DATABASES_FILE = path.join(CONFIG_DIR, "databases.toml");
-const OLD_DATABASES_FILE = path.join(CONFIG_DIR, "databases.json");
 
 //
 // Converts a TOML-shaped config object to the TypeScript IDatabasesConfig type.
@@ -59,32 +71,13 @@ function namesMatch(left: string, right: string): boolean {
 
 //
 // Loads the databases configuration from disk.
-// If the TOML file does not exist but an old JSON file does, migrates automatically.
 // If the loaded TOML still uses the legacy `recent_database_paths` field, converts it
 // to `recent_database_names` (resolving each path to its current entry's name; dropping
 // paths that no longer match any entry) and rewrites the file.
-// Returns a default config with an empty list if neither file exists.
+// Returns a default config with an empty list if the file does not exist.
 //
 export async function loadDatabasesConfig(): Promise<IDatabasesConfig> {
     if (!await pathExists(DATABASES_FILE)) {
-        if (await pathExists(OLD_DATABASES_FILE)) {
-            const jsonConfig = await readJson<{ databases?: IDatabaseEntry[]; recentDatabasePaths?: string[]; recentDatabaseNames?: string[] }>(OLD_DATABASES_FILE);
-            const databases = Array.isArray(jsonConfig.databases) ? jsonConfig.databases : [];
-            let recentDatabaseNames: string[];
-            if (Array.isArray(jsonConfig.recentDatabaseNames)) {
-                recentDatabaseNames = jsonConfig.recentDatabaseNames;
-            }
-            else if (Array.isArray(jsonConfig.recentDatabasePaths)) {
-                recentDatabaseNames = recentPathsToNames(jsonConfig.recentDatabasePaths, databases);
-            }
-            else {
-                recentDatabaseNames = [];
-            }
-            const migrated: IDatabasesConfig = { databases, recentDatabaseNames };
-            await saveDatabasesConfig(migrated);
-            await remove(OLD_DATABASES_FILE);
-            return migrated;
-        }
         return { databases: [], recentDatabaseNames: [] };
     }
 

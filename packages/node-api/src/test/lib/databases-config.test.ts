@@ -2,15 +2,11 @@
 const mockPathExists = jest.fn();
 const mockReadToml = jest.fn();
 const mockWriteToml = jest.fn();
-const mockReadJson = jest.fn();
-const mockRemove = jest.fn();
 
 jest.mock('node-utils', () => ({
     pathExists: mockPathExists,
     readToml: mockReadToml,
     writeToml: mockWriteToml,
-    readJson: mockReadJson,
-    remove: mockRemove,
 }));
 
 import {
@@ -101,34 +97,8 @@ describe('loadDatabasesConfig', () => {
     });
 });
 
-describe('loadDatabasesConfig migration', () => {
+describe('loadDatabasesConfig recents migration', () => {
     beforeEach(() => jest.clearAllMocks());
-
-    test('migrates from JSON when TOML does not exist but JSON does', async () => {
-        mockPathExists.mockImplementation((filePath: string) => filePath.endsWith('.json'));
-        mockReadJson.mockResolvedValue({
-            databases: [makeEntry('/a', 'alpha')],
-            recentDatabasePaths: ['/a'],
-        });
-
-        const config = await loadDatabasesConfig();
-
-        expect(config.databases).toHaveLength(1);
-        expect(config.databases[0].path).toBe('/a');
-        expect(config.recentDatabaseNames).toEqual(['alpha']);
-        expect(mockWriteToml).toHaveBeenCalled();
-        expect(mockRemove).toHaveBeenCalledWith(expect.stringContaining('databases.json'));
-    });
-
-    test('coerces missing arrays when migrating from JSON', async () => {
-        mockPathExists.mockImplementation((filePath: string) => filePath.endsWith('.json'));
-        mockReadJson.mockResolvedValue({});
-
-        const config = await loadDatabasesConfig();
-
-        expect(config.databases).toEqual([]);
-        expect(config.recentDatabaseNames).toEqual([]);
-    });
 
     test('migrates legacy recent_database_paths to recent_database_names and rewrites the file', async () => {
         mockPathExists.mockImplementation((filePath: string) => filePath.endsWith('.toml'));
