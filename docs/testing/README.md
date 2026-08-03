@@ -94,6 +94,29 @@ Tests are selected before the emulator check and the build, so a mistyped name f
 
 The assertion helpers the tests call (`wait_for_value`, `assert_value`, and the rest of `common.sh`) are fatal: a helper failure ends the test immediately rather than letting it continue past a bad assumption.
 
+### Hunting flaky tests
+
+A suite that passes once has told you very little. A mode that fails one run in two hundred passes every normal check and still breaks a build later. `find-flakey-tests` drives the full suite in a loop and only calls it clean after a long unbroken streak of green runs:
+
+```bash
+bun run find-flakey-tests                    # until 500 consecutive green runs
+bun run find-flakey-tests -- --target 100    # a shorter streak
+bun run find-flakey-tests -- --start 42      # carry on numbering from a previous session
+bun run find-flakey-tests -- --help
+```
+
+It runs `bun run test:everything -- --force` each time. `--force` matters: without it the what-changed gate skips suites that have not changed, so the loop could run hundreds of times without ever exercising the suite that is flaky.
+
+It stops at the first real failure, because the point is the streak and a streak with a failure in it is not a streak. On failure it writes a report naming the lane and the test that failed, the tail of that run's output, snapshots of the per-test log files the next run would otherwise overwrite, and the state of the machine at that moment: free memory, attached devices, and any kernel out-of-memory kills in the last hour. That last part is there because several failures found this way were caused by the machine and not the code, and none of them were visible in the suite's own output.
+
+A crash of the Bun runtime itself (SIGSEGV, SIGILL, a panic) is not a failure of the code under test, so such a run is retried rather than counted against the streak. Five in a row stops the session, since a result resting on that many crashes would mean nothing. Every crash is listed in the summary either way, so they can never pass unnoticed.
+
+Everything is written under `tmp/find-flakey-tests/<timestamp>/` (gitignored): one log per run, plus `report.txt` on failure. The paths are printed on the last lines of output.
+
+Exit status is 0 when the streak is reached, 1 when a run failed, 2 on bad usage, and 3 when too many Bun crashes in a row made the result meaningless.
+
+The loop itself has no automated test. Its own behaviour on failure (counting the streak, bailing at the first failure, telling a Bun crash apart from a real failure, writing the report) is therefore unverified except by running it.
+
 ### Running the Android tests over several emulators
 
 `bun run test:and` uses every emulator that is on the LAN bridge, one worker per device, so the suite finishes several times faster. Measured on this repo: 375s originally, 276s after the wait helpers were made to poll five times a second, and 113s across six emulators.

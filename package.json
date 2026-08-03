@@ -49,6 +49,7 @@
     "tcl": "bun run test:cli:lan-share",
     "test:cli:hash-cache": "cd ./apps/cli/ && bash ./hash-cache-smoke-test.sh",
     "test:what-changed": "cd ./tools/what-changed && bash ./smoke-tests.sh",
+    "find-flakey-tests": "bash ./scripts/find-flakey-tests.sh",
     "test:lan-share:cli-desktop": "bash ./cli-desktop-lan-share-smoke-tests.sh",
     "tlcd": "bun run test:lan-share:cli-desktop",
     "stories": "bash ./scripts/story-player.sh --platform electron",

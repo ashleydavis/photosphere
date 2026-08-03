@@ -68,6 +68,7 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 - `bun run what-changed` - List the files that changed since the last passing run, with their hashes
 - `bun run what-changed:baseline` - Record the current tree as the baseline without running anything (an assertion, not a check)
 - `bun run test:what-changed` - Run the what-changed smoke tests (drives it against a throwaway repository and a fake runner)
+- `bun run find-flakey-tests` - Loop `test:everything --force` until a target number of consecutive green runs is reached (default 500), stopping at the first failure with a diagnosis report. `-- --target N` sets the streak, `-- --start N` continues a previous session's run numbering. See [Testing](docs/testing/README.md)
 - `bun run stories` - Cycle the Electron app through every UI story, capturing screenshots (long-running, excluded from `test:all`)
 - `bun run stories:and` - Same stories cycle on the Android emulator/device. Renders every page at phone resolution, so this is how to check pages fit on mobile
 - `bun run stories:ios` - Same stories cycle on the iOS simulator
