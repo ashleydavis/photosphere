@@ -54,19 +54,60 @@ test("full send-receive round trip", async () => {
     expect(received).toEqual(payload);
 }, 30000);
 
-test("send returns false when receiver has a different pairing code", async () => {
+// Covers the fix for the intermittent LAN-share failure where the receiver never reached its review step: a sender
+// used to take the first receiver it heard on the subnet, and a pairing-code mismatch then ended
+// the share for good, so any unrelated share announcing during the test's discovery window failed
+// it.
+test("discovery ignores a receiver whose pairing code is not the one being looked for", async () => {
     const payload = { message: "test" };
 
-    // Receiver was given code "1111" but sender has "2222"
+    // Stands in for an unrelated share happening at the same time: another worktree's smoke tests,
+    // another machine on the LAN, or the app itself. It announces on the same machine-wide
+    // discovery port, so this sender hears it.
+    const foreignReceiver = new LanShareReceiver(15000);
+    await foreignReceiver.start("1111");
+    const foreignReceivePromise = foreignReceiver.receive();
+
+    const sender = new LanShareSender(payload, "2222");
+    const endpoint = await sender.waitForReceiver(3000);
+
+    // The sender used to accept this stranger, fail the pairing-code check, and end the share for
+    // good, because a mismatch is fatal and the discovery socket is closed by then. It must now
+    // hold out for its own receiver instead.
+    expect(endpoint).toBeNull();
+
+    // Holding out must not make a mistyped code look like an absent device. The sender records
+    // that it heard somebody, so the caller can tell the two apart.
+    expect(sender.sawMismatchedReceiver).toBe(true);
+
+    foreignReceiver.cancel();
+    await foreignReceivePromise;
+}, 30000);
+
+// There is deliberately no test for the opposite case, "a sender that hears nothing does not
+// report a mismatched receiver". Its assertion is about the absence of foreign broadcasts, and the
+// discovery port is machine-wide with announcements going to the whole subnet, so any other share
+// running anywhere nearby makes it fail. Writing it caught itself: it went red the first time it
+// ran, because a noise generator from the reproduction of this very bug was still advertising. A
+// test that depends on nobody else on the network sharing at that moment is a flaky test, which is
+// the opposite of what this work is for.
+
+test("send returns false when the receiver it is given has a different pairing code", async () => {
+    const payload = { message: "test" };
+
+    // The endpoint is obtained by a sender that does hold the matching code, because discovery now
+    // refuses to hand a mismatched receiver to anybody. The pairing-code check inside send() is a
+    // second line of defence and is still worth covering on its own.
     const receiver = new LanShareReceiver(15000);
     await receiver.start("1111");
     const receivePromise = receiver.receive();
 
-    const sender = new LanShareSender(payload, "2222");
-    const endpoint = await sender.waitForReceiver(10000);
+    const matchingSender = new LanShareSender(payload, "1111");
+    const endpoint = await matchingSender.waitForReceiver(10000);
     expect(endpoint).not.toBeNull();
 
-    const success = await sender.send(endpoint!);
+    const mismatchedSender = new LanShareSender(payload, "2222");
+    const success = await mismatchedSender.send(endpoint!);
     expect(success).toBe(false);
 
     receiver.cancel();

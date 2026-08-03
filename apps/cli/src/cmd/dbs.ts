@@ -1163,7 +1163,18 @@ export async function dbsSend(cmdOptions: IDbsSendOptions): Promise<void> {
     process.removeListener('SIGINT', sigintHandler);
 
     if (!endpoint) {
-        spin.stop(pc.yellow('No device found within 60 seconds.'));
+        // Discovery now ignores receivers whose pairing code does not match, which stops two shares
+        // hijacking each other but also means a mistyped code ends as a plain timeout. This tells
+        // the two apart.
+        //
+        // A device that announced a different pairing code is a mistyped code, not an absent
+        // device, and saying so saves the user hunting the wrong problem.
+        if (sender.sawMismatchedReceiver) {
+            spin.stop(pc.yellow('Pairing code rejected: a device was found but it is using a different code.'));
+        }
+        else {
+            spin.stop(pc.yellow('No device found within 60 seconds.'));
+        }
         return;
     }
 

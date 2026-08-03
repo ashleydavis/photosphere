@@ -6,8 +6,11 @@
 # By default the emulator runs behind QEMU's user-mode NAT (the 10.0.2.x network). That network is
 # deliberately isolated: the guest can reach out through the host, but UDP broadcast never leaves the
 # emulator, and the host cannot open a connection back to the guest. LAN sharing depends on both. The
-# receiver broadcasts "PSIE_RECV:<port>:<fingerprint>" to 255.255.255.255:54321, and the sender, on
-# hearing it, opens an HTTPS connection back to whatever address the broadcast arrived from. Under
+# receiver broadcasts "PSIE_RECV:<port>:<codeHash>:<fingerprint>" to 255.255.255.255:54321, and the
+# sender, on hearing it, opens an HTTPS connection back to whatever address the broadcast arrived
+# from. The codeHash field carries a hash of the pairing code so a sender ignores a receiver from
+# another session; without it a sender took whichever receiver announced first, which failed the
+# LAN-share tests intermittently. Under
 # user-mode NAT the broadcast is never heard, so the receiver waits its full 60 seconds and reports
 # "No sender connected within 60 seconds".
 #

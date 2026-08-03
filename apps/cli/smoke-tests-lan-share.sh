@@ -171,7 +171,14 @@ reset_dirs() {
 }
 
 # Per-test timeout in seconds.
-TEST_TIMEOUT=20
+#
+# 90 rather than a smaller number because of how discovery works. A sender ignores any receiver whose
+# pairing code does not match its own, so when a test deliberately uses the wrong code there is never
+# a match and the sender waits out its full 60 second discovery window before reporting. That is the
+# deliberate cost of not pairing with a stranger. Every other test here finishes in a few seconds, so
+# the number only matters for that one case, and one number is easier to reason about than a default
+# plus an override.
+TEST_TIMEOUT=90
 
 # Run a test function with per-test timeout, cleanup, and timing.
 # The test runs in the foreground (so counters and RECEIVER_PID work).
@@ -465,7 +472,8 @@ test_rogue_receiver_rejected() {
 
     log_info "Rogue test: captured broadcast: $broadcast_msg"
 
-    # Parse "PSIE_RECV:{port}:{fingerprint}" with bash parameter expansion.
+    # Parse "PSIE_RECV:{port}:{codeHash}:{fingerprint}" with bash parameter expansion. Only the
+    # port is needed here, and it is still the first field.
     local without_prefix="${broadcast_msg#PSIE_RECV:}"
     local receiver_port="${without_prefix%%:*}"
 
@@ -534,10 +542,12 @@ test_cert_fingerprint_matches_broadcast() {
         return 1
     fi
 
-    # Parse "PSIE_RECV:{port}:{fingerprint}" with bash parameter expansion.
+    # Parse "PSIE_RECV:{port}:{codeHash}:{fingerprint}" with bash parameter expansion. The
+    # fingerprint is taken last because it can itself contain colons.
     local without_prefix="${broadcast_msg#PSIE_RECV:}"
     local receiver_port="${without_prefix%%:*}"
-    local broadcast_fingerprint="${without_prefix#*:}"
+    local after_port="${without_prefix#*:}"
+    local broadcast_fingerprint="${after_port#*:}"
 
     if [ -z "$receiver_port" ] || [ -z "$broadcast_fingerprint" ]; then
         log_fail "Cert test: could not parse broadcast"

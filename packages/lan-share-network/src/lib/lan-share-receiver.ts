@@ -363,7 +363,24 @@ export class LanShareReceiver {
 
         this.udpSocket.bind(() => {
             this.udpSocket!.setBroadcast(true);
-            const message = Buffer.from(`PSIE_RECV:${port}:${selfSigned.fingerprint}`);
+            // Fixes the intermittent LAN-share failure where the receiver never reached its review step, which failed
+            // Electron test 8 with "Timed out waiting for log pattern: Database review step".
+            //
+            // The pairing code's hash is part of the announcement so a sender can tell whose
+            // receiver this is before committing to it. Without it the announcement carried no
+            // session identity at all, a sender took the first receiver it heard on the whole
+            // subnet, and a mismatched pairing code ended that share permanently. Two shares
+            // running at once, in two worktrees or on two machines, would take each other's halves.
+            //
+            // The hash goes before the fingerprint because a fingerprint can contain colons, so
+            // anything after it cannot be parsed back out.
+            //
+            // This publishes nothing that was not already public: it is the same unsalted
+            // sha256(code) that any caller can fetch from this receiver over plain HTTP at
+            // GET /pairing-code-hash, on a receiver that is already broadcasting its port to the
+            // whole subnet. That the code is short enough to brute force from its hash is a
+            // pre-existing property of the pairing design, not something this line introduces.
+            const message = Buffer.from(`PSIE_RECV:${port}:${this.codeHash}:${selfSigned.fingerprint}`);
             this.broadcastTimer = setInterval(() => {
                 this.udpSocket!.send(message, 0, message.length, DISCOVERY_PORT, "255.255.255.255");
                 // Also send to loopback so same-machine discovery works on macOS, where

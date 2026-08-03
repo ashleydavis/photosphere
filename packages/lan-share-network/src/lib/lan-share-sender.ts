@@ -40,11 +40,20 @@ export class LanShareSender {
     // The 4-digit pairing code displayed to the user.
     pairingCode: string;
 
+    // Whether discovery heard a receiver announcing a different pairing code.
+    //
+    // Since discovery began filtering on the pairing code, a mistyped code and an absent receiver
+    // both end as a plain timeout, and those are very different things to tell a person: one means
+    // "check the number you typed", the other means "the other device is not sharing". This records
+    // which of the two happened so the caller can say so.
+    sawMismatchedReceiver: boolean;
+
     constructor(payload: unknown, pairingCode?: string) {
         this.payload = payload;
         this.pairingCode = pairingCode ?? generatePairingCode();
         this.udpSocket = null;
         this.isCancelled = false;
+        this.sawMismatchedReceiver = false;
     }
 
     //
@@ -52,6 +61,10 @@ export class LanShareSender {
     // Returns the receiver endpoint when found, or null on timeout or cancellation.
     //
     async waitForReceiver(timeoutMs: number): Promise<IReceiverEndpoint | null> {
+        // What this sender's own receiver will be announcing. Computed once, outside the message
+        // handler, because every announcement on the subnet arrives here.
+        const expectedCodeHash = createHash("sha256").update(this.pairingCode).digest("hex");
+
         return new Promise<IReceiverEndpoint | null>((resolve) => {
             this.udpSocket = createSocket({ type: "udp4", reuseAddr: true });
 
@@ -82,15 +95,30 @@ export class LanShareSender {
                     return;
                 }
 
-                // Parse "PSIE_RECV:{port}:{certFingerprint}"
+                // Parse "PSIE_RECV:{port}:{codeHash}:{certFingerprint}"
                 const parts = text.slice(BROADCAST_PREFIX.length).split(":");
-                if (parts.length < 2) {
+                if (parts.length < 3) {
                     return;
                 }
 
                 const port = parseInt(parts[0], 10);
-                const certFingerprint = parts.slice(1).join(":"); // fingerprint might contain colons
+                const announcedCodeHash = parts[1];
+                const certFingerprint = parts.slice(2).join(":"); // fingerprint might contain colons
                 if (isNaN(port) || !certFingerprint) {
+                    return;
+                }
+
+                // Fixes the intermittent LAN-share failure where the receiver never reached its review step.
+                //
+                // Ignore any receiver that is not the one this share is paired with. The discovery
+                // port is a single machine-wide resource and the announcement goes to the whole
+                // subnet, so everything else sharing at that moment is heard here: another
+                // worktree's smoke tests, the lan-share unit tests, another machine on the LAN.
+                // Without this check the first announcement to arrive won, and because a pairing
+                // code mismatch is fatal further down (no retry, no second look, the socket is
+                // already closed), picking a stranger ended the share for good.
+                if (announcedCodeHash !== expectedCodeHash) {
+                    this.sawMismatchedReceiver = true;
                     return;
                 }
 
