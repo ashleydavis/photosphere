@@ -108,7 +108,11 @@ export function S3BrowserModal({ open, s3Key, onClose, onSelect }: IS3BrowserMod
     // Builds and returns the selected S3 path string.
     //
     function handleSelectLocation(): void {
-        const selectedPath = `s3:${bucket}:/${prefix}`;
+        // The bucket and the key within it are separated by a slash, not a colon. A "bucket:" segment
+        // is not a valid S3 path: the storage layer takes everything before the first slash as the
+        // bucket name, so the colon ended up in the bucket name and the server rejected the request
+        // as InvalidBucketName. Every location chosen here used to be recorded in that unusable form.
+        const selectedPath = `s3:${bucket}/${prefix}`;
         onSelect(selectedPath);
     }
 

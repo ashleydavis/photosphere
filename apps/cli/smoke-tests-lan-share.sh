@@ -308,7 +308,7 @@ test_share_database() {
     seed_vault_secret_from_file "$SENDER_VAULT_DIR" "encsndr1" "encryption-key" "$pem_file"
 
     seed_databases_config "$SENDER_CONFIG_DIR" \
-        '[{"name":"share-test-db","description":"A database for LAN share testing","path":"s3:test-bucket:/photos","s3Key":"s3sender","encryptionKey":"encsndr1"}]'
+        '[{"name":"share-test-db","description":"A database for LAN share testing","path":"s3:test-bucket/photos","s3Key":"s3sender","encryptionKey":"encsndr1"}]'
 
     local test_code="1234"
     local receiver_log="${TEST_TMP_DIR}/receiver-db.log"

@@ -1,23 +1,15 @@
 #!/bin/bash
-DESCRIPTION="S3 path shapes: simple, deep, colon form and awkward filenames"
+DESCRIPTION="S3 path shapes: simple, deep and awkward filenames"
 
 # Four databases in one bucket, each created and read back, each asserted not to see the others'
 # assets. Sharing a bucket is the point: a prefix that is not applied correctly turns into a database
 # that reads back its neighbours' files, or reads back nothing at all.
 #
-# The colon form (`s3:bucket:/prefix`) is the shape the S3 browser writes into databases.json
-# (packages/user-interface/src/components/s3-browser-modal.tsx line 111) and that
-# apps/cli/smoke-tests-lan-share.sh line 238 uses, so it occurs in the wild, but no CLI test has ever
-# used it. Both forms have to keep working.
-#
-# The colon-form section currently FAILS and is left failing on purpose, and it is placed last so
-# everything before it still runs and reports. Nothing in the storage layer understands the `bucket:`
-# segment: CloudStorage.parsePath (packages/storage/src/lib/cloud-storage.ts lines 75-91) and
-# parseS3ListPath (packages/storage/src/lib/s3-path.ts lines 23-36) both split the path at the first
-# "/" and take everything before it as the bucket name, so `bucket:/prefix` asks the server for a
-# bucket literally named "bucket:" and the request comes back InvalidBucketName. A database chosen
-# through the app's own S3 browser is therefore written into databases.json in a form this code cannot
-# open.
+# A bucket and the key within it are separated by a slash. `s3:bucket:/prefix` is not a valid path
+# and nothing should produce one; the S3 browser used to, which is why every location picked through
+# it was recorded in a form that could not be opened. That is fixed at the source in
+# packages/user-interface/src/components/s3-browser-modal.tsx rather than by teaching the storage
+# layer to accept an invalid path, so there is no colon-form case here to test.
 #
 # The fourth database imports files whose names carry a space and a non-ASCII character, because those
 # become object keys and an unescaped key is a request that names the wrong object.
@@ -90,7 +82,6 @@ test_s3_paths() {
 
     local simple_db="s3:$S3_EMULATOR_BUCKET/simple"
     local deep_db="s3:$S3_EMULATOR_BUCKET/a/b/c/deep"
-    local colon_db="s3:$S3_EMULATOR_BUCKET:/colon-form"
     local awkward_db="s3:$S3_EMULATOR_BUCKET/awkward-names"
 
     # --- Each path shape creates a database and reads its own import back. ---
@@ -118,12 +109,6 @@ test_s3_paths() {
     expect_not_listed "$deep_db" "a photo with spaces.jpg"
     expect_not_listed "$awkward_db" "test.jpg"
     expect_not_listed "$awkward_db" "test.png"
-
-    # --- The colon form the S3 browser produces. Last, because it fails; see the header. ---
-
-    create_and_read_back "$colon_db" "$TEST_FILES_DIR/test.webp" "test.webp"
-    expect_not_listed "$colon_db" "test.jpg"
-    expect_not_listed "$simple_db" "test.webp"
 
     test_passed
 }
