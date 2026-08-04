@@ -18,10 +18,10 @@ trap cleanup EXIT
 mkdir -p "$TMP_DIR/vault"
 
 # Pre-create a secret with the name "dup-secret".
-write_vault_secret "$TMP_DIR/vault/dup-secret.json" dup-secret s3-credentials \
+write_vault_secret "$TMP_DIR/vault" dup-secret s3-credentials \
     '{"region":"","accessKeyId":"","secretAccessKey":""}'
 
-# Capture the original file's modification timestamp so we can verify
+# Capture the vault file's modification timestamp so we can verify
 # the duplicate-add does not overwrite it.
 # Modification time, sub-second, so a rewrite inside the same second is still caught. GNU stat
 # (Linux, Git Bash) and BSD stat (macOS) spell it differently, hence the fallback.
@@ -29,7 +29,7 @@ file_mtime() {
     stat -c %y "$1" 2>/dev/null || stat -f %Fm "$1"
 }
 
-ORIG_MTIME=$(file_mtime "$TMP_DIR/vault/dup-secret.json")
+ORIG_MTIME=$(file_mtime "$TMP_DIR/vault/vault.json")
 
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
@@ -48,16 +48,16 @@ send_command "$APP_PORT" click '{"dataId":"add-secret-confirm"}'
 # remain untouched. Wait for the error to appear in the log.
 wait_for_log "$TMP_DIR" "A secret named 'dup-secret' already exists"
 
-# Assert there is exactly one vault file matching dup-secret*.json.
-COUNT=$(find "$TMP_DIR/vault" -maxdepth 1 -name "dup-secret*.json" | wc -l)
+# Assert the vault still holds exactly one secret, so the duplicate add stored nothing extra.
+COUNT=$(jq 'length' "$TMP_DIR/vault/vault.json")
 if [ "$COUNT" -ne 1 ]; then
-    log_error "Expected exactly 1 vault file for 'dup-secret', found $COUNT"
+    log_error "Expected exactly 1 secret in the vault, found $COUNT"
     exit 1
 fi
 
-# Assert the original file's modification timestamp is unchanged
+# Assert the vault file's modification timestamp is unchanged
 # (i.e. the duplicate add did not overwrite it).
-NEW_MTIME=$(file_mtime "$TMP_DIR/vault/dup-secret.json")
+NEW_MTIME=$(file_mtime "$TMP_DIR/vault/vault.json")
 if [ "$ORIG_MTIME" != "$NEW_MTIME" ]; then
     log_error "Original vault file was overwritten by duplicate-add"
     log_error "Original mtime: $ORIG_MTIME, new mtime: $NEW_MTIME"

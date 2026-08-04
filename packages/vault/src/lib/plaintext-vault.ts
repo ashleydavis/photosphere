@@ -5,37 +5,14 @@ import * as path from "path";
 import { ISecret, IVault, IPrereqCheckResult } from "./vault";
 
 //
-// Default directory under which the plain-text vault stores its files.
+// Default directory under which the plain-text vault stores its vault file.
 //
 const DEFAULT_VAULT_DIR = path.join(os.homedir(), ".config", "photosphere", "vault");
 
 //
-// The file extension used for each secret file.
+// The name of the single file that holds every secret in the vault.
 //
-const SECRET_FILE_EXTENSION = ".json";
-
-//
-// Encodes a secret name into a filename-safe string using percent-encoding.
-// This ensures that names containing special characters, slashes, etc.
-// are stored safely on every supported filesystem.
-//
-function encodeSecretName(name: string): string {
-    return encodeURIComponent(name);
-}
-
-//
-// Decodes a filename back into the original secret name.
-//
-function decodeSecretName(encoded: string): string {
-    return decodeURIComponent(encoded);
-}
-
-//
-// Returns the absolute path of the file that stores the given secret.
-//
-function secretFilePath(vaultDir: string, name: string): string {
-    return path.join(vaultDir, encodeSecretName(name) + SECRET_FILE_EXTENSION);
-}
+const VAULT_FILE_NAME = "vault.json";
 
 //
 // Unix permission mode: owner read + write only (rw-------)
@@ -63,13 +40,26 @@ async function ensureDir(dirPath: string): Promise<void> {
 }
 
 //
-// A vault implementation that persists secrets as plain-text JSON files
-// under a directory on the local filesystem.
+// The on-disk shape of the vault file: a JSON object whose keys are secret
+// names and whose values are the secrets stored under those names.  A secret
+// name lives in a JSON key, so a colon, slash or unicode character in a name
+// needs no encoding of any kind.
 //
-// Each secret is written to its own file named after the (percent-encoded)
-// secret name with a ".json" extension.  By default the vault directory is
-// ~/.config/vault, but a custom directory can be supplied to the constructor
-// which makes the implementation straightforward to test in isolation.
+export interface IVaultFile {
+    //
+    // Each secret, keyed by its name.
+    //
+    [name: string]: ISecret;
+}
+
+//
+// A vault implementation that persists secrets as a single plain-text JSON
+// file under a directory on the local filesystem.
+//
+// Every secret is held in one "vault.json" file, keyed by secret name.  By
+// default the vault directory is ~/.config/vault, but a custom directory can
+// be supplied to the constructor which makes the implementation
+// straightforward to test in isolation.
 //
 // This vault type is intentionally unencrypted and is intended for
 // development / low-security use cases, or as a reference implementation
@@ -77,12 +67,52 @@ async function ensureDir(dirPath: string): Promise<void> {
 //
 export class PlaintextVault implements IVault {
     //
-    // Absolute path to the directory where secret files are stored.
+    // Absolute path to the directory that holds the vault file.
     //
     private readonly vaultDir: string;
 
+    //
+    // Absolute path to the single file that holds every secret.
+    //
+    private readonly vaultFilePath: string;
+
     constructor(vaultDir: string = DEFAULT_VAULT_DIR) {
         this.vaultDir = vaultDir;
+        this.vaultFilePath = path.join(vaultDir, VAULT_FILE_NAME);
+    }
+
+    //
+    // Reads every secret out of the vault file.
+    // Returns an empty set when the file does not exist yet.  A file that
+    // exists but does not parse throws, because silently treating a corrupt
+    // vault as an empty one would hide the damage and then overwrite it.
+    //
+    private async readAll(): Promise<IVaultFile> {
+        let raw: string;
+        try {
+            raw = await fs.readFile(this.vaultFilePath, "utf8");
+        }
+        catch (error: any) {
+            if (error.code === "ENOENT") {
+                return {};
+            }
+            throw error;
+        }
+        return JSON.parse(raw) as IVaultFile;
+    }
+
+    //
+    // Writes every secret back to the vault file, creating the vault
+    // directory first if it is not there.
+    //
+    private async writeAll(contents: IVaultFile): Promise<void> {
+        await ensureDir(this.vaultDir);
+        await fs.writeFile(this.vaultFilePath, JSON.stringify(contents, null, 2), { encoding: "utf8", mode: FILE_MODE });
+        // Apply the mode explicitly; writeFile with mode may be affected by the
+        // process umask on some systems.
+        await fs.chmod(this.vaultFilePath, FILE_MODE).catch(() => {
+            // chmod is not supported on all platforms (e.g. Windows); ignore errors.
+        });
     }
 
     //
@@ -90,63 +120,26 @@ export class PlaintextVault implements IVault {
     // Returns undefined if no secret with that name exists.
     //
     async get(name: string): Promise<ISecret | undefined> {
-        const filePath = secretFilePath(this.vaultDir, name);
-        let raw: string;
-        try {
-            raw = await fs.readFile(filePath, "utf8");
-        }
-        catch (error: any) {
-            if (error.code === "ENOENT") {
-                return undefined;
-            }
-            throw error;
-        }
-        return JSON.parse(raw) as ISecret;
+        const contents = await this.readAll();
+        return contents[name];
     }
 
     //
     // Creates or overwrites a secret.
     //
     async set(secret: ISecret): Promise<void> {
-        await ensureDir(this.vaultDir);
-        const filePath = secretFilePath(this.vaultDir, secret.name);
-        await fs.writeFile(filePath, JSON.stringify(secret, null, 2), { encoding: "utf8", mode: FILE_MODE });
-        // Apply the mode explicitly; writeFile with mode may be affected by the
-        // process umask on some systems.
-        await fs.chmod(filePath, FILE_MODE).catch(() => {
-            // chmod is not supported on all platforms (e.g. Windows); ignore errors.
-        });
+        const contents = await this.readAll();
+        contents[secret.name] = secret;
+        await this.writeAll(contents);
     }
 
     //
-    // Returns all secrets stored in the vault directory.
-    // Returns an empty array if the vault directory does not yet exist.
+    // Returns all secrets stored in the vault file.
+    // Returns an empty array if the vault file does not yet exist.
     //
     async list(): Promise<ISecret[]> {
-        let entries: string[];
-        try {
-            entries = await fs.readdir(this.vaultDir);
-        }
-        catch (error: any) {
-            if (error.code === "ENOENT") {
-                return [];
-            }
-            throw error;
-        }
-
-        const secrets: ISecret[] = [];
-        for (const entry of entries) {
-            if (!entry.endsWith(SECRET_FILE_EXTENSION)) {
-                continue;
-            }
-            const encodedName = entry.slice(0, -SECRET_FILE_EXTENSION.length);
-            const name = decodeSecretName(encodedName);
-            const secret = await this.get(name);
-            if (secret !== undefined) {
-                secrets.push(secret);
-            }
-        }
-        return secrets;
+        const contents = await this.readAll();
+        return Object.values(contents);
     }
 
     //
@@ -154,23 +147,20 @@ export class PlaintextVault implements IVault {
     // Does nothing if the secret does not exist.
     //
     async delete(name: string): Promise<void> {
-        const filePath = secretFilePath(this.vaultDir, name);
-        try {
-            await fs.unlink(filePath);
+        const contents = await this.readAll();
+        if (contents[name] === undefined) {
+            return;
         }
-        catch (error: any) {
-            if (error.code !== "ENOENT") {
-                throw error;
-            }
-        }
+        delete contents[name];
+        await this.writeAll(contents);
     }
 
     //
-    // Returns true if the vault directory exists on disk.
+    // Returns true if the vault file exists on disk.
     // Useful for checking whether the vault has been initialised.
     //
     exists(): boolean {
-        return fsSync.existsSync(this.vaultDir);
+        return fsSync.existsSync(this.vaultFilePath);
     }
 
     //

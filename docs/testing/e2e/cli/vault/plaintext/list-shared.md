@@ -26,9 +26,11 @@ export PHOTOSPHERE_VAULT_TYPE=plaintext
 
 ### 2. Seed an S3 credential secret
 
+Every secret lives in one `vault.json`, keyed by its name.
+
 ```bash
-cat > /tmp/psi-test/vault/s3test01.json <<'EOF'
-{"name":"s3test01","type":"s3-credentials","value":"{\"region\":\"us-east-1\",\"accessKeyId\":\"AKIATEST\",\"secretAccessKey\":\"secret123\",\"endpoint\":\"http://localhost:9000\"}"}
+cat > /tmp/psi-test/vault/vault.json <<'EOF'
+{"s3test01":{"name":"s3test01","type":"s3-credentials","value":"{\"region\":\"us-east-1\",\"accessKeyId\":\"AKIATEST\",\"secretAccessKey\":\"secret123\",\"endpoint\":\"http://localhost:9000\"}"}}
 EOF
 ```
 
@@ -36,10 +38,12 @@ EOF
 
 ### 3. Seed an API key secret
 
+Merge the second secret into the same file, so the first one survives.
+
 ```bash
-cat > /tmp/psi-test/vault/api00001.json <<'EOF'
-{"name":"api00001","type":"api-key","value":"AIzaFakeKey123"}
-EOF
+jq -c '. + {"api00001":{"name":"api00001","type":"api-key","value":"AIzaFakeKey123"}}' \
+    /tmp/psi-test/vault/vault.json > /tmp/psi-test/vault/vault.json.new
+mv /tmp/psi-test/vault/vault.json.new /tmp/psi-test/vault/vault.json
 ```
 
 ---

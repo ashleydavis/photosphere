@@ -480,35 +480,80 @@ check_no_errors() {
 }
 
 #
-# Writes one plaintext-vault secret file, the JSON envelope the vault stores a secret in
+# Merges one secret into the plaintext vault's single vault.json file, which holds every secret
+# keyed by its name. The merge is a read-modify-write, so seeding a second secret keeps the first.
+# An absent vault file starts from an empty object. A vault file that does not parse fails the test
+# outright rather than being silently replaced with a fresh one.
+#
+# jq --argjson passes the secret in as data, so nothing is spliced into a template as text.
+# Usage: merge_vault_secret <vault-dir> <secret-json>
+#
+merge_vault_secret() {
+    local vault_dir="$1"
+    local secret_json="$2"
+    local vault_file="$vault_dir/vault.json"
+
+    mkdir -p "$vault_dir"
+    if [ ! -f "$vault_file" ]; then
+        printf '%s' '{}' > "$vault_file"
+    fi
+
+    local merged
+    if ! merged=$(jq -c --argjson secret "$secret_json" '. + {($secret.name): $secret}' "$vault_file"); then
+        # Called from the top level of a test script, not inside a subshell or a command
+        # substitution, so exit is safe and makes a corrupt vault file fail the test outright.
+        echo "Vault file $vault_file is not valid JSON" >&2
+        exit 1
+    fi
+    printf '%s' "$merged" > "$vault_file"
+    chmod 600 "$vault_file"
+}
+
+#
+# Returns success when a vault directory's vault.json holds a secret under the given name.
+# `has` is false when the key is absent, and jq -e exits non-zero on a false result.
+# Usage: vault_has_secret <vault-dir> <name>
+#
+vault_has_secret() {
+    local vault_dir="$1"
+    local secret_name="$2"
+    local vault_file="$vault_dir/vault.json"
+
+    if [ ! -f "$vault_file" ]; then
+        return 1
+    fi
+    jq -e --arg name "$secret_name" 'has($name)' "$vault_file" > /dev/null 2>&1
+}
+
+#
+# Seeds one secret into the plaintext vault, in the JSON envelope the vault stores a secret in
 # (an object with name, type and value, where value is always a string). For an s3-credentials
 # secret that string is itself JSON, so pass the already-encoded JSON document as the value.
 #
 # jq --arg passes every value in as data, never as text spliced into a template, so a name or
 # value containing a quote, a backslash or a newline is escaped by jq rather than becoming syntax.
-# jq prints a trailing newline that the vault's own writer does not, so printf strips it.
-# Usage: write_vault_secret <file> <name> <type> <value>
+# Usage: write_vault_secret <vault-dir> <name> <type> <value>
 #
 write_vault_secret() {
-    local file_path="$1"
+    local vault_dir="$1"
     local secret_name="$2"
     local secret_type="$3"
     local secret_value="$4"
-    printf '%s' "$(jq -cn --arg name "$secret_name" --arg type "$secret_type" --arg value "$secret_value" \
-        '{name: $name, type: $type, value: $value}')" > "$file_path"
+    merge_vault_secret "$vault_dir" "$(jq -cn --arg name "$secret_name" --arg type "$secret_type" --arg value "$secret_value" \
+        '{name: $name, type: $type, value: $value}')"
 }
 
 #
 # The same, with the secret's value read verbatim from a file, newlines and all, which is how a
 # multi-line PEM gets in. jq --rawfile keeps the file's exact bytes, including any trailing newline,
 # which $(cat ...) would strip.
-# Usage: write_vault_secret_from_file <file> <name> <type> <value-file>
+# Usage: write_vault_secret_from_file <vault-dir> <name> <type> <value-file>
 #
 write_vault_secret_from_file() {
-    local file_path="$1"
+    local vault_dir="$1"
     local secret_name="$2"
     local secret_type="$3"
     local value_file="$4"
-    printf '%s' "$(jq -cn --arg name "$secret_name" --arg type "$secret_type" --rawfile value "$value_file" \
-        '{name: $name, type: $type, value: $value}')" > "$file_path"
+    merge_vault_secret "$vault_dir" "$(jq -cn --arg name "$secret_name" --arg type "$secret_type" --rawfile value "$value_file" \
+        '{name: $name, type: $type, value: $value}')"
 }

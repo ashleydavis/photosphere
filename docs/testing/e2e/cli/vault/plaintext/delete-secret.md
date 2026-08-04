@@ -28,11 +28,11 @@ export PHOTOSPHERE_VAULT_TYPE=plaintext
 ### 2. Seed two secrets
 
 ```bash
-cat > /tmp/psi-test/vault/keep-secret.json <<'EOF'
-{"name":"keep-secret","type":"plain","value":"keep-me"}
-EOF
-cat > /tmp/psi-test/vault/delete-secret.json <<'EOF'
-{"name":"delete-secret","type":"plain","value":"delete-me"}
+cat > /tmp/psi-test/vault/vault.json <<'EOF'
+{
+  "keep-secret": {"name":"keep-secret","type":"plain","value":"keep-me"},
+  "delete-secret": {"name":"delete-secret","type":"plain","value":"delete-me"}
+}
 EOF
 ```
 
@@ -58,4 +58,4 @@ bun run start -- secrets list
 Expected:
 - Output contains `keep-secret`.
 - Output does not contain `delete-secret`.
-- `/tmp/psi-test/vault/delete-secret.json` no longer exists.
+- `/tmp/psi-test/vault/vault.json` no longer holds a `delete-secret` key, and still holds `keep-secret`.

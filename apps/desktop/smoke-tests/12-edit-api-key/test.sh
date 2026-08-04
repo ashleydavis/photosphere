@@ -22,7 +22,7 @@ mkdir -p "$TMP_DIR/vault"
 # Seed the vault with a raw api-key (no JSON envelope), edit it via the
 # UI and verify the round-trip preserves the raw-string format.
 RAW_KEY="sk-test-1234567890ABCDEF"
-write_vault_secret "$TMP_DIR/vault/api-key-1.json" api-key-1 api-key "$RAW_KEY"
+write_vault_secret "$TMP_DIR/vault" api-key-1 api-key "$RAW_KEY"
 
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
@@ -39,7 +39,7 @@ send_command "$APP_PORT" click '{"dataId":"add-secret-confirm"}'
 wait_for_log "$TMP_DIR" "Secret updated"
 
 # Assert the vault still contains the raw key string (not a JSON envelope).
-SAVED_VALUE=$(jq -j '.value' "$TMP_DIR/vault/api-key-1.json")
+SAVED_VALUE=$(jq -j --arg name api-key-1 '.[$name].value' "$TMP_DIR/vault/vault.json")
 
 if [ "$SAVED_VALUE" != "$RAW_KEY" ]; then
     log_error "Vault value is no longer the raw API key"

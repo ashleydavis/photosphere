@@ -27,7 +27,7 @@ MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQ
 -----END PRIVATE KEY-----
 "
 printf '%s' "$RAW_PEM" > "$TMP_DIR/raw.pem"
-write_vault_secret_from_file "$TMP_DIR/vault/enc-key-1.json" \
+write_vault_secret_from_file "$TMP_DIR/vault" \
     enc-key-1 encryption-key "$TMP_DIR/raw.pem"
 
 start_app "$TMP_DIR"
@@ -52,13 +52,13 @@ wait_for_log "$TMP_DIR" "Secret updated"
 # turns each of the PEM's newlines into CRLF on the way into this file and makes the comparison
 # below fail even when the value round-tripped perfectly. The flag is accepted and does nothing on
 # Linux and macOS, where output is already byte-exact.
-jq -jb '.value' "$TMP_DIR/vault/enc-key-1.json" > "$TMP_DIR/saved.pem"
+jq -jb --arg name enc-key-1 '.[$name].value' "$TMP_DIR/vault/vault.json" > "$TMP_DIR/saved.pem"
 if ! cmp -s "$TMP_DIR/raw.pem" "$TMP_DIR/saved.pem"; then
     log_error "Vault value differs from the raw PEM"
     exit 1
 fi
 
-SAVED_TYPE=$(jq -j '.type' "$TMP_DIR/vault/enc-key-1.json")
+SAVED_TYPE=$(jq -j --arg name enc-key-1 '.[$name].type' "$TMP_DIR/vault/vault.json")
 if [ "$SAVED_TYPE" != "encryption-key" ]; then
     log_error "Type field changed: $SAVED_TYPE"
     exit 1

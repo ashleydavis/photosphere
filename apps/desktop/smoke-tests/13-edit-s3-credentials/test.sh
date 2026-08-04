@@ -22,7 +22,7 @@ mkdir -p "$TMP_DIR/vault"
 # Seed the vault with an s3-credentials secret stored as a JSON value
 # containing only the credential fields (no `label`). Edit a field via
 # the UI, save, and assert the value is still JSON with no `label`.
-write_vault_secret "$TMP_DIR/vault/s3-creds-1.json" s3-creds-1 s3-credentials \
+write_vault_secret "$TMP_DIR/vault" s3-creds-1 s3-credentials \
     '{"region":"us-east-1","accessKeyId":"AKIAOLD","secretAccessKey":"OLDSECRET"}'
 
 start_app "$TMP_DIR"
@@ -44,7 +44,7 @@ wait_for_log "$TMP_DIR" "Secret updated"
 # The secret's value is itself a JSON document, so it is read out to its own file and then read
 # field by field, rather than parsed twice in one go. `jq -j` writes the string value raw and adds no
 # trailing newline, so the file holds exactly the bytes the app stored.
-jq -j '.value' "$TMP_DIR/vault/s3-creds-1.json" > "$TMP_DIR/credentials.json"
+jq -j --arg name s3-creds-1 '.[$name].value' "$TMP_DIR/vault/vault.json" > "$TMP_DIR/credentials.json"
 
 # `has` is false when the key is absent, which is what "no label key" means here, and jq -e exits
 # non-zero on a false result.

@@ -27,8 +27,8 @@ export PHOTOSPHERE_VAULT_TYPE=plaintext
 ### 2. Seed a secret
 
 ```bash
-cat > /tmp/psi-test/vault/view-secret.json <<'EOF'
-{"name":"view-secret","type":"plain","value":"my-secret-value"}
+cat > /tmp/psi-test/vault/vault.json <<'EOF'
+{"view-secret":{"name":"view-secret","type":"plain","value":"my-secret-value"}}
 EOF
 ```
 

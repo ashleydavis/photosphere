@@ -26,8 +26,8 @@ export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-sender/config
 export PHOTOSPHERE_VAULT_DIR=/tmp/psi-sender/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
 
-cat > /tmp/psi-sender/vault/test-secret.json <<'EOF'
-{"name":"test-secret","type":"api-key","value":"TESTAPIKEY123"}
+cat > /tmp/psi-sender/vault/vault.json <<'EOF'
+{"test-secret":{"name":"test-secret","type":"api-key","value":"TESTAPIKEY123"}}
 EOF
 ```
 
@@ -84,9 +84,9 @@ In terminal B:
 
 ```bash
 bun run start -- secrets list
-ls /tmp/psi-receiver/vault
+cat /tmp/psi-receiver/vault/vault.json
 ```
 
 Expected:
 - `secrets list` includes `test-secret`.
-- `/tmp/psi-receiver/vault/test-secret.json` exists and contains the value `TESTAPIKEY123`.
+- `/tmp/psi-receiver/vault/vault.json` holds a `test-secret` key whose value is `TESTAPIKEY123`.

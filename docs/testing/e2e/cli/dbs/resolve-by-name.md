@@ -34,18 +34,22 @@ bun run start -- add ../../test/test.png --db /tmp/psi-test/db --key dbs-enc-key
 
 Expected:
 - The database is initialised and the asset is added.
-- The vault file `/tmp/psi-test/vault/dbs-enc-key.json` exists.
+- The vault file `/tmp/psi-test/vault/vault.json` exists and holds a `dbs-enc-key` key.
 
 ---
 
 ### 3. Republish the encryption key under a shared id
 
+Copy the key's value into a second entry in the same `vault.json`.
+
 ```bash
-bun -e "const fs=require('fs');const d=JSON.parse(fs.readFileSync('/tmp/psi-test/vault/dbs-enc-key.json','utf8'));fs.writeFileSync('/tmp/psi-test/vault/enc00001.json',JSON.stringify({name:'enc00001',type:'encryption-key',value:d.value}));"
+jq -c '. + {"enc00001":{"name":"enc00001","type":"encryption-key","value":.["dbs-enc-key"].value}}' \
+    /tmp/psi-test/vault/vault.json > /tmp/psi-test/vault/vault.json.new
+mv /tmp/psi-test/vault/vault.json.new /tmp/psi-test/vault/vault.json
 ```
 
 Expected:
-- The new vault file `/tmp/psi-test/vault/enc00001.json` exists.
+- `/tmp/psi-test/vault/vault.json` now holds an `enc00001` key as well.
 
 ---
 

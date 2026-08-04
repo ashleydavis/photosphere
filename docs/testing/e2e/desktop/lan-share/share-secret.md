@@ -30,10 +30,11 @@ bun run dev
 
 Notes:
 - `PHOTOSPHERE_CONFIG_DIR` isolates each instance's database/secret config.
-- `PHOTOSPHERE_VAULT_DIR` isolates each instance's vault files.
-- `PHOTOSPHERE_VAULT_TYPE=plaintext` stores secrets as JSON files under the
-  vault directory instead of the shared OS keychain, so the two instances stay
-  independent (and you can inspect the vault files directly).
+- `PHOTOSPHERE_VAULT_DIR` isolates each instance's vault file.
+- `PHOTOSPHERE_VAULT_TYPE=plaintext` stores every secret in a single
+  `vault.json` under the vault directory, keyed by secret name, instead of in
+  the shared OS keychain, so the two instances stay independent (and you can
+  inspect the vault file directly).
 
 Both instances run on the same machine and discover each other over local
 loopback. (Two separate machines on the same LAN also works; run one command

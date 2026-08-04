@@ -39,8 +39,12 @@ Expected:
 
 ### 3. Republish the encryption key under a shared id
 
+Copy the key's value into a second entry in the same `vault.json`.
+
 ```bash
-bun -e "const fs=require('fs');const d=JSON.parse(fs.readFileSync('/tmp/psi-test/vault/dbs-path-enc-key.json','utf8'));fs.writeFileSync('/tmp/psi-test/vault/enc00002.json',JSON.stringify({name:'enc00002',type:'encryption-key',value:d.value}));"
+jq -c '. + {"enc00002":{"name":"enc00002","type":"encryption-key","value":.["dbs-path-enc-key"].value}}' \
+    /tmp/psi-test/vault/vault.json > /tmp/psi-test/vault/vault.json.new
+mv /tmp/psi-test/vault/vault.json.new /tmp/psi-test/vault/vault.json
 ```
 
 ---

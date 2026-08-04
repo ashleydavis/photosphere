@@ -33,7 +33,7 @@ bun run start -- secrets add --yes --name test-secret --type plain --value hello
 
 Expected:
 - The command exits successfully.
-- The file `/tmp/psi-test/vault/test-secret.json` exists.
+- The file `/tmp/psi-test/vault/vault.json` exists and holds a `test-secret` key.
 
 ---
 

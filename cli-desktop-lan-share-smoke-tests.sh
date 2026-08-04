@@ -73,7 +73,50 @@ bundle_desktop() {
 }
 
 #
-# Seeds a vault directory with a single plain-text secret JSON file.
+# Merges one secret into a vault directory's single vault.json file, which holds every secret keyed
+# by its name. The merge is a read-modify-write, so seeding a second secret keeps the first. An
+# absent vault file starts from an empty object, and a vault file that does not parse fails the test
+# outright rather than being silently replaced with a fresh one.
+# Usage: merge_vault_secret <vault_dir> <secret_json>
+#
+merge_vault_secret() {
+    local vault_dir="$1"
+    local secret_json="$2"
+    local vault_file="$vault_dir/vault.json"
+
+    mkdir -p "$vault_dir"
+    if [ ! -f "$vault_file" ]; then
+        printf '%s' '{}' > "$vault_file"
+    fi
+
+    local merged
+    if ! merged=$(jq -c --argjson secret "$secret_json" '. + {($secret.name): $secret}' "$vault_file"); then
+        echo "Vault file $vault_file is not valid JSON" >&2
+        return 1
+    fi
+    printf '%s' "$merged" > "$vault_file"
+    chmod 600 "$vault_file"
+}
+
+#
+# Returns success when a vault directory's vault.json holds a secret under the given name.
+# Usage: vault_has_secret <vault_dir> <name>
+#
+vault_has_secret() {
+    local vault_dir="$1"
+    local secret_name="$2"
+    local vault_file="$vault_dir/vault.json"
+
+    if [ ! -f "$vault_file" ]; then
+        return 1
+    fi
+    jq -e --arg name "$secret_name" 'has($name)' "$vault_file" > /dev/null
+}
+
+#
+# Seeds a vault directory with a single plain-text secret. The name goes into a JSON key, so a
+# colon, slash or space in it needs no encoding, and jq --arg escapes a quote, backslash or newline
+# in the value as data rather than letting it become syntax.
 # Usage: seed_secret <vault_dir> <name> <type> <value>
 #
 seed_secret() {
@@ -81,17 +124,8 @@ seed_secret() {
     local secret_name="$2"
     local secret_type="$3"
     local secret_value="$4"
-    mkdir -p "$vault_dir"
-    local escaped_value
-    escaped_value=$(printf '%s' "$secret_value" | sed 's/\\/\\\\/g; s/"/\\"/g')
-    cat > "$vault_dir/$secret_name.json" <<VAULT_EOF
-{
-  "name": "$secret_name",
-  "type": "$secret_type",
-  "value": "$escaped_value"
-}
-VAULT_EOF
-    chmod 600 "$vault_dir/$secret_name.json"
+    merge_vault_secret "$vault_dir" "$(jq -cn --arg name "$secret_name" --arg type "$secret_type" --arg value "$secret_value" \
+        '{name: $name, type: $type, value: $value}')"
 }
 
 #
@@ -105,11 +139,9 @@ seed_encryption_key() {
     local pem_file="$vault_dir/$secret_name.pem"
     openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$pem_file" 2>/dev/null
     # jq --rawfile reads the PEM's exact bytes (trailing newline included, which $(cat ...) would
-    # strip) and --arg passes the name in as data, so nothing is spliced into a template. jq prints
-    # a trailing newline the vault's own writer does not, so printf strips it.
-    printf '%s' "$(jq -cn --arg name "$secret_name" --arg type encryption-key --rawfile value "$pem_file" \
-        '{name: $name, type: $type, value: $value}')" > "$vault_dir/$secret_name.json"
-    chmod 600 "$vault_dir/$secret_name.json"
+    # strip) and --arg passes the name in as data, so nothing is spliced into a template.
+    merge_vault_secret "$vault_dir" "$(jq -cn --arg name "$secret_name" --arg type encryption-key --rawfile value "$pem_file" \
+        '{name: $name, type: $type, value: $value}')"
     rm -f "$pem_file"
 }
 
@@ -321,7 +353,7 @@ test_cli_to_desktop_secret() {
     send_command "$app_port" click '{"dataId":"receive-secret-save-button"}'
     wait_for_log "$test_tmp/desktop" "Secret saved" || { mark_fail "$test_name" "$sender_log" "$test_tmp/desktop/app.log"; stop_app "$app_port" "$test_tmp/desktop"; return; }
 
-    if [ ! -f "$test_tmp/desktop/vault/shared-api-key.json" ] || ! grep -q "shared-api-key" "$test_tmp/desktop/vault/shared-api-key.json"; then
+    if ! vault_has_secret "$test_tmp/desktop/vault" "shared-api-key"; then
         mark_fail "$test_name" "$sender_log" "$test_tmp/desktop/app.log"
         stop_app "$app_port" "$test_tmp/desktop"
         return
@@ -386,7 +418,7 @@ test_cli_to_desktop_database() {
         return
     fi
 
-    if [ ! -f "$test_tmp/desktop/vault/s3-cli-key.json" ] || [ ! -f "$test_tmp/desktop/vault/enc-cli-key.json" ]; then
+    if ! vault_has_secret "$test_tmp/desktop/vault" "s3-cli-key" || ! vault_has_secret "$test_tmp/desktop/vault" "enc-cli-key"; then
         mark_fail "$test_name" "$sender_log" "$test_tmp/desktop/app.log"
         stop_app "$app_port" "$test_tmp/desktop"
         return
@@ -446,7 +478,7 @@ test_desktop_to_cli_secret() {
         return
     fi
 
-    if [ ! -f "$test_tmp/cli/vault/desktop-api-key.json" ] || ! grep -q "desktop-api-key" "$test_tmp/cli/vault/desktop-api-key.json"; then
+    if ! vault_has_secret "$test_tmp/cli/vault" "desktop-api-key"; then
         mark_fail "$test_name" "$receiver_log" "$test_tmp/desktop/app.log"
         cleanup_cli_pids
         stop_app "$app_port" "$test_tmp/desktop"
@@ -518,7 +550,7 @@ test_desktop_to_cli_database() {
         return
     fi
 
-    if [ ! -f "$test_tmp/cli/vault/s3-desktop-key.json" ] || [ ! -f "$test_tmp/cli/vault/enc-desktop-key.json" ]; then
+    if ! vault_has_secret "$test_tmp/cli/vault" "s3-desktop-key" || ! vault_has_secret "$test_tmp/cli/vault" "enc-desktop-key"; then
         mark_fail "$test_name" "$receiver_log" "$test_tmp/desktop/app.log"
         cleanup_cli_pids
         stop_app "$app_port" "$test_tmp/desktop"

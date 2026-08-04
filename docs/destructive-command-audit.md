@@ -185,9 +185,9 @@ One destructive line in a sourced library applies to every caller. These are the
 
 **`apps/cli/smoke-tests/lib/functions.sh`**, deletes at lines 14, 186, 200, 415, 430, 448, 478, 512, 528, 979, 988, 1039, and overwrites an asset file at line 999. All targets are under `TEST_TMP_DIR`. Sourced by 26 scripts: `apps/cli/smoke-tests/01-create-database` through `26-repair-damaged` (every numbered test that uses the shared fixtures).
 
-**`apps/cli/smoke-tests/lib/common.sh`**, `rm -f "${PHOTOSPHERE_CONFIG_DIR}/databases.toml"` at line 796 and `cat > .../databases.json` at line 797, plus `cat > "$file_path"` at line 769 and `chmod 600` at line 776. It also defines `TEST_TMP_DIR` (line 16) and `get_test_dir` (line 28), which is where every caller's deletion target comes from. Sourced by 65 scripts (every `apps/cli/smoke-tests/*/test.sh`).
+**`apps/cli/smoke-tests/lib/common.sh`**, `rm -f "${PHOTOSPHERE_CONFIG_DIR}/databases.toml"` at line 800 and `cat > .../databases.json` at line 801, plus `> "$vault_file"` at line 779 and `chmod 600` at line 780. It also defines `TEST_TMP_DIR` (line 16) and `get_test_dir` (line 28), which is where every caller's deletion target comes from. Sourced by 65 scripts (every `apps/cli/smoke-tests/*/test.sh`).
 
-**`apps/cli/smoke-tests-key-chain/lib/common.sh`**, the same shape at lines 777, 778, 761, 768. Sourced by 6 scripts (`apps/cli/smoke-tests-key-chain/58..63/test.sh`).
+**`apps/cli/smoke-tests-key-chain/lib/common.sh`**, the same shape at lines 789, 790, 779, 780. Sourced by 6 scripts (`apps/cli/smoke-tests-key-chain/58..63/test.sh`).
 
 **`apps/desktop/smoke-tests/lib/common.sh`**, `kill_app_tree` (lines 218-229) walks the process tree with `pgrep -P` and sends `SIGTERM` then `SIGKILL`; `rm -f "$tmp_dir/test-control.port"` at line 146. Only descendants of a pid the helper itself started are killed. Sourced by 28 scripts: the 26 `apps/desktop/smoke-tests/*/test.sh` plus `apps/desktop/screenshots/capture-ux.sh` plus `scripts/story-player.sh`, and indirectly by `cli-desktop-lan-share-smoke-tests.sh`.
 
@@ -299,9 +299,9 @@ Every script in the repository, one row each, in path order. Categories are A (g
 | `apps/cli/smoke-tests-key-chain/61-keychain-vault-edit/test.sh` | B 16: `rm -rf "$test_dir"` |
 | `apps/cli/smoke-tests-key-chain/62-keychain-vault-delete/test.sh` | B 16: `rm -rf "$test_dir"` |
 | `apps/cli/smoke-tests-key-chain/63-keychain-vault-list-multiple/test.sh` | B 16: `rm -rf "$test_dir"` |
-| `apps/cli/smoke-tests-key-chain/lib/common.sh` | F 768: `chmod 600 "$file_path"`<br>B 777: `rm -f "${PHOTOSPHERE_CONFIG_DIR}/databases.toml"` |
-| `apps/cli/smoke-tests-lan-share.sh` | F 115: `chmod 600 "$file_path"`<br>B 169: `rm -rf "$SENDER_VAULT_DIR" "$SENDER_CONFIG_DIR" "$RECEIVER_VAULT_DIR" "$RECEIVER_CONFIG_DIR"`<br>D 186: `pkill -f "bun run start.*--yes" 2>/dev/null \|\| true`<br>D 187: `pkill -f "bun run.*udp-listen" 2>/dev/null \|\| true`<br>D 189: `pkill -9 -f "bun run start.*--yes" 2>/dev/null \|\| true`<br>D 204: `pkill -f "bun run.*receive --yes" 2>/dev/null \|\| true`<br>F 238: `chmod 600 "${SENDER_VAULT_DIR}/encsndr1.json"`<br>B 426: `rm -rf "$RECEIVER_VAULT_DIR" "$RECEIVER_CONFIG_DIR"`<br>B 526: `rm -rf "$RECEIVER_VAULT_DIR" "$RECEIVER_CONFIG_DIR"`<br>D 604: `pkill -f "bun run.*receive --yes" 2>/dev/null \|\| true` |
-| `apps/cli/smoke-tests/lib/common.sh` | F 776: `chmod 600 "$file_path"`<br>B 796: `rm -f "${PHOTOSPHERE_CONFIG_DIR}/databases.toml"` |
+| `apps/cli/smoke-tests-key-chain/lib/common.sh` | F 780: `chmod 600 "$vault_file"`<br>B 789: `rm -f "${PHOTOSPHERE_CONFIG_DIR}/databases.toml"` |
+| `apps/cli/smoke-tests-lan-share.sh` | F 113: `chmod 600 "$vault_file"`<br>B 205: `rm -rf "$SENDER_VAULT_DIR" "$SENDER_CONFIG_DIR" "$RECEIVER_VAULT_DIR" "$RECEIVER_CONFIG_DIR"`<br>D 229: `pkill -f "bun run start.*--yes" 2>/dev/null \|\| true`<br>D 230: `pkill -f "bun run.*udp-listen" 2>/dev/null \|\| true`<br>D 232: `pkill -9 -f "bun run start.*--yes" 2>/dev/null \|\| true`<br>D 247: `pkill -f "bun run.*receive --yes" 2>/dev/null \|\| true`<br>B 460: `rm -rf "$RECEIVER_VAULT_DIR" "$RECEIVER_CONFIG_DIR"`<br>B 561: `rm -rf "$RECEIVER_VAULT_DIR" "$RECEIVER_CONFIG_DIR"`<br>D 641: `pkill -f "bun run.*receive --yes" 2>/dev/null \|\| true` |
+| `apps/cli/smoke-tests/lib/common.sh` | F 780: `chmod 600 "$vault_file"`<br>B 800: `rm -f "${PHOTOSPHERE_CONFIG_DIR}/databases.toml"` |
 | `apps/cli/smoke-tests/lib/functions.sh` | B 14: `rm -rf "$TEST_DB_DIR"`<br>B 186: `rm -rf "$db_dir"`<br>B 200: `rm -rf "$db_dir"`<br>B 415: `rm -rf "$test_copy_dir"`<br>B 430: `rm "$file_to_delete"`<br>B 448: `rm -rf "$test_copy_dir"`<br>B 478: `rm -rf "$test_copy_dir"`<br>B 512: `rm -rf "$test_copy_dir"`<br>B 528: `rm -rf "$replica_dir"`<br>B 979: `rm -rf "$damaged_dir"`<br>B 988: `rm "$file_to_delete"`<br>B 1039: `rm -rf "$damaged_dir"` |
 | `apps/cli/smoke-tests.sh` | B 281: `rm -rf "$TEST_TMP_DIR"`<br>B 369: `rm -f "$UUID_COUNTER_FILE"`<br>B 378: `rm -rf "$TEST_TMP_DIR"`<br>B 388: `rm -rf "$replica_dir"`<br>C 524: `mv "$log_file" "$log_file.signal-death" 2>/dev/null \|\| true`<br>B 525: `rm -rf "${TEST_TMP_DIR:?}/${dir_name}"`<br>B 630: `rm -rf "$TEST_TMP_DIR"`<br>B 637: `rm -f "$UUID_COUNTER_FILE"`<br>E 642: `invoke_command "Clear local cache" "$(get_cli_command) hash-cache clear" \|\| {`<br>E 748: `invoke_command "Clear local cache" "$(get_cli_command) hash-cache clear" \|\| {`<br>B 920: `rm -rf "$TEST_TMP_DIR"`<br>B 926: `rm -f "$UUID_COUNTER_FILE"`<br>E 930: `invoke_command "Clear local cache" "$(get_cli_command) hash-cache clear" \|\| {`<br>E 1000: `invoke_command "Clear local cache" "$(get_cli_command) hash-cache clear" \|\| {` |
 | `apps/cli/sync-smoke-test.sh` | B 246: `rm -rf "$TEST_DB_DIR" "$TEST_FILES_DIR" "$PROCESS_OUTPUT_DIR"`<br>B 307: `rm -rf "$replica_dir"` |
@@ -337,7 +337,7 @@ Every script in the repository, one row each, in path order. Categories are A (g
 | `apps/desktop/smoke-tests/7-share-secret/test.sh` | none directly; reaches a destructive helper: kill_app_tree, stop_app |
 | `apps/desktop/smoke-tests/8-share-database/test.sh` | none directly; reaches a destructive helper: kill_app_tree, stop_app |
 | `apps/desktop/smoke-tests/9-view-secret/test.sh` | none directly; reaches a destructive helper: kill_app_tree, stop_app |
-| `apps/desktop/smoke-tests/lib/common.sh` | B 146: `rm -f "$tmp_dir/test-control.port"` |
+| `apps/desktop/smoke-tests/lib/common.sh` | B 174: `rm -f "$tmp_dir/test-control.port"`<br>F 509: `chmod 600 "$vault_file"` |
 | `apps/desktop/smoke-tests.sh` | B 120: `rm -rf "$dir/tmp"`<br>B 180: `rm -rf "$dir/tmp"` |
 | `apps/ios-frontend/ios/build-imagemagick.sh` | B 49: `rm -rf "$work"; mkdir -p "$work" "$prefix"` |
 | `apps/ios-frontend/ios/run-unit-tests.sh` | none |
@@ -387,7 +387,7 @@ Every script in the repository, one row each, in path order. Categories are A (g
 | `apps/smoke-tests/tests/8-share-database/test.sh` | none directly; reaches a destructive helper: _reset_app_state, _seed_database, stop_app |
 | `apps/smoke-tests/tests/9-view-secret/test.sh` | none directly; reaches a destructive helper: _reset_app_state, stop_app |
 | `apps/smoke-tests/timeout.test.sh` | B 20: `rm -rf "$WORK"` |
-| `cli-desktop-lan-share-smoke-tests.sh` | D 59: `pkill -f "bun run.*secrets (send\|receive)" 2>/dev/null \|\| true`<br>D 60: `pkill -f "bun run.*dbs (send\|receive)" 2>/dev/null \|\| true`<br>F 94: `chmod 600 "$vault_dir/$secret_name.json"`<br>F 116: `chmod 600 "$vault_dir/$secret_name.json"`<br>B 117: `rm -f "$pem_file"`<br>B 289: `rm -rf "$test_tmp"`<br>B 345: `rm -rf "$test_tmp"`<br>B 410: `rm -rf "$test_tmp"`<br>B 472: `rm -rf "$test_tmp"`<br>B 541: `rm -rf "$TMP_ROOT"` |
+| `cli-desktop-lan-share-smoke-tests.sh` | D 59: `pkill -f "bun run.*secrets (send\|receive)" 2>/dev/null \|\| true`<br>D 60: `pkill -f "bun run.*dbs (send\|receive)" 2>/dev/null \|\| true`<br>F 98: `chmod 600 "$vault_file"`<br>B 145: `rm -f "$pem_file"`<br>B 317: `rm -rf "$test_tmp"`<br>B 373: `rm -rf "$test_tmp"`<br>B 438: `rm -rf "$test_tmp"`<br>B 500: `rm -rf "$test_tmp"`<br>B 569: `rm -rf "$TMP_ROOT"` |
 | `docs/testing/e2e/desktop/news/setup-news-feed.sh` | C 10: `cat > "$NEWS_FILE"` (NEWS_FILE is the literal /tmp/photosphere-news.yaml; clobbers it) |
 | `.githooks/pre-commit` | none |
 | `run-cloud-storage-tests.sh` | E 80: `node scripts/clear-s3-bucket.js "$TEST_S3_BUCKET"` |

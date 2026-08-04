@@ -21,7 +21,7 @@ mkdir -p "$TMP_DIR/vault"
 
 # Seed the vault with an api-key whose vault key matches its name.
 RAW_KEY="sk-rename-me"
-write_vault_secret "$TMP_DIR/vault/old-name.json" old-name api-key "$RAW_KEY"
+write_vault_secret "$TMP_DIR/vault" old-name api-key "$RAW_KEY"
 
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
@@ -39,17 +39,18 @@ send_command "$APP_PORT" click '{"dataId":"add-secret-confirm"}'
 wait_for_log "$TMP_DIR" "Secret updated"
 
 # Assert the new vault key holds the value and the old key is gone.
-if [ -f "$TMP_DIR/vault/old-name.json" ]; then
-    log_error "Old vault entry $TMP_DIR/vault/old-name.json still exists"
+# `has` is false when the key is absent, and jq -e exits non-zero on a false result.
+if jq -e --arg name old-name 'has($name)' "$TMP_DIR/vault/vault.json" > /dev/null 2>&1; then
+    log_error "Old vault entry 'old-name' still exists"
     exit 1
 fi
 
-if [ ! -f "$TMP_DIR/vault/new-name.json" ]; then
-    log_error "New vault entry $TMP_DIR/vault/new-name.json was not created"
+if ! jq -e --arg name new-name 'has($name)' "$TMP_DIR/vault/vault.json" > /dev/null 2>&1; then
+    log_error "New vault entry 'new-name' was not created"
     exit 1
 fi
 
-NEW_VALUE=$(jq -j '.value' "$TMP_DIR/vault/new-name.json")
+NEW_VALUE=$(jq -j --arg name new-name '.[$name].value' "$TMP_DIR/vault/vault.json")
 
 if [ "$NEW_VALUE" != "$RAW_KEY" ]; then
     log_error "Renamed entry's value was not preserved"

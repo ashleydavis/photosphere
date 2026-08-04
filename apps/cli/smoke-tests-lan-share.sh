@@ -90,29 +90,65 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Seed a vault secret directly into a vault directory.
+# Merge one secret into a vault directory's single vault.json file, which holds every secret keyed by
+# its name. The merge is a read-modify-write, so seeding a second secret keeps the first. An absent
+# vault file starts from an empty object, and a vault file that does not parse fails rather than
+# being silently replaced with a fresh one.
+merge_vault_secret() {
+    local vault_dir="$1"
+    local secret_json="$2"
+    local vault_file="${vault_dir}/vault.json"
+
+    mkdir -p "$vault_dir"
+    if [ ! -f "$vault_file" ]; then
+        printf '%s' '{}' > "$vault_file"
+    fi
+
+    local merged
+    if ! merged=$(jq -c --argjson secret "$secret_json" '. + {($secret.name): $secret}' "$vault_file"); then
+        log_fail "Vault file $vault_file is not valid JSON"
+        return 1
+    fi
+    printf '%s' "$merged" > "$vault_file"
+    chmod 600 "$vault_file"
+}
+
+# Seed a vault secret directly into a vault directory. The name goes into a JSON key, so a colon,
+# slash or space in it needs no encoding. jq --arg passes each value in as data, never as text
+# spliced into a template, so a quote, backslash or newline is escaped rather than becoming syntax.
 seed_vault_secret() {
     local vault_dir="$1"
     local secret_name="$2"
     local secret_type="$3"
     local secret_value="$4"
 
-    mkdir -p "$vault_dir"
-    local encoded_name
-    encoded_name=$(printf '%s' "$secret_name" | sed 's/:/%3A/g')
-    local file_path="${vault_dir}/${encoded_name}.json"
-
-    local escaped_value
-    escaped_value=$(printf '%s' "$secret_value" | sed 's/\\/\\\\/g; s/"/\\"/g')
-
-    cat > "$file_path" <<VAULT_EOF
-{
-  "name": "$secret_name",
-  "type": "$secret_type",
-  "value": "${escaped_value}"
+    merge_vault_secret "$vault_dir" "$(jq -cn --arg name "$secret_name" --arg type "$secret_type" --arg value "$secret_value" \
+        '{name: $name, type: $type, value: $value}')"
 }
-VAULT_EOF
-    chmod 600 "$file_path"
+
+# The same, with the secret's value read verbatim from a file, newlines and all, which is how a
+# multi-line PEM gets in. jq --rawfile keeps the file's exact bytes, including any trailing newline,
+# which $(cat ...) would strip.
+seed_vault_secret_from_file() {
+    local vault_dir="$1"
+    local secret_name="$2"
+    local secret_type="$3"
+    local value_file="$4"
+
+    merge_vault_secret "$vault_dir" "$(jq -cn --arg name "$secret_name" --arg type "$secret_type" --rawfile value "$value_file" \
+        '{name: $name, type: $type, value: $value}')"
+}
+
+# Count the secrets held in a vault directory's vault.json. Prints 0 when the file is absent.
+count_vault_secrets() {
+    local vault_dir="$1"
+    local vault_file="${vault_dir}/vault.json"
+
+    if [ ! -f "$vault_file" ]; then
+        printf '0'
+        return 0
+    fi
+    jq 'length' "$vault_file"
 }
 
 # Seed a databases.json config file directly.
@@ -230,16 +266,10 @@ test_share_database() {
         '{"region":"us-east-1","accessKeyId":"AKIATEST","secretAccessKey":"secret123","endpoint":"http://localhost:9000"}'
 
     # Generate a real RSA-2048 PEM so resolveDatabaseSharePayload can derive the public key.
-    # The vault file is JSON, so the file is built directly rather than by templating, to handle PEM newlines.
     local pem_file="${TEST_TMP_DIR}/encsndr1.pem"
     mkdir -p "$TEST_TMP_DIR" "$SENDER_VAULT_DIR"
     openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$pem_file" 2>/dev/null
-    # jq --rawfile reads the PEM's exact bytes (trailing newline included, which $(cat ...) would
-    # strip) and escapes them as JSON data, so nothing is spliced into a template. jq prints a
-    # trailing newline the vault's own writer does not, so printf strips it.
-    printf '%s' "$(jq -cn --arg name encsndr1 --arg type encryption-key --rawfile value "$pem_file" \
-        '{name: $name, type: $type, value: $value}')" > "${SENDER_VAULT_DIR}/encsndr1.json"
-    chmod 600 "${SENDER_VAULT_DIR}/encsndr1.json"
+    seed_vault_secret_from_file "$SENDER_VAULT_DIR" "encsndr1" "encryption-key" "$pem_file"
 
     seed_databases_config "$SENDER_CONFIG_DIR" \
         '[{"name":"share-test-db","description":"A database for LAN share testing","path":"s3:test-bucket:/photos","s3Key":"s3sender","encryptionKey":"encsndr1"}]'
@@ -265,7 +295,7 @@ test_share_database() {
     fi
 
     local receiver_secrets
-    receiver_secrets=$(find "$RECEIVER_VAULT_DIR" -maxdepth 1 -name '*.json' 2>/dev/null | wc -l)
+    receiver_secrets=$(count_vault_secrets "$RECEIVER_VAULT_DIR")
     if [ "$receiver_secrets" -ge 1 ]; then
         log_success "Database share: receiver vault has $receiver_secrets secret(s)"
     else
@@ -318,7 +348,7 @@ test_share_secret() {
     fi
 
     local receiver_secrets
-    receiver_secrets=$(find "$RECEIVER_VAULT_DIR" -maxdepth 1 -name '*.json' 2>/dev/null | wc -l)
+    receiver_secrets=$(count_vault_secrets "$RECEIVER_VAULT_DIR")
     if [ "$receiver_secrets" -ge 1 ]; then
         log_success "Secret share: receiver vault has $receiver_secrets secret(s)"
     else
@@ -365,7 +395,7 @@ test_wrong_pairing_code() {
     fi
 
     local receiver_secrets
-    receiver_secrets=$(find "$RECEIVER_VAULT_DIR" -maxdepth 1 -name '*.json' 2>/dev/null | wc -l)
+    receiver_secrets=$(count_vault_secrets "$RECEIVER_VAULT_DIR")
     if [ "$receiver_secrets" -eq 0 ]; then
         log_success "Wrong code: receiver vault is still empty (no import)"
     else
@@ -405,7 +435,7 @@ test_share_database_no_secrets() {
     fi
 
     local receiver_secrets
-    receiver_secrets=$(find "$RECEIVER_VAULT_DIR" -maxdepth 1 -name '*.json' 2>/dev/null | wc -l)
+    receiver_secrets=$(count_vault_secrets "$RECEIVER_VAULT_DIR")
     if [ "$receiver_secrets" -eq 0 ]; then
         log_success "No-secrets DB share: receiver vault is empty (no secrets to import)"
     else
@@ -514,7 +544,7 @@ test_rogue_receiver_rejected() {
 
     # Verify receiver vault is still empty.
     local receiver_secrets
-    receiver_secrets=$(find "$RECEIVER_VAULT_DIR" -maxdepth 1 -name '*.json' 2>/dev/null | wc -l)
+    receiver_secrets=$(count_vault_secrets "$RECEIVER_VAULT_DIR")
     if [ "$receiver_secrets" -eq 0 ]; then
         log_success "Rogue test: receiver vault still empty (rogue payload not accepted)"
     else

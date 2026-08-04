@@ -22,8 +22,8 @@ export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-sender/config
 export PHOTOSPHERE_VAULT_DIR=/tmp/psi-sender/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
 
-cat > /tmp/psi-sender/vault/test-s3-key.json <<'EOF'
-{"name":"test-s3-key","type":"s3-credentials","value":"{\"region\":\"us-east-1\",\"accessKeyId\":\"AKIATEST\",\"secretAccessKey\":\"testsecret\"}"}
+cat > /tmp/psi-sender/vault/vault.json <<'EOF'
+{"test-s3-key":{"name":"test-s3-key","type":"s3-credentials","value":"{\"region\":\"us-east-1\",\"accessKeyId\":\"AKIATEST\",\"secretAccessKey\":\"testsecret\"}"}}
 EOF
 
 cat > /tmp/psi-sender/config/databases.json <<'EOF'
@@ -90,4 +90,4 @@ bun run start -- secrets list
 Expected:
 - `dbs list` contains `test-db` and its path.
 - `secrets list` contains `test-s3-key`.
-- `/tmp/psi-receiver/vault/test-s3-key.json` exists.
+- `/tmp/psi-receiver/vault/vault.json` holds a `test-s3-key` key.

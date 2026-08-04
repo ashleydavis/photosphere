@@ -51,6 +51,12 @@ describe("PlaintextVault", () => {
             const result = await vault.get("token");
             expect(result?.value).toBe("new-value");
         });
+
+        test("returns undefined when the vault file exists but holds no such name", async () => {
+            await vault.set({ name: "present", type: "password", value: "here" });
+            const result = await vault.get("absent");
+            expect(result).toBeUndefined();
+        });
     });
 
     describe("set", () => {
@@ -78,6 +84,24 @@ describe("PlaintextVault", () => {
             expect(result?.type).toBe("s3-credentials");
         });
 
+        test("creates the vault file when it does not exist yet", async () => {
+            await vault.set({ name: "first", type: "password", value: "one" });
+            const stats = await fs.stat(path.join(tempDir, "vault.json"));
+            expect(stats.isFile()).toBe(true);
+        });
+
+        test("preserves the secrets already held in the vault file", async () => {
+            await vault.set({ name: "first", type: "password", value: "one" });
+            await vault.set({ name: "second", type: "api-key", value: "two" });
+            await vault.set({ name: "third", type: "password", value: "three" });
+            const first = await vault.get("first");
+            const second = await vault.get("second");
+            const third = await vault.get("third");
+            expect(first?.value).toBe("one");
+            expect(second?.value).toBe("two");
+            expect(third?.value).toBe("three");
+        });
+
         test("supports a key pair secret with both private and public key in the value", async () => {
             const keyPairValue = JSON.stringify({ privateKey: "-----BEGIN PRIVATE KEY-----", publicKey: "-----BEGIN PUBLIC KEY-----" });
             await vault.set({ name: "my-keypair", type: "key-pair", value: keyPairValue });
@@ -95,7 +119,7 @@ describe("PlaintextVault", () => {
             expect(secrets).toEqual([]);
         });
 
-        test("returns an empty array when the vault directory does not exist", async () => {
+        test("returns an empty array when the vault file does not exist", async () => {
             const emptyVault = new PlaintextVault(path.join(tempDir, "does-not-exist"));
             const secrets = await emptyVault.list();
             expect(secrets).toEqual([]);
@@ -118,12 +142,33 @@ describe("PlaintextVault", () => {
             expect(secrets[0].name).toBe("keep");
         });
 
-        test("ignores files without the .json extension", async () => {
+        test("ignores a stray file sitting alongside the vault file", async () => {
             await vault.set({ name: "real", type: "api-key", value: "val" });
             // Write a stray file that should be ignored.
             await fs.writeFile(path.join(tempDir, "noise.txt"), "ignore me", "utf8");
             const secrets = await vault.list();
             expect(secrets).toHaveLength(1);
+        });
+    });
+
+    describe("a malformed vault file", () => {
+        //
+        // Writes a vault file that is not valid JSON, so the vault has to
+        // fail loudly rather than reporting an empty vault and then
+        // overwriting whatever was really in there.
+        //
+        async function writeMalformedVaultFile(): Promise<void> {
+            await fs.writeFile(path.join(tempDir, "vault.json"), "{ this is not json", "utf8");
+        }
+
+        test("makes get throw", async () => {
+            await writeMalformedVaultFile();
+            await expect(vault.get("anything")).rejects.toThrow();
+        });
+
+        test("makes list throw", async () => {
+            await writeMalformedVaultFile();
+            await expect(vault.list()).rejects.toThrow();
         });
     });
 
@@ -173,12 +218,12 @@ describe("PlaintextVault", () => {
         // Permission checks are only meaningful on POSIX platforms.
         const isWindows = process.platform === "win32";
 
-        test("secret file is created with owner-only permissions (0o600)", async () => {
+        test("vault file is created with owner-only permissions (0o600)", async () => {
             if (isWindows) {
                 return;
             }
             await vault.set({ name: "perm-test", type: "password", value: "s3cr3t" });
-            const filePath = path.join(tempDir, encodeURIComponent("perm-test") + ".json");
+            const filePath = path.join(tempDir, "vault.json");
             const stats = await fs.stat(filePath);
             const mode = stats.mode & 0o777;
             expect(mode).toBe(0o600);
@@ -201,6 +246,10 @@ describe("PlaintextVault", () => {
         test("returns false before any secrets are stored", () => {
             const freshVault = new PlaintextVault(path.join(tempDir, "fresh"));
             expect(freshVault.exists()).toBe(false);
+        });
+
+        test("returns false when the vault directory exists but holds no vault file", () => {
+            expect(vault.exists()).toBe(false);
         });
 
         test("returns true after a secret has been stored", async () => {

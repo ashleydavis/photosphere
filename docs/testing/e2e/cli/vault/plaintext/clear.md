@@ -27,11 +27,11 @@ export PHOTOSPHERE_VAULT_TYPE=plaintext
 ### 2. Seed multiple secrets
 
 ```bash
-cat > /tmp/psi-test/vault/clear-secret-one.json <<'EOF'
-{"name":"clear-secret-one","type":"plain","value":"value-one"}
-EOF
-cat > /tmp/psi-test/vault/clear-secret-two.json <<'EOF'
-{"name":"clear-secret-two","type":"plain","value":"value-two"}
+cat > /tmp/psi-test/vault/vault.json <<'EOF'
+{
+  "clear-secret-one": {"name":"clear-secret-one","type":"plain","value":"value-one"},
+  "clear-secret-two": {"name":"clear-secret-two","type":"plain","value":"value-two"}
+}
 EOF
 ```
 

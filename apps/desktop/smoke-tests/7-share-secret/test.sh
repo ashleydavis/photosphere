@@ -22,9 +22,7 @@ trap cleanup EXIT
 mkdir -p "$TMP_DIR/sender/vault" "$TMP_DIR/sender/config" "$TMP_DIR/receiver/vault" "$TMP_DIR/receiver/config"
 
 # Seed sender vault with a test secret
-cat > "$TMP_DIR/sender/vault/test-secret.json" << 'EOF'
-{"name":"test-secret","type":"api-key","value":"TESTAPIKEY123"}
-EOF
+write_vault_secret "$TMP_DIR/sender/vault" test-secret api-key "TESTAPIKEY123"
 
 # Start sender app
 start_app "$TMP_DIR/sender" 0
@@ -101,13 +99,8 @@ if [ "$row_text" != "test-secret" ]; then
 fi
 
 # Assert receiver vault contains the secret
-if [ ! -f "$TMP_DIR/receiver/vault/test-secret.json" ]; then
-    log_error "Expected $TMP_DIR/receiver/vault/test-secret.json to exist"
-    exit 1
-fi
-
-if ! grep -q 'test-secret' "$TMP_DIR/receiver/vault/test-secret.json"; then
-    log_error "Receiver secret file does not contain expected name"
+if ! vault_has_secret "$TMP_DIR/receiver/vault" test-secret; then
+    log_error "Expected the receiver vault to hold a secret named 'test-secret'"
     exit 1
 fi
 

@@ -23,9 +23,9 @@ test_dbs_resolve_by_name() {
     invoke_command "Add PNG to database" "$(get_cli_command) add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" 0
 
     # Extract the private key PEM from the CLI vault and store it as a shared secret.
-    local cli_key_file="${PHOTOSPHERE_VAULT_DIR}/${key_name}.json"
+    local cli_vault_file="${PHOTOSPHERE_VAULT_DIR}/vault.json"
     local key_value
-    key_value=$(jq -j '.value' "$cli_key_file")
+    key_value=$(jq -j --arg name "$key_name" '.[$name].value' "$cli_vault_file")
     seed_vault_secret "enc00001" "encryption-key" "$key_value"
 
     # Register the database with the shared encryption key.

@@ -750,6 +750,11 @@ show_tree() {
     fi
 }
 
+# Seeds one secret into the plaintext vault's single vault.json file, which holds every secret keyed
+# by its name. The name goes into a JSON key, so a colon, slash or space in it needs no encoding.
+# The merge is a read-modify-write, so seeding a second secret keeps the first. An absent vault file
+# starts from an empty object, and a vault file that does not parse fails the test outright rather
+# than being silently replaced with a fresh one.
 # Usage: seed_vault_secret "shared:abc123" "s3-credentials" '{"region":"us-east-1",...}'
 seed_vault_secret() {
     local secret_name="$1"
@@ -757,16 +762,22 @@ seed_vault_secret() {
     local secret_value="$3"
 
     mkdir -p "$PHOTOSPHERE_VAULT_DIR"
-    local encoded_name
-    encoded_name=$(printf '%s' "$secret_name" | bun "$REPO_ROOT/scripts/json-encode.ts" --url-segment -)
-    local file_path="${PHOTOSPHERE_VAULT_DIR}/${encoded_name}.json"
+    local vault_file="${PHOTOSPHERE_VAULT_DIR}/vault.json"
+    if [ ! -f "$vault_file" ]; then
+        printf '%s' '{}' > "$vault_file"
+    fi
 
     # jq --arg passes each value in as data, never as text spliced into a template, so a name or
     # value containing a quote, a backslash or a newline is escaped by jq rather than becoming
     # syntax. jq prints a trailing newline the vault's own writer does not, so printf strips it.
-    printf '%s' "$(jq -cn --arg name "$secret_name" --arg type "$secret_type" --arg value "$secret_value" \
-        '{name: $name, type: $type, value: $value}')" > "$file_path"
-    chmod 600 "$file_path"
+    local merged
+    if ! merged=$(jq -c --arg name "$secret_name" --arg type "$secret_type" --arg value "$secret_value" \
+        '. + {($name): {name: $name, type: $type, value: $value}}' "$vault_file"); then
+        log_error "Vault file $vault_file is not valid JSON"
+        return 1
+    fi
+    printf '%s' "$merged" > "$vault_file"
+    chmod 600 "$vault_file"
 }
 
 # Populate a pre-initialized database with the 5 standard test files (PNG, JPG, MP4, 2 from multiple-files).

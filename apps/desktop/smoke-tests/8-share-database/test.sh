@@ -21,13 +21,12 @@ trap cleanup EXIT
 mkdir -p "$TMP_DIR/sender/vault" "$TMP_DIR/sender/config" "$TMP_DIR/receiver/vault" "$TMP_DIR/receiver/config"
 
 # Seed sender vault with S3 credentials
-cat > "$TMP_DIR/sender/vault/test-s3-key.json" << 'EOF'
-{"name":"test-s3-key","type":"s3-credentials","value":"{\"region\":\"us-east-1\",\"accessKeyId\":\"AKIATEST\",\"secretAccessKey\":\"testsecret\"}"}
-EOF
+write_vault_secret "$TMP_DIR/sender/vault" test-s3-key s3-credentials \
+    '{"region":"us-east-1","accessKeyId":"AKIATEST","secretAccessKey":"testsecret"}'
 
 # Seed sender vault with encryption key (raw PEM — receiver derives the public key)
 openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$TMP_DIR/sender/test-enc-key.pem" 2>/dev/null
-write_vault_secret_from_file "$TMP_DIR/sender/vault/test-enc-key.json" \
+write_vault_secret_from_file "$TMP_DIR/sender/vault" \
     test-enc-key encryption-key "$TMP_DIR/sender/test-enc-key.pem"
 
 # Seed sender databases config (TOML format)
@@ -128,24 +127,14 @@ if ! grep -q 'test-db' "$TMP_DIR/receiver/config/databases.toml"; then
 fi
 
 # Assert receiver vault has the S3 credentials
-if [ ! -f "$TMP_DIR/receiver/vault/test-s3-key.json" ]; then
-    log_error "Expected $TMP_DIR/receiver/vault/test-s3-key.json to exist"
-    exit 1
-fi
-
-if ! grep -q 'test-s3-key' "$TMP_DIR/receiver/vault/test-s3-key.json"; then
-    log_error "Receiver vault test-s3-key.json does not contain expected name"
+if ! vault_has_secret "$TMP_DIR/receiver/vault" test-s3-key; then
+    log_error "Expected the receiver vault to hold a secret named 'test-s3-key'"
     exit 1
 fi
 
 # Assert receiver vault has the encryption key
-if [ ! -f "$TMP_DIR/receiver/vault/test-enc-key.json" ]; then
-    log_error "Expected $TMP_DIR/receiver/vault/test-enc-key.json to exist"
-    exit 1
-fi
-
-if ! grep -q 'test-enc-key' "$TMP_DIR/receiver/vault/test-enc-key.json"; then
-    log_error "Receiver vault test-enc-key.json does not contain expected name"
+if ! vault_has_secret "$TMP_DIR/receiver/vault" test-enc-key; then
+    log_error "Expected the receiver vault to hold a secret named 'test-enc-key'"
     exit 1
 fi
 
