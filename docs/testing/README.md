@@ -101,7 +101,7 @@ A suite that passes once has told you very little. A mode that fails one run in 
 ```bash
 bun run find-flakey-tests                    # until 500 consecutive green runs
 bun run find-flakey-tests -- --target 100    # a shorter streak
-bun run find-flakey-tests -- --start 42      # carry on numbering from a previous session
+bun run find-flakey-tests -- --resume 42     # carry on from a session that banked 42 green runs
 bun run find-flakey-tests -- --help
 ```
 
@@ -111,9 +111,11 @@ It stops at the first real failure, because the point is the streak and a streak
 
 A crash of the Bun runtime itself (SIGSEGV, SIGILL, a panic) is not a failure of the code under test, so such a run is retried rather than counted against the streak. Five in a row stops the session, since a result resting on that many crashes would mean nothing. Every crash is listed in the summary either way, so they can never pass unnoticed.
 
+A sick Android emulator pool is treated the same way, and only when the looped command actually drives the emulators (`test:and` and the whole set do; the unit tests, the CLI suite, the Electron suite and the iOS suite do not). The loop pauses rather than failing: it says the pool is sick, keeps the streak, and waits up to an hour for the emulators to come back, resuming by itself with however many devices are restarted. A run that went red while the pool was sick is not counted against the streak either. It gives up only if the pool stays away, or if five runs in a row go red with a sick pool.
+
 Everything is written under `tmp/find-flakey-tests/<timestamp>/` (gitignored): one log per run, plus `report.txt` on failure. The paths are printed on the last lines of output.
 
-Exit status is 0 when the streak is reached, 1 when a run failed, 2 on bad usage, and 3 when too many Bun crashes in a row made the result meaningless.
+Exit status is 0 when the streak is reached, 1 when a run failed, 2 on bad usage, 3 when too many Bun crashes in a row made the result meaningless, and 4 when the emulator pool it depends on did not come back.
 
 The loop itself has no automated test. Its own behaviour on failure (counting the streak, bailing at the first failure, telling a Bun crash apart from a real failure, writing the report) is therefore unverified except by running it.
 

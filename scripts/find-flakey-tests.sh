@@ -25,6 +25,13 @@
 # of the code under test, so such a run is retried rather than counted, up to BUN_CRASH_RETRIES times
 # in a row. Every crash is still reported in the summary, so they can never pass unnoticed.
 #
+# A sick Android emulator pool is treated the same way, and only when the looped command actually
+# drives the emulators (`test:and` and the whole set do; unit tests, the CLI suite, the Electron
+# suite and the iOS suite do not). The loop pauses instead of failing: it says the pool is sick and
+# waits for it to come back, keeping the streak. Restart the emulators and the session carries on by
+# itself, with however many devices come back. It gives up only after DEVICE_WAIT_SECONDS of waiting,
+# or after DEVICE_FAILURE_RETRIES runs in a row have gone red with a sick pool.
+#
 # Usage:
 #
 #   bun run find-flakey-tests
@@ -44,8 +51,8 @@
 #   bun run find-flakey-tests -- --target 100
 #       Require a 100-run streak instead of the default 500.
 #
-#   bun run find-flakey-tests -- --greens 4 --start 5
-#       Carry on from an earlier session: 4 runs already banked, number the next run 5.
+#   bun run find-flakey-tests -- --resume 4
+#       Carry on from an earlier session that banked 4 green runs. The next run is numbered 5.
 #
 #   bun run find-flakey-tests -- --help
 #
@@ -63,16 +70,13 @@
 #
 #   --target N    consecutive green runs required before the suite is declared clean (default 500).
 #
-#   --start N     the run number to label the first run with (default 1). Purely cosmetic: it affects
-#                 the numbering in the log and the report, not how many runs are performed. Use it
-#                 when continuing a session so the run numbers carry on from where they left off.
-#
-#   --greens N    green runs already banked, counted towards the target (default 0). For resuming
-#                 after an interruption that was not a test failure, for example stopping to restart
-#                 an emulator pool or a machine reboot. Only sound when the code under test has not
-#                 changed since those runs passed: a streak is only meaningful as N runs of one tree.
-#                 A test failure resets the count to zero and no flag should be used to paper over
-#                 that.
+#   --resume N    carry on from a session that banked N green runs (default 0): those N count towards
+#                 the target and the next run is numbered N+1, so the numbering and the streak can
+#                 never drift apart. For resuming after an interruption that was not a test failure,
+#                 for example stopping to restart an emulator pool or a machine reboot. Only sound
+#                 when the code under test has not changed since those runs passed: a streak is only
+#                 meaningful as N runs of one tree. A test failure resets the count to zero and no
+#                 flag should be used to paper over that.
 #
 #   --command C   loop this exact command. Overrides --script and --test, and takes whatever you give
 #                 it, so it can run anything: one unit test, a script that is not a test, a command
@@ -85,7 +89,8 @@
 # one log per run plus a report.txt on failure. The paths are printed as the last lines of stdout.
 #
 # Exit status: 0 when the target streak is reached, 1 when a run failed, 2 on bad usage, 3 when too
-# many consecutive Bun crashes made the result meaningless.
+# many consecutive Bun crashes made the result meaningless, 4 when the Android emulator pool the
+# looped command depends on stopped being healthy and did not come back.
 #
 set -uo pipefail
 
@@ -95,13 +100,15 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # Consecutive green runs required before the suite is declared clean.
 TARGET=500
 
-# The number given to the first run. Cosmetic only, for continuing a previous session's numbering.
-START=1
-
-# Green runs already banked before this invocation, counted towards the target. Lets a streak
-# survive an interruption that was not a test failure (a pool restart, a reboot), which otherwise
-# makes a long target unreachable: every interruption would send the count back to zero.
-GREENS=0
+# Green runs already banked before this invocation, counted towards the target, with the run
+# numbering carrying on from them. Lets a streak survive an interruption that was not a test failure
+# (a pool restart, a reboot), which otherwise makes a long target unreachable: every interruption
+# would send the count back to zero.
+#
+# One number rather than two. There used to be a separate flag for the run numbering, and giving only
+# that one looked exactly like resuming while banking nothing: a session was restarted at run 83 and
+# quietly began its streak again from zero.
+RESUME=0
 
 # The command driven in a loop. `--force` defeats the what-changed gate so every suite runs every
 # time, which is the whole point: a gated run can skip the very suite that is flaky.
@@ -129,12 +136,29 @@ BUN_CRASH_RETRIES=5
 # against the run's whole output.
 BUN_CRASH_PATTERN="Bun has crashed|panic: |terminated by signal SIG(ILL|SEGV|BUS|ABRT)|Segmentation fault"
 
+# How often a paused loop re-checks a sick emulator pool, in seconds. Short enough that a restarted
+# pool is picked up promptly, long enough that the polling is not itself a load on the machine.
+DEVICE_POLL_SECONDS=30
+
+# How often the paused loop says it is still waiting, in seconds.
+DEVICE_REPORT_SECONDS=300
+
+# How long the loop waits for a sick pool to come back before giving up, in seconds. Long enough to
+# notice the pause and restart a pool by hand, short enough that an unattended overnight run does not
+# sit paused until morning with nothing to show for it.
+DEVICE_WAIT_SECONDS=3600
+
+# How many runs in a row may go red with a sick pool before giving up. Each one is waited out rather
+# than counted as a failure, which is right for a pool that dies once, but a pool that dies during
+# every run would otherwise keep the loop going forever without ever banking a green.
+DEVICE_FAILURE_RETRIES=5
+
 # Prints the usage block at the top of this file, so there is one copy of it rather than two.
 print_usage() {
     # The range ends at the last line of the header comment block, which is the line before
     # `set -uo pipefail`. Update it if the header grows: a stale range silently truncates the
     # help, which is how --target once vanished from it.
-    sed -n '3,89p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    sed -n '3,97p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
 }
 
 while [ "$#" -gt 0 ]; do
@@ -143,12 +167,8 @@ while [ "$#" -gt 0 ]; do
             TARGET="${2:-}"
             shift 2
             ;;
-        --start)
-            START="${2:-}"
-            shift 2
-            ;;
-        --greens)
-            GREENS="${2:-}"
+        --resume)
+            RESUME="${2:-}"
             shift 2
             ;;
         --script)
@@ -259,20 +279,21 @@ case "$TARGET" in
         exit 2
         ;;
 esac
-case "$START" in
+case "$RESUME" in
     ''|*[!0-9]*)
-        echo "find-flakey-tests: --start must be a positive whole number, got '$START'" >&2
-        exit 2
-        ;;
-esac
-case "$GREENS" in
-    ''|*[!0-9]*)
-        echo "find-flakey-tests: --greens must be a whole number, got '$GREENS'" >&2
+        echo "find-flakey-tests: --resume must be a whole number, got '$RESUME'" >&2
         exit 2
         ;;
 esac
 if [ "$TARGET" -lt 1 ]; then
     echo "find-flakey-tests: --target must be at least 1" >&2
+    exit 2
+fi
+
+# A resume that already meets the target would run nothing at all and declare the suite clean on the
+# strength of runs from another session, which is the one thing this loop must never do.
+if [ "$RESUME" -ge "$TARGET" ]; then
+    echo "find-flakey-tests: --resume $RESUME already meets --target $TARGET, so there would be nothing to run. Raise --target." >&2
     exit 2
 fi
 
@@ -355,8 +376,9 @@ snapshot_suite_logs() {
 }
 
 #
-# Reports whether the Android emulators are still in the state the loop started with, printing a
-# reason and returning non-zero when they are not.
+# Reports whether every attached Android emulator is still answering, printing a reason and returning
+# non-zero for the first one that is not. Says nothing about how many devices there are, which is the
+# caller's business.
 #
 # "Degraded" here means one of four things actually seen during this work, all of which produced a
 # red test that had nothing to do with the code under test:
@@ -369,24 +391,17 @@ snapshot_suite_logs() {
 #      never coming back and the run takes many times its normal length.
 #
 # The first two are checked here, because they are cheap and unambiguous to check between runs. The
-# loop stops on them rather than carrying on, because every run after that point produces failures
-# that say nothing about the code and each one resets the streak.
+# loop waits them out rather than carrying on, because every run made against a sick pool produces
+# failures that say nothing about the code and each one resets the streak.
 #
 # This only ever reads. It does not start, stop, reconnect or otherwise touch a device: recovering
 # the pool is a person's job, and an earlier attempt to poke a device from here is exactly the kind
 # of thing that should not happen from inside a loop.
 #
-# Usage: check_devices_healthy <expected_count>
+# Usage: check_devices_responding
 #
-check_devices_healthy() {
-    local expected="$1"
-    local attached serial
-
-    attached="$(adb devices 2>/dev/null | grep -c "device$")"
-    if [ "$attached" -ne "$expected" ]; then
-        echo "device count changed: started with $expected, now $attached" >&2
-        return 1
-    fi
+check_devices_responding() {
+    local serial
 
     for serial in $(adb devices 2>/dev/null | grep "device$" | cut -f1); do
         if ! timeout 30 adb -s "$serial" shell "cmd package list packages" 2>/dev/null | grep -q "^package:"; then
@@ -411,23 +426,146 @@ check_devices_healthy() {
     return 0
 }
 
+#
+# Reports whether the pool is still the one the loop started with: the same number of devices, every
+# one of them answering. Prints a reason and returns non-zero when it is not.
+#
+# Usage: check_devices_healthy <expected_count>
+#
+check_devices_healthy() {
+    local expected="$1"
+    local attached
+
+    attached="$(adb devices 2>/dev/null | grep -c "device$")"
+    if [ "$attached" -ne "$expected" ]; then
+        echo "device count changed: started with $expected, now $attached" >&2
+        return 1
+    fi
+
+    check_devices_responding
+}
+
+#
+# Waits for a sick emulator pool to come back, returning non-zero if it has not within
+# DEVICE_WAIT_SECONDS. Sets DEVICE_COUNT_AT_START to the size of the pool it resumes with.
+#
+# The loop pauses rather than stops, because a sick pool says nothing about the code under test.
+# Stopping throws away a streak that took hours to build, over something a person can put right in a
+# minute once they are told the loop is waiting on it. The streak is not touched while paused, so the
+# session carries on from exactly where it was.
+#
+# Whatever comes back may be a different size to what went away, so the count is re-baselined here
+# rather than held to the old number: an operator restarting a pool may well bring up fewer or more
+# emulators than before, and holding out for the old number would wait forever. The Android suite
+# discovers its devices at the start of every run (apps/smoke-tests/run.sh), so a smaller pool means
+# the same tests spread over fewer devices, not tests queueing for devices that are never coming.
+#
+# Like the check itself, this only ever reads. Restarting emulators is a person's job.
+#
+# Usage: wait_for_healthy_devices
+#
+wait_for_healthy_devices() {
+    local waited=0 attached
+
+    while [ "$waited" -lt "$DEVICE_WAIT_SECONDS" ]; do
+        sleep "$DEVICE_POLL_SECONDS"
+        waited=$((waited + DEVICE_POLL_SECONDS))
+
+        # A pool of nothing is not a pool: with no devices attached at all there is nothing for the
+        # suite to run on, so that counts as still waiting.
+        attached="$(adb devices 2>/dev/null | grep -c "device$")"
+        if [ "$attached" -gt 0 ] && check_devices_responding 2>/dev/null; then
+            if [ "$attached" -eq "$DEVICE_COUNT_AT_START" ]; then
+                echo "  pool is answering again after $((waited / 60))m, $attached device(s). Resuming."
+            else
+                echo "  pool is answering again after $((waited / 60))m, now $attached device(s) instead of $DEVICE_COUNT_AT_START. Resuming."
+            fi
+            DEVICE_COUNT_AT_START="$attached"
+            return 0
+        fi
+
+        # Only every few minutes: a line every poll would bury the reason it paused in the first
+        # place, which is the one thing worth reading here.
+        if [ "$((waited % DEVICE_REPORT_SECONDS))" -eq 0 ]; then
+            echo "  still waiting for the emulator pool, $((waited / 60))m of $((DEVICE_WAIT_SECONDS / 60))m"
+        fi
+    done
+
+    return 1
+}
+
+#
+# Prints where the streak got to and how to carry it on, then stops with the infrastructure exit
+# status. Reads the loop's counters, so it is only meaningful once the loop is running.
+#
+# Usage: stop_for_sick_pool <reason>
+#
+stop_for_sick_pool() {
+    local reason="$1"
+
+    echo
+    echo "find-flakey-tests: STOPPING, $reason"
+    echo "The streak stands at $greens of $TARGET. Nothing here changed anything on any device."
+    echo "Restart the pool, then carry on with: --resume $greens"
+    echo "LOGS=$SESSION_DIR"
+    exit 4
+}
+
+# Whether the command being looped actually drives Android devices, which decides whether the pool is
+# watched at all. Only the Android smoke suite talks to adb, and only `test:and` and the whole set
+# include it. Every other choice (unit tests, the CLI suite, the Electron suite, the iOS suite)
+# touches no Android device, so an emulator going bad on the machine has nothing to do with the run
+# and must not interrupt the streak.
+#
+# This is not hypothetical: a `bun run test` streak was halted at 84 of 100 by an emulator that run
+# never went near, because the check keyed off "any device is attached" rather than "this command
+# uses the devices".
+DEVICE_SUITE=0
+if [ "$COMMAND_GIVEN" -eq 1 ]; then
+    # An arbitrary command, so the suite has to be recognised in the text of it. The patterns end at
+    # the name so `test:and:unit`, which is Gradle unit tests and needs no device, is not mistaken
+    # for the device-driving `test:and`.
+    case "$COMMAND" in
+        *test:and|*"test:and "*|*test:everything|*"test:everything "*)
+            DEVICE_SUITE=1
+            ;;
+    esac
+else
+    # A suite chosen by --script, or nothing chosen at all and the default whole-set command standing.
+    case "${SCRIPT:-everything}" in
+        test:and|everything)
+            DEVICE_SUITE=1
+            ;;
+    esac
+fi
+
 # How many devices were attached when the loop started. The check compares against this rather than a
 # fixed number, so it works whatever size the pool is, and is skipped entirely when there are no
 # devices (a run of unit tests or the CLI suite needs none).
-DEVICE_COUNT_AT_START="$(adb devices 2>/dev/null | grep -c "device$")"
+DEVICE_COUNT_AT_START=0
+if [ "$DEVICE_SUITE" -eq 1 ]; then
+    DEVICE_COUNT_AT_START="$(adb devices 2>/dev/null | grep -c "device$")"
+fi
 if [ "$DEVICE_COUNT_AT_START" -gt 0 ]; then
-    echo "find-flakey-tests: $DEVICE_COUNT_AT_START device(s) attached. The loop stops if that changes or one stops answering."
+    echo "find-flakey-tests: $DEVICE_COUNT_AT_START device(s) attached. The loop pauses if that changes or one stops answering."
 fi
 
 echo "find-flakey-tests: requiring $TARGET consecutive green runs of: $COMMAND"
+if [ "$RESUME" -gt 0 ]; then
+    echo "find-flakey-tests: resuming with $RESUME green run(s) banked, numbering from run $((RESUME + 1))."
+fi
 echo "find-flakey-tests: logs in $SESSION_DIR"
 echo
 
 # Consecutive green runs so far, including any banked by a previous invocation on the same tree.
-greens="$GREENS"
+greens="$RESUME"
 
-# The number given to the run currently being performed.
-run_number="$START"
+# The number given to the run currently being performed. Runs are numbered by where they sit in the
+# streak, so run N is the Nth green run if it passes, and a resumed session carries straight on.
+run_number=$((RESUME + 1))
+
+# The number of the first run this session, for the summary at the end.
+first_run_number="$run_number"
 
 # Consecutive Bun crashes, reset by any run that does not crash.
 consecutive_crashes=0
@@ -435,18 +573,28 @@ consecutive_crashes=0
 # Every Bun crash seen this session, reported at the end so they are never silently swallowed.
 crash_runs=()
 
+# Consecutive red runs blamed on a sick emulator pool, reset by any run that passes.
+consecutive_device_failures=0
+
+# Every run this session that went red with a sick pool, reported at the end for the same reason as
+# the crashes: a run that was not counted is still a run that has to be visible.
+device_failure_runs=()
+
 session_start="$(date +%s)"
 
 while [ "$greens" -lt "$TARGET" ]; do
-    # Stop rather than run against a pool that has degraded. Exit 4 marks it as an infrastructure
-    # halt, distinct from a test failure (1), so a stopped streak is never mistaken for a red test.
+    # Wait rather than run against a pool that has degraded. The streak is kept while waiting, so
+    # restarting the emulators is all it takes to have the session carry on. The count is zero, and
+    # this whole check therefore skipped, unless the looped command is one that drives the devices.
     if [ "$DEVICE_COUNT_AT_START" -gt 0 ] && ! check_devices_healthy "$DEVICE_COUNT_AT_START"; then
         echo
-        echo "find-flakey-tests: STOPPING because the emulator pool is no longer healthy."
-        echo "The streak stands at $greens of $TARGET. Nothing here changed anything on any device."
-        echo "Restart the pool, then resume with: --greens $greens --start $run_number"
-        echo "LOGS=$SESSION_DIR"
-        exit 4
+        echo "find-flakey-tests: PAUSED because the emulator pool is not healthy."
+        echo "The streak of $greens of $TARGET is kept. Nothing here changed anything on any device."
+        echo "Restart the pool and the loop picks it up by itself, waiting up to $((DEVICE_WAIT_SECONDS / 60))m."
+        if ! wait_for_healthy_devices; then
+            stop_for_sick_pool "the emulator pool did not come back within $((DEVICE_WAIT_SECONDS / 60))m."
+        fi
+        echo
     fi
 
     run_label="$(printf '%04d' "$run_number")"
@@ -461,6 +609,7 @@ while [ "$greens" -lt "$TARGET" ]; do
     if [ "$run_status" -eq 0 ]; then
         greens=$((greens + 1))
         consecutive_crashes=0
+        consecutive_device_failures=0
         echo "  PASS in ${run_duration}s (green $greens of $TARGET)"
         run_number=$((run_number + 1))
         continue
@@ -481,6 +630,23 @@ while [ "$greens" -lt "$TARGET" ]; do
             done
             echo "LOGS=$SESSION_DIR"
             exit 3
+        fi
+        continue
+    fi
+
+    # A red run made against a pool that is now sick says nothing about the code: the devices the
+    # tests needed stopped answering underneath them. Treated like a Bun crash rather than a failure,
+    # so it does not break the streak: the pool is waited on and the same run number is tried again.
+    if [ "$DEVICE_COUNT_AT_START" -gt 0 ] && ! check_devices_healthy "$DEVICE_COUNT_AT_START"; then
+        consecutive_device_failures=$((consecutive_device_failures + 1))
+        device_failure_runs+=("run $run_number (${run_duration}s): $run_log")
+        echo "  FAIL in ${run_duration}s, but the emulator pool is sick, so it is not counted (device failure $consecutive_device_failures of $DEVICE_FAILURE_RETRIES allowed in a row)"
+        if [ "$consecutive_device_failures" -ge "$DEVICE_FAILURE_RETRIES" ]; then
+            stop_for_sick_pool "$consecutive_device_failures runs in a row went red with a sick emulator pool, so waiting it out is getting nowhere."
+        fi
+        echo "find-flakey-tests: PAUSED. Restart the pool and the loop picks it up by itself, waiting up to $((DEVICE_WAIT_SECONDS / 60))m."
+        if ! wait_for_healthy_devices; then
+            stop_for_sick_pool "the emulator pool did not come back within $((DEVICE_WAIT_SECONDS / 60))m."
         fi
         continue
     fi
@@ -521,6 +687,13 @@ while [ "$greens" -lt "$TARGET" ]; do
         done
         echo
     fi
+    if [ "${#device_failure_runs[@]}" -gt 0 ]; then
+        echo "Runs earlier in this session that went red with a sick emulator pool (not counted as failures):"
+        for device_failure_line in "${device_failure_runs[@]}"; do
+            echo "  $device_failure_line"
+        done
+        echo
+    fi
     echo "REPORT=$REPORT"
     echo "RUN_LOG=$run_log"
     echo "LOGS=$SESSION_DIR"
@@ -531,12 +704,19 @@ session_duration="$(( $(date +%s) - session_start ))"
 
 echo
 echo "find-flakey-tests: $TARGET consecutive green runs, no failures."
-echo "Runs $START to $((run_number - 1)), total ${session_duration}s."
+echo "Runs $first_run_number to $((run_number - 1)), total ${session_duration}s."
 if [ "${#crash_runs[@]}" -gt 0 ]; then
     echo
     echo "Bun crashes seen and retried (not counted as failures):"
     for crash_line in "${crash_runs[@]}"; do
         echo "  $crash_line"
+    done
+fi
+if [ "${#device_failure_runs[@]}" -gt 0 ]; then
+    echo
+    echo "Runs that went red with a sick emulator pool and were retried (not counted as failures):"
+    for device_failure_line in "${device_failure_runs[@]}"; do
+        echo "  $device_failure_line"
     done
 fi
 echo "LOGS=$SESSION_DIR"
