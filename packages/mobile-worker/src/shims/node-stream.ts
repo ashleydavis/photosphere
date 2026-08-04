@@ -52,10 +52,19 @@ export interface ITransformContext {
 }
 
 //
-// A minimal readable stream over an in-memory Buffer. It emits one `data` event with the whole
-// buffer, then `end`, on a microtask so listeners attached synchronously after construction still
-// receive the events. `destroy()` stops further emission (used by loadVersion once it has the
-// header bytes it needs).
+// A minimal readable stream, in either of the two shapes callers use.
+//
+// Over an in-memory Buffer, it emits one `data` event with the whole buffer, then `end`, on a
+// microtask so listeners attached synchronously after construction still receive the events.
+//
+// Constructed with no payload, it is push-driven the way Node's Readable is: a subclass implements
+// `_read()` and delivers bytes by calling `this.push(chunk)`, ending with `this.push(null)`. That is
+// how S3RangeReadableStream produces an object fetched in ranges. Without this the subclass's pushed
+// bytes went nowhere and the single `data` event carried the absent payload, so every consumer
+// received `undefined`: reading anything out of S3 on a device failed inside the first thing that
+// looked at the bytes.
+//
+// `destroy()` stops further emission (used by loadVersion once it has the header bytes it needs).
 //
 export class Readable {
     //
@@ -64,9 +73,35 @@ export class Readable {
     protected listeners: Map<string, StreamListener[]> = new Map();
 
     //
-    // The bytes this stream will emit.
+    // The bytes this stream will emit, when built over a fixed payload. Undefined when push-driven.
     //
-    private readonly payload: Buffer;
+    private readonly payload: Buffer | undefined;
+
+    //
+    // Chunks delivered by push() that have not been emitted yet.
+    //
+    private pushQueue: Buffer[] = [];
+
+    //
+    // True once push(null) has marked the end of the pushed bytes.
+    //
+    private pushEnded = false;
+
+    //
+    // True once the end event has been emitted for the pushed bytes, so it only fires once.
+    //
+    private pushEndEmitted = false;
+
+    //
+    // True while waiting for an asynchronous _read() to deliver its chunk, so it is not called again
+    // before the one in flight has pushed.
+    //
+    private reading = false;
+
+    //
+    // True while pump() is running, so a push() made from inside _read() does not re-enter it.
+    //
+    private pumping = false;
 
     //
     // True once destroy() has been called; suppresses pending emission.
@@ -79,10 +114,117 @@ export class Readable {
     private scheduled = false;
 
     //
-    // Builds a readable over the given bytes.
+    // Builds a readable over the given bytes, or a push-driven one when no payload is given.
     //
-    constructor(payload: Buffer) {
+    constructor(payload?: Buffer) {
         this.payload = payload;
+    }
+
+    //
+    // Treats anything that behaves like a readable as an instance of this class.
+    //
+    // The AWS SDK gates on `body instanceof Readable` before it will read a response body, and the
+    // http shim's IncomingMessage is an independent event emitter rather than a subclass of this
+    // class: it has to be, because express and raw-body need the wider EventEmitter surface it
+    // provides. Every GetObject on a device therefore failed with "Unexpected stream implementation,
+    // expect Stream.Readable instance, got IncomingMessage", which is why reading an object out of S3
+    // never worked there while writing and stat-ing did.
+    //
+    // Widening the check here keeps the two shims independent, rather than reshaping the http shim
+    // around one caller's instanceof test.
+    //
+    static [Symbol.hasInstance](candidate: any): boolean {
+        if (candidate === null || typeof candidate !== "object") {
+            return false;
+        }
+
+        // Real instances of this class or a subclass of it.
+        if (Object.prototype.isPrototypeOf.call(Readable.prototype, candidate)) {
+            return true;
+        }
+
+        // Readable-shaped: consumers subscribe with on(), producers deliver with push(), and a
+        // failure or early exit goes through destroy().
+        return typeof candidate.on === "function"
+            && typeof candidate.push === "function"
+            && typeof candidate.destroy === "function";
+    }
+
+    //
+    // Implemented by a push-driven subclass to produce the next chunk. Called when the stream wants
+    // more bytes; the subclass responds by calling push(), possibly asynchronously.
+    //
+    protected _read?(): void | Promise<void>;
+
+    //
+    // Queues a chunk for delivery, or ends the stream when given null. Returns true, as Node's does
+    // when the consumer can accept more.
+    //
+    push(chunk: Buffer | null): boolean {
+        if (chunk === null) {
+            this.pushEnded = true;
+        }
+        else {
+            this.pushQueue.push(chunk);
+        }
+
+        // Whatever _read() was waiting to deliver has arrived, so another call is allowed.
+        this.reading = false;
+
+        // Before a consumer attaches, pushed chunks simply queue up and are delivered when it does.
+        if (this.scheduled) {
+            this.pump();
+        }
+        return true;
+    }
+
+    //
+    // Delivers queued chunks to listeners and asks _read() for more until the stream ends.
+    //
+    private pump(): void {
+        if (this.pumping || this.destroyed) {
+            return;
+        }
+        this.pumping = true;
+        try {
+            for (;;) {
+                while (this.pushQueue.length > 0 && !this.destroyed) {
+                    this.emit("data", this.pushQueue.shift()!);
+                }
+                if (this.destroyed) {
+                    return;
+                }
+                if (this.pushEnded) {
+                    if (!this.pushEndEmitted) {
+                        this.pushEndEmitted = true;
+                        this.emit("end");
+                    }
+                    return;
+                }
+                if (this.reading || !this._read) {
+                    return;
+                }
+
+                // Ask for the next chunk on a microtask rather than immediately.
+                //
+                // A producer commonly pushes its chunk and then pushes null in the same continuation
+                // (S3RangeReadableStream does exactly that for the final range of an object). Calling
+                // _read() the instant the chunk arrives would request another range before that null
+                // lands, reading past the end of the object and hanging on a request that has nothing
+                // to return. Deferring lets any sibling push settle first, so the end is seen.
+                this.reading = true;
+                Promise.resolve().then(() => {
+                    if (this.destroyed || this.pushEnded) {
+                        return;
+                    }
+                    this._read!();
+                });
+                return;
+            }
+        }
+        finally {
+            this.pumping = false;
+        }
     }
 
     //
@@ -109,9 +251,72 @@ export class Readable {
     }
 
     //
-    // Stops the stream; no further events are emitted.
+    // Yields the stream's chunks, so `for await (const chunk of stream)` works.
     //
-    destroy(): void {
+    // @aws-sdk/lib-storage consumes an upload body that way, and without it every upload to S3 from a
+    // device failed with "not a function" as the SDK reached for an iterator that was not there.
+    //
+    async *[Symbol.asyncIterator](): AsyncGenerator<Buffer> {
+        const queued: Buffer[] = [];
+        let ended = false;
+        let failure: Error | undefined;
+        let wake: (() => void) | undefined;
+
+        //
+        // Releases the consumer waiting below, if there is one.
+        //
+        const signal = () => {
+            const waiting = wake;
+            wake = undefined;
+            if (waiting) {
+                waiting();
+            }
+        };
+
+        // Attaching a data listener is what starts the stream, so this subscribes before waiting.
+        this.on("data", (chunk: Buffer) => {
+            queued.push(chunk);
+            signal();
+        });
+        this.on("end", () => {
+            ended = true;
+            signal();
+        });
+        this.on("error", (err: Error) => {
+            failure = err instanceof Error ? err : new Error(String(err));
+            ended = true;
+            signal();
+        });
+
+        for (;;) {
+            while (queued.length > 0) {
+                yield queued.shift()!;
+            }
+            if (failure) {
+                throw failure;
+            }
+            if (ended) {
+                return;
+            }
+            await new Promise<void>(resolve => {
+                wake = resolve;
+            });
+        }
+    }
+
+    //
+    // Stops the stream; no further data or end is emitted.
+    //
+    // When given an error, it is emitted first, as Node's destroy(err) does. Producers report a
+    // failure that way rather than by emitting directly: S3RangeReadableStream calls destroy(err)
+    // when a range request cannot be fetched. Dropping it left the consumer waiting on a stream that
+    // would never deliver anything and never end, so a failed read from S3 on a device surfaced only
+    // as its caller's timeout, tens of seconds later and naming nothing useful.
+    //
+    destroy(error?: Error): void {
+        if (error && !this.destroyed) {
+            this.emit("error", error);
+        }
         this.destroyed = true;
     }
 
@@ -165,6 +370,15 @@ export class Readable {
 
         Promise.resolve().then(() => {
             if (this.destroyed) {
+                return;
+            }
+
+            // Push-driven when the subclass implements _read(), or when bytes have already been
+            // pushed. A Readable built without a payload, without _read and with nothing pushed keeps
+            // the original behaviour of emitting once and ending, so nothing that relied on that
+            // starts waiting forever for a push that never comes.
+            if (this._read || this.pushQueue.length > 0 || this.pushEnded) {
+                this.pump();
                 return;
             }
 

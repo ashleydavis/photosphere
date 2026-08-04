@@ -93,6 +93,10 @@ send_command "$APP_PORT" click '{"dataId":"database-storage-type-option-s3"}' ||
 # The S3 Credentials row only renders once the type is S3, so wait for it before clicking.
 wait_for_value "$APP_PORT" "chosen-s3-secret" "None selected"
 send_command "$APP_PORT" click '{"dataId":"select-s3-button"}' || exit 1
+# Wait for the secret list to mount before picking from it. Clicking straight through leaves the
+# chosen secret as "None selected" when the device is slow, because the click lands before the modal
+# renders its buttons. The desktop lifecycle test waits on the same line for the same reason.
+wait_for_log "$TMP_DIR" "Select secret modal ready"
 send_command "$APP_PORT" click '{"dataId":"secret-select-button"}' || exit 1
 wait_for_value "$APP_PORT" "chosen-s3-secret" "$SECRET_NAME"
 
@@ -101,12 +105,18 @@ send_command "$APP_PORT" click '{"dataId":"create-database-confirm"}' || exit 1
 wait_for_log "$TMP_DIR" "Database created"
 log_success "The database was created on S3 from the device"
 
-# --- 3. Open it and import two images. ---
+# --- 3. Import two images into it. ---
 
-send_command "$APP_PORT" menu '{"itemId":"open-database"}' || exit 1
-wait_for_log "$TMP_DIR" "Open database dialog opened"
-send_command "$APP_PORT" click '{"dataId":"database-list-item-0"}' || exit 1
+# Creating the database opens it, so there is no open step here. Opening it a second time would
+# cancel the task source the first open established, and the engine pool remembers a cancelled
+# source, so the load queued against it is dropped and never completes. Test 36 documents the same
+# trap for the replicate flow.
 wait_for_log "$TMP_DIR" "Load assets task completed: 0 assets loaded"
+
+# Creating the database leaves the secrets page on screen, and the Import button lives on the
+# gallery, so navigate there before reaching for it.
+send_command "$APP_PORT" navigate '{"page":"/"}' || exit 1
+wait_for_log "$TMP_DIR" "Gallery loaded: 0 assets"
 
 send_command "$APP_PORT" click '{"dataId":"import-button"}' || exit 1
 wait_for_log "$TMP_DIR" "Import page ready"

@@ -70,6 +70,36 @@ describe("S3RangeReadableStream", () => {
         expect(callCount()).toBe(1);
     });
 
+    test("ends the stream on a short read when the response carries no Content-Range", async () => {
+        // The file size is normally learned from Content-Range. It is not always available: on the
+        // mobile worker the response reaches the SDK through the native HTTP bridge without it. A
+        // range that comes back shorter than it asked for is then the only signal that the end of the
+        // object has been reached, and without acting on it the stream requests ranges for ever and
+        // never ends, which hung every read from S3 on a device until its caller timed out.
+        const data = Buffer.from("a short object with no content range");
+        let calls = 0;
+        const mockSend = jest.fn().mockImplementation((command: any) => {
+            calls += 1;
+            const match = (command.input.Range as string).match(/bytes=(\d+)-(\d+)/);
+            const start = parseInt(match![1], 10);
+            const end = Math.min(parseInt(match![2], 10), data.length - 1);
+            const slice = data.subarray(start, end + 1);
+            return Promise.resolve({
+                // No ContentRange, so the stream cannot learn the file size.
+                Body: {
+                    transformToByteArray: async () => new Uint8Array(slice),
+                },
+            });
+        });
+        const s3 = { send: mockSend } as unknown as S3Client;
+
+        const stream = new S3RangeReadableStream(s3, "my-bucket", "my-key");
+        const result = await streamToBuffer(stream);
+
+        expect(result).toEqual(data);
+        expect(calls).toBe(1);
+    });
+
     test("reads an empty file", async () => {
         const mockSend = jest.fn().mockResolvedValue({
             ContentRange: "bytes 0-0/0",

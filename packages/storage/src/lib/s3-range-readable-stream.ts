@@ -82,6 +82,10 @@ export class S3RangeReadableStream extends Readable {
             let successfulChunkIndex = this.chunkSizeIndex;
             let nextChunkIndex = this.chunkSizeIndex;
 
+            // How many bytes the successful attempt asked for, used to detect the end of the object
+            // when the response carries no usable Content-Range.
+            let requestedChunkSize = 0;
+
             //
             // Retry getting the next chunk 3 times.
             // We down size the chunk size each time just in case it's a memory issue.
@@ -92,6 +96,7 @@ export class S3RangeReadableStream extends Readable {
                 nextChunkIndex = Math.min(nextChunkIndex + 1, CHUNK_SIZES.length - 1);
 
                 const chunkSize = CHUNK_SIZES[successfulChunkIndex];
+                requestedChunkSize = chunkSize;
                 const rangeStart = this.offset;
                 const rangeEnd = rangeStart + chunkSize - 1;
 
@@ -133,6 +138,18 @@ export class S3RangeReadableStream extends Readable {
 
             // If this chunk brings us to the end of the file, signal end-of-stream.
             if (this.fileSize !== undefined && this.offset >= this.fileSize) {
+                this.push(null);
+            }
+            else if (chunkData.length < requestedChunkSize) {
+                // A range request that comes back with fewer bytes than it asked for has reached the
+                // end of the object, so this is the last chunk.
+                //
+                // The file size is normally learned from the Content-Range header, but it is not
+                // always available: on the mobile worker the response reaches the SDK through the
+                // native HTTP bridge without it, so fileSize stays undefined and the check above can
+                // never fire. Without this the stream kept requesting ranges past the end of the
+                // object and never ended, and every read from S3 on a device hung until its caller
+                // timed out.
                 this.push(null);
             }
         }

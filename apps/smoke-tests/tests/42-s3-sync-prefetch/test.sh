@@ -81,7 +81,11 @@ wait_for_log "$TMP_DIR" "Secrets page loaded"
 add_s3_secret_via_ui "$APP_PORT" "$SECRET_NAME" "$S3_ENDPOINT" "us-east-1" "$S3_EMULATOR_ACCESS_KEY" "$S3_EMULATOR_SECRET_KEY" || exit 1
 
 "${PLATFORM}_seed_database" "$LOCAL_REPLICA" "$DB_NAME"
-"${PLATFORM}_seed_databases_config" "[{\"name\":\"$DB_NAME\",\"path\":\"$DB_NAME\",\"s3Key\":\"$SECRET_NAME\"}]" || exit 1
+# Both databases are registered, the on-device replica and its origin in the bucket. Credentials are
+# resolved by exact path, and the sync and prefetch handlers open the origin by the path recorded in
+# the replica's own config, so without an entry for that path the origin is opened with no credentials
+# at all and every read of it fails with "Region is missing".
+"${PLATFORM}_seed_databases_config" "[{\"name\":\"$DB_NAME\",\"path\":\"$DB_NAME\",\"s3Key\":\"$SECRET_NAME\"},{\"name\":\"$DB_NAME-origin\",\"path\":\"$S3_ORIGIN_PATH\",\"s3Key\":\"$SECRET_NAME\"}]" || exit 1
 
 send_command "$APP_PORT" menu '{"itemId":"open-database"}' || exit 1
 wait_for_log "$TMP_DIR" "Open database dialog opened"

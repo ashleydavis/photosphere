@@ -96,6 +96,280 @@ describe("node-stream Readable shim", () => {
 });
 
 //
+// Unit tests for the push-driven Readable: a subclass implements _read() and delivers bytes with
+// push(), ending with push(null). This is the shape S3RangeReadableStream uses to fetch an object in
+// ranges, so it is the path every read from S3 on a device takes.
+//
+// Before this was implemented, push() went nowhere and the stream emitted its (absent) fixed payload
+// instead, so consumers received a single `undefined` chunk. That is what made reading anything out
+// of S3 on a device fail inside the first code that looked at the bytes.
+//
+describe("node-stream Readable shim, push-driven", () => {
+
+    //
+    // Collects everything a stream emits, resolving with the chunks once it ends.
+    //
+    function collect(readable: Readable): Promise<Buffer[]> {
+        return new Promise<Buffer[]>((resolveDone, rejectDone) => {
+            const received: Buffer[] = [];
+            readable.on("data", (chunk: Buffer) => {
+                received.push(chunk);
+            });
+            readable.on("end", () => {
+                resolveDone(received);
+            });
+            readable.on("error", (err: Error) => {
+                rejectDone(err);
+            });
+        });
+    }
+
+    //
+    // A stream that pushes the given chunks one per _read() call, then ends. `synchronous` controls
+    // whether each push happens inside the _read() call or on a later microtask, because those are
+    // different paths through the pump: one recurses, the other resumes from push().
+    //
+    class ChunkedReadable extends Readable {
+        private nextIndex = 0;
+
+        constructor(private readonly chunks: Buffer[], private readonly synchronous: boolean) {
+            super();
+        }
+
+        protected _read(): void {
+            const deliver = () => {
+                if (this.nextIndex >= this.chunks.length) {
+                    this.push(null);
+                    return;
+                }
+                const chunk = this.chunks[this.nextIndex];
+                this.nextIndex += 1;
+                this.push(chunk);
+            };
+
+            if (this.synchronous) {
+                deliver();
+            }
+            else {
+                Promise.resolve().then(deliver);
+            }
+        }
+    }
+
+    test("delivers chunks pushed asynchronously from _read, in order, then ends", async () => {
+        const chunks = [Buffer.from("one"), Buffer.from("two"), Buffer.from("three")];
+
+        const received = await collect(new ChunkedReadable(chunks, false));
+
+        expect(received.length).toBe(3);
+        expect(Buffer.concat(received).toString()).toBe("onetwothree");
+    });
+
+    test("delivers chunks pushed synchronously from _read, in order, then ends", async () => {
+        const chunks = [Buffer.from("alpha"), Buffer.from("beta")];
+
+        const received = await collect(new ChunkedReadable(chunks, true));
+
+        expect(received.length).toBe(2);
+        expect(Buffer.concat(received).toString()).toBe("alphabeta");
+    });
+
+    test("never emits an undefined chunk", async () => {
+        const received = await collect(new ChunkedReadable([Buffer.from("bytes")], false));
+
+        for (const chunk of received) {
+            expect(chunk).toBeDefined();
+            expect(Buffer.isBuffer(chunk)).toBe(true);
+        }
+    });
+
+    test("a stream that ends without pushing anything emits end and no data", async () => {
+        const received = await collect(new ChunkedReadable([], false));
+
+        expect(received).toEqual([]);
+    });
+
+    test("chunks pushed before a consumer attaches are still delivered", async () => {
+        const readable = new Readable();
+        readable.push(Buffer.from("early"));
+        readable.push(null);
+
+        const received = await collect(readable);
+
+        expect(Buffer.concat(received).toString()).toBe("early");
+    });
+
+    test("end is emitted once even when push(null) is followed by another pump", async () => {
+        const readable = new Readable();
+        let endCount = 0;
+        readable.on("end", () => {
+            endCount += 1;
+        });
+        readable.on("data", () => {
+            // Attaching a data listener is what schedules emission.
+        });
+
+        readable.push(Buffer.from("only"));
+        readable.push(null);
+        await Promise.resolve();
+        await Promise.resolve();
+        readable.push(null);
+        await Promise.resolve();
+
+        expect(endCount).toBe(1);
+    });
+
+    test("destroy() stops delivery of chunks pushed afterwards", async () => {
+        const readable = new Readable();
+        const received: Buffer[] = [];
+        readable.on("data", (chunk: Buffer) => {
+            received.push(chunk);
+        });
+
+        readable.destroy();
+        readable.push(Buffer.from("after destroy"));
+        readable.push(null);
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(received).toEqual([]);
+    });
+
+    test("pipe forwards pushed chunks to the destination and ends it", async () => {
+        const written: Buffer[] = [];
+        let ended = false;
+        const destination = {
+            write: (chunk: Buffer) => {
+                written.push(chunk);
+                return true;
+            },
+            end: () => {
+                ended = true;
+            },
+        };
+
+        new ChunkedReadable([Buffer.from("piped ")," bytes"].map(part => Buffer.from(part)), false)
+            .pipe(destination);
+
+        // Let the scheduled emission and its pushes run.
+        for (let tick = 0; tick < 10; tick += 1) {
+            await Promise.resolve();
+        }
+
+        expect(Buffer.concat(written).toString()).toBe("piped  bytes");
+        expect(ended).toBe(true);
+    });
+
+    test("destroy(error) emits the error so a failed producer reaches its consumer", async () => {
+        const readable = new Readable();
+        const failure = new Error("range request failed");
+
+        let seen: Error | undefined;
+        readable.on("error", (err: Error) => {
+            seen = err;
+        });
+        readable.on("data", () => {
+            // Attaching a data listener is what schedules emission.
+        });
+
+        readable.destroy(failure);
+
+        expect(seen).toBe(failure);
+    });
+
+    test("destroy() with no error emits nothing", async () => {
+        const readable = new Readable();
+        let sawError = false;
+        readable.on("error", () => {
+            sawError = true;
+        });
+        readable.on("data", () => {
+            // Attaching a data listener is what schedules emission.
+        });
+
+        readable.destroy();
+        await Promise.resolve();
+
+        expect(sawError).toBe(false);
+    });
+
+    test("for await yields pushed chunks in order", async () => {
+        // @aws-sdk/lib-storage consumes an upload body with for-await, so a stream without an async
+        // iterator fails every upload with "not a function".
+        const chunks = [Buffer.from("first "), Buffer.from("second")];
+        const received: Buffer[] = [];
+
+        for await (const chunk of new ChunkedReadable(chunks, false)) {
+            received.push(chunk);
+        }
+
+        expect(Buffer.concat(received).toString()).toBe("first second");
+    });
+
+    test("for await yields a fixed payload", async () => {
+        const received: Buffer[] = [];
+
+        for await (const chunk of new Readable(Buffer.from("payload"))) {
+            received.push(chunk);
+        }
+
+        expect(Buffer.concat(received).toString()).toBe("payload");
+    });
+
+    test("for await rethrows a stream error", async () => {
+        const readable = new Readable();
+        const failure = new Error("stream broke");
+
+        const iterate = async () => {
+            for await (const _chunk of readable) {
+                // Consuming; the error is what matters.
+            }
+        };
+
+        const iterated = iterate();
+        readable.destroy(failure);
+
+        await expect(iterated).rejects.toThrow("stream broke");
+    });
+
+    test("a readable-shaped object counts as a Readable instance", () => {
+        // The AWS SDK refuses to read a response body that is not `instanceof Readable`, and the http
+        // shim's IncomingMessage is an independent event emitter rather than a subclass of this one.
+        const readableShaped = {
+            on: () => undefined,
+            push: () => true,
+            destroy: () => undefined,
+        };
+
+        expect(readableShaped instanceof Readable).toBe(true);
+    });
+
+    test("real instances and subclasses still count as Readable instances", () => {
+        class Subclass extends Readable {
+        }
+
+        expect(new Readable(Buffer.from("x")) instanceof Readable).toBe(true);
+        expect(new Subclass() instanceof Readable).toBe(true);
+    });
+
+    test("objects that are not readable-shaped are not Readable instances", () => {
+        expect({} instanceof Readable).toBe(false);
+        expect({ on: () => undefined } instanceof Readable).toBe(false);
+        expect((null as any) instanceof Readable).toBe(false);
+        expect(("a string" as any) instanceof Readable).toBe(false);
+    });
+
+    test("a fixed-payload Readable is unaffected by the push-driven path", async () => {
+        const payload = Buffer.from("fixed payload", "utf8");
+
+        const received = await collect(new Readable(payload));
+
+        expect(received.length).toBe(1);
+        expect(received[0].equals(payload)).toBe(true);
+    });
+});
+
+//
 // Unit tests for the Transform used by the encryption layer's decryption stream, which the asset
 // server pipes an encrypted file read through when serving an asset.
 //

@@ -45,28 +45,16 @@ start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
 # Seed the encrypted database files into the sandbox and its config entry.
-"${PLATFORM}_seed_database" "$DB_PATH" "$DB_NAME"
-"${PLATFORM}_seed_databases_config" "[{\"name\":\"$DB_NAME\",\"path\":\"$DB_NAME\"}]" || exit 1
-
-# Seed the *worker-side* database registry too. resolve-storage-credentials.ts decides whether to
-# open a database encrypted by looking up the path in the registry that node-api's getDatabases()
-# reads, and taking that entry's encryption_key as the vault secret name. That registry is
-# databases.toml under the config dir, which on device resolves sandbox-relative to
-# .config/photosphere/databases.toml (the mobile `os.homedir()` shim returns ""). The app's own
-# database list is a different file (databases.toml at the sandbox root), so without this one the
-# worker finds no entry, hasAnyEncryptionSource stays false, and the database opens as plain storage
+#
+# The entry carries the encryption key's secret name. resolve-storage-credentials.ts decides whether
+# to open a database encrypted by looking that up, and without it the database opens as plain storage
 # and reads still-encrypted bytes instead of decrypting.
-CONFIG_SEED="$TMP_DIR/config-seed"
-rm -rf "$CONFIG_SEED"
-mkdir -p "$CONFIG_SEED/photosphere"
-cat > "$CONFIG_SEED/photosphere/databases.toml" <<TOML
-[[databases]]
-name = "$DB_NAME"
-description = ""
-path = "$DB_NAME"
-encryption_key = "$DB_NAME"
-TOML
-"${PLATFORM}_seed_database" "$CONFIG_SEED" ".config"
+#
+# There is one registry to seed, not two. The worker reads the same databases.toml at the sandbox root
+# that the app writes; it used to look under .config/photosphere instead, which no device has, and
+# this test carried a second seeded copy there to work around that.
+"${PLATFORM}_seed_database" "$DB_PATH" "$DB_NAME"
+"${PLATFORM}_seed_databases_config" "[{\"name\":\"$DB_NAME\",\"path\":\"$DB_NAME\",\"encryptionKey\":\"$DB_NAME\"}]" || exit 1
 
 # Add the private key into the device keychain as an encryption-key secret, through the app's own
 # add-secret UI (the real path a secret takes into the keychain). The worker vault (14b) then resolves
