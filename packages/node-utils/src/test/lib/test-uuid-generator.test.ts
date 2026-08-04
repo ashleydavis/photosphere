@@ -2,12 +2,15 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { TestUuidGenerator } from '../../lib/test-uuid-generator';
+import { createTestTempDir } from '../../lib/test-temp-dir';
 
 //
-// Creates a unique directory path under the OS temp folder for test isolation.
+// Creates a path under a directory of this test's own, for a directory that does not exist yet.
+// The tests below need a path that is NOT there, so this names a child of the allocated directory
+// rather than the allocated directory itself.
 //
 function uniqueTmpDir(): string {
-    return path.join(os.tmpdir(), `photosphere-uuid-gen-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    return path.join(createTestTempDir('photosphere-uuid-gen-test'), 'counter');
 }
 
 describe('TestUuidGenerator', () => {

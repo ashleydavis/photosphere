@@ -9,7 +9,6 @@ CLI_DIR="$REPO_DIR/apps/cli"
 
 print_test_header 22 "edit-database-origin"
 
-TMP_DIR="$TEST_DIR/tmp"
 NEW_ORIGIN="s3:my-bucket:/origin-database"
 
 cleanup() {

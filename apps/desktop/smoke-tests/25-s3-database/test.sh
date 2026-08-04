@@ -24,7 +24,6 @@ REPO_ROOT="$(cd "$TEST_DIR/../../../.." && native_pwd)"
 
 print_test_header 25 "s3-database"
 
-TMP_DIR="$TEST_DIR/tmp"
 S3_STATE_DIR="$TMP_DIR/s3"
 SECRET_NAME="smoke-test-s3"
 

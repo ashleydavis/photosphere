@@ -454,11 +454,20 @@ export function copySync(src: string, dest: string): void {
 
 //
 // Returns the temp directory to use for this process.
-// When TEST_TMP_DIR env var is set (test isolation mode), uses a subdirectory of the
-// test's isolated dir so temp files are scoped per-test and cleaned up between runs.
-// Otherwise returns the system temp dir.
+//
+// PHOTOSPHERE_TEST_TMP_ROOT is set by the test runners to the directory belonging to the ONE test
+// currently running, so every process that test starts writes inside that test's own directory and
+// no other test can see it. TEST_TMP_DIR is the older variable, set per suite rather than per test,
+// and is still honoured so a suite part-way through the migration keeps working. Both name a
+// directory the test owns, and the process temp goes in a "tmp" subdirectory of it so it does not
+// collide with the fixtures, vault and config the test keeps alongside.
+//
+// With neither set (a person running psi) this is the system temp dir.
 //
 export function getProcessTmpDir(): string {
+    if (process.env.PHOTOSPHERE_TEST_TMP_ROOT) {
+        return path.resolve(process.env.PHOTOSPHERE_TEST_TMP_ROOT, 'tmp');
+    }
     if (process.env.TEST_TMP_DIR) {
         return path.resolve(process.env.TEST_TMP_DIR, 'tmp');
     }

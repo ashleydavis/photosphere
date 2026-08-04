@@ -52,9 +52,21 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Per-test temporary directories, the same allocator every other suite in this repository uses.
+source "$_CLI_ABS_DIR/../../scripts/lib/allocate-test-temp-dir.sh"
+
 # Test configuration
-# Override TEST_TMP_DIR to run tests in parallel (e.g. TEST_TMP_DIR=./test/tmp-$$ ./smoke-tests.sh)
-TEST_TMP_DIR="${TEST_TMP_DIR:-$_CLI_ABS_DIR/test/tmp}"
+#
+# The suite root, which holds the build output and whatever the setup and reset commands work on.
+# It is NOT where a test runs: each test is given a uniquely named directory of its own by
+# allocate_isolated_test_dir below, so two runs out of one checkout cannot collide.
+#
+# Exported, and this is load-bearing rather than tidiness. The CLI is a child process, so a
+# TEST_TMP_DIR that is merely assigned is invisible to it: getProcessTmpDir() then falls back to the
+# system temp dir and every CLI process on the machine shares /tmp/photosphere. This suite runs
+# `hash-cache clear` four times, which deletes that directory outright, and it took out the log
+# directory of a suite running alongside in the middle of writing to it.
+export TEST_TMP_DIR="${TEST_TMP_DIR:-$_CLI_ABS_DIR/test/tmp}"
 TEST_DB_DIR="$TEST_TMP_DIR/shared/test-db"
 TEST_FILES_DIR="../../test"
 MULTIPLE_IMAGES_DIR="../../test/multiple-files"
@@ -423,6 +435,19 @@ format_duration() {
     fi
 }
 
+#
+# Allocates the directory one test runs in and hands it down as ISOLATED_TEST_TMP_DIR, which
+# smoke-tests/lib/common.sh turns into that test's TEST_TMP_DIR and PHOTOSPHERE_TEST_TMP_ROOT.
+#
+# The name comes from the allocator rather than from the test's own directory name, so two runs out
+# of one checkout cannot be handed the same path. That is the whole point: the fixed
+# <suite root>/<test name> this replaced is shared by every concurrent run.
+# Usage: allocate_isolated_test_dir <test_dir_name>
+#
+allocate_isolated_test_dir() {
+    photosphere_test_temp_dir "$1"
+}
+
 # Run a single test script sequentially; redirect all script output to its log file.
 run_one() {
     local test_sh="$1"
@@ -430,11 +455,9 @@ run_one() {
     dir="$(dirname "$test_sh")"
     num="$(test_number "$test_sh")"
     name="$(test_name "$test_sh")"
-    log_file="$dir/tmp/test-run.log"
     dir_name="$(basename "$dir")"
-    mkdir -p "$dir/tmp"
-    export ISOLATED_TEST_TMP_DIR="${TEST_TMP_DIR}/${dir_name}"
-    mkdir -p "$ISOLATED_TEST_TMP_DIR"
+    export ISOLATED_TEST_TMP_DIR="$(allocate_isolated_test_dir "$dir_name")"
+    log_file="$ISOLATED_TEST_TMP_DIR/test-run.log"
     printf "${BLUE}RUN ${NC}  %2s  %s\n" "$num" "$name"
     local test_start=$SECONDS
     if timeout 300 bash "$test_sh" >"$log_file" 2>&1; then
@@ -487,19 +510,23 @@ run_parallel() {
             j=$((j + 1))
         done
 
+        # Where each test in this batch was told to run, so the wait loop below can find its log and
+        # its duration. The path is no longer derivable from the test's name: every test gets a
+        # uniquely named directory, which is the point.
+        local batch_test_dirs=()
         for test_sh in "${batch_tests[@]}"; do
-            local dir log_file num name dir_name
+            local dir log_file num name dir_name test_dir
             dir="$(dirname "$test_sh")"
             num="$(test_number "$test_sh")"
             name="$(test_name "$test_sh")"
             dir_name="$(basename "$dir")"
-            log_file="$dir/tmp/test-run.log"
-            mkdir -p "$dir/tmp"
-            mkdir -p "${TEST_TMP_DIR}/${dir_name}"
+            test_dir="$(allocate_isolated_test_dir "$dir_name")"
+            batch_test_dirs+=("$test_dir")
+            log_file="$test_dir/test-run.log"
             printf "${BLUE}RUN ${NC}  %2s  %s\n" "$num" "$name"
             (
                 local_start=$SECONDS
-                ISOLATED_TEST_TMP_DIR="${TEST_TMP_DIR}/${dir_name}" timeout 300 bash "$test_sh" >"$log_file" 2>&1
+                ISOLATED_TEST_TMP_DIR="$test_dir" timeout 300 bash "$test_sh" >"$log_file" 2>&1
                 local_exit=$?
 
                 # Retry once, and only when Bun itself crashed rather than a test failing an assertion.
@@ -522,13 +549,16 @@ run_parallel() {
                 if [ "$local_exit" -ne 0 ] && grep -qE "Bun has crashed|panic: |terminated by signal SIG(ILL|SEGV|BUS|ABRT)" "$log_file" 2>/dev/null; then
                     printf "${YELLOW}RETRY${NC} %2s  %s hit a Bun runtime crash (not an assertion), retrying once\n" "$num" "$name"
                     mv "$log_file" "$log_file.signal-death" 2>/dev/null || true
-                    rm -rf "${TEST_TMP_DIR:?}/${dir_name}"
-                    mkdir -p "${TEST_TMP_DIR}/${dir_name}"
-                    ISOLATED_TEST_TMP_DIR="${TEST_TMP_DIR}/${dir_name}" timeout 300 bash "$test_sh" >"$log_file" 2>&1
+                    # The retry gets a freshly allocated directory rather than the crashed run's
+                    # directory emptied and reused, so the crashed run's state is still there to
+                    # look at and the retry cannot inherit half-written files from it.
+                    local retry_dir
+                    retry_dir="$(allocate_isolated_test_dir "$dir_name")"
+                    ISOLATED_TEST_TMP_DIR="$retry_dir" timeout 300 bash "$test_sh" >"$log_file" 2>&1
                     local_exit=$?
                 fi
 
-                echo $((SECONDS - local_start)) > "$dir/tmp/test-duration.txt"
+                echo $((SECONDS - local_start)) > "$test_dir/test-duration.txt"
                 exit $local_exit
             ) &
             batch_pids+=($!)
@@ -536,12 +566,13 @@ run_parallel() {
 
         local k=0
         for pid in "${batch_pids[@]}"; do
-            local test_sh num name
+            local test_sh num name batch_test_dir
             test_sh="${batch_tests[$k]}"
             num="$(test_number "$test_sh")"
             name="$(test_name "$test_sh")"
+            batch_test_dir="${batch_test_dirs[$k]}"
             local duration_file
-            duration_file="$(dirname "$test_sh")/tmp/test-duration.txt"
+            duration_file="$batch_test_dir/test-duration.txt"
             local test_duration
             if wait "$pid"; then
                 test_duration=$(format_duration "$(cat "$duration_file" 2>/dev/null || echo 0)")
@@ -549,8 +580,8 @@ run_parallel() {
                 pass=$((pass + 1))
             else
                 test_duration=$(format_duration "$(cat "$duration_file" 2>/dev/null || echo 0)")
-                printf "${RED}FAIL${NC}  %2s  %-30s  %s  (log: %s/tmp/test-run.log)\n" "$num" "$name" "$test_duration" "$(dirname "$test_sh")"
-                FAILED_TEST_LOGS+=("$(dirname "$test_sh")/tmp/test-run.log")
+                printf "${RED}FAIL${NC}  %2s  %-30s  %s  (log: %s)\n" "$num" "$name" "$test_duration" "$batch_test_dir/test-run.log"
+                FAILED_TEST_LOGS+=("$batch_test_dir/test-run.log")
                 fail=$((fail + 1))
             fi
             k=$((k + 1))
@@ -593,8 +624,10 @@ print_failed_logs() {
     echo "FAILED TEST OUTPUT"
     echo "============================================================================"
     for log_file in "${FAILED_TEST_LOGS[@]}"; do
+        # The log sits in the directory allocated for the test, and that directory is named after
+        # the test with a unique suffix, so its own name is the label.
         local test_dir_name
-        test_dir_name=$(basename "$(dirname "$(dirname "$log_file")")")
+        test_dir_name=$(basename "$(dirname "$log_file")")
         echo ""
         echo "---------- $test_dir_name ($log_file) ----------"
         cat "$log_file"

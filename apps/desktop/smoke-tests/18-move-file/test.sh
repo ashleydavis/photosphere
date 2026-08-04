@@ -10,8 +10,6 @@ IMAGES_DIR="$REPO_DIR/test/multiple-files"
 
 print_test_header 18 "move-file"
 
-TMP_DIR="$TEST_DIR/tmp"
-
 trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 
 SOURCE_DB="$TMP_DIR/source-db"

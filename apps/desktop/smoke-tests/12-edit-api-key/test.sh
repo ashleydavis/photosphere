@@ -8,8 +8,6 @@ REPO_ROOT="$(cd "$TEST_DIR/../../../.." && native_pwd)"
 
 print_test_header 12 "edit-api-key"
 
-TMP_DIR="$TEST_DIR/tmp"
-
 cleanup() {
     if [ -f "$TMP_DIR/app.pid" ]; then
         kill_app_tree "$(cat "$TMP_DIR/app.pid")"

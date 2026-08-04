@@ -10,8 +10,6 @@ IMAGES_DIR="$REPO_DIR/test/multiple-files"
 
 print_test_header 4 "import-photos"
 
-TMP_DIR="$TEST_DIR/tmp"
-
 trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 
 log_info "Pre-creating database with CLI..."

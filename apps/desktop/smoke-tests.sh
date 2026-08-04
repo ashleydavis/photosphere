@@ -2,6 +2,11 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+# Per-test temporary directories. Each test gets a uniquely named directory of its own, outside the
+# source tree, in place of the fixed <test>/tmp every run used to share.
+source "$REPO_DIR/scripts/lib/allocate-test-temp-dir.sh"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -112,13 +117,16 @@ format_duration() {
 
 run_one() {
     local test_sh="$1"
-    local dir num name log_file
+    local dir num name test_temp_dir log_file
     dir="$(dirname "$test_sh")"
     num="$(test_number "$test_sh")"
     name="$(test_name "$test_sh")"
-    log_file="$dir/tmp/test-run.log"
-    rm -rf "$dir/tmp"
-    mkdir -p "$dir/tmp"
+    # A directory of this test's own, shared with no other test and with no other run. The test
+    # inherits it through the exported variables, so everything it and the app it starts write goes
+    # inside it rather than into a fixed <test>/tmp that concurrent runs fought over.
+    test_temp_dir="$(photosphere_test_temp_dir "$name")"
+    photosphere_export_test_temp "$test_temp_dir"
+    log_file="$test_temp_dir/test-run.log"
     printf "${BLUE}RUN ${NC}  %2s  %s\n" "$num" "$name"
     local test_start=$SECONDS
     if timeout "$PER_TEST_TIMEOUT" bash "$test_sh" >"$log_file" 2>&1; then
@@ -171,20 +179,24 @@ run_parallel_batch() {
             j=$((j + 1))
         done
 
+        # Where each test in this batch was told to write, so the wait loop below can find its log
+        # and its duration. The path is no longer derivable from the test's name: every test gets a
+        # uniquely named directory, which is the point.
+        local batch_temp_dirs=()
         for t in "${batch_tests[@]}"; do
-            local dir log_file num name
-            dir="$(dirname "$t")"
+            local test_temp_dir log_file num name
             num="$(test_number "$t")"
             name="$(test_name "$t")"
-            log_file="$dir/tmp/test-run.log"
-            rm -rf "$dir/tmp"
-            mkdir -p "$dir/tmp"
+            test_temp_dir="$(photosphere_test_temp_dir "$name")"
+            batch_temp_dirs+=("$test_temp_dir")
+            log_file="$test_temp_dir/test-run.log"
             printf "${BLUE}RUN ${NC}  %2s  %s\n" "$num" "$name"
             (
+                photosphere_export_test_temp "$test_temp_dir"
                 local_start=$SECONDS
                 timeout "$PER_TEST_TIMEOUT" bash "$t" >"$log_file" 2>&1
                 local_exit=$?
-                echo $((SECONDS - local_start)) > "$dir/tmp/test-duration.txt"
+                echo $((SECONDS - local_start)) > "$test_temp_dir/test-duration.txt"
                 exit $local_exit
             ) &
             batch_pids+=($!)
@@ -192,12 +204,13 @@ run_parallel_batch() {
 
         local k=0
         for pid in "${batch_pids[@]}"; do
-            local t num name
+            local t num name batch_temp_dir
             t="${batch_tests[$k]}"
             num="$(test_number "$t")"
             name="$(test_name "$t")"
+            batch_temp_dir="${batch_temp_dirs[$k]}"
             local duration_file
-            duration_file="$(dirname "$t")/tmp/test-duration.txt"
+            duration_file="$batch_temp_dir/test-duration.txt"
             local test_duration
             if wait "$pid"; then
                 test_duration=$(format_duration "$(cat "$duration_file" 2>/dev/null || echo 0)")
@@ -205,8 +218,8 @@ run_parallel_batch() {
                 eval "$pass_var=$(( ${!pass_var} + 1 ))"
             else
                 test_duration=$(format_duration "$(cat "$duration_file" 2>/dev/null || echo 0)")
-                printf "${RED}FAIL${NC}  %2s  %-30s  %s  (log: %s/tmp/test-run.log)\n" "$num" "$name" "$test_duration" "$(dirname "$t")"
-                FAILED_TEST_LOGS+=("$(dirname "$t")/tmp/test-run.log")
+                printf "${RED}FAIL${NC}  %2s  %-30s  %s  (log: %s)\n" "$num" "$name" "$test_duration" "$batch_temp_dir/test-run.log"
+                FAILED_TEST_LOGS+=("$batch_temp_dir/test-run.log")
                 eval "$fail_var=$(( ${!fail_var} + 1 ))"
             fi
             k=$((k + 1))

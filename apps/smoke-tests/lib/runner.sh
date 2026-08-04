@@ -12,6 +12,14 @@
 #               this: discovery is a UDP broadcast on the segment every emulator shares, so two of
 #               them running at once see each other's traffic.
 
+# Directory holding this file, used to reach the shared per-test temp directory helpers.
+RUNNER_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Per-test temporary directories. Sourced here as well as from common.sh because runner.test.sh
+# sources this file on its own, without common.sh, and the worker loop below allocates a directory
+# for every test it dispatches.
+source "$RUNNER_LIB_DIR/../../../scripts/lib/allocate-test-temp-dir.sh"
+
 # Marker file name, matched against a test's own directory.
 EXCLUSIVE_MARKER=".exclusive"
 
@@ -200,12 +208,6 @@ runner_flock() {
     fi
     return 0
 }
-
-# Per-test scratch directory for this run, relative to each test's own directory. Concurrent runs out
-# of one checkout must not share it: the wipe before each test would otherwise delete a live bridge
-# log and pid file belonging to another run. Set from PHOTOSPHERE_TEST_TMP when a run id was handed
-# down, else plain "tmp" as a single run has always used.
-RUN_TMP_NAME="${PHOTOSPHERE_TEST_TMP:-tmp}"
 
 # The address every device must be able to reach for any mobile test to work: this host, on the LAN
 # bridge. Matches BRIDGE_HOST's reasoning in common.sh, from the guest's side rather than the host's.
@@ -688,19 +690,22 @@ run_worker() {
             break
         fi
 
-        local dir name log_file duration_file
+        local dir name test_temp_dir log_file duration_file
         dir="$(dirname "$test_path")"
         name="$(basename "$dir")"
-        # Scoped to this run, so wiping it cannot destroy a concurrent run's live test state.
-        rm -rf "$dir/$RUN_TMP_NAME"
-        mkdir -p "$dir/$RUN_TMP_NAME"
-        log_file="$dir/$RUN_TMP_NAME/test-run.log"
-        duration_file="$dir/$RUN_TMP_NAME/test-duration.txt"
+        # A directory of this test's own, outside the source tree and shared with nothing. The test
+        # inherits it through the exported variables, so everything it and its child processes write
+        # (the app log, the bridge pid file, the CLI's temporary files) lands inside it.
+        test_temp_dir="$(photosphere_test_temp_dir "$name")"
+        photosphere_export_test_temp "$test_temp_dir"
+        log_file="$test_temp_dir/test-run.log"
+        duration_file="$test_temp_dir/test-duration.txt"
 
         # Wait for a free emulator, then bind this test to it. Held only while the test runs.
         if ! acquire_device; then
             printf "${RED}FAIL${NC}  %-32s  no emulator came free within %ss\n" "$name" "$DEVICE_CLAIM_TIMEOUT"
-            echo "fail $name 0" > "$results_dir/$name.result"
+            # No log: the test never ran. The summary prints a dash for it.
+            echo "fail $name 0 -" > "$results_dir/$name.result"
             continue
         fi
         if [ -n "$ACQUIRED_DEVICE" ]; then
@@ -773,12 +778,14 @@ run_worker() {
 
         local duration
         duration="$(cat "$duration_file" 2>/dev/null || echo 0)"
+        # The log path goes in the result file because it can no longer be reconstructed from the
+        # test's name: every test gets a uniquely named directory of its own, which is the point.
         if [ "$status" -eq 0 ]; then
             printf "${GREEN}PASS${NC}  %-32s  %ss\n" "$name" "$duration"
-            echo "pass $name $duration" > "$results_dir/$name.result"
+            echo "pass $name $duration $log_file" > "$results_dir/$name.result"
         else
             printf "${RED}FAIL${NC}  %-32s  %ss  (log: %s)\n" "$name" "$duration" "$log_file"
-            echo "fail $name $duration" > "$results_dir/$name.result"
+            echo "fail $name $duration $log_file" > "$results_dir/$name.result"
         fi
     done
 }

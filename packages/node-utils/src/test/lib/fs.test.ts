@@ -1,7 +1,8 @@
 import * as path from 'path';
 import * as fsNative from 'fs/promises';
 import { writeFileSync } from 'fs';
-import { readToml, writeToml, readJson, writeJson, outputFile, updateToml, updateJson, updateFileOptimistic, updateFileRawOptimistic, getProcessTmpDir } from '../../lib/fs';
+import { readToml, writeToml, readJson, writeJson, outputFile, updateToml, updateJson, updateFileOptimistic, updateFileRawOptimistic } from '../../lib/fs';
+import { createTestTempDir } from '../../lib/test-temp-dir';
 
 //
 // Simple config shape used by the update-mutator tests.
@@ -12,10 +13,11 @@ interface ICounter {
 }
 
 //
-// Creates a unique temp file path in the OS temp directory.
+// Creates a file path inside a directory of this test's own. Uniqueness comes from the operating
+// system, so two tests starting in the same millisecond cannot end up sharing a path.
 //
 function tempFilePath(suffix: string): string {
-    return path.join(getProcessTmpDir(), `photosphere-fs-test-${Date.now()}-${suffix}`);
+    return path.join(createTestTempDir('photosphere-fs-test'), suffix);
 }
 
 describe('readToml / writeToml', () => {

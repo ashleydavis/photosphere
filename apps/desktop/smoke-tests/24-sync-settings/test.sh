@@ -14,7 +14,6 @@ DESKTOP_DIR="$(cd "$TEST_DIR/../.." && native_pwd)"
 
 print_test_header 24 "sync-settings"
 
-TMP_DIR="$TEST_DIR/tmp"
 CONFIG_TOML="$TMP_DIR/config/desktop.toml"
 
 cleanup() {

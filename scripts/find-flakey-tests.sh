@@ -304,6 +304,28 @@ mkdir -p "$SESSION_DIR"
 
 REPORT="$SESSION_DIR/report.txt"
 
+# Per-test temporary directories, for the count reported at the end of a session.
+source "$ROOT/scripts/lib/allocate-test-temp-dir.sh"
+
+# How many per-test directories existed before this session started, so the growth it causes can be
+# told from what was already there.
+TEST_TEMP_COUNT_AT_START="$(photosphere_test_temp_count)"
+
+#
+# Reports how much the tree of per-test directories grew over this session.
+#
+# Nothing removes those directories, so a session that runs the suite hundreds of times leaves
+# hundreds of them behind and the tree grows without bound. That growth once turned a 15 second run
+# into a 46 second one, and the cause was invisible until somebody went looking. Printing the count
+# at the end of every session means it shows up on the session that caused it.
+#
+report_test_temp_growth() {
+    local count_now
+    count_now="$(photosphere_test_temp_count)"
+    echo "Per-test temp directories under $PHOTOSPHERE_TEST_TEMP_ROOT: $count_now"
+    echo "  (was $TEST_TEMP_COUNT_AT_START at the start of this session; nothing removes them.)"
+}
+
 # Records the state of the machine at the moment of a failure. Several failure modes found by this
 # loop were nothing to do with the code: the kernel's out-of-memory killer taking an Android
 # emulator, and an emulator vanishing mid-test. Neither is visible in the suite's own output, and
@@ -694,6 +716,8 @@ while [ "$greens" -lt "$TARGET" ]; do
         done
         echo
     fi
+    report_test_temp_growth
+    echo
     echo "REPORT=$REPORT"
     echo "RUN_LOG=$run_log"
     echo "LOGS=$SESSION_DIR"
@@ -719,5 +743,7 @@ if [ "${#device_failure_runs[@]}" -gt 0 ]; then
         echo "  $device_failure_line"
     done
 fi
+echo
+report_test_temp_growth
 echo "LOGS=$SESSION_DIR"
 exit 0

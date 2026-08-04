@@ -26,7 +26,6 @@ IMAGES_DIR="$REPO_DIR/test/multiple-files"
 
 print_test_header 20 "download-multiple-assets"
 
-TMP_DIR="$TEST_DIR/tmp"
 SOURCE_DB="$TMP_DIR/test-db"
 DOWNLOAD_DIR="$TMP_DIR/downloads"
 

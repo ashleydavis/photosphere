@@ -9,8 +9,6 @@ CLI_DIR="$REPO_DIR/apps/cli"
 
 print_test_header 16 "remove-recent-database"
 
-TMP_DIR="$TEST_DIR/tmp"
-
 cleanup() {
     if [ -f "$TMP_DIR/app.pid" ]; then
         kill_app_tree "$(cat "$TMP_DIR/app.pid")"

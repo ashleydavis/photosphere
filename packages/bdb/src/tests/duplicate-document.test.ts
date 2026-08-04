@@ -4,6 +4,7 @@ import path from 'path';
 import { BsonDatabase } from '../lib/database';
 import type { IBsonCollection } from '../lib/collection';
 import { RandomUuidGenerator, TimestampProvider } from 'utils';
+import { createTestTempDir } from 'node-utils';
 
 describe('Collection duplicate document tests', () => {
     let db: BsonDatabase;
@@ -11,9 +12,9 @@ describe('Collection duplicate document tests', () => {
     let tempDir: string;
     
     beforeEach(async () => {
-        // Setup a temporary directory for testing
-        tempDir = path.join(__dirname, 'temp-test-db-' + Date.now());
-        fs.mkdirSync(tempDir, { recursive: true });
+        // A directory of this test's own, outside the source tree. Uniqueness comes from the
+        // operating system, so two tests starting in the same millisecond cannot share one.
+        tempDir = createTestTempDir('temp-test-db');
         
         // Create a database with a mock storage
         const storage = new MockStorage();

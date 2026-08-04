@@ -17,8 +17,6 @@ source "$TEST_DIR/../../lib/common.sh"
 
 print_test_header 4 "import-photos"
 
-TMP_DIR="$TEST_DIR/$TEST_TMP_NAME"
-
 # The empty target database (seeded from the checked-in no-assets fixture) and its sandbox-relative name.
 DB_NAME="import-target"
 

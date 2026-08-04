@@ -1,16 +1,16 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { FileStorage } from '../lib/file-storage';
-import { ensureDir, remove, pathExists } from 'node-utils';
+import { ensureDir, remove, pathExists, createTestTempDir } from 'node-utils';
 
 describe('FileStorage Write Locks', () => {
     let tempDir: string;
     let storage: FileStorage;
 
     beforeEach(async () => {
-        // Use a unique temp directory for each test
-        tempDir = path.join(__dirname, `temp-test-locks-${Date.now()}-${Math.random()}`);
-        await ensureDir(tempDir);
+        // A directory of this test's own, outside the source tree. Uniqueness comes from the
+        // operating system, so two tests starting in the same millisecond cannot share one.
+        tempDir = createTestTempDir('temp-test-locks');
         storage = new FileStorage(tempDir);
     });
 

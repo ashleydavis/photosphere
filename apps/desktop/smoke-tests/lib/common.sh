@@ -10,6 +10,14 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
+# Directory containing this script (apps/desktop/smoke-tests/lib), and the repository it sits in.
+COMMON_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(cd "$COMMON_LIB_DIR/../../../.." && pwd)"
+
+# Per-test temporary directories. Every test writes everything it produces inside one directory of
+# its own, so no test can be affected by, or affect, another test's files.
+source "$REPO_DIR/scripts/lib/allocate-test-temp-dir.sh"
+
 # Default seconds a wait tolerates before failing, doubled from the standalone value so a concurrent
 # suite run sharing the machine (which slows everything) does not trip a spurious timeout.
 DEFAULT_WAIT_TIMEOUT=120
@@ -69,6 +77,23 @@ detect_platform() {
         *)                  echo "linux";;
     esac
 }
+
+# TMP_DIR is where a test keeps its app log, pid file, config, vault and anything else it writes.
+# smoke-tests.sh allocates it and hands it down in PHOTOSPHERE_TEST_TMP_ROOT; a test run on its own,
+# straight from the command line, allocates its own here so it is isolated either way. Set here
+# rather than in each test.sh so isolation holds by construction and no test can forget to ask
+# for it.
+#
+# Converted to a native path because Electron is a native process: on Windows (Git Bash) the POSIX
+# form mktemp prints is not a path Electron can resolve.
+if [ -n "${PHOTOSPHERE_TEST_TMP_ROOT:-}" ]; then
+    TMP_DIR="$PHOTOSPHERE_TEST_TMP_ROOT"
+else
+    TMP_DIR="$(photosphere_test_temp_dir "$(basename "$(dirname "$0")")")"
+    photosphere_export_test_temp "$TMP_DIR"
+fi
+mkdir -p "$TMP_DIR"
+TMP_DIR="$(cd "$TMP_DIR" && native_pwd)"
 
 #
 # Detects the current CPU architecture: x64 or arm64.

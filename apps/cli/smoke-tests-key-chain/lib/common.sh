@@ -16,7 +16,16 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 # Override TEST_TMP_DIR to run tests in parallel (e.g. TEST_TMP_DIR=./test/tmp-$$ ./smoke-tests.sh)
 # ISOLATED_TEST_TMP_DIR is set per-script by the orchestrator for parallel runs and takes precedence.
-TEST_TMP_DIR="${ISOLATED_TEST_TMP_DIR:-${TEST_TMP_DIR:-./test/tmp}}"
+#
+# Exported, because the CLI is a child process and cannot see a variable that is only assigned. An
+# unexported TEST_TMP_DIR sends every psi process to the shared /tmp/photosphere, which another
+# suite's `hash-cache clear` then deletes underneath it.
+export TEST_TMP_DIR="${ISOLATED_TEST_TMP_DIR:-${TEST_TMP_DIR:-./test/tmp}}"
+
+# The same directory again under the variable getProcessTmpDir() prefers, so the temporary files
+# every psi process this test starts writes land inside this test's own directory.
+export PHOTOSPHERE_TEST_TMP_ROOT="$TEST_TMP_DIR"
+
 TEST_DB_DIR="$TEST_TMP_DIR/shared/test-db"
 TEST_FILES_DIR="../../test"
 MULTIPLE_IMAGES_DIR="../../test/multiple-files"

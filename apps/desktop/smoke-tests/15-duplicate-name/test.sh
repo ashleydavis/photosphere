@@ -6,8 +6,6 @@ TEST_DIR="$(cd "$(dirname "$0")" && native_pwd)"
 DESKTOP_DIR="$(cd "$TEST_DIR/../.." && native_pwd)"
 print_test_header 15 "duplicate-name"
 
-TMP_DIR="$TEST_DIR/tmp"
-
 cleanup() {
     if [ -f "$TMP_DIR/app.pid" ]; then
         kill_app_tree "$(cat "$TMP_DIR/app.pid")"

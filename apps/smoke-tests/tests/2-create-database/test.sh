@@ -10,8 +10,6 @@ source "$TEST_DIR/../../lib/common.sh"
 
 print_test_header 2 "create-database"
 
-TMP_DIR="$TEST_DIR/$TEST_TMP_NAME"
-
 trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 
 # Wipe everything the app has stored on the device (its storage sandbox, the WebView's

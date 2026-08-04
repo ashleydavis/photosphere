@@ -13,6 +13,12 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
+# Per-test temporary directories, the same allocator every other suite in this repository uses.
+_KEYCHAIN_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$_KEYCHAIN_SCRIPT_DIR/../../scripts/lib/allocate-test-temp-dir.sh"
+
+# The suite root. It is NOT where a test runs: run_one allocates a uniquely named directory for
+# each test and hands it down as ISOLATED_TEST_TMP_DIR.
 TEST_TMP_DIR="${TEST_TMP_DIR:-./test/tmp-keychain}"
 USE_BINARY=false
 
@@ -42,9 +48,8 @@ run_one() {
     local num name log_file
     num="$(test_number "$test_sh")"
     name="$(test_name "$test_sh")"
-    log_file="$(dirname "$test_sh")/tmp/test-run.log"
-    mkdir -p "$(dirname "$test_sh")/tmp"
-    export ISOLATED_TEST_TMP_DIR="${TEST_TMP_DIR}/$(basename "$(dirname "$test_sh")")"
+    export ISOLATED_TEST_TMP_DIR="$(photosphere_test_temp_dir "$(basename "$(dirname "$test_sh")")")"
+    log_file="$ISOLATED_TEST_TMP_DIR/test-run.log"
     printf "${BLUE}RUN ${NC}  %s  %s\n" "$num" "$name"
     if timeout 300 bash "$test_sh" >"$log_file" 2>&1; then
         printf "${GREEN}PASS${NC}  %s  %s\n" "$num" "$name"

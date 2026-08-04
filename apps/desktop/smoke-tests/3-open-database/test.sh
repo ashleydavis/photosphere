@@ -9,8 +9,6 @@ CLI_DIR="$REPO_DIR/apps/cli"
 
 print_test_header 3 "open-database"
 
-TMP_DIR="$TEST_DIR/tmp"
-
 trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 
 log_info "Pre-creating database with CLI..."

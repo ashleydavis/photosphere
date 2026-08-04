@@ -2,7 +2,7 @@ import * as crypto from 'crypto';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import { HashCache, IHashCacheEntry } from '../../lib/hash-cache';
-import { getProcessTmpDir } from 'node-utils';
+import { createTestTempDir } from 'node-utils';
 
 // Mock implementation of IStorage (no longer used, kept for reference)
 class MockStorage {
@@ -118,14 +118,8 @@ describe('HashCache', () => {
     let hashCache: HashCache;
     let cacheDir: string;
 
-    // Monotonic counter making each test's cache directory unique. Date.now() alone is not enough:
-    // two tests whose beforeEach runs in the same millisecond would share a directory, so a test that
-    // calls load() would inherit the entries a prior test saved there (this made the buffer-resizing
-    // test see 1004 entries instead of 1000). The counter guarantees a fresh directory per test.
-    let cacheDirCounter = 0;
-
     beforeEach(() => {
-        cacheDir = path.join(getProcessTmpDir(), `hash-cache-test-${Date.now()}-${cacheDirCounter++}`);
+        cacheDir = createTestTempDir('hash-cache-test');
         hashCache = new HashCache(cacheDir);
     });
     
@@ -503,10 +497,9 @@ describe('encodeEntries / decodeEntries', () => {
 
 describe('HashCache concurrent saves', () => {
     let cacheDir: string;
-    let cacheDirCounter = 0;
 
     beforeEach(() => {
-        cacheDir = path.join(getProcessTmpDir(), `hash-cache-concurrent-test-${Date.now()}-${cacheDirCounter++}`);
+        cacheDir = createTestTempDir('hash-cache-concurrent-test');
     });
 
     //

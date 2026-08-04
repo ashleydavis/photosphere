@@ -21,18 +21,32 @@ NC='\033[0m'
 # Directory containing this script (apps/smoke-tests/lib).
 LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Name of the per-test scratch directory, relative to the test's own directory. Every test sets
-# TMP_DIR from this rather than hardcoding "tmp", so that several suites running at once out of one
-# checkout each get their own scratch space. The runner sets it to tmp/run-<id> per run; on its own
-# it stays "tmp", which is what a single run has always used.
-#
-# Without this, two concurrent runs share tests/<name>/tmp, and the runner wiping that directory
-# before a test destroys the other run's live bridge log and pid file underneath it.
-TEST_TMP_NAME="${PHOTOSPHERE_TEST_TMP:-tmp}"
-
 # Repo-relative locations used by the platform launchers.
 SMOKE_TESTS_DIR="$(cd "$LIB_DIR/.." && pwd)"
 REPO_DIR="$(cd "$SMOKE_TESTS_DIR/../.." && pwd)"
+
+# Per-test temporary directories. Every test writes everything it produces inside one directory of
+# its own, so no test can be affected by, or affect, another test's files.
+source "$REPO_DIR/scripts/lib/allocate-test-temp-dir.sh"
+
+# TMP_DIR is where a test keeps its app log, bridge pid file, fixtures and anything else it writes.
+# The runner allocates it and hands it down in PHOTOSPHERE_TEST_TMP_ROOT; a test run on its own,
+# straight from the command line, allocates its own here so it is isolated either way. Set here
+# rather than in each test.sh so isolation holds by construction and no test can forget to ask
+# for it.
+#
+# run.sh sources this file too and needs no directory of its own, so this only fires for a test.sh.
+case "$(basename "$0")" in
+    test.sh)
+        if [ -n "${PHOTOSPHERE_TEST_TMP_ROOT:-}" ]; then
+            TMP_DIR="$PHOTOSPHERE_TEST_TMP_ROOT"
+        else
+            TMP_DIR="$(photosphere_test_temp_dir "$(basename "$(dirname "$0")")")"
+            photosphere_export_test_temp "$TMP_DIR"
+        fi
+        mkdir -p "$TMP_DIR"
+        ;;
+esac
 ANDROID_FRONTEND_DIR="$REPO_DIR/apps/android-frontend"
 IOS_FRONTEND_DIR="$REPO_DIR/apps/ios-frontend"
 

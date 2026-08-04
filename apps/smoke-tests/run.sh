@@ -25,12 +25,9 @@ NC='\033[0m'
 # Sourcing common.sh also sources the platform launcher and defines the *_prepare/_build/etc.
 source "$SCRIPT_DIR/lib/common.sh"
 
-# Give this run its own per-test scratch directory before anything reads it, so several suites can
-# run at once out of one checkout without wiping each other's live test state. Exported, because each
-# test.sh is a separate process that builds its TMP_DIR from it.
-export PHOTOSPHERE_TEST_TMP="${PHOTOSPHERE_TEST_TMP:-tmp/run-$$}"
-
-# The work queue and worker pool that spread the tests over the available devices.
+# The work queue and worker pool that spread the tests over the available devices. It allocates a
+# uniquely named directory for each test as it dispatches it, so nothing needs to be scoped per run
+# here: no two tests share a directory whether they are in the same run or not.
 source "$SCRIPT_DIR/lib/runner.sh"
 
 discover_tests() {
@@ -141,16 +138,19 @@ main() {
     local pass=0
     local fail=0
     local failed_names=()
-    local result_file verdict name
+    local failed_logs=()
+    local result_file verdict name log_path
     for result_file in "$results_dir"/*.result; do
         [ -e "$result_file" ] || continue
         verdict="$(awk '{ print $1 }' "$result_file")"
         name="$(awk '{ print $2 }' "$result_file")"
+        log_path="$(awk '{ print $4 }' "$result_file")"
         if [ "$verdict" = "pass" ]; then
             pass=$((pass + 1))
         else
             fail=$((fail + 1))
             failed_names+=("$name")
+            failed_logs+=("$log_path")
         fi
     done
     rm -rf "$results_dir"
@@ -162,8 +162,12 @@ main() {
         # Workers interleave their output, so each failure's log path is printed here rather than
         # leaving it to be hunted for in the scrollback.
         printf "${RED}%d of %d tests failed${NC}\n" "$fail" "$((pass + fail))"
-        for name in "${failed_names[@]}"; do
-            printf "${RED}  %s${NC}  (log: %s)\n" "$name" "$SCRIPT_DIR/tests/$name/$RUN_TMP_NAME/test-run.log"
+        # The path comes from the result file: each test has a uniquely named directory of its own,
+        # so it cannot be rebuilt from the test's name.
+        local failed_index=0
+        while [ "$failed_index" -lt "${#failed_names[@]}" ]; do
+            printf "${RED}  %s${NC}  (log: %s)\n" "${failed_names[$failed_index]}" "${failed_logs[$failed_index]}"
+            failed_index=$((failed_index + 1))
         done
     fi
     return $((fail > 0 ? 1 : 0))

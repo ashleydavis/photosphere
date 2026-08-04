@@ -19,14 +19,39 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-# Temp directory for test data.
-TEST_TMP_DIR="${TEST_TMP_DIR:-./test/tmp-lan-share}"
+# Per-test temporary directories, the same allocator every other suite in this repository uses.
+_LAN_SHARE_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$_LAN_SHARE_SCRIPT_DIR/../../scripts/lib/allocate-test-temp-dir.sh"
 
-# Isolated vault and config dirs for sender and receiver.
+# The suite root. It is NOT where a test runs: run_test points TEST_TMP_DIR at a uniquely named
+# directory for the length of each test.
+#
+# Exported, because the CLI is a child process and cannot see a variable that is only assigned. An
+# unexported TEST_TMP_DIR sends every psi process to the shared /tmp/photosphere, which another
+# suite's `hash-cache clear` then deletes underneath it.
+export TEST_TMP_DIR="${TEST_TMP_DIR:-./test/tmp-lan-share}"
+export PHOTOSPHERE_TEST_TMP_ROOT="$TEST_TMP_DIR"
+
+# Isolated vault and config dirs for sender and receiver. Rebuilt by use_test_temp_dir for each
+# test, so no two tests, and no two concurrent runs, share them.
 SENDER_VAULT_DIR="${TEST_TMP_DIR}/sender-vault"
 SENDER_CONFIG_DIR="${TEST_TMP_DIR}/sender-config"
 RECEIVER_VAULT_DIR="${TEST_TMP_DIR}/receiver-vault"
 RECEIVER_CONFIG_DIR="${TEST_TMP_DIR}/receiver-config"
+
+#
+# Points this suite's directories at the given directory: the temp root every psi process resolves,
+# and the four sender and receiver locations every test builds its paths from.
+# Usage: use_test_temp_dir <dir>
+#
+use_test_temp_dir() {
+    local dir="$1"
+    photosphere_export_test_temp "$dir"
+    SENDER_VAULT_DIR="${dir}/sender-vault"
+    SENDER_CONFIG_DIR="${dir}/sender-config"
+    RECEIVER_VAULT_DIR="${dir}/receiver-vault"
+    RECEIVER_CONFIG_DIR="${dir}/receiver-config"
+}
 export PHOTOSPHERE_VAULT_TYPE="plaintext"
 
 # Counters.
@@ -223,6 +248,13 @@ run_test() {
     local test_func="$1"
     local start_time=$SECONDS
 
+    # A uniquely named directory for this test, so no two of these cases, and no two concurrent runs
+    # out of one checkout, write to the same sender vault, receiver vault or receiver log. Every one
+    # of these tests already starts by clearing the directories it uses, so nothing here depends on
+    # state left by the test before it.
+    local suite_tmp_dir="$TEST_TMP_DIR"
+    use_test_temp_dir "$(photosphere_test_temp_dir "$test_func")"
+
     # Background watchdog — kills stuck bun processes after timeout.
     (
         sleep "$TEST_TIMEOUT"
@@ -246,6 +278,10 @@ run_test() {
     # Kill any lingering receivers between tests and wait for them to die.
     pkill -f "bun run.*receive --yes" 2>/dev/null || true
     sleep 0.3
+
+    # Put the suite root back, so anything running between tests is not left pointing at the
+    # directory of the test that has just finished.
+    use_test_temp_dir "$suite_tmp_dir"
 
     local elapsed=$(( SECONDS - start_time ))
     if [ "$elapsed" -ge "$TEST_TIMEOUT" ]; then

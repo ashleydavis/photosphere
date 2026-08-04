@@ -15,14 +15,15 @@ import {
     removeSync,
     copySync
 } from './fs';
+import { createTestTempDir } from './test-temp-dir';
 
 describe('fs utilities', () => {
     let testDir: string;
 
     beforeEach(async () => {
-        // Create a unique test directory for each test
-        testDir = path.join(os.tmpdir(), `fs-test-${Date.now()}-${Math.random().toString(36).substring(7)}`);
-        await ensureDir(testDir);
+        // A directory of this test's own. Uniqueness comes from the operating system, so two tests
+        // starting in the same millisecond cannot end up sharing one.
+        testDir = createTestTempDir('fs-test');
     });
 
     afterEach(async () => {

@@ -154,8 +154,8 @@ TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DESKTOP_DIR="$TEST_DIR/../.."
 source "$TEST_DIR/../lib/common.sh"
 
-TMP_DIR="$TEST_DIR/tmp"
-rm -rf "$TMP_DIR"
+# TMP_DIR is set by common.sh: every test is given a uniquely named directory of its own, outside
+# the source tree, and writes everything it produces inside it. Do not set it yourself.
 
 trap 'stop_app "$PORT" "$TMP_DIR"' EXIT
 

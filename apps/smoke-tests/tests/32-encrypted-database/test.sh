@@ -13,7 +13,6 @@ source "$TEST_DIR/../../lib/common.sh"
 
 print_test_header 32 "encrypted-database"
 
-TMP_DIR="$TEST_DIR/$TEST_TMP_NAME"
 DB_NAME="enc-db"
 # The CLI's --key is a *vault key name*, not a file path: --generate-key stores the generated RSA
 # key pair in the host vault under this name and never writes a PEM file. Every host CLI call here

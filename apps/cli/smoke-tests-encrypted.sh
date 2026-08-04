@@ -21,8 +21,20 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
+# Per-test temporary directories, the same allocator every other suite in this repository uses.
+_ENCRYPTED_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$_ENCRYPTED_SCRIPT_DIR/../../scripts/lib/allocate-test-temp-dir.sh"
+
 # Test configuration
-TEST_TMP_DIR="${TEST_TMP_DIR:-./test/tmp-encrypted}"
+#
+# The suite root, holding the shared vault and config. It is NOT where a test runs: run_single_test
+# points TEST_TMP_DIR at a uniquely named directory for the length of each test.
+#
+# Exported, because the CLI is a child process and cannot see a variable that is only assigned. An
+# unexported TEST_TMP_DIR sends every psi process to the shared /tmp/photosphere, which another
+# suite's `hash-cache clear` then deletes underneath it.
+export TEST_TMP_DIR="${TEST_TMP_DIR:-./test/tmp-encrypted}"
+export PHOTOSPHERE_TEST_TMP_ROOT="$TEST_TMP_DIR"
 TEST_FILES_DIR="../../test"
 
 # Isolate the vault and config so tests don't pollute the user's real data.
@@ -1366,6 +1378,30 @@ test_key_not_found_message() {
 # -----------------------------------------------------------------------------
 
 run_single_test() {
+    local name="$1"
+
+    # Every test runs in a uniquely named directory of its own, from the same allocator every other
+    # suite in this repository uses. Each test below builds its working paths from TEST_TMP_DIR, so
+    # pointing that at the allocated directory for the length of one test is what isolates them:
+    # the fixed <suite root>/<test name> it replaces is shared by every concurrent run.
+    #
+    # The vault and config are deliberately left at the suite root. Several of these tests read back
+    # a key an earlier test created, so moving the vault per test would change what they cover.
+    local suite_tmp_dir="$TEST_TMP_DIR"
+    photosphere_export_test_temp "$(photosphere_test_temp_dir "$name")"
+
+    local status=0
+    run_encrypted_test "$name" || status=$?
+
+    photosphere_export_test_temp "$suite_tmp_dir"
+    return "$status"
+}
+
+#
+# Dispatches to the test function for a name. Split out of run_single_test so the directory it
+# allocates is put back however the test leaves.
+#
+run_encrypted_test() {
     local name="$1"
 
     case "$name" in

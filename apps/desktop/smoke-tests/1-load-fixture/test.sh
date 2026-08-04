@@ -8,7 +8,6 @@ REPO_DIR="$(cd "$DESKTOP_DIR/../.." && native_pwd)"
 
 print_test_header 1 "load-fixture"
 
-TMP_DIR="$TEST_DIR/tmp"
 FIXTURE_DB="$REPO_DIR/test/dbs/50-assets"
 
 cleanup() {

@@ -137,7 +137,7 @@ Each pool emulator runs on a writable clone of your base AVD, about 8KB each, be
 
 Tests are dispatched in the order they are numbered. One marker file in a test's own directory changes scheduling, documented in [apps/smoke-tests/tests/README.md](../../apps/smoke-tests/tests/README.md): `.exclusive` serialises a test across the whole pool (the LAN-share tests need it, because discovery broadcasts on the segment every emulator shares).
 
-With more than one worker, each test's output goes to `tests/<name>/tmp/test-run.log` and only its status line is printed, since concurrent output would interleave. A single device keeps streaming to the terminal.
+With more than one worker, each test's output goes to `test-run.log` inside that test's own temporary directory (see [Every test gets its own directory](#every-test-gets-its-own-directory)) and only its status line is printed, since concurrent output would interleave. A single device keeps streaming to the terminal. The `FAIL` line and the run summary both print the full path.
 
 Run every test across the monorepo via the shell script, which prints a summary of results. It does not run the tests in parallel, which makes it easier to see where a failure originates:
 
@@ -178,6 +178,18 @@ Running the stories on Android or iOS renders every page at phone resolution, wh
 These runs are long, so they are excluded from `bun run test:all`.
 
 See [the stories README](../../packages/user-interface/src/stories/README.md) for the full reference: entry points on each platform, all runner options, how the cycle works, and how to add a new story.
+
+## Every test gets its own directory
+
+Every test, not every suite, owns a uniquely named directory for its fixtures, logs and scratch space, and gets one without asking. Tests used to share directories and interfere with each other: one suite deleted `/tmp/photosphere` while another was writing its log header there, and two concurrent mobile runs wiped each other's live bridge logs out of `tests/<name>/tmp`.
+
+Directories live under `/tmp/photosphere-tests/` (or `$TMPDIR` where that is set), named `<test-name>-<random>`, so a stray directory always names the test that made it. That root is deliberately not the CLI's own `/tmp/photosphere`, which `psi hash-cache clear` deletes outright.
+
+A test never asks for its directory. The runner allocates one and exports `PHOTOSPHERE_TEST_TMP_ROOT` and `TEST_TMP_DIR` pointing at it, so the test, the app it launches and every `psi` process it starts all write inside it. In a mobile or desktop test the path is in `TMP_DIR`, set by `lib/common.sh`; do not set it yourself. A test run straight from the command line, outside its runner, allocates its own the same way.
+
+The allocator is `scripts/lib/allocate-test-temp-dir.sh`, shared by every suite: the CLI suites (plain, encrypted, LAN-share, keychain), the Electron suite and the mobile suite. Its TypeScript counterpart for unit tests is `createTestTempDir(label)` in `packages/node-utils`.
+
+**Nothing removes these directories.** They accumulate, one per test per run. That is deliberate: keeping them is what made several intermittent failures diagnosable, and the deletion code that would clean them up is the same shape as the code that caused the `/tmp/photosphere` incident in the first place. `bun run find-flakey-tests` prints the count at the end of every session, so growth shows up on the session that caused it rather than weeks later as an unexplained slowdown. Remove them yourself when the count gets high.
 
 ## Manual testing
 
