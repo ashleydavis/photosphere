@@ -41,7 +41,9 @@ discover_tests() {
 cleanup_all_devices() {
     local slot
     for slot in "${RUNNER_SLOTS[@]}"; do
-        with_device "$slot" "${PLATFORM}_cleanup"
+        # A device this run can no longer claim is skipped rather than waited on. This runs from the
+        # EXIT trap, so blocking here would leave the run unable to finish at all.
+        with_device "$slot" "${PLATFORM}_cleanup" || true
     done
 }
 
@@ -121,10 +123,33 @@ main() {
 
     log_info "Running on ${#RUNNER_SLOTS[@]} device(s): ${RUNNER_SLOTS[*]}"
 
+    # Install onto every device this run can actually claim. A device another suite is holding is
+    # dropped from the run rather than waited on forever: this loop happens before any test starts,
+    # so one stuck lock used to stall the whole suite while the remaining emulators sat idle. The
+    # drop is reported, never silent, because a run on fewer devices is a smaller run.
     local slot
+    local usable_slots=()
+    local install_status
     for slot in "${RUNNER_SLOTS[@]}"; do
-        with_device "$slot" "${PLATFORM}_install"
+        install_status=0
+        with_device "$slot" "${PLATFORM}_install" || install_status=$?
+        if [ "$install_status" -eq 0 ]; then
+            usable_slots+=("$slot")
+        elif [ "$install_status" -ne "$DEVICE_UNAVAILABLE_STATUS" ]; then
+            log_error "Installing the app on $slot failed (exit $install_status)."
+            exit 1
+        fi
     done
+
+    if [ ${#usable_slots[@]} -eq 0 ]; then
+        log_error "Every device is held by another suite, so this run has nothing to test on."
+        exit 1
+    fi
+
+    if [ ${#usable_slots[@]} -ne ${#RUNNER_SLOTS[@]} ]; then
+        log_error "Running on ${#usable_slots[@]} of ${#RUNNER_SLOTS[@]} device(s): ${usable_slots[*]}. The rest are held by another suite."
+    fi
+    RUNNER_SLOTS=("${usable_slots[@]}")
 
     # Clear the app's data from every device however the run ends, so the databases the tests seed
     # and import into do not pile up until a device runs out of storage. Deregistering here too, so

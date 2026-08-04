@@ -253,6 +253,17 @@ EXCLUSIVE_LOCK_FD=6
 # How long a worker waits for an emulator to come free before giving up on its test.
 DEVICE_CLAIM_TIMEOUT="${PHOTOSPHERE_DEVICE_CLAIM_TIMEOUT:-1800}"
 
+# How long the install and cleanup steps wait for one device before giving it up and moving on.
+# These run over every device in turn before any test starts, so an unbounded wait here stalls the
+# whole suite on a single stuck device. Long enough that a device genuinely mid-test in another
+# suite is waited for, short enough that a leaked lock costs one device rather than the run.
+DEVICE_SETUP_LOCK_TIMEOUT="${PHOTOSPHERE_DEVICE_SETUP_LOCK_TIMEOUT:-120}"
+
+# What with_device returns when it could not claim the device at all, as opposed to the status of a
+# command that ran on it. Chosen outside the range a normal command returns so the two cannot be
+# confused: a failed install must fail the run, an unavailable device must only lose that device.
+DEVICE_UNAVAILABLE_STATUS=75
+
 # The device the calling worker currently holds, and the descriptor holding its lock. Set by
 # acquire_device, cleared by release_device.
 ACQUIRED_DEVICE=""
@@ -347,6 +358,24 @@ device_is_quarantined() {
 #
 # Usage: start_device_health_watch <serial> <marker_file>
 #
+#
+# The polling loop of the health watcher. A named function rather than an inline subshell so it can
+# be started with the runner's lock descriptors closed, in both of the cases below, without the loop
+# being written out twice.
+# Usage: device_health_watch_loop <serial> <marker_file>
+#
+device_health_watch_loop() {
+    local serial="$1"
+    local marker_file="$2"
+    while true; do
+        if ! timeout "$DEVICE_HEALTH_TIMEOUT_SECONDS" adb -s "$serial" shell \
+            "ping -c 1 -W 1 $DEVICE_HEALTH_HOST" >/dev/null 2>&1; then
+            date -Is > "$marker_file"
+        fi
+        sleep "$DEVICE_HEALTH_SAMPLE_SECONDS"
+    done
+}
+
 start_device_health_watch() {
     local serial="$1"
     local marker_file="$2"
@@ -356,15 +385,25 @@ start_device_health_watch() {
         return 0
     fi
 
-    (
-        while true; do
-            if ! timeout "$DEVICE_HEALTH_TIMEOUT_SECONDS" adb -s "$serial" shell \
-                "ping -c 1 -W 1 $DEVICE_HEALTH_HOST" >/dev/null 2>&1; then
-                date -Is > "$marker_file"
-            fi
-            sleep "$DEVICE_HEALTH_SAMPLE_SECONDS"
-        done
-    ) >/dev/null 2>&1 &
+    # Started with the runner's lock descriptors closed, for the watcher AND for the adb and sleep
+    # processes it spawns.
+    #
+    # A background process inherits the parent's open file descriptions, flocks included, and an
+    # flock lives as long as ANY descriptor referring to that description. The watcher used to
+    # inherit the device lock taken by acquire_device, and so did every `sleep` and `adb` it started.
+    # release_device closes the worker's own copy, but an inherited copy in a surviving child keeps
+    # the emulator locked with nothing using it, and nothing ever frees it: the next run blocks on
+    # that lock indefinitely while the device sits idle. run_test_isolated closes the same
+    # descriptors for the test for exactly this reason.
+    #
+    # The device descriptor is only closed when one is held: `{var}>&-` with an empty var is an
+    # ambiguous redirect, which would stop the watcher starting at all. Closing the fixed
+    # exclusive-lock descriptor is safe whether or not it is open.
+    if [ -n "$ACQUIRED_FD" ]; then
+        device_health_watch_loop "$serial" "$marker_file" >/dev/null 2>&1 {ACQUIRED_FD}>&- 6>&- &
+    else
+        device_health_watch_loop "$serial" "$marker_file" >/dev/null 2>&1 6>&- &
+    fi
     echo $!
 }
 
@@ -453,7 +492,21 @@ with_device() {
         return "$status"
     fi
     exec {fd}<>"/tmp/photosphere-android-device-$serial.lock"
-    runner_flock "$fd"
+    # Bounded, because this wait used to have no end. The install and cleanup loops in run.sh call
+    # this for EVERY device in turn, before any test runs, so a single device whose lock is never
+    # released stalls the entire suite rather than costing it that one device. That is not
+    # hypothetical: a suite from another checkout leaked the lock for emulator-5556 through a
+    # background process that inherited the descriptor, and every later run on this machine blocked
+    # on the install loop for as long as that process lived, while two healthy emulators sat idle.
+    #
+    # Giving up returns DEVICE_UNAVAILABLE_STATUS so the caller can drop that device and carry on
+    # with the rest, which is the honest outcome: a device another suite is holding cannot be
+    # installed to or cleaned up anyway.
+    if ! runner_flock -w "$DEVICE_SETUP_LOCK_TIMEOUT" "$fd"; then
+        exec {fd}>&-
+        log_error "$serial is still held by another suite after ${DEVICE_SETUP_LOCK_TIMEOUT}s, so this run cannot use it."
+        return "$DEVICE_UNAVAILABLE_STATUS"
+    fi
     "${PLATFORM}_export_device" "$serial"
     # Closed for the command and its children, so nothing it spawns can outlive it still holding the
     # device locked. See the note in run_worker.
