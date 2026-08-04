@@ -582,7 +582,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
                     )}
 
                     {step === "waiting" && (
-                        <Button variant="plain" onClick={handleCancel}>Cancel</Button>
+                        <Button data-id="receive-database-cancel-button" variant="plain" onClick={handleCancel}>Cancel</Button>
                     )}
 
                     {step === "review" && (

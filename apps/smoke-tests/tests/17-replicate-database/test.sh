@@ -64,6 +64,29 @@ send_command "$APP_PORT" click '{"dataId":"replicate-mode-partial"}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"replicate-start-button"}' || exit 1
 wait_for_log "$TMP_DIR" "Replication completed for"
 
+# --- Replicate a second time. ---
+#
+# A replication tags its task queue with the source database's path and shuts that queue down when it
+# finishes, which cancels the source. The engine pool used to remember a cancelled source for the life
+# of the app, so this second replication was discarded before it ran: no error, no log line, the
+# dialog simply sat there. Anything that queues work under the same source twice hit the same wall,
+# which is why this assertion exists rather than a unique tag hiding it.
+send_command "$APP_PORT" click '{"dataId":"replicate-close-button"}' || exit 1
+
+send_command "$APP_PORT" navigate '{"page":"secrets"}' || exit 1
+send_command "$APP_PORT" navigate '{"page":"databases"}' || exit 1
+wait_for_log "$TMP_DIR" "Databases page loaded"
+
+send_command "$APP_PORT" click '{"dataId":"entity-actions-menu"}' || exit 1
+send_command "$APP_PORT" click '{"dataId":"replicate-database-button"}' || exit 1
+wait_for_log "$TMP_DIR" "Replicate database dialog opened"
+
+send_command "$APP_PORT" type '{"dataId":"replicate-dest-path-input","text":"dest-second"}' || exit 1
+send_command "$APP_PORT" click '{"dataId":"replicate-mode-partial"}' || exit 1
+send_command "$APP_PORT" click '{"dataId":"replicate-start-button"}' || exit 1
+wait_for_log "$TMP_DIR" "Replication completed for"
+log_success "A second replication of the same database ran, rather than being silently dropped"
+
 check_no_errors "$TMP_DIR"
 
 log_success "Test 17 passed: replicate-database"

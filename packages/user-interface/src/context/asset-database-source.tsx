@@ -386,12 +386,16 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
     // "exists" means the same thing everywhere: checkDatabaseExists reports a directory that holds no
     // database as absent.
     //
-    // The queue is tagged with a unique throwaway source, never dbPath: shutdown() cancels the source and
-    // the mobile engine pool remembers a cancelled source permanently, so reusing dbPath here would drop
-    // every later task for the database (load-assets and the dialogs all run under source == dbPath).
+    // The source is namespaced per database rather than being dbPath itself. This queue shuts down as
+    // soon as it has its answer, and shutdown() cancels its whole source, so tagging it dbPath would
+    // cancel every other task running against that database: openDatabase calls this first, which is
+    // enough to kill a replication of the same database that is already under way. dbPath is shared by
+    // load-assets, create-database, move-assets, import, verify and check, so nothing that cancels on
+    // completion may use it. The tag is stable rather than a generated id: a second check of the same
+    // database reuses it, which is what the mobile pool's re-arm on addTask makes safe.
     //
     async function checkDatabaseExists(dbPath: string): Promise<boolean> {
-        const queue = new TaskQueue(uuidGenerator, `check-database-exists-${uuidGenerator.generate()}`);
+        const queue = new TaskQueue(uuidGenerator, `check-database-exists-${dbPath}`);
         try {
             const taskId = queue.addTask("check-database-exists", { databasePath: dbPath });
             const result = await queue.awaitTask(taskId);

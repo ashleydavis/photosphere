@@ -7,6 +7,22 @@ test("cancel stops the sender", () => {
     sender.cancel();
 });
 
+test("cancel ends a wait in progress instead of leaving it to time out", async () => {
+    const sender = new LanShareSender({ data: "test" });
+
+    // The timeout is far longer than this test is allowed to take, so the wait can only finish
+    // because cancel() ended it. Closing the discovery socket alone used to leave this promise
+    // pending for the full timeout, which is what made Ctrl+C on a waiting sender look dead.
+    const waiting = sender.waitForReceiver(60000);
+    const startedAt = Date.now();
+
+    sender.cancel();
+
+    const result = await waiting;
+    expect(result).toBeNull();
+    expect(Date.now() - startedAt).toBeLessThan(5000);
+}, 10000);
+
 test("pairingCode is a 4-digit string when not supplied", () => {
     const sender = new LanShareSender({ data: "test" });
     expect(sender.pairingCode).toMatch(/^\d{4}$/);

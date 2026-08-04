@@ -188,8 +188,7 @@ public final class EnginePool {
     }
 
     //
-    // Enqueues a task and immediately tries to dispatch it to an idle engine. If the task's
-    // source has already been cancelled it is dropped without running. Called from the
+    // Enqueues a task and immediately tries to dispatch it to an idle engine. Called from the
     // plugin's addTask. Thread-safe.
     //
     public void addTask(PooledTask task) {
@@ -198,10 +197,21 @@ public final class EnginePool {
                 return;
             }
 
-            // Drop tasks whose source was already cancelled before they were even added.
-            if (cancelledSources.contains(task.source)) {
-                return;
-            }
+            // Re-arm the source. Cancelling a source cancels the work in flight at that moment and
+            // nothing more; it must not disable the source for future work. A task arriving here is a
+            // fresh, deliberate request from the WebView, not a straggler of the cancelled batch, so
+            // it clears the cancellation rather than being dropped by it.
+            //
+            // queueChildTask deliberately does NOT do this, and the asymmetry is the point: children
+            // are spawned from inside a running handler, so a batch being cancelled right now can
+            // still be producing them and they must still be dropped. Clearing in both places would
+            // break cancellation outright.
+            //
+            // Without this, cancelling a source poisoned it for the life of the app: every later task
+            // under that name was discarded before dispatch, with nothing rejected and nothing logged.
+            // A second replication of the same database, or a second browse of an S3 bucket, simply
+            // did nothing.
+            cancelledSources.remove(task.source);
 
             cancellationState.register(task.taskId, false);
             pendingQueue.addLast(task);
@@ -222,6 +232,9 @@ public final class EnginePool {
                 return;
             }
 
+            // Kept, unlike addTask, which clears the source instead. A child comes from a handler that
+            // is already running, so a batch being cancelled right now can still be producing children
+            // and they must be dropped. This check is the reason the set exists.
             if (cancelledSources.contains(child.source)) {
                 return;
             }

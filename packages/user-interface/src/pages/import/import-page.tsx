@@ -202,14 +202,18 @@ export function ImportPage() {
     }, [importItems.length]);
 
     //
-    // Run tool check on mount (when a database is loaded).
+    // Run tool check on mount (when a database is loaded), and again whenever the page returns to
+    // idle. Status lives in the context above this page and survives navigation, so after one import
+    // it is 'completed' or 'cancelled' rather than 'idle'. Depending on databasePath alone meant a
+    // revisit ran the effect once, failed the guard, and left toolsStatus undefined, which switches
+    // allowDragAndDrop off and makes every subsequent drop vanish without a word.
     //
     useEffect(() => {
         if (databasePath && status === 'idle') {
             runToolCheck();
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [databasePath]);
+    }, [databasePath, status]);
 
     //
     // Runs the tool check and updates toolsStatus.
@@ -302,6 +306,7 @@ export function ImportPage() {
                         <CircularProgress size="sm" />
                         <Typography level="title-md" sx={{ flexGrow: 1 }}>Importing…</Typography>
                         <Button
+                            data-id="import-cancel-button"
                             variant="soft"
                             color="danger"
                             size="sm"
@@ -481,6 +486,7 @@ export function ImportPage() {
                                 }}
                             >
                                 <Button
+                                    data-id="import-clear-button"
                                     variant="soft"
                                     color="neutral"
                                     size={isMobile ? "lg" : "md"}

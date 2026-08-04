@@ -193,7 +193,7 @@ export function ShareSecretDialog({ open, entry, onClose }: IShareSecretDialogPr
                 )}
 
                 {step === "showing-code" && (
-                    <Button variant="plain" onClick={handleCancel}>Cancel</Button>
+                    <Button data-id="share-secret-cancel-button" variant="plain" onClick={handleCancel}>Cancel</Button>
                 )}
 
                 {(step === "success" || step === "error") && (

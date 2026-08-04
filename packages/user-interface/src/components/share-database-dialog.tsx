@@ -315,7 +315,7 @@ export function ShareDatabaseDialog({ open, entry, onClose }: IShareDatabaseDial
                 )}
 
                 {step === "showing-code" && (
-                    <Button variant="plain" onClick={handleCancel}>Cancel</Button>
+                    <Button data-id="share-database-cancel-button" variant="plain" onClick={handleCancel}>Cancel</Button>
                 )}
 
                 {(step === "success" || step === "error") && (

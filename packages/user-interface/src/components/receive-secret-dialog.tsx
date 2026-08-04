@@ -236,7 +236,7 @@ export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps
                     )}
 
                     {step === "waiting" && (
-                        <Button variant="plain" onClick={handleCancel}>Cancel</Button>
+                        <Button data-id="receive-secret-cancel-button" variant="plain" onClick={handleCancel}>Cancel</Button>
                     )}
 
                     {step === "review" && (

@@ -37,6 +37,10 @@ export class LanShareSender {
     // Whether the sender has been cancelled.
     private isCancelled: boolean;
 
+    // Abandons the wait in waitForReceiver, set while that wait is in progress and cleared when it
+    // ends. Held so cancel() can finish the wait rather than leave the caller sitting on it.
+    private abandonWaitForReceiver: (() => void) | null;
+
     // The 4-digit pairing code displayed to the user.
     pairingCode: string;
 
@@ -54,6 +58,7 @@ export class LanShareSender {
         this.udpSocket = null;
         this.isCancelled = false;
         this.sawMismatchedReceiver = false;
+        this.abandonWaitForReceiver = null;
     }
 
     //
@@ -82,8 +87,19 @@ export class LanShareSender {
 
             const timeoutTimer = setTimeout(() => {
                 this.cleanupUdp();
+                this.abandonWaitForReceiver = null;
                 resolve(null);
             }, timeoutMs);
+
+            // Lets cancel() end this wait immediately, with the same "no receiver" result a timeout
+            // gives. Closing the discovery socket is not enough on its own: the promise stays pending
+            // and the caller keeps waiting out the full timeout, so Ctrl+C on `psi dbs send` looked
+            // like it did nothing for up to a minute.
+            this.abandonWaitForReceiver = () => {
+                clearTimeout(timeoutTimer);
+                this.abandonWaitForReceiver = null;
+                resolve(null);
+            };
 
             this.udpSocket.on("message", (message, remoteInfo) => {
                 if (this.isCancelled) {
@@ -124,6 +140,7 @@ export class LanShareSender {
 
                 clearTimeout(timeoutTimer);
                 this.cleanupUdp();
+                this.abandonWaitForReceiver = null;
 
                 resolve({
                     address: remoteInfo.address,
@@ -225,11 +242,18 @@ export class LanShareSender {
     }
 
     //
-    // Cancels the sender, cleaning up the UDP discovery socket.
+    // Cancels the sender, cleaning up the UDP discovery socket and ending any wait in progress.
+    // The receiver's cancel() finishes its pending wait the same way; without that here, Ctrl+C on a
+    // waiting sender closed the socket but left the command sitting on its promise until the full
+    // discovery timeout ran out.
     //
     cancel(): void {
         this.isCancelled = true;
         this.cleanupUdp();
+
+        if (this.abandonWaitForReceiver) {
+            this.abandonWaitForReceiver();
+        }
     }
 
     //
