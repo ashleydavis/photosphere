@@ -28,7 +28,6 @@ IMAGES_DIR="$REPO_DIR/test/multiple-files"
 
 print_test_header 26 "s3-database-lifecycle"
 
-TMP_DIR="$TEST_DIR/tmp"
 S3_STATE_DIR="$TMP_DIR/s3"
 SECRET_NAME="smoke-test-s3"
 DB_NAME="s3-lifecycle"

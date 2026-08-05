@@ -22,7 +22,6 @@ source "$TEST_DIR/../../lib/common.sh"
 
 print_test_header 43 "s3-failure"
 
-TMP_DIR="$TEST_DIR/$TEST_TMP_NAME"
 S3_STATE_DIR="$TMP_DIR/s3"
 SECRET_NAME="smoke-test-s3"
 DB_NAME="s3-unreachable"

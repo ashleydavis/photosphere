@@ -23,7 +23,6 @@ IMAGES_DIR="$REPO_DIR/test/multiple-files"
 
 print_test_header 27 "s3-replicate"
 
-TMP_DIR="$TEST_DIR/tmp"
 S3_STATE_DIR="$TMP_DIR/s3"
 SECRET_NAME="smoke-test-s3"
 SOURCE_DB="$TMP_DIR/source-db"

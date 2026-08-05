@@ -21,7 +21,6 @@ IMAGES_DIR="$REPO_DIR/test/multiple-files"
 
 print_test_header 28 "s3-failure"
 
-TMP_DIR="$TEST_DIR/tmp"
 S3_STATE_DIR="$TMP_DIR/s3"
 SECRET_NAME="smoke-test-s3"
 DB_NAME="s3-failure"

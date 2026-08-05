@@ -15,7 +15,6 @@ TEST_DIR="$(cd "$(dirname "$0")" && native_pwd)"
 DESKTOP_DIR="$(cd "$TEST_DIR/../.." && native_pwd)"
 print_test_header 29 "share-database-cancel"
 
-TMP_DIR="$TEST_DIR/tmp"
 
 cleanup() {
     if [ -f "$TMP_DIR/sender/app.pid" ]; then
