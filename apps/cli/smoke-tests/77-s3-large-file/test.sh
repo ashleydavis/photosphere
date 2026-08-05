@@ -66,7 +66,9 @@ test_s3_large_file() {
 
     local fixture="$TEST_DIR/large-video.mp4"
     log_info "Generating a ${FIXTURE_SECONDS}s noise video (this is the >100 MB fixture)..."
-    if ! ffmpeg -y -f lavfi -i "color=c=black:s=1280x720:r=30:d=$FIXTURE_SECONDS,noise=alls=100:allf=t+u" \
+    # -nostdin is ffmpeg's non-interactive flag: without it ffmpeg reads the terminal for keyboard
+    # commands, which freezes it here. See the same call in 74-s3-failures for the detail.
+    if ! ffmpeg -nostdin -y -f lavfi -i "color=c=black:s=1280x720:r=30:d=$FIXTURE_SECONDS,noise=alls=100:allf=t+u" \
         -c:v libx264 -preset ultrafast -qp 0 -pix_fmt yuv420p "$fixture" >/dev/null 2>&1; then
         log_error "ffmpeg could not generate the large test video"
         exit 1

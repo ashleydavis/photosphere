@@ -42,6 +42,22 @@ async function multiline({ message }) {
     return 'test-pem';
 }
 
+// The animated spinner. A jest.fn so a test can assert whether it was reached at all: the CLI's own
+// spinner() only creates one for an interactive run, because the animated one takes hold of the
+// terminal (see apps/cli/src/lib/spinner.ts).
+const spinner = jest.fn(() => ({
+    start() {
+        return;
+    },
+    stop() {
+        return;
+    },
+    message() {
+        return;
+    },
+    isCancelled: false,
+}));
+
 module.exports = {
     confirm,
     isCancel,
@@ -50,7 +66,8 @@ module.exports = {
     intro,
     note,
     text,
-    multiline
+    multiline,
+    spinner
 };
 
 module.exports.default = module.exports;

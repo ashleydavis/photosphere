@@ -4,7 +4,8 @@ import pc from 'picocolors';
 import { getVault, getDefaultVaultType, IVault } from 'vault';
 import { log } from 'utils';
 import { getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry, findDatabase } from 'node-api';
-import { confirm, intro, outro, text, select, isCancel, spinner, note } from '../lib/clack/prompts';
+import { confirm, intro, outro, text, select, isCancel, note } from '../lib/clack/prompts';
+import { spinner } from '../lib/spinner';
 import { exit } from 'node-utils';
 import { generateKeyPair } from 'storage';
 import type { IDatabaseEntry } from 'node-api';
@@ -1151,7 +1152,7 @@ export async function dbsSend(cmdOptions: IDbsSendOptions): Promise<void> {
     log.info(pc.dim('  Enter this code on the other device, then wait.'));
     log.info('');
 
-    const spin = spinner();
+    const spin = spinner(!skipPrompts);
     spin.start('Waiting for other device on local network... (Ctrl+C to cancel)');
 
     const sigintHandler = () => {
@@ -1291,7 +1292,7 @@ async function dbsReceive(cmdOptions: { yes?: boolean; code?: string }): Promise
     const receiver = new LanShareReceiver(60000);
     await receiver.start(code);
 
-    const spin = spinner();
+    const spin = spinner(!skipPrompts);
     spin.start('Waiting for sender on the local network... (Ctrl+C to cancel)');
 
     const sigintHandler = () => {

@@ -2,7 +2,8 @@ import { Command } from 'commander';
 import pc from 'picocolors';
 import { getVault, getDefaultVaultType } from 'vault';
 import { log } from 'utils';
-import { confirm, intro, outro, text, password, select, isCancel, spinner, note, multiline } from '../lib/clack/prompts';
+import { confirm, intro, outro, text, password, select, isCancel, note, multiline } from '../lib/clack/prompts';
+import { spinner } from '../lib/spinner';
 import { exit } from 'node-utils';
 import * as fs from 'fs/promises';
 import { existsSync } from 'fs';
@@ -806,7 +807,7 @@ export async function secretsSend(cmdOptions: ISecretsSendOptions): Promise<void
     log.info(pc.dim('  Enter this code on the receiver device, then wait.'));
     log.info('');
 
-    const spin = spinner();
+    const spin = spinner(!cmdOptions.yes);
     spin.start('Waiting for receiver on the local network... (Ctrl+C to cancel)');
 
     const sigintHandler = () => {
@@ -894,7 +895,7 @@ async function secretsReceive(cmdOptions: { yes?: boolean; code?: string }): Pro
     const receiver = new LanShareReceiver(60000);
     await receiver.start(code);
 
-    const spin = spinner();
+    const spin = spinner(!skipPrompts);
     spin.start('Waiting for sender on the local network... (Ctrl+C to cancel)');
 
     const sigintHandler = () => {

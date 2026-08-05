@@ -181,6 +181,16 @@ These runs are long, so they are excluded from `bun run test:all`.
 
 See [the stories README](../../packages/user-interface/src/stories/README.md) for the full reference: entry points on each platform, all runner options, how the cycle works, and how to add a new story.
 
+## No test may touch the terminal
+
+Every command a test runs must be given its non-interactive flag: `--yes` for `psi`, `-nostdin` for `ffmpeg`. A test has no user at a keyboard, and a command that reaches for the terminal anyway does not merely misbehave, it stops dead.
+
+The reason is process groups. Each CLI smoke test runs under `timeout`, which puts the test in a process group of its own, and that group is not the terminal's foreground group. Reading the terminal from there, or switching it into raw mode, makes the kernel stop the process, and nothing ever resumes it. The test then sits there producing no output until the suite's 300 second timeout kills it.
+
+This only happens when a terminal is attached, so the git hook, CI and any piped run never see it and the same tests pass there. That asymmetry is what made it look like flakiness: four tests (`74-s3-failures` and `77-s3-large-file` calling `ffmpeg`, `78-dbs-share-cancel` and `79-secrets-share-cancel` running a spinning `psi dbs send`) timed out together on an interactive run and passed on every unattended one.
+
+On the `psi` side `--yes` now carries this meaning. `spinner(interactive)` in `apps/cli/src/lib/spinner.ts` hands back the animated spinner when someone is watching and plain log lines when nobody is, so a non-interactive run says the same things without the terminal ever being taken hold of. A command run without `--yes` behaves exactly as it always did.
+
 ## Every test gets its own directory
 
 Every test, not every suite, owns a uniquely named directory for its fixtures, logs and scratch space, and gets one without asking. Tests used to share directories and interfere with each other: one suite deleted `/tmp/photosphere` while another was writing its log header there, and two concurrent mobile runs wiped each other's live bridge logs out of `tests/<name>/tmp`.

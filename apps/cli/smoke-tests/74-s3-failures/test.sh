@@ -5,12 +5,13 @@ DESCRIPTION="An unreachable or wrong S3 target fails loudly"
 # an empty-but-successful result. An empty database and an unreachable database look identical to a
 # user, so a silent success here is how a backup ends up believed-good and empty.
 #
-# The third assertion is the one that matters most, and it currently FAILS. The emulator is stopped
-# while an import of a directory is in flight, so the write path loses its server mid-operation.
-# `psi add` then exits 0. Its output does say "Files failed: 5" and prints a warning, so the failure
-# is not invisible to a person reading the terminal, but the exit code a script or a scheduled backup
-# checks says the import succeeded when not one file was written. That is left failing and reported
-# rather than worked around.
+# The third assertion is the one that matters most: the emulator is stopped while an import is in
+# flight, so the write path loses its server mid-operation and `psi add` must exit non-zero. It does,
+# as long as the server goes away during the upload, which is what this test now waits for.
+#
+# The commit that follows the upload is a different path and it is still broken: a batch that cannot
+# be written there is dropped, the uploaded files stay in storage unrecorded, and `psi add` exits 0
+# saying "Added 0 files". See the comment on the wait below. Nothing covers that today.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
@@ -91,7 +92,12 @@ test_s3_failures() {
     # server part way through it lands comfortably inside the import rather than after it.
     local big_fixture="$TEST_DIR/mid-import-video.mp4"
     log_info "Generating a large video so the import takes long enough to interrupt..."
-    if ! ffmpeg -y -f lavfi -i "color=c=black:s=1280x720:r=30:d=3,noise=alls=100:allf=t+u" \
+    # -nostdin is ffmpeg's non-interactive flag: without it ffmpeg reads the terminal for keyboard
+    # commands, and a test cannot do that. Each test runs under `timeout`, which puts it in its own
+    # process group, and a process outside the terminal's foreground group that reads the terminal is
+    # stopped by the kernel and never resumes. Run from a terminal this froze a 0.2s ffmpeg call
+    # until the suite's 300s timeout killed the test.
+    if ! ffmpeg -nostdin -y -f lavfi -i "color=c=black:s=1280x720:r=30:d=3,noise=alls=100:allf=t+u" \
         -c:v libx264 -preset ultrafast -qp 0 -pix_fmt yuv420p "$big_fixture" >/dev/null 2>&1; then
         log_error "ffmpeg could not generate the large test video"
         exit 1
@@ -103,7 +109,38 @@ test_s3_failures() {
 
     NODE_ENV=testing $(get_cli_command) add "$big_fixture" --db "$mid_import_db" --yes > "$import_log" 2>&1 &
     local import_pid=$!
-    sleep 2
+
+    # Wait for the upload to be in flight rather than sleeping a fixed two seconds. The sleep raced
+    # the upload and lost about half the time on this machine: 145 MB went up in under two seconds, so
+    # the server was taken away during the database commit that follows the upload instead of during
+    # the upload itself. Those are different code paths and only the upload one fails loudly, so the
+    # verdict came down to how fast the machine could push the fixture into a local server.
+    #
+    # The fixture is larger than one upload part, so the emulator holds a directory under
+    # .minio.sys/multipart for exactly as long as the upload runs: it appears when the first part
+    # arrives and is gone once the upload finishes. Waiting for it puts the stop inside the upload
+    # every time.
+    #
+    # Losing the endpoint during the commit is NOT covered by this test any more, and it is a real
+    # failure: the batch is dropped, the files stay in storage unrecorded, and `psi add` exits 0
+    # reporting "Added 0 files". Same silent success this test exists to catch, on the other side of
+    # the upload.
+    local multipart_dir="$MID_IMPORT_STATE_DIR/data/.minio.sys/multipart"
+    local upload_started=false
+    local attempt
+    for attempt in $(seq 1 600); do
+        if [ -n "$(ls -A "$multipart_dir" 2>/dev/null)" ]; then
+            upload_started=true
+            break
+        fi
+        sleep 0.1
+    done
+
+    if [ "$upload_started" != "true" ]; then
+        log_error "The import never began uploading, so the server could not be taken away mid-upload"
+        exit 1
+    fi
+
     stop_s3_emulator "$MID_IMPORT_STATE_DIR"
 
     wait "$import_pid"
