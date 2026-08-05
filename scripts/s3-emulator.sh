@@ -58,6 +58,28 @@ PORT_RANGE_START=20000
 PORT_RANGE_SIZE=12768
 PORT_ATTEMPTS=50
 
+# Where a chosen port is recorded so no other emulator picks it.
+#
+# A fixed machine-wide path, not a per-test one: several suites, and several worktrees, start
+# emulators at the same moment, and a reservation only prevents a collision if every starter can see
+# it. One directory per port, created with mkdir, which the OS makes atomic: of several starts
+# racing for the same number exactly one succeeds and the rest move on to another port.
+#
+# Without this two emulators bound the same port and stayed there. MinIO probes the port before
+# binding, but the probe is not the bind, and it sets SO_REUSEPORT, so two servers starting close
+# enough together both succeed. The kernel then split connections between them and requests landed
+# on whichever server it chose, giving "The specified bucket does not exist" against a bucket that
+# had just been created.
+PORT_RESERVATION_DIR="${PHOTOSPHERE_S3_PORT_DIR:-/tmp/photosphere-s3-emulator-ports}"
+
+# How old a reservation must be before it is treated as abandoned. A run killed between reserving a
+# port and releasing it leaves its directory behind, and nothing else would ever remove it.
+#
+# This is spelled as `find -mtime` takes it, because that is the only thing it is ever passed to and
+# converting a friendlier unit here would only invite getting the conversion wrong. `+0` means "last
+# changed more than a full day ago", which no live run can be: nothing here runs for a day.
+RESERVATION_STALE_MTIME="+0"
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # Git-ignored cache for the downloaded binary, shared by every test and every worktree run.
@@ -130,8 +152,33 @@ ensure_minio_binary() {
 }
 
 #
-# Prints a port nothing is listening on, by picking a random one and trying to connect to it with
-# bash's /dev/tcp. A refused connection means the port is free.
+# Reclaims reservations left behind by a run that was killed before it could release its port.
+# Anything older than RESERVATION_STALE_MTIME cannot belong to a live run, because no run lasts a
+# day. Without this the reservation directory would only ever grow, and the range would fill.
+#
+# The directories are always empty, so `rmdir` is used rather than a recursive delete: it refuses to
+# touch anything that unexpectedly has content in it.
+#
+collect_stale_reservations() {
+    find "$PORT_RESERVATION_DIR" -mindepth 1 -maxdepth 1 -type d -mtime "$RESERVATION_STALE_MTIME" \
+        -exec rmdir {} + 2>/dev/null || true
+    return 0
+}
+
+#
+# Prints a port that nothing is listening on AND that no other emulator has claimed, having claimed
+# it for this caller. Release it with release_port_reservation once the server it is for has gone.
+#
+# Two checks, because they catch different things. `mkdir` of the port's reservation directory is
+# atomic, so of several emulators racing for the same number exactly one wins and the losers pick
+# again; that is what stops two of our own servers landing on one port. The /dev/tcp connect then
+# catches a port that something outside the tests is already using, which no reservation would know
+# about.
+#
+# Reserving is not merely a nicety here: MinIO checks the port before binding it but sets
+# SO_REUSEPORT when it does bind, so two servers starting close together both succeed and the kernel
+# splits connections between them. Checking the port alone cannot prevent that, because the answer
+# goes stale in the seconds MinIO takes to start.
 #
 # Never a hardcoded number: several smoke suites run at once out of one checkout, and a fixed port
 # would make two of them fight over the same server.
@@ -139,14 +186,21 @@ ensure_minio_binary() {
 # The range stops below 32768, where Linux starts handing out ephemeral ports, so a port picked here
 # cannot also be handed to an unrelated process as the local end of an outgoing connection.
 #
-find_free_port() {
+reserve_free_port() {
     local port attempt
+    mkdir -p "$PORT_RESERVATION_DIR"
+    collect_stale_reservations
     attempt=1
     while [ "$attempt" -le "$PORT_ATTEMPTS" ]; do
         port=$(( PORT_RANGE_START + RANDOM % PORT_RANGE_SIZE ))
-        if ! (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null; then
-            echo "$port"
-            return 0
+        if mkdir "$PORT_RESERVATION_DIR/$port" 2>/dev/null; then
+            if ! (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null; then
+                echo "$port"
+                return 0
+            fi
+            # Claimed by us but occupied by something else, so hand the claim straight back rather
+            # than sitting on a number this emulator will never use.
+            release_port_reservation "$port"
         fi
         attempt=$((attempt + 1))
     done
@@ -155,14 +209,45 @@ find_free_port() {
 }
 
 #
+# Gives a reserved port back so a later emulator can use it. Always succeeds, including when the
+# port was never reserved, so it is safe on every failure path.
+# Usage: release_port_reservation <port>
+#
+release_port_reservation() {
+    local port="$1"
+
+    if [ -z "$port" ]; then
+        return 0
+    fi
+    rmdir "$PORT_RESERVATION_DIR/$port" 2>/dev/null || true
+    return 0
+}
+
+#
 # Polls the MinIO health endpoint until the server answers or the timeout expires.
-# Usage: wait_for_health <port> <log_file>
+#
+# The server's own pid is watched as well as the port, because the port answering is not proof that
+# OUR server answered: a MinIO that fails to bind exits immediately, and if anything else is on that
+# port the health check would pass against a stranger's server and this emulator would go on to seed
+# and hand out someone else's. Giving up as soon as the process is gone also turns a dead server
+# into an immediate retry instead of a full HEALTH_TIMEOUT_SECONDS wait.
+#
+# Usage: wait_for_health <port> <log_file> <server_pid>
 #
 wait_for_health() {
     local port="$1"
     local logFile="$2"
+    local serverPid="$3"
     local elapsed=0
     while [ "$elapsed" -lt "$HEALTH_TIMEOUT_SECONDS" ]; do
+        # Our process is checked before the port, not after: once it has exited, a healthy answer
+        # from that port can only have come from somebody else's server, and treating that as
+        # success is the very thing this is here to prevent.
+        if ! kill -0 "$serverPid" 2>/dev/null; then
+            log "MinIO exited before it became healthy on port $port. Server log:"
+            cat "$logFile" >&2 || true
+            return 1
+        fi
         if curl -sf --max-time 2 "http://127.0.0.1:$port/minio/health/live" >/dev/null 2>&1; then
             return 0
         fi
@@ -184,7 +269,7 @@ start_one_server() {
     local minioBinary="$2"
     local port serverPid
 
-    port="$(find_free_port)"
+    port="$(reserve_free_port)"
     rm -f "$stateDir/minio.log"
 
     # `--address` fixes the S3 API port. `--console-address :0` lets the OS place the admin console
@@ -201,9 +286,10 @@ start_one_server() {
     echo "$serverPid" > "$stateDir/minio.pid"
     echo "$port" > "$stateDir/minio.port"
 
-    if ! wait_for_health "$port" "$stateDir/minio.log"; then
+    if ! wait_for_health "$port" "$stateDir/minio.log" "$serverPid"; then
         kill "$serverPid" 2>/dev/null || true
         rm -f "$stateDir/minio.pid" "$stateDir/minio.port"
+        release_port_reservation "$port"
         return 1
     fi
 
@@ -282,9 +368,15 @@ ENV
 stop_emulator() {
     local stateDir="$1"
     local pidFile="$stateDir/minio.pid"
-    local serverPid
+    local serverPid port
+
+    # Read the port before the early return below, and give the reservation back on every path out
+    # of here. A state directory that has a port but no pid belongs to a run that died between
+    # reserving and starting, and its port would otherwise stay claimed until the daily sweep.
+    port="$(cat "$stateDir/minio.port" 2>/dev/null || true)"
 
     if [ ! -f "$pidFile" ]; then
+        release_port_reservation "$port"
         return 0
     fi
 
@@ -296,6 +388,7 @@ stop_emulator() {
         log "Stopped MinIO (pid $serverPid)."
     fi
     rm -f "$pidFile" "$stateDir/minio.port"
+    release_port_reservation "$port"
     return 0
 }
 
