@@ -32,6 +32,13 @@
 # itself, with however many devices come back. It gives up only after DEVICE_WAIT_SECONDS of waiting,
 # or after DEVICE_FAILURE_RETRIES runs in a row have gone red with a sick pool.
 #
+# Every run is timed, and before each one the loop prints when that run should end and when the whole
+# streak should. The estimate is the mean of the last few runs rather than of all of them, so it exists
+# from the second run onwards, tightens as the session goes on, and follows a machine that gets slower
+# or faster part way through instead of staying anchored to how the session began. It counts time spent
+# running only: a pause waiting for an emulator pool, or a crash that is retried, pushes the real
+# finish later than the estimate says.
+#
 # Usage:
 #
 #   bun run find-flakey-tests
@@ -48,8 +55,8 @@
 #   bun run find-flakey-tests -- --command "bun run test -- describe-http-error"
 #       Loop any command at all. Use this for anything the options above do not cover.
 #
-#   bun run find-flakey-tests -- --target 100
-#       Require a 100-run streak instead of the default 500.
+#   bun run find-flakey-tests -- --target 500
+#       Require a 500-run streak instead of the default 100.
 #
 #   bun run find-flakey-tests -- --resume 4
 #       Carry on from an earlier session that banked 4 green runs. The next run is numbered 5.
@@ -68,7 +75,7 @@
 #                 Requires --script. Use this once a particular test is known to be the flaky one:
 #                 a single mobile test takes seconds where the whole suite takes minutes.
 #
-#   --target N    consecutive green runs required before the suite is declared clean (default 500).
+#   --target N    consecutive green runs required before the suite is declared clean (default 100).
 #
 #   --resume N    carry on from a session that banked N green runs (default 0): those N count towards
 #                 the target and the next run is numbered N+1, so the numbering and the streak can
@@ -98,7 +105,7 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # Consecutive green runs required before the suite is declared clean.
-TARGET=500
+TARGET=100
 
 # Green runs already banked before this invocation, counted towards the target, with the run
 # numbering carrying on from them. Lets a streak survive an interruption that was not a test failure
@@ -153,12 +160,18 @@ DEVICE_WAIT_SECONDS=3600
 # every run would otherwise keep the loop going forever without ever banking a green.
 DEVICE_FAILURE_RETRIES=5
 
+# How many of the most recent runs the time estimate averages over. Few enough that it follows a
+# machine whose speed changes part way through a session, which is normal here: a background build
+# finishing, an emulator pool being restarted at a different size, the per-test temp tree growing.
+# Many enough that one unusually slow run does not throw the whole estimate.
+ESTIMATE_WINDOW=10
+
 # Prints the usage block at the top of this file, so there is one copy of it rather than two.
 print_usage() {
     # The range ends at the last line of the header comment block, which is the line before
     # `set -uo pipefail`. Update it if the header grows: a stale range silently truncates the
     # help, which is how --target once vanished from it.
-    sed -n '3,97p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    sed -n '3,101p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
 }
 
 while [ "$#" -gt 0 ]; do
@@ -533,6 +546,121 @@ stop_for_sick_pool() {
     exit 4
 }
 
+#
+# Writes a number of seconds as a short duration, the largest two units of it only, because the
+# estimate is never precise enough for the seconds in "2h 14m 09s" to mean anything.
+#
+# Usage: format_duration <seconds>
+#
+format_duration() {
+    local total="$1"
+    local hours=$((total / 3600))
+    local minutes=$(( (total % 3600) / 60 ))
+    local seconds=$((total % 60))
+
+    if [ "$hours" -gt 0 ]; then
+        printf '%dh %02dm' "$hours" "$minutes"
+    elif [ "$minutes" -gt 0 ]; then
+        printf '%dm %02ds' "$minutes" "$seconds"
+    else
+        printf '%ds' "$seconds"
+    fi
+}
+
+#
+# Writes an absolute time, given as seconds since the epoch, in the given date format. GNU date's
+# spelling first, BSD date's second, since this repository is developed on both Linux and macOS.
+#
+# Usage: format_epoch <epoch_seconds> <date_format>
+#
+format_epoch() {
+    local epoch="$1"
+    local format="$2"
+
+    date -d "@$epoch" "+$format" 2>/dev/null || date -r "$epoch" "+$format"
+}
+
+#
+# Writes an absolute time, given as seconds since the epoch, as a clock time. A time on a later day
+# carries the day with it, because a long streak finishing "at 06:15" is ambiguous about which
+# morning is meant and these sessions routinely run overnight.
+#
+# Usage: format_clock_time <epoch_seconds>
+#
+format_clock_time() {
+    local epoch="$1"
+
+    if [ "$(format_epoch "$epoch" '%Y-%m-%d')" = "$(date '+%Y-%m-%d')" ]; then
+        format_epoch "$epoch" '%H:%M:%S'
+    else
+        format_epoch "$epoch" '%a %d %b %H:%M'
+    fi
+}
+
+#
+# Recalculates the expected length of a run from the runs that have already finished, into
+# estimate_seconds and estimate_sample. Both stay at zero while there is nothing to estimate from.
+#
+# Only the last ESTIMATE_WINDOW runs are averaged, so the estimate tracks the machine as it is now
+# rather than as it was at the start of the session.
+#
+# Usage: update_estimate
+#
+update_estimate() {
+    local index total=0 count=0
+
+    index=$(( ${#run_durations[@]} - ESTIMATE_WINDOW ))
+    if [ "$index" -lt 0 ]; then
+        index=0
+    fi
+
+    while [ "$index" -lt "${#run_durations[@]}" ]; do
+        total=$((total + run_durations[index]))
+        count=$((count + 1))
+        index=$((index + 1))
+    done
+
+    if [ "$count" -eq 0 ]; then
+        estimate_seconds=0
+        estimate_sample=0
+        return
+    fi
+
+    estimate_seconds=$(( (total + count / 2) / count ))
+    estimate_sample="$count"
+}
+
+#
+# Prints when the run about to start should end and when the whole streak should, or says there is
+# nothing to estimate from yet.
+#
+# Printed before the run rather than after it, because the run itself puts every line it produces in
+# its log file: from the terminal, a run in progress is a single header line and a long silence, and
+# the only useful thing to say during that silence is when it will be over.
+#
+# The numbers count time spent running. A pause waiting for a sick emulator pool, or a crashed run
+# that is retried, puts the real finish later than this.
+#
+# Usage: print_estimate
+#
+print_estimate() {
+    local now remaining run_end streak_seconds streak_end
+
+    if [ "$estimate_sample" -eq 0 ]; then
+        echo "  no estimate yet, the first run makes one."
+        return
+    fi
+
+    now="$(date +%s)"
+    remaining=$((TARGET - greens))
+    run_end=$((now + estimate_seconds))
+    streak_seconds=$((estimate_seconds * remaining))
+    streak_end=$((now + streak_seconds))
+
+    echo "  $(format_duration "$estimate_seconds") a run over the last $estimate_sample: this run ends about $(format_clock_time "$run_end")"
+    echo "  $remaining run(s) left, all green about $(format_clock_time "$streak_end"), $(format_duration "$streak_seconds") from now"
+}
+
 # Whether the command being looped actually drives Android devices, which decides whether the pool is
 # watched at all. Only the Android smoke suite talks to adb, and only `test:and` and the whole set
 # include it. Every other choice (unit tests, the CLI suite, the Electron suite, the iOS suite)
@@ -602,6 +730,16 @@ consecutive_device_failures=0
 # the crashes: a run that was not counted is still a run that has to be visible.
 device_failure_runs=()
 
+# How long each green run took, in seconds, oldest first. Only green runs, because a run that crashed
+# or died on a sick pool was cut short or dragged out by something that is not the suite, and letting
+# either into the average would make every estimate after it wrong.
+run_durations=()
+
+# The expected length of a run in seconds, and how many runs that expectation is drawn from. Zero
+# until the first run finishes, which is the only time the loop has nothing to estimate from.
+estimate_seconds=0
+estimate_sample=0
+
 session_start="$(date +%s)"
 
 while [ "$greens" -lt "$TARGET" ]; do
@@ -624,6 +762,7 @@ while [ "$greens" -lt "$TARGET" ]; do
     run_start="$(date +%s)"
 
     echo "===== run $run_number (green $greens of $TARGET) ====="
+    print_estimate
     mise exec -- bash -c "$COMMAND" > "$run_log" 2>&1
     run_status=$?
     run_duration="$(( $(date +%s) - run_start ))"
@@ -632,7 +771,9 @@ while [ "$greens" -lt "$TARGET" ]; do
         greens=$((greens + 1))
         consecutive_crashes=0
         consecutive_device_failures=0
-        echo "  PASS in ${run_duration}s (green $greens of $TARGET)"
+        run_durations+=("$run_duration")
+        update_estimate
+        echo "  PASS in $(format_duration "$run_duration") (green $greens of $TARGET)"
         run_number=$((run_number + 1))
         continue
     fi
@@ -728,7 +869,7 @@ session_duration="$(( $(date +%s) - session_start ))"
 
 echo
 echo "find-flakey-tests: $TARGET consecutive green runs, no failures."
-echo "Runs $first_run_number to $((run_number - 1)), total ${session_duration}s."
+echo "Runs $first_run_number to $((run_number - 1)), total $(format_duration "$session_duration"), $(format_duration "$estimate_seconds") a run at the end."
 if [ "${#crash_runs[@]}" -gt 0 ]; then
     echo
     echo "Bun crashes seen and retried (not counted as failures):"

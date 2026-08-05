@@ -99,11 +99,13 @@ The assertion helpers the tests call (`wait_for_value`, `assert_value`, and the 
 A suite that passes once has told you very little. A mode that fails one run in two hundred passes every normal check and still breaks a build later. `find-flakey-tests` drives the full suite in a loop and only calls it clean after a long unbroken streak of green runs:
 
 ```bash
-bun run find-flakey-tests                    # until 500 consecutive green runs
-bun run find-flakey-tests -- --target 100    # a shorter streak
+bun run find-flakey-tests                    # until 100 consecutive green runs
+bun run find-flakey-tests -- --target 500    # a longer streak
 bun run find-flakey-tests -- --resume 42     # carry on from a session that banked 42 green runs
 bun run find-flakey-tests -- --help
 ```
+
+Before each run it prints when that run should end and when the whole streak should, as a clock time and as a time from now. The estimate is the mean of the last ten runs, so it appears from the second run onwards, tightens as the session goes on, and follows the machine as it speeds up or slows down instead of staying anchored to how the session began. It counts time spent running only, so a pause waiting for an emulator pool, or a crashed run that is retried, puts the real finish later than the estimate says.
 
 It runs `bun run test:everything -- --force` each time. `--force` matters: without it the what-changed gate skips suites that have not changed, so the loop could run hundreds of times without ever exercising the suite that is flaky.
 
