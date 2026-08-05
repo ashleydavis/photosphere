@@ -96,6 +96,7 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 
 ## Code Style
 - **Types**: Use interfaces with PascalCase (`IStorage`) for types, explicit return types
+- **Interface names always start with `I`** (`IStorage`, `IFileLister`, `IConfig`). This applies to every interface without exception, including ones that describe plain data and ones that describe a function. A new interface that does not start with `I` is wrong and must be renamed.
 - **Naming**: camelCase for variables/methods, PascalCase for classes/interfaces
 - **Imports**: Named imports for functions, default imports for modules
 - **Functions**: Named functions for top-level methods, arrow functions for callbacks
