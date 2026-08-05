@@ -5,32 +5,23 @@ import { createTestTempDir, getTestTempRoot } from '../../lib/test-temp-dir';
 import { getProcessTmpDir } from '../../lib/fs';
 
 //
-// Restores the two environment variables that steer the process temp directory, so a test that
-// points them somewhere cannot leak that setting into the tests that follow it.
+// Restores the environment variable that steers the process temp directory, so a test that points
+// it somewhere cannot leak that setting into the tests that follow it.
 //
 describe('test temp directories', () => {
-    let originalTestTmpRoot: string | undefined;
-    let originalTestTmpDir: string | undefined;
+    let originalTmpDir: string | undefined;
 
     beforeEach(() => {
-        originalTestTmpRoot = process.env.PHOTOSPHERE_TEST_TMP_ROOT;
-        originalTestTmpDir = process.env.TEST_TMP_DIR;
-        delete process.env.PHOTOSPHERE_TEST_TMP_ROOT;
-        delete process.env.TEST_TMP_DIR;
+        originalTmpDir = process.env.PHOTOSPHERE_TMP_DIR;
+        delete process.env.PHOTOSPHERE_TMP_DIR;
     });
 
     afterEach(() => {
-        if (originalTestTmpRoot === undefined) {
-            delete process.env.PHOTOSPHERE_TEST_TMP_ROOT;
+        if (originalTmpDir === undefined) {
+            delete process.env.PHOTOSPHERE_TMP_DIR;
         }
         else {
-            process.env.PHOTOSPHERE_TEST_TMP_ROOT = originalTestTmpRoot;
-        }
-        if (originalTestTmpDir === undefined) {
-            delete process.env.TEST_TMP_DIR;
-        }
-        else {
-            process.env.TEST_TMP_DIR = originalTestTmpDir;
+            process.env.PHOTOSPHERE_TMP_DIR = originalTmpDir;
         }
     });
 
@@ -71,27 +62,20 @@ describe('test temp directories', () => {
         expect(testTempRoot).not.toBe(path.join(getProcessTmpDir(), 'photosphere'));
     });
 
-    test('getTestTempRoot follows the process temp dir when a per-test root is set', () => {
-        const perTestRoot = path.join(os.tmpdir(), 'photosphere-root-follow-check');
-        process.env.PHOTOSPHERE_TEST_TMP_ROOT = perTestRoot;
+    test('getTestTempRoot follows the process temp dir when an override is set', () => {
+        const overrideRoot = path.join(os.tmpdir(), 'photosphere-root-follow-check');
+        process.env.PHOTOSPHERE_TMP_DIR = overrideRoot;
 
-        expect(getTestTempRoot()).toBe(path.join(perTestRoot, 'tmp', 'photosphere-tests'));
+        expect(getTestTempRoot()).toBe(path.join(overrideRoot, 'tmp', 'photosphere-tests'));
     });
 
-    test('getProcessTmpDir prefers PHOTOSPHERE_TEST_TMP_ROOT over TEST_TMP_DIR', () => {
-        process.env.PHOTOSPHERE_TEST_TMP_ROOT = path.join(os.tmpdir(), 'per-test-root');
-        process.env.TEST_TMP_DIR = path.join(os.tmpdir(), 'per-suite-dir');
+    test('getProcessTmpDir uses a "tmp" subdirectory of PHOTOSPHERE_TMP_DIR when it is set', () => {
+        process.env.PHOTOSPHERE_TMP_DIR = path.join(os.tmpdir(), 'chosen-dir');
 
-        expect(getProcessTmpDir()).toBe(path.join(os.tmpdir(), 'per-test-root', 'tmp'));
+        expect(getProcessTmpDir()).toBe(path.join(os.tmpdir(), 'chosen-dir', 'tmp'));
     });
 
-    test('getProcessTmpDir uses TEST_TMP_DIR when only that is set', () => {
-        process.env.TEST_TMP_DIR = path.join(os.tmpdir(), 'per-suite-dir');
-
-        expect(getProcessTmpDir()).toBe(path.join(os.tmpdir(), 'per-suite-dir', 'tmp'));
-    });
-
-    test('getProcessTmpDir falls back to the system temp dir when neither is set', () => {
+    test('getProcessTmpDir falls back to the system temp dir when the override is not set', () => {
         expect(getProcessTmpDir()).toBe(os.tmpdir());
     });
 });

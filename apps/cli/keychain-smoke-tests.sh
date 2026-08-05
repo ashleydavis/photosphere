@@ -18,7 +18,7 @@ _KEYCHAIN_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$_KEYCHAIN_SCRIPT_DIR/../../scripts/lib/allocate-test-temp-dir.sh"
 
 # The suite root. It is NOT where a test runs: run_one allocates a uniquely named directory for
-# each test and hands it down as ISOLATED_TEST_TMP_DIR.
+# each test and hands it down as TEST_TMP_DIR.
 TEST_TMP_DIR="${TEST_TMP_DIR:-./test/tmp-keychain}"
 USE_BINARY=false
 
@@ -48,8 +48,8 @@ run_one() {
     local num name log_file
     num="$(test_number "$test_sh")"
     name="$(test_name "$test_sh")"
-    export ISOLATED_TEST_TMP_DIR="$(photosphere_test_temp_dir "$(basename "$(dirname "$test_sh")")")"
-    log_file="$ISOLATED_TEST_TMP_DIR/test-run.log"
+    export TEST_TMP_DIR="$(photosphere_test_temp_dir "$(basename "$(dirname "$test_sh")")")"
+    log_file="$TEST_TMP_DIR/test-run.log"
     printf "${BLUE}RUN ${NC}  %s  %s\n" "$num" "$name"
     if timeout 300 bash "$test_sh" >"$log_file" 2>&1; then
         printf "${GREEN}PASS${NC}  %s  %s\n" "$num" "$name"

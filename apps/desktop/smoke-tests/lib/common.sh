@@ -83,15 +83,15 @@ detect_platform() {
 }
 
 # TMP_DIR is where a test keeps its app log, pid file, config, vault and anything else it writes.
-# smoke-tests.sh allocates it and hands it down in PHOTOSPHERE_TEST_TMP_ROOT; a test run on its own,
+# smoke-tests.sh allocates it and hands it down in PHOTOSPHERE_TMP_DIR; a test run on its own,
 # straight from the command line, allocates its own here so it is isolated either way. Set here
 # rather than in each test.sh so isolation holds by construction and no test can forget to ask
 # for it.
 #
 # Converted to a native path because Electron is a native process: on Windows (Git Bash) the POSIX
 # form mktemp prints is not a path Electron can resolve.
-if [ -n "${PHOTOSPHERE_TEST_TMP_ROOT:-}" ]; then
-    TMP_DIR="$PHOTOSPHERE_TEST_TMP_ROOT"
+if [ -n "${PHOTOSPHERE_TMP_DIR:-}" ]; then
+    TMP_DIR="$PHOTOSPHERE_TMP_DIR"
 else
     TMP_DIR="$(photosphere_test_temp_dir "$(basename "$(dirname "$0")")")"
     photosphere_export_test_temp "$TMP_DIR"

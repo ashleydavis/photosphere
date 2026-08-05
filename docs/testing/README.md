@@ -185,7 +185,10 @@ Every test, not every suite, owns a uniquely named directory for its fixtures, l
 
 Directories live under `/tmp/photosphere-tests/` (or `$TMPDIR` where that is set), named `<test-name>-<random>`, so a stray directory always names the test that made it. That root is deliberately not the CLI's own `/tmp/photosphere`, which `psi hash-cache clear` deletes outright.
 
-A test never asks for its directory. The runner allocates one and exports `PHOTOSPHERE_TEST_TMP_ROOT` and `TEST_TMP_DIR` pointing at it, so the test, the app it launches and every `psi` process it starts all write inside it. In a mobile or desktop test the path is in `TMP_DIR`, set by `lib/common.sh`; do not set it yourself. A test run straight from the command line, outside its runner, allocates its own the same way.
+A test never asks for its directory. The runner allocates one and exports two variables pointing at it, so the test, the app it launches and every `psi` process it starts all write inside it. In a mobile or desktop test the path is in `TMP_DIR`, set by `lib/common.sh`; do not set it yourself. A test run straight from the command line, outside its runner, allocates its own the same way.
+
+- `TEST_TMP_DIR` is the test harness's own variable, naming the directory this test keeps its fixtures, vault, config and scratch space in. The shell suites read it; nothing in the application does.
+- `PHOTOSPHERE_TMP_DIR` is an application setting, not a test one: it tells Photosphere where to put its temporary files, and any user can set it (it is listed on the wiki's Environment Variables page alongside `PHOTOSPHERE_LOG_DIR` and the rest). The runner points it at the test's directory so the app's own scratch files land there too. Without it every `psi` process on the machine shares one location, which is how `psi hash-cache clear` once deleted a directory out from under a suite running alongside.
 
 The allocator is `scripts/lib/allocate-test-temp-dir.sh`, shared by every suite: the CLI suites (plain, encrypted, LAN-share, keychain), the Electron suite and the mobile suite. Its TypeScript counterpart for unit tests is `createTestTempDir(label)` in `packages/node-utils`.
 

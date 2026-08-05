@@ -34,7 +34,7 @@ source "$_ENCRYPTED_SCRIPT_DIR/../../scripts/lib/allocate-test-temp-dir.sh"
 # unexported TEST_TMP_DIR sends every psi process to the shared /tmp/photosphere, which another
 # suite's `hash-cache clear` then deletes underneath it.
 export TEST_TMP_DIR="${TEST_TMP_DIR:-./test/tmp-encrypted}"
-export PHOTOSPHERE_TEST_TMP_ROOT="$TEST_TMP_DIR"
+export PHOTOSPHERE_TMP_DIR="$TEST_TMP_DIR"
 TEST_FILES_DIR="../../test"
 
 # Isolate the vault and config so tests don't pollute the user's real data.

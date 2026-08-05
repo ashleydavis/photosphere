@@ -30,7 +30,7 @@ REPO_DIR="$(cd "$SMOKE_TESTS_DIR/../.." && pwd)"
 source "$REPO_DIR/scripts/lib/allocate-test-temp-dir.sh"
 
 # TMP_DIR is where a test keeps its app log, bridge pid file, fixtures and anything else it writes.
-# The runner allocates it and hands it down in PHOTOSPHERE_TEST_TMP_ROOT; a test run on its own,
+# The runner allocates it and hands it down in PHOTOSPHERE_TMP_DIR; a test run on its own,
 # straight from the command line, allocates its own here so it is isolated either way. Set here
 # rather than in each test.sh so isolation holds by construction and no test can forget to ask
 # for it.
@@ -38,8 +38,8 @@ source "$REPO_DIR/scripts/lib/allocate-test-temp-dir.sh"
 # run.sh sources this file too and needs no directory of its own, so this only fires for a test.sh.
 case "$(basename "$0")" in
     test.sh)
-        if [ -n "${PHOTOSPHERE_TEST_TMP_ROOT:-}" ]; then
-            TMP_DIR="$PHOTOSPHERE_TEST_TMP_ROOT"
+        if [ -n "${PHOTOSPHERE_TMP_DIR:-}" ]; then
+            TMP_DIR="$PHOTOSPHERE_TMP_DIR"
         else
             TMP_DIR="$(photosphere_test_temp_dir "$(basename "$(dirname "$0")")")"
             photosphere_export_test_temp "$TMP_DIR"

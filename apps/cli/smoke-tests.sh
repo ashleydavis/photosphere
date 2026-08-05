@@ -436,8 +436,9 @@ format_duration() {
 }
 
 #
-# Allocates the directory one test runs in and hands it down as ISOLATED_TEST_TMP_DIR, which
-# smoke-tests/lib/common.sh turns into that test's TEST_TMP_DIR and PHOTOSPHERE_TEST_TMP_ROOT.
+# Allocates the directory one test runs in. It is handed down as TEST_TMP_DIR, which
+# smoke-tests/lib/common.sh also points PHOTOSPHERE_TMP_DIR at so the psi processes the test starts
+# write their own temporary files inside it too.
 #
 # The name comes from the allocator rather than from the test's own directory name, so two runs out
 # of one checkout cannot be handed the same path. That is the whole point: the fixed
@@ -456,8 +457,8 @@ run_one() {
     num="$(test_number "$test_sh")"
     name="$(test_name "$test_sh")"
     dir_name="$(basename "$dir")"
-    export ISOLATED_TEST_TMP_DIR="$(allocate_isolated_test_dir "$dir_name")"
-    log_file="$ISOLATED_TEST_TMP_DIR/test-run.log"
+    export TEST_TMP_DIR="$(allocate_isolated_test_dir "$dir_name")"
+    log_file="$TEST_TMP_DIR/test-run.log"
     printf "${BLUE}RUN ${NC}  %2s  %s\n" "$num" "$name"
     local test_start=$SECONDS
     if timeout 300 bash "$test_sh" >"$log_file" 2>&1; then
@@ -526,7 +527,7 @@ run_parallel() {
             printf "${BLUE}RUN ${NC}  %2s  %s\n" "$num" "$name"
             (
                 local_start=$SECONDS
-                ISOLATED_TEST_TMP_DIR="$test_dir" timeout 300 bash "$test_sh" >"$log_file" 2>&1
+                TEST_TMP_DIR="$test_dir" timeout 300 bash "$test_sh" >"$log_file" 2>&1
                 local_exit=$?
 
                 # Retry once, and only when Bun itself crashed rather than a test failing an assertion.
@@ -554,7 +555,7 @@ run_parallel() {
                     # look at and the retry cannot inherit half-written files from it.
                     local retry_dir
                     retry_dir="$(allocate_isolated_test_dir "$dir_name")"
-                    ISOLATED_TEST_TMP_DIR="$retry_dir" timeout 300 bash "$test_sh" >"$log_file" 2>&1
+                    TEST_TMP_DIR="$retry_dir" timeout 300 bash "$test_sh" >"$log_file" 2>&1
                     local_exit=$?
                 fi
 

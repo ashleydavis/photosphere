@@ -14,15 +14,16 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
-# Override TEST_TMP_DIR to run tests in parallel (e.g. TEST_TMP_DIR=./test/tmp-$$ ./smoke-tests.sh)
-# ISOLATED_TEST_TMP_DIR is set per-script by the orchestrator for parallel runs and takes precedence.
-export TEST_TMP_DIR="${ISOLATED_TEST_TMP_DIR:-${TEST_TMP_DIR:-./test/tmp}}"
+# Where this test keeps its fixtures, vault, config and scratch space. The orchestrator allocates a
+# directory per test and passes it in; a test run straight from the command line inherits whatever is
+# set, and falls back to the suite's own directory.
+export TEST_TMP_DIR="${TEST_TMP_DIR:-./test/tmp}"
 
-# The same directory again under the variable getProcessTmpDir() prefers, so the temporary files
+# The same directory again under Photosphere's own temp-directory setting, so the temporary files
 # every psi process this test starts writes (the hash cache and the log directory among them) land
 # inside this test's own directory rather than in a location shared with every other test on the
 # machine.
-export PHOTOSPHERE_TEST_TMP_ROOT="$TEST_TMP_DIR"
+export PHOTOSPHERE_TMP_DIR="$TEST_TMP_DIR"
 
 TEST_DB_DIR="$TEST_TMP_DIR/shared/test-db"
 TEST_FILES_DIR="../../test"

@@ -30,7 +30,7 @@ source "$_LAN_SHARE_SCRIPT_DIR/../../scripts/lib/allocate-test-temp-dir.sh"
 # unexported TEST_TMP_DIR sends every psi process to the shared /tmp/photosphere, which another
 # suite's `hash-cache clear` then deletes underneath it.
 export TEST_TMP_DIR="${TEST_TMP_DIR:-./test/tmp-lan-share}"
-export PHOTOSPHERE_TEST_TMP_ROOT="$TEST_TMP_DIR"
+export PHOTOSPHERE_TMP_DIR="$TEST_TMP_DIR"
 
 # Isolated vault and config dirs for sender and receiver. Rebuilt by use_test_temp_dir for each
 # test, so no two tests, and no two concurrent runs, share them.

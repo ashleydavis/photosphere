@@ -51,16 +51,17 @@ photosphere_test_temp_dir() {
 # Points every child process at the given test's directory, so the CLI and the app write their
 # temporary files inside it rather than into a location shared with every other test.
 #
-# Both variables are exported: PHOTOSPHERE_TEST_TMP_ROOT is what getProcessTmpDir() prefers, and
-# TEST_TMP_DIR is the older per-suite variable that parts of the CLI suites still read. Exporting is
-# the whole point. TEST_TMP_DIR was once set without being exported, so the CLI never saw it, every
-# CLI process on the machine shared /tmp/photosphere, and `hash-cache clear` deleted it out from
-# under a suite running alongside.
+# Both variables are exported. PHOTOSPHERE_TMP_DIR is Photosphere's own setting for where it puts
+# temporary files, which getProcessTmpDir() reads, so pointing it at the test's directory is what
+# keeps the app's scratch files inside it. TEST_TMP_DIR is the shell-side name the CLI suites read
+# for their own fixtures. Exporting is the whole point. TEST_TMP_DIR was once set without being
+# exported, so the CLI never saw it, every CLI process on the machine shared /tmp/photosphere, and
+# `hash-cache clear` deleted it out from under a suite running alongside.
 # Usage: photosphere_export_test_temp <dir>
 #
 photosphere_export_test_temp() {
     local dir="$1"
-    export PHOTOSPHERE_TEST_TMP_ROOT="$dir"
+    export PHOTOSPHERE_TMP_DIR="$dir"
     export TEST_TMP_DIR="$dir"
 }
 
