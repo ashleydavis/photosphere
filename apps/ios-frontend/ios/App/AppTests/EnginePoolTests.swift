@@ -295,9 +295,13 @@ final class EnginePoolTests: XCTestCase {
     }
 
     //
-    // A task enqueued for an already-cancelled source is dropped immediately and never starts.
+    // A task enqueued for a previously-cancelled source re-arms that source and runs. Cancelling a
+    // source cancels only the work in flight at that moment; a later addTask is a fresh, deliberate
+    // request from the WebView and must not be dropped by the earlier cancellation (see the re-arm
+    // in EnginePool.addTask). Without this, cancelling a source once poisoned it for the life of the
+    // app.
     //
-    func testAddTaskForCancelledSourceDropped() {
+    func testAddTaskForCancelledSourceReArmsAndRuns() {
         let delegate = CapturingDelegate()
         let coordinator = StubCoordinator()
         let pool = makePool(size: 2, delegate: delegate, coordinator: coordinator)
@@ -306,7 +310,7 @@ final class EnginePoolTests: XCTestCase {
         pool.addTask(task("t1", source: "db-cancelled"))
         pool.addTask(task("t2", source: "db-live"))
 
-        XCTAssertEqual(coordinator.startedTaskIds(), ["t2"])
+        XCTAssertEqual(coordinator.startedTaskIds(), ["t1", "t2"])
     }
 
     //
