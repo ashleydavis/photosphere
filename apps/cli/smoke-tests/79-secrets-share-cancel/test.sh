@@ -5,7 +5,8 @@ DESCRIPTION="Ctrl+C cancels psi secrets send and psi secrets receive, and both w
 # waits, so both commands are cancellable and neither had anything covering that path.
 #
 # As in 78 the signal has to reach the CLI rather than the `bun run start --` wrapper, which does not
-# forward it, so each command runs in its own process group and the group is signalled.
+# forward it, so each command runs under bash job control (macOS has no setsid) in its own process
+# group and the group is signalled.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
@@ -33,8 +34,17 @@ start_share_command() {
     shift 2
 
     : > "$log_file"
-    setsid "$@" > "$log_file" 2>&1 &
+
+    # macOS has no setsid, so bash job control stands in for it: with monitor mode on, the shell makes
+    # each background job the leader of a new process group whose PGID equals its PID. That group is
+    # what cancel_share_command signals, the way a terminal's Ctrl+C signals a foreground job's whole
+    # group, so the SIGINT reaches the CLI grandchild rather than only the `bun run start --` wrapper,
+    # which does not forward it. Monitor mode is turned off again straight after so nothing else in the
+    # test runs under it.
+    set -m
+    "$@" > "$log_file" 2>&1 &
     local command_pid=$!
+    set +m
 
     SHARE_PGID=$(ps -o pgid= -p "$command_pid" | tr -d ' ')
     if [ -z "$SHARE_PGID" ]; then
