@@ -18,15 +18,20 @@
 # opened by tapping it. That is the same thing registering a database in
 # ~/.config/photosphere/databases.toml does on desktop.
 #
+# Only two things are ever deployed to: a real device plugged in over USB, and the single
+# hand-testing emulator. A plugged-in device wins, because the reason to have one attached is to test
+# on it. Nothing else is a candidate, so a running smoke-test pool, a base AVD kept as a template for
+# cloning, or an emulator somebody started for another job all stay untouched.
+#
 # Usage: apps/android-frontend/scripts/run-android.sh [fixture]
 #   [fixture]                    50 | 1 | 0, or a directory name under test/dbs (e.g. 1-video, v6)
-#   PHOTOSPHERE_ANDROID_TARGET   deploy to a specific target when several are attached
-#   PHOTOSPHERE_ANDROID_AVD      start a specific AVD (default: the only one, when there is one)
+#   PHOTOSPHERE_ANDROID_TARGET   deploy to a specific target, whatever is attached
+#   PHOTOSPHERE_ANDROID_AVD      use a specific AVD as the emulator (default: psphere-single)
 #   PHOTOSPHERE_NO_LAN_BRIDGE=1  start the emulator normally, without the LAN bridge
 #
 # The fixture works the same on an emulator and on a plugged-in physical device: it goes over
 # `adb push` and `run-as`, which need only that the installed build is debuggable, and the debug APK
-# is. On a phone, plug it in with USB debugging authorised and it is chosen like any other target.
+# is. On a phone, plug it in with USB debugging authorised and it is chosen ahead of the emulator.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -55,6 +60,11 @@ CAP_RUN_LOG="/tmp/photosphere-cap-run.log"
 # whether a deploy that reported failure actually installed this build.
 APK_PATH="$APP_ROOT/android/app/build/outputs/apk/debug/app-debug.apk"
 
+# The native-run binary `cap run` shells out to for the deploy, resolved from the root node_modules
+# because the workspace hoists it there. Run directly (rather than only through cap) to ask it what
+# targets it can see, which is what cap validates --target against.
+NATIVE_RUN="$REPO_DIR/node_modules/native-run/bin/native-run"
+
 # The network card the emulator plugs into to reach the host, from the one file that defines it.
 #
 # This used to be a local copy reading "tap-psphere", which the bridge script has never created. The
@@ -63,25 +73,41 @@ APK_PATH="$APP_ROOT/android/app/build/outputs/apk/debug/app-debug.apk"
 source "$SCRIPT_DIR/emulator-config.sh"
 NETCARD_NAME="$NETCARD_PREFIX-0"
 
+# The AVD the emulator half of this script starts and deploys to: the hand-testing one, by name.
+# Naming it is what keeps the pool's clones and the base AVD out of the running, and it is used both
+# to start the emulator and to recognise it once it is attached, so those two can never disagree.
+RUN_AVD="${PHOTOSPHERE_ANDROID_AVD:-$SINGLE_AVD_NAME}"
+
 #
-# Prints the ids of every target adb can actually deploy to. Deliberately ignores "offline" and
-# "unauthorized" entries, which would otherwise be selected and then fail confusingly.
+# Prints the serial of every attached real device. Deliberately ignores "offline" and "unauthorized"
+# entries, which would otherwise be selected and then fail confusingly.
 #
-# Emulators belonging to the smoke-test pool are skipped, because they are not yours to deploy to:
-# a run in progress owns them, and installing over one corrupts that run. The smoke-test harness
-# already applies this rule in the other direction (android_pool_devices in
-# apps/smoke-tests/lib/android.sh leaves a hand-started emulator alone), so without this the rule
-# only held one way: any pool running in the background turned a single unambiguous choice into
-# "more than one target attached" and stopped hand testing dead.
+# A local emulator is always called "emulator-<port>" by adb, so anything else attached is a real
+# device. A device reached over the network (`adb connect`) is called "<host>:<port>" and so counts
+# as a real device here, which is what it is.
 #
-attached_targets() {
+hardware_targets() {
+    "$ADB" devices | awk 'NR>1 && $2=="device" && $1 !~ /^emulator-/ { print $1 }'
+}
+
+#
+# Prints the serial of the attached emulator running RUN_AVD, and nothing when it is not running.
+#
+# Emulators are matched by the AVD they are running rather than by being "the attached emulator", so
+# the smoke-test pool's clones are never deployed to: they are not yours to deploy to, because a run
+# in progress owns them and installing over one corrupts that run. The smoke-test harness applies the
+# same rule in the other direction (android_pool_devices in apps/smoke-tests/lib/android.sh leaves a
+# hand-started emulator alone).
+#
+emulator_target() {
     local serial avd
-    for serial in $("$ADB" devices | awk 'NR>1 && $2=="device" { print $1 }'); do
-        avd="$("$ADB" -s "$serial" emu avd name 2>/dev/null | head -1 | tr -d '\r')"
-        case "$avd" in
-            "$POOL_AVD_PREFIX"-*) ;;
-            *) echo "$serial" ;;
-        esac
+    for serial in $("$ADB" devices | awk 'NR>1 && $2=="device" && $1 ~ /^emulator-/ { print $1 }'); do
+        # Capped, because an emulator that has stopped answering its console would otherwise hang the
+        # whole run here rather than failing it.
+        avd="$(timeout 8 "$ADB" -s "$serial" emu avd name 2>/dev/null | head -1 | tr -d '\r')"
+        if [ "$avd" = "$RUN_AVD" ]; then
+            echo "$serial"
+        fi
     done
 }
 
@@ -98,32 +124,13 @@ start_emulator() {
         exit 1
     fi
 
-    local avd="${PHOTOSPHERE_ANDROID_AVD:-}"
-    if [ -z "$avd" ]; then
-        local avds
-        # The pool's clones are excluded for the same reason attached_targets excludes the emulators
-        # running them: they belong to a smoke-test run, not to hand testing. Without this a cloned
-        # pool turns a single unambiguous choice into "several AVDs exist" and stops hand testing.
-        avds="$("$EMULATOR" -list-avds 2>/dev/null | grep -v '^$' | grep -v "^$POOL_AVD_PREFIX-" || true)"
-
-        # The hand-testing AVD wins outright when it exists, since that is the one emu:and:up runs
-        # and so the one that has the app's state on it.
-        if echo "$avds" | grep -qx "$SINGLE_AVD_NAME"; then
-            avds="$SINGLE_AVD_NAME"
-        fi
-
-        local avd_count
-        avd_count="$(echo "$avds" | grep -c . || true)"
-        if [ "$avd_count" -eq 0 ]; then
-            echo "ERROR: no AVDs exist. Create one in Android Studio's Device Manager." >&2
-            exit 1
-        fi
-        if [ "$avd_count" -gt 1 ]; then
-            echo "ERROR: several AVDs exist. Set PHOTOSPHERE_ANDROID_AVD to one of:" >&2
-            echo "$avds" | sed 's/^/  /' >&2
-            exit 1
-        fi
-        avd="$avds"
+    # Named outright rather than worked out from what exists, so which emulator this deploys to never
+    # depends on which other AVDs happen to be on the machine.
+    local avd="$RUN_AVD"
+    if ! "$EMULATOR" -list-avds 2>/dev/null | grep -qx "$avd"; then
+        echo "ERROR: there is no AVD named '$avd'." >&2
+        echo "Run 'bun run emu:and:up' to create it and start it on the LAN bridge." >&2
+        exit 1
     fi
 
     # Only attach to the bridge when it is actually there. Without this check the emulator fails to
@@ -212,6 +219,23 @@ installed_apk_checksum() {
 }
 
 #
+# Returns 0 when native-run can see the chosen target.
+#
+# This is asked separately from adb because `cap run --target` validates the id against native-run's
+# list rather than against adb, and the two disagree more often than they look like they should:
+# native-run puts a 5 second timeout on every adb call it makes and, when one is exceeded, runs
+# `adb kill-server` and `adb start-server` and retries against devices that are still
+# re-authorizing, so a listing can come back with nothing attached at all. Capacitor then throws
+# native-run's error away (it only reports one when the AVD list is empty as well) and says
+# "Invalid target ID: <serial>. Valid targets are: <every AVD on the machine>", which reads as though
+# the device had never been plugged in.
+#
+native_run_sees_target() {
+    "$NATIVE_RUN" android --list --json 2>/dev/null \
+        | jq -e --arg id "$target" '[.devices[]?.id] | index($id) != null' >/dev/null 2>&1
+}
+
+#
 # Copies the fixture database into the app's private files directory: the sandbox root the native
 # PathSandbox resolves paths against, which is why the app opens it by a plain relative name.
 #
@@ -290,28 +314,36 @@ if [ $# -gt 0 ]; then
     fi
 fi
 
-targets="$(attached_targets)"
-target_count="$(echo "$targets" | grep -c . || true)"
-
-if [ "$target_count" -eq 0 ]; then
-    start_emulator
-    disable_guest_wifi
-    targets="$(attached_targets)"
-    target_count="$(echo "$targets" | grep -c . || true)"
-fi
-
-if [ "$target_count" -eq 0 ]; then
-    echo "ERROR: emulator booted but adb still sees no target." >&2
-    exit 1
-fi
-
 target="${PHOTOSPHERE_ANDROID_TARGET:-}"
 if [ -z "$target" ]; then
+    # A real device first: having one plugged in is what says you want to test on it. Only when there
+    # is none does the emulator come into it, and then only the hand-testing one.
+    targets="$(hardware_targets)"
+    target_count="$(echo "$targets" | grep -c . || true)"
+
     if [ "$target_count" -gt 1 ]; then
-        echo "ERROR: more than one target attached. Set PHOTOSPHERE_ANDROID_TARGET to one of:" >&2
+        echo "ERROR: more than one device attached. Set PHOTOSPHERE_ANDROID_TARGET to one of:" >&2
         echo "$targets" | sed 's/^/  /' >&2
         exit 1
     fi
+
+    if [ "$target_count" -eq 0 ]; then
+        targets="$(emulator_target)"
+        target_count="$(echo "$targets" | grep -c . || true)"
+    fi
+
+    if [ "$target_count" -eq 0 ]; then
+        start_emulator
+        disable_guest_wifi
+        targets="$(emulator_target)"
+        target_count="$(echo "$targets" | grep -c . || true)"
+    fi
+
+    if [ "$target_count" -eq 0 ]; then
+        echo "ERROR: '$RUN_AVD' booted but adb sees no emulator running it." >&2
+        exit 1
+    fi
+
     target="$targets"
 fi
 
@@ -343,6 +375,27 @@ fi
 # 5 second timeout also covers calls made before the install (`adb devices`, `getprop`): matching
 # the error text alone would accept a run that never installed anything and leave you hand-testing
 # whatever build happened to be on the device already.
+if [ ! -x "$NATIVE_RUN" ]; then
+    echo "ERROR: native-run not found at $NATIVE_RUN. Run 'bun install' from the repo root." >&2
+    exit 1
+fi
+
+# Retried, because it is the listing that is unreliable and not the device: adb has the target
+# attached, so a second look a few seconds later almost always has it too. Failing here is worth the
+# wait, because the alternative is cap's "Invalid target ID" naming every AVD on the machine.
+for list_attempt in $(seq 1 5); do
+    if native_run_sees_target; then
+        break
+    fi
+    if [ "$list_attempt" -eq 5 ]; then
+        echo "ERROR: native-run cannot see $target, so 'cap run --target' would reject it." >&2
+        echo "adb has it attached. This is what native-run sees:" >&2
+        "$NATIVE_RUN" android --list >&2 || true
+        exit 1
+    fi
+    sleep 3
+done
+
 cd "$APP_ROOT"
 cap_status=0
 bunx cap run android --target "$target" 2>&1 | tee "$CAP_RUN_LOG" || cap_status=$?
