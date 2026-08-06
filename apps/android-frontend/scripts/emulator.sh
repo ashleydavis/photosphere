@@ -756,11 +756,19 @@ start_emulator_bg() {
     # enough to any ceiling worth setting that a hard kill would be a coin toss. The slice's own
     # MemoryMax is the hard backstop, and it covers the pool rather than one member of it.
     #
-    # 5G is a per-emulator sanity check, not the real limit: it sits within the 4GB to 6.4GB range
-    # measured of a working emulator, so an emulator behaving normally barely notices it and one
-    # running away is slowed down on its own rather than at the expense of the other four. What
-    # bounds a test run is the slice, in psphere-pool.slice. Change that file, not this number, to
-    # give the pool more or less room.
+    # 8G is a per-emulator sanity check, not the real limit: it sits above what a working emulator
+    # asks for, so one behaving normally never feels it and one running away is slowed down on its
+    # own rather than at the expense of the other four. What bounds a test run is the slice, in
+    # psphere-pool.slice.
+    #
+    # It is above real demand, which was measured at 6.0GB to 6.7GB an emulator under a suite run:
+    # 4.19GB to 4.70GB of anonymous memory, which is not page cache and cannot be reclaimed, plus
+    # 1.34GB to 1.99GB in swap. A limit under that figure does not slow a runaway, it throttles every
+    # emulator all the time and pushes the shortfall to swap, which is the slow path that makes an
+    # emulator miss timing.
+    #
+    # It is also what makes the slice's limit reachable: five emulators at 8G can use the 40G the
+    # slice allows, where a lower number here caps the pool below it no matter what the slice says.
     #
     # ${setenv_args[@]+"${setenv_args[@]}"} rather than "${setenv_args[@]}" because this script runs
     # under `set -u`, where expanding an empty array is an unbound-variable error on older bash. The
@@ -795,7 +803,7 @@ start_emulator_bg() {
     systemd-run --user --unit="$unit" \
         --slice="$POOL_SLICE" \
         --description="Photosphere emulator: $avd on $netcard" \
-        -p MemoryHigh=5G \
+        -p MemoryHigh=8G \
         -p MemorySwapMax=2G \
         -p StandardOutput="file:/tmp/psphere-emulator-$log_suffix.log" \
         -p StandardError="file:/tmp/psphere-emulator-$log_suffix.log" \
