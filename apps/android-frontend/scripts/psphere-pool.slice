@@ -34,11 +34,22 @@ Description=Photosphere Android emulator pool
 # from the group, so the emulators page and slow down instead of the whole machine thrashing.
 # MemoryMax is the hard ceiling behind it, and crossing that does kill something in the group.
 #
-# 20G is deliberately BELOW what the pool actually uses (the 29.6GB above). A limit set higher than
-# real usage would only ever catch a runaway, and would have changed nothing about the run that
-# filled the machine: the point here is to make the ordinary case give memory back, not to guard
-# against an imagined one. Raise it if the emulators become unusably slow, but measure the pool's
-# real usage first and keep the limit under it.
+# 40G is ABOVE what the pool uses, which is a deliberate reversal of what these numbers used to say.
+#
+# They used to be 20G and 26G, set below real usage so the ordinary case gave memory back. Measuring
+# five emulators against that showed what it cost: each peaked at 4.3GB to 4.5GB, about 22GB between
+# them, against a 20G soft limit, so the group sat permanently on the limit and each emulator paged
+# roughly 650MB out to swap for the whole of a run. That is reclaim being applied to emulators that
+# were behaving, all the time, rather than to a runaway.
+#
+# 40G leaves the ordinary case alone and keeps MemoryMax as the backstop against the runaway that
+# caused this file to exist. The measurement matters more than the number: if the pool's peak ever
+# approaches 40G, that is a change worth understanding rather than a limit worth raising again.
+#
+# The cost is host headroom. This machine has 62GB, so a 46G hard ceiling leaves about 16GB for
+# everything else, including the build and the test suites that run alongside the emulators. That is
+# closer to the conditions of the original incident than 26G was. If the machine starts thrashing
+# with the pool inside its limits, this is the first number to look at.
 #
 # HOW TO CHECK IT IS IN EFFECT
 #
@@ -49,5 +60,5 @@ Description=Photosphere Android emulator pool
 #       What the group is using right now, live, next to everything else on the machine.
 #
 [Slice]
-MemoryHigh=20G
-MemoryMax=26G
+MemoryHigh=40G
+MemoryMax=46G
