@@ -20,11 +20,9 @@
     "test": "bun --filter '*' test",
     "test:watch": "bun --filter '*' test:watch",
     "test:all": "bun run test && bun run test:cli && bun run test:cli:encrypted && bun run test:cli:lan-share && bun run test:electron",
-    "test:everything": "bun tools/what-changed/src/cli.ts",
-    "everything:plan": "bun tools/what-changed/src/cli.ts --plan",
-    "what-changed": "bun tools/what-changed/src/cli.ts --files",
-    "what-changed:baseline": "bun tools/what-changed/src/cli.ts --baseline",
-    "test:everything:all": "bash ./scripts/test-everything-parallel.sh",
+    "test:everything": "bash ./scripts/test-everything-parallel.sh",
+    "everything:plan": "bash ./scripts/test-everything-parallel.sh --plan",
+    "test:everything:all": "bash ./scripts/test-everything-parallel.sh --force",
     "tev": "bun run test:everything",
     "t": "bun run test",
     "tw": "bun run test:watch",
@@ -48,7 +46,6 @@
     "test:cli:lan-share": "cd ./apps/cli/ && bash ./smoke-tests-lan-share.sh",
     "tcl": "bun run test:cli:lan-share",
     "test:cli:hash-cache": "cd ./apps/cli/ && bash ./hash-cache-smoke-test.sh",
-    "test:what-changed": "cd ./tools/what-changed && bash ./smoke-tests.sh",
     "find-flakey-tests": "bash ./scripts/find-flakey-tests.sh",
     "measure-android-leak": "bash ./scripts/measure-android-emulator-leak.sh",
     "test:lan-share:cli-desktop": "bash ./cli-desktop-lan-share-smoke-tests.sh",
@@ -95,7 +92,6 @@
   "workspaces": [
     "apps/*",
     "packages/*",
-    "aux/*",
-    "tools/*"
+    "aux/*"
   ]
 }

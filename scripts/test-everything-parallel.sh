@@ -12,16 +12,32 @@
 # stop a commit or a push. The trade is that a run reports the first failure rather than all of them,
 # so a second failure elsewhere only shows up once the first is fixed.
 #
-# Called with no arguments it runs the whole set for the host platform. Called with script names it
-# runs exactly those, which is how .githooks/pre-commit asks for just the two cheap ones.
+# Called with no arguments it asks what-changed which targets are affected and runs only those. A
+# docs-only change runs nothing at all. Called with script names it runs exactly those, ungated,
+# because the caller has already decided. --force skips the question and runs the whole set for the
+# host platform.
+#
+# what-changed only reports; it runs nothing itself. This script is what turns its answer into a run:
+#
+#   1. Ask `what-changed targets`, which prints one name per line and nothing when nothing changed.
+#   2. Run those, all at once.
+#   3. Record the tree as the new baseline, but only if every one of them passed.
+#
+# Step 3 is the one that matters. Recording after a failure would mark a broken tree as tested and the
+# next run would report nothing to do. `what-changed baseline capture` appears exactly once below, on
+# the success path, and nothing else here moves the baseline.
+#
+# what-changed must be on PATH: https://github.com/ashleydavis/what-changed/releases
 #
 # Every script's output is captured to its own file, and the ones that failed are printed in full at
 # the end along with the command to re-run. Nothing is fixed, staged or committed here.
 #
 # Usage:
-#   bun run test:everything               # the full set for this platform
+#   bun run test:everything               # only what changed, for this platform
 #   bun run tev                           # the same thing, shorter
-#   bun run test:everything compile test  # just those two, still in parallel
+#   bun run tev -- --force                # the whole set, changed or not
+#   bun run tev -- --plan                 # print the decision, run nothing
+#   bun run test:everything compile test  # just those two, ungated, still in parallel
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -40,10 +56,64 @@ case "$(uname -s)" in
         ;;
 esac
 
-if [ "$#" -gt 0 ]; then
-    SCRIPTS=("$@")
-else
+FORCE=false
+PLAN_ONLY=false
+NAMED_SCRIPTS=()
+
+for ARGUMENT in "$@"; do
+    case "$ARGUMENT" in
+        --force)
+            FORCE=true
+            ;;
+        --plan)
+            PLAN_ONLY=true
+            ;;
+        --*)
+            echo "Unknown option \"$ARGUMENT\". Known options: --force, --plan." >&2
+            exit 1
+            ;;
+        *)
+            NAMED_SCRIPTS+=("$ARGUMENT")
+            ;;
+    esac
+done
+
+# Whether this run is allowed to move the baseline. Only a gated run may: an explicit list of script
+# names is a partial run, and recording after it would mark suites as tested that never ran.
+RECORD_BASELINE=false
+
+if [ "${#NAMED_SCRIPTS[@]}" -gt 0 ]; then
+    SCRIPTS=("${NAMED_SCRIPTS[@]}")
+elif [ "$FORCE" = true ]; then
     SCRIPTS=(compile test test:cli test:electron "${PLATFORM_SCRIPTS[@]}")
+    RECORD_BASELINE=true
+else
+    if ! command -v what-changed >/dev/null 2>&1; then
+        echo "what-changed is not on PATH." >&2
+        echo "Get it from https://github.com/ashleydavis/what-changed/releases" >&2
+        echo "Or pass --force to run the whole set without it." >&2
+        exit 1
+    fi
+
+    SCRIPTS=()
+    while IFS= read -r LINE; do
+        if [ -n "$LINE" ]; then
+            SCRIPTS+=("$LINE")
+        fi
+    done <<< "$(what-changed targets)"
+    RECORD_BASELINE=true
+
+    if [ "${#SCRIPTS[@]}" -eq 0 ]; then
+        echo "Nothing to run: nothing has changed since the last passing run."
+        echo "Use --force to run everything anyway."
+        exit 0
+    fi
+fi
+
+if [ "$PLAN_ONLY" = true ]; then
+    echo "Would run: ${SCRIPTS[*]}"
+    echo "--plan given, running nothing."
+    exit 0
 fi
 
 # Scripts that must not run at the same time as each other, one group per line, because they are not
@@ -284,6 +354,17 @@ done
 if [ "${#failed[@]}" -eq 0 ] && [ "${#cancelled[@]}" -eq 0 ]; then
     echo ""
     echo "All ${#SCRIPTS[@]} script(s) passed."
+
+    #
+    # The only line in this script that moves the baseline, and it is reachable only from here, where
+    # every script has passed. Recording anywhere else would mark a broken tree as tested and the next
+    # run would report nothing to do.
+    #
+    if [ "$RECORD_BASELINE" = true ]; then
+        echo ""
+        what-changed baseline capture
+    fi
+
     exit 0
 fi
 

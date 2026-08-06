@@ -45,17 +45,19 @@ There is one hook, `.githooks/pre-commit`. It delegates to `bun run test:everyth
 | Mobile smoke tests | `bun run test:and` | `bun run test:ios` |
 | Mobile native unit tests | `bun run test:and:unit` | `bun run test:ios:unit` |
 
-There is also `bun run test:what-changed`, the smoke suite for what-changed itself, which is fast enough to run every time it is asked for.
+The platform split is decided by `what-changed.yaml`, and matches what the parallel runner used to decide with `uname`. The mobile toolchains do not exist on the other platform, so there is no way to run both sets from one machine.
 
-The platform split is decided by `what-changed.json`, and matches what the parallel runner used to decide with `uname`. The mobile toolchains do not exist on the other platform, so there is no way to run both sets from one machine.
+**The set above is filtered by what changed.** `bun run test:everything` no longer runs everything unconditionally. `scripts/test-everything-parallel.sh` asks `what-changed` which targets are affected, runs those, and records a new baseline only if they all pass.
 
-**The set above is filtered by what changed.** `bun run test:everything` no longer runs everything unconditionally. It goes through `tools/what-changed`, which hashes the working tree and asks the parallel runner only for the scripts whose watched paths differ from what they saw the last time they passed. A docs-only change runs nothing at all. Pass `--force` to run the whole set regardless:
+`what-changed` is a separate project, installed as a single executable from [its releases page](https://github.com/ashleydavis/what-changed/releases), and must be on your `PATH`. It only reports; it runs nothing itself. A docs-only change runs nothing at all. Pass `--force` to run the whole set regardless:
 
 ```
 bun run test:everything -- --force      # run everything, changed or not
 bun run test:everything -- --plan       # print what would run, run nothing
-bun run test:everything:all             # the ungated parallel runner, bypassing the gate
+bun run test:everything:all             # the same as --force
 ```
+
+**Only a gated or forced run records a baseline.** Naming scripts explicitly (`bun run test:everything compile test`) runs exactly those and records nothing, because a partial run is not evidence that the rest still passes.
 
 The full rules are in the section below.
 
@@ -100,37 +102,47 @@ Neither has caused a failure in practice, but if you see a build error that make
 
 ## When a suite is skipped
 
-`what-changed.json` at the repository root is the whole rule. It lists one target per script, the paths that target watches, and the platforms it can run on. The gate hashes every file git considers part of the working tree (tracked files plus untracked files no ignore rule matches), builds a directory hash tree over them, and compares each target's watched paths against the hashes recorded the last time that target passed. A target runs when any watched path differs, when it has never passed, or when `--force` was given.
+`what-changed.yaml` at the repository root is the whole rule. It lists one target per script, the paths that target watches, and the platforms it can run on. what-changed hashes every file git considers part of the working tree (tracked files plus untracked files no ignore rule matches), compares them against the baseline recorded at the last passing run, and reports each changed file under every target that watches it. A target is affected when any file under its watched paths differs, when there is no baseline at all, or when `--force` was given.
 
 The watched paths as they stand:
 
 | Target | Watches | Platforms |
 | --- | --- | --- |
-| `compile` | `packages`, `apps`, `tools` | any |
-| `test` | `packages`, `apps`, `tools` | any |
+| `compile` | `packages`, `apps` | any |
+| `test` | `packages`, `apps` | any |
 | `test:cli` | `apps/cli`, `packages` | any |
 | `test:electron` | `apps/desktop`, `apps/desktop-frontend`, `packages` | any |
 | `test:and`, `test:and:unit` | `apps/android-frontend`, `apps/smoke-tests`, `packages` | Linux |
 | `test:ios`, `test:ios:unit` | `apps/ios-frontend`, `apps/smoke-tests`, `packages` | macOS |
-| `test:what-changed` | `tools/what-changed` | any |
 
-Every target also watches `alwaysPaths`: `package.json`, `bun.lock`, `mise.toml`, `what-changed.json`, `scripts` and `.githooks`. Anything that changes how every suite runs makes every suite run.
+Every target also watches `always`: `package.json`, `bun.lock`, `mise.toml`, `what-changed.yaml`, `scripts` and `.githooks`. Anything that changes how every suite runs makes every suite run.
 
-`ignoreExtensions` is `.md`, `.txt` and `.log`. Files of those types are left out of the file list entirely, so a documentation change runs nothing and never appears in `bun run what-changed`. That drops the watched set from about 2195 files to about 1970.
+`ignore` is `.md`, `.txt` and `.log`. Files of those types are left out of the file list entirely, so a documentation change runs nothing and never appears in `what-changed changes`. That drops the watched set from about 2195 files to about 1970.
 
 The umbrella `packages` entry is deliberate. Narrowing a target to the packages it actually depends on is a config edit with no code change, but a wrong narrowing silently skips a suite that should have run, so the config does not guess. What it already buys is real: a change confined to `docs/`, `apps/cli/`, `apps/desktop/` or `.claude/` no longer runs the mobile suites, and a docs-only or plan-only change runs nothing at all.
 
-**A failing run records nothing.** The parallel runner kills the remaining lanes at the first failure, so there is no trustworthy per-script result to record. Nothing is written unless the whole run passes, which means a target that passed inside a failing run will run again next time. That wastes some time and cannot produce a wrong answer, which is the right way round.
+**A failing run records nothing.** `what-changed baseline capture` appears exactly once in `scripts/test-everything-parallel.sh`, inside the branch reached only when every script passed. The runner kills the remaining lanes at the first failure, so there is no trustworthy per-script result to record anyway, and a target that passed inside a failing run will run again next time. That wastes some time and cannot produce a wrong answer, which is the right way round.
 
 **The gate cannot see changes outside the working tree.** If a suite passed and then the environment changed (a different emulator, a new SDK, a changed environment variable), the gate will still skip it. That is what `--force` is for.
 
-The hashes live in `.cache/what-changed/`, which is gitignored. Deleting that directory makes the next run a full one.
+The state lives in `.what-changed/`, which is gitignored. It holds two things that behave differently:
 
-`bun run what-changed:baseline` marks the current tree as the baseline without running anything, for when you already know it is good. It is an assertion, not a check.
+| | Holds | Deleting it |
+| --- | --- | --- |
+| `.what-changed/baseline.json` | Every file's hash at the last passing run | Makes everything read as changed, so the next run is a full one |
+| `.what-changed/cache/` | Per-file mtime, size and hash | Costs one slow run and nothing else |
 
-Two commands answer "why": `bun run everything:plan` prints the per-target decision without running anything, naming the watched paths that changed. `bun run what-changed` lists the individual files that differ from the last passing run, with their hashes. Neither records anything, so both are free to run.
+`what-changed baseline capture` marks the current tree as the baseline without running anything, for when you already know it is good. It is an assertion, not a check. `what-changed baseline reset` forgets it.
 
-The tool itself is `tools/what-changed`, and it is deliberately free of anything Photosphere-specific so it can be lifted into another project. Everything in this section comes from `what-changed.json` at the repository root, not from the tool. See [its README](../tools/what-changed/README.md) for the config format and [docs/HOW_IT_WORKS.md](../tools/what-changed/docs/HOW_IT_WORKS.md) for the internals.
+Three commands answer "why", and none of them records anything, so all three are free to run:
+
+```
+bun run everything:plan       # which targets would run
+what-changed summary          # the changed files, grouped under the targets they affect
+what-changed changes          # the changed files as a flat list, with their hashes
+```
+
+The tool is a separate project: https://github.com/ashleydavis/what-changed. It carries nothing Photosphere-specific. Everything in this section comes from `what-changed.yaml` at the repository root, not from the tool.
 
 ## Why the mobile suites matter
 

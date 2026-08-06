@@ -11,8 +11,8 @@
 # The premise is that a suite which passes once tells you very little. A mode that fails one run in
 # two hundred will pass any normal check and still break a build later. This drives
 # `bun run test:everything -- --force` in a loop and requires a long unbroken streak of green runs
-# before it will call the suite clean. `--force` is always passed, so the what-changed gate never
-# skips a suite: every run exercises everything.
+# before it will call the suite clean. `--force` is always passed, so the change gate never skips a
+# suite: every run exercises everything.
 #
 # On the first real failure it bails out rather than carrying on, because the point of the loop is
 # the streak, and a streak with a failure in it is not a streak. It then writes a diagnosis report
@@ -117,8 +117,8 @@ TARGET=100
 # quietly began its streak again from zero.
 RESUME=0
 
-# The command driven in a loop. `--force` defeats the what-changed gate so every suite runs every
-# time, which is the whole point: a gated run can skip the very suite that is flaky.
+# The command driven in a loop. `--force` defeats the change gate so every suite runs every time,
+# which is the whole point: a gated run can skip the very suite that is flaky.
 COMMAND="bun run test:everything -- --force"
 
 # Which suite --script selects. Kept as a list so an unknown name is rejected with the valid ones

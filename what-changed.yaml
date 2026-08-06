@@ -1,0 +1,82 @@
+# Which test scripts still need to run, decided by what has changed since the last passing run.
+#
+# what-changed reports; scripts/test-everything-parallel.sh reads that report, runs the affected
+# scripts, and records a new baseline only when they all pass. See docs/git-hooks.md.
+#
+# Every target name here is passed straight to scripts/test-everything-parallel.sh as a script name,
+# so they must match the script names in package.json exactly.
+
+# Paths that fall under every target: anything that changes how every suite runs.
+#
+# bun.lock is here because installed dependencies live in node_modules, which is gitignored and
+# therefore never hashed. The lockfile is the only tracked evidence that they changed.
+always:
+  - package.json
+  - bun.lock
+  - mise.toml
+  - what-changed.yaml
+  - scripts
+  - .githooks
+
+# Extensions left out of the file list entirely, so a documentation-only change runs nothing.
+ignore:
+  - .md
+  - .txt
+  - .log
+
+targets:
+  - name: compile
+    paths:
+      - packages
+      - apps
+
+  - name: test
+    paths:
+      - packages
+      - apps
+
+  - name: test:cli
+    paths:
+      - apps/cli
+      - packages
+
+  - name: test:electron
+    paths:
+      - apps/desktop
+      - apps/desktop-frontend
+      - packages
+
+  # The mobile suites need a toolchain that only exists on one platform: an Android emulator for
+  # these two, Xcode for the two below. Listing platforms keeps them out of the report entirely on
+  # the other one, so the runner is never asked for a script it cannot run.
+  - name: test:and
+    paths:
+      - apps/android-frontend
+      - apps/smoke-tests
+      - packages
+    platforms:
+      - linux
+
+  - name: test:and:unit
+    paths:
+      - apps/android-frontend
+      - apps/smoke-tests
+      - packages
+    platforms:
+      - linux
+
+  - name: test:ios
+    paths:
+      - apps/ios-frontend
+      - apps/smoke-tests
+      - packages
+    platforms:
+      - darwin
+
+  - name: test:ios:unit
+    paths:
+      - apps/ios-frontend
+      - apps/smoke-tests
+      - packages
+    platforms:
+      - darwin

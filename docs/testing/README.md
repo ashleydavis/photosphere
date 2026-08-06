@@ -20,7 +20,7 @@ bun run test:everything
 
 Or `bun run tev` for short.
 
-Runs are gated on changed paths: a script is only run when the paths it watches (listed in `what-changed.json`) differ from what they were the last time that script passed, so a docs-only change runs nothing. Add `-- --force` to run everything regardless, or `-- --plan` to print the decision without running anything. `bun run test:everything:all` is the ungated runner.
+Runs are gated on changed paths: a script is only run when the paths it watches (listed in `what-changed.yaml`) differ from what they were at the last passing run, so a docs-only change runs nothing. Add `-- --force` to run everything regardless, or `-- --plan` to print the decision without running anything. `bun run test:everything:all` runs the whole set regardless. The gate needs the `what-changed` executable on your PATH, from [its releases page](https://github.com/ashleydavis/what-changed/releases).
 
 That is also what the checked-in git hooks run. They gate commits and pushes locally, and they have to be installed once per clone. See [Git hooks](../git-hooks.md).
 
@@ -107,7 +107,7 @@ bun run find-flakey-tests -- --help
 
 Before each run it prints when that run should end and when the whole streak should, as a clock time and as a time from now. The estimate is the mean of the last ten runs, so it appears from the second run onwards, tightens as the session goes on, and follows the machine as it speeds up or slows down instead of staying anchored to how the session began. It counts time spent running only, so a pause waiting for an emulator pool, or a crashed run that is retried, puts the real finish later than the estimate says.
 
-It runs `bun run test:everything -- --force` each time. `--force` matters: without it the what-changed gate skips suites that have not changed, so the loop could run hundreds of times without ever exercising the suite that is flaky.
+It runs `bun run test:everything -- --force` each time. `--force` matters: without it the gate skips suites that have not changed, so the loop could run hundreds of times without ever exercising the suite that is flaky.
 
 It stops at the first real failure, because the point is the streak and a streak with a failure in it is not a streak. On failure it writes a report naming the lane and the test that failed, the tail of that run's output, snapshots of the per-test log files the next run would otherwise overwrite, and the state of the machine at that moment: free memory, attached devices, and any kernel out-of-memory kills in the last hour. That last part is there because several failures found this way were caused by the machine and not the code, and none of them were visible in the suite's own output.
 
