@@ -38,6 +38,11 @@ ADB_TIMEOUT_SECONDS=8
 SERIAL_WIDTH=16
 STATUS_WIDTH=12
 
+# Column widths for each emulator's own CPU and memory. Right-aligned, so "4%" and "40%" line up and
+# the eye can compare down the column.
+CPU_WIDTH=4
+MEMORY_WIDTH=5
+
 # The blocks the graphs are drawn from, lowest to highest, and how many there are. A value is mapped
 # onto one of these by its percentage, so each column is one sample.
 GRAPH_BLOCKS=("▁" "▂" "▃" "▄" "▅" "▆" "▇" "█")
@@ -87,6 +92,31 @@ health_history=()
 previous_busy=0
 previous_total=0
 
+# How many processors the machine has. Per-emulator CPU is reported as a share of the whole machine
+# rather than of one core, so the emulator figures and the CPU graph above them are in the same units
+# and can be read against each other.
+processor_count="$(nproc 2>/dev/null || echo 1)"
+
+# The machine's total memory in bytes. Used as the denominator for an emulator that carries no memory
+# limit of its own, so its column still reads as a share of something real.
+machine_memory_bytes="$(awk '/^MemTotal:/ { print $2 * 1024 }' /proc/meminfo)"
+
+# Each emulator's AVD name and control-group path, keyed by adb serial. Both are fixed for as long as
+# an emulator lives, and finding them costs an adb round trip and a process search, so they are looked
+# up once rather than every time the table is refreshed.
+declare -A avd_by_serial=()
+declare -A cgroup_by_serial=()
+
+# The previous CPU reading for each emulator, and when it was taken, so CPU can be worked out from the
+# change between two readings. Microseconds of CPU consumed, and a nanosecond wall clock stamp.
+declare -A cpu_usec_by_serial=()
+declare -A cpu_stamp_by_serial=()
+
+# The last known table row for each emulator, keyed by adb serial, as "status|detail|cpu|memory".
+# Kept because emulators are checked in rotation rather than all at once, so every frame needs the
+# readings taken on earlier turns to fill the rows it did not visit this time.
+declare -A row_by_serial=()
+
 #
 # Restores the cursor and leaves the finished display on screen. Bound to Ctrl-C so quitting does not
 # leave the terminal with a hidden cursor.
@@ -125,20 +155,147 @@ health_of() {
     # Every adb call reads from /dev/null. `adb shell` consumes its standard input, and these run
     # inside a loop whose standard input is the list of devices, so without this the first emulator
     # checked would swallow the rest of the list and the table would show one row.
+    # An empty answer means the emulator did not answer, which is its own condition and not the same
+    # as any of the states below. An emulator thrashing on memory stays listed by adb as a device and
+    # accepts the connection while answering nothing, and calling that "still booting" or "off the
+    # lan bridge" states something definite that has not been established. It says which it is.
     booted="$(timeout "$ADB_TIMEOUT_SECONDS" adb -s "$serial" shell getprop sys.boot_completed </dev/null 2>/dev/null | tr -d '\r' | head -1)"
+    if [ -z "$booted" ]; then
+        echo "Unhealthy|not answering adb"
+        return 0
+    fi
     if [ "$booted" != "1" ]; then
         echo "Unhealthy|still booting"
         return 0
     fi
 
-    address="$(timeout "$ADB_TIMEOUT_SECONDS" adb -s "$serial" shell ip -4 addr show wlan0 </dev/null 2>/dev/null | grep -o 'inet 192\.168\.55\.[0-9]*' | head -1)"
+    # `ip addr show`, not `ip -4 addr show`. The -4 form prints nothing at all when the interface has
+    # no IPv4 address, which is indistinguishable from the command having failed. Without the flag
+    # the link line is always printed, so an empty result means only one thing, and the line also
+    # carries NO-CARRIER, which says the wifi dropped rather than merely lost its lease.
+    wlan_output="$(timeout "$ADB_TIMEOUT_SECONDS" adb -s "$serial" shell ip addr show wlan0 </dev/null 2>/dev/null)"
+    if [ -z "$wlan_output" ]; then
+        echo "Unhealthy|not answering adb"
+        return 0
+    fi
+
+    address="$(printf '%s\n' "$wlan_output" | grep -o 'inet 192\.168\.55\.[0-9]*' | head -1)"
     address="${address#inet }"
     if [ -z "$address" ]; then
-        echo "Unhealthy|not on the lan bridge"
+        if printf '%s\n' "$wlan_output" | grep -q 'NO-CARRIER'; then
+            echo "Unhealthy|off the lan bridge, wifi down"
+        else
+            echo "Unhealthy|off the lan bridge, no address"
+        fi
         return 0
     fi
 
     echo "Healthy|$address"
+}
+
+#
+# Prints the control group directory holding one emulator's processes, or nothing when it cannot be
+# found. Looked up by the emulator's AVD name, which is what its command line carries.
+#
+# The control group is used rather than the emulator's main process because an emulator is a tree of
+# them, and the main process alone accounts for only part of what it costs. The path is checked for
+# the pool's own unit name before it is accepted: an emulator started outside this project sits in
+# whatever group its shell is in, and reporting that group's usage would credit the emulator with
+# everything else running in the same terminal.
+#
+# Usage: cgroup_dir_for_avd <avd_name>
+#
+cgroup_dir_for_avd() {
+    local avd="$1"
+    local pid cgroup_path
+
+    pid="$(pgrep -f -- "-avd $avd" 2>/dev/null | head -1)"
+    if [ -z "$pid" ]; then
+        return 0
+    fi
+
+    cgroup_path="$(awk -F: '$1 == "0" { print $3 }' "/proc/$pid/cgroup" 2>/dev/null)"
+    case "$cgroup_path" in
+        *psphere-emu-*) ;;
+        *) return 0 ;;
+    esac
+
+    if [ -d "/sys/fs/cgroup$cgroup_path" ]; then
+        echo "/sys/fs/cgroup$cgroup_path"
+    fi
+}
+
+#
+# Sets emulator_cpu_result and emulator_memory_result for one emulator, to a percentage and a figure
+# in gigabytes, or to "?" when they cannot be read.
+#
+# CPU comes from the change in the group's consumed CPU time over the wall time between two readings,
+# expressed as a share of every processor the machine has. Memory is the group's current usage.
+#
+# The answers are returned in globals rather than printed, because working out CPU means remembering
+# the previous reading, and a function called through a command substitution runs in a subshell whose
+# variables are thrown away. Written that way it forgot every reading and reported "?" forever.
+#
+# A question mark rather than a zero when the figures are unavailable, because zero would read as an
+# emulator using nothing, which is a different and much more alarming claim than not knowing.
+#
+# Usage: emulator_usage <serial>
+#
+emulator_usage() {
+    local serial="$1"
+    local cgroup_dir usage_usec memory_bytes memory_limit now_nsec
+    local previous_usec previous_stamp elapsed_nsec
+
+    emulator_cpu_result="?"
+    emulator_memory_result="?"
+
+    cgroup_dir="${cgroup_by_serial[$serial]:-}"
+    if [ -z "$cgroup_dir" ] || [ ! -d "$cgroup_dir" ]; then
+        return 0
+    fi
+
+    memory_bytes="$(cat "$cgroup_dir/memory.current" 2>/dev/null || true)"
+    usage_usec="$(awk '/^usage_usec/ { print $2 }' "$cgroup_dir/cpu.stat" 2>/dev/null || true)"
+    case "$memory_bytes$usage_usec" in
+        ''|*[!0-9]*) return 0 ;;
+    esac
+
+    # Memory is shown against the emulator's own limit rather than as a figure in gigabytes, because
+    # the figure is the limit: every emulator is started with MemoryHigh=5G and sits on it, so a
+    # gigabyte column read 5.0 for all of them for ever and said nothing. A percentage says the one
+    # thing worth knowing, which is whether this emulator is pinned against its ceiling or has room.
+    #
+    # An emulator with no limit set is measured against the machine's memory instead, so the column
+    # still means something rather than dividing by "max".
+    memory_limit="$(cat "$cgroup_dir/memory.high" 2>/dev/null || true)"
+    case "$memory_limit" in
+        ''|*[!0-9]*) memory_limit="$machine_memory_bytes" ;;
+    esac
+    if [ "$memory_limit" -gt 0 ]; then
+        emulator_memory_result="$(( memory_bytes * 100 / memory_limit ))%"
+    fi
+
+    now_nsec="$(date +%s%N)"
+    previous_usec="${cpu_usec_by_serial[$serial]:-}"
+    previous_stamp="${cpu_stamp_by_serial[$serial]:-}"
+    cpu_usec_by_serial["$serial"]="$usage_usec"
+    cpu_stamp_by_serial["$serial"]="$now_nsec"
+
+    if [ -n "$previous_usec" ] && [ -n "$previous_stamp" ]; then
+        elapsed_nsec=$(( now_nsec - previous_stamp ))
+        if [ "$elapsed_nsec" -gt 0 ]; then
+            # Consumed microseconds against elapsed microseconds across every processor. The
+            # multiply comes before the divide, because this is integer arithmetic and dividing
+            # first would round the answer away.
+            emulator_cpu_result=$(( (usage_usec - previous_usec) * 100 / (elapsed_nsec / 1000 * processor_count) ))
+            if [ "$emulator_cpu_result" -lt 0 ]; then
+                emulator_cpu_result=0
+            fi
+            if [ "$emulator_cpu_result" -gt 100 ]; then
+                emulator_cpu_result=100
+            fi
+        fi
+    fi
 }
 
 #
@@ -277,31 +434,36 @@ render_display() {
     local total_count="$5"
     shift 5
 
-    local row serial status detail padded_serial padded_status colour
+    local row serial status detail cpu memory padded_serial padded_status colour
 
-    printf '%-*s%-*s%s\n' "$SERIAL_WIDTH" "EMULATOR" "$STATUS_WIDTH" "STATUS" "DETAIL"
+    printf '%-*s%-*s%*s %*s  %s\n' \
+        "$SERIAL_WIDTH" "EMULATOR" "$STATUS_WIDTH" "STATUS" \
+        "$CPU_WIDTH" "CPU" "$MEMORY_WIDTH" "MEM" "DETAIL"
 
     if [ "$#" -eq 0 ]; then
         printf '%s\n' "${COLOUR_DIM}no devices attached${COLOUR_OFF}"
     fi
 
     for row in "$@"; do
-        serial="${row%%|*}"
-        status="${row#*|}"
-        detail="${status#*|}"
-        status="${status%%|*}"
+        IFS='|' read -r serial status detail cpu memory <<< "$row"
 
         # Padded before it is coloured, because the escape sequences are invisible on screen but do
         # count towards a printf field width, which would leave the columns ragged.
         printf -v padded_serial '%-*s' "$SERIAL_WIDTH" "$serial"
         printf -v padded_status '%-*s' "$STATUS_WIDTH" "$status"
+        # Unknown is dim rather than red. It means nobody has looked at this emulator yet, which is
+        # not a finding, and colouring it as one would report trouble that has not been established.
         if [ "$status" = "Healthy" ]; then
             colour="$COLOUR_GREEN"
+        elif [ "$status" = "Unknown" ]; then
+            colour="$COLOUR_DIM"
         else
             colour="$COLOUR_RED"
         fi
 
-        printf '%s%s%s%s%s\n' "$padded_serial" "$colour" "$padded_status" "$COLOUR_OFF" "$detail"
+        printf '%s%s%s%s%*s %*s  %s\n' \
+            "$padded_serial" "$colour" "$padded_status" "$COLOUR_OFF" \
+            "$CPU_WIDTH" "$cpu" "$MEMORY_WIDTH" "$memory" "$detail"
     done
 
     printf '\n'
@@ -370,23 +532,66 @@ rows=()
 healthy_count=0
 total_count=0
 sample_index=0
+health_turn=0
 
 while true; do
     if [ $(( sample_index % HEALTH_EVERY_SAMPLES )) -eq 0 ]; then
+        # One emulator is checked per turn, taken in rotation, rather than all of them at once.
+        #
+        # A sick emulator is the expensive one to ask: it stays listed as a device and accepts the
+        # connection while answering nothing, so every call to it costs the full timeout. Checking
+        # all five in a row meant one stuck emulator held up the whole frame, and with several stuck
+        # the first frame never finished at all, so the display showed nothing precisely when it was
+        # most worth watching. In rotation a stuck emulator delays its own row and nothing else, and
+        # the graphs keep moving throughout.
+        mapfile -t attached_lines < <(attached_devices)
+
+        attached_serials=()
+        for line in ${attached_lines[@]+"${attached_lines[@]}"}; do
+            attached_serials+=("${line%% *}")
+        done
+
+        if [ "${#attached_serials[@]}" -gt 0 ]; then
+            turn_index=$(( health_turn % ${#attached_serials[@]} ))
+            serial="${attached_serials[$turn_index]}"
+            adb_state="${attached_lines[$turn_index]#* }"
+
+            result="$(health_of "$serial" "$adb_state")"
+
+            # The AVD name and its control group are found once per emulator and kept, because
+            # neither changes while it is running and both cost more than reading the figures does.
+            if [ -z "${avd_by_serial[$serial]:-}" ]; then
+                avd_by_serial["$serial"]="$(timeout "$ADB_TIMEOUT_SECONDS" adb -s "$serial" emu avd name </dev/null 2>/dev/null | head -1 | tr -d '\r')"
+            fi
+            if [ -z "${cgroup_by_serial[$serial]:-}" ] && [ -n "${avd_by_serial[$serial]:-}" ]; then
+                cgroup_by_serial["$serial"]="$(cgroup_dir_for_avd "${avd_by_serial[$serial]}")"
+            fi
+            # Called directly, not through a command substitution, so its saved readings survive to
+            # the next sample and CPU can be worked out from the change between them.
+            emulator_usage "$serial"
+            emulator_cpu="$emulator_cpu_result"
+            emulator_memory="$emulator_memory_result"
+            if [ "$emulator_cpu" != "?" ]; then
+                emulator_cpu="$emulator_cpu%"
+            fi
+
+            row_by_serial["$serial"]="$result|$emulator_cpu|$emulator_memory"
+            health_turn=$(( health_turn + 1 ))
+        fi
+
+        # The table is rebuilt from what is attached now, so an emulator that has gone leaves the
+        # display rather than lingering on its last known reading. One not yet reached in the
+        # rotation says so instead of claiming a state nobody has looked at.
         rows=()
         healthy_count=0
         total_count=0
-        while read -r serial adb_state; do
-            if [ -z "$serial" ]; then
-                continue
-            fi
-            result="$(health_of "$serial" "$adb_state")"
-            rows+=("$serial|$result")
+        for serial in ${attached_serials[@]+"${attached_serials[@]}"}; do
+            rows+=("$serial|${row_by_serial[$serial]:-Unknown|not checked yet|?|?}")
             total_count=$(( total_count + 1 ))
-            if [ "${result%%|*}" = "Healthy" ]; then
-                healthy_count=$(( healthy_count + 1 ))
-            fi
-        done < <(attached_devices)
+            case "${row_by_serial[$serial]:-}" in
+                Healthy\|*) healthy_count=$(( healthy_count + 1 )) ;;
+            esac
+        done
     fi
     sample_index=$(( sample_index + 1 ))
 
