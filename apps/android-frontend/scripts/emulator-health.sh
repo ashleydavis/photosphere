@@ -41,7 +41,7 @@ STATUS_WIDTH=12
 # Column widths for each emulator's own CPU and memory. Right-aligned, so "4%" and "40%" line up and
 # the eye can compare down the column.
 CPU_WIDTH=4
-MEMORY_WIDTH=5
+MEMORY_WIDTH=10
 
 # The blocks the graphs are drawn from, lowest to highest, and how many there are. A value is mapped
 # onto one of these by its percentage, so each column is one sample.
@@ -254,25 +254,34 @@ emulator_usage() {
         return 0
     fi
 
-    memory_bytes="$(cat "$cgroup_dir/memory.current" 2>/dev/null || true)"
+    # `anon` from memory.stat, not memory.current.
+    #
+    # memory.current counts page cache, and cache expands to fill whatever allowance it is given and
+    # is handed straight back when anything needs it. A healthy emulator therefore reads close to
+    # 100% and the column says nothing, which is worse than showing no column: a reading of 99% on an
+    # emulator using 3.6GB of its 8GB looks like an emergency and is not one.
+    #
+    # `anon` is memory that cannot be reclaimed, so it is the figure that decides whether an emulator
+    # is in trouble. It was 4.7GB against a 5GB limit when the pool collapsed, and 3.6GB against 8GB
+    # on the same emulators once they had room.
+    memory_bytes="$(awk '/^anon /{ print $2 }' "$cgroup_dir/memory.stat" 2>/dev/null || true)"
     usage_usec="$(awk '/^usage_usec/ { print $2 }' "$cgroup_dir/cpu.stat" 2>/dev/null || true)"
     case "$memory_bytes$usage_usec" in
         ''|*[!0-9]*) return 0 ;;
     esac
 
-    # Memory is shown against the emulator's own limit rather than as a figure in gigabytes, because
-    # the figure is the limit: every emulator is started with MemoryHigh=5G and sits on it, so a
-    # gigabyte column read 5.0 for all of them for ever and said nothing. A percentage says the one
-    # thing worth knowing, which is whether this emulator is pinned against its ceiling or has room.
-    #
-    # An emulator with no limit set is measured against the machine's memory instead, so the column
-    # still means something rather than dividing by "max".
+    # Both the figure and the share of the limit, because each answers a question the other cannot.
+    # Gigabytes say how big the emulator is and can be compared against any other tool; the
+    # percentage says how close it is to being throttled, which needs the limit to interpret.
     memory_limit="$(cat "$cgroup_dir/memory.high" 2>/dev/null || true)"
     case "$memory_limit" in
         ''|*[!0-9]*) memory_limit="$machine_memory_bytes" ;;
     esac
     if [ "$memory_limit" -gt 0 ]; then
-        emulator_memory_result="$(( memory_bytes * 100 / memory_limit ))%"
+        emulator_memory_result="$(awk -v bytes="$memory_bytes" -v limit="$memory_limit" \
+            'BEGIN { printf "%.1fG %d%%", bytes / 1073741824, bytes * 100 / limit }')"
+    else
+        emulator_memory_result="$(awk -v bytes="$memory_bytes" 'BEGIN { printf "%.1fG", bytes / 1073741824 }')"
     fi
 
     now_nsec="$(date +%s%N)"
