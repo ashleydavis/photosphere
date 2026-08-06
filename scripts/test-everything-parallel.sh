@@ -167,6 +167,46 @@ recorded_exit_for() {
 LANES=()
 build_lanes
 
+# Refuses the whole run when an Android suite is asked for and no emulator is on the LAN bridge.
+#
+# The suite checks this for itself and fails in seconds, but by then the other lanes have started, so a
+# pool that is down costs a compile and a unit run before anything says why, and their results are
+# thrown away when the suite reports. Checking here means the run stops before any of that begins.
+#
+# Only the same condition the suite already requires is checked, and only when an Android suite is in
+# the set: attached devices whose wlan0 carries a 192.168.55.x address. Nothing is started, stopped or
+# repaired here; a pool that is down is reported and left exactly as it is.
+require_android_emulator() {
+    local script wanted="" serial healthy=0
+
+    for script in "${SCRIPTS[@]}"; do
+        case "$script" in
+            test:and|test:and:unit) wanted="yes" ;;
+        esac
+    done
+    if [ -z "$wanted" ]; then
+        return 0
+    fi
+    if ! command -v adb >/dev/null 2>&1; then
+        return 0
+    fi
+
+    for serial in $(adb devices 2>/dev/null | awk 'NR > 1 && $2 == "device" { print $1 }'); do
+        if timeout 8 adb -s "$serial" shell ip addr show wlan0 </dev/null 2>/dev/null | grep -q 'inet 192\.168\.55\.'; then
+            healthy=$((healthy + 1))
+        fi
+    done
+
+    if [ "$healthy" -eq 0 ]; then
+        echo "No emulator is on the LAN bridge, so the Android suites cannot run." >&2
+        echo "Nothing has been started: the whole set is refused rather than run against a pool that is down." >&2
+        echo "Check it with 'bun run emu:and:status', watch it with 'bun run emu:and:health'." >&2
+        exit 1
+    fi
+}
+
+require_android_emulator
+
 echo "Running ${#SCRIPTS[@]} script(s) across ${#LANES[@]} parallel lane(s):"
 for lane in "${LANES[@]}"; do
     case "$lane" in
