@@ -20,6 +20,7 @@
     "emu:down": "bash ./scripts/emulator.sh down",
     "emu:restart": "bash ./scripts/emulator.sh restart",
     "emu:status": "bash ./scripts/emulator.sh status",
+    "emu:health": "bash ./scripts/emulator-health.sh",
     "test:unit": "bun run sync && bash ./scripts/android-gradle.sh :app:testDebugUnitTest --rerun-tasks"
   },
   "dependencies": {

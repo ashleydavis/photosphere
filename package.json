@@ -86,6 +86,7 @@
     "emu:and:down": "bun run --filter=android-frontend emu:down",
     "emu:and:restart": "bun run --filter=android-frontend emu:restart",
     "emu:and:status": "bun run --filter=android-frontend emu:status",
+    "emu:and:health": "bash ./apps/android-frontend/scripts/emulator-health.sh",
     "screenshots": "bun run bundle && bash ./apps/desktop/screenshots/capture-ux.sh",
     "perf": "bun --filter '*' perf"
   },
