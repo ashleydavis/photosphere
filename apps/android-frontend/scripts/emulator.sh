@@ -133,6 +133,19 @@ POOL_SLICE="psphere-pool.slice"
 POOL_SLICE_SOURCE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$POOL_SLICE"
 POOL_SLICE_INSTALL_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 
+# Matches every transient unit the pool starts, whatever index it carries.
+#
+# A glob rather than a loop over PHOTOSPHERE_EMULATOR_COUNT, because the count can differ between the
+# run that started the pool and the run stopping it: raising it from 3 to 10 and restarting must
+# still account for the three that are actually up, and a loop over the new count would look at the
+# wrong set.
+POOL_UNIT_GLOB="psphere-emu-pool-*"
+
+# How long to wait for systemd to release those unit names after their emulators have gone. Seconds,
+# because the wait is normally a moment; it is generous only so that a loaded machine is not failed
+# for being slow.
+POOL_UNIT_RELEASE_TIMEOUT_SECONDS=60
+
 #
 # True when the DHCP server we started is still alive.
 #
@@ -965,6 +978,39 @@ cmd_pool_up() {
 }
 
 #
+# Waits until systemd has released the pool's transient unit names, so the same names can be started
+# again. Read-only: it stops nothing, it only watches.
+#
+# adb drops an emulator from its device list as soon as the emulator's socket goes, but systemd keeps
+# the unit loaded for a moment longer while it reaps the process. Waiting only on adb, as this used
+# to, let `pool-up` run while a unit was still deactivating, and `systemd-run` refuses a name that is
+# still loaded: "Unit psphere-emu-pool-0.service was already loaded or has a fragment file". That
+# aborted the run on the first emulator, so `pool-restart` could not bring the pool back at all,
+# which is the one thing it exists to do. `systemctl reset-failed` does not help, because the unit is
+# not failed, it is still on its way out.
+#
+wait_for_pool_units_released() {
+    local waited=0
+
+    if ! command -v systemctl >/dev/null 2>&1; then
+        return 0
+    fi
+
+    while [ "$waited" -lt "$POOL_UNIT_RELEASE_TIMEOUT_SECONDS" ]; do
+        if [ "$(systemctl --user list-units --all --no-legend --plain "$POOL_UNIT_GLOB" 2>/dev/null | wc -l)" -eq 0 ]; then
+            return 0
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+
+    echo "ERROR: systemd still has the pool's units loaded after ${POOL_UNIT_RELEASE_TIMEOUT_SECONDS}s," >&2
+    echo "so starting the pool again would collide with them. Still loaded:" >&2
+    systemctl --user list-units --all --no-legend --plain "$POOL_UNIT_GLOB" >&2 2>/dev/null || true
+    return 1
+}
+
+#
 # Stops the pool and removes only its taps. Never touches the single hand-testing emulator: the
 # emulators stopped are exactly those whose AVD is one of the pool's clones, and the taps removed
 # are exactly the pool's. The clone AVDs are left on disk (about 8KB each) so a later pool start
@@ -989,6 +1035,9 @@ cmd_pool_down() {
         done
         echo "Stopped $stopped pool emulator(s)."
     fi
+
+    # Before the taps go, so a failure here leaves the pool as it was rather than half torn down.
+    wait_for_pool_units_released || exit 1
 
     local index taps=""
     for index in $(seq 0 $((PHOTOSPHERE_EMULATOR_COUNT - 1))); do
