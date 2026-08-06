@@ -44,7 +44,7 @@ BRIDGE_NAME="br-psphere"
 #
 # Override with the environment variable to go back up, for example
 # PHOTOSPHERE_EMULATOR_COUNT=5 bun run emu:and:pool
-PHOTOSPHERE_EMULATOR_COUNT="${PHOTOSPHERE_EMULATOR_COUNT:-3}"
+PHOTOSPHERE_EMULATOR_COUNT="${PHOTOSPHERE_EMULATOR_COUNT:-5}"
 
 # The tap and AVD names, shared with the smoke-test harness and the run script. Sourced rather than
 # repeated, so a rename cannot leave one side looking for an interface or an AVD the other never
