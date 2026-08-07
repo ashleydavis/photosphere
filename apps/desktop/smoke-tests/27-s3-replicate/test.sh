@@ -29,9 +29,7 @@ SOURCE_DB="$TMP_DIR/source-db"
 
 # Stop the app AND the emulator, so a failed assertion never leaves a MinIO server running.
 cleanup() {
-    if [ -f "$TMP_DIR/app.pid" ]; then
-        kill_app_tree "$(cat "$TMP_DIR/app.pid")"
-    fi
+    cleanup_apps "$TMP_DIR"
     stop_s3_emulator "$S3_STATE_DIR"
 }
 trap cleanup EXIT

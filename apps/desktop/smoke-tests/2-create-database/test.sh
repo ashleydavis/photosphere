@@ -8,9 +8,7 @@ DESKTOP_DIR="$(cd "$TEST_DIR/../.." && native_pwd)"
 print_test_header 2 "create-database"
 
 cleanup() {
-    if [ -f "$TMP_DIR/app.pid" ]; then
-        kill_app_tree "$(cat "$TMP_DIR/app.pid")"
-    fi
+    cleanup_apps "$TMP_DIR"
 }
 trap cleanup EXIT
 

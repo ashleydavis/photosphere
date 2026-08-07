@@ -15,12 +15,7 @@ print_test_header 30 "receive-database-cancel"
 
 
 cleanup() {
-    if [ -f "$TMP_DIR/sender/app.pid" ]; then
-        kill_app_tree "$(cat "$TMP_DIR/sender/app.pid")"
-    fi
-    if [ -f "$TMP_DIR/receiver/app.pid" ]; then
-        kill_app_tree "$(cat "$TMP_DIR/receiver/app.pid")"
-    fi
+    cleanup_apps "$TMP_DIR/sender" "$TMP_DIR/receiver"
 }
 trap cleanup EXIT
 

@@ -54,6 +54,31 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEST_ROOT="$SCRIPT_DIR/test/tmp/hash-cache-concurrency"
 OUTPUT_DIR="$TEST_ROOT/outputs"
 
+# Starting and stopping background processes: the tree walk the trap below stops the writers with.
+source "$SCRIPT_DIR/../../scripts/lib/process-control.sh"
+
+# Every writer this test backgrounds, so a run that ends early takes them with it.
+WRITER_PIDS=()
+
+#
+# Stops any writer still running. This test had no trap of any kind, so an assertion failure part
+# way through (`set -e` exits immediately) or the parallel runner's SIGTERM left ten writers, and the
+# psi process each was driving, running and reparented to init. Each writer is a shell whose psi
+# child does the work, so the tree has to be taken rather than the recorded pid alone.
+#
+stop_writers() {
+    local writer_pid
+    for writer_pid in "${WRITER_PIDS[@]:-}"; do
+        if [ -n "$writer_pid" ]; then
+            kill_process_tree "$writer_pid"
+        fi
+    done
+    WRITER_PIDS=()
+}
+trap stop_writers EXIT
+trap 'stop_writers; exit 130' INT
+trap 'stop_writers; exit 143' TERM
+
 # Both the writers and the reads resolve the cache directory from TEST_TMP_DIR, so pointing it at
 # an isolated directory keeps this test off the developer's real hash cache.
 export TEST_TMP_DIR="$TEST_ROOT"
@@ -99,6 +124,7 @@ for ((processIndex = 1; processIndex <= NUM_PROCESSES; processIndex++)); do
     WRITER_NAME="writer$processIndex"
     run_writer "$WRITER_NAME" > "$OUTPUT_DIR/$WRITER_NAME.log" 2>&1 &
     PIDS+=($!)
+    WRITER_PIDS+=($!)
 done
 
 FAILED_PROCESSES=0
@@ -107,6 +133,8 @@ for pid in "${PIDS[@]}"; do
         FAILED_PROCESSES=$((FAILED_PROCESSES + 1))
     fi
 done
+# Every writer has been waited on, so there is nothing left for the exit trap to stop.
+WRITER_PIDS=()
 
 echo ""
 if [ "$FAILED_PROCESSES" -gt 0 ]; then

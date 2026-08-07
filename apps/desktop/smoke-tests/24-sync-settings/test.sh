@@ -17,9 +17,7 @@ print_test_header 24 "sync-settings"
 CONFIG_TOML="$TMP_DIR/config/desktop.toml"
 
 cleanup() {
-    if [ -f "$TMP_DIR/app.pid" ]; then
-        kill_app_tree "$(cat "$TMP_DIR/app.pid")"
-    fi
+    cleanup_apps "$TMP_DIR"
 }
 trap cleanup EXIT
 

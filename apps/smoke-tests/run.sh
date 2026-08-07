@@ -23,7 +23,44 @@ NC='\033[0m'
 : "${PLATFORM:?PLATFORM must be set to 'android' or 'ios'}"
 
 # Sourcing common.sh also sources the platform launcher and defines the *_prepare/_build/etc.
+# It sources scripts/lib/process-control.sh too, which is where the leak check comes from. Every
+# control bridge the tests launch records its process group in this file, and the check at the end
+# looks at those groups and nothing else. Exported, because the launches happen in the test.sh child
+# processes.
 source "$SCRIPT_DIR/lib/common.sh"
+export PHOTOSPHERE_LAUNCHED_GROUPS
+PHOTOSPHERE_LAUNCHED_GROUPS="$(mktemp "${TMPDIR:-/tmp}/photosphere-mobile-launches-XXXXXX")"
+
+#
+# Fails the run when anything this suite launched is still running at the end of it.
+#
+# It looks only at the process groups this suite's own launches recorded, so the four other suites
+# that `bun run test:everything` runs alongside this one cannot be mistaken for its leak.
+#
+# The second look comes after a pause. A test's cleanup signals its bridge and returns without
+# waiting for it, so looking immediately races the kernel finishing it off.
+#
+check_for_leaked_processes() {
+    local leaked
+    leaked="$(list_leaked_launches)"
+    if [ -z "$leaked" ]; then
+        return 0
+    fi
+    sleep 5
+    leaked="$(list_leaked_launches)"
+    if [ -z "$leaked" ]; then
+        return 0
+    fi
+
+    echo ""
+    printf "${RED}LEAK: this run left processes it started still running.${NC}\n"
+    printf '%s\n' "$leaked" | while IFS= read -r leaked_line; do
+        echo "  $leaked_line"
+    done
+    echo ""
+    echo "Stop them before running again; they hold memory until something does."
+    return 1
+}
 
 # The work queue and worker pool that spread the tests over the available devices. It allocates a
 # uniquely named directory for each test as it dispatches it, so nothing needs to be scoped per run
@@ -222,7 +259,12 @@ main() {
             failed_index=$((failed_index + 1))
         done
     fi
-    return $((fail > 0 ? 1 : 0))
+    # A run that leaves control bridges behind has failed even when every test passed.
+    local leaked=0
+    check_for_leaked_processes || leaked=1
+    rm -f "$PHOTOSPHERE_LAUNCHED_GROUPS"
+
+    return $(((fail > 0 || leaked > 0) ? 1 : 0))
 }
 
 main "$@"

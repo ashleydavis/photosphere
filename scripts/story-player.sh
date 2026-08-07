@@ -424,38 +424,6 @@ open_index() {
     fi
 }
 
-#
-# Kills the capture loop along with its whole descendant tree. The loop spawns a
-# `tail -F | while read` pipeline whose children are not killed when the parent dies, so a plain
-# `kill $CAPTURE_PID` leaves an orphaned `tail -F` behind.
-#
-kill_capture_tree() {
-    local root_pid="$1"
-    if [ -z "$root_pid" ]; then
-        return
-    fi
-    local descendants=""
-    collect_descendants() {
-        local pid="$1"
-        local kids
-        kids=$(pgrep -P "$pid" 2>/dev/null || true)
-        for kid in $kids; do
-            collect_descendants "$kid"
-            descendants="$descendants $kid"
-        done
-    }
-    collect_descendants "$root_pid"
-    for pid in $descendants "$root_pid"; do
-        kill -TERM "$pid" 2>/dev/null || true
-    done
-    sleep 0.3
-    for pid in $descendants "$root_pid"; do
-        if kill -0 "$pid" 2>/dev/null; then
-            kill -KILL "$pid" 2>/dev/null || true
-        fi
-    done
-}
-
 print_test_header "story-player" "play-every-story ($PLATFORM_NAME)"
 
 build_app || exit 1
@@ -466,8 +434,11 @@ mkdir -p "$TMP_DIR"
 CAPTURE_PID=""
 
 cleanup() {
+    # The capture loop spawns a `tail -F | while read` pipeline whose children are not killed when
+    # the parent dies, so a plain `kill $CAPTURE_PID` leaves an orphaned `tail -F` behind. The tree
+    # walk takes the pipeline with it.
     if [ -n "$CAPTURE_PID" ]; then
-        kill_capture_tree "$CAPTURE_PID"
+        kill_process_tree "$CAPTURE_PID"
         CAPTURE_PID=""
     fi
     stop_app "$APP_PORT" "$TMP_DIR" || true
@@ -523,7 +494,7 @@ wait_for_log "$TMP_DIR" "STORIES CYCLE COMPLETE" 900
 # Stop the capture loop now the cycle is done; otherwise `tail` keeps running.
 #
 if [ -n "$CAPTURE_PID" ]; then
-    kill_capture_tree "$CAPTURE_PID"
+    kill_process_tree "$CAPTURE_PID"
     wait "$CAPTURE_PID" 2>/dev/null || true
     CAPTURE_PID=""
 fi

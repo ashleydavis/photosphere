@@ -18,6 +18,11 @@ REPO_DIR="$(cd "$COMMON_LIB_DIR/../../../.." && pwd)"
 # its own, so no test can be affected by, or affect, another test's files.
 source "$REPO_DIR/scripts/lib/allocate-test-temp-dir.sh"
 
+# Starting and stopping background processes: the process group launcher, the tree walk and the
+# leak counter. Shared with the mobile suite, the CLI suites and the story player so there is one
+# implementation rather than a copy per caller.
+source "$REPO_DIR/scripts/lib/process-control.sh"
+
 # Default seconds a wait tolerates before failing, doubled from the standalone value so a concurrent
 # suite run sharing the machine (which slows everything) does not trip a spurious timeout.
 DEFAULT_WAIT_TIMEOUT=120
@@ -221,16 +226,25 @@ start_app() {
         fi
     fi
 
-    PHOTOSPHERE_TEST_MODE=1 \
-    PHOTOSPHERE_CONFIG_DIR="$tmp_dir/config" \
-    PHOTOSPHERE_VAULT_DIR="$tmp_dir/vault" \
-    PHOTOSPHERE_VAULT_TYPE=plaintext \
-    PHOTOSPHERE_LOG_DIR="$tmp_dir" \
-    PHOTOSPHERE_NEWS_URL="${PHOTOSPHERE_NEWS_URL:-}" \
-    TEST_TMP_DIR="$tmp_dir" \
-    NODE_ENV=testing \
-    "${wrapper[@]}" "${launch_args[@]}" --no-sandbox --disable-gpu -geometry "${PHOTOSPHERE_TEST_GEOMETRY:-960x800+${x_pos}+0}" > "$tmp_dir/app.log" 2>&1 &
-    echo $! > "$tmp_dir/app.pid"
+    # Launched into a process group of its own, and the group recorded beside the pid. The recorded
+    # pid is the xvfb-run wrapper, and the app and the X server are its children; once the wrapper
+    # dies they are reparented to init and no walk of the process tree can find them again. The
+    # group survives that, so it is what cleanup_apps kills. The environment goes through `env`
+    # because launch_in_process_group takes a command, and a variable assignment written in front of
+    # a shell function is not one.
+    local launched_pid launched_pgid
+    read -r launched_pid launched_pgid < <(launch_in_process_group "$tmp_dir/app.log" \
+        env PHOTOSPHERE_TEST_MODE=1 \
+            PHOTOSPHERE_CONFIG_DIR="$tmp_dir/config" \
+            PHOTOSPHERE_VAULT_DIR="$tmp_dir/vault" \
+            PHOTOSPHERE_VAULT_TYPE=plaintext \
+            PHOTOSPHERE_LOG_DIR="$tmp_dir" \
+            PHOTOSPHERE_NEWS_URL="${PHOTOSPHERE_NEWS_URL:-}" \
+            TEST_TMP_DIR="$tmp_dir" \
+            NODE_ENV=testing \
+            "${wrapper[@]}" "${launch_args[@]}" --no-sandbox --disable-gpu -geometry "${PHOTOSPHERE_TEST_GEOMETRY:-960x800+${x_pos}+0}")
+    echo "$launched_pid" > "$tmp_dir/app.pid"
+    echo "$launched_pgid" > "$tmp_dir/app.pgid"
 
     local actual_port
     # wait_for_test_port prints the port on stdout so it stays return-based (exit would only kill the
@@ -245,22 +259,7 @@ start_app() {
 }
 
 #
-# Prints the given process and every process descended from it, deepest first.
-#
-# The list is gathered before anything is killed, on purpose: once a parent dies its children are
-# reparented to init, so walking the tree afterwards finds nothing and the survivors are invisible.
-#
-process_tree_pids() {
-    local pid="$1"
-    local child
-    for child in $(pgrep -P "$pid" 2>/dev/null); do
-        process_tree_pids "$child"
-    done
-    echo "$pid"
-}
-
-#
-# Stops the given process and everything it started, politely first and then not.
+# Stops the app launched from the given tmp directory, and everything it started.
 #
 # The recorded app pid is the xvfb-run wrapper, not the app. xvfb-run runs its command as a child
 # rather than exec'ing it, and starts Xvfb as another child of its own, so signalling that one pid
@@ -272,30 +271,53 @@ process_tree_pids() {
 # across runs and worktrees until the machine ran out of memory and systemd-oomd killed 354 processes
 # in one go, which took the Android emulator pool with it and failed a test run that was otherwise fine.
 #
+# The group recorded by start_app is preferred, because it still reaches the app and the X server
+# after the wrapper has died; the tree walk is the fallback for a platform with no setsid.
+# Usage: kill_app_tree <pid> [tmp_dir]
+#
 kill_app_tree() {
     local pid="$1"
-    local tree_pid tree_pids
-    tree_pids="$(process_tree_pids "$pid")"
-    for tree_pid in $tree_pids; do
-        kill -TERM "$tree_pid" 2>/dev/null || true
-    done
-    sleep 1
-    for tree_pid in $tree_pids; do
-        kill -KILL "$tree_pid" 2>/dev/null || true
-    done
+    local tmp_dir="${2:-${APP_TMP_DIR:-}}"
+    local pgid=""
+    if [ -n "$tmp_dir" ] && [ -f "$tmp_dir/app.pgid" ]; then
+        pgid="$(cat "$tmp_dir/app.pgid" 2>/dev/null || true)"
+    fi
+    if [ -n "$pgid" ]; then
+        kill_process_group "$pgid"
+        return 0
+    fi
+    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+        kill_process_tree "$pid"
+    fi
+    return 0
 }
 
-# Kills the app process recorded in <tmp_dir>/app.pid. Used by the wait_for_ready relaunch path.
+#
+# Stops whatever each of the given tmp directories has running, and is the only thing a test's
+# cleanup needs to call. Tolerates a missing pid file, a pid that is already gone and a directory
+# that was never used, so it is safe in an unconditional trap and safe to call twice.
+#
+# Every desktop test cleans up through this, so no test has to know how a process is stopped and a
+# change to that can never again reach some tests and miss others.
+# Usage: cleanup_apps <tmp_dir> [tmp_dir ...]
+#
+cleanup_apps() {
+    local tmp_dir
+    for tmp_dir in "$@"; do
+        if [ -z "$tmp_dir" ] || [ ! -d "$tmp_dir" ] || [ ! -f "$tmp_dir/app.pid" ]; then
+            continue
+        fi
+        local pid
+        pid="$(cat "$tmp_dir/app.pid" 2>/dev/null || true)"
+        kill_app_tree "$pid" "$tmp_dir" || true
+    done
+    return 0
+}
+
+# Kills the app recorded in <tmp_dir>. Used by the wait_for_ready relaunch path.
 _kill_app() {
     local tmp_dir="$1"
-    local pid_file="$tmp_dir/app.pid"
-    if [ -f "$pid_file" ]; then
-        local pid
-        pid=$(cat "$pid_file")
-        if kill -0 "$pid" 2>/dev/null; then
-            kill_app_tree "$pid"
-        fi
-    fi
+    cleanup_apps "$tmp_dir"
 }
 
 #
@@ -482,14 +504,7 @@ stop_app() {
     local tmp_dir="$2"
     send_command "$port" quit '{}' 2>/dev/null || true
     sleep 2
-    local pid_file="$tmp_dir/app.pid"
-    if [ -f "$pid_file" ]; then
-        local pid
-        pid=$(cat "$pid_file")
-        if kill -0 "$pid" 2>/dev/null; then
-            kill_app_tree "$pid"
-        fi
-    fi
+    cleanup_apps "$tmp_dir"
 }
 
 #

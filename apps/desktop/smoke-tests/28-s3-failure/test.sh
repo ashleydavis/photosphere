@@ -26,9 +26,7 @@ SECRET_NAME="smoke-test-s3"
 DB_NAME="s3-failure"
 
 cleanup() {
-    if [ -f "$TMP_DIR/app.pid" ]; then
-        kill_app_tree "$(cat "$TMP_DIR/app.pid")"
-    fi
+    cleanup_apps "$TMP_DIR"
     stop_s3_emulator "$S3_STATE_DIR"
 }
 trap cleanup EXIT

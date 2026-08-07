@@ -29,6 +29,11 @@ REPO_DIR="$(cd "$SMOKE_TESTS_DIR/../.." && pwd)"
 # its own, so no test can be affected by, or affect, another test's files.
 source "$REPO_DIR/scripts/lib/allocate-test-temp-dir.sh"
 
+# Starting and stopping background processes: the process group launcher, the tree walk and the
+# leak counter. Shared with the desktop suite, the CLI suites and the story player so there is one
+# implementation rather than a copy per caller.
+source "$REPO_DIR/scripts/lib/process-control.sh"
+
 # TMP_DIR is where a test keeps its app log, bridge pid file, fixtures and anything else it writes.
 # The runner allocates it and hands it down in PHOTOSPHERE_TMP_DIR; a test run on its own,
 # straight from the command line, allocates its own here so it is isolated either way. Set here
@@ -377,18 +382,23 @@ start_app() {
     fi
     echo "$existing_log_lines" > "$tmp_dir/.log-cursor"
 
-    PHOTOSPHERE_TEST_PORT="0" \
-    PHOTOSPHERE_LOG_DIR="$tmp_dir" \
-    PHOTOSPHERE_TEST_PLATFORM="$PLATFORM" \
-    PHOTOSPHERE_TEST_APP_ID="$APP_ID" \
-    PHOTOSPHERE_TEST_BUNDLE_ID="$BUNDLE_ID" \
-    PHOTOSPHERE_TEST_IOS_UDID="${IOS_SIMULATOR_UDID:-}" \
-    bun "$LIB_DIR/control-bridge-main.ts" > "$tmp_dir/bridge.log" 2>&1 &
-    local bridge_pid=$!
-    # Remove the bridge from the shell's job table so killing it in stop_app does not print an
-    # asynchronous "Terminated: 15" job-control notice. It is still stopped explicitly by PID.
-    disown "$bridge_pid"
+    # Launched into a process group of its own, and the group recorded beside the pid. `bun` runs
+    # the bridge script in a child process, so signalling the one recorded pid can leave that child
+    # alive and reparented to init, exactly as the desktop suite's xvfb-run wrapper did. The group
+    # still reaches it after the parent has gone. The environment goes through `env` because
+    # launch_in_process_group takes a command, and a variable assignment written in front of a shell
+    # function is not one.
+    local bridge_pid bridge_pgid
+    read -r bridge_pid bridge_pgid < <(launch_in_process_group "$tmp_dir/bridge.log" \
+        env PHOTOSPHERE_TEST_PORT="0" \
+            PHOTOSPHERE_LOG_DIR="$tmp_dir" \
+            PHOTOSPHERE_TEST_PLATFORM="$PLATFORM" \
+            PHOTOSPHERE_TEST_APP_ID="$APP_ID" \
+            PHOTOSPHERE_TEST_BUNDLE_ID="$BUNDLE_ID" \
+            PHOTOSPHERE_TEST_IOS_UDID="${IOS_SIMULATOR_UDID:-}" \
+            bun "$LIB_DIR/control-bridge-main.ts")
     echo "$bridge_pid" > "$tmp_dir/bridge.pid"
+    echo "$bridge_pgid" > "$tmp_dir/bridge.pgid"
 
     local actual_port
     actual_port=$(wait_for_bridge_port "$tmp_dir/bridge.port") || exit 1
@@ -523,14 +533,25 @@ stop_app() {
     local tmp_dir="$2"
     send_command "$port" quit '{}' 2>/dev/null || true
     "${PLATFORM}_stop" "$port" 2>/dev/null || true
+
+    # The group recorded by start_app is preferred, because it still reaches bun's child after the
+    # process that was signalled has gone; the tree walk is the fallback for a platform with no
+    # setsid. Signalling the recorded pid alone, as this used to, leaves that child running and
+    # reparented to init.
+    local pgid=""
+    if [ -f "$tmp_dir/bridge.pgid" ]; then
+        pgid="$(cat "$tmp_dir/bridge.pgid" 2>/dev/null || true)"
+    fi
+    if [ -n "$pgid" ]; then
+        kill_process_group "$pgid" || true
+        return 0
+    fi
     local pid_file="$tmp_dir/bridge.pid"
     if [ -f "$pid_file" ]; then
         local pid
         pid=$(cat "$pid_file")
         if kill -0 "$pid" 2>/dev/null; then
-            kill "$pid" 2>/dev/null || true
-            sleep 1
-            kill -9 "$pid" 2>/dev/null || true
+            kill_process_tree "$pid"
         fi
     fi
 }

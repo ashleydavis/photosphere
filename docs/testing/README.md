@@ -242,6 +242,20 @@ The allocator is `scripts/lib/allocate-test-temp-dir.sh`, shared by every suite:
 
 **Nothing removes these directories.** They accumulate, one per test per run. That is deliberate: keeping them is what made several intermittent failures diagnosable, and the deletion code that would clean them up is the same shape as the code that caused the `/tmp/photosphere` incident in the first place. `bun run find-flakey-tests` prints the count at the end of every session, so growth shows up on the session that caused it rather than weeks later as an unexplained slowdown. Remove them yourself when the count gets high.
 
+## Every suite cleans up its processes, and proves it
+
+A suite starts real processes: an Electron app under `xvfb-run`, an X server, a control bridge, a `psi` process per CLI test. Every one of those is stopped by the suite that started it, and every suite checks at the end that it left none of them running.
+
+Stopping is by process group, not by walking the process tree. A tree walk asks the kernel who a process's children are, so it only works while the parent is alive: the moment the parent dies its children are reparented to init and the walk finds nothing, which is exactly the state a leak leaves behind. A process group survives reparenting, so `kill -- -<pgid>` still reaches every member. `scripts/lib/process-control.sh` is the one implementation of this, shared by the desktop suite, the mobile suite, both CLI suites and the story player. Putting a command in a group of its own needs `setsid`, which macOS does not have, so on macOS the library records no group and falls back to the tree walk. That asymmetry is real and cannot be removed.
+
+The leak check runs at the end of `apps/desktop/smoke-tests.sh` and `apps/smoke-tests/run.sh`. Each app or control bridge a test launches records its process group in the file named by `PHOTOSPHERE_LAUNCHED_GROUPS`, which the runner exports before it starts anything; at the end the runner reports whatever is still alive in those groups and fails the run. **A leak check failure on a run whose tests all passed is a real failure, not noise.** It means the suite left something on the machine, and enough of those is what took the machine into an out-of-memory kill that took the Android emulator pool with it. Fix the cleanup that missed; do not delete the check.
+
+It is scoped to the groups the suite itself created, and that precision is load-bearing rather than tidiness. `bun run test:everything` runs five suites at once in one checkout, so anything looser (matching this checkout's path, say) makes every suite report the other four's live processes as its own leak. Naming the groups also reaches processes that match no pattern at all: the `Xvfb` server and Electron's utility processes are in the group but mention this checkout nowhere.
+
+The CLI suite has no leak check. Nothing in it launches through `launch_in_process_group` (a test starts `psi` directly inside its batch subshell), so there is no group to scope to, and a check there could never fire. What keeps that suite from leaking is that its interrupt and exit traps kill each batch subshell's whole process tree rather than just the subshell.
+
+There is one case the cleanup cannot cover, and nothing else covers it either. A SIGKILL runs no handler, so when `systemd-oomd` decides the machine is out of memory, or a runner is hard-killed, whatever was running is left behind however careful the suite was. The leak check will report those processes on the next run that notices them, but stopping them is a manual job: find them with `ps -eo pid,ppid,args | grep <path to this checkout>` and kill what is orphaned.
+
 ## Manual testing
 
 The manual end-to-end tests live under [e2e/](e2e/). Each test is a short markdown script with prerequisites, numbered steps, and expected results. They are split into:

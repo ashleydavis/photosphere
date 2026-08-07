@@ -8,6 +8,10 @@ source "$TEST_DIR/../../lib/common.sh"
 
 print_test_header 28 "host-emulator-comms"
 
+# No exit trap here, unlike every other test in this directory, because this one starts no app and
+# no control bridge: it only runs adb commands, which exit on their own. A trap would have nothing
+# to stop. Add one alongside the first start_app anyone puts in this file.
+
 # Android only: both directions are checked through adb and the emulator's NAT/bridge addressing,
 # neither of which exists on iOS, where the simulator shares the host's network and there is nothing
 # to check. Without this guard the test ran on iOS and failed on the missing adb.

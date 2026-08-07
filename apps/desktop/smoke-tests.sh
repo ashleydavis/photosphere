@@ -8,6 +8,13 @@ REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # source tree, in place of the fixed <test>/tmp every run used to share.
 source "$REPO_DIR/scripts/lib/allocate-test-temp-dir.sh"
 
+# The leak check, so this run can be held to leaving the machine as it found it. Every app the tests
+# launch records its process group in this file, and the check at the end looks at those groups and
+# nothing else. Exported, because the launches happen in the test.sh child processes.
+source "$REPO_DIR/scripts/lib/process-control.sh"
+export PHOTOSPHERE_LAUNCHED_GROUPS
+PHOTOSPHERE_LAUNCHED_GROUPS="$(mktemp "${TMPDIR:-/tmp}/photosphere-desktop-launches-XXXXXX")"
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -304,6 +311,41 @@ print_summary() {
     fi
 }
 
+#
+# Fails the run when anything this suite launched is still running at the end of it.
+#
+# A suite that leaks has failed, whatever its tests reported, because the cost lands on whatever runs
+# next: enough leaked Electron trees and X servers and the machine runs out of memory and
+# systemd-oomd starts killing things at random.
+#
+# It looks only at the process groups this suite's own launches recorded, so the four other suites
+# that `bun run test:everything` runs alongside this one cannot be mistaken for its leak.
+#
+# The second look comes after a pause. The last test's cleanup signals its processes and returns
+# without waiting for them, so looking immediately races the kernel finishing them off.
+#
+check_for_leaked_processes() {
+    local leaked
+    leaked="$(list_leaked_launches)"
+    if [[ -z "$leaked" ]]; then
+        return 0
+    fi
+    sleep 5
+    leaked="$(list_leaked_launches)"
+    if [[ -z "$leaked" ]]; then
+        return 0
+    fi
+
+    echo ""
+    printf "${RED}LEAK: this run left processes it started still running.${NC}\n"
+    printf '%s\n' "$leaked" | while IFS= read -r leaked_line; do
+        echo "  $leaked_line"
+    done
+    echo ""
+    echo "Stop them before running again; they hold memory until something does."
+    return 1
+}
+
 find_matching() {
     local pattern="$1"
     while IFS= read -r t; do
@@ -381,8 +423,11 @@ main() {
             exit 1
         fi
         bundle_app
-        run_sequential "${matching[@]}"
-        exit $?
+        local single_status=0
+        run_sequential "${matching[@]}" || single_status=$?
+        check_for_leaked_processes || single_status=1
+        rm -f "$PHOTOSPHERE_LAUNCHED_GROUPS"
+        exit "$single_status"
     fi
 
     local all_tests=()
@@ -397,11 +442,15 @@ main() {
 
     bundle_app
 
+    local run_status=0
     if [[ "$mode" == "sequential" ]]; then
-        run_sequential "${all_tests[@]}"
+        run_sequential "${all_tests[@]}" || run_status=$?
     else
-        run_mixed "$parallel_n" "${all_tests[@]}"
+        run_mixed "$parallel_n" "${all_tests[@]}" || run_status=$?
     fi
+    check_for_leaked_processes || run_status=1
+    rm -f "$PHOTOSPHERE_LAUNCHED_GROUPS"
+    return "$run_status"
 }
 
 main "$@"

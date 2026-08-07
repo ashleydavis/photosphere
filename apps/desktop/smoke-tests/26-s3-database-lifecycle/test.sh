@@ -35,9 +35,7 @@ DB_NAME="s3-lifecycle"
 # Stop the app AND the emulator, so a failed assertion never leaves a MinIO server running. The
 # emulator's stop is safe to call when nothing was started, so it goes in unconditionally.
 cleanup() {
-    if [ -f "$TMP_DIR/app.pid" ]; then
-        kill_app_tree "$(cat "$TMP_DIR/app.pid")"
-    fi
+    cleanup_apps "$TMP_DIR"
     stop_s3_emulator "$S3_STATE_DIR"
 }
 trap cleanup EXIT

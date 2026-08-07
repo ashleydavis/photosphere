@@ -10,9 +10,7 @@ CLI_DIR="$REPO_DIR/apps/cli"
 print_test_header 6 "add-database-entry"
 
 cleanup() {
-    if [ -f "$TMP_DIR/app.pid" ]; then
-        kill_app_tree "$(cat "$TMP_DIR/app.pid")"
-    fi
+    cleanup_apps "$TMP_DIR"
 }
 trap cleanup EXIT
 

@@ -23,6 +23,11 @@ NC='\033[0m'
 _LAN_SHARE_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$_LAN_SHARE_SCRIPT_DIR/../../scripts/lib/allocate-test-temp-dir.sh"
 
+# Starting and stopping background processes: the tree walk this suite kills its receiver with.
+# Shared with the desktop and mobile suites so there is one implementation rather than a copy per
+# caller.
+source "$_LAN_SHARE_SCRIPT_DIR/../../scripts/lib/process-control.sh"
+
 # The suite root. It is NOT where a test runs: run_test points TEST_TMP_DIR at a uniquely named
 # directory for the length of each test.
 #
@@ -78,24 +83,15 @@ log_fail() {
     TESTS_FAILED=$((TESTS_FAILED + 1))
 }
 
-# Recursively kill a process and all of its descendants (children first).
+# Kill a process and its descendants reliably.
+#
 # `bun run start` runs the actual CLI in a child process that owns the UDP broadcast and HTTPS
 # server. Killing only the top-level PID (especially SIGKILL, which the wrapper cannot forward)
 # orphans that child, which keeps broadcasting its pairing code and gets picked up by the next
-# test's sender, corrupting it. Killing the whole tree prevents the orphan.
-kill_tree() {
-    local pid="$1"
-    local child
-    for child in $(pgrep -P "$pid" 2>/dev/null); do
-        kill_tree "$child"
-    done
-    kill -9 "$pid" 2>/dev/null || true
-}
-
-# Kill a process and its descendants reliably.
+# test's sender, corrupting it. kill_process_tree takes the whole tree, which prevents the orphan.
 kill_proc() {
     local pid="$1"
-    kill_tree "$pid"
+    kill_process_tree "$pid"
     wait "$pid" 2>/dev/null || true
 }
 
@@ -110,7 +106,10 @@ test_cleanup() {
 # Clean up on script exit.
 cleanup() {
     test_cleanup
-    jobs -p 2>/dev/null | xargs -r kill -9 2>/dev/null || true
+    local job_pid
+    for job_pid in $(jobs -p 2>/dev/null); do
+        kill_process_tree "$job_pid"
+    done
     wait 2>/dev/null || true
 }
 trap cleanup EXIT

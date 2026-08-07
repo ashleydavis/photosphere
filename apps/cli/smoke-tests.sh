@@ -55,6 +55,17 @@ NC='\033[0m' # No Color
 # Per-test temporary directories, the same allocator every other suite in this repository uses.
 source "$_CLI_ABS_DIR/../../scripts/lib/allocate-test-temp-dir.sh"
 
+# Starting and stopping background processes: the tree walk the traps below use to take a batch
+# subshell together with the CLI processes underneath it. Shared with the desktop and mobile suites
+# so there is one implementation rather than a copy per caller.
+#
+# No leak check here, unlike the desktop and mobile suites. Theirs works by scoping to the process
+# groups their own launches recorded, and nothing in this suite launches through
+# launch_in_process_group: a CLI test starts `psi` directly, in its own batch subshell. There is
+# nothing to scope to, so a check here would be one that can never fire. What stops this suite
+# leaking is the tree kill in the traps below.
+source "$_CLI_ABS_DIR/../../scripts/lib/process-control.sh"
+
 # Test configuration
 #
 # The suite root, which holds the build output and whatever the setup and reset commands work on.
@@ -128,8 +139,18 @@ FAILED_TESTS=()
 FAILED_TEST_LOGS=()
 
 # Trap to show summary on exit (including failures)
+#
+# Also stops anything still running. This used to print and nothing else, so an exit that was not a
+# clean end of the run (a failure part way through a batch, or the parallel runner's SIGTERM routed
+# here by handle_interrupt) left the batch subshells and every CLI process under them alive and
+# reparented to init. A suite must not outlive itself.
 cleanup_and_show_summary() {
     local exit_code=$?
+    local job_pid
+    for job_pid in $(jobs -p); do
+        kill_process_tree "$job_pid"
+    done
+
     echo ""
     echo "============================================================================"
     if [ $exit_code -eq 0 ]; then
@@ -145,10 +166,18 @@ cleanup_and_show_summary() {
 trap cleanup_and_show_summary EXIT
 
 # Handle Ctrl-C: kill all background jobs and exit immediately.
+#
+# Each background job is a batch subshell, and the CLI processes doing the actual work are its
+# children, not the job itself. Signalling only the job left every one of those children running and
+# reparented to init, which is the leak this suite contributed. kill_process_tree takes the whole
+# tree, and takes it before anything dies, while the parent links are still there to follow.
 handle_interrupt() {
     echo ""
     echo "Interrupted."
-    jobs -p | xargs -r kill -TERM 2>/dev/null
+    local job_pid
+    for job_pid in $(jobs -p); do
+        kill_process_tree "$job_pid"
+    done
     exit 130
 }
 
