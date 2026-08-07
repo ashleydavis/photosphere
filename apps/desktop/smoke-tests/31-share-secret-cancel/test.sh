@@ -69,12 +69,21 @@ log_info "First pairing code: $first_code"
 
 send_command "$SENDER_PORT" click '{"dataId":"share-secret-cancel-button"}'
 
+#
+# An empty response means the request itself failed, which is not the same as the pairing code having
+# gone, and this loop used to treat the two alike: an app that had died read exactly like a cancelled
+# share and satisfied the wait. The response is now required to have arrived before its value is
+# believed, and still_showing starts at the code the sender was displaying so a run where every
+# request failed ends in the failure below rather than in a pass.
 elapsed=0
+still_showing="$first_code"
 while [ "$elapsed" -lt 15 ]; do
     response=$(curl -sf "http://localhost:$SENDER_PORT/get-value?dataId=share-pairing-code" 2>/dev/null || true)
-    still_showing=$(echo "$response" | sed 's/.*"value":"\([^"]*\)".*/\1/')
-    if [ -z "$still_showing" ] || ! echo "$still_showing" | grep -qE '^[0-9]{4}$'; then
-        break
+    if [ -n "$response" ]; then
+        still_showing=$(echo "$response" | sed 's/.*"value":"\([^"]*\)".*/\1/')
+        if [ -z "$still_showing" ] || ! echo "$still_showing" | grep -qE '^[0-9]{4}$'; then
+            break
+        fi
     fi
     sleep 1
     elapsed=$((elapsed + 1))

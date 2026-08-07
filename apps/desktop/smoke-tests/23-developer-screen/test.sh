@@ -49,7 +49,10 @@ wait_for_value_gone() {
     while [ "$elapsed" -lt 30 ]; do
         local response
         response=$(curl -sf "http://localhost:$port/get-value?dataId=$data_id" 2>/dev/null || true)
-        if ! echo "$response" | grep -q "$substring"; then
+        # The response has to have arrived before its absence of the substring means anything. An
+        # empty response is a failed request, and returning success on one made this helper report
+        # "the overlay is gone" for an app that had died.
+        if [ -n "$response" ] && ! echo "$response" | grep -q "$substring"; then
             return 0
         fi
         sleep 1

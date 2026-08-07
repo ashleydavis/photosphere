@@ -327,12 +327,24 @@ expect_value() {
 }
 
 # Parse a value from output and check if it matches expected value
+#
+# The label has to be present. parse_numeric returns its default of 0 when it finds no match, so an
+# assertion expecting 0 used to pass just as readily against output that never mentioned the label at
+# all: twenty assertions of the form expect_output_value "$output" "Removed:" "0" would not have
+# noticed the CLI dropping, renaming or failing to print that line. Checking for the label first
+# turns "the number is not there" into a failure instead of a zero.
 expect_output_value() {
     local output="$1"
     local pattern="$2"
     local expected="$3"
     local description="$4"
-    
+
+    if ! echo "$output" | grep -q "$pattern"; then
+        log_error "$description: the output contains no '$pattern' line, so there is no value to check"
+        echo "$output"
+        exit 1
+    fi
+
     local actual=$(parse_numeric "$output" "$pattern")
     expect_value "$actual" "$expected" "$description"
 }

@@ -17,8 +17,8 @@ cleanup() {
 trap cleanup EXIT
 
 log_info "Pre-creating two databases with CLI..."
-cd "$CLI_DIR" && bun run start -- init --db "$TMP_DIR/test-db-a" --yes
-cd "$CLI_DIR" && bun run start -- init --db "$TMP_DIR/test-db-b" --yes
+cd "$CLI_DIR" && bun run start -- init --db "$TMP_DIR/test-db-a" --yes || exit 1
+cd "$CLI_DIR" && bun run start -- init --db "$TMP_DIR/test-db-b" --yes || exit 1
 cd "$DESKTOP_DIR"
 
 log_info "Writing databases.toml seeded with two entries and both in recent_database_names..."

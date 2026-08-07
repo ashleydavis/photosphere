@@ -35,7 +35,10 @@ test_dbs_resolve_by_path() {
     local summary_output
     invoke_command "Summary by path (auto-resolve)" "$(get_cli_command) summary --db \"$db_dir\" --yes" 0 "summary_output"
 
-    expect_output_string "$summary_output" "1" "Summary shows at least 1 asset"
+    # Asserted on the imported-file count, not on an unanchored grep for "1". That grep matched any
+    # "1" anywhere in the output, and the summary of a database with no assets at all contains four
+    # of them (a file count, a byte count and two hashes), so it could not fail.
+    expect_output_value "$summary_output" "Files imported:" "1" "Summary shows the one asset that was added"
 
     test_passed
 }

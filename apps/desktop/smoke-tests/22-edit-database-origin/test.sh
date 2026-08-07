@@ -19,7 +19,7 @@ cleanup() {
 trap cleanup EXIT
 
 log_info "Pre-creating database with CLI..."
-cd "$CLI_DIR" && bun run start -- init --db "$TMP_DIR/test-db" --yes
+cd "$CLI_DIR" && bun run start -- init --db "$TMP_DIR/test-db" --yes || exit 1
 cd "$DESKTOP_DIR"
 
 start_app "$TMP_DIR"

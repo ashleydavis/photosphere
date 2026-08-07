@@ -29,6 +29,13 @@ send_command "$APP_PORT" type '{"dataId":"secret-name-input","text":"test-secret
 send_command "$APP_PORT" click '{"dataId":"add-secret-confirm"}' || exit 1
 wait_for_log "$TMP_DIR" "Secret added"
 
+# The log line alone proved nothing: the app writes it straight after awaiting addSecret, so a
+# keychain write that silently does nothing leaves it intact and this test passed with the secret
+# never stored. Confirmed by dropping both secureStore.set calls and watching this test still pass.
+# The secrets page renders one row per stored secret, so waiting for the row is the assertion that
+# the secret actually reached the keychain and was enumerated back out of it.
+wait_for_value "$APP_PORT" "secret-row-name-test-secret" "test-secret"
+
 check_no_errors "$TMP_DIR"
 
 log_success "Test 5 passed: add-secret"

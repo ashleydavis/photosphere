@@ -32,9 +32,9 @@ DOWNLOAD_DIR="$TMP_DIR/downloads"
 trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 
 log_info "Pre-creating database and importing two fixtures..."
-cd "$CLI_DIR" && bun run start -- init --db "$SOURCE_DB" --yes
-cd "$CLI_DIR" && bun run start -- add "$IMAGES_DIR/test-1.jpeg" --db "$SOURCE_DB" --yes
-cd "$CLI_DIR" && bun run start -- add "$IMAGES_DIR/test-2.png" --db "$SOURCE_DB" --yes
+cd "$CLI_DIR" && bun run start -- init --db "$SOURCE_DB" --yes || exit 1
+cd "$CLI_DIR" && bun run start -- add "$IMAGES_DIR/test-1.jpeg" --db "$SOURCE_DB" --yes || exit 1
+cd "$CLI_DIR" && bun run start -- add "$IMAGES_DIR/test-2.png" --db "$SOURCE_DB" --yes || exit 1
 cd "$DESKTOP_DIR"
 
 log_info "Writing databases.toml..."

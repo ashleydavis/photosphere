@@ -22,8 +22,8 @@ DEST_PARTIAL="$TMP_DIR/dest-partial"
 DEST_FULL="$TMP_DIR/dest-full"
 
 log_info "Pre-creating source database with CLI and importing a fixture..."
-cd "$CLI_DIR" && bun run start -- init --db "$SOURCE_DB" --yes
-cd "$CLI_DIR" && bun run start -- add "$IMAGES_DIR/test-1.jpeg" --db "$SOURCE_DB" --yes
+cd "$CLI_DIR" && bun run start -- init --db "$SOURCE_DB" --yes || exit 1
+cd "$CLI_DIR" && bun run start -- add "$IMAGES_DIR/test-1.jpeg" --db "$SOURCE_DB" --yes || exit 1
 cd "$DESKTOP_DIR"
 
 start_app "$TMP_DIR"

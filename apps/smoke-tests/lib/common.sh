@@ -97,6 +97,12 @@ POLL_TICKS_PER_SECOND=5
 LAN_BRIDGE_PROBE_ATTEMPTS=5
 LAN_BRIDGE_PROBE_INTERVAL_SECONDS=1
 
+# Exit code a test uses to tell the runner it did not run its body, so the runner reports it as
+# skipped rather than counting it as a pass. Must match the value in lib/runner.sh, which reads it
+# from the test's exit status; the two files are kept apart because runner.test.sh sources the runner
+# on its own, without this file.
+TEST_SKIPPED_EXIT_CODE=77
+
 # Clean up the app/bridge even when a run is interrupted (Ctrl-C) or the runner's timeout kills a
 # slow test (SIGTERM), not only on a normal exit. A bash EXIT trap does not fire on an uncaught
 # signal, so turn those signals into an exit here: that runs the per-test EXIT trap (stop_app),
@@ -836,13 +842,18 @@ require_lan_bridge() {
         attempt=$((attempt + 1))
         sleep "$LAN_BRIDGE_PROBE_INTERVAL_SECONDS"
     done
-    # A run that has declared it cannot have a bridge skips these tests instead of failing, the same
-    # way 33-s3-database skips without S3 credentials. The release workflow sets this because its
-    # emulator is booted by an action that attaches no tap device, so the bridge cannot be built
-    # there at all. A developer who simply forgot to bring the bridge up still gets a hard failure.
+    # A run that has declared it cannot have a bridge skips these tests instead of failing. The
+    # release workflow sets this because its emulator is booted by an action that attaches no tap
+    # device, so the bridge cannot be built there at all. A developer who simply forgot to bring the
+    # bridge up still gets a hard failure.
+    #
+    # The exit is TEST_SKIPPED_EXIT_CODE rather than 0. Exiting 0 made the runner count these tests
+    # in "All N tests passed" while they had executed none of their body, so on the release runner
+    # the only coverage of receiving a database or a secret over the LAN reported success having
+    # tested nothing at all.
     if [ "${PHOTOSPHERE_NO_LAN_BRIDGE:-}" = "1" ]; then
         log_info "SKIP: this test needs the host LAN bridge and PHOTOSPHERE_NO_LAN_BRIDGE=1 says this run has none. Skipping."
-        exit 0
+        exit "$TEST_SKIPPED_EXIT_CODE"
     fi
     log_error "The emulator is not on the host LAN bridge, so a host-to-device LAN transfer cannot work."
     log_error "Probed wlan0 $LAN_BRIDGE_PROBE_ATTEMPTS times; adb last reported: ${probe_output:-<no output>}"

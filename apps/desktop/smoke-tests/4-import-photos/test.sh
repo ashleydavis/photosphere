@@ -13,7 +13,7 @@ print_test_header 4 "import-photos"
 trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 
 log_info "Pre-creating database with CLI..."
-cd "$CLI_DIR" && bun run start -- init --db "$TMP_DIR/test-db" --yes
+cd "$CLI_DIR" && bun run start -- init --db "$TMP_DIR/test-db" --yes || exit 1
 cd "$DESKTOP_DIR"
 
 log_info "Writing databases.toml with one entry..."

@@ -108,16 +108,19 @@ log_success "The app did not report an empty-but-successful load from the unreac
 
 # Falls through to the error check below, which decides the test.
 
-# Something has to say the load failed. An error in the log is that statement. The AWS SDK retries a
+# Something has to say the load failed, and it has to be about THIS database. The AWS SDK retries a
 # connection several times before giving up, so this waits well past that rather than deciding after
 # one look: the question is whether the app EVER says anything, not whether it says it quickly.
 #
-# The dbus line Chromium writes at startup carries [ERROR] but has nothing to do with the database, so
-# it is excluded; anything else counts.
+# Matched on openDatabase's own message naming the database path, not on any [ERROR] line that is not
+# the Chromium dbus one. That older check passed on any unrelated error the app happened to log, so it
+# could report "the app reported an error for the unreachable bucket" for an error about something
+# else entirely, which is exactly the confusion this test exists to prevent.
+EXPECTED_ERROR="Could not reach the database at $S3_DB_PATH"
 ERROR_WAIT_SECONDS=90
 error_elapsed=0
 while [ "$error_elapsed" -lt "$ERROR_WAIT_SECONDS" ]; do
-    if grep '\[ERROR\]' "$TMP_DIR/app.log" 2>/dev/null | grep -qv 'org.freedesktop'; then
+    if grep -qF "$EXPECTED_ERROR" "$TMP_DIR/app.log" 2>/dev/null; then
         log_success "The app reported an error for the unreachable bucket after ${error_elapsed}s"
         stop_app "$APP_PORT" "$TMP_DIR"
         log_success "Test 28 passed: s3-failure"
@@ -127,7 +130,7 @@ while [ "$error_elapsed" -lt "$ERROR_WAIT_SECONDS" ]; do
     error_elapsed=$((error_elapsed + 1))
 done
 
-log_error "The app said nothing at all about the unreachable bucket for ${ERROR_WAIT_SECONDS}s"
+log_error "The app never logged \"$EXPECTED_ERROR\" in ${ERROR_WAIT_SECONDS}s"
 log_error "It neither completed the load nor logged an error, so the user is left looking at a screen that never resolves"
 log_error "Last 30 lines of app.log:"
 tail -30 "$TMP_DIR/app.log"

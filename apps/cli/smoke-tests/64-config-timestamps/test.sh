@@ -144,10 +144,17 @@ test_config_timestamps() {
 
     invoke_command "Initialize repair source database" "$(get_cli_command) init --db $repair_source_dir --yes"
     invoke_command "Add file to repair source" "$(get_cli_command) add --db $repair_source_dir $TEST_FILES_DIR/test.png --yes"
-    invoke_command "Replicate to create repair target" "$(get_cli_command) replicate --db $repair_source_dir --dest $repair_db_dir --yes --force"
 
-    # Capture pre-repair lastModifiedAt (the replicated target may not have one yet).
+    # The repair target is a plain copy of the source rather than a replica of it. Replication does
+    # not carry lastModifiedAt across, so the target came out with none, and the only assertion that
+    # checks repair ADVANCES the timestamp was guarded on the pre-repair value being present and had
+    # therefore never executed on any run. A copy inherits the source's state file, so the target now
+    # has a lastModifiedAt to advance past and that assertion runs.
+    cp -r "$repair_source_dir" "$repair_db_dir"
+
+    # Pre-repair lastModifiedAt. It must be there: it comes from the add above, through the copy.
     local before_repair_modified=$(read_state_field "$repair_db_dir" "lastModifiedAt")
+    expect_valid_iso_date "$before_repair_modified" "lastModifiedAt present on the repair target before repair"
 
     # Damage the target by deleting an asset file so repair has work to do.
     local file_to_delete=$(find "$repair_db_dir/asset" -type f | head -1)
@@ -166,13 +173,13 @@ test_config_timestamps() {
     local after_repair_modified=$(read_state_field "$repair_db_dir" "lastModifiedAt")
     expect_valid_iso_date "$after_repair_modified" "lastModifiedAt set after repair"
 
-    if [ -n "$before_repair_modified" ]; then
-        if [[ "$after_repair_modified" > "$before_repair_modified" ]]; then
-            log_success "Repair advanced lastModifiedAt past pre-repair value"
-        else
-            log_error "Repair did not advance lastModifiedAt: before=$before_repair_modified after=$after_repair_modified"
-            exit 1
-        fi
+    # No longer guarded on the pre-repair value being set: it is asserted present above, so this
+    # comparison always runs. Guarded, it never ran at all.
+    if [[ "$after_repair_modified" > "$before_repair_modified" ]]; then
+        log_success "Repair advanced lastModifiedAt past pre-repair value"
+    else
+        log_error "Repair did not advance lastModifiedAt: before=$before_repair_modified after=$after_repair_modified"
+        exit 1
     fi
 
     rm -rf "$test_dir"

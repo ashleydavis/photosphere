@@ -12,6 +12,10 @@ print_test_header 6 "add-database-entry"
 
 DB_NAME="test-db"
 
+# The name the entry is given in the database list. It carries no spaces because the assertion below
+# reads the row back through the control bridge, which puts the data-id straight into a URL query.
+ENTRY_NAME="my-test-db"
+
 trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 
 # Wipe everything the app has stored on the device (its storage sandbox, the WebView's
@@ -34,10 +38,18 @@ send_command "$APP_PORT" click '{"dataId":"page-actions-menu"}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"add-database-button"}' || exit 1
 wait_for_log "$TMP_DIR" "Add database dialog opened"
 
-send_command "$APP_PORT" type '{"dataId":"database-name-input","text":"My Test DB"}' || exit 1
+send_command "$APP_PORT" type "{\"dataId\":\"database-name-input\",\"text\":\"$ENTRY_NAME\"}" || exit 1
 send_command "$APP_PORT" type "{\"dataId\":\"database-path-input\",\"text\":\"$DB_NAME\"}" || exit 1
 send_command "$APP_PORT" click '{"dataId":"add-database-confirm"}' || exit 1
 wait_for_log "$TMP_DIR" "Database entry added"
+
+# The log line alone proved nothing: the provider writes it straight after awaiting
+# configStore.addDatabase, so an entry that never reaches databases.toml leaves it intact and this
+# test passed with nothing registered. Confirmed by dropping the addDatabase call and watching this
+# test still pass. The databases page renders one row per configured entry, so waiting for the row
+# to carry the entry's name is the assertion that it was really added and read back.
+send_command "$APP_PORT" navigate '{"page":"databases"}' || exit 1
+wait_for_value "$APP_PORT" "database-row-name-$ENTRY_NAME" "$ENTRY_NAME"
 
 check_no_errors "$TMP_DIR"
 

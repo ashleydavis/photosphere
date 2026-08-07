@@ -137,18 +137,19 @@ test_add_multiple_files() {
 
     log_info "Database path: $TEST_DB_DIR"
 
-    if [ -d "$MULTIPLE_IMAGES_DIR" ]; then
-        local add_output
-        invoke_command "Add multiple files" "$(get_cli_command) add --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes" 0 "add_output"
+    # A missing fixture directory is a failure, not a silent pass. This used to fall through to
+    # test_passed having run no command and made no assertion, so the test reported success while
+    # covering nothing. The path is relative, so it also depends on the runner's working directory:
+    # exactly the kind of thing that would break quietly.
+    check_exists "$MULTIPLE_IMAGES_DIR" "Multiple images fixture directory"
 
-        # Check that 5 files were imported (2 images + 1 video + 2 images from the zip archive)
-        expect_output_value "$add_output" "Files added:" "5" "Five files imported from multiple files directory"
+    local add_output
+    invoke_command "Add multiple files" "$(get_cli_command) add --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes" 0 "add_output"
 
-        invoke_command "Check multiple files added" "$(get_cli_command) check --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
-    else
-        log_warning "Multiple images directory not found: $MULTIPLE_IMAGES_DIR"
-        log_warning "Skipping multiple file tests"
-    fi
+    # Check that 5 files were imported (2 images + 1 video + 2 images from the zip archive)
+    expect_output_value "$add_output" "Files added:" "5" "Five files imported from multiple files directory"
+
+    invoke_command "Check multiple files added" "$(get_cli_command) check --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
     test_passed
 }
 
@@ -158,14 +159,12 @@ test_add_same_multiple_files() {
 
     log_info "Database path: $TEST_DB_DIR"
 
-    if [ -d "$MULTIPLE_IMAGES_DIR" ]; then
-        invoke_command "Re-add multiple files" "$(get_cli_command) add --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
+    # A missing fixture directory is a failure, not a silent pass. See test_add_multiple_files.
+    check_exists "$MULTIPLE_IMAGES_DIR" "Multiple images fixture directory"
 
-        invoke_command "Check multiple files still in database" "$(get_cli_command) check --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
-    else
-        log_warning "Multiple images directory not found: $MULTIPLE_IMAGES_DIR"
-        log_warning "Skipping multiple file tests"
-    fi
+    invoke_command "Re-add multiple files" "$(get_cli_command) add --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
+
+    invoke_command "Check multiple files still in database" "$(get_cli_command) check --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
     test_passed
 }
 
@@ -173,12 +172,9 @@ test_add_duplicate_images() {
     local test_number="$1"
     print_test_header "$test_number" "ADD DUPLICATE IMAGES (DEDUPE TO 1 ASSET)"
 
-    if [ ! -d "$DUPLICATE_IMAGES_DIR" ]; then
-        log_warning "Duplicate images directory not found: $DUPLICATE_IMAGES_DIR"
-        log_warning "Skipping duplicate images test"
-        test_passed
-        return 0
-    fi
+    # A missing fixture directory is a failure, not a silent pass. This used to call test_passed and
+    # return having asserted nothing. See test_add_multiple_files.
+    check_exists "$DUPLICATE_IMAGES_DIR" "Duplicate images fixture directory"
 
     local test_dir=$(get_test_dir "$test_number")
     mkdir -p "$test_dir"
@@ -299,31 +295,49 @@ test_export_assets() {
     # Check export output for success message
     expect_output_string "$export_output" "Successfully exported" "Export success message"
 
-    # Test 2: Export display version to directory (if it exists)
-    local display_file="$TEST_DB_DIR/display/$test_asset_id"
-    if [ -f "$display_file" ]; then
-        invoke_command "Export display version to directory" "$(get_cli_command) export --db $TEST_DB_DIR $test_asset_id $export_dir/ --type display --verbose --yes"
-
-        # Check if the display file was exported (name will depend on original filename)
-        local exported_display_count=$(find "$export_dir" -name "*_display.*" | wc -l)
-        if [ "$exported_display_count" -eq 0 ]; then
-            log_warning "Display version export didn't create expected _display file"
-        else
-            log_success "Display version exported successfully"
-        fi
-    else
-        log_info "Display version not available for asset $test_asset_id, skipping display export test"
+    # Test 2: Export display version to directory.
+    #
+    # The asset is chosen from the display directory rather than reusing $test_asset_id. Not every
+    # asset has a display version (a video has none), and the id picked above is the first in the
+    # asset directory, which in this database is one of the two without: this whole section was
+    # skipped on every run and had never executed. Picking an asset that has one makes it run.
+    #
+    # A database with no display versions at all is now a failure rather than a silent skip, because
+    # this database is built from five fixtures of which several are images, so an empty display
+    # directory means the import stopped producing display versions.
+    local display_asset_id
+    display_asset_id=$(ls "$TEST_DB_DIR/display" 2>/dev/null | head -1)
+    if [ -z "$display_asset_id" ]; then
+        log_error "No display versions exist in $TEST_DB_DIR/display, so the display export cannot be tested"
+        exit 1
     fi
 
-    # Test 3: Export thumbnail version (if it exists)
+    log_info "Using asset ID for the display export test: $display_asset_id"
+    invoke_command "Export display version to directory" "$(get_cli_command) export --db $TEST_DB_DIR $display_asset_id $export_dir/ --type display --verbose --yes"
+
+    # A missing _display file is now fatal. It used to be a log_warning that the test carried straight
+    # on from, so an export that wrote nothing at all still passed this section.
+    local exported_display_count=$(find "$export_dir" -name "*_display.*" | wc -l)
+    if [ "$exported_display_count" -eq 0 ]; then
+        log_error "The display export reported success but wrote no *_display file into $export_dir"
+        ls -la "$export_dir"
+        exit 1
+    fi
+    log_success "Display version exported successfully"
+
+    # Test 3: Export thumbnail version.
+    #
+    # The guard is gone for the same reason as Test 2's: a section that silently skips itself when
+    # its precondition is absent reports a pass having tested nothing. Every asset in this database
+    # has a thumbnail, including the video, so a missing one is a real fault to report.
     local thumb_file="$TEST_DB_DIR/thumb/$test_asset_id"
-    if [ -f "$thumb_file" ]; then
-        invoke_command "Export thumbnail version" "$(get_cli_command) export --db $TEST_DB_DIR $test_asset_id $export_dir/thumb.jpg --type thumb --verbose --yes"
-
-        check_exists "$export_dir/thumb.jpg" "Exported thumbnail file"
-    else
-        log_info "Thumbnail version not available for asset $test_asset_id, skipping thumbnail export test"
+    if [ ! -f "$thumb_file" ]; then
+        log_error "Asset $test_asset_id has no thumbnail at $thumb_file, so the thumbnail export cannot be tested"
+        exit 1
     fi
+    invoke_command "Export thumbnail version" "$(get_cli_command) export --db $TEST_DB_DIR $test_asset_id $export_dir/thumb.jpg --type thumb --verbose --yes"
+
+    check_exists "$export_dir/thumb.jpg" "Exported thumbnail file"
 
     # Test 4: Try to export non-existent asset (should fail)
     local invalid_asset_id="00000000-0000-0000-0000-000000000000"

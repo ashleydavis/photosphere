@@ -170,6 +170,11 @@ main() {
 
     local pass=0
     local fail=0
+    # Skipped tests are counted apart from passes. A gated test (no LAN bridge, or an Android-only
+    # test dispatched on iOS) runs none of its body, and counting it in "All N tests passed" reported
+    # coverage that had not happened. Naming them in the summary is what makes that visible.
+    local skip=0
+    local skipped_names=()
     local failed_names=()
     local failed_logs=()
     local result_file verdict name log_path
@@ -180,6 +185,9 @@ main() {
         log_path="$(awk '{ print $4 }' "$result_file")"
         if [ "$verdict" = "pass" ]; then
             pass=$((pass + 1))
+        elif [ "$verdict" = "skip" ]; then
+            skip=$((skip + 1))
+            skipped_names+=("$name")
         else
             fail=$((fail + 1))
             failed_names+=("$name")
@@ -189,6 +197,17 @@ main() {
     rm -rf "$results_dir"
 
     echo ""
+    # Printed before the verdict, and named one per line, so a run that skipped something can never
+    # be read as a run that covered everything.
+    if [ "$skip" -gt 0 ]; then
+        printf "${BLUE}%d test(s) skipped, so they proved nothing this run:${NC}\n" "$skip"
+        local skipped_index=0
+        while [ "$skipped_index" -lt "${#skipped_names[@]}" ]; do
+            printf "${BLUE}  %s${NC}\n" "${skipped_names[$skipped_index]}"
+            skipped_index=$((skipped_index + 1))
+        done
+        echo ""
+    fi
     if [ "$fail" -eq 0 ]; then
         printf "${GREEN}All %d tests passed${NC}\n" "$pass"
     else

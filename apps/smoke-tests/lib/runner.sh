@@ -23,6 +23,13 @@ source "$RUNNER_LIB_DIR/../../../scripts/lib/allocate-test-temp-dir.sh"
 # Marker file name, matched against a test's own directory.
 EXCLUSIVE_MARKER=".exclusive"
 
+# Exit code a test uses to say it did not run its body, so the runner can report it as skipped rather
+# than as a pass. Before this existed a gated test (no LAN bridge, or an Android-only test dispatched
+# on iOS) exited 0 having executed nothing, and the runner counted it in "All N tests passed": the
+# suite reported coverage it had not performed. 77 is the conventional skip code and is far enough
+# from a real failure that nothing else produces it. common.sh defines the same value for the tests.
+TEST_SKIPPED_EXIT_CODE=77
+
 # Seconds a single test may run before the pool kills it, so one wedged test cannot hang the suite.
 PER_TEST_TIMEOUT="${PHOTOSPHERE_PER_TEST_TIMEOUT:-600}"
 
@@ -841,7 +848,11 @@ run_worker() {
         duration="$(cat "$duration_file" 2>/dev/null || echo 0)"
         # The log path goes in the result file because it can no longer be reconstructed from the
         # test's name: every test gets a uniquely named directory of its own, which is the point.
-        if [ "$status" -eq 0 ]; then
+        if [ "$status" -eq "$TEST_SKIPPED_EXIT_CODE" ]; then
+            # Recorded separately from a pass so a test that ran nothing is never counted as coverage.
+            printf "${BLUE}SKIP${NC}  %-32s  %ss  (log: %s)\n" "$name" "$duration" "$log_file"
+            echo "skip $name $duration $log_file" > "$results_dir/$name.result"
+        elif [ "$status" -eq 0 ]; then
             printf "${GREEN}PASS${NC}  %-32s  %ss\n" "$name" "$duration"
             echo "pass $name $duration $log_file" > "$results_dir/$name.result"
         else

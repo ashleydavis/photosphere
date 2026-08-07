@@ -11,10 +11,13 @@ print_test_header 28 "host-emulator-comms"
 # Android only: both directions are checked through adb and the emulator's NAT/bridge addressing,
 # neither of which exists on iOS, where the simulator shares the host's network and there is nothing
 # to check. Without this guard the test ran on iOS and failed on the missing adb.
+#
+# The exit is TEST_SKIPPED_EXIT_CODE rather than 0, and the line below no longer says PASS. Exiting 0
+# and printing [PASS] made an iOS run count this test in "All N tests passed" while it had checked
+# neither direction of the connectivity it names.
 if [ "$PLATFORM" != "android" ]; then
     log_info "SKIP: 28-host-emulator-comms checks Android emulator networking and does not apply to $PLATFORM. Skipping."
-    log_success "Test 28 skipped: host-emulator-comms (not applicable to $PLATFORM)"
-    exit 0
+    exit "$TEST_SKIPPED_EXIT_CODE"
 fi
 
 # Host to emulator: adb reaches the guest shell and a token round-trips.

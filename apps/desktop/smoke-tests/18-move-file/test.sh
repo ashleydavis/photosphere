@@ -16,11 +16,11 @@ SOURCE_DB="$TMP_DIR/source-db"
 DEST_DB="$TMP_DIR/dest-db"
 
 log_info "Pre-creating source database and importing a fixture..."
-cd "$CLI_DIR" && bun run start -- init --db "$SOURCE_DB" --yes
-cd "$CLI_DIR" && bun run start -- add "$IMAGES_DIR/test-1.jpeg" --db "$SOURCE_DB" --yes
+cd "$CLI_DIR" && bun run start -- init --db "$SOURCE_DB" --yes || exit 1
+cd "$CLI_DIR" && bun run start -- add "$IMAGES_DIR/test-1.jpeg" --db "$SOURCE_DB" --yes || exit 1
 
 log_info "Pre-creating destination database..."
-cd "$CLI_DIR" && bun run start -- init --db "$DEST_DB" --yes
+cd "$CLI_DIR" && bun run start -- init --db "$DEST_DB" --yes || exit 1
 cd "$DESKTOP_DIR"
 
 log_info "Writing databases.toml with both entries..."

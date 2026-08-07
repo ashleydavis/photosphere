@@ -17,7 +17,7 @@ cleanup() {
 trap cleanup EXIT
 
 log_info "Pre-creating database with CLI..."
-cd "$CLI_DIR" && bun run start -- init --db "$TMP_DIR/test-db" --yes
+cd "$CLI_DIR" && bun run start -- init --db "$TMP_DIR/test-db" --yes || exit 1
 
 log_info "Pre-creating api-key secret with CLI (using the same vault as the app)..."
 PHOTOSPHERE_CONFIG_DIR="$TMP_DIR/config" \

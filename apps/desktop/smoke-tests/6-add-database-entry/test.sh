@@ -17,7 +17,7 @@ cleanup() {
 trap cleanup EXIT
 
 log_info "Pre-creating database with CLI..."
-cd "$CLI_DIR" && bun run start -- init --db "$TMP_DIR/test-db" --yes
+cd "$CLI_DIR" && bun run start -- init --db "$TMP_DIR/test-db" --yes || exit 1
 cd "$DESKTOP_DIR"
 
 start_app "$TMP_DIR"
@@ -38,6 +38,22 @@ send_command "$APP_PORT" type "{\"dataId\":\"database-path-input\",\"text\":\"$T
 send_command "$APP_PORT" click '{"dataId":"add-database-confirm"}'
 
 wait_for_log "$TMP_DIR" "Database entry added"
+
+# The log line alone proved nothing: the main process writes it straight after awaiting
+# addDatabaseEntry, so an entry that never reaches databases.toml leaves it intact and this test
+# passed with nothing registered. Confirmed by dropping the addDatabaseEntry call and watching this
+# test still pass. Reading the file back is the assertion that the entry was really added.
+DATABASES_TOML="$TMP_DIR/config/databases.toml"
+if [ ! -f "$DATABASES_TOML" ]; then
+    log_error "The app reported 'Database entry added' but wrote no $DATABASES_TOML"
+    exit 1
+fi
+if ! grep -q 'My Test DB' "$DATABASES_TOML"; then
+    log_error "The app reported 'Database entry added' but $DATABASES_TOML has no entry named 'My Test DB'"
+    cat "$DATABASES_TOML"
+    exit 1
+fi
+log_success "The database entry is in databases.toml"
 
 check_no_errors "$TMP_DIR"
 

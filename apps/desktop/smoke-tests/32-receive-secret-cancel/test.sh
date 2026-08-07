@@ -44,12 +44,21 @@ wait_for_value "$RECEIVER_PORT" "receive-secret-cancel-button" "Cancel"
 
 send_command "$RECEIVER_PORT" click '{"dataId":"receive-secret-cancel-button"}'
 
+#
+# An empty response means the request itself failed, which is not the same as the dialog having
+# closed, and this loop used to treat the two alike: an app that had died read exactly like a
+# cancelled dialog and satisfied the wait. The response is now required to have arrived before its
+# value is believed, and still_waiting starts at "Cancel" so a run where every request failed ends in
+# the failure below rather than in a pass.
 elapsed=0
+still_waiting="Cancel"
 while [ "$elapsed" -lt 15 ]; do
     response=$(curl -sf "http://localhost:$RECEIVER_PORT/get-value?dataId=receive-secret-cancel-button" 2>/dev/null || true)
-    still_waiting=$(echo "$response" | sed 's/.*"value":"\([^"]*\)".*/\1/')
-    if [ "$still_waiting" != "Cancel" ]; then
-        break
+    if [ -n "$response" ]; then
+        still_waiting=$(echo "$response" | sed 's/.*"value":"\([^"]*\)".*/\1/')
+        if [ "$still_waiting" != "Cancel" ]; then
+            break
+        fi
     fi
     sleep 1
     elapsed=$((elapsed + 1))

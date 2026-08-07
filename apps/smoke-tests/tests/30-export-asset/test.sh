@@ -40,7 +40,14 @@ wait_for_log "$TMP_DIR" "AssetView opened"
 # completed download. Assert no "Download completed" line appears.
 send_command "$APP_PORT" stage-export '{"exportOutcome":"cancelled"}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"download-asset-button"}' || exit 1
-sleep 3
+
+# Waiting for the cancel to be reported, rather than sleeping a fixed three seconds and checking that
+# nothing was logged. The old shape could not fail for the right reason: a download that never started
+# at all logs no completion either, so a button that did nothing read exactly like a working cancel,
+# and on a loaded machine a download that was merely slower than three seconds read the same way too.
+wait_for_log "$TMP_DIR" "Download cancelled: test-1.jpeg"
+
+# ...and having cancelled, it must not also claim to have completed.
 if grep -q "Download completed" "$TMP_DIR/app.log"; then
     log_error "A cancelled export must not report a completed download"
     exit 1

@@ -503,6 +503,11 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
         const filename = asset.origFileName || asset._id;
         const result = await platform.saveDownloadedFiles([{ assetId: asset._id, assetType: "asset", filename }], databasePath!);
         if (result.outcome === "cancelled") {
+            // Logged for the same reason the completed path below is: cancelling is an outcome the
+            // user chose, and until this line existed it was the only outcome of a download that left
+            // no trace at all. That silence is what made the export-cancel smoke test unable to tell
+            // a cancel that worked from a button that did nothing.
+            log.event(`Download cancelled: ${filename}`);
             return;
         }
 

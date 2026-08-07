@@ -88,13 +88,18 @@ if ( wait_for_log "$TMP_DIR" "Load assets task completed: 0 assets loaded" 60 );
 fi
 log_success "The app did not report an empty-but-successful load from the unreachable bucket"
 
-# Something has to say the load failed. An error in the app log is that statement. The AWS SDK retries
-# a connection several times before giving up, so this waits well past that: the question is whether
-# the app EVER says anything, not whether it says it quickly.
+# Something has to say the load failed, and it has to be about THIS database. The AWS SDK retries a
+# connection several times before giving up, so this waits well past that: the question is whether the
+# app EVER says anything, not whether it says it quickly.
+#
+# Matched on openDatabase's own message naming the database path, not on any [ERROR] line at all. That
+# older check passed on any unrelated error the app happened to log, which the header above already
+# admitted could be a credential failure rather than the unreachable bucket this test is about.
+EXPECTED_ERROR="Could not reach the database at $S3_DB_PATH"
 ERROR_WAIT_SECONDS=90
 error_elapsed=0
 while [ "$error_elapsed" -lt "$ERROR_WAIT_SECONDS" ]; do
-    if grep -q '\[ERROR\]' "$TMP_DIR/app.log" 2>/dev/null; then
+    if grep -qF "$EXPECTED_ERROR" "$TMP_DIR/app.log" 2>/dev/null; then
         log_success "The app reported an error for the unreachable bucket after ${error_elapsed}s"
         log_success "Test 43 passed: s3-failure"
         exit 0
@@ -103,7 +108,7 @@ while [ "$error_elapsed" -lt "$ERROR_WAIT_SECONDS" ]; do
     error_elapsed=$((error_elapsed + 1))
 done
 
-log_error "The app said nothing at all about the unreachable bucket for ${ERROR_WAIT_SECONDS}s"
+log_error "The app never logged \"$EXPECTED_ERROR\" in ${ERROR_WAIT_SECONDS}s"
 log_error "It neither completed the load nor logged an error, so the user is left looking at a screen that never resolves"
 log_error "Last 30 lines of app.log:"
 tail -30 "$TMP_DIR/app.log"

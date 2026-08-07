@@ -56,12 +56,21 @@ send_command "$APP_PORT" click '{"dataId":"receive-database-cancel-button"}' || 
 
 # Cancelling closes the dialog. Waiting for the button to go keeps the test from reopening the dialog
 # while the first receive is still in flight, which would prove nothing about the restart.
+#
+# read_value returns an empty string both for an element that is not on screen and for a request that
+# never reached the device, so believing it on its own made a dead app read exactly like a cancelled
+# dialog. The bridge is asked outright whether it is still answering, and only then is the value
+# believed; a device that has stopped responding now fails here instead of passing.
 elapsed=0
 still_waiting="Cancel"
 while [ "$elapsed" -lt 15 ]; do
-    still_waiting=$(read_value "$APP_PORT" "receive-database-cancel-button")
-    if [ "$still_waiting" != "Cancel" ]; then
-        break
+    # -s without -f, matching wait_for_bridge: this asks whether the bridge is answering at all, not
+    # whether the app reports itself ready, so a transient 503 is not mistaken for an unreachable device.
+    if curl -s -o /dev/null "http://$BRIDGE_HOST:$APP_PORT/ready" 2>/dev/null; then
+        still_waiting=$(read_value "$APP_PORT" "receive-database-cancel-button")
+        if [ "$still_waiting" != "Cancel" ]; then
+            break
+        fi
     fi
     sleep 1
     elapsed=$((elapsed + 1))
