@@ -3,6 +3,7 @@ name: Release
 env:
   BUN_VERSION: "1.3.14"
   NODE_VERSION: "24.15.0"
+  WHAT_CHANGED_VERSION: "v0.0.3"
 
 on:
   push:
@@ -174,6 +175,9 @@ jobs:
         uses: ./.github/actions/retry-install
         with:
           run: bun install
+
+      - name: Install what-changed
+        uses: ./.github/actions/install-what-changed
 
       - name: Compile TypeScript
         run: bun run compile
@@ -1226,6 +1230,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
+      - name: Install what-changed
+        uses: ./.github/actions/install-what-changed
+
       - name: Run Android native unit tests
         run: bun run test:and:unit
 
@@ -1275,6 +1282,9 @@ jobs:
         with:
           path: apps/ios-frontend/ios/App/vendor/im
           key: ${{ runner.os }}-ios-imagemagick-${{ hashFiles('apps/ios-frontend/ios/build-imagemagick.sh') }}
+
+      - name: Install what-changed
+        uses: ./.github/actions/install-what-changed
 
       # Host bridge, engine pool, subtask routing, path sandbox, media host functions.
       - name: Run iOS native unit tests
@@ -1362,6 +1372,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
+      - name: Install what-changed
+        uses: ./.github/actions/install-what-changed
+
       - name: Run Android smoke tests
         uses: reactivecircus/android-emulator-runner@v2
         env:
@@ -1426,6 +1439,9 @@ jobs:
         with:
           path: apps/ios-frontend/ios/App/vendor/im
           key: ${{ runner.os }}-ios-imagemagick-${{ hashFiles('apps/ios-frontend/ios/build-imagemagick.sh') }}
+
+      - name: Install what-changed
+        uses: ./.github/actions/install-what-changed
 
       # run.sh boots an iOS simulator and builds/installs the app via xcrun/xcodebuild.
       - name: Run iOS smoke tests

@@ -1,0 +1,36 @@
+name: Install what-changed
+description: >
+  Puts the what-changed executable on PATH. Every package.json script a CI job runs ends in
+  `what-changed baseline capture <target>`, so without it the script exits 127 after the work it
+  names has already passed.
+
+runs:
+  using: composite
+  steps:
+    - name: Download and install what-changed
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+
+        # Runner OS and architecture pick the release asset. Only the two combinations the jobs
+        # needing what-changed actually run on are handled; anything else fails here rather than
+        # later, on a missing command, in whichever script happens to reach it first.
+        case "$RUNNER_OS-$RUNNER_ARCH" in
+            Linux-X64) asset="what-changed-linux-x64.tar.gz";;
+            macOS-ARM64) asset="what-changed-macos-arm64.tar.gz";;
+            macOS-X64) asset="what-changed-macos-x64.tar.gz";;
+            *) echo "::error::No what-changed release asset for $RUNNER_OS-$RUNNER_ARCH"; exit 1;;
+        esac
+
+        install_dir="$RUNNER_TEMP/what-changed-bin"
+        mkdir -p "$install_dir"
+        gh release download "$WHAT_CHANGED_VERSION" --repo ashleydavis/what-changed \
+            --pattern "$asset" --dir "$RUNNER_TEMP"
+        tar -xzf "$RUNNER_TEMP/$asset" -C "$install_dir"
+        chmod +x "$install_dir/what-changed"
+
+        # GITHUB_PATH rather than a symlink into /usr/local/bin, so this needs no sudo and works the
+        # same on both runner families.
+        echo "$install_dir" >> "$GITHUB_PATH"
