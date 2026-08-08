@@ -356,6 +356,20 @@ android_host_address() {
         return 0
     fi
 
+    # A run that has declared it has no bridge is not waiting for one. The poll below exists to ride
+    # out a bridge-attached emulator's wifi flap, and where PHOTOSPHERE_NO_LAN_BRIDGE=1 says there is
+    # no bridge there is no flap to ride out and no address that could ever appear: the wait runs to
+    # its full length and ends at 10.0.2.2 every single time.
+    #
+    # It is not free. This function is called on every app launch, and the release workflow, which
+    # sets that flag, paid the full 30 seconds 43 times in one run: 21 and a half minutes of a 39
+    # minute job, and the whole of the workflow's slowdown from 18 minutes to 40. Every test's
+    # duration in that run was its old duration plus an exact multiple of 30 seconds.
+    if [ "${PHOTOSPHERE_NO_LAN_BRIDGE:-}" = "1" ]; then
+        echo "10.0.2.2"
+        return 0
+    fi
+
     # Every message here goes to stderr: this function's stdout is the address its caller captures,
     # so anything else written there would be read as part of it.
     local waited=0
