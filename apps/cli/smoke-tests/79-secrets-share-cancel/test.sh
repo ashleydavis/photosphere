@@ -76,10 +76,15 @@ cancel_share_command() {
 
     kill -INT -"$SHARE_PGID"
 
+    # Liveness is tested with `kill -0`, a bash builtin, and not with `pgrep -g`. Git for Windows
+    # ships no pgrep, so that call did not fail to find the process, it failed to run at all, and
+    # the loop read "pgrep exited non-zero" as "the command has stopped". This assertion therefore
+    # could not fail on Windows, and the same loop in phase 3 returned immediately instead of
+    # waiting for the receiver, which is what actually broke that phase.
     local attempt
     for attempt in $(seq 1 40); do
         sleep 0.5
-        if ! pgrep -g "$SHARE_PGID" > /dev/null 2>&1; then
+        if ! kill -0 "$SHARE_PGID" 2>/dev/null; then
             SHARE_PGID=""
             return 0
         fi
@@ -153,7 +158,7 @@ test_secrets_share_cancel() {
     local attempt
     for attempt in $(seq 1 40); do
         sleep 0.5
-        if ! pgrep -g "$SHARE_PGID" > /dev/null 2>&1; then
+        if ! kill -0 "$SHARE_PGID" 2>/dev/null; then
             SHARE_PGID=""
             break
         fi
