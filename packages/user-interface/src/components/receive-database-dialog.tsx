@@ -1,5 +1,5 @@
 import { log } from "utils";
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ResponsiveDialog } from './responsive-dialog';
 import DialogTitle from '@mui/joy/DialogTitle';
 import DialogContent from '@mui/joy/DialogContent';
@@ -117,6 +117,15 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
     // The existing entry that the new database collides with (used for the Replace path).
     const [existingDbName, setExistingDbName] = useState<string | undefined>(undefined);
 
+    // Set when the user cancels a receive that is already waiting for a sender.
+    //
+    // Cancelling closes the dialog, but the wait for the sender is still in flight and finishes
+    // afterwards, reporting that no sender connected. Without this it writes that outcome into a
+    // dialog that has already closed and reset itself, leaving it on the error step, so reopening
+    // shows the error rather than the code field. A ref rather than state because the in-flight
+    // wait needs to read the current value when it resolves, not the one captured when it started.
+    const receiveAbandoned = useRef(false);
+
     // Reset state when the dialog closes, and announce it only once it is open.
     //
     // The reset happens on the way out rather than on the way in so that the dialog is always
@@ -140,11 +149,18 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
     // Starts the receiver with the entered code, waits for the sender payload, then moves to review.
     //
     const handleStartReceiving = useCallback(async () => {
+        receiveAbandoned.current = false;
         try {
             await platform.startShareReceive(enteredCode);
             setStep("waiting");
 
             const received = await platform.waitShareReceive();
+
+            // A receive the user cancelled has nothing to report. Its outcome would otherwise land
+            // in a dialog that has already closed and reset.
+            if (receiveAbandoned.current) {
+                return;
+            }
 
             if (!received) {
                 setErrorMessage("No sender connected within 60 seconds.");
@@ -164,6 +180,11 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
             log.event('Database review step');
         }
         catch (err) {
+            // Same reason as above: a cancelled receive that fails on its way out is not a failure
+            // the user needs telling about, and the dialog it would report into has gone.
+            if (receiveAbandoned.current) {
+                return;
+            }
             // Surface the failure instead of leaving the dialog spinning on "Waiting for sender...".
             log.exception("Receive error:", err as Error);
             setErrorMessage(lanShareErrorMessage(err as Error));
@@ -361,6 +382,9 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
     //
     const handleCancel = useCallback(async () => {
         if (step === "waiting") {
+            // Marked before the cancel rather than after, because cancelling is what makes the
+            // in-flight wait finish, and it can resolve while this is still awaiting.
+            receiveAbandoned.current = true;
             await platform.cancelShareReceive();
         }
         onClose();
