@@ -994,8 +994,15 @@ cmd_pool_up() {
 # to, let `pool-up` run while a unit was still deactivating, and `systemd-run` refuses a name that is
 # still loaded: "Unit psphere-emu-pool-0.service was already loaded or has a fragment file". That
 # aborted the run on the first emulator, so `pool-restart` could not bring the pool back at all,
-# which is the one thing it exists to do. `systemctl reset-failed` does not help, because the unit is
-# not failed, it is still on its way out.
+# which is the one thing it exists to do. Waiting is what handles that case: `systemctl reset-failed`
+# does not, because such a unit is not failed, it is still on its way out.
+#
+# A unit whose emulator died IS failed, though, and that is the other way the names stay taken. An
+# emulator that segfaults leaves its transient unit loaded in the failed state, and systemd keeps a
+# failed unit loaded indefinitely so its status can still be read: no amount of waiting releases it.
+# That is cleared here rather than waited on, because otherwise the first crash of any pool emulator
+# blocks every later `pool-restart` until somebody runs reset-failed by hand, and emulators do crash.
+# Only the pool's own units are touched, and only ones already dead, so nothing running is disturbed.
 #
 wait_for_pool_units_released() {
     local waited=0
@@ -1005,6 +1012,10 @@ wait_for_pool_units_released() {
     fi
 
     while [ "$waited" -lt "$POOL_UNIT_RELEASE_TIMEOUT_SECONDS" ]; do
+        # Inside the loop, not once before it: a unit that is on its way out when this starts can
+        # reach the failed state part way through the wait, and would then never be cleared at all.
+        systemctl --user reset-failed "$POOL_UNIT_GLOB" >/dev/null 2>&1 || true
+
         if [ "$(systemctl --user list-units --all --no-legend --plain "$POOL_UNIT_GLOB" 2>/dev/null | wc -l)" -eq 0 ]; then
             return 0
         fi
