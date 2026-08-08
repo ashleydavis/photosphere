@@ -141,6 +141,18 @@ POOL_SLICE_INSTALL_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 # wrong set.
 POOL_UNIT_GLOB="psphere-emu-pool-*"
 
+# The size of an AVD's data partition, written into config.ini and read by the emulator.
+#
+# This was 6G, and all five pool AVDs reached it: each one held a userdata-qemu.img.qcow2 of exactly
+# 6,442,909,696 bytes, which is the 6G limit to the byte. A full data partition makes the package
+# manager refuse an install with INSTALL_FAILED_INSUFFICIENT_STORAGE, and a suite that does not notice
+# carries on testing whichever build was already on the device.
+#
+# The size only takes effect on an AVD whose userdata is created fresh, because the partition is sized
+# when userdata-qemu.img is first created. Raising this number does nothing to an emulator that
+# already has one; that is what the -wipe-data on pool-restart is for.
+AVD_DATA_PARTITION_SIZE="12G"
+
 # How long to wait for systemd to release those unit names after their emulators have gone. Seconds,
 # because the wait is normally a moment; it is generous only so that a loaded machine is not failed
 # for being slow.
@@ -484,7 +496,7 @@ hw.lcd.density=440
 hw.gpu.enabled=yes
 hw.gpu.mode=swiftshader_indirect
 hw.keyboard=yes
-disk.dataPartition.size=6G
+disk.dataPartition.size=$AVD_DATA_PARTITION_SIZE
 CONFIG
 
     {
@@ -531,6 +543,75 @@ base_avd_name() {
         return 0
     fi
     "$emulator" -list-avds 2>/dev/null | grep -v '^$' | grep -v "^$POOL_AVD_PREFIX-" | grep -v "^${SINGLE_AVD_NAME}$" | head -1
+}
+
+#
+# Brings an existing AVD's data partition size up to AVD_DATA_PARTITION_SIZE, rewriting the
+# disk.dataPartition.size line in its config.ini when it differs and adding the line when it is
+# absent. Prints what it changed. Touches no file at all when the value already matches, so calling
+# it twice does nothing the second time.
+#
+# This exists because clone_avd returns early for a clone that is already there, so an AVD created
+# before the size changed would otherwise keep the size it was cloned with forever.
+#
+# config.ini is the input to the next cold boot, which is why editing it between runs is what takes
+# effect. A running emulator reads its own hardware-qemu.ini, which the emulator regenerates from
+# config.ini at launch, so there is nothing to edit on a running one and nothing here disturbs it.
+# The size itself only reaches the guest when userdata is created fresh, which is what pool-restart's
+# -wipe-data does.
+# Usage: ensure_avd_data_partition_size <avd_name>
+#
+ensure_avd_data_partition_size() {
+    local name="$1"
+    local home ini dir config current temp
+    home="$(avd_home)"
+    ini="$home/$name.ini"
+
+    if [ ! -f "$ini" ]; then
+        echo "ERROR: AVD '$name' not found at $ini." >&2
+        return 1
+    fi
+
+    # The AVD's directory name does not have to match its name, so read it from the .ini, exactly as
+    # clone_avd does.
+    dir="$(grep '^path=' "$ini" | cut -d= -f2-)"
+    config="$dir/config.ini"
+    if [ ! -f "$config" ]; then
+        echo "ERROR: AVD '$name' has no config.ini at $dir." >&2
+        return 1
+    fi
+
+    # `|| true` because a config.ini with no such line makes grep exit 1, which under `set -e` would
+    # abort the script rather than take the "add the line" branch below.
+    current="$(grep '^disk\.dataPartition\.size=' "$config" | head -1 | cut -d= -f2- || true)"
+    if [ "$current" = "$AVD_DATA_PARTITION_SIZE" ]; then
+        return 0
+    fi
+
+    # Written to a temporary file beside the original and moved into place, so a config.ini is never
+    # left half-written if this is interrupted.
+    temp="$config.psphere-size"
+
+    if [ -n "$current" ]; then
+        sed "s/^disk\.dataPartition\.size=.*/disk.dataPartition.size=$AVD_DATA_PARTITION_SIZE/" "$config" > "$temp"
+        mv "$temp" "$config"
+        echo "AVD '$name': data partition size $current -> $AVD_DATA_PARTITION_SIZE (applies on the next wiped boot)."
+        return 0
+    fi
+
+    {
+        cat "$config"
+
+        # A config.ini that does not end in a newline would otherwise have the new setting joined
+        # onto its last line. $(...) strips trailing newlines, so this is empty exactly when the
+        # file already ends in one.
+        if [ -n "$(tail -c 1 "$config")" ]; then
+            echo ""
+        fi
+        echo "disk.dataPartition.size=$AVD_DATA_PARTITION_SIZE"
+    } > "$temp"
+    mv "$temp" "$config"
+    echo "AVD '$name': data partition size set to $AVD_DATA_PARTITION_SIZE (applies on the next wiped boot)."
 }
 
 #
@@ -685,6 +766,72 @@ ensure_pool_slice() {
 }
 
 #
+# Prints the command line the emulator is launched with, one argument per line, and runs nothing.
+# The last argument says whether to wipe: non-empty appends -wipe-data, empty leaves it off.
+#
+# It is a function of its own so that what start_emulator_bg is about to run can be read and checked
+# without starting an emulator, which matters because starting one is the human's job here and the
+# agent must not do it.
+#
+# -no-snapshot forces a cold boot. A quick-boot snapshot restores the guest's previous network state
+# (behind the 10.0.2.x virtual router), so wlan0 never re-associates to the freshly created tap and
+# stays NO-CARRIER. A cold boot brings wifi up fresh and associates it to -wifi-tap, which is the
+# whole point.
+#
+# -wipe-data recreates the data partition from the system image instead of reusing the overlay left
+# by the last run. It is what makes a change to AVD_DATA_PARTITION_SIZE reach the guest, because the
+# partition is sized when userdata-qemu.img is created and never afterwards. It also throws away
+# everything the guest had, including the installed app.
+#
+# -gpu swiftshader_indirect pins software rendering. Two settings have been tried here and both are
+# recorded, because the second was chosen on evidence produced by the first.
+#
+# "auto", the original, let the emulator pick a backend at runtime. It chose software rendering
+# anyway (Vulkan 'lavapipe', GLES 'swangle'), and four of five pool emulators crashed inside ten
+# minutes during a suite run, each log ending in crash-handler output with a minidump written.
+#
+# "off" was tried next. It removed GPU emulation entirely and produced a new, repeatable failure: the
+# app started, its WebView took fifteen seconds to bring up a sandboxed rendering process, and the
+# main thread then hung with an ANR. Two separate occurrences, both inside WebView start-up, one
+# blocked on a mutex in WebView class initialisation. The devices were healthy throughout, so this was
+# the app hanging rather than the emulator dying. "off" leaves Chromium with no GL path at all, which
+# is what its start-up needs.
+#
+# "swiftshader_indirect" keeps rendering in software, so nothing depends on the host GPU and the
+# backend no longer varies between emulators, while still giving the WebView something to render on.
+# It is the usual choice for unattended runs.
+#
+# It is passed on the command line as well as set in the AVD config, because the command line
+# overrides the config and an AVD cloned before that change would otherwise keep the old setting.
+#
+# None of this has been shown to stop the original crashes. There is no stack trace for those (no
+# minidump symboliser is installed), and the dump has been kept for that. What is established is
+# narrower: "off" causes WebView start-up hangs, and this setting exists to avoid them without going
+# back to a backend chosen at runtime.
+# Usage: emulator_launch_argv <emulator_binary> <avd_name> <tap_name> <wipe>
+#
+emulator_launch_argv() {
+    local emulator="$1"
+    local avd="$2"
+    local netcard="$3"
+    local wipe="$4"
+
+    echo "$emulator"
+    echo "-avd"
+    echo "$avd"
+    echo "-no-snapshot"
+    echo "-no-boot-anim"
+    echo "-gpu"
+    echo "swiftshader_indirect"
+    echo "-wifi-tap"
+    echo "$netcard"
+
+    if [ -n "$wipe" ]; then
+        echo "-wipe-data"
+    fi
+}
+
+#
 # Starts one writable emulator in the background on the given tap, so it lands on the bridge. Must
 # run as your user, not root: the emulator can only open a tap it owns. Nothing here is ever
 # -read-only, so every emulator keeps its own state.
@@ -697,12 +844,16 @@ ensure_pool_slice() {
 # A service also detaches by itself, so setsid is no longer needed, and captures the process's output
 # itself, so the shell redirect is gone with it. Each emulator is a separate unit, so one that dies
 # leaves the rest running.
-# Usage: start_emulator_bg <avd_name> <tap_name> <log_suffix>
+#
+# The last argument says whether to wipe the emulator's data partition on the way up. It is passed
+# straight to emulator_launch_argv; see there for what it does and what it costs.
+# Usage: start_emulator_bg <avd_name> <tap_name> <log_suffix> <wipe>
 #
 start_emulator_bg() {
     local avd="$1"
     local netcard="$2"
     local log_suffix="$3"
+    local wipe="$4"
 
     if [ "$(id -u)" -eq 0 ]; then
         echo "ERROR: the emulator must run as your user, not root." >&2
@@ -744,13 +895,17 @@ start_emulator_bg() {
     # that leftover record and nothing else: it cannot stop an emulator that is running.
     systemctl --user reset-failed "$unit" 2>/dev/null || true
 
-    echo "Starting emulator '$avd' on $netcard as $unit (cold boot, so wifi associates to the bridge)..."
+    if [ -n "$wipe" ]; then
+        echo "Starting emulator '$avd' on $netcard as $unit (cold boot with -wipe-data, so its data partition is recreated)..."
+    else
+        echo "Starting emulator '$avd' on $netcard as $unit (cold boot, so wifi associates to the bridge)..."
+    fi
 
-    # -no-snapshot forces a cold boot. A quick-boot snapshot restores the guest's
-    # previous network state (behind the 10.0.2.x virtual router), so wlan0 never
-    # re-associates to the freshly created tap and stays NO-CARRIER. A cold boot
-    # brings wifi up fresh and associates it to -wifi-tap, which is the whole point.
-    #
+    # The emulator's own arguments come from emulator_launch_argv, which is where they are explained,
+    # and are read one per line because none of them can contain a newline.
+    local -a emulator_argv
+    mapfile -t emulator_argv < <(emulator_launch_argv "$emulator" "$avd" "$netcard" "$wipe")
+
     # MemoryHigh rather than MemoryMax per emulator: MemoryHigh throttles the emulator and reclaims
     # from it, where MemoryMax would have the kernel kill it outright, and an emulator sits close
     # enough to any ceiling worth setting that a hard kill would be a coin toss. The slice's own
@@ -773,33 +928,6 @@ start_emulator_bg() {
     # ${setenv_args[@]+"${setenv_args[@]}"} rather than "${setenv_args[@]}" because this script runs
     # under `set -u`, where expanding an empty array is an unbound-variable error on older bash. The
     # + form expands to nothing at all when the array is empty, which is what is wanted.
-    # -gpu swiftshader_indirect pins software rendering.
-    #
-    # Two settings have been tried here and both are recorded, because the second was chosen on
-    # evidence produced by the first.
-    #
-    # "auto", the original, let the emulator pick a backend at runtime. It chose software rendering
-    # anyway (Vulkan 'lavapipe', GLES 'swangle'), and four of five pool emulators crashed inside ten
-    # minutes during a suite run, each log ending in crash-handler output with a minidump written.
-    #
-    # "off" was tried next. It removed GPU emulation entirely and produced a new, repeatable failure:
-    # the app started, its WebView took fifteen seconds to bring up a sandboxed rendering process,
-    # and the main thread then hung with an ANR. Two separate occurrences, both inside WebView
-    # start-up, one blocked on a mutex in WebView class initialisation. The devices were healthy
-    # throughout, so this was the app hanging rather than the emulator dying. "off" leaves Chromium
-    # with no GL path at all, which is what its start-up needs.
-    #
-    # "swiftshader_indirect" keeps rendering in software, so nothing depends on the host GPU and the
-    # backend no longer varies between emulators, while still giving the WebView something to render
-    # on. It is the usual choice for unattended runs.
-    #
-    # Passed on the command line as well as set in the AVD config above, because the command line
-    # overrides the config and an AVD cloned before this change would otherwise keep the old setting.
-    #
-    # None of this has been shown to stop the original crashes. There is no stack trace for those (no
-    # minidump symboliser is installed), and the dump has been kept for that. What is established is
-    # narrower: "off" causes WebView start-up hangs, and this setting exists to avoid them without
-    # going back to a backend chosen at runtime.
     systemd-run --user --unit="$unit" \
         --slice="$POOL_SLICE" \
         --description="Photosphere emulator: $avd on $netcard" \
@@ -808,7 +936,7 @@ start_emulator_bg() {
         -p StandardOutput="file:/tmp/psphere-emulator-$log_suffix.log" \
         -p StandardError="file:/tmp/psphere-emulator-$log_suffix.log" \
         ${setenv_args[@]+"${setenv_args[@]}"} \
-        "$emulator" -avd "$avd" -no-snapshot -no-boot-anim -gpu swiftshader_indirect -wifi-tap "$netcard"
+        "${emulator_argv[@]}"
 }
 
 #
@@ -918,7 +1046,11 @@ cmd_up() {
     base="$(ensure_base_avd)" || exit 1
     clone_avd "$base" "$SINGLE_AVD_NAME" || exit 1
 
-    start_emulator_bg "$SINGLE_AVD_NAME" "$netcard" "single"
+    # Keeps the hand-testing emulator on the same partition size as the pool, so the two do not drift
+    # apart and a problem seen on one is reproducible on the other.
+    ensure_avd_data_partition_size "$SINGLE_AVD_NAME" || exit 1
+
+    start_emulator_bg "$SINGLE_AVD_NAME" "$netcard" "single" ""
 
     echo "Waiting for the emulator to be ready on the bridge (up to 180s)..."
     if wait_for_ready 180 1 single_serials; then
@@ -936,11 +1068,31 @@ cmd_up() {
 # bridge as the single emulator. Deliberately independent of `up`, so a pool can be started and
 # stopped while a hand-testing emulator keeps running untouched.
 #
+# Takes an optional --wipe, which starts every emulator with -wipe-data and so resets its data
+# partition to baseline. Only pool-restart passes it. A plain pool-up deliberately does not, because
+# pool-up is what brings the pool back after emulators have crashed, and throwing the installed app
+# away on a recovery would turn it into a full reinstall.
+# Usage: cmd_pool_up [--wipe]
+#
 cmd_pool_up() {
     if [ "$(id -u)" -eq 0 ]; then
         echo "ERROR: run 'pool-up' as your user (it uses sudo only for the bridge)." >&2
         exit 1
     fi
+
+    local wipe=""
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --wipe)
+                wipe="wipe"
+                ;;
+            *)
+                echo "ERROR: unknown argument to pool-up: $1 (only --wipe is understood)." >&2
+                exit 1
+                ;;
+        esac
+        shift
+    done
 
     local base
     base="$(ensure_base_avd)" || exit 1
@@ -949,6 +1101,11 @@ cmd_pool_up() {
     local index taps=""
     for index in $(seq 0 $((PHOTOSPHERE_EMULATOR_COUNT - 1))); do
         clone_avd "$base" "$(pool_avd_name "$index")" || exit 1
+
+        # After the clone rather than inside it, because clone_avd returns early for a clone that
+        # already exists and would never reach one created before the size changed.
+        ensure_avd_data_partition_size "$(pool_avd_name "$index")" || exit 1
+
         taps="$taps $(pool_netcard_name "$index")"
     done
 
@@ -972,7 +1129,7 @@ cmd_pool_up() {
     fi
 
     for index in $(seq 0 $((PHOTOSPHERE_EMULATOR_COUNT - 1))); do
-        start_emulator_bg "$(pool_avd_name "$index")" "$(pool_netcard_name "$index")" "pool-$index"
+        start_emulator_bg "$(pool_avd_name "$index")" "$(pool_netcard_name "$index")" "pool-$index" "$wipe"
     done
 
     echo "Waiting for $PHOTOSPHERE_EMULATOR_COUNT pool emulator(s) to reach the bridge (up to 600s)..."
@@ -1123,9 +1280,21 @@ cmd_restart() {
 # place. This is the way to pick up a change to the emulators' memory limits, since the limits are
 # read when an emulator starts and cannot be applied to one already running.
 #
+# It also resets each pool emulator's data partition to baseline, by starting it with -wipe-data.
+# That is how a change to AVD_DATA_PARTITION_SIZE takes effect: the partition is sized when
+# userdata-qemu.img is created, so an emulator that already has one keeps its old size no matter what
+# config.ini says. It is also the answer to a partition that has filled up, which is what happened to
+# all five pool AVDs at 6G.
+#
+# What the wipe costs: it removes /data/local/tmp/psphere-apk.sha, the stamp android_ensure_apk in
+# apps/smoke-tests/lib/android.sh compares against, so the first `test:and` after a restart reinstalls
+# the APK on every emulator. That is once per restart rather than once per run, so the saving commit
+# a01f52f2 made by not reinstalling an unchanged APK at the top of every run is untouched from the
+# second run onwards.
+#
 cmd_pool_restart() {
     cmd_pool_down
-    cmd_pool_up
+    cmd_pool_up --wipe
 }
 
 #
@@ -1206,7 +1375,12 @@ case "${1:-}" in
         cmd_status
         ;;
     pool-up)
-        cmd_pool_up
+        # shift so the sub-command name itself is not passed on as an argument, leaving whatever
+        # followed it (--wipe) for cmd_pool_up to read. ${@+"$@"} rather than "$@" for the same
+        # reason the setenv array uses that form: on older bash, `set -u` treats an empty "$@" as an
+        # unbound variable, and the + form expands to nothing at all instead.
+        shift
+        cmd_pool_up ${@+"$@"}
         ;;
     pool-down)
         cmd_pool_down
@@ -1222,7 +1396,7 @@ case "${1:-}" in
         bridge_down
         ;;
     *)
-        echo "Usage: $0 {up|down|restart|status|pool-up|pool-down|pool-restart}"
+        echo "Usage: $0 {up|down|restart|status|pool-up [--wipe]|pool-down|pool-restart}"
         echo ""
         echo "  up          Bring the '$SINGLE_AVD_NAME' emulator up on the LAN bridge and wait"
         echo "              until ready. Runs alongside 'pool-up' without disturbing it."
@@ -1231,8 +1405,13 @@ case "${1:-}" in
         echo "  status      Print each attached device and whether it is on the bridge (exit 0 if any is)."
         echo "  pool-up     Bring up PHOTOSPHERE_EMULATOR_COUNT writable emulators, each on its own"
         echo "              cloned AVD and its own tap. Runs alongside 'up' without disturbing it."
+        echo "              Keeps each emulator's userdata, so the installed app survives; pass"
+        echo "              --wipe to reset it instead."
         echo "  pool-down   Stop only the pool's emulators and remove only the pool's taps."
-        echo "  pool-restart pool-down then pool-up. Leaves the hand-testing emulator alone."
+        echo "  pool-restart pool-down then pool-up --wipe. Leaves the hand-testing emulator alone."
+        echo "              The wipe resets each emulator's data partition to baseline, which is how"
+        echo "              a disk-size change takes effect and how a full partition is cleared. The"
+        echo "              app is reinstalled on the first 'test:and' afterwards."
         echo ""
         echo "The bridge, DHCP and NAT are shared: they are only torn down once no taps are left."
         echo "Both 'up' and 'pool-up' run on clones of a base AVD, which is auto-selected (override with"

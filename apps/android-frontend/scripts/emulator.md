@@ -48,6 +48,16 @@ The limits live in `psphere-pool.slice`, next to `emulator.sh`, which is comment
 
 The limits are read when an emulator starts, so a change only reaches emulators started afterwards. Use `bun run emu:and:pool:restart` to apply one to the pool.
 
+### Disk, and what a restart resets
+
+Each AVD's data partition is sized by `AVD_DATA_PARTITION_SIZE` at the top of `emulator.sh`, currently 12G. It was 6G, and all five pool AVDs reached that limit: each held a `userdata-qemu.img.qcow2` of exactly 6,442,909,696 bytes. A full data partition makes the package manager refuse an install with `INSTALL_FAILED_INSUFFICIENT_STORAGE`, and a suite that does not notice carries on testing whichever build was already on the device, which is why `bun run emu:and:pool:status` reports free space.
+
+Changing that number is not enough on its own. The partition is sized when `userdata-qemu.img` is first created, so an emulator that already has one keeps its old size whatever `config.ini` says. `bun run emu:and:pool:restart` is what makes the change take effect: it starts each pool emulator with `-wipe-data`, which recreates the data partition from the system image at the current size. That is also how a partition that has filled up gets cleared. `pool-up` on its own never wipes, because it is what brings the pool back after emulators have crashed and a recovery should not throw the installed app away.
+
+A wipe costs one reinstall per emulator. It removes `/data/local/tmp/psphere-apk.sha`, the stamp `android_ensure_apk` in `apps/smoke-tests/lib/android.sh` compares against, so the first `bun run test:and` after a restart installs the APK on all of them again. That is once per restart, not once per run, so the saving made by not reinstalling an unchanged APK at the top of every run is untouched from the second run onwards.
+
+The overlays are sparse qcow2 files that grow only as they are written, so doubling the size costs nothing until it is used. What doubles is the ceiling, and that is worth having room for: five emulators at 12G is 60G of worst case, against the 30G they used to be able to reach, on top of the base and single AVDs. The measurement taken when the size was raised: 57G in total under the AVD directory, on a filesystem with 258G free.
+
 Check what is in effect, and what the pool is using right now:
 
 ```
