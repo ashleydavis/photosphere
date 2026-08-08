@@ -46,11 +46,10 @@ start_share_command() {
     local command_pid=$!
     set +m
 
-    SHARE_PGID=$(ps -o pgid= -p "$command_pid" | tr -d ' ')
-    if [ -z "$SHARE_PGID" ]; then
-        log_error "Could not read the process group of the share command"
-        return 1
-    fi
+    # The group id is the job's pid, which is what `set -m` above just guaranteed, so it is taken
+    # from the job rather than asked for. It used to come from `ps -o pgid=`, which Git Bash's ps
+    # does not accept: it printed nothing and the test failed on Windows before running anything.
+    SHARE_PGID="$command_pid"
 
     local attempt
     for attempt in $(seq 1 60); do
