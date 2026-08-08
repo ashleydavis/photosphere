@@ -89,6 +89,13 @@ PARALLEL_N=5
 # Record start time for total duration reporting
 SMOKE_TESTS_START_TIME=$SECONDS
 
+# Exit code a test uses to say it did not run its body, so the runner reports it as skipped rather
+# than as a pass. A skip is counted and printed separately and never folded into the pass total,
+# because a suite that reports coverage it did not perform is worse than one that reports a failure.
+# 77 is the conventional skip code and is the same value apps/smoke-tests/lib/runner.sh uses, so the
+# two suites do not disagree about what it means.
+export TEST_SKIPPED_EXIT_CODE=77
+
 # Get test directory path for a given test number
 get_test_dir() {
     local test_number="$1"
@@ -461,7 +468,15 @@ run_one() {
     log_file="$TEST_TMP_DIR/test-run.log"
     printf "${BLUE}RUN ${NC}  %2s  %s\n" "$num" "$name"
     local test_start=$SECONDS
-    if timeout 300 bash "$test_sh" >"$log_file" 2>&1; then
+    local test_status=0
+    timeout 300 bash "$test_sh" >"$log_file" 2>&1 || test_status=$?
+    if [ "$test_status" -eq "$TEST_SKIPPED_EXIT_CODE" ]; then
+        local test_duration
+        test_duration=$(format_duration $((SECONDS - test_start)))
+        printf "${BLUE}SKIP${NC}  %2s  %-30s  %s  (log: %s)\n" "$num" "$name" "$test_duration" "$log_file"
+        return "$TEST_SKIPPED_EXIT_CODE"
+    fi
+    if [ "$test_status" -eq 0 ]; then
         local test_duration
         test_duration=$(format_duration $((SECONDS - test_start)))
         printf "${GREEN}PASS${NC}  %2s  %-30s  %s\n" "$num" "$name" "$test_duration"
@@ -479,15 +494,21 @@ run_one() {
 run_sequential() {
     local pass=0
     local fail=0
+    local skip=0
+    local one_status
     for test_sh in "$@"; do
-        if run_one "$test_sh"; then
+        one_status=0
+        run_one "$test_sh" || one_status=$?
+        if [ "$one_status" -eq 0 ]; then
             pass=$((pass + 1))
+        elif [ "$one_status" -eq "$TEST_SKIPPED_EXIT_CODE" ]; then
+            skip=$((skip + 1))
         else
             fail=$((fail + 1))
         fi
     done
     print_failed_logs
-    print_summary "$pass" "$fail"
+    print_summary "$pass" "$fail" "$skip"
     return $((fail > 0 ? 1 : 0))
 }
 
@@ -498,6 +519,7 @@ run_parallel() {
     local tests=("$@")
     local pass=0
     local fail=0
+    local skip=0
     local total="${#tests[@]}"
     local i=0
 
@@ -575,12 +597,16 @@ run_parallel() {
             local duration_file
             duration_file="$batch_test_dir/test-duration.txt"
             local test_duration
-            if wait "$pid"; then
-                test_duration=$(format_duration "$(cat "$duration_file" 2>/dev/null || echo 0)")
+            local wait_status=0
+            wait "$pid" || wait_status=$?
+            test_duration=$(format_duration "$(cat "$duration_file" 2>/dev/null || echo 0)")
+            if [ "$wait_status" -eq "$TEST_SKIPPED_EXIT_CODE" ]; then
+                printf "${BLUE}SKIP${NC}  %2s  %-30s  %s  (log: %s)\n" "$num" "$name" "$test_duration" "$batch_test_dir/test-run.log"
+                skip=$((skip + 1))
+            elif [ "$wait_status" -eq 0 ]; then
                 printf "${GREEN}PASS${NC}  %2s  %-30s  %s\n" "$num" "$name" "$test_duration"
                 pass=$((pass + 1))
             else
-                test_duration=$(format_duration "$(cat "$duration_file" 2>/dev/null || echo 0)")
                 printf "${RED}FAIL${NC}  %2s  %-30s  %s  (log: %s)\n" "$num" "$name" "$test_duration" "$batch_test_dir/test-run.log"
                 FAILED_TEST_LOGS+=("$batch_test_dir/test-run.log")
                 fail=$((fail + 1))
@@ -590,7 +616,7 @@ run_parallel() {
     done
 
     print_failed_logs
-    print_summary "$pass" "$fail"
+    print_summary "$pass" "$fail" "$skip"
     return $((fail > 0 ? 1 : 0))
 }
 
@@ -598,15 +624,21 @@ run_parallel() {
 print_summary() {
     local pass="$1"
     local fail="$2"
-    local total=$((pass + fail))
+    local skip="${3:-0}"
+    local total=$((pass + fail + skip))
     local elapsed=$((SECONDS - SMOKE_TESTS_START_TIME))
     local minutes=$((elapsed / 60))
     local secs=$((elapsed % 60))
     echo ""
     if ((fail == 0)); then
-        printf "${GREEN}All %d tests passed${NC}\n" "$total"
+        printf "${GREEN}All %d tests passed${NC}\n" "$pass"
     else
         printf "${RED}%d of %d tests failed${NC}\n" "$fail" "$total"
+    fi
+    # Reported on its own line and never folded into the pass count, so a run that skipped
+    # something can never read as having covered it.
+    if ((skip > 0)); then
+        printf "${BLUE}%d test(s) skipped${NC}\n" "$skip"
     fi
     if ((minutes > 0)); then
         printf "Duration: %dm %ds\n" "$minutes" "$secs"
