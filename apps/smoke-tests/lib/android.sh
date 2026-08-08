@@ -207,6 +207,27 @@ android_setup_env() {
 }
 
 #
+# Whether a device can still reach this host, for the runner's health checks.
+#
+# On the LAN bridge this is a real measurement: the guest holds a 192.168.55.x address, the host
+# answers on DEVICE_HEALTH_HOST, and a ping says whether the app could still talk to the control
+# bridge. A run that has declared it has no bridge (PHOTOSPHERE_NO_LAN_BRIDGE=1, which the release
+# workflow sets because its emulator is booted with no tap device) reaches the host at the NAT alias
+# 10.0.2.2 instead, and nothing on the guest can ping DEVICE_HEALTH_HOST because that address exists
+# nowhere. Probing it there measures nothing and fails every time, so it is not probed.
+#
+# Usage: android_can_reach_host <serial>
+#
+android_can_reach_host() {
+    local serial="$1"
+    if [ "${PHOTOSPHERE_NO_LAN_BRIDGE:-}" = "1" ]; then
+        return 0
+    fi
+    timeout "$DEVICE_HEALTH_TIMEOUT_SECONDS" adb -s "$serial" shell \
+        "ping -c 1 -W 1 $DEVICE_HEALTH_HOST" >/dev/null 2>&1
+}
+
+#
 # Returns 0 if an emulator/device is attached and reporting "device" state.
 #
 android_device_attached() {

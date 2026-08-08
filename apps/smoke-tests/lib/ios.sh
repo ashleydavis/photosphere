@@ -72,6 +72,21 @@ ios_device_slots() {
 }
 
 #
+# Whether a simulator can still reach this host, for the runner's health checks.
+#
+# Always yes. The simulator shares the host's network stack, which is why ios_host_address is simply
+# loopback, so there is no link between the two that can go down mid-test and nothing to probe. This
+# is a constant, not a stub: the runner's generic probe used to run `adb` against a simulator UDID,
+# which fails on every call, so every failed or skipped test withdrew the only simulator and the job
+# ran to its 90 minute timeout.
+#
+# Usage: ios_can_reach_host <udid>
+#
+ios_can_reach_host() {
+    return 0
+}
+
+#
 # Binds the calling shell to one simulator. The iOS helpers all read IOS_SIMULATOR_UDID.
 # Usage: ios_export_device <udid>
 #
