@@ -1392,9 +1392,12 @@ jobs:
           # the embedded worker's own output goes. app.log carries what the WebView logged and stops
           # dead at "Database entry added", so the task that actually fails leaves no trace in it.
           # The suite's exit code is preserved so capturing evidence cannot turn a failure into a pass.
+          # The `|| status=$?` matters: this script runs under set -e, so a plain call would end it
+          # the moment the suite failed and the dump below would never happen, which is exactly what
+          # the first attempt at this did.
           script: |
-            bun run test:and
-            status=$?
+            status=0
+            bun run test:and || status=$?
             mkdir -p /tmp/photosphere-tests
             adb logcat -d > /tmp/photosphere-tests/logcat.txt 2>&1 || true
             exit $status
