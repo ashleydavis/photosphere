@@ -1,11 +1,16 @@
 import { generateKeyPair, hashPublicKey, loadEncryptionKeys } from '../lib/key-utils';
 import type { IStorageOptions } from '../lib/encryption-types';
 import { createCipheriv, randomBytes } from 'node:crypto';
+import { createTestTempDir } from 'node-utils';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
-// Test key files are generated under the package-local ./tmp directory
-const testKeysDir = path.join(__dirname, '..', 'tmp');
+// Key files are generated in a directory belonging to this process alone, named by the operating
+// system through mkdtemp. It used to be the package-local ./tmp, which is the same absolute path for
+// every process on the machine: two runs of the unit suite at once then shared it, and the afterAll
+// below removed it while the other run was between its mkdir and its writeFile, which failed that
+// run with an ENOENT that had nothing to do with the code under test.
+const testKeysDir = createTestTempDir('encryption-key-utils');
 
 async function createTestKeyPath(baseName: string): Promise<string> {
     await fs.mkdir(testKeysDir, { recursive: true });
@@ -127,6 +132,8 @@ describe('loadEncryptionKeys', () => {
 
     afterAll(async () => {
         try {
+            // Safe to remove now, and it was not before: mkdtemp gave this directory to this process
+            // and no other, so nothing else can be writing inside it when this runs.
             await fs.rm(testKeysDir, { recursive: true, force: true });
         } catch {
             // Best-effort cleanup; ignore errors.

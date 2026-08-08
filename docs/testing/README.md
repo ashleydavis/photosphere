@@ -121,6 +121,42 @@ Exit status is 0 when the streak is reached, 1 when a run failed, 2 on bad usage
 
 The loop itself has no automated test. Its own behaviour on failure (counting the streak, bailing at the first failure, telling a Bun crash apart from a real failure, writing the report) is therefore unverified except by running it.
 
+Once a suite is sound on its own, the next question is whether it is sound in company. That is [Hunting suites that break each other](#hunting-suites-that-break-each-other), below.
+
+### Hunting suites that break each other
+
+`bun run test:everything` starts the suites concurrently, so two of them that touch the same file, port, directory, lock or device can fail each other in ways that never show up when either is run alone. That is a different failure class from ordinary flakiness: the suite is not unreliable in itself, it is unreliable in company. It is also on the commit path, because that parallel runner is what the git hooks run, so a pair that interferes refuses a commit with a failure nobody can reproduce afterwards.
+
+`check-parallel-tests` runs every selected script alone first, then runs every combination of two of them at the same time, and reports only the failures that appear in company and not alone:
+
+```bash
+bun run test:parallel                              # everything this machine can run, mobile included
+bun run test:parallel -- --scripts "test test:cli" # just these two, for a quick answer
+bun run test:parallel -- --help
+```
+
+**A default run is slow and needs the emulator pool already up.** It checks `test`, `test:cli`, `test:electron` and the mobile suites this machine can actually run, which on Linux is four scripts, four runs alone and ten combinations, with the mobile suites taking minutes each. Name `--scripts` explicitly when you want a quick answer: that gives you precisely the scripts you asked for and no mobile detection.
+
+**Everything runs once.** Each script alone once, each combination once. A conflict that only shows up on some runs will be missed, so this answers whether a conflict is there, not how often it happens. That is a deliberate trade for a run you might actually start: `bun run find-flakey-tests` is the tool for the second question.
+
+`test:ios` is included only on macOS, and `test:and` only where the Android tooling is installed and `bun run emu:and:status` reports a ready device. Either one that cannot run is dropped with a printed reason rather than left in to fail every combination it appears in, and the summary says how many combinations went unchecked as a result, so a reduced run can never be mistaken for a clean one. The check never starts, stops or restarts an emulator: that is the human's job.
+
+**Self-pairs are included**, so three scripts is 6 combinations rather than 3: each script is also checked against a second copy of itself. Nothing in `test:everything` runs one suite twice at once, but two worktrees, two developers on one machine, or a rerun started before the last one finished all do. A self-pair failure means exactly that: the suite cannot be run twice at once, usually because it hardcodes a path, a port or a lock.
+
+**Nothing is muted.** The pairs `SERIAL_GROUPS` in `scripts/test-everything-parallel.sh` already keeps apart (`test:and:unit` with `test:and`, `test:ios:unit` with `test:ios`) are reported as interference like any other, because a known conflict is still a conflict. They are also the positive control: run `bun run test:parallel -- --scripts "test:and test:and:unit"` and a check that does not report them is a check that is not working.
+
+The three verdicts:
+
+- **ok** - both scripts are sound alone and both sides passed when run together.
+- **interference** - both scripts are sound alone and at least one side failed when they ran together. This is a real finding: record it in the "Parallel-only failure modes" section of [the flaky-test registry](../flaky-tests-registry.md), naming the pair and the shared resource.
+- **inconclusive** - at least one script failed on its own, so nothing the pair did proves anything. Ordinary flakiness has masked the answer. Run `bun run find-flakey-tests -- --script <name>` on that script first: the two tools are a pair, one proves a suite is sound alone and the other proves it is sound in company, and the second is only meaningful once the first has passed.
+
+Exit status is 0 when nothing was found, 1 when interference was, 2 on bad usage, 3 when too many Bun crashes in a row made the result meaningless, 4 when the emulator pool degraded mid-run, and 5 when nothing was found but something was inconclusive.
+
+Everything is written under `tmp/parallel-check/<timestamp>/` (gitignored): one log per side, plus a `report.txt` on a finding that names the failing side, quotes the useful part of the log, and records the state of the machine. Nothing is ever deleted or overwritten, so old sessions are yours to clear.
+
+The check itself has no automated test. Like `find-flakey-tests`, it is an instrument rather than something on the commit path, and its own behaviour is verified by running it.
+
 ### Running the Android tests over several emulators
 
 `bun run test:and` uses every emulator that is on the LAN bridge, one worker per device, so the suite finishes several times faster. Measured on this repo: 375s originally, 276s after the wait helpers were made to poll five times a second, and 113s across six emulators.

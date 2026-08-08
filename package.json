@@ -48,6 +48,7 @@
     "test:cli:hash-cache": "cd ./apps/cli/ && bash ./hash-cache-smoke-test.sh",
     "find-flakey-tests": "bash ./scripts/find-flakey-tests.sh",
     "measure-android-leak": "bash ./scripts/measure-android-emulator-leak.sh",
+    "test:parallel": "bash ./scripts/check-parallel-tests.sh",
     "test:lan-share:cli-desktop": "bash ./cli-desktop-lan-share-smoke-tests.sh",
     "tlcd": "bun run test:lan-share:cli-desktop",
     "stories": "bash ./scripts/story-player.sh --platform electron",
