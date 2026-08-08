@@ -19,6 +19,17 @@
 # cannot reach the host and no test can use it. Reporting that as up would be the same false
 # reassurance in a different place.
 #
+# It also reports how much room each pool emulator has left, because an emulator can be running, on
+# the bridge, and still useless: with a full /data the package manager refuses the install with
+# INSTALL_FAILED_INSUFFICIENT_STORAGE, and a suite that does not check goes on testing whatever build
+# was already there. That was invisible here until now, so "pool up" read as an all-clear while the
+# results coming out of the suite were about somebody else's code.
+#
+# Free space does NOT change the exit code, which stays exactly what the two lines at the top say it
+# is. Callers put that code in a condition to decide whether there is anything to run on at all, and
+# an emulator short of space is a different problem with a different fix from an emulator that is not
+# there.
+#
 # Read-only. It never starts, stops or changes anything: the pool belongs to whoever is at the
 # keyboard.
 #
@@ -54,6 +65,27 @@ QUIET="false"
 # without this the check inherits its hang instead of reporting it.
 ADB_TIMEOUT_SECONDS=8
 
+# How little free space on a pool emulator's /data is too little to start a suite on.
+#
+# The debug APK is around 110MB and an install needs several times that: adb streams a copy into the
+# staging area, the package manager keeps the installed copy, the native libraries are extracted
+# beside it and dex optimisation writes more again. Every test then writes databases, imported photos
+# and video thumbnails into app storage on top. An emulator with 400MB free has been seen to refuse
+# the install outright, which is where this number comes from: it is the point at which an install is
+# no longer safe to assume, not the point at which one is certain to fail.
+LOW_SPACE_MB=1024
+
+# The device path the free-space reading is taken at: the app's data volume, which is what an install
+# and everything a test writes both land on. /data itself reports the whole partition and is not what
+# the package manager measures against.
+DEVICE_DATA_PATH="/data/user/0"
+
+# One "<serial> <megabytes>" entry per pool emulator found below LOW_SPACE_MB. Filled while the
+# emulators are walked and printed after the verdict, so the headline still comes first. A global
+# rather than a local passed around, because an empty array cannot be expanded into a function's
+# arguments under `set -u` without a guard that reads worse than this does.
+LOW_SPACE_FOUND=()
+
 #
 # Prints the path to adb, or nothing when it cannot be found. Looks on PATH first and then in the SDK,
 # the same two places emulator.sh looks.
@@ -68,6 +100,46 @@ adb_path() {
     if [ -x "$sdk_adb" ]; then
         echo "$sdk_adb"
     fi
+}
+
+#
+# Prints the megabytes free on the given device's app data volume, or nothing when the device cannot
+# be asked. Android's df reports 1K blocks by default, and the fourth column is what is available.
+# Usage: device_free_mb <adb> <serial>
+#
+device_free_mb() {
+    local adb="$1"
+    local serial="$2"
+    local available_kb
+    available_kb="$(timeout "$ADB_TIMEOUT_SECONDS" "$adb" -s "$serial" shell df "$DEVICE_DATA_PATH" 2>/dev/null | tr -d '\r' | awk 'NR > 1 { print $4; exit }' || true)"
+    # Only a plain number is believed. A device that answered with an error, a warning or nothing at
+    # all must not be reported as having some particular amount of room.
+    case "$available_kb" in
+        ''|*[!0-9]*)
+            return 0
+            ;;
+    esac
+    echo "$(( available_kb / 1024 ))"
+}
+
+#
+# Prints a line per pool emulator in LOW_SPACE_FOUND, and nothing at all when every one of them has
+# room. Silence is the normal case and is what says there is nothing here to act on.
+#
+report_low_space() {
+    if [ "${#LOW_SPACE_FOUND[@]}" -eq 0 ]; then
+        return 0
+    fi
+
+    local entry serial free_mb
+    echo -e "${YELLOW}low on space${NC}: an install needs more room than these have left, and the package manager"
+    echo -e "               refuses it with INSTALL_FAILED_INSUFFICIENT_STORAGE when it runs out:"
+    for entry in "${LOW_SPACE_FOUND[@]}"; do
+        serial="${entry%% *}"
+        free_mb="${entry##* }"
+        echo -e "  ${YELLOW}$serial${NC}  ${free_mb}MB free on $DEVICE_DATA_PATH (want at least ${LOW_SPACE_MB}MB)"
+    done
+    echo "               Free space on them, or restart the pool, before trusting a suite run."
 }
 
 main() {
@@ -99,7 +171,7 @@ main() {
     local serials
     serials="$("$adb" devices 2>/dev/null | awk 'NR > 1 && $2 == "device" { print $1 }')"
 
-    local serial avd guest
+    local serial avd guest free_mb
     local running=0
     local on_bridge=0
 
@@ -118,6 +190,14 @@ main() {
         if [ -n "$guest" ]; then
             on_bridge=$(( on_bridge + 1 ))
         fi
+
+        # Asked of every running pool emulator, on or off the bridge. Being off the bridge is the
+        # louder problem but it is not the only one, and an emulator brought back onto the bridge is
+        # still unusable if it has no room.
+        free_mb="$(device_free_mb "$adb" "$serial")"
+        if [ -n "$free_mb" ] && [ "$free_mb" -lt "$LOW_SPACE_MB" ]; then
+            LOW_SPACE_FOUND+=("$serial $free_mb")
+        fi
     done
 
     if [ "$on_bridge" -eq 0 ]; then
@@ -127,6 +207,7 @@ main() {
             else
                 echo -e "${RED}pool down${NC}: $running pool emulator(s) running, none on the LAN bridge"
             fi
+            report_low_space
         fi
         exit 1
     fi
@@ -141,6 +222,7 @@ main() {
         else
             echo -e "${GREEN}pool up${NC}: $on_bridge pool emulator(s) on the LAN bridge"
         fi
+        report_low_space
     fi
     exit 0
 }
