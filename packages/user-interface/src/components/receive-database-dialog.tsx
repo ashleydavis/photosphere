@@ -117,16 +117,23 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
     // The existing entry that the new database collides with (used for the Replace path).
     const [existingDbName, setExistingDbName] = useState<string | undefined>(undefined);
 
-    // Reset state when dialog opens
+    // Reset state when the dialog closes, and announce it only once it is open.
+    //
+    // The reset happens on the way out rather than on the way in so that the dialog is always
+    // already showing the code step by the time it becomes visible. Resetting on open cannot do
+    // that: an effect runs after the render that opened the dialog, so setting the step there
+    // leaves one render in which the dialog is open and still showing whichever step it was on
+    // when it was last closed. Reopening after a cancel lands on the waiting step, which has no
+    // code field and no Start button, and anything acting on the line below finds neither.
     useEffect(() => {
         if (!open) {
+            setStep("enter-code");
+            setEnteredCode("");
+            setPayload(null);
+            setErrorMessage("");
             return;
         }
         log.event('Receive database dialog opened');
-        setStep("enter-code");
-        setEnteredCode("");
-        setPayload(null);
-        setErrorMessage("");
     }, [open]);
 
     //
