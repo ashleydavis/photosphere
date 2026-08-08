@@ -123,16 +123,24 @@ main() {
 
     log_info "Running on ${#RUNNER_SLOTS[@]} device(s): ${RUNNER_SLOTS[*]}"
 
-    # Install onto every device this run can actually claim. A device another suite is holding is
-    # dropped from the run rather than waited on forever: this loop happens before any test starts,
+    # Put this run's build onto every device it can actually claim. A device another suite is holding
+    # is dropped from the run rather than waited on forever: this loop happens before any test starts,
     # so one stuck lock used to stall the whole suite while the remaining emulators sat idle. The
     # drop is reported, never silent, because a run on fewer devices is a smaller run.
+    #
+    # *_ensure_apk rather than *_install, so a device that already carries this exact build is left
+    # alone. The check is the APK's own checksum, so this still guarantees what the unconditional
+    # install guaranteed: no test ever runs against another worktree's build or a stale one. What it
+    # stops is reinstalling an unchanged 117MB APK onto all five emulators at the top of every run,
+    # which is where the emulators' memory was going. Each emulator kept roughly 40MB of host memory
+    # per run and never gave it back, so a repeated run walked them into their 8G limit and killed
+    # them with SIGSEGV after a couple of hours. A single build is installed once and then reused.
     local slot
     local usable_slots=()
     local install_status
     for slot in "${RUNNER_SLOTS[@]}"; do
         install_status=0
-        with_device "$slot" "${PLATFORM}_install" || install_status=$?
+        with_device "$slot" "${PLATFORM}_ensure_apk" || install_status=$?
         if [ "$install_status" -eq 0 ]; then
             usable_slots+=("$slot")
         elif [ "$install_status" -ne "$DEVICE_UNAVAILABLE_STATUS" ]; then
