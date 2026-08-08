@@ -15,6 +15,23 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
 trap cleanup_and_show_summary EXIT
 
+# Windows cannot be sent a Ctrl+C from here, so this test does not run there and says so.
+#
+# This is a limit of the harness, not of the CLI. Windows has no POSIX signals: a console program is
+# interrupted by GenerateConsoleCtrlEvent, which only reaches a process created with
+# CREATE_NEW_PROCESS_GROUP and only from something sharing its console. Bash can do neither. Both
+# routes were tried against the real runner and both were watched failing with "The share command was
+# still running 20s after Ctrl+C": the process group, which Git Bash does not deliver to a native
+# process at all, and the process itself.
+#
+# It reports SKIP and is counted separately, never as a pass. Before this it appeared to pass on
+# Windows, which was worse: the liveness check used pgrep, which Git Bash does not have, so the
+# assertion could not fail and the platform looked covered when nothing had been signalled.
+if [[ "$OSTYPE" == "msys"* ]] || [[ "$OSTYPE" == "cygwin"* ]]; then
+    log_info "SKIP: Ctrl+C cannot be delivered to a native console process from Git Bash, so this test cannot run on Windows."
+    exit "${TEST_SKIPPED_EXIT_CODE:-77}"
+fi
+
 # Process group of the command started by start_share_command, signalled by cancel_share_command.
 SHARE_PGID=""
 

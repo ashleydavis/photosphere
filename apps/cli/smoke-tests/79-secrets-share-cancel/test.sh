@@ -12,6 +12,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
 trap cleanup_and_show_summary EXIT
 
+# Not run on Windows, for the reason set out at length in 78-dbs-share-cancel: Ctrl+C cannot be
+# delivered to a native console process from Git Bash, and both the process group and the process
+# itself were watched failing to stop the command on the real runner. Reported as SKIP and counted
+# separately, never as a pass.
+if [[ "$OSTYPE" == "msys"* ]] || [[ "$OSTYPE" == "cygwin"* ]]; then
+    log_info "SKIP: Ctrl+C cannot be delivered to a native console process from Git Bash, so this test cannot run on Windows."
+    exit "${TEST_SKIPPED_EXIT_CODE:-77}"
+fi
+
 # Process group of the command started by start_share_command, signalled by cancel_share_command.
 SHARE_PGID=""
 
