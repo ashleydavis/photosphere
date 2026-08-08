@@ -35,17 +35,23 @@ export async function exportCommand(context: ICommandContext, assetId: string, o
         return;
     }
 
-    // Construct the storage path based on asset type
+    // Construct the storage path based on asset type.
+    //
+    // Separated by "/", the way every other caller writes it (asset-query.ts, upload-asset.worker.ts,
+    // repair.ts, list.ts). A storage path is not a filesystem path, so path.join is wrong: on Windows
+    // it returned "asset\<id>" while the object had been written at "asset/<id>", so exporting out of
+    // S3 looked for a key that does not exist. On Linux and macOS path.join happens to produce "/",
+    // which is why this only ever failed on Windows.
     const getAssetStoragePath = (type: AssetType): string => {
         switch (type) {
             case "original":
-                return path.join("asset", assetId);
+                return `asset/${assetId}`;
             case "display":
-                return path.join("display", assetId);
+                return `display/${assetId}`;
             case "thumb":
-                return path.join("thumb", assetId);
+                return `thumb/${assetId}`;
             default:
-                return path.join("asset", assetId);
+                return `asset/${assetId}`;
         }
     };
 
