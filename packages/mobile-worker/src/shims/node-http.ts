@@ -852,6 +852,12 @@ export class ClientRequest extends HttpEmitter {
     private inactivityTimer: NodeJS.Timeout | undefined = undefined;
 
     //
+    // True once the request head has been written to the transport. After that a body chunk goes
+    // straight out rather than onto bodyChunks, which nothing reads again.
+    //
+    private headSent = false;
+
+    //
     // Opens the connection and schedules the send. `socket` and, for TLS, `secureConnect` are raised on
     // microtasks before the request goes out, so a caller that pins the certificate can attach its
     // listener and abort in time.
@@ -879,10 +885,31 @@ export class ClientRequest extends HttpEmitter {
     }
 
     //
-    // Buffers a request body chunk.
+    // Writes a request body chunk: buffered while the head is still pending, sent straight out once
+    // the head has gone.
+    //
+    // Both halves matter. The send happens on a fixed microtask chain from the constructor rather
+    // than when the caller says it has finished, so a caller that writes its body any later than
+    // that used to have its bytes pushed onto a list nothing read again. The request went out with
+    // the caller's own Content-Length header over an empty body, and the server sat waiting for
+    // bytes that were never coming: a PUT that never completed and never failed, while GETs over the
+    // same transport were fine because they have no body. That was create-database against S3 from
+    // the device hanging with nothing in the log.
+    //
+    // Writing straight to the transport after the head is correct HTTP rather than a patch: the head
+    // has already declared how many body bytes follow, so they are simply the next bytes on the
+    // connection whenever they arrive.
     //
     write(chunk: Buffer | Uint8Array | string): boolean {
-        this.bodyChunks.push(typeof chunk === "string" ? Buffer.from(chunk, "utf8") : Buffer.from(chunk));
+        const buffer = typeof chunk === "string" ? Buffer.from(chunk, "utf8") : Buffer.from(chunk);
+        if (this.headSent) {
+            if (!this.aborted) {
+                this.transport.write(buffer);
+                this.restartInactivityTimer();
+            }
+            return true;
+        }
+        this.bodyChunks.push(buffer);
         return true;
     }
 
@@ -1000,6 +1027,7 @@ export class ClientRequest extends HttpEmitter {
         this.setupResponseParsing(callback, method);
 
         this.transport.write(Buffer.from(head, "utf8"));
+        this.headSent = true;
         if (body.length > 0) {
             this.transport.write(body);
         }
