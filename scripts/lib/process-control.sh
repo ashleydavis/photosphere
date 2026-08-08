@@ -15,27 +15,17 @@
 # process group is a label the kernel keeps on each process, and reparenting does not change it, so
 # `kill -- -<pgid>` still reaches every member however many parents have died in between.
 #
-# The group is therefore the reliable form and the tree walk is the fallback. Putting a command in a
-# group of its own needs `setsid`, which is a util-linux program and is not present on macOS, so on
-# macOS launch_in_process_group records no group and callers fall back to the tree walk. Everything
-# here degrades to today's behaviour when the group is unavailable rather than failing.
+# The group is therefore the reliable form and the tree walk is only for a pid this library did not
+# launch. The group is made with bash job control rather than `setsid`, which is util-linux and does
+# not exist on macOS: with monitor mode on, the shell puts each background job in a new process group
+# whose pgid is its pid. There is no host check and no reduced path anywhere below, so there is no
+# platform where the cleanup quietly stops cleaning up while still reporting success. That job
+# control does this is proven at runtime rather than assumed, once per shell, by
+# process_control_verify_job_control, which refuses to launch anything if it does not.
 
-# The checkout this library belongs to, resolved from this file's own location (scripts/lib) so it
-# does not depend on the caller's working directory. Every "is this one of ours" decision below is
-# made against this string, because several worktrees run suites at once on the same machine and
-# killing another checkout's live run would be far worse than the leak this exists to clear.
-PROCESS_CONTROL_REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-
-# Worktrees live inside the checkout they were made from, so this checkout's path is a prefix of
-# every worktree's path and a plain "contains the repo root" match would claim their processes too.
-# Anything under here belongs to a different checkout and is never a candidate.
-PROCESS_CONTROL_WORKTREES_PREFIX="$PROCESS_CONTROL_REPO_ROOT/.claude/worktrees/"
-
-# How long, in units of PROCESS_CONTROL_GROUP_POLL_SECONDS, launch_in_process_group waits for setsid
-# to move the command into its own group. The move happens between fork and exec, so a pgid read
-# straight after the launch can still show the launching shell's group.
-PROCESS_CONTROL_GROUP_POLL_ATTEMPTS=50
-PROCESS_CONTROL_GROUP_POLL_SECONDS=0.05
+# Whether bash job control has been shown, in this shell, to put a background job in a process group
+# of its own: "yes" once proven, "no" once disproven, empty before the check has run.
+PROCESS_CONTROL_JOB_CONTROL_VERIFIED=""
 
 # Seconds between the SIGTERM and the SIGKILL in the kill helpers, giving a process the chance to
 # shut down on its own terms before it is taken out.
@@ -127,13 +117,68 @@ kill_process_group() {
 }
 
 #
-# Starts a command in the background with its output redirected to <log_file>, in a process group of
-# its own where that is possible, and prints "<pid> <pgid>" for the caller to record.
+# Proves, once per shell, that turning on bash job control puts a background job in a process group
+# of its own whose pgid is the job's own pid. Succeeds quietly and fails loudly.
 #
-# The pgid field is empty when the command could not be given a group of its own (no setsid, so it
-# stayed in the launching shell's group). An empty pgid is the signal to fall back to the tree walk;
-# it is never the caller's own group, so a caller can pass whatever it reads here straight to
-# kill_process_group without checking.
+# This exists so that nothing downstream has to assume it. A launched command can exit before its
+# group can be read (a wrapper that starts a child and returns does exactly that), and the only
+# honest thing to report for one of those is the pid, which is right only if job control did what it
+# is supposed to. Proving it once here is what makes that report true rather than a guess, and a
+# guessed process group is dangerous in a way a missed one is not: it names some other process's
+# group, and the cleanup then kills whatever is in it.
+#
+# The probe is a real background job, because the question is what the kernel did and not what the
+# manual says. It is killed as soon as its group has been read, so it costs one process spawn rather
+# than the second its sleep asks for, and it happens once for the life of the shell.
+# Usage: process_control_verify_job_control
+#
+process_control_verify_job_control() {
+    if [ "$PROCESS_CONTROL_JOB_CONTROL_VERIFIED" = "yes" ]; then
+        return 0
+    fi
+    if [ "$PROCESS_CONTROL_JOB_CONTROL_VERIFIED" = "no" ]; then
+        return 1
+    fi
+
+    local own_pgid probe_pid probe_pgid monitor_was_on
+    own_pgid="$(process_group_of "$$")"
+    monitor_was_on="no"
+    case "$-" in
+        *m*)
+            monitor_was_on="yes"
+            ;;
+    esac
+
+    set -m
+    sleep 1 &
+    probe_pid=$!
+    if [ "$monitor_was_on" = "no" ]; then
+        set +m
+    fi
+    probe_pgid="$(process_group_of "$probe_pid")"
+    kill "$probe_pid" 2>/dev/null || true
+
+    if [ -n "$probe_pgid" ] && [ "$probe_pgid" = "$probe_pid" ] && [ "$probe_pgid" != "$own_pgid" ]; then
+        PROCESS_CONTROL_JOB_CONTROL_VERIFIED="yes"
+        return 0
+    fi
+
+    PROCESS_CONTROL_JOB_CONTROL_VERIFIED="no"
+    echo "process_control_verify_job_control: bash job control did not put a background job in a process group of its own on this host (probe pid $probe_pid landed in group '$probe_pgid', this script is in group $own_pgid). The test suites cannot clean up reliably without that, so refusing to launch rather than reporting a process group that was never checked." >&2
+    return 1
+}
+
+#
+# Starts a command in the background with its output redirected to <log_file>, in a process group of
+# its own, and prints "<pid> <pgid>" for the caller to record.
+#
+# The group comes from bash job control. With monitor mode on, the shell puts a background job in a
+# new process group whose pgid is the job's own pid, so the group is known the instant the launch
+# returns and nothing has to be polled for. Monitor mode is turned on for the launch alone and put
+# back exactly as it was found, because leaving it on changes how the rest of the caller behaves.
+#
+# The pgid is therefore always set, and it is never the caller's own group, so a caller can pass what
+# it reads here straight to kill_process_group.
 #
 # Read the two fields with:  read -r pid pgid < <(launch_in_process_group log cmd...)
 # Environment for the command goes through `env`, e.g.
@@ -143,47 +188,45 @@ kill_process_group() {
 launch_in_process_group() {
     local log_file="$1"
     shift
-    local launched_pid launched_pgid own_pgid used_setsid
-    own_pgid="$(process_group_of "$$")"
-    if command -v setsid >/dev/null 2>&1; then
-        used_setsid="yes"
-        setsid "$@" > "$log_file" 2>&1 &
-    else
-        used_setsid="no"
-        "$@" > "$log_file" 2>&1 &
+    local launched_pid launched_pgid own_pgid monitor_was_on
+    if ! process_control_verify_job_control; then
+        return 1
     fi
-    launched_pid=$!
+    own_pgid="$(process_group_of "$$")"
+    monitor_was_on="no"
+    case "$-" in
+        *m*)
+            monitor_was_on="yes"
+            ;;
+    esac
 
-    launched_pgid=""
-    if [ "$used_setsid" = "yes" ]; then
-        # setsid changes the group after the fork, so the new group is not there the instant the
-        # launch returns. Poll for it, and give up the moment the process is gone: a command that
-        # exits immediately must not cost the caller the whole polling window.
-        local attempt=0
-        local observed_pgid
-        while [ "$attempt" -lt "$PROCESS_CONTROL_GROUP_POLL_ATTEMPTS" ]; do
-            observed_pgid="$(process_group_of "$launched_pid")"
-            if [ -n "$observed_pgid" ] && [ "$observed_pgid" != "$own_pgid" ]; then
-                launched_pgid="$observed_pgid"
-                break
-            fi
-            if ! kill -0 "$launched_pid" 2>/dev/null; then
-                break
-            fi
-            sleep "$PROCESS_CONTROL_GROUP_POLL_SECONDS"
-            attempt=$((attempt + 1))
-        done
+    set -m
+    "$@" > "$log_file" 2>&1 &
+    launched_pid=$!
+    if [ "$monitor_was_on" = "no" ]; then
+        set +m
+    fi
+
+    # Read back from the kernel rather than assumed, so a host that behaves differently is caught
+    # here instead of having its cleanup signal some other process's group.
+    launched_pgid="$(process_group_of "$launched_pid")"
+    if [ -z "$launched_pgid" ]; then
+        # Nothing to read means the command exited before it could be looked at, which a wrapper
+        # that starts a child and returns does routinely. Its group was its own pid: not assumed,
+        # but resting on the check above, which proved that is what job control does here. The group
+        # still matters even though the leader is gone, because whatever it started is still in it.
+        launched_pgid="$launched_pid"
+    fi
+    if [ "$launched_pgid" = "$own_pgid" ]; then
+        echo "launch_in_process_group: bash job control did not give '$1' a process group of its own on this host (it is still in group $own_pgid, which holds this script). Refusing to report a group that cannot be killed safely." >&2
+        return 1
     fi
 
     # Recorded for the leak check, when a suite has asked for one by exporting the file to write to.
     # This is what makes the check specific to what this suite started: it names the exact groups,
     # not a pattern that other suites' processes also match.
     if [ -n "${PHOTOSPHERE_LAUNCHED_GROUPS:-}" ]; then
-        if [ -n "$launched_pgid" ]; then
-            echo "pgid $launched_pgid" >> "$PHOTOSPHERE_LAUNCHED_GROUPS"
-        else
-            echo "pid $launched_pid" >> "$PHOTOSPHERE_LAUNCHED_GROUPS"
-        fi
+        echo "pgid $launched_pgid" >> "$PHOTOSPHERE_LAUNCHED_GROUPS"
     fi
 
     printf '%s %s\n' "$launched_pid" "$launched_pgid"
@@ -201,8 +244,9 @@ launch_in_process_group() {
 # full run through the git hook did exactly that, failing a CLI suite whose 79 tests had all passed
 # over Electron and mobile processes that were still legitimately running in other lanes.
 #
-# A run on a machine with no setsid records pids instead of groups, so the check still works there,
-# just without reaching a process whose parent has already died.
+# `ps -A` rather than `ps -e`: both list every process under procps, but the BSD ps on macOS reads
+# -e as "show the environment too", which would put each process's whole environment in the output.
+# -A means all processes on both.
 #
 list_leaked_launches() {
     local record_file="${PHOTOSPHERE_LAUNCHED_GROUPS:-}"
@@ -210,7 +254,7 @@ list_leaked_launches() {
         return 0
     fi
     local snapshot
-    snapshot="$(ps -eo pid=,pgid=,args= 2>/dev/null || true)"
+    snapshot="$(ps -A -o pid=,pgid=,args= 2>/dev/null || true)"
     if [ -z "$snapshot" ]; then
         return 0
     fi
@@ -221,9 +265,6 @@ list_leaked_launches() {
         case "$kind" in
             pgid)
                 printf '%s\n' "$snapshot" | awk -v want="$identifier" '$2 == want { $2 = ""; print }' || true
-                ;;
-            pid)
-                printf '%s\n' "$snapshot" | awk -v want="$identifier" '$1 == want { $2 = ""; print }' || true
                 ;;
         esac
     done < "$record_file"

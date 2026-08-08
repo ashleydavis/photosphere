@@ -232,6 +232,14 @@ start_app() {
     # group survives that, so it is what cleanup_apps kills. The environment goes through `env`
     # because launch_in_process_group takes a command, and a variable assignment written in front of
     # a shell function is not one.
+    # Done here rather than left to the launch below, which runs inside a process substitution: a
+    # subshell inherits this shell's variables but cannot write back to it, so the check's result
+    # would be forgotten and its probe process spawned again on every single launch.
+    if ! process_control_verify_job_control; then
+        log_error "Cannot start the app without a process group of its own; see the error above."
+        return 1
+    fi
+
     local launched_pid launched_pgid
     read -r launched_pid launched_pgid < <(launch_in_process_group "$tmp_dir/app.log" \
         env PHOTOSPHERE_TEST_MODE=1 \
@@ -272,7 +280,8 @@ start_app() {
 # in one go, which took the Android emulator pool with it and failed a test run that was otherwise fine.
 #
 # The group recorded by start_app is preferred, because it still reaches the app and the X server
-# after the wrapper has died; the tree walk is the fallback for a platform with no setsid.
+# after the wrapper has died. The tree walk below is only for a tmp directory that has no recorded
+# group, which means start_app never got as far as writing one.
 # Usage: kill_app_tree <pid> [tmp_dir]
 #
 kill_app_tree() {

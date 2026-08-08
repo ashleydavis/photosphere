@@ -388,6 +388,14 @@ start_app() {
     # still reaches it after the parent has gone. The environment goes through `env` because
     # launch_in_process_group takes a command, and a variable assignment written in front of a shell
     # function is not one.
+    # Done here rather than left to the launch below, which runs inside a process substitution: a
+    # subshell inherits this shell's variables but cannot write back to it, so the check's result
+    # would be forgotten and its probe process spawned again on every single launch.
+    if ! process_control_verify_job_control; then
+        log_error "Cannot start the control bridge without a process group of its own; see the error above."
+        return 1
+    fi
+
     local bridge_pid bridge_pgid
     read -r bridge_pid bridge_pgid < <(launch_in_process_group "$tmp_dir/bridge.log" \
         env PHOTOSPHERE_TEST_PORT="0" \
@@ -535,9 +543,9 @@ stop_app() {
     "${PLATFORM}_stop" "$port" 2>/dev/null || true
 
     # The group recorded by start_app is preferred, because it still reaches bun's child after the
-    # process that was signalled has gone; the tree walk is the fallback for a platform with no
-    # setsid. Signalling the recorded pid alone, as this used to, leaves that child running and
-    # reparented to init.
+    # process that was signalled has gone. The tree walk below is only for a tmp directory with no
+    # recorded group, which means start_app never got as far as writing one. Signalling the recorded
+    # pid alone, as this used to, leaves that child running and reparented to init.
     local pgid=""
     if [ -f "$tmp_dir/bridge.pgid" ]; then
         pgid="$(cat "$tmp_dir/bridge.pgid" 2>/dev/null || true)"
