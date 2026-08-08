@@ -22,6 +22,21 @@
 # deletes outright.
 PHOTOSPHERE_TEST_TEMP_ROOT="${TMPDIR:-/tmp}/photosphere-tests"
 
+# On Windows the root is held in the native form, because one directory must have one name.
+#
+# Git Bash rewrites an argument that looks like a POSIX path before a native binary sees it, and it
+# does that only for arguments. A test that ran `psi init --db /tmp/photosphere-tests/x/db` created
+# the database at C:/Users/.../Temp/photosphere-tests/x/db, then compared the CLI's output against
+# the string it sent and failed. Worse, a path bash writes into a file is not an argument and is not
+# rewritten, so the registry seeded by test 49 held the POSIX form while the database sat at the
+# Windows one, and resolving the name found nothing. Holding the native form means there is nothing
+# left to rewrite and both sides read the same string. `pwd -W` is how apps/cli/smoke-tests.sh
+# already does this for its own directory. Unchanged on Linux and macOS.
+if [[ "$OSTYPE" == "msys"* ]] || [[ "$OSTYPE" == "cygwin"* ]]; then
+    mkdir -p "$PHOTOSPHERE_TEST_TEMP_ROOT"
+    PHOTOSPHERE_TEST_TEMP_ROOT="$(cd "$PHOTOSPHERE_TEST_TEMP_ROOT" && pwd -W)"
+fi
+
 #
 # Prints the directory that per-test directories are created inside, creating it if needed.
 #
