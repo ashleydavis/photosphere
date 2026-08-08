@@ -1390,6 +1390,18 @@ jobs:
           target: google_apis
           script: bun run test:and
 
+      # The runner prints only the last 30 lines of a failing test's app log, which is enough to see
+      # that something failed and not enough to see why. Everything the run wrote is kept here so a
+      # failure that cannot be reproduced off the runner can still be read afterwards.
+      - name: Keep the smoke test logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-smoke-test-logs
+          path: /tmp/photosphere-tests/
+          retention-days: 7
+          if-no-files-found: warn
+
   ios-smoke-tests:
     # Higher than the other mobile jobs because `bun run test:ios` resolves the FFmpegKit Swift
     # Package on a clean checkout and, whenever the ImageMagick cache below misses, builds
