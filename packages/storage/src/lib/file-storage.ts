@@ -1,4 +1,5 @@
 import * as fs from "fs/promises";
+import { randomUUID } from "crypto";
 import { createReadStream, createWriteStream } from "fs";
 import { pipeline } from "stream/promises";
 import * as path from "path";
@@ -9,6 +10,18 @@ import { ensureDir, pathExists, remove, copy } from "node-utils";
 
 // Write lock timeout in milliseconds (10 seconds)
 const WRITE_LOCK_TIMEOUT_MS = 10000;
+
+//
+// Names the temporary file a write is staged in before it is renamed over the destination.
+//
+// Unique per write, never derived from the destination alone. Two writes to one path used to share
+// "<path>.tmp": each opened it, each wrote into it, and the first rename moved it out from under the
+// second. On Linux the loser fails with ENOENT and on Windows with EPERM, because there the file is
+// still open by the other writer, which is what broke adding to an encrypted database there.
+//
+function temporaryWritePath(filePath: string): string {
+    return `${filePath}.${randomUUID()}.tmp`;
+}
 
 export class FileStorage implements IStorage {
 
@@ -144,7 +157,7 @@ export class FileStorage implements IStorage {
     async write(filePath: string, contentType: string | undefined, data: Buffer): Promise<void> {
 
         await ensureDir(path.dirname(filePath));
-        const tmpPath = `${filePath}.tmp`;
+        const tmpPath = temporaryWritePath(filePath);
         await fs.writeFile(tmpPath, data);
         await fs.rename(tmpPath, filePath);
     }
@@ -160,7 +173,7 @@ export class FileStorage implements IStorage {
     // Writes an input stream to storage.
     //
     async writeStream(filePath: string, _contentType: string | undefined, inputStream: Readable): Promise<void> {
-        const tmpPath = `${filePath}.tmp`;
+        const tmpPath = temporaryWritePath(filePath);
         await ensureDir(path.dirname(filePath));
         await pipeline(inputStream, createWriteStream(tmpPath));
         await fs.rename(tmpPath, filePath);
