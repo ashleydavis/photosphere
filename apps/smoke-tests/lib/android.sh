@@ -21,6 +21,19 @@ ANDROID_APK_STAMP="/data/local/tmp/psphere-apk.sha"
 # gates on it so `status` and the test run never disagree about what ready means.
 ANDROID_BRIDGE_SCRIPT="$ANDROID_FRONTEND_DIR/scripts/emulator.sh"
 
+# How long android_host_address waits for a bridge-attached emulator's wlan0 address to come back
+# before it concludes the emulator is not on the bridge at all.
+#
+# The emulated wifi association drops and re-associates on its own under load, and wlan0 loses its
+# 192.168.55.x address for the few seconds that takes (the guest re-DHCPs, which is visible as
+# repeated DHCPREQUESTs from one emulator in the host dnsmasq log). A single sample taken inside
+# that window reads as "not on the bridge" on an emulator that is on it, which is the one answer
+# this must never give: the 10.0.2.2 it would fall back to is dead here, so the app is launched at
+# an address it can never reach and burns both of its 120s readiness attempts before failing. The
+# outages seen have healed well inside this window, and waiting a few seconds to launch costs far
+# less than the 240s a wrong answer costs.
+ANDROID_HOST_ADDRESS_WAIT_SECONDS=30
+
 # The pool's AVD and tap names, from the one file that defines them. Sourced rather than copied: the
 # harness has to recognise a pool emulator so it leaves a hand-testing one alone, and a duplicated
 # literal would silently stop matching the day it was renamed, quietly reinstalling over somebody's
@@ -309,16 +322,41 @@ android_ensure_apk() {
 # host at 10.0.2.2. Auto-detect from the guest's wlan0 address, overridable with
 # PHOTOSPHERE_ANDROID_TEST_HOST (for example 127.0.0.1 for a physical device over `adb reverse`).
 #
+# The wlan0 address is polled for ANDROID_HOST_ADDRESS_WAIT_SECONDS rather than sampled once,
+# because a bridge-attached emulator drops that address for a few seconds at a time when its wifi
+# re-associates. Reading a flap as "not on the bridge" hands back the dead 10.0.2.2 alias and costs
+# the caller both of its readiness attempts, so a missing address has to be given time to come back
+# before it is believed. A genuinely NAT-only emulator has no wlan0 address to wait for and still
+# ends up at 10.0.2.2, just later.
+#
 android_host_address() {
     if [ -n "${PHOTOSPHERE_ANDROID_TEST_HOST:-}" ]; then
         echo "$PHOTOSPHERE_ANDROID_TEST_HOST"
         return 0
     fi
-    if adb shell ip addr show wlan0 2>/dev/null | tr -d '\r' | grep -q 'inet 192\.168\.55\.'; then
-        echo "192.168.55.1"
-    else
-        echo "10.0.2.2"
+
+    # Every message here goes to stderr: this function's stdout is the address its caller captures,
+    # so anything else written there would be read as part of it.
+    local waited=0
+    while true; do
+        if adb shell ip addr show wlan0 2>/dev/null | tr -d '\r' | grep -q 'inet 192\.168\.55\.'; then
+            if [ "$waited" -gt 0 ]; then
+                log_info "wlan0 had no LAN address for ${waited}s; it came back, so the emulator is on the bridge after all." >&2
+            fi
+            echo "192.168.55.1"
+            return 0
+        fi
+        if [ "$waited" -ge "$ANDROID_HOST_ADDRESS_WAIT_SECONDS" ]; then
+            break
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+
+    if [ "$waited" -gt 0 ]; then
+        log_info "wlan0 never took a 192.168.55.x address in ${waited}s; treating this as a NAT-only emulator." >&2
     fi
+    echo "10.0.2.2"
 }
 
 #
