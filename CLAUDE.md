@@ -2,6 +2,14 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Platforms
+
+This is crass platform app. Developed on Linux, but delivered and tested on Windows, Linux, MacOS, Android and iOS. All tests and smoke tests be cross platform to work on the platforms where they are delivered, here is the list of apps and where they run:
+
+- CLI tool: Windows, Linux and MacOS.
+- Desktop app: Windows, Linux and MacOS.
+- Mobile app: Android and iOS.
+
 ## Rules
 
 - When writing plans, do not add any steps for "Human Verification" or "Human Testing", plans you write should be automatically tested by unit tests and smoke tests. No human will be testing your work.
