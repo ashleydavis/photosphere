@@ -1,0 +1,89 @@
+# Find and fix the Android emulator memory leak
+
+## Overview
+
+Running the Android smoke tests repeatedly makes the pool emulators grow without giving the memory back, until the kernel throttles them and they are killed with SIGSEGV. This is what stops `bun run find-flakey-tests -- --script test:and --target 100` from ever finishing: each emulator is allowed 8G, the pool as a whole 40G soft and 46G hard (`apps/android-frontend/scripts/psphere-pool.slice`), and growth of a few hundred megabytes per run exhausts that in a couple of dozen runs. The measurement tool for this already exists, `scripts/measure-android-emulator-leak.sh` (`bun run measure-android-leak`, documented in `scripts/measure-android-emulator-leak.md`), but it has never been run against real emulators, so the first thing this plan does is prove the instrument before trusting anything it says. The work then proceeds in order: establish whether `2-create-database` leaks and characterise what grows inside the emulator, narrow the cause within that test, fix it or say why it cannot be fixed here, then sweep every test in turn with `--all` and repeat for each test that leaks. The end state is a pool that survives 100 consecutive runs of `test:and`.
+
+## Issues
+
+## Steps
+
+**Standing constraints for every step.** The agent must never start, stop, restart, wipe or otherwise change an emulator, per `apps/android-frontend/CLAUDE.md`. Where a step needs the pool restarted, the agent stops, says so, and waits for the human. The agent must run `bun run emu:and:pool:status` and read its exit code before making any statement about whether the pool is up, per the rule in `CLAUDE.md`. Shell scripts in this repository get no unit tests and no `*.test.sh` files, per `CLAUDE.md`; the measurement tooling here is shell, and what proves it works is running it against the real pool.
+
+1. **Confirm the pool is usable before measuring anything.** Run `bun run emu:and:pool:status`. Record the exit code, the number of emulators on the LAN bridge, and any low-space warnings it prints. If the exit code is 1, or if any emulator is reported below its free-space threshold, stop and report to the human rather than measuring: an emulator short of space refuses the install with `INSTALL_FAILED_INSUFFICIENT_STORAGE` and the suite goes on testing whichever build was already there, which would make every number in this plan describe the wrong code. Do not attempt to free space or restart anything.
+
+2. **Prove the instrument on a short session.** Run `bun run measure-android-leak -- --test 2 --runs 4`. This is the first execution of `scripts/measure-android-emulator-leak.sh` against real emulators, so treat every part of its output as unproven. Check specifically: the emulator list matches what `emu:and:pool:status` reported and contains no phantom entry; the ceiling equals 8G times the number of emulators; the baseline figure is in the range `emulator-health.sh` reports for healthy emulators (roughly 3 to 4G each); the table columns line up; `tmp/android-emulator-leak.csv` has one row per run with one populated column per emulator; and `tmp/android-emulator-leak-runs.log` holds the suite output for each run. Record anything wrong rather than working around it.
+
+3. **Fix whatever step 2 found, in `scripts/measure-android-emulator-leak.sh`.** Any defect in the instrument has to be fixed before its readings are used, because a wrong reading here sends the rest of this plan somewhere false. The functions most likely to need it are `running_pool_avds`, `emulator_memory_bytes`, `emulator_limit_bytes`, `sample_and_report` and `classify_verdict`. After each fix re-run step 2 and confirm the output before moving on. `bash -n scripts/measure-android-emulator-leak.sh` must pass.
+
+4. **Exercise the interrupt and death paths, which have also never run.** Start `bun run measure-android-leak -- --test 2 --runs 20`, let it reach at least run 3, then send it SIGINT. Confirm `on_interrupt` prints the per-emulator table and a verdict for the runs that finished, that the averages divide by `COMPLETED_RUNS` rather than by the requested 20, and that the exit status is 130. Confirm from `bun run emu:and:pool:status` afterwards that the pool is unchanged and every emulator is still on the bridge, since the suite's own signal handling is what is being relied on here.
+
+5. **Establish whether `2-create-database` leaks.** Run `bun run measure-android-leak -- --test 2 --runs 20 --detail --csv tmp/leak-test2-baseline.csv`. Read the verdict, and read the per-run column rather than only the average: growth that keeps coming is a leak, growth that fades is start-up cost. This is the question left open by earlier work, which recorded roughly 67MB per run on a fresh pool for this test but never checked whether that figure was sustained across the batch or decaying within it. Write the outcome, the per-run series and the verdict into `docs/investigations/android-emulator-leak/test-2-baseline.md`, creating the directory.
+
+6. **Characterise what is growing, from the `--detail` output of step 5.** The `What grew` table separates memory per run, heap per run, thread count and open file count. Record which of them move. Memory climbing while threads and files stay flat is memory allocated and never freed; threads or files climbing alongside it is a handle leak, which is a different defect in a different place; heap tracking memory means the growth is in the emulator process rather than the Android guest, whose `ram.img` is fixed at 2048M. Also record whether every emulator grew or only the ones that ran the test, since the suite spreads tests over whichever devices are free and that distinction says whether the leak follows the work.
+
+7. **Narrow the cause inside test 2 by measuring progressively smaller versions of it.** `apps/smoke-tests/tests/2-create-database/test.sh` does four things after resetting state: launches the app, opens the new-database dialog, types a name and path, and clicks confirm, which runs the create-database task in the embedded worker over the native fs write functions. Earlier work established that launch, host bridge and teardown alone produce no growth, so the suspect region is what happens after the dialog opens. Create throwaway copies under `apps/smoke-tests/tests/` named `90-leak-probe-launch-only`, `91-leak-probe-dialog-only` and `92-leak-probe-create`, each a copy of test 2 truncated after a different one of those actions, and measure each with `bun run measure-android-leak -- --test 90 --runs 12 --detail` and so on. The first probe whose growth matches test 2's names the action responsible. Delete the probe tests once the answer is recorded; they exist to answer one question and must not be left in the suite, where they would run in every future `test:and`.
+
+8. **Decide whether the cause can be fixed in this repository, and say which it is.** Two outcomes are possible and they lead to different work. If the growth is driven by something the app or the test does that has an alternative, for example an fs pattern in the embedded worker or a WebView behaviour, then it is fixable here and step 9 applies. If the growth is inherent to QEMU under this workload, it is not fixable here, because reimplementing or patching the emulator is out of the question and this repository cannot carry a copy of somebody else's code. In that case stop, write the finding into `docs/investigations/android-emulator-leak/findings.md`, and put the mitigation options to the human rather than choosing one: recycling each emulator after a fixed number of runs changes pool lifecycle and belongs to the human, as does anything touching `apps/android-frontend/scripts/emulator.sh` start-up behaviour. Do not implement a mitigation without the human approving that specific option in the message being acted on.
+
+9. **Implement the fix, if step 8 found one that belongs here.** The file to change depends on what step 7 named. If it is in the embedded worker, that is `packages/mobile-worker/`; if in the shared UI, `packages/user-interface/`; if in the Android host functions, `apps/android-frontend/`. Whatever it is, the change must compile (`bun run compile`) and every new or changed TypeScript function gets a unit test under that package's `src/test` directory, written and watched failing against the unfixed code before it is accepted. React components, contexts and hooks are not unit tested; extract any testable logic into a `lib/` function and test that.
+
+10. **Verify the fix against test 2.** Re-run `bun run measure-android-leak -- --test 2 --runs 20 --detail --csv tmp/leak-test2-fixed.csv` and require a verdict of `NO LEAK`. Compare the per-run series against `tmp/leak-test2-baseline.csv` from step 5 and record both in `docs/investigations/android-emulator-leak/test-2-baseline.md`. A verdict of `NOT A LEAK, STILL SETTLING` is not good enough here: re-run with `--runs 40` to establish whether it reaches zero and stays there.
+
+11. **Sweep every test.** Run `bun run measure-android-leak -- --all --csv tmp/leak-sweep.csv`. This measures each test in turn with 6 runs each, one warm-up and five measured, and prints a worst-first table. It stops by design once the pool passes 85% full, because readings past that describe the state of the pool rather than the test. When it stops, report the resume command it prints, ask the human to restart the pool, and wait. Do not restart it. Resume with `bun run measure-android-leak -- --all --resume-from <test it named>` and repeat until every test has been measured. Record the full worst-first table in `docs/investigations/android-emulator-leak/sweep.md`.
+
+12. **Treat each leaking test the way test 2 was treated.** For every test the sweep reports as `LEAK`, work through steps 5 to 10 for that test: measure it on its own with `--runs 20 --detail` to confirm the sweep's five-run verdict, characterise what grows, narrow the cause, fix it or refer it to the human, then verify. Order the work by the sweep's growth-per-run figure, worst first, because a shared cause is most likely to show up in the largest one and fixing it may clear several at once. Re-run the sweep after each fix rather than assuming the other tests are unaffected.
+
+13. **Confirm the pool survives a long session.** With every test reporting no leak, run `bun run measure-android-leak -- --full --runs 20 --detail`, which runs the whole suite each time rather than a single test and is the configuration that showed the largest growth per run. Require a `NO LEAK` verdict. Then run `bun run measure-android-leak -- --test 2 --to-the-end`, which continues until an emulator is actually killed or 500 runs pass; require that it reaches its cap without any emulator dying.
+
+14. **Prove the original goal.** Ask the human to restart the pool so the run starts from a clean baseline, wait, then run `bun run find-flakey-tests -- --script test:and --target 100`. This is the thing the whole plan exists for and it is the only check that covers the interaction of the leak with everything else in a run. Record the outcome in `docs/investigations/android-emulator-leak/findings.md`, including how far the streak got if it did not reach 100 and what failed.
+
+15. **Write up what was found.** Complete `docs/investigations/android-emulator-leak/findings.md` with the cause, the fix, the measurements before and after, and anything ruled out along the way so the next person does not repeat it. If any test still leaks and was referred to the human rather than fixed, say so by name. Move this plan from `docs/plans/new/` to `docs/plans/done/` only once step 14 has passed.
+
+## Unit Tests
+
+The measurement tooling is shell (`scripts/measure-android-emulator-leak.sh`, `scripts/android-pool-status.sh`) and gets no unit tests and no `*.test.sh` files, per the rule in `CLAUDE.md`. What proves it works is running it against the real pool, which steps 2 and 4 do.
+
+The tests below depend on what step 7 finds, and cannot be named until then. Whatever step 9 changes, these rules apply:
+
+- Every new or changed TypeScript function gets a unit test under its package's `src/test` directory, using `test(` rather than `it(`.
+- Each test must be watched failing against the unfixed code before it is accepted, per `CLAUDE.md`. A test that has only ever passed has not been shown to test anything.
+- React components, contexts and hooks are not unit tested. If the fix lands in one, extract the logic into a `lib/` function and test that function instead.
+- If the fix is a configuration or lifecycle change with no function behind it, say so here rather than inventing a test that asserts nothing.
+
+## Smoke Tests
+
+- `bun run test:and` must pass in full after any change from step 9. The existing 41 tests are the end-to-end coverage for the app behaviour a fix would touch, and a leak fix that breaks one of them is not a fix.
+- The throwaway probe tests from step 7 (`90-leak-probe-launch-only`, `91-leak-probe-dialog-only`, `92-leak-probe-create`) are measurement instruments, not tests to keep. They must be deleted once step 7 has its answer, and `bun run test:and` must be run afterwards to confirm the suite is back to its original test list.
+- If the fix lands in `packages/user-interface`, it is shared by web, desktop, iOS and Android, so `bun run test:electron` must pass as well as `bun run test:and`. On a machine with Xcode, `bun run test:ios` too.
+- The leak measurement itself is the end-to-end check for this work: `bun run measure-android-leak -- --full --runs 20` reporting `NO LEAK` in step 13, and `--to-the-end` reaching its cap without an emulator dying.
+
+## Verify
+
+1. `bun run compile` exits 0.
+2. `bun run test` passes, including any unit test added in step 9.
+3. `bash -n scripts/measure-android-emulator-leak.sh` passes.
+4. `bun run test:everything -- --force` passes, which is the canonical check for this repository and covers the mobile suites that `test:all` silently skips.
+5. `bun run measure-android-leak -- --test 2 --runs 20` reports `NO LEAK`.
+6. `bun run measure-android-leak -- --all` reports no test as `LEAK`, across however many pool restarts the sweep takes.
+7. `bun run measure-android-leak -- --full --runs 20` reports `NO LEAK`.
+8. `bun run measure-android-leak -- --test 2 --to-the-end` reaches its 500 run cap with no emulator dying.
+9. `bun run find-flakey-tests -- --script test:and --target 100` completes 100 consecutive green runs.
+10. `bun run emu:and:pool:status` exits 0 with every emulator on the bridge and none low on space, both before and after the long runs.
+11. `apps/smoke-tests/tests/` contains no `9*-leak-probe-*` directory.
+
+## Notes
+
+**The instrument is unproven and that is why it is measured first.** `scripts/measure-android-emulator-leak.sh` was written in a session that never ran it against emulators. Its syntax passes, its heap extraction was checked against a sample `smaps` file, its column layout and its sweep sorting were checked in isolation, and nothing else in it has ever executed. Steps 2 to 4 exist so the rest of the plan is not built on its output being right.
+
+**What is already established, and what is not.** The growth is host-side rather than in the Android guest: the guest's `ram.img` is fixed at 2048M and fully touched. It is not the test harness or the host bridge, since repeated launch and teardown with no test at all produced no growth. `2-create-database` grew the pool by roughly 67MB per run on a fresh pool, but whether that growth was sustained or decaying was never checked, which is what step 5 settles. Roughly 180MB of QEMU heap growth per emulator per run was recorded earlier, along with 630 to 900MB per run pool-wide for the whole 41-test suite. That last pair does not add up: one test at 67MB cannot account for the suite's figure, and no explanation was found. Step 11 exists to find where the rest comes from.
+
+**Two earlier attributions were wrong and should not be trusted.** The redundant APK reinstall (fixed in `a01f52f2`) was believed to account for about 40MB per emulator per run; the leak continued at the same rate after it. Clearing the app's data after each test (`2b1dd131`) was reported as taking test 2 from 74MB to 0MB per run; that was measured on a saturated pool where nothing could grow, and on a fresh pool the figure was still 67MB. Neither fixed the leak.
+
+**Tooling that is not available here.** `ptrace_scope` is 1 on this machine, so gdb cannot attach to an emulator started by systemd. There is no `heaptrack`, `valgrind` or `ltrace` installed, and `bpftrace` needs root. Launching an emulator under gdb was tried and failed for want of libc symbols. This is why step 7 narrows by bisecting the workload rather than by attaching a profiler: the crude method is the one that works here.
+
+**A sweep cannot finish on one pool fill.** 41 tests at 6 runs each is 246 runs, and a leaking pool is full after roughly 30. The sweep stops at 85% and prints a resume command by design. The pool restarts between segments are the human's to perform, and the plan waits for them rather than doing them.
+
+**The outcome may be that this cannot be fixed here.** If the growth turns out to be QEMU's own behaviour under this workload rather than something the app drives, there is no fix in this repository, and the answer is a mitigation to the pool's lifecycle that changes how emulators are recycled. That is the human's decision, not the agent's, and step 8 stops rather than choosing.
+
+**Free space is a separate failure that can spoil these measurements.** `scripts/android-pool-status.sh` reports an emulator low on `/data/user/0` because a full one refuses the install with `INSTALL_FAILED_INSUFFICIENT_STORAGE` and the suite carries on testing whatever build was already installed. A leak session run in that state measures the wrong build. Step 1 checks for it before anything else.
