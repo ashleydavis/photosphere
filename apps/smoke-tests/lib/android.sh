@@ -483,6 +483,24 @@ android_reset_app_state() {
 }
 
 #
+# Clears the app's stored data once a test has finished with the device, so nothing a test wrote is
+# still on the emulator when the next one starts.
+#
+# Every test already clears this on its way in, which is what keeps tests from reading each other's
+# state. Doing it on the way out as well is about the emulator rather than the tests: whatever the
+# last test wrote otherwise sits in the guest filesystem until something else happens to run there,
+# and an emulator is shared, long-lived and shut down by nobody. Databases, imported photos and
+# video thumbnails are not small.
+#
+# Deliberately quiet and deliberately unable to fail. This runs after a test's result has already
+# been decided, so a device that has gone offline or an app that was never installed must not turn a
+# passing test into a failing one, and there is nothing here worth a line in the runner's output.
+#
+android_clean_after_test() {
+    adb shell pm clear "$APP_ID" >/dev/null 2>&1 || true
+}
+
+#
 # Removes a path under the app's private files directory (the storage sandbox root), so a test that
 # creates fresh state at that path is rerunnable. No-op when the app is not installed yet.
 # Usage: android_reset_path <relative_path_under_files>

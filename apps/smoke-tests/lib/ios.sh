@@ -219,6 +219,23 @@ ios_seed_databases_config() {
 # emptying the container is not enough on its own; `simctl keychain reset` is what clears them. Call
 # this BEFORE start_app, so nothing can write state back underneath it.
 #
+#
+# Clears the app's stored data once a test has finished with the simulator, so nothing a test wrote
+# is still there when the next one starts. The Android counterpart carries the reasoning.
+#
+# Quiet and unable to fail: it runs after a test's result has been decided, so it must not be able
+# to turn a passing test into a failing one. The keychain is left alone, unlike the reset on the way
+# in, because resetting it is the part that can fail and a secret left behind is cleared by the next
+# test before anything reads it.
+#
+ios_clean_after_test() {
+    local container
+    container="$(ios_app_container)"
+    if [ -n "$container" ]; then
+        rm -rf "$container/Documents/"* "$container/Library/"* "$container/tmp/"* 2>/dev/null || true
+    fi
+}
+
 ios_reset_app_state() {
     local container
     container="$(ios_app_container)"

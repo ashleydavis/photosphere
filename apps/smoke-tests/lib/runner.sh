@@ -799,6 +799,14 @@ run_worker() {
         # own reasons on a healthy device is recorded as a failure exactly as before.
         stop_device_health_watch "$health_watcher"
 
+        # Take this test's data off the device before letting go of it, so the emulator is not left
+        # carrying every database, photo and thumbnail that every test before it created. Runs for
+        # every test whatever its result, and before the requeue path below, so a discarded attempt
+        # cleans up after itself too.
+        if [ -n "$ACQUIRED_DEVICE" ]; then
+            "${PLATFORM}_clean_after_test"
+        fi
+
         # Discard when the device lost the host at any point during the test, or has lost it now.
         # The marker covers an outage that has already healed, which is the common case; the live
         # check covers one that is still going.
