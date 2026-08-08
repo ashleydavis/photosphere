@@ -173,32 +173,6 @@ seed_databases_toml() {
 }
 
 #
-# Writes a databases.json config (CLI-style) with a single database entry.
-# Usage: seed_databases_json <config_dir> <db_name> <db_path> [s3_key] [encryption_key]
-#
-seed_databases_json() {
-    local config_dir="$1"
-    local db_name="$2"
-    local db_path="$3"
-    local s3_key="${4:-}"
-    local encryption_key="${5:-}"
-    mkdir -p "$config_dir"
-    local extras=""
-    if [ -n "$s3_key" ]; then
-        extras+=",\"s3Key\":\"$s3_key\""
-    fi
-    if [ -n "$encryption_key" ]; then
-        extras+=",\"encryptionKey\":\"$encryption_key\""
-    fi
-    cat > "$config_dir/databases.json" <<JSON_EOF
-{
-  "databases": [{"name":"$db_name","description":"","path":"$db_path"$extras}],
-  "recentDatabasePaths": []
-}
-JSON_EOF
-}
-
-#
 # Polls the desktop test-control server for the pairing-code element and prints
 # it once it contains a 4-digit value. Returns non-zero on timeout.
 # Usage: read_desktop_pairing_code <port>
@@ -377,7 +351,7 @@ test_cli_to_desktop_database() {
     seed_secret "$test_tmp/cli/vault" "s3-cli-key" "s3-credentials" \
         '{"region":"us-east-1","accessKeyId":"AKIATEST","secretAccessKey":"secret123","endpoint":"http://localhost:9000"}'
     seed_encryption_key "$test_tmp/cli/vault" "enc-cli-key"
-    seed_databases_json "$test_tmp/cli/config" "cli-shared-db" "s3:test-bucket:/photos" "s3-cli-key" "enc-cli-key"
+    seed_databases_toml "$test_tmp/cli/config" "cli-shared-db" "s3:test-bucket:/photos" "s3-cli-key" "enc-cli-key"
 
     local code="2345"
     local app_port
