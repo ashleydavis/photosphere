@@ -55,11 +55,21 @@ ios_prepare() {
 }
 
 #
-# iOS has one simulator and no second checkout competing for it, so there is never a foreign build to
-# put back. Present so the runner can call the same hook on both platforms.
+# Puts this run's build on the simulator, which is the hook run.sh calls once per device before any
+# test starts.
+#
+# It installs. It used to return 0 without doing anything, on the reasoning that iOS has one
+# simulator and no second checkout competing for it, so there is never a foreign build to put back.
+# That reasoning is about REPLACING a build and overlooked the first one: run.sh calls this hook
+# INSTEAD of ios_install, so nothing installed the app at all, and every test failed with
+# "The request to open au.com.codecapers.photosphere failed" after two 120 second launch attempts.
+#
+# Unlike Android there is no checksum stamp here, because simctl install onto a local simulator is
+# fast and the saving that motivated the Android stamp (not reinstalling a 117MB APK onto five
+# emulators) does not apply to one simulator.
 #
 ios_ensure_apk() {
-    return 0
+    ios_install
 }
 
 #
