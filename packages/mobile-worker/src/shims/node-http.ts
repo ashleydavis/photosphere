@@ -841,6 +841,17 @@ export class ClientRequest extends HttpEmitter {
     private aborted = false;
 
     //
+    // How long the connection may be idle before the request times out, as asked for by setTimeout.
+    // Undefined when no caller has asked for a timeout, in which case none is enforced.
+    //
+    private inactivityTimeoutMs: number | undefined = undefined;
+
+    //
+    // The running inactivity timer, restarted whenever bytes move and cleared on teardown.
+    //
+    private inactivityTimer: NodeJS.Timeout | undefined = undefined;
+
+    //
     // Opens the connection and schedules the send. `socket` and, for TLS, `secureConnect` are raised on
     // microtasks before the request goes out, so a caller that pins the certificate can attach its
     // listener and abort in time.
@@ -885,14 +896,51 @@ export class ClientRequest extends HttpEmitter {
     }
 
     //
-    // Registers an inactivity timeout callback. The native transports report no socket-level timeout,
-    // so the caller's own timer enforces the deadline; this only records the listener.
+    // Registers an inactivity timeout and enforces it.
+    //
+    // It used to only record the listener, on the reasoning that the native transports report no
+    // socket-level timeout so the caller's own timer would enforce the deadline. There is no such
+    // timer: this IS the caller's timer. The AWS SDK builds its client with requestTimeout 30000
+    // (see CloudStorage) and enforces it by calling this and destroying the request when it fires,
+    // so recording the listener and never calling it meant a request that stalled stalled for ever.
+    // On a device that showed up as create-database never finishing and never failing.
+    //
+    // Inactivity, not total duration, matching Node: any traffic in either direction restarts the
+    // clock, so a large slow transfer is not cut off while a dead connection still is.
     //
     setTimeout(timeoutMs: number, callback?: (...args: any[]) => void): this {
         if (callback) {
             this.on("timeout", callback);
         }
+        this.inactivityTimeoutMs = timeoutMs;
+        this.restartInactivityTimer();
         return this;
+    }
+
+    //
+    // Stops the idle clock for good, used once the request can no longer be waiting on anything.
+    //
+    private stopInactivityTimer(): void {
+        this.inactivityTimeoutMs = undefined;
+        this.restartInactivityTimer();
+    }
+
+    //
+    // Starts the inactivity clock again, or stops it when no timeout has been asked for. Called
+    // whenever bytes move in either direction, and on teardown.
+    //
+    private restartInactivityTimer(): void {
+        if (this.inactivityTimer !== undefined) {
+            clearTimeout(this.inactivityTimer);
+            this.inactivityTimer = undefined;
+        }
+        if (this.inactivityTimeoutMs === undefined || this.aborted) {
+            return;
+        }
+        this.inactivityTimer = setTimeout(() => {
+            this.inactivityTimer = undefined;
+            this.emit("timeout");
+        }, this.inactivityTimeoutMs);
     }
 
     //
@@ -902,6 +950,7 @@ export class ClientRequest extends HttpEmitter {
         if (this.aborted) {
             return;
         }
+        this.stopInactivityTimer();
         this.aborted = true;
         this.transport.destroy();
         if (error) {
@@ -954,6 +1003,9 @@ export class ClientRequest extends HttpEmitter {
         if (body.length > 0) {
             this.transport.write(body);
         }
+
+        // The request is on the wire, so the idle clock starts here.
+        this.restartInactivityTimer();
     }
 
     //
@@ -980,10 +1032,13 @@ export class ClientRequest extends HttpEmitter {
             }
             if (bodyRemaining <= 0) {
                 response.push(null);
+                this.stopInactivityTimer();
             }
         };
 
         this.transport.on("data", (chunk: Buffer) => {
+            // Bytes arrived, so the connection is not idle.
+            this.restartInactivityTimer();
             if (headParsed) {
                 feedBody(chunk);
                 return;
@@ -1014,12 +1069,20 @@ export class ClientRequest extends HttpEmitter {
             }
             else if (bodyRemaining <= 0) {
                 response.push(null);
+                this.stopInactivityTimer();
             }
+        });
+
+        this.transport.on("close", () => {
+            // Nothing more can arrive, so the idle clock must not outlive the connection and fire a
+            // timeout at a request that has already finished.
+            this.stopInactivityTimer();
         });
 
         this.transport.on("end", () => {
             if (response && bodyRemaining > 0) {
                 response.push(null);
+                this.stopInactivityTimer();
             }
         });
     }
