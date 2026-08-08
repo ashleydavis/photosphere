@@ -1388,7 +1388,16 @@ jobs:
           api-level: 33
           arch: x86_64
           target: google_apis
-          script: bun run test:and
+          # logcat is taken before the action tears the emulator down, because that is the only place
+          # the embedded worker's own output goes. app.log carries what the WebView logged and stops
+          # dead at "Database entry added", so the task that actually fails leaves no trace in it.
+          # The suite's exit code is preserved so capturing evidence cannot turn a failure into a pass.
+          script: |
+            bun run test:and
+            status=$?
+            mkdir -p /tmp/photosphere-tests
+            adb logcat -d > /tmp/photosphere-tests/logcat.txt 2>&1 || true
+            exit $status
 
       # The runner prints only the last 30 lines of a failing test's app log, which is enough to see
       # that something failed and not enough to see why. Everything the run wrote is kept here so a
