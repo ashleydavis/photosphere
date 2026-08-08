@@ -620,7 +620,12 @@ jobs:
           path: ./apps/cli/bin/x64/linux/psi
 
   build-windows:
-    timeout-minutes: 20
+    # 30 rather than 20, matching electron-smoke-tests and the unit-test jobs. This job builds three
+    # executables and then runs the whole CLI smoke suite, which has grown from 65 tests to 79. Its
+    # last two runs took 19m41s and 18m27s, so it was within twenty seconds of its limit, and the
+    # next one was killed at 20m11s having reported nothing. A job cancelled on its timeout says less
+    # than one that finishes and lists what failed.
+    timeout-minutes: 30
     needs: prepare-tag
     runs-on: windows-latest
     steps:
