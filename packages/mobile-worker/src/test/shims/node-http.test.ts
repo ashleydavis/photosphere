@@ -226,6 +226,29 @@ describe("http shim outbound request", () => {
     });
 
     //
+    // setTimeout has to enforce the deadline, not merely remember it.
+    //
+    // The AWS SDK builds its S3 client with requestTimeout 30000 (CloudStorage) and enforces it by
+    // calling request.setTimeout and destroying the request when it fires. This used to record the
+    // listener and never call it, so a request that stalled stalled for ever: on a device that was
+    // create-database never finishing and never failing, with nothing in the log at all.
+    //
+    test('a request that goes quiet raises timeout, so a stalled request cannot hang for ever', async () => {
+        installClientHost();
+
+        const req: any = request({ hostname: "minio.test", port: 9000, path: "/obj", method: "PUT" });
+        let timedOut = false;
+        req.setTimeout(60, () => {
+            timedOut = true;
+        });
+        req.end(Buffer.from("payload"));
+
+        // A real wait, not a microtask drain: the point is that wall-clock silence trips the timer.
+        await new Promise(resolve => globalThis.setTimeout(resolve, 250));
+        expect(timedOut).toBe(true);
+    });
+
+    //
     // The AWS SDK reaches for `request.socket` and, when it finds one, calls the Node net.Socket
     // contract on it: setTimeout, removeListener, setKeepAlive. The transport underneath this shim
     // has none of those, so exposing it under that name made every S3 request throw "not a function"
