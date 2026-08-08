@@ -224,6 +224,38 @@ describe("http shim outbound request", () => {
         expect(mock.writes.length).toBe(0);
         expect(req.destroyed).toBe(true);
     });
+
+    //
+    // The AWS SDK reaches for `request.socket` and, when it finds one, calls the Node net.Socket
+    // contract on it: setTimeout, removeListener, setKeepAlive. The transport underneath this shim
+    // has none of those, so exposing it under that name made every S3 request throw "not a function"
+    // once the SDK's deferred timeout fired, which failed create-database against S3 on device.
+    // Exactly the branch @smithy/node-http-handler takes, asserted here so the property cannot come
+    // back under that name.
+    //
+    test("a client request offers no socket, so a Node socket contract is never called on the transport", async () => {
+        installClientHost();
+
+        const req: any = request({ hostname: "minio.test", port: 9000, path: "/", method: "GET" });
+        await flush(10);
+
+        expect(req.socket).toBeUndefined();
+        expect(typeof req.setTimeout).toBe("function");
+
+        // set-socket-timeout.js, verbatim in structure: with no socket it must reach the request's
+        // own setTimeout, which this shim does implement.
+        let reachedRequestSetTimeout = false;
+        const onTimeout = () => {};
+        if (req.socket) {
+            req.socket.setTimeout(1000, onTimeout);
+        }
+        else {
+            req.setTimeout(1000, onTimeout);
+            reachedRequestSetTimeout = true;
+        }
+
+        expect(reachedRequestSetTimeout).toBe(true);
+    });
 });
 
 //

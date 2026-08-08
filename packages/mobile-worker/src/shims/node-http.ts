@@ -821,7 +821,14 @@ export class ClientRequest extends HttpEmitter {
     //
     // The connection this request is sent over.
     //
-    private socket: IClientTransport;
+    // Deliberately NOT named `socket`. TypeScript's `private` hides nothing at runtime, and a
+    // library that finds a `socket` property on a request treats it as a Node net.Socket and calls
+    // the whole of that contract on it. IClientTransport has five members, so the AWS SDK's
+    // `request.socket.setTimeout(...)` threw "not a function" and failed every create-database
+    // against S3 on a device. Under this name the SDK takes its own `else` branch and calls
+    // ClientRequest.setTimeout below, which is what that method exists for.
+    //
+    private transport: IClientTransport;
 
     //
     // Buffered request body chunks, flushed when the request is sent.
@@ -842,13 +849,13 @@ export class ClientRequest extends HttpEmitter {
                 socketFactory: ClientSocketFactory, signalsHandshake: boolean) {
         super();
         const hostname = options.hostname || options.host || "";
-        this.socket = socketFactory(resolvePort(options, signalsHandshake), hostname);
+        this.transport = socketFactory(resolvePort(options, signalsHandshake), hostname);
 
         Promise.resolve().then(() => {
-            this.emit("socket", this.socket);
+            this.emit("socket", this.transport);
             Promise.resolve().then(() => {
                 if (signalsHandshake) {
-                    this.socket.emit("secureConnect");
+                    this.transport.emit("secureConnect");
                 }
                 Promise.resolve().then(() => {
                     if (this.aborted) {
@@ -896,7 +903,7 @@ export class ClientRequest extends HttpEmitter {
             return;
         }
         this.aborted = true;
-        this.socket.destroy();
+        this.transport.destroy();
         if (error) {
             this.emit("error", error);
         }
@@ -943,9 +950,9 @@ export class ClientRequest extends HttpEmitter {
 
         this.setupResponseParsing(callback, method);
 
-        this.socket.write(Buffer.from(head, "utf8"));
+        this.transport.write(Buffer.from(head, "utf8"));
         if (body.length > 0) {
-            this.socket.write(body);
+            this.transport.write(body);
         }
     }
 
@@ -976,7 +983,7 @@ export class ClientRequest extends HttpEmitter {
             }
         };
 
-        this.socket.on("data", (chunk: Buffer) => {
+        this.transport.on("data", (chunk: Buffer) => {
             if (headParsed) {
                 feedBody(chunk);
                 return;
@@ -991,7 +998,7 @@ export class ClientRequest extends HttpEmitter {
             const parsed = parseResponseHead(headerText);
             headParsed = true;
 
-            response = new IncomingMessage("", "", parsed.headers, this.socket as unknown as Socket) as IClientResponse;
+            response = new IncomingMessage("", "", parsed.headers, this.transport as unknown as Socket) as IClientResponse;
             response.statusCode = parsed.statusCode;
 
             const contentLength = parseInt(parsed.headers["content-length"] || "0", 10);
@@ -1010,7 +1017,7 @@ export class ClientRequest extends HttpEmitter {
             }
         });
 
-        this.socket.on("end", () => {
+        this.transport.on("end", () => {
             if (response && bodyRemaining > 0) {
                 response.push(null);
             }
