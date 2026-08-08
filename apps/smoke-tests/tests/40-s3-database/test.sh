@@ -68,6 +68,12 @@ open_s3_browser() {
     # The S3 Credentials row only renders once the type is S3, so wait for it before clicking.
     wait_for_value "$APP_PORT" "chosen-s3-secret" "None selected"
     send_command "$APP_PORT" click '{"dataId":"select-s3-button"}' || return 1
+    # The modal loads its secrets before it renders any of them, so its button does not exist for a
+    # moment after the click above. Clicking immediately outruns it: the click's own wait for the
+    # element gives up, logs "element not found", and does nothing, and the only later sign of it is
+    # this function's wait for the chosen secret timing out with "None selected" still showing. Every
+    # other place that clicks this button waits for the same line, on both platforms.
+    wait_for_log "$TMP_DIR" "Select secret modal ready"
     send_command "$APP_PORT" click '{"dataId":"secret-select-button"}' || return 1
     wait_for_value "$APP_PORT" "chosen-s3-secret" "$SECRET_NAME"
 
