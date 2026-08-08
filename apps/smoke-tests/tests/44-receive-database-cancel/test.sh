@@ -39,6 +39,12 @@ send_command "$APP_PORT" click '{"dataId":"page-actions-menu"}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"receive-database-button"}' || exit 1
 wait_for_log "$TMP_DIR" "Receive database dialog opened"
 
+# The dialog logs that it opened before its code step has rendered, so the log line alone is not
+# enough to type into it. The Start button belongs to that step, so waiting for it is what proves
+# the field below exists. Without this the type and the click both find nothing, do nothing and say
+# so only in a WARN, and the failure surfaces much later as the sender finding no device at all.
+wait_for_value "$APP_PORT" "receive-database-start-button" "Start"
+
 send_command "$APP_PORT" type '{"dataId":"receive-database-code-input","text":"4321"}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"receive-database-start-button"}' || exit 1
 
@@ -72,6 +78,13 @@ log_success "The cancelled receive stopped and the dialog closed"
 send_command "$APP_PORT" click '{"dataId":"page-actions-menu"}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"receive-database-button"}' || exit 1
 wait_for_log "$TMP_DIR" "Receive database dialog opened"
+
+# Same gate as the first receive, and this is the reopen that was actually seen to lose the race:
+# the dialog reported itself open, its code step had not rendered, and the type and click below
+# silently went nowhere. The device then never started receiving, so the sender below waited out its
+# full minute and reported finding no device, which reads as a transfer fault rather than a missed
+# click.
+wait_for_value "$APP_PORT" "receive-database-start-button" "Start"
 
 send_command "$APP_PORT" type '{"dataId":"receive-database-code-input","text":"4321"}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"receive-database-start-button"}' || exit 1
