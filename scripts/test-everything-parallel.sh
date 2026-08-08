@@ -21,11 +21,11 @@
 #
 #   1. Ask `what-changed targets`, which prints one name per line and nothing when nothing changed.
 #   2. Run those, all at once.
-#   3. Record the tree as the new baseline, but only if every one of them passed.
 #
-# Step 3 is the one that matters. Recording after a failure would mark a broken tree as tested and the
-# next run would report nothing to do. `what-changed baseline capture` appears exactly once below, on
-# the success path, and nothing else here moves the baseline.
+# Nothing here records a baseline. Each script in package.json captures its own target on success, so
+# `bun run test:cli` alone marks test:cli as up to date whether it was run from here or by hand. That
+# is why a script's capture is chained with && : a failing suite never reaches it, so a broken tree is
+# never marked as tested, and one suite passing never marks another as passed.
 #
 # what-changed must be on PATH: https://github.com/ashleydavis/what-changed/releases
 #
@@ -78,15 +78,11 @@ for ARGUMENT in "$@"; do
     esac
 done
 
-# Whether this run is allowed to move the baseline. Only a gated run may: an explicit list of script
-# names is a partial run, and recording after it would mark suites as tested that never ran.
-RECORD_BASELINE=false
 
 if [ "${#NAMED_SCRIPTS[@]}" -gt 0 ]; then
     SCRIPTS=("${NAMED_SCRIPTS[@]}")
 elif [ "$FORCE" = true ]; then
     SCRIPTS=(compile test test:cli test:electron "${PLATFORM_SCRIPTS[@]}")
-    RECORD_BASELINE=true
 else
     if ! command -v what-changed >/dev/null 2>&1; then
         echo "what-changed is not on PATH." >&2
@@ -101,7 +97,6 @@ else
             SCRIPTS+=("$LINE")
         fi
     done <<< "$(what-changed targets)"
-    RECORD_BASELINE=true
 
     if [ "${#SCRIPTS[@]}" -eq 0 ]; then
         echo "Nothing to run: nothing has changed since the last passing run."
@@ -354,16 +349,6 @@ done
 if [ "${#failed[@]}" -eq 0 ] && [ "${#cancelled[@]}" -eq 0 ]; then
     echo ""
     echo "All ${#SCRIPTS[@]} script(s) passed."
-
-    #
-    # The only line in this script that moves the baseline, and it is reachable only from here, where
-    # every script has passed. Recording anywhere else would mark a broken tree as tested and the next
-    # run would report nothing to do.
-    #
-    if [ "$RECORD_BASELINE" = true ]; then
-        echo ""
-        what-changed baseline capture
-    fi
 
     exit 0
 fi
