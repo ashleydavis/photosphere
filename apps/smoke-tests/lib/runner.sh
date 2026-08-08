@@ -297,13 +297,18 @@ ACQUIRED_FD=""
 # while adb still reports it as present and healthy. Measured directly rather than inferred, and
 # read-only: it pings and nothing else.
 #
+# The probe belongs to the platform, because only one of the two can answer it at all and the cost
+# of answering wrongly is the whole run. A probe that always says "unreachable" withdraws the device
+# under the first test that does not exit 0, and a run with one device then has none, so every
+# remaining test waits DEVICE_CLAIM_TIMEOUT and the job dies on its own timeout with nothing to show.
+# That is what the release workflow did on both mobile jobs.
+#
 # Usage: device_can_reach_host <serial>
 #
 device_can_reach_host() {
     local serial="$1"
     [ -n "$serial" ] || return 0
-    timeout "$DEVICE_HEALTH_TIMEOUT_SECONDS" adb -s "$serial" shell \
-        "ping -c 1 -W 1 $DEVICE_HEALTH_HOST" >/dev/null 2>&1
+    "${PLATFORM}_can_reach_host" "$serial"
 }
 
 #
@@ -375,8 +380,7 @@ device_health_watch_loop() {
     local serial="$1"
     local marker_file="$2"
     while true; do
-        if ! timeout "$DEVICE_HEALTH_TIMEOUT_SECONDS" adb -s "$serial" shell \
-            "ping -c 1 -W 1 $DEVICE_HEALTH_HOST" >/dev/null 2>&1; then
+        if ! device_can_reach_host "$serial"; then
             date -Is > "$marker_file"
         fi
         sleep "$DEVICE_HEALTH_SAMPLE_SECONDS"
