@@ -817,7 +817,12 @@ jobs:
           path: ./apps/cli/bin/x64/win/psi.exe
 
   build-macos-x64:
-    timeout-minutes: 20
+    # 30 rather than 20, the same headroom build-windows has. This is the slowest of the build jobs
+    # by a wide margin: its recent runs took 13m36s, 14m24s, 14m26s and 17m09s, and then one took
+    # 20m19s and was killed on the limit having produced nothing. The others on this workflow finish
+    # in six to ten minutes, so nothing else needs this. macos-15-intel is the scarce runner class
+    # here and its pace varies more than the work does.
+    timeout-minutes: 30
     needs: prepare-tag
     runs-on: macos-15-intel # x64 architecture
     steps:
