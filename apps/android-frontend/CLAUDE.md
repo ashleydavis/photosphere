@@ -38,6 +38,14 @@ It prints one line per attached device saying whether that device is on the brid
 
 The guest address is timing-dependent (wifi associates/de-associates, adb is busy during a test), so `status` retries a few times. It is still a hint: the definitive check is running `bun run test:and`.
 
+## `bun run emu:and:pool:status`: the pool alone, as an exit code
+
+`status` above answers a wider question than the pool. It counts every attached emulator that is on the bridge, including the single hand-testing one, so it says `ready` when the pool is down and only `psphere-single` is up. `bun run emu:and:pool:status` (`scripts/android-pool-status.sh`) filters to pool emulators by asking each device which AVD it is running, and exits 0 when at least one of them is on the LAN bridge and 1 when none is. Add `-- --quiet` for the exit code alone, for use in a condition. It is read-only and never changes anything.
+
+A partial pool exits 0, because `test:and` can run on what is left, but it says so (`3 of 5 pool emulator(s) on the LAN bridge`). Emulators leave this pool by being killed for using too much memory, so a count that has dropped is the first sign of that.
+
+**Never state whether the pool is up or down without running this first.** Every time that has been guessed at it has been wrong, always the same way: a reading taken earlier in the session and repeated later as though it were current. The human starts and stops emulators without announcing it, so a reading is stale the moment after it is taken. Run the check at the point the answer is needed.
+
 ## `test:and` gates on readiness and shares the emulators
 
 `bun run test:and` runs `apps/smoke-tests/run.sh`. Several runs can go at once: the emulators are a shared pool rather than something one run reserves.
