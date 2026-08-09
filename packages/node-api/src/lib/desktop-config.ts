@@ -1,6 +1,6 @@
 import * as os from "os";
 import * as path from "path";
-import { readJson, readToml, writeToml, updateToml, pathExists, remove } from "node-utils";
+import { readToml, updateToml, pathExists } from "node-utils";
 
 //
 // Configuration for the desktop app stored in ~/.config/photosphere/desktop.toml
@@ -94,13 +94,12 @@ interface ITomlDesktopConfig {
 
 const CONFIG_DIR = process.env.PHOTOSPHERE_CONFIG_DIR || path.join(os.homedir(), ".config", "photosphere");
 const CONFIG_FILE = path.join(CONFIG_DIR, "desktop.toml");
-const OLD_CONFIG_FILE = path.join(CONFIG_DIR, "desktop.json");
-const MAX_RECENT_SEARCHES = 10;
+export const MAX_RECENT_SEARCHES = 10;
 
 //
 // Converts a TOML-shaped desktop config to the TypeScript IDesktopConfig type.
 //
-function tomlToDesktopConfig(toml: ITomlDesktopConfig): IDesktopConfig {
+export function tomlToDesktopConfig(toml: ITomlDesktopConfig): IDesktopConfig {
     const config: IDesktopConfig = {};
     if (toml.last_folder !== undefined) {
         config.lastFolder = toml.last_folder;
@@ -138,7 +137,7 @@ function tomlToDesktopConfig(toml: ITomlDesktopConfig): IDesktopConfig {
 //
 // Converts the TypeScript IDesktopConfig to the TOML on-disk shape.
 //
-function desktopConfigToToml(config: IDesktopConfig): ITomlDesktopConfig {
+export function desktopConfigToToml(config: IDesktopConfig): ITomlDesktopConfig {
     const toml: ITomlDesktopConfig = {};
     if (config.lastFolder !== undefined) {
         toml.last_folder = config.lastFolder;
@@ -182,17 +181,10 @@ export function getConfigPath(): string {
 
 //
 // Loads the desktop configuration from disk.
-// If the TOML file does not exist but an old JSON file does, migrates automatically.
-// Returns default config if neither file exists.
+// Returns a default config if the file does not exist.
 //
 export async function loadDesktopConfig(): Promise<IDesktopConfig> {
     if (!await pathExists(CONFIG_FILE)) {
-        if (await pathExists(OLD_CONFIG_FILE)) {
-            const jsonConfig = await readJson<IDesktopConfig>(OLD_CONFIG_FILE);
-            await saveDesktopConfig(jsonConfig);
-            await remove(OLD_CONFIG_FILE);
-            return jsonConfig;
-        }
         return {};
     }
 
@@ -201,23 +193,71 @@ export async function loadDesktopConfig(): Promise<IDesktopConfig> {
 }
 
 //
-// Saves the desktop configuration to disk.
+// Changes the desktop configuration on disk. Every edit goes through here.
 //
-export async function saveDesktopConfig(config: IDesktopConfig): Promise<void> {
-    await writeToml(CONFIG_FILE, desktopConfigToToml(config));
-}
-
+// The mutator is handed the file's CURRENT contents and changes them in place. updateToml runs it
+// under the update lock beside the file, checks the file has not moved before renaming, and re-runs
+// the mutator against the new contents if it has, so two edits arriving together both survive.
 //
-// Applies a mutation to the desktop config as a serialized read-modify-write: reads the
-// current config, applies the mutator in place, and writes it back. Updates are serialized
-// on the config file (via updateToml) so two overlapping updates cannot lose each other's
-// changes. Prefer this over a manual load/mutate/save when changing a single field.
+// This is the only way to write the file. A saveDesktopConfig that took a whole config and wrote it
+// used to sit beside this, and its callers were all load-then-save, so an edit made between their
+// read and their write was silently discarded. Windows made the same overlap visible on the sibling
+// databases.toml, where it refuses to rename over a file another handle still holds.
 //
 export async function updateDesktopConfig(mutator: (config: IDesktopConfig) => void): Promise<void> {
     await updateToml<ITomlDesktopConfig>(CONFIG_FILE, {}, (toml) => {
         const config = tomlToDesktopConfig(toml);
         mutator(config);
         return desktopConfigToToml(config);
+    });
+}
+
+//
+// The config keys that remember a folder chosen in a folder picker.
+//
+export type FolderConfigKey = 'lastFolder' | 'lastDownloadFolder';
+
+//
+// Every config key a folder picker is allowed to read from and write back to.
+//
+export const FOLDER_CONFIG_KEYS: FolderConfigKey[] = ['lastFolder', 'lastDownloadFolder'];
+
+//
+// Narrows a folder key to one the config actually holds, throwing when it is not one of them.
+//
+// The key arrives from the renderer as a plain string, so without this an unrecognised key would be
+// written into the config under a name nothing ever reads, and the picker would silently forget the
+// folder every time.
+//
+export function asFolderConfigKey(folderKey: string): FolderConfigKey {
+    const found = FOLDER_CONFIG_KEYS.find(candidate => candidate === folderKey);
+    if (found === undefined) {
+        throw new Error(`Unknown folder config key "${folderKey}". Expected one of: ${FOLDER_CONFIG_KEYS.join(', ')}.`);
+    }
+    return found;
+}
+
+//
+// Gets the folder remembered under a folder picker's config key, used as the dialog's starting
+// directory. Returns undefined when no folder has been remembered under that key yet.
+//
+export async function getFolderPath(folderKey: string): Promise<string | undefined> {
+    const config = await loadDesktopConfig();
+    return config[asFolderConfigKey(folderKey)];
+}
+
+//
+// Remembers the folder a user chose under a folder picker's config key.
+//
+// Only that one key is written, and it is written against the file's CURRENT contents. A folder
+// picker stays open for as long as the user takes to choose, so a config read before the dialog
+// opened is stale by the time it closes, and writing that whole config back would undo anything
+// changed in the meantime.
+//
+export async function updateFolderPath(folderKey: string, folderPath: string): Promise<void> {
+    const key = asFolderConfigKey(folderKey);
+    await updateDesktopConfig(config => {
+        config[key] = folderPath;
     });
 }
 

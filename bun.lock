@@ -686,6 +686,9 @@
     "packages/vault": {
       "name": "vault",
       "version": "1.0.0",
+      "dependencies": {
+        "node-utils": "workspace:*",
+      },
       "devDependencies": {
         "@types/jest": "^29.4.0",
         "@types/node": "^22.9.1",

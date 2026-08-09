@@ -2,39 +2,62 @@ import * as fs from "fs/promises";
 import * as fsSync from "fs";
 import * as os from "os";
 import * as path from "path";
+import { updateFileOptimistic } from "node-utils";
 import { ISecret, IVault, IPrereqCheckResult } from "./vault";
 
 //
 // Default directory under which the plain-text vault stores its vault file.
 //
-const DEFAULT_VAULT_DIR = path.join(os.homedir(), ".config", "photosphere", "vault");
+export const DEFAULT_VAULT_DIR = path.join(os.homedir(), ".config", "photosphere", "vault");
 
 //
 // The name of the single file that holds every secret in the vault.
 //
-const VAULT_FILE_NAME = "vault.json";
+export const VAULT_FILE_NAME = "vault.json";
 
 //
 // Unix permission mode: owner read + write only (rw-------)
 //
-const FILE_MODE = 0o600;
+export const FILE_MODE = 0o600;
 
 //
 // Unix permission mode: owner read + write + execute only (rwx------)
 // Execute is required on directories to allow listing and traversal.
 //
-const DIR_MODE = 0o700;
+export const DIR_MODE = 0o700;
+
+//
+// How many times an update reloads and re-applies its change when another writer
+// published to the vault file first, before giving up and throwing.
+//
+export const UPDATE_RETRIES = 3;
 
 //
 // Ensures that a directory exists, creating it (and any missing ancestors)
 // if it does not.  On platforms that support POSIX permissions the directory
 // is created with mode 0o700 (owner-only access).
 //
-async function ensureDir(dirPath: string): Promise<void> {
+export async function ensureDir(dirPath: string): Promise<void> {
     await fs.mkdir(dirPath, { recursive: true, mode: DIR_MODE });
     // Apply the mode explicitly because the recursive flag may create
     // intermediate directories with the process umask rather than DIR_MODE.
     await fs.chmod(dirPath, DIR_MODE).catch(() => {
+        // chmod is not supported on all platforms (e.g. Windows); ignore errors.
+    });
+}
+
+//
+// The path of the single file that holds every secret in a vault directory.
+//
+export function getVaultFilePath(vaultDir: string): string {
+    return path.join(vaultDir, VAULT_FILE_NAME);
+}
+
+//
+// Restricts a file to owner read + write.
+//
+export async function applyFileMode(filePath: string): Promise<void> {
+    await fs.chmod(filePath, FILE_MODE).catch(() => {
         // chmod is not supported on all platforms (e.g. Windows); ignore errors.
     });
 }
@@ -50,6 +73,59 @@ export interface IVaultFile {
     // Each secret, keyed by its name.
     //
     [name: string]: ISecret;
+}
+
+//
+// Reads every secret out of a vault directory's vault file.
+// Returns an empty set when the file does not exist yet.  A file that exists but does not parse
+// throws, because silently treating a corrupt vault as an empty one would hide the damage and
+// then overwrite it.
+//
+export async function readVaultFile(vaultDir: string): Promise<IVaultFile> {
+    let raw: string;
+    try {
+        raw = await fs.readFile(getVaultFilePath(vaultDir), "utf8");
+    }
+    catch (error: any) {
+        if (error.code === "ENOENT") {
+            return {};
+        }
+        throw error;
+    }
+    return JSON.parse(raw) as IVaultFile;
+}
+
+//
+// Applies a change to a vault directory's vault file. Every write goes through here.
+//
+// The mutator is handed the file's CURRENT contents and changes them in place. updateFileOptimistic
+// takes an exclusive lock beside the file, re-checks the file has not moved before renaming the new
+// contents into place, and re-runs the mutator against the fresh contents if it has. It also makes
+// publishing atomic, so an interrupted write leaves the previous vault rather than a truncated one.
+//
+// The whole vault lives in one file, so the read-all/write-all pair this replaces lost secrets: two
+// processes each adding a secret both read the same contents, and whichever wrote second dropped
+// the other's secret. Two CLI invocations storing credentials at once is enough to hit that.
+//
+export async function updateVaultFile(vaultDir: string, mutator: (contents: IVaultFile) => void): Promise<void> {
+    // The update takes its lock beside the file, so the directory has to exist first, and has to be
+    // created here to get owner-only permissions rather than the default ones the update would use.
+    await ensureDir(vaultDir);
+
+    const filePath = getVaultFilePath(vaultDir);
+    await updateFileOptimistic<IVaultFile>(filePath, {},
+        contents => {
+            mutator(contents);
+            return contents;
+        },
+        raw => JSON.parse(raw) as IVaultFile,
+        contents => JSON.stringify(contents, null, 2),
+        UPDATE_RETRIES);
+
+    // The update publishes by renaming a temp file into place, and that temp file is created with
+    // the default permissions, so the mode has to be reapplied to the file it becomes. Nothing is
+    // exposed in between: the owner-only directory above is what stops another user reading it.
+    await applyFileMode(filePath);
 }
 
 //
@@ -82,45 +158,11 @@ export class PlaintextVault implements IVault {
     }
 
     //
-    // Reads every secret out of the vault file.
-    // Returns an empty set when the file does not exist yet.  A file that
-    // exists but does not parse throws, because silently treating a corrupt
-    // vault as an empty one would hide the damage and then overwrite it.
-    //
-    private async readAll(): Promise<IVaultFile> {
-        let raw: string;
-        try {
-            raw = await fs.readFile(this.vaultFilePath, "utf8");
-        }
-        catch (error: any) {
-            if (error.code === "ENOENT") {
-                return {};
-            }
-            throw error;
-        }
-        return JSON.parse(raw) as IVaultFile;
-    }
-
-    //
-    // Writes every secret back to the vault file, creating the vault
-    // directory first if it is not there.
-    //
-    private async writeAll(contents: IVaultFile): Promise<void> {
-        await ensureDir(this.vaultDir);
-        await fs.writeFile(this.vaultFilePath, JSON.stringify(contents, null, 2), { encoding: "utf8", mode: FILE_MODE });
-        // Apply the mode explicitly; writeFile with mode may be affected by the
-        // process umask on some systems.
-        await fs.chmod(this.vaultFilePath, FILE_MODE).catch(() => {
-            // chmod is not supported on all platforms (e.g. Windows); ignore errors.
-        });
-    }
-
-    //
     // Retrieves a secret by name.
     // Returns undefined if no secret with that name exists.
     //
     async get(name: string): Promise<ISecret | undefined> {
-        const contents = await this.readAll();
+        const contents = await readVaultFile(this.vaultDir);
         return contents[name];
     }
 
@@ -128,9 +170,9 @@ export class PlaintextVault implements IVault {
     // Creates or overwrites a secret.
     //
     async set(secret: ISecret): Promise<void> {
-        const contents = await this.readAll();
-        contents[secret.name] = secret;
-        await this.writeAll(contents);
+        await updateVaultFile(this.vaultDir, contents => {
+            contents[secret.name] = secret;
+        });
     }
 
     //
@@ -138,7 +180,7 @@ export class PlaintextVault implements IVault {
     // Returns an empty array if the vault file does not yet exist.
     //
     async list(): Promise<ISecret[]> {
-        const contents = await this.readAll();
+        const contents = await readVaultFile(this.vaultDir);
         return Object.values(contents);
     }
 
@@ -147,12 +189,14 @@ export class PlaintextVault implements IVault {
     // Does nothing if the secret does not exist.
     //
     async delete(name: string): Promise<void> {
-        const contents = await this.readAll();
+        const contents = await readVaultFile(this.vaultDir);
         if (contents[name] === undefined) {
             return;
         }
-        delete contents[name];
-        await this.writeAll(contents);
+
+        await updateVaultFile(this.vaultDir, current => {
+            delete current[name];
+        });
     }
 
     //
