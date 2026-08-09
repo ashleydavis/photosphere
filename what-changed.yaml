@@ -40,11 +40,53 @@ targets:
       - apps/cli
       - packages
 
+  - name: test:cli:encrypted
+    paths:
+      - apps/cli
+      - packages
+
+  - name: test:cli:lan-share
+    paths:
+      - apps/cli
+      - packages
+
+  - name: test:cli:sync
+    paths:
+      - apps/cli
+      - packages
+
+  - name: test:cli:write-lock
+    paths:
+      - apps/cli
+      - packages
+
+  - name: test:cli:hash-cache
+    paths:
+      - apps/cli
+      - packages
+
   - name: test:electron
     paths:
       - apps/desktop
       - apps/desktop-frontend
       - packages
+
+  # The suite itself is a script at the repository root, so it has to be named as a path of its own.
+  # Nothing under packages or apps matches it, which is how a change to it went five days without
+  # running anything.
+  - name: test:lan-share:cli-desktop
+    paths:
+      - cli-desktop-lan-share-smoke-tests.sh
+      - apps/cli
+      - apps/desktop
+      - apps/desktop-frontend
+      - packages
+
+  # The mobile test harness's own tests: the run lock, the work queue and worker pool, and the
+  # timeout helper. They drive shell, not the app, so they need no device and run on every platform.
+  - name: test:harness
+    paths:
+      - apps/smoke-tests
 
   # The mobile suites need a toolchain that only exists on one platform: an Android emulator for
   # these two, Xcode for the two below. Listing platforms keeps them out of the report entirely on

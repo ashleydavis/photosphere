@@ -18,9 +18,21 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Test configuration
-TEST_FILES_DIR="./test/tmp/write-lock-files"
-PROCESS_OUTPUT_DIR="./test/tmp/write-lock-outputs"
+# Per-run temporary directory, the same allocator every other suite in this repository uses.
+_WRITE_LOCK_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$_WRITE_LOCK_SCRIPT_DIR/../../scripts/lib/allocate-test-temp-dir.sh"
+
+# Test configuration.
+#
+# Everything this run writes lives under a directory allocated for this run alone. It used to be a
+# fixed path under test/tmp, which broke two ways at once: that tree belongs to smoke-tests.sh, which
+# deletes all of it at the start and end of its own run, and a fixed path collides with a second copy
+# of this suite from another worktree or an overlapping rerun. Neither showed up while this suite was
+# the only thing running.
+WRITE_LOCK_TEST_ROOT="$(photosphere_test_temp_dir "cli-write-lock")"
+photosphere_export_test_temp "$WRITE_LOCK_TEST_ROOT"
+TEST_FILES_DIR="$WRITE_LOCK_TEST_ROOT/write-lock-files"
+PROCESS_OUTPUT_DIR="$WRITE_LOCK_TEST_ROOT/write-lock-outputs"
 
 # Default: run from code; use --binary for built executable
 USE_BINARY=false
@@ -137,7 +149,7 @@ get_test_db_dir() {
         # Format: s3:bucket-name/path (no double slash)
         echo "s3:photosphere-test-write-lock/write-lock-test"
     else
-        echo "./test/tmp/write-lock-test-db"
+        echo "$WRITE_LOCK_TEST_ROOT/write-lock-test-db"
     fi
 }
 

@@ -63,13 +63,23 @@ suite_cleanup() {
 trap suite_cleanup EXIT
 
 #
-# Bundles the desktop app and the frontend so start_app can launch Electron from source.
+# Builds bundle/main.js and the renderer, which is what start_app points Electron at. The root
+# `bun run bundle` is the one definition of that build, so this calls it rather than repeating its
+# two halves here.
+#
+# PHOTOSPHERE_SKIP_DESKTOP_BUNDLE says the caller has already built it. scripts/test-everything-parallel.sh
+# sets it after building once for the whole run, because this suite and apps/desktop/smoke-tests.sh
+# write the same directories and vite empties bundle/frontend before rewriting it, so two builds at
+# once can delete the renderer the other is about to launch. Unset, which is how this suite runs on
+# its own, the build happens here as it always did.
 #
 bundle_desktop() {
-    log_info "Bundling desktop-frontend..."
-    (cd "$DESKTOP_FRONTEND_DIR" && bun run bundle) > "$TMP_ROOT/bundle-frontend.log" 2>&1
-    log_info "Bundling desktop..."
-    (cd "$DESKTOP_DIR" && bun run bundle) > "$TMP_ROOT/bundle-desktop.log" 2>&1
+    if [ -n "${PHOTOSPHERE_SKIP_DESKTOP_BUNDLE:-}" ]; then
+        log_info "Bundle already built by the caller (PHOTOSPHERE_SKIP_DESKTOP_BUNDLE is set): skipping bundle step."
+        return
+    fi
+    log_info "Bundling desktop-frontend and desktop..."
+    (cd "$ROOT_DIR" && bun run bundle) > "$TMP_ROOT/bundle.log" 2>&1
 }
 
 #

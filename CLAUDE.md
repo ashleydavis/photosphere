@@ -63,7 +63,7 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 ### Run from repo root:
 - **`bun run test:everything` (alias `bun run tev`) IS THE CANONICAL WAY TO TEST A CHANGE.** Whenever you need to know whether a change is good, whether that is before a commit, after a rebase, at the end of a piece of work, or because you were asked to "run the tests", this is the command. Add `-- --force` to make every suite run regardless of what the change gate thinks changed, which is what to use after a rebase or whenever you want the whole set. Do not assemble your own sequence of `bun run compile`, `bun run test` and `bun run smoke` instead: that combination silently covers no mobile suite, so it passes while the mobile app is broken, and it is not what the git hook runs. The individual scripts below exist for narrowing down a failure once this one has told you there is one.
 - `bun run compile` - Compile all TypeScript
-- `bun run test:everything` (alias `bun run tev`) - Run the genuine full set for this platform, all at once (compile, unit, CLI, Electron, and both mobile suites). Use this when asked to run "all tests". Runs are gated on changed paths: a script is only run when the paths it watches (see `what-changed.yaml`) differ from what they were at the last passing run, so a docs-only change runs nothing. Pass `-- --force` to run everything regardless, `-- --plan` to print the decision without running anything. Pass script names to consider only those, still in parallel. This is what the git hooks run; see `docs/git-hooks.md`. It needs the `what-changed` executable on your PATH, from https://github.com/ashleydavis/what-changed/releases.
+- `bun run test:everything` (alias `bun run tev`) - Run the genuine full set for this platform, all at once (compile, unit, every CLI suite, Electron, the CLI to desktop LAN share suite, the mobile test harness, and both mobile suites). Use this when asked to run "all tests". The only Release workflow test jobs it leaves out are the stories runs, the packaging builds, and `perf-tests`. Runs are gated on changed paths: a script is only run when the paths it watches (see `what-changed.yaml`) differ from what they were at the last passing run, so a docs-only change runs nothing. Pass `-- --force` to run everything regardless, `-- --plan` to print the decision without running anything. Pass script names to consider only those, still in parallel. This is what the git hooks run; see `docs/git-hooks.md`. It needs the `what-changed` executable on your PATH, from https://github.com/ashleydavis/what-changed/releases.
 - `bun run test:everything:all` - The whole set for this platform, changed or not. The same as `-- --force`.
 - `bun run test:all` - Unit tests plus the CLI and Electron smoke tests, one after another. Despite the name it covers NO mobile suite, so it can pass while the mobile app is broken. Any change under `packages/mobile-frontend/`, `packages/mobile-worker/`, `apps/android-frontend/`, `apps/ios-frontend/` or `apps/smoke-tests/` requires `bun run test:and` (or `bun run test:ios` on macOS) before it is committed.
 - `bun run test` - Run unit tests only
@@ -73,6 +73,13 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 - `bun run dev:web` - Start dev-server and frontend concurrently (no Electron)
 - `bun run test:cli` - Run CLI smoke tests
 - `bun run test:cli -- <number|name>` - Run a single CLI smoke test by number or name
+- `bun run test:cli:encrypted` - CLI encrypted database smoke tests
+- `bun run test:cli:lan-share` - CLI to CLI LAN share smoke tests
+- `bun run test:cli:sync` - CLI sync smoke tests, several processes syncing at once
+- `bun run test:cli:write-lock` - CLI write lock smoke tests, several processes writing at once
+- `bun run test:cli:hash-cache` - CLI hash cache concurrency smoke tests
+- `bun run test:lan-share:cli-desktop` (alias `tlcd`) - CLI to desktop LAN share smoke tests, both directions
+- `bun run test:harness` - The mobile test harness's own tests (run lock, work queue and worker pool, timeout helper). Needs no device
 - `bun run test:electron` - Build and run Electron smoke tests
 - `bun run everything:plan` - Print which test scripts would run and why, without running anything
 - `what-changed changes` - List the files that changed since the last passing run, with their hashes

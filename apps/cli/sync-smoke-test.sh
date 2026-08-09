@@ -18,10 +18,22 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Test configuration
-TEST_DB_DIR="./test/tmp/sync-test-db"
-TEST_FILES_DIR="./test/tmp/sync-test-files"
-PROCESS_OUTPUT_DIR="./test/tmp/sync-test-outputs"
+# Per-run temporary directory, the same allocator every other suite in this repository uses.
+_SYNC_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$_SYNC_SCRIPT_DIR/../../scripts/lib/allocate-test-temp-dir.sh"
+
+# Test configuration.
+#
+# Everything this run writes lives under a directory allocated for this run alone. It used to be a
+# fixed path under test/tmp, which broke two ways at once: that tree belongs to smoke-tests.sh, which
+# deletes all of it at the start and end of its own run, and a fixed path collides with a second copy
+# of this suite from another worktree or an overlapping rerun. Neither showed up while this suite was
+# the only thing running.
+SYNC_TEST_ROOT="$(photosphere_test_temp_dir "cli-sync")"
+photosphere_export_test_temp "$SYNC_TEST_ROOT"
+TEST_DB_DIR="$SYNC_TEST_ROOT/sync-test-db"
+TEST_FILES_DIR="$SYNC_TEST_ROOT/sync-test-files"
+PROCESS_OUTPUT_DIR="$SYNC_TEST_ROOT/sync-test-outputs"
 
 # Default: run from code; use --binary for built executable
 USE_BINARY=false

@@ -51,7 +51,16 @@ while [[ $# -gt 0 ]]; do
 done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TEST_ROOT="$SCRIPT_DIR/test/tmp/hash-cache-concurrency"
+
+# Per-run temporary directory, the same allocator every other suite in this repository uses.
+source "$SCRIPT_DIR/../../scripts/lib/allocate-test-temp-dir.sh"
+
+# Everything this run writes lives under a directory allocated for this run alone. It used to be a
+# fixed path under test/tmp, which broke two ways at once: that tree belongs to smoke-tests.sh, which
+# deletes all of it at the start and end of its own run, and a fixed path collides with a second copy
+# of this suite from another worktree or an overlapping rerun. Neither showed up while this suite was
+# the only thing running.
+TEST_ROOT="$(photosphere_test_temp_dir "cli-hash-cache")"
 OUTPUT_DIR="$TEST_ROOT/outputs"
 
 # Starting and stopping background processes: the tree walk the trap below stops the writers with.
@@ -80,8 +89,10 @@ trap 'stop_writers; exit 130' INT
 trap 'stop_writers; exit 143' TERM
 
 # Both the writers and the reads resolve the cache directory from TEST_TMP_DIR, so pointing it at
-# an isolated directory keeps this test off the developer's real hash cache.
-export TEST_TMP_DIR="$TEST_ROOT"
+# an isolated directory keeps this test off the developer's real hash cache. PHOTOSPHERE_TMP_DIR goes
+# with it so the CLI's own scratch files land there too rather than in the shared /tmp/photosphere,
+# which `psi hash-cache clear` deletes outright.
+photosphere_export_test_temp "$TEST_ROOT"
 
 EXPECTED_ENTRIES=$((NUM_PROCESSES * ENTRIES_PER_PROCESS))
 
@@ -99,7 +110,8 @@ echo "Entries per process: $ENTRIES_PER_PROCESS"
 echo "Expected entries:    $EXPECTED_ENTRIES"
 echo ""
 
-rm -rf "$TEST_ROOT"
+# No delete first: the directory above was allocated for this run and is already empty. Deleting it
+# would take the one mktemp just handed out, and nothing else has ever written there.
 mkdir -p "$OUTPUT_DIR"
 
 # Each writer adds its own entries, one psi process per entry, so the processes are constantly

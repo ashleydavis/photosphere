@@ -41,7 +41,14 @@ There is one hook, `.githooks/pre-commit`. It delegates to `bun run test:everyth
 | Compile | `bun run compile` | `bun run compile` |
 | Unit tests | `bun run test` | `bun run test` |
 | CLI smoke tests | `bun run test:cli` | `bun run test:cli` |
+| CLI encrypted database tests | `bun run test:cli:encrypted` | `bun run test:cli:encrypted` |
+| CLI LAN share tests | `bun run test:cli:lan-share` | `bun run test:cli:lan-share` |
+| CLI sync tests | `bun run test:cli:sync` | `bun run test:cli:sync` |
+| CLI write lock tests | `bun run test:cli:write-lock` | `bun run test:cli:write-lock` |
+| CLI hash cache tests | `bun run test:cli:hash-cache` | `bun run test:cli:hash-cache` |
 | Electron smoke tests | `bun run test:electron` | `bun run test:electron` |
+| CLI to desktop LAN share tests | `bun run test:lan-share:cli-desktop` | `bun run test:lan-share:cli-desktop` |
+| Mobile harness tests | `bun run test:harness` | `bun run test:harness` |
 | Mobile smoke tests | `bun run test:and` | `bun run test:ios` |
 | Mobile native unit tests | `bun run test:and:unit` | `bun run test:ios:unit` |
 

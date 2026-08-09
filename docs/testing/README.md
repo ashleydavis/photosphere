@@ -73,6 +73,26 @@ Run the hash cache concurrency smoke test, which proves that parallel processes 
 bun run test:cli:hash-cache
 ```
 
+Run the other CLI suites: LAN share (CLI to CLI), sync and write lock, the last two driving several processes against one database at once:
+
+```bash
+bun run test:cli:lan-share
+bun run test:cli:sync
+bun run test:cli:write-lock
+```
+
+Run the CLI to desktop LAN share suite, which shares secrets and databases in both directions between the CLI and the Electron app:
+
+```bash
+bun run test:lan-share:cli-desktop
+```
+
+Run the mobile test harness's own tests, covering the device run lock, the work queue and worker pool, and the timeout helper. They drive shell rather than the app, so they need no device and take seconds:
+
+```bash
+bun run test:harness
+```
+
 Run the mobile smoke tests. Each test lives at `apps/smoke-tests/tests/<n>-<name>/test.sh`, numbered 0-39, and each `test.sh` is platform-neutral: the same file runs against the Android emulator/device and the iOS simulator:
 
 ```bash
@@ -254,7 +274,7 @@ That job control really does this is checked at runtime rather than trusted, onc
 
 The leak check runs at the end of `apps/desktop/smoke-tests.sh` and `apps/smoke-tests/run.sh`. Each app or control bridge a test launches records its process group in the file named by `PHOTOSPHERE_LAUNCHED_GROUPS`, which the runner exports before it starts anything; at the end the runner reports whatever is still alive in those groups and fails the run. **A leak check failure on a run whose tests all passed is a real failure, not noise.** It means the suite left something on the machine, and enough of those is what took the machine into an out-of-memory kill that took the Android emulator pool with it. Fix the cleanup that missed; do not delete the check.
 
-It is scoped to the groups the suite itself created, and that precision is load-bearing rather than tidiness. `bun run test:everything` runs five suites at once in one checkout, so anything looser (matching this checkout's path, say) makes every suite report the other four's live processes as its own leak. Naming the groups also reaches processes that match no pattern at all: the `Xvfb` server and Electron's utility processes are in the group but mention this checkout nowhere.
+It is scoped to the groups the suite itself created, and that precision is load-bearing rather than tidiness. `bun run test:everything` runs a dozen suites at once in one checkout, so anything looser (matching this checkout's path, say) makes every suite report the others' live processes as its own leak. Naming the groups also reaches processes that match no pattern at all: the `Xvfb` server and Electron's utility processes are in the group but mention this checkout nowhere.
 
 The CLI suite has no leak check. Nothing in it launches through `launch_in_process_group` (a test starts `psi` directly inside its batch subshell), so there is no group to scope to, and a check there could never fire. What keeps that suite from leaking is that its interrupt and exit traps kill each batch subshell's whole process tree rather than just the subshell.
 

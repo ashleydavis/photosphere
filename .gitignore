@@ -65,3 +65,7 @@ ux-review/
 .claude/worktrees/
 .claude/permissions-log/
 .claude/permissions-debug.log
+
+# Per-machine record of how long each test script took, used by test:everything to print an
+# expected time. A measurement of this machine only, so it is never shared.
+.test-durations/

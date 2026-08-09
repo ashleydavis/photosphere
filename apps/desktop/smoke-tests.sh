@@ -358,14 +358,26 @@ find_matching() {
     done < <(discover_tests)
 }
 
+# Builds bundle/main.js and the renderer, which is what Electron is pointed at: apps/desktop's
+# package.json names bundle/main.js as its main. The root `bun run bundle` is the one definition of
+# that build, so this calls it rather than repeating its two halves here.
+#
+# PHOTOSPHERE_SKIP_DESKTOP_BUNDLE says the caller has already built it. scripts/test-everything-parallel.sh
+# sets it after building once for the whole run, because this suite and
+# cli-desktop-lan-share-smoke-tests.sh write the same directories and vite empties bundle/frontend
+# before rewriting it, so two builds at once can delete the renderer the other is about to launch.
+# Unset, which is how this suite runs on its own, the build happens here as it always did.
 bundle_app() {
     if [[ "$USE_BINARY" == "true" ]]; then
         echo "Binary mode: skipping bundle step."
         return
     fi
+    if [[ -n "${PHOTOSPHERE_SKIP_DESKTOP_BUNDLE:-}" ]]; then
+        echo "Bundle already built by the caller (PHOTOSPHERE_SKIP_DESKTOP_BUNDLE is set): skipping bundle step."
+        return
+    fi
     echo "Bundling..."
-    cd "$SCRIPT_DIR/../desktop-frontend" && bun run bundle
-    cd "$SCRIPT_DIR" && bun run bundle
+    (cd "$REPO_DIR" && bun run bundle)
 }
 
 main() {

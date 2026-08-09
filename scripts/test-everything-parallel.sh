@@ -82,7 +82,20 @@ done
 if [ "${#NAMED_SCRIPTS[@]}" -gt 0 ]; then
     SCRIPTS=("${NAMED_SCRIPTS[@]}")
 elif [ "$FORCE" = true ]; then
-    SCRIPTS=(compile test test:cli test:electron "${PLATFORM_SCRIPTS[@]}")
+    SCRIPTS=(
+        compile
+        test
+        test:cli
+        test:cli:encrypted
+        test:cli:lan-share
+        test:cli:sync
+        test:cli:write-lock
+        test:cli:hash-cache
+        test:electron
+        test:lan-share:cli-desktop
+        test:harness
+        "${PLATFORM_SCRIPTS[@]}"
+    )
 else
     if ! command -v what-changed >/dev/null 2>&1; then
         echo "what-changed is not on PATH." >&2
@@ -192,20 +205,71 @@ log_name_for() {
     printf '%s' "$1" | tr ':' '-'
 }
 
+# Where each script's last successful duration is remembered, one file per script holding its seconds.
+#
+# Git-ignored and machine-local on purpose: it is a measurement of THIS machine, and an emulator here
+# is not an emulator on a runner. It carries no meaning off this computer and nothing reads it but the
+# estimate printed below.
+DURATION_CACHE_DIR="$REPO_DIR/.test-durations"
+
+# Prints the last recorded duration in seconds for a script, or nothing when it has never been timed.
+recorded_duration_for() {
+    local file="$DURATION_CACHE_DIR/$(log_name_for "$1")"
+    if [ -f "$file" ]; then
+        cat "$file" 2>/dev/null
+    fi
+}
+
+# Records how long a script took, so the next run can say what to expect.
+#
+# Only a passing run is recorded. A failure usually stops early, so its duration says how long the
+# suite took to break rather than how long it takes, and keeping it would make the estimate drift
+# downwards every time something broke.
+record_duration_for() {
+    local script="$1"
+    local seconds="$2"
+    mkdir -p "$DURATION_CACHE_DIR"
+    printf '%s\n' "$seconds" > "$DURATION_CACHE_DIR/$(log_name_for "$script")"
+}
+
+# Formats a count of seconds as m:ss, or seconds alone when it is under a minute.
+format_seconds() {
+    local total="$1"
+    if [ "$total" -ge 60 ]; then
+        printf '%dm %02ds' "$((total / 60))" "$((total % 60))"
+    else
+        printf '%ds' "$total"
+    fi
+}
+
 # Runs one script, writing its output and its exit code beside each other so the caller can report
 # both, and returning that code so a waiting caller sees the failure too.
 run_script() {
     local script="$1"
-    local log_name code
+    local log_name code started elapsed
     log_name="$(log_name_for "$script")"
+    started=$SECONDS
     if command -v mise >/dev/null 2>&1; then
         mise exec -- bun run "$script" > "$LOG_DIR/$log_name.log" 2>&1 < /dev/null
     else
         bun run "$script" > "$LOG_DIR/$log_name.log" 2>&1 < /dev/null
     fi
     code=$?
+    elapsed=$((SECONDS - started))
     echo "$code" > "$LOG_DIR/$log_name.exit"
+    echo "$elapsed" > "$LOG_DIR/$log_name.seconds"
+    if [ "$code" = "0" ]; then
+        record_duration_for "$script" "$elapsed"
+    fi
     return "$code"
+}
+
+# Prints the seconds a script took in this run, or nothing when it never finished.
+elapsed_for() {
+    local file="$LOG_DIR/$(log_name_for "$1").seconds"
+    if [ -f "$file" ]; then
+        cat "$file" 2>/dev/null
+    fi
 }
 
 # Runs one lane's scripts one after another, stopping at the first failure so the rest of that lane is
@@ -272,14 +336,89 @@ require_android_emulator() {
 
 require_android_emulator
 
+# Builds the desktop bundle once, for the whole run, when a suite that needs it is in the set.
+#
+# Both desktop suites bundle for themselves so that each works when run on its own, and both write the
+# same directories: `bun run bundle` empties apps/desktop/bundle/frontend (vite's emptyOutDir) and
+# rewrites apps/desktop/bundle. Started together that is one suite deleting the renderer the other is
+# about to launch Electron against.
+#
+# Keeping the two suites in one lane fixed it and cost the run the shorter suite's whole runtime, about
+# a minute, for a build that takes five seconds. Building it here instead, before any lane starts, costs
+# five seconds once: PHOTOSPHERE_SKIP_DESKTOP_BUNDLE tells the suites it is already done, so they skip
+# their own build and run at the same time as each other.
+bundle_desktop_once() {
+    local script wanted=""
+
+    for script in "${SCRIPTS[@]}"; do
+        case "$script" in
+            test:electron|test:lan-share:cli-desktop) wanted="yes" ;;
+        esac
+    done
+    if [ -z "$wanted" ]; then
+        return 0
+    fi
+
+    local bundle_status=0
+    echo "Bundling the desktop app once for this run..."
+    if command -v mise >/dev/null 2>&1; then
+        mise exec -- bun run bundle || bundle_status=$?
+    else
+        bun run bundle || bundle_status=$?
+    fi
+
+    if [ "$bundle_status" -ne 0 ]; then
+        echo "The desktop bundle failed (exit $bundle_status), so nothing has been started." >&2
+        exit 1
+    fi
+
+    export PHOTOSPHERE_SKIP_DESKTOP_BUNDLE=1
+}
+
+bundle_desktop_once
+
+RUN_STARTED=$SECONDS
+
+# Width of the lane-name column, so the estimates line up under each other rather than sitting at a
+# different place on every row. Measured from the longest lane name actually being run.
+lane_name_width=0
+for lane in "${LANES[@]}"; do
+    if [ "${#lane}" -gt "$lane_name_width" ]; then
+        lane_name_width="${#lane}"
+    fi
+done
+
 echo "Running ${#SCRIPTS[@]} script(s) across ${#LANES[@]} parallel lane(s):"
 for lane in "${LANES[@]}"; do
+    # The expected time is the sum of the lane's scripts, since a lane runs its scripts one after
+    # another. A script that has never passed here has nothing to expect, and says so rather than
+    # guessing at a number.
+    lane_expected=0
+    lane_unknown=""
+    for script in $lane; do
+        script_expected="$(recorded_duration_for "$script")"
+        if [ -n "$script_expected" ]; then
+            lane_expected=$((lane_expected + script_expected))
+        else
+            lane_unknown="yes"
+        fi
+    done
+
+    # The tilde marks the number as an estimate rather than a measurement, which is what tells it
+    # apart from the real durations printed in the results at the end.
+    if [ -n "$lane_unknown" ]; then
+        lane_estimate="not timed yet"
+    else
+        lane_estimate="$(format_seconds "$lane_expected") ~"
+    fi
+
     case "$lane" in
         *" "*)
-            echo "  $lane   (in this order, they share a build directory)"
+            printf '  %-*s  %s   (in this order, they share a build directory)\n' \
+                "$lane_name_width" "$lane" "$lane_estimate"
             ;;
         *)
-            echo "  $lane"
+            printf '  %-*s  %s\n' "$lane_name_width" "$lane" "$lane_estimate"
             ;;
     esac
 done
@@ -333,18 +472,47 @@ failed=()
 
 # Reported lane by lane rather than in the order the scripts were requested, so a lane's failure appears
 # above the scripts that were skipped because of it rather than below them.
+RUN_ELAPSED=$((SECONDS - RUN_STARTED))
+
+# Same column width as the lane listing above, so the durations here sit under the estimates there.
+script_name_width=0
+for script in $(printf '%s\n' "${LANES[@]}" | tr ' ' '\n'); do
+    if [ "${#script}" -gt "$script_name_width" ]; then
+        script_name_width="${#script}"
+    fi
+done
+
 echo "Results:"
 for script in $(printf '%s\n' "${LANES[@]}" | tr ' ' '\n'); do
     code="$(recorded_exit_for "$script")"
-    if [ -z "$code" ]; then
-        printf '  ....  bun run %s (cancelled, another script failed first)\n' "$script"
-    elif [ "$code" = "0" ]; then
-        printf '  PASS  bun run %s\n' "$script"
+    took="$(elapsed_for "$script")"
+    if [ -n "$took" ]; then
+        took_text="$(format_seconds "$took")"
     else
-        printf '  FAIL  bun run %s (exit %s)\n' "$script" "$code"
+        took_text=""
+    fi
+    if [ -z "$code" ]; then
+        printf '  ....  bun run %-*s  cancelled, another script failed first\n' "$script_name_width" "$script"
+    elif [ "$code" = "0" ]; then
+        printf '  PASS  bun run %-*s  %s\n' "$script_name_width" "$script" "$took_text"
+    else
+        printf '  FAIL  bun run %-*s  %s   exit %s\n' "$script_name_width" "$script" "$took_text" "$code"
         failed+=("$script")
     fi
 done
+
+# The wall clock, and beside it what the same scripts would have cost run one after another. The two
+# differ because the lanes run at the same time, and the gap is what the parallelism is worth.
+sequential_total=0
+for script in $(printf '%s\n' "${LANES[@]}" | tr ' ' '\n'); do
+    took="$(elapsed_for "$script")"
+    if [ -n "$took" ]; then
+        sequential_total=$((sequential_total + took))
+    fi
+done
+echo ""
+printf 'Total: %s (%s if run one after another)\n' \
+    "$(format_seconds "$RUN_ELAPSED")" "$(format_seconds "$sequential_total")"
 
 if [ "${#failed[@]}" -eq 0 ] && [ "${#cancelled[@]}" -eq 0 ]; then
     echo ""
