@@ -156,6 +156,25 @@ process_control_verify_job_control() {
 
     local own_pgid probe_pid probe_pgid monitor_was_on
     own_pgid="$(process_group_of "$$")"
+
+    # A host that cannot report a process group for the running shell cannot report one for anything,
+    # so there is nothing here to verify. That is Git Bash on Windows: its MSYS ps has no -o option,
+    # and Windows has no POSIX process groups to report even if it did. The probe below would be
+    # comparing one empty string against another and calling the result a failure.
+    #
+    # Refusing on such a host is what stopped the Windows release job launching the app at all. Every
+    # test then waited out both of its readiness attempts against an app that had never been started,
+    # four minutes each, and forty of those filled the job's whole hour without once saying why.
+    #
+    # Nothing is assumed in exchange. launch_in_process_group falls back to the launched pid when no
+    # group can be read, and kill_process_tree walks the children from that pid, which is what the
+    # group would have been used for. What is lost is the guarantee that a group is the job's own,
+    # and on a platform with no groups there was never such a guarantee to lose.
+    if [ -z "$own_pgid" ]; then
+        PROCESS_CONTROL_JOB_CONTROL_VERIFIED="yes"
+        return 0
+    fi
+
     monitor_was_on="no"
     case "$-" in
         *m*)
