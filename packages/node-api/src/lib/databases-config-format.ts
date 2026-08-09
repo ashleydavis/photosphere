@@ -69,9 +69,6 @@ export interface ITomlDatabasesConfig {
 
     // Recently opened database names.
     recent_database_names?: string[];
-
-    // Legacy field — recently opened database paths. Migrated on load.
-    recent_database_paths?: string[];
 }
 
 //

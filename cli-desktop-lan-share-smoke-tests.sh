@@ -167,8 +167,6 @@ seed_databases_toml() {
         if [ -n "$encryption_key" ]; then
             echo "encryption_key = \"$encryption_key\""
         fi
-        echo ""
-        echo "[recent_database_paths]"
     } > "$config_dir/databases.toml"
 }
 

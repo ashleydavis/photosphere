@@ -34,7 +34,6 @@ name = "test-db"
 description = ""
 path = "/tmp/smoke-test-db"
 
-[recent_database_paths]
 EOF
 
 #

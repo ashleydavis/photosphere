@@ -99,35 +99,39 @@ describe('loadDatabasesConfig', () => {
     });
 });
 
-describe('loadDatabasesConfig recents migration', () => {
+//
+// Loading is a read and nothing else. It used to migrate a legacy `recent_database_paths` field and
+// rewrite the file, which meant a read could take a lock and write; that is gone, so a file holding
+// anything this code does not recognise is simply read past.
+//
+describe('loadDatabasesConfig ignores keys it does not know', () => {
     beforeEach(() => jest.clearAllMocks());
 
-    test('migrates legacy recent_database_paths to recent_database_names and rewrites the file', async () => {
-        mockPathExists.mockImplementation((filePath: string) => filePath.endsWith('.toml'));
-        mockReadToml.mockResolvedValue({
-            databases: [makeTomlEntry('/a', 'alpha'), makeTomlEntry('/b', 'beta')],
-            recent_database_paths: ['/b', '/a'],
-        });
-
-        const config = await loadDatabasesConfig();
-
-        expect(config.recentDatabaseNames).toEqual(['beta', 'alpha']);
-        expect(mockUpdateToml).toHaveBeenCalledTimes(1);
-        const tomlArg = mockUpdateToml.mock.calls[0][1];
-        expect(tomlArg.recent_database_names).toEqual(['beta', 'alpha']);
-        expect(tomlArg.recent_database_paths).toBeUndefined();
-    });
-
-    test('drops legacy paths that no longer match any database during migration', async () => {
+    test('reads the file without writing to it', async () => {
         mockPathExists.mockImplementation((filePath: string) => filePath.endsWith('.toml'));
         mockReadToml.mockResolvedValue({
             databases: [makeTomlEntry('/a', 'alpha')],
-            recent_database_paths: ['/missing', '/a'],
+            recent_database_names: ['alpha'],
         });
 
         const config = await loadDatabasesConfig();
 
         expect(config.recentDatabaseNames).toEqual(['alpha']);
+        expect(mockUpdateToml).not.toHaveBeenCalled();
+    });
+
+    test('an unrecognised key leaves the recents empty and still writes nothing', async () => {
+        mockPathExists.mockImplementation((filePath: string) => filePath.endsWith('.toml'));
+        mockReadToml.mockResolvedValue({
+            databases: [makeTomlEntry('/a', 'alpha')],
+            recent_database_paths: ['/a'],
+        });
+
+        const config = await loadDatabasesConfig();
+
+        expect(config.databases).toHaveLength(1);
+        expect(config.recentDatabaseNames).toEqual([]);
+        expect(mockUpdateToml).not.toHaveBeenCalled();
     });
 });
 

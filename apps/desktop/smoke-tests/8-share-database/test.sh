@@ -36,7 +36,6 @@ path = "/tmp/smoke-test-db"
 s3_key = "test-s3-key"
 encryption_key = "test-enc-key"
 
-[recent_database_paths]
 EOF
 
 # Start sender app
