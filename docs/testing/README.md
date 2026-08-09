@@ -122,8 +122,11 @@ A suite that passes once has told you very little. A mode that fails one run in 
 bun run find-flakey-tests                    # until 100 consecutive green runs
 bun run find-flakey-tests -- --target 500    # a longer streak
 bun run find-flakey-tests -- --resume 42     # carry on from a session that banked 42 green runs
+bun run find-flakey-tests -- --ladder        # each suite in turn, cheapest first
 bun run find-flakey-tests -- --help
 ```
+
+`--ladder` climbs the suites one at a time instead of looping the whole set: 100 green runs of `bun run test`, then 100 of `bun run test:cli`, then Electron, then Android, stopping at the first rung that fails. Looping everything is the slowest possible way to find a flaky unit test, and a red unit run names its test in seconds where the same failure inside a parallel run of everything has to be dug out of a lane. Each rung's run logs go in their own numbered subdirectory of the session, and a failure prints the command to carry on from that rung once it is fixed, since the rungs below it are already proven on this tree. `--target` is the streak required of every rung, and `--resume` applies to the first rung only, the one the session restarts on. Name your own rungs (from the same suites `--script` accepts) to climb something else: `--ladder "test test:cli test:ios"` is how to include the iOS suite on macOS, which the default rungs leave out because it can never pass on Linux.
 
 Before each run it prints when that run should end and when the whole streak should, as a clock time and as a time from now. The estimate is the mean of the last ten runs, so it appears from the second run onwards, tightens as the session goes on, and follows the machine as it speeds up or slows down instead of staying anchored to how the session began. It counts time spent running only, so a pause waiting for an emulator pool, or a crashed run that is retried, puts the real finish later than the estimate says.
 

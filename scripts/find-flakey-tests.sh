@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 #
+# usage-begin
 # Runs the full test suite over and over to prove it is not flaky, and stops dead at the first
 # failure with everything needed to diagnose it.
 #
@@ -13,6 +14,14 @@
 # `bun run test:everything -- --force` in a loop and requires a long unbroken streak of green runs
 # before it will call the suite clean. `--force` is always passed, so the change gate never skips a
 # suite: every run exercises everything.
+#
+# The ladder (--ladder) climbs the suites in turn, cheapest first, requiring the full streak of each
+# one before it starts the next: the unit tests, then the CLI suite, then Electron, then Android. It
+# exists because looping the whole set is the slowest possible way to find a flaky unit test. A unit
+# run takes seconds and an Android run takes minutes, so a hundred green unit runs cost a few minutes
+# and rule out an entire suite before anything expensive starts. A failure on a low rung is also far
+# easier to read than the same failure buried in a parallel run of everything at once, and the ladder
+# stops there rather than spending hours on the rungs above it.
 #
 # On the first real failure it bails out rather than carrying on, because the point of the loop is
 # the streak, and a streak with a failure in it is not a streak. It then writes a diagnosis report
@@ -48,6 +57,13 @@
 #   bun run find-flakey-tests -- --script test:and
 #       Loop one suite instead of the whole set.
 #
+#   bun run find-flakey-tests -- --ladder
+#       Climb the suites in turn: 100 green runs of `bun run test`, then 100 of `bun run test:cli`,
+#       then Electron, then Android. The first rung to fail stops the session.
+#
+#   bun run find-flakey-tests -- --ladder "test test:cli test:ios"
+#       Climb the rungs you name instead of the default ones, in the order you name them.
+#
 #   bun run find-flakey-tests -- --script test:and --test 19
 #       Loop a single test within a suite. The filter is passed straight through to the suite, so
 #       whatever that suite accepts works here: a number, part of a name, or a full directory name.
@@ -71,11 +87,19 @@
 #                 are concentrated in one suite it surfaces them several times sooner. The cost is
 #                 coverage: a single-suite streak says nothing about the others.
 #
+#   --ladder [L]  climb the suites in turn, requiring a full --target streak of each one before
+#                 starting the next, and stopping the session at the first rung that fails. With no
+#                 list it climbs: test, test:cli, test:electron, test:and. Give a list (space or
+#                 comma separated, from the same names as --script) to climb your own rungs, which is
+#                 how to include test:ios on macOS. Cannot be combined with --script, --test or
+#                 --command, since each of those names a single thing to loop.
+#
 #   --test FILTER narrow to one test within the chosen suite, for example `--script test:and --test 19`.
 #                 Requires --script. Use this once a particular test is known to be the flaky one:
 #                 a single mobile test takes seconds where the whole suite takes minutes.
 #
 #   --target N    consecutive green runs required before the suite is declared clean (default 100).
+#                 On a ladder it is the streak required of every rung, not of the ladder as a whole.
 #
 #   --resume N    carry on from a session that banked N green runs (default 0): those N count towards
 #                 the target and the next run is numbered N+1, so the numbering and the streak can
@@ -83,7 +107,9 @@
 #                 for example stopping to restart an emulator pool or a machine reboot. Only sound
 #                 when the code under test has not changed since those runs passed: a streak is only
 #                 meaningful as N runs of one tree. A test failure resets the count to zero and no
-#                 flag should be used to paper over that.
+#                 flag should be used to paper over that. On a ladder it applies to the first rung
+#                 only, the one the session restarts on; the rungs above it start from zero as they
+#                 always would. That is the form the session prints when it stops part way up.
 #
 #   --command C   loop this exact command. Overrides --script and --test, and takes whatever you give
 #                 it, so it can run anything: one unit test, a script that is not a test, a command
@@ -93,11 +119,14 @@
 #   --help        print this usage and exit.
 #
 # Output: everything is written under tmp/find-flakey-tests/<timestamp>/ in the repo (gitignored),
-# one log per run plus a report.txt on failure. The paths are printed as the last lines of stdout.
+# one log per run plus a report.txt on failure. A ladder puts each rung's run logs in its own
+# subdirectory named after the suite, so one rung's logs never write over another's. The paths are
+# printed as the last lines of stdout.
 #
 # Exit status: 0 when the target streak is reached, 1 when a run failed, 2 on bad usage, 3 when too
 # many consecutive Bun crashes made the result meaningless, 4 when the Android emulator pool the
 # looped command depends on stopped being healthy and did not come back.
+# usage-end
 #
 set -uo pipefail
 
@@ -135,6 +164,24 @@ TEST_FILTER=""
 # choice rather than the default sitting in COMMAND.
 COMMAND_GIVEN=0
 
+# Whether --ladder was given, and the rungs it climbs in the order they are climbed.
+#
+# The default rungs are the suites in increasing cost order, which is also increasing order of how
+# much a failure costs to read: a red unit run names a test in seconds, a red Android run is minutes
+# of emulator output. test:ios is not among them because most of this work happens on Linux, where
+# that rung can never pass; name it explicitly (`--ladder "test test:cli test:ios"`) on macOS.
+LADDER=0
+LADDER_RUNGS=""
+LADDER_DEFAULT="test test:cli test:electron test:and"
+
+# The rung being climbed, named in every run line and in the failure report so a log read afterwards
+# says which suite each run belonged to. Empty when a single command is being looped.
+RUNG_LABEL=""
+
+# The rungs left to climb, the one in progress included, so a session that stops part way up can say
+# how to carry on from there rather than from the bottom.
+REMAINING_RUNGS=""
+
 # How many Bun runtime crashes in a row are tolerated before giving up. One crash is bad luck and is
 # retried; a run of them means something is genuinely broken and continuing would hide it.
 BUN_CRASH_RETRIES=5
@@ -168,10 +215,11 @@ ESTIMATE_WINDOW=10
 
 # Prints the usage block at the top of this file, so there is one copy of it rather than two.
 print_usage() {
-    # The range ends at the last line of the header comment block, which is the line before
-    # `set -uo pipefail`. Update it if the header grows: a stale range silently truncates the
-    # help, which is how --target once vanished from it.
-    sed -n '3,101p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    # Delimited by sentinel lines rather than by hardcoded line numbers, which is what this used to
+    # do: the range went stale as the header grew and silently dropped --target out of the help.
+    sed -n '/^# usage-begin$/,/^# usage-end$/p' "${BASH_SOURCE[0]}" \
+        | sed '1d;$d' \
+        | sed 's/^# \{0,1\}//'
 }
 
 while [ "$#" -gt 0 ]; do
@@ -194,6 +242,21 @@ while [ "$#" -gt 0 ]; do
                     ;;
             esac
             shift 2
+            ;;
+        --ladder)
+            LADDER=1
+            # The rung list is optional, so the next argument is only taken when there is one and it
+            # is not another option. Without that check, `--ladder --target 20` would swallow
+            # `--target` as the list and then complain about a rung called "--target".
+            case "${2:-}" in
+                ''|--*)
+                    shift
+                    ;;
+                *)
+                    LADDER_RUNGS="$2"
+                    shift 2
+                    ;;
+            esac
             ;;
         --test)
             TEST_FILTER="${2:-}"
@@ -222,14 +285,20 @@ done
 # passes --script or --command and never sees this, and the terminal check below means a run with no
 # terminal attached falls through to the default rather than blocking for input that can never come.
 prompt_for_selection() {
-    local reply index=1 choice
+    local reply index=1 choice selection=""
     echo "Which suite should be looped?"
-    for choice in $SCRIPT_CHOICES; do
-        if [ "$choice" = "everything" ]; then
-            echo "  $index) everything    the whole set (bun run test:everything -- --force)"
-        else
-            echo "  $index) $choice"
-        fi
+    for choice in $SCRIPT_CHOICES ladder; do
+        case "$choice" in
+            everything)
+                echo "  $index) everything    the whole set (bun run test:everything -- --force)"
+                ;;
+            ladder)
+                echo "  $index) ladder        each suite in turn, cheapest first: $LADDER_DEFAULT"
+                ;;
+            *)
+                echo "  $index) $choice"
+                ;;
+        esac
         index=$((index + 1))
     done
     printf "Choose [1]: "
@@ -237,39 +306,97 @@ prompt_for_selection() {
     reply="${reply:-1}"
 
     index=1
-    for choice in $SCRIPT_CHOICES; do
+    for choice in $SCRIPT_CHOICES ladder; do
         if [ "$index" = "$reply" ]; then
-            SCRIPT="$choice"
+            selection="$choice"
         fi
         index=$((index + 1))
     done
-    if [ -z "$SCRIPT" ]; then
+    if [ -z "$selection" ]; then
         echo "find-flakey-tests: '$reply' is not one of the choices." >&2
         exit 2
     fi
 
-    if [ "$SCRIPT" != "everything" ]; then
+    if [ "$selection" = "ladder" ]; then
+        LADDER=1
+    else
+        SCRIPT="$selection"
+    fi
+
+    if [ -n "$SCRIPT" ] && [ "$SCRIPT" != "everything" ]; then
         printf "Narrow to one test? (a number or part of a name, blank for all): "
         read -r TEST_FILTER
     fi
 
-    printf "How many consecutive green runs? [%s]: " "$TARGET"
+    if [ "$LADDER" -eq 1 ]; then
+        printf "How many consecutive green runs of each suite? [%s]: " "$TARGET"
+    else
+        printf "How many consecutive green runs? [%s]: " "$TARGET"
+    fi
     read -r reply
     TARGET="${reply:-$TARGET}"
 }
 
-if [ "$COMMAND_GIVEN" -eq 0 ] && [ -z "$SCRIPT" ] && [ -t 0 ]; then
+if [ "$COMMAND_GIVEN" -eq 0 ] && [ -z "$SCRIPT" ] && [ "$LADDER" -eq 0 ] && [ -t 0 ]; then
     prompt_for_selection
 fi
+
+# A ladder loops several commands one after another, so the options that name a single thing to loop
+# have nothing to say about it. Rejected rather than quietly ignored: a run given both would otherwise
+# do something other than what either option asked for.
+if [ "$LADDER" -eq 1 ]; then
+    if [ "$COMMAND_GIVEN" -eq 1 ] || [ -n "$SCRIPT" ] || [ -n "$TEST_FILTER" ]; then
+        echo "find-flakey-tests: --ladder cannot be combined with --script, --test or --command; each of those loops one thing, and a ladder loops several in turn." >&2
+        exit 2
+    fi
+
+    LADDER_RUNGS="${LADDER_RUNGS:-$LADDER_DEFAULT}"
+
+    # Commas are accepted as well as spaces, because a list of suite names reads naturally either way
+    # and getting it wrong would otherwise fail as an unknown rung called "test,test:cli".
+    LADDER_RUNGS="${LADDER_RUNGS//,/ }"
+
+    rung_count=0
+    for rung in $LADDER_RUNGS; do
+        case " $SCRIPT_CHOICES " in
+            *" $rung "*) ;;
+            *)
+                echo "find-flakey-tests: --ladder rungs must each be one of: $SCRIPT_CHOICES (got '$rung')" >&2
+                exit 2
+                ;;
+        esac
+        rung_count=$((rung_count + 1))
+    done
+
+    if [ "$rung_count" -eq 0 ]; then
+        echo "find-flakey-tests: --ladder was given an empty list of rungs." >&2
+        exit 2
+    fi
+
+    REMAINING_RUNGS="$LADDER_RUNGS"
+fi
+
+#
+# Writes the command that loops one named suite. The whole set is the one that needs more than its
+# script name: `--force` defeats the change gate, without which a looped run would skip whichever
+# suites have not changed, which could be the very one that is flaky.
+#
+# Usage: command_for_script <script_name>
+#
+command_for_script() {
+    local script="$1"
+
+    if [ "$script" = "everything" ]; then
+        echo "bun run test:everything -- --force"
+    else
+        echo "bun run $script"
+    fi
+}
 
 # --command wins outright. Otherwise a chosen suite becomes the command, with any --test filter
 # appended, and with nothing chosen at all the default set in COMMAND above stands.
 if [ "$COMMAND_GIVEN" -eq 0 ] && [ -n "$SCRIPT" ]; then
-    if [ "$SCRIPT" = "everything" ]; then
-        COMMAND="bun run test:everything -- --force"
-    else
-        COMMAND="bun run $SCRIPT"
-    fi
+    COMMAND="$(command_for_script "$SCRIPT")"
 fi
 
 if [ -n "$TEST_FILTER" ]; then
@@ -541,7 +668,13 @@ stop_for_sick_pool() {
     echo
     echo "find-flakey-tests: STOPPING, $reason"
     echo "The streak stands at $greens of $TARGET. Nothing here changed anything on any device."
-    echo "Restart the pool, then carry on with: --resume $greens"
+    if [ -n "$RUNG_LABEL" ]; then
+        # The rungs below this one are already proven on this tree, so the way back in is the rest of
+        # the ladder with this rung's banked runs carried over, not the whole ladder from the bottom.
+        echo "Restart the pool, then carry on with: --ladder \"$REMAINING_RUNGS\" --target $TARGET --resume $greens"
+    else
+        echo "Restart the pool, then carry on with: --resume $greens"
+    fi
     echo "LOGS=$SESSION_DIR"
     exit 4
 }
@@ -661,66 +794,50 @@ print_estimate() {
     echo "  $remaining run(s) left, all green about $(format_clock_time "$streak_end"), $(format_duration "$streak_seconds") from now"
 }
 
-# Whether the command being looped actually drives Android devices, which decides whether the pool is
-# watched at all. Only the Android smoke suite talks to adb, and only `test:and` and the whole set
-# include it. Every other choice (unit tests, the CLI suite, the Electron suite, the iOS suite)
-# touches no Android device, so an emulator going bad on the machine has nothing to do with the run
-# and must not interrupt the streak.
+#
+# Reports whether a command actually drives Android devices, which decides whether the emulator pool
+# is watched while that command loops. Only the Android smoke suite talks to adb, and only `test:and`
+# and the whole set include it. Everything else (the unit tests, the CLI suite, the Electron suite,
+# the iOS suite) touches no Android device, so an emulator going bad on the machine has nothing to do
+# with the run and must not interrupt the streak.
 #
 # This is not hypothetical: a `bun run test` streak was halted at 84 of 100 by an emulator that run
 # never went near, because the check keyed off "any device is attached" rather than "this command
 # uses the devices".
-DEVICE_SUITE=0
-if [ "$COMMAND_GIVEN" -eq 1 ]; then
-    # An arbitrary command, so the suite has to be recognised in the text of it. The patterns end at
-    # the name so `test:and:unit`, which is Gradle unit tests and needs no device, is not mistaken
-    # for the device-driving `test:and`.
-    case "$COMMAND" in
+#
+# Usage: command_drives_devices <command>
+#
+command_drives_devices() {
+    local command="$1"
+
+    # The patterns end at the name so `test:and:unit`, which is Gradle unit tests and needs no
+    # device, is not mistaken for the device-driving `test:and`.
+    case "$command" in
         *test:and|*"test:and "*|*test:everything|*"test:everything "*)
-            DEVICE_SUITE=1
+            return 0
             ;;
     esac
-else
-    # A suite chosen by --script, or nothing chosen at all and the default whole-set command standing.
-    case "${SCRIPT:-everything}" in
-        test:and|everything)
-            DEVICE_SUITE=1
-            ;;
-    esac
-fi
 
-# How many devices were attached when the loop started. The check compares against this rather than a
-# fixed number, so it works whatever size the pool is, and is skipped entirely when there are no
-# devices (a run of unit tests or the CLI suite needs none).
-DEVICE_COUNT_AT_START=0
-if [ "$DEVICE_SUITE" -eq 1 ]; then
-    DEVICE_COUNT_AT_START="$(adb devices 2>/dev/null | grep -c "device$")"
-fi
-if [ "$DEVICE_COUNT_AT_START" -gt 0 ]; then
-    echo "find-flakey-tests: $DEVICE_COUNT_AT_START device(s) attached. The loop pauses if that changes or one stops answering."
-fi
+    return 1
+}
 
-echo "find-flakey-tests: requiring $TARGET consecutive green runs of: $COMMAND"
-if [ "$RESUME" -gt 0 ]; then
-    echo "find-flakey-tests: resuming with $RESUME green run(s) banked, numbering from run $((RESUME + 1))."
-fi
-echo "find-flakey-tests: logs in $SESSION_DIR"
-echo
-
-# Consecutive green runs so far, including any banked by a previous invocation on the same tree.
+# Consecutive green runs so far on the streak in progress, including any banked by a previous
+# invocation on the same tree.
 greens="$RESUME"
 
 # The number given to the run currently being performed. Runs are numbered by where they sit in the
 # streak, so run N is the Nth green run if it passes, and a resumed session carries straight on.
 run_number=$((RESUME + 1))
 
-# The number of the first run this session, for the summary at the end.
+# The number of the first run of the streak in progress, for the summary at the end.
 first_run_number="$run_number"
 
 # Consecutive Bun crashes, reset by any run that does not crash.
 consecutive_crashes=0
 
-# Every Bun crash seen this session, reported at the end so they are never silently swallowed.
+# Every Bun crash seen this session, reported at the end so they are never silently swallowed. Kept
+# across a whole ladder rather than per rung, because a machine that crashes Bun on two different
+# rungs is one problem and has to be readable as one.
 crash_runs=()
 
 # Consecutive red runs blamed on a sick emulator pool, reset by any run that passes.
@@ -730,9 +847,9 @@ consecutive_device_failures=0
 # the crashes: a run that was not counted is still a run that has to be visible.
 device_failure_runs=()
 
-# How long each green run took, in seconds, oldest first. Only green runs, because a run that crashed
-# or died on a sick pool was cut short or dragged out by something that is not the suite, and letting
-# either into the average would make every estimate after it wrong.
+# How long each green run of the streak in progress took, in seconds, oldest first. Only green runs,
+# because a run that crashed or died on a sick pool was cut short or dragged out by something that is
+# not the suite, and letting either into the average would make every estimate after it wrong.
 run_durations=()
 
 # The expected length of a run in seconds, and how many runs that expectation is drawn from. Zero
@@ -740,136 +857,261 @@ run_durations=()
 estimate_seconds=0
 estimate_sample=0
 
-session_start="$(date +%s)"
+# How many devices were attached when the streak in progress started. The check compares against this
+# rather than a fixed number, so it works whatever size the pool is, and is skipped entirely when
+# there are none (a streak of unit tests or the CLI suite needs no device).
+DEVICE_COUNT_AT_START=0
 
-while [ "$greens" -lt "$TARGET" ]; do
-    # Wait rather than run against a pool that has degraded. The streak is kept while waiting, so
-    # restarting the emulators is all it takes to have the session carry on. The count is zero, and
-    # this whole check therefore skipped, unless the looped command is one that drives the devices.
-    if [ "$DEVICE_COUNT_AT_START" -gt 0 ] && ! check_devices_healthy "$DEVICE_COUNT_AT_START"; then
-        echo
-        echo "find-flakey-tests: PAUSED because the emulator pool is not healthy."
-        echo "The streak of $greens of $TARGET is kept. Nothing here changed anything on any device."
-        echo "Restart the pool and the loop picks it up by itself, waiting up to $((DEVICE_WAIT_SECONDS / 60))m."
-        if ! wait_for_healthy_devices; then
-            stop_for_sick_pool "the emulator pool did not come back within $((DEVICE_WAIT_SECONDS / 60))m."
-        fi
-        echo
+# How long the streak in progress took, in seconds, filled in when it finishes.
+streak_duration=0
+
+#
+# Loops one command until TARGET consecutive green runs are banked, and returns only on success: a
+# real failure writes the report and stops the whole session from in here, because the point of the
+# loop is the streak and a streak with a failure in it is not a streak.
+#
+# The counters it works on are the globals above rather than locals, because the failure paths print
+# them, the summary at the end prints them again, and on a ladder the crash and sick-pool lists have
+# to survive from one rung to the next.
+#
+# Usage: run_streak <command> <run_directory> <green_runs_already_banked>
+#
+run_streak() {
+    COMMAND="$1"
+    local run_dir="$2"
+    local resume_from="$3"
+    local streak_start run_label run_log run_start run_status run_duration crash_line device_failure_line
+
+    mkdir -p "$run_dir"
+
+    # Worked out per streak rather than once per session, because a ladder loops a different command
+    # on every rung: the unit rung must not watch the emulators and the Android rung must.
+    DEVICE_COUNT_AT_START=0
+    if command_drives_devices "$COMMAND"; then
+        DEVICE_COUNT_AT_START="$(adb devices 2>/dev/null | grep -c "device$")"
+    fi
+    if [ "$DEVICE_COUNT_AT_START" -gt 0 ]; then
+        echo "find-flakey-tests: $DEVICE_COUNT_AT_START device(s) attached. The loop pauses if that changes or one stops answering."
     fi
 
-    run_label="$(printf '%04d' "$run_number")"
-    run_log="$SESSION_DIR/run-$run_label.log"
-    run_start="$(date +%s)"
+    greens="$resume_from"
+    run_number=$((resume_from + 1))
+    first_run_number="$run_number"
+    consecutive_crashes=0
+    consecutive_device_failures=0
 
-    echo "===== run $run_number (green $greens of $TARGET) ====="
-    print_estimate
-    mise exec -- bash -c "$COMMAND" > "$run_log" 2>&1
-    run_status=$?
-    run_duration="$(( $(date +%s) - run_start ))"
+    # Reset for each streak. Durations from an earlier rung say nothing about this one: a unit run
+    # takes seconds where an Android run takes minutes, so carrying them over would make every
+    # estimate on the new rung badly wrong for as long as the window took to fill.
+    run_durations=()
+    estimate_seconds=0
+    estimate_sample=0
 
-    if [ "$run_status" -eq 0 ]; then
-        greens=$((greens + 1))
-        consecutive_crashes=0
-        consecutive_device_failures=0
-        run_durations+=("$run_duration")
-        update_estimate
-        echo "  PASS in $(format_duration "$run_duration") (green $greens of $TARGET)"
-        run_number=$((run_number + 1))
-        continue
+    streak_start="$(date +%s)"
+
+    echo "find-flakey-tests: requiring $TARGET consecutive green runs of: $COMMAND"
+    if [ "$resume_from" -gt 0 ]; then
+        echo "find-flakey-tests: resuming with $resume_from green run(s) banked, numbering from run $((resume_from + 1))."
     fi
+    echo "find-flakey-tests: logs in $run_dir"
+    echo
 
-    # A crash of the Bun runtime is not a failure of the code under test, so it does not break the
-    # streak. It is retried under the same run number and always reported.
-    if grep -qE "$BUN_CRASH_PATTERN" "$run_log"; then
-        consecutive_crashes=$((consecutive_crashes + 1))
-        crash_runs+=("run $run_number (${run_duration}s): $run_log")
-        echo "  BUN CRASH in ${run_duration}s, not counted, retrying (crash $consecutive_crashes of $BUN_CRASH_RETRIES allowed in a row)"
-        if [ "$consecutive_crashes" -ge "$BUN_CRASH_RETRIES" ]; then
+    while [ "$greens" -lt "$TARGET" ]; do
+        # Wait rather than run against a pool that has degraded. The streak is kept while waiting, so
+        # restarting the emulators is all it takes to have the session carry on. The count is zero,
+        # and this whole check therefore skipped, unless the looped command drives the devices.
+        if [ "$DEVICE_COUNT_AT_START" -gt 0 ] && ! check_devices_healthy "$DEVICE_COUNT_AT_START"; then
             echo
-            echo "find-flakey-tests: $consecutive_crashes Bun crashes in a row; stopping, because a result built on that many crashes would mean nothing."
-            echo "Crash logs:"
+            echo "find-flakey-tests: PAUSED because the emulator pool is not healthy."
+            echo "The streak of $greens of $TARGET is kept. Nothing here changed anything on any device."
+            echo "Restart the pool and the loop picks it up by itself, waiting up to $((DEVICE_WAIT_SECONDS / 60))m."
+            if ! wait_for_healthy_devices; then
+                stop_for_sick_pool "the emulator pool did not come back within $((DEVICE_WAIT_SECONDS / 60))m."
+            fi
+            echo
+        fi
+
+        run_label="$(printf '%04d' "$run_number")"
+        run_log="$run_dir/run-$run_label.log"
+        run_start="$(date +%s)"
+
+        echo "===== ${RUNG_LABEL:+$RUNG_LABEL }run $run_number (green $greens of $TARGET) ====="
+        print_estimate
+        mise exec -- bash -c "$COMMAND" > "$run_log" 2>&1
+        run_status=$?
+        run_duration="$(( $(date +%s) - run_start ))"
+
+        if [ "$run_status" -eq 0 ]; then
+            greens=$((greens + 1))
+            consecutive_crashes=0
+            consecutive_device_failures=0
+            run_durations+=("$run_duration")
+            update_estimate
+            echo "  PASS in $(format_duration "$run_duration") (green $greens of $TARGET)"
+            run_number=$((run_number + 1))
+            continue
+        fi
+
+        # A crash of the Bun runtime is not a failure of the code under test, so it does not break
+        # the streak. It is retried under the same run number and always reported.
+        if grep -qE "$BUN_CRASH_PATTERN" "$run_log"; then
+            consecutive_crashes=$((consecutive_crashes + 1))
+            crash_runs+=("${RUNG_LABEL:+$RUNG_LABEL }run $run_number (${run_duration}s): $run_log")
+            echo "  BUN CRASH in ${run_duration}s, not counted, retrying (crash $consecutive_crashes of $BUN_CRASH_RETRIES allowed in a row)"
+            if [ "$consecutive_crashes" -ge "$BUN_CRASH_RETRIES" ]; then
+                echo
+                echo "find-flakey-tests: $consecutive_crashes Bun crashes in a row; stopping, because a result built on that many crashes would mean nothing."
+                echo "Crash logs:"
+                for crash_line in "${crash_runs[@]}"; do
+                    echo "  $crash_line"
+                done
+                echo "LOGS=$SESSION_DIR"
+                exit 3
+            fi
+            continue
+        fi
+
+        # A red run made against a pool that is now sick says nothing about the code: the devices the
+        # tests needed stopped answering underneath them. Treated like a Bun crash rather than a
+        # failure, so it does not break the streak: the pool is waited on and the run number retried.
+        if [ "$DEVICE_COUNT_AT_START" -gt 0 ] && ! check_devices_healthy "$DEVICE_COUNT_AT_START"; then
+            consecutive_device_failures=$((consecutive_device_failures + 1))
+            device_failure_runs+=("${RUNG_LABEL:+$RUNG_LABEL }run $run_number (${run_duration}s): $run_log")
+            echo "  FAIL in ${run_duration}s, but the emulator pool is sick, so it is not counted (device failure $consecutive_device_failures of $DEVICE_FAILURE_RETRIES allowed in a row)"
+            if [ "$consecutive_device_failures" -ge "$DEVICE_FAILURE_RETRIES" ]; then
+                stop_for_sick_pool "$consecutive_device_failures runs in a row went red with a sick emulator pool, so waiting it out is getting nowhere."
+            fi
+            echo "find-flakey-tests: PAUSED. Restart the pool and the loop picks it up by itself, waiting up to $((DEVICE_WAIT_SECONDS / 60))m."
+            if ! wait_for_healthy_devices; then
+                stop_for_sick_pool "the emulator pool did not come back within $((DEVICE_WAIT_SECONDS / 60))m."
+            fi
+            continue
+        fi
+
+        # A real failure. Everything below is about making it diagnosable.
+        echo "  FAIL in ${run_duration}s (exit $run_status)"
+        echo
+
+        {
+            echo "find-flakey-tests failure report"
+            echo "================================"
+            echo
+            echo "command:        $COMMAND"
+            if [ -n "$RUNG_LABEL" ]; then
+                echo "ladder rung:    $RUNG_LABEL, of: $LADDER_RUNGS"
+            fi
+            echo "failed on run:  $run_number"
+            echo "green streak:   $greens consecutive passes before this failure"
+            echo "target:         $TARGET"
+            echo "exit status:    $run_status"
+            echo "run duration:   ${run_duration}s"
+            echo "session:        $SESSION_DIR"
+            echo "full run log:   $run_log"
+            echo
+            summarise_failure "$run_log"
+            echo
+            capture_machine_state
+        } > "$REPORT"
+
+        SUITE_LOGS="$run_dir/suite-logs-run-$run_label"
+        if snapshot_suite_logs "$SUITE_LOGS"; then
+            echo "suite logs:     $SUITE_LOGS" >> "$REPORT"
+        fi
+
+        cat "$REPORT"
+        echo
+        if [ -n "$RUNG_LABEL" ]; then
+            # A failed streak starts again from zero, so there is nothing to resume; what is worth
+            # keeping is the rungs below this one, which are already proven clean on this tree.
+            echo "The rungs below $RUNG_LABEL are clean. Once this is fixed, carry on from here with:"
+            echo "  bun run find-flakey-tests -- --ladder \"$REMAINING_RUNGS\" --target $TARGET"
+            echo
+        fi
+        if [ "${#crash_runs[@]}" -gt 0 ]; then
+            echo "Bun crashes earlier in this session (not counted as failures):"
             for crash_line in "${crash_runs[@]}"; do
                 echo "  $crash_line"
             done
-            echo "LOGS=$SESSION_DIR"
-            exit 3
+            echo
         fi
-        continue
-    fi
+        if [ "${#device_failure_runs[@]}" -gt 0 ]; then
+            echo "Runs earlier in this session that went red with a sick emulator pool (not counted as failures):"
+            for device_failure_line in "${device_failure_runs[@]}"; do
+                echo "  $device_failure_line"
+            done
+            echo
+        fi
+        report_test_temp_growth
+        echo
+        echo "REPORT=$REPORT"
+        echo "RUN_LOG=$run_log"
+        echo "LOGS=$SESSION_DIR"
+        exit 1
+    done
 
-    # A red run made against a pool that is now sick says nothing about the code: the devices the
-    # tests needed stopped answering underneath them. Treated like a Bun crash rather than a failure,
-    # so it does not break the streak: the pool is waited on and the same run number is tried again.
-    if [ "$DEVICE_COUNT_AT_START" -gt 0 ] && ! check_devices_healthy "$DEVICE_COUNT_AT_START"; then
-        consecutive_device_failures=$((consecutive_device_failures + 1))
-        device_failure_runs+=("run $run_number (${run_duration}s): $run_log")
-        echo "  FAIL in ${run_duration}s, but the emulator pool is sick, so it is not counted (device failure $consecutive_device_failures of $DEVICE_FAILURE_RETRIES allowed in a row)"
-        if [ "$consecutive_device_failures" -ge "$DEVICE_FAILURE_RETRIES" ]; then
-            stop_for_sick_pool "$consecutive_device_failures runs in a row went red with a sick emulator pool, so waiting it out is getting nowhere."
-        fi
-        echo "find-flakey-tests: PAUSED. Restart the pool and the loop picks it up by itself, waiting up to $((DEVICE_WAIT_SECONDS / 60))m."
-        if ! wait_for_healthy_devices; then
-            stop_for_sick_pool "the emulator pool did not come back within $((DEVICE_WAIT_SECONDS / 60))m."
-        fi
-        continue
-    fi
+    streak_duration="$(( $(date +%s) - streak_start ))"
+}
 
-    # A real failure. Everything below is about making it diagnosable.
-    echo "  FAIL in ${run_duration}s (exit $run_status)"
+session_start="$(date +%s)"
+
+# What each rung of a ladder proved, one line each, for the summary at the end. A ladder that reached
+# the top has to show what it actually did rung by rung: "everything is clean" says nothing about how
+# much of it was run or how long each part took.
+ladder_results=()
+
+if [ "$LADDER" -eq 1 ]; then
+    echo "find-flakey-tests: climbing the ladder: $LADDER_RUNGS"
+    echo "find-flakey-tests: $TARGET consecutive green runs of each rung, cheapest first, stopping at the first rung that fails."
+    if [ "$RESUME" -gt 0 ]; then
+        echo "find-flakey-tests: resuming the first rung with $RESUME green run(s) banked; the rungs above it start from zero."
+    fi
+    echo "find-flakey-tests: logs in $SESSION_DIR"
     echo
 
-    {
-        echo "find-flakey-tests failure report"
-        echo "================================"
-        echo
-        echo "command:        $COMMAND"
-        echo "failed on run:  $run_number"
-        echo "green streak:   $greens consecutive passes before this failure"
-        echo "target:         $TARGET"
-        echo "exit status:    $run_status"
-        echo "run duration:   ${run_duration}s"
-        echo "session:        $SESSION_DIR"
-        echo "full run log:   $run_log"
-        echo
-        summarise_failure "$run_log"
-        echo
-        capture_machine_state
-    } > "$REPORT"
+    rung_index=0
 
-    SUITE_LOGS="$SESSION_DIR/suite-logs-run-$run_label"
-    if snapshot_suite_logs "$SUITE_LOGS"; then
-        echo "suite logs:     $SUITE_LOGS" >> "$REPORT"
-    fi
+    for rung in $LADDER_RUNGS; do
+        RUNG_LABEL="$rung"
+        rung_index=$((rung_index + 1))
 
-    cat "$REPORT"
-    echo
-    if [ "${#crash_runs[@]}" -gt 0 ]; then
-        echo "Bun crashes earlier in this session (not counted as failures):"
-        for crash_line in "${crash_runs[@]}"; do
-            echo "  $crash_line"
-        done
+        # Each rung's logs go in their own directory, because every streak numbers its runs from one
+        # and a shared directory would have the Android rung's run-0001.log write over the unit
+        # rung's. Numbered as well as named, so the directory listing is in the order they were
+        # climbed and a rung named twice does not write over itself. The suite name carries a colon,
+        # which is legal in a path but awkward to type, so it becomes a dash.
+        run_streak "$(command_for_script "$rung")" "$SESSION_DIR/$(printf '%02d' "$rung_index")-${rung//:/-}" "$RESUME"
+
+        ladder_results+=("$rung: $TARGET green run(s) in $(format_duration "$streak_duration")")
         echo
-    fi
-    if [ "${#device_failure_runs[@]}" -gt 0 ]; then
-        echo "Runs earlier in this session that went red with a sick emulator pool (not counted as failures):"
-        for device_failure_line in "${device_failure_runs[@]}"; do
-            echo "  $device_failure_line"
-        done
+        echo "find-flakey-tests: rung $rung is clean, $TARGET green runs in $(format_duration "$streak_duration")."
         echo
-    fi
-    report_test_temp_growth
-    echo
-    echo "REPORT=$REPORT"
-    echo "RUN_LOG=$run_log"
-    echo "LOGS=$SESSION_DIR"
-    exit 1
-done
+
+        # Only the rung the session starts on can inherit banked runs. Every rung above it has not
+        # been run at all on this tree, so it starts from zero however the session was invoked.
+        RESUME=0
+
+        # The rungs still to climb, this one now behind us, so a failure higher up says how to carry
+        # on from exactly where it stopped rather than from the bottom of the ladder.
+        REMAINING_RUNGS="${REMAINING_RUNGS#"$rung"}"
+        REMAINING_RUNGS="${REMAINING_RUNGS# }"
+    done
+else
+    run_streak "$COMMAND" "$SESSION_DIR" "$RESUME"
+fi
 
 session_duration="$(( $(date +%s) - session_start ))"
 
 echo
-echo "find-flakey-tests: $TARGET consecutive green runs, no failures."
-echo "Runs $first_run_number to $((run_number - 1)), total $(format_duration "$session_duration"), $(format_duration "$estimate_seconds") a run at the end."
+if [ "$LADDER" -eq 1 ]; then
+    echo "find-flakey-tests: every rung of the ladder is clean, $TARGET consecutive green runs each."
+    for ladder_line in "${ladder_results[@]}"; do
+        echo "  $ladder_line"
+    done
+    echo "Total $(format_duration "$session_duration")."
+else
+    echo "find-flakey-tests: $TARGET consecutive green runs, no failures."
+    echo "Runs $first_run_number to $((run_number - 1)), total $(format_duration "$session_duration"), $(format_duration "$estimate_seconds") a run at the end."
+fi
 if [ "${#crash_runs[@]}" -gt 0 ]; then
     echo
     echo "Bun crashes seen and retried (not counted as failures):"
