@@ -316,7 +316,13 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
                 syncStartedCallbacksRef.current.forEach(callback => callback());
             }
             else if (messageType === "sync-completed") {
-                log.event("Sync completed");
+                // The suffix says whether the sync moved anything, which is the only way to tell a
+                // sync that ran and found both sides identical from one that pushed changes. Keep
+                // "Sync completed" as the start of the line: the smoke tests that predate this wait on
+                // that substring alone (wait_for_log matches by substring), so they keep passing
+                // untouched. Do not "tidy" the prefix away.
+                const synced = (message as { synced?: boolean }).synced;
+                log.event(synced ? "Sync completed: changes synced" : "Sync completed: nothing to sync");
                 syncCompletedCallbacksRef.current.forEach(callback => callback());
             }
             else if (messageType === "sync-skipped") {

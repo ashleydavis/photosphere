@@ -150,6 +150,17 @@ ios_host_address() {
 }
 
 #
+# Makes a port the host is listening on reachable from the simulator. Nothing to do: the simulator
+# shares the host's network stack, so a host port is already reachable at the loopback address
+# ios_host_address prints. This is the iOS counterpart of android_expose_host_port, and it exists so
+# common.sh can call the hook unconditionally rather than asking which platform it is on.
+# Usage: ios_expose_host_port <port>
+#
+ios_expose_host_port() {
+    return 0
+}
+
+#
 # Launches the app in test mode, passing the bridge address via SIMCTL_CHILD_* env vars (which
 # arrive in the app's environment without the prefix).
 # Usage: ios_launch <port>

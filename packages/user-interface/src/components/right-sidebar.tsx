@@ -686,6 +686,7 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
                         <Divider />
                         <List sx={{ pl: "15px", ...listSx }}>
                             <ListItem
+                                data-id="close-database-button"
                                 onClick={async () => {
                                     setSidebarOpen(false);
                                     await onCloseDatabase();

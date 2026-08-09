@@ -84,22 +84,24 @@ describe("asset server over the shimmed http", () => {
         expect(statusOf(response)).toBe(400);
     });
 
-    // The apply-database-ops route parses a JSON body via express.json(). express's JSON body parser
-    // (body-parser/raw-body) does not read the body over the minimal engine stream shim, so the
-    // gallery EDIT path (metadata ops) is a known follow-up. The asset DISPLAY path (GET /asset) and
-    // the raw-body POST /asset path below do not use express.json and work. This asserts the route is
-    // reachable and produces a framed HTTP response over the shimmed TCP transport.
-    test("POST /apply-database-ops is reachable and responds over the shimmed transport", async () => {
+    // The gallery EDIT path. This is the one route the UI uses to change a record, and unlike
+    // GET /asset and POST /asset it parses its body with express.json(), so it is the only place the
+    // shim's readable surface has to satisfy body-parser and raw-body rather than being consumed
+    // directly. Asserting the ops reach the core is the whole point: an earlier version of this test
+    // checked only that a framed HTTP response came back, which a 400 from a body that never arrived
+    // satisfies just as well as a 204 from one that did.
+    test("POST /apply-database-ops delivers the parsed ops to the core", async () => {
         const mock = installMockTcpHost("L-asset-3", 8080);
         startServer();
 
-        const payload = JSON.stringify({ ops: [{ databaseId: "/db", collectionName: "metadata", recordId: "asset-1", op: { type: "set", fields: {} } }] });
+        const ops = [{ databaseId: "/db", collectionName: "metadata", recordId: "asset-1", op: { type: "set", fields: { description: "edited" } } }];
+        const payload = JSON.stringify({ ops });
         const request = Buffer.from(`POST /apply-database-ops HTTP/1.1\r\nContent-Type: application/json\r\nContent-Length: ${Buffer.byteLength(payload)}\r\n\r\n${payload}`);
         const response = await roundTripRequest(mock, request);
 
-        // A valid framed HTTP status line is returned (route reachable; transport works end to end).
-        expect(statusOf(response)).toBeGreaterThanOrEqual(200);
-        expect(statusOf(response)).toBeLessThan(600);
+        expect(statusOf(response)).toBe(204);
+        expect(applyDatabaseOps).toHaveBeenCalledTimes(1);
+        expect(applyDatabaseOps).toHaveBeenCalledWith(ops);
     });
 
     test("POST /asset writes the asset and returns 204", async () => {

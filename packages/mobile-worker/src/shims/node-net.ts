@@ -184,6 +184,21 @@ export class Socket extends TinyEmitter {
     private closed = false;
 
     //
+    // Whether the connection can still be read from and written to. Both stay true until it closes.
+    //
+    // These exist for on-finished, which express and body-parser both sit on top of. Its isFinished()
+    // decides an IncomingMessage is already finished when `!socket.readable`, and an absent property
+    // reads as undefined, which negates to true. So without these a brand new request looked complete
+    // before a byte of it had been read: body-parser's read() took its "body already parsed" branch,
+    // called next() without ever setting req.body, and the route behind express.json() then threw
+    // reading a property of undefined. That is every route on this server that parses a JSON body,
+    // which is to say the whole gallery edit path. Nothing about the transport was wrong; the socket
+    // simply was not telling the truth about itself.
+    //
+    readable = true;
+    writable = true;
+
+    //
     // Wraps a native-accepted connection id.
     //
     constructor(connectionId: string) {
@@ -229,6 +244,8 @@ export class Socket extends TinyEmitter {
             return;
         }
         this.closed = true;
+        this.readable = false;
+        this.writable = false;
         activeSockets.delete(this.connectionId);
         const host = getTcpHost();
         callHost(() => host.tcpClose(this.connectionId));
@@ -250,6 +267,8 @@ export class Socket extends TinyEmitter {
             return;
         }
         this.closed = true;
+        this.readable = false;
+        this.writable = false;
         activeSockets.delete(this.connectionId);
         this.emit("end");
         this.emit("close");

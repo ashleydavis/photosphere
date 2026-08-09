@@ -220,6 +220,7 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                 <div className="flex flex-row items-center pl-3 pr-3 pt-3 pb-2">
                     <div style={{ flex: 1, display: "flex", flexDirection: "row", alignItems: "center" }}>
                         <IconButton
+                            data-id="asset-view-close-button"
                             className="pointer-events-auto"
                             variant="outlined"
                             color="neutral"
@@ -330,6 +331,7 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
 
                     <IconButton
                         data-testid="open-info-button"
+                        data-id="open-info-button"
                         className="pointer-events-auto"
                         variant="outlined"
                         color="neutral"

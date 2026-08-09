@@ -54,6 +54,27 @@ export interface ISyncSkippedMessage {
 }
 
 //
+// Task message sent when a sync has finished running, so the UI can report the outcome.
+//
+export interface ISyncCompletedMessage {
+    //
+    // Message type discriminator.
+    //
+    type: "sync-completed";
+
+    //
+    // The path of the local database that was synced.
+    //
+    databasePath: string;
+
+    //
+    // False when the sync ran but both sides already held identical content, so nothing was
+    // transferred. True when records or files moved in either direction.
+    //
+    synced: boolean;
+}
+
+//
 // Task message sent during a sync to carry a batch of incremental changes to the UI.
 //
 export interface ISyncBatchMessage {

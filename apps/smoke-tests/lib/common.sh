@@ -733,6 +733,10 @@ start_s3_emulator() {
     fi
     # shellcheck disable=SC1090
     source "$state_dir/env"
+    # A real Android device has no route to this host's loopback and reaches it only through an adb
+    # reverse, so the port has to be exposed before an address for it is worth handing out. A no-op on
+    # an emulator and on the iOS simulator, both of which reach the host on their own.
+    "${PLATFORM}_expose_host_port" "$S3_EMULATOR_PORT"
     local host_address
     host_address="$("${PLATFORM}_host_address")"
     export S3_ENDPOINT="http://$host_address:$S3_EMULATOR_PORT"
@@ -852,6 +856,19 @@ require_lan_bridge() {
     if [ "$PLATFORM" != "android" ]; then
         return 0
     fi
+    # A real device is on the same physical LAN as the host already, so the emulator bridge is not
+    # what makes host-to-device sharing work here and there is nothing to probe for. This trusts the
+    # phone and the host to be on the same LAN segment with broadcast traffic passing between them. A
+    # network with client isolation is not detected up front: the transfer fails loudly instead, at
+    # the sender's "no device found" timeout, which cli_send_expect_success turns into a test failure.
+    case "${ANDROID_SERIAL:-}" in
+        ""|emulator-*)
+            ;;
+        *)
+            log_success "Running on real device ${ANDROID_SERIAL}, which shares the host's LAN, so the emulator bridge is not needed."
+            return 0
+            ;;
+    esac
     # Being on the bridge is a static property of the emulator, so one unlucky sample must not decide
     # it. A single probe was doing exactly that: it threw stderr away, so an adb hiccup or a momentary
     # gap in the interface read identically to a bridge that was never brought up, and the test died

@@ -4,7 +4,7 @@ import { openStorage } from "./open-storage";
 import { merkleTreeExists } from "./tree";
 import { loadDatabaseConfig } from "api";
 import { syncDatabases } from "./sync";
-import type { ISyncDatabaseData, ISyncChange, ISyncBatchMessage, ISyncSkippedMessage } from "api";
+import type { ISyncDatabaseData, ISyncChange, ISyncBatchMessage, ISyncSkippedMessage, ISyncCompletedMessage } from "api";
 import type { IAsset } from "api";
 import { log } from "utils";
 
@@ -132,7 +132,8 @@ export async function syncDatabaseHandler(
             log.info(`Sync skipped for "${data.databasePath}": databases already identical`);
         }
 
-        context.sendMessage({ type: "sync-completed", databasePath: data.databasePath });
+        const completedMessage: ISyncCompletedMessage = { type: "sync-completed", databasePath: data.databasePath, synced: result.synced };
+        context.sendMessage(completedMessage);
     }
     catch (error) {
         log.exception(`Sync failed for "${data.databasePath}"`, error as Error);

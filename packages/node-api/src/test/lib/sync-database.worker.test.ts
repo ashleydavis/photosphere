@@ -156,4 +156,30 @@ describe("syncDatabaseHandler", () => {
             .map(call => call[0].type);
         expect(messageTypes).toEqual(["sync-started", "sync-completed"]);
     });
+
+    test("the sync-completed message reports synced true when records were transferred", async () => {
+        mockSyncDatabases.mockResolvedValueOnce({ synced: true });
+        const context = makeContext();
+
+        await syncDatabaseHandler(makeData(), context);
+
+        expect(context.sendMessage).toHaveBeenCalledWith({
+            type: "sync-completed",
+            databasePath: "/fake/local",
+            synced: true,
+        });
+    });
+
+    test("the sync-completed message reports synced false when both sides were already identical", async () => {
+        mockSyncDatabases.mockResolvedValueOnce({ synced: false });
+        const context = makeContext();
+
+        await syncDatabaseHandler(makeData(), context);
+
+        expect(context.sendMessage).toHaveBeenCalledWith({
+            type: "sync-completed",
+            databasePath: "/fake/local",
+            synced: false,
+        });
+    });
 });

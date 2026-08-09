@@ -41,6 +41,24 @@ ANDROID_HOST_ADDRESS_WAIT_SECONDS=30
 source "$ANDROID_FRONTEND_DIR/scripts/emulator-config.sh"
 
 #
+# Prints one serial per line for every attached real device, and nothing when only emulators are
+# attached. Deliberately ignores "offline" and "unauthorized" entries, which would otherwise be
+# selected and then fail confusingly.
+#
+# A local emulator is always called "emulator-<port>" by adb, so anything else attached is a real
+# device. A device reached over the network (`adb connect`) is called "<host>:<port>" and so counts as
+# a real device here, which is what it is.
+#
+# This is the harness's copy of hardware_targets in apps/android-frontend/scripts/run-android.sh,
+# which selects a deploy target by the same rule for the same reason. Written out again rather than
+# shared because that script deliberately keeps clear of the harness's environment (ANDROID_SERIAL
+# binding, log_info, APP_ID from common.sh).
+#
+android_hardware_devices() {
+    adb devices 2>/dev/null | awk 'NR > 1 && $2 == "device" && $1 !~ /^emulator-/ { print $1 }'
+}
+
+#
 # Fails the whole run immediately unless the emulator is started AND on the LAN bridge, by delegating
 # to the bridge script's `status` (exit 0 = ready). Never boots, restarts, wipes, reboots, or changes
 # any setting on the emulator: getting it ready is the human's job, not this script's.
@@ -50,7 +68,20 @@ source "$ANDROID_FRONTEND_DIR/scripts/emulator-config.sh"
 # needs the emulator started, so that is all this requires of it. Asking for the bridge in that case
 # would gate the whole suite on something it does not use.
 #
+# A plugged-in real device is accepted before any of that is asked. The emulator LAN bridge exists to
+# give an emulated guest a route to the host it otherwise has no way to reach, and a phone on the same
+# physical LAN as the host already has one. Demanding the bridge would refuse a run on the very device
+# that needs it least.
+#
 android_require_ready() {
+    local hardware_devices
+    hardware_devices="$(android_hardware_devices)"
+    if [ -n "$hardware_devices" ]; then
+        log_info "Real device(s) attached, so the run will use them rather than the emulator pool:"
+        echo "$hardware_devices" | sed 's/^/  /'
+        return 0
+    fi
+
     if [ "${PHOTOSPHERE_NO_LAN_BRIDGE:-}" = "1" ]; then
         log_info "Checking the emulator is started (PHOTOSPHERE_NO_LAN_BRIDGE=1, so the LAN bridge is not required)..."
         if ! adb devices 2>/dev/null | awk 'NR > 1 && $2 == "device" { found = 1 } END { exit found ? 0 : 1 }'; then
@@ -92,13 +123,20 @@ android_ready_devices() {
 }
 
 #
-# Prints the emulators this run may use, one per line.
+# Prints the devices this run may use, one per line.
 #
-# When the pool is up, only the pool is used: a hand-testing emulator is left alone, because tests
-# reinstall the app and wipe its data. Only when no pool emulator is running does this fall back to
-# whatever bridge-ready device there is, which is what makes a single hand-started emulator work.
+# A plugged-in real device wins over everything else, for the reason run-android.sh gives about
+# choosing a deploy target: the reason to have one attached is to test on it. Note what that costs. A
+# run that would have spread itself over five pool emulators becomes a run on one phone, so the whole
+# Android suite takes considerably longer while a phone is plugged in. Unplug it, or name the
+# emulators in PHOTOSPHERE_ANDROID_DEVICES, to get the pool's parallelism back.
 #
-# PHOTOSPHERE_ANDROID_DEVICES (a space-separated serial list) overrides both.
+# With no real device attached, and when the pool is up, only the pool is used: a hand-testing
+# emulator is left alone, because tests reinstall the app and wipe its data. Only when no pool
+# emulator is running does this fall back to whatever bridge-ready device there is, which is what
+# makes a single hand-started emulator work.
+#
+# PHOTOSPHERE_ANDROID_DEVICES (a space-separated serial list) overrides all of it.
 #
 android_device_slots() {
     if [ -n "${PHOTOSPHERE_ANDROID_DEVICES:-}" ]; then
@@ -106,6 +144,13 @@ android_device_slots() {
         for serial in $PHOTOSPHERE_ANDROID_DEVICES; do
             echo "$serial"
         done
+        return 0
+    fi
+
+    local hardware_devices
+    hardware_devices="$(android_hardware_devices)"
+    if [ -n "$hardware_devices" ]; then
+        echo "$hardware_devices"
         return 0
     fi
 
@@ -293,15 +338,35 @@ android_build() {
 #
 # Installs (or reinstalls) the debug APK on the device.
 #
+# A failed install stops the run. It used to be ignored: the exit code was never read and the stamp
+# was written regardless, so a device that refused the install kept whatever build was already on it
+# while reporting the new one's checksum. Every test that followed then ran another build's code and
+# its result meant nothing, with no sign of it anywhere in the output. That is what
+# INSTALL_FAILED_INSUFFICIENT_STORAGE looks like on a pool emulator whose /data has filled up: the
+# suite carries on testing the previous build, and the only symptom is that the change under test
+# appears not to exist. run.sh already treats a non-zero return here as fatal.
+#
 android_install() {
     if [ ! -f "$ANDROID_APK" ]; then
         log_error "APK not found at $ANDROID_APK (did android_build run?)"
         return 1
     fi
     log_info "Installing APK..."
-    adb install -r "$ANDROID_APK"
+    local install_output
+    local install_status=0
+    install_output="$(adb install -r "$ANDROID_APK" 2>&1)" || install_status=$?
+    # The exit code is not trusted on its own. `adb install` has shipped versions that print
+    # "Failure [INSTALL_FAILED_...]" and still exit 0, so the output decides it too: a successful
+    # install prints "Success" on a line of its own and nothing else does.
+    if [ "$install_status" -ne 0 ] || ! echo "$install_output" | grep -q '^Success$'; then
+        log_error "Installing the APK on ${ANDROID_SERIAL:-this device} failed (exit $install_status). adb said:"
+        echo "$install_output" | sed 's/^/  /'
+        return 1
+    fi
+    echo "$install_output"
     # Record what is now on this device, so a run can tell whether the app it is about to test is
-    # still its own build. See android_ensure_apk.
+    # still its own build. Only reached once the install has actually succeeded, because a stamp
+    # written after a failure is a lie the rest of the run believes. See android_ensure_apk.
     adb shell "echo $(android_apk_checksum) > $ANDROID_APK_STAMP" >/dev/null 2>&1 || true
 }
 
@@ -343,11 +408,18 @@ android_ensure_apk() {
 # host at 10.0.2.2. Auto-detect from the guest's wlan0 address, overridable with
 # PHOTOSPHERE_ANDROID_TEST_HOST (for example 127.0.0.1 for a physical device over `adb reverse`).
 #
-# The wlan0 address is polled for ANDROID_HOST_ADDRESS_WAIT_SECONDS rather than sampled once,
-# because a bridge-attached emulator drops that address for a few seconds at a time when its wifi
-# re-associates. Reading a flap as "not on the bridge" hands back the dead 10.0.2.2 alias and costs
-# the caller both of its readiness attempts, so a missing address has to be given time to come back
-# before it is believed. A genuinely NAT-only emulator has no wlan0 address to wait for and still
+# A real device gets 127.0.0.1, and that is correct only because every host port a test serves is
+# reversed onto the device with android_expose_host_port, so loopback on the phone is loopback on the
+# host. Its branch comes before the polling below rather than after, because a phone never takes a
+# 192.168.55.x address at all: that range is what the emulator bridge hands out, and a phone's address
+# is on the developer's own LAN. Polling for one would wait out the full timeout to learn nothing and
+# then fall through to the 10.0.2.2 NAT alias, which exists on an emulated guest and nowhere else.
+#
+# For an emulator the wlan0 address is polled for ANDROID_HOST_ADDRESS_WAIT_SECONDS rather than
+# sampled once, because a bridge-attached emulator drops that address for a few seconds at a time when
+# its wifi re-associates. Reading a flap as "not on the bridge" hands back the dead 10.0.2.2 alias and
+# costs the caller both of its readiness attempts, so a missing address has to be given time to come
+# back before it is believed. A genuinely NAT-only emulator has no wlan0 address to wait for and still
 # ends up at 10.0.2.2, just later.
 #
 android_host_address() {
@@ -355,6 +427,20 @@ android_host_address() {
         echo "$PHOTOSPHERE_ANDROID_TEST_HOST"
         return 0
     fi
+
+    # A real device, before either of the emulator answers below. It has to come first even though
+    # the no-bridge branch is also an early return: a phone reached with PHOTOSPHERE_NO_LAN_BRIDGE=1
+    # set would otherwise be handed 10.0.2.2, which is QEMU's alias for the host and exists on an
+    # emulated guest and nowhere else. Loopback is right here only because android_expose_host_port
+    # reverses every host port a test serves onto the device.
+    case "${ANDROID_SERIAL:-}" in
+        ""|emulator-*)
+            ;;
+        *)
+            echo "127.0.0.1"
+            return 0
+            ;;
+    esac
 
     # A run that has declared it has no bridge is not waiting for one. The poll below exists to ride
     # out a bridge-attached emulator's wifi flap, and where PHOTOSPHERE_NO_LAN_BRIDGE=1 says there is
@@ -392,6 +478,29 @@ android_host_address() {
         log_info "wlan0 never took a 192.168.55.x address in ${waited}s; treating this as a NAT-only emulator." >&2
     fi
     echo "10.0.2.2"
+}
+
+#
+# Makes a port the host is listening on reachable from the device at the address android_host_address
+# prints.
+#
+# On a real device that means `adb reverse`: the phone has no route to the host's loopback, and its
+# own LAN address for the host is not what android_host_address hands out, so the port has to be
+# tunnelled through adb to make 127.0.0.1 on the device mean this host. On an emulator it is a no-op,
+# because the guest already reaches the host directly, at 192.168.55.1 over the LAN bridge or at
+# 10.0.2.2 under user-mode NAT.
+#
+# Usage: android_expose_host_port <port>
+#
+android_expose_host_port() {
+    local port="$1"
+    case "${ANDROID_SERIAL:-}" in
+        ""|emulator-*)
+            return 0
+            ;;
+    esac
+    adb reverse "tcp:$port" "tcp:$port" >/dev/null
+    log_info "Reversed host port $port onto ${ANDROID_SERIAL}, so the device reaches it at 127.0.0.1:$port"
 }
 
 #

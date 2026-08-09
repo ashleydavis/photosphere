@@ -174,6 +174,15 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
         await api.post(`${restApiUrl}/apply-database-ops`, { ops }, {
             headers: { "Content-Type": "application/json" },
         });
+
+        // Logged because until now the success of a metadata write was observable nowhere at all.
+        // Every caller reaches this through a debounce with nothing awaiting the promise, and the app
+        // installs no unhandledrejection handler, so a write that failed left the app looking exactly
+        // like one that succeeded: the edit sits in React state either way. This is the same kind of
+        // lifecycle line as "Database opened" and "Sync completed", and it is what says the record is
+        // on disk rather than only on screen.
+        log.info(`Database ops applied: ${ops.length} op(s)`);
+
         platform.notifyDatabaseEdited();
     }
 
