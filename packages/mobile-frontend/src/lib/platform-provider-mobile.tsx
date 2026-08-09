@@ -89,17 +89,6 @@ const persistentStore: configStore.IKeyValueStore = window.localStorage;
 const secretStore: MobileSecretStore = new MobileSecretStore(createCapacitorSecureStore());
 
 //
-// Deletes the plaintext secrets blob an earlier build wrote to localStorage. Secrets now live in the
-// device keychain, so a plaintext copy left on a device by that build is pure exposure with nothing
-// reading it. Removed at module load, before any UI can run, and logged so the removal is visible rather
-// than silent. Key name only, never a value.
-//
-if (persistentStore.getItem(configStore.LEGACY_PLAINTEXT_SECRETS_KEY) !== null) {
-    persistentStore.removeItem(configStore.LEGACY_PLAINTEXT_SECRETS_KEY);
-    log.info(`mobile-secrets: removed the legacy plaintext '${configStore.LEGACY_PLAINTEXT_SECRETS_KEY}' entry from localStorage; secrets are stored in the device keychain and any secret held only in that entry must be re-added.`);
-}
-
-//
 // Props for the mobile platform provider.
 //
 export interface IPlatformProviderMobileProps {

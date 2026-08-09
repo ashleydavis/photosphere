@@ -16,14 +16,6 @@ import type { IDatabaseEntry, IShowNotificationData } from "user-interface";
 //
 
 //
-// localStorage key an earlier build kept the secrets list under, values and all, in plaintext. Secrets
-// now live one-per-item in the device keychain (see mobile-secure-store.ts) and nothing writes this key
-// any more. It is retained solely so the startup purge can delete a plaintext copy left behind on a
-// device that ran that earlier build.
-//
-export const LEGACY_PLAINTEXT_SECRETS_KEY = "photosphere.secrets";
-
-//
 // localStorage key for the available news items (seeded in tests; would be fetched in production).
 //
 export const NEWS_KEY = "photosphere.news";
