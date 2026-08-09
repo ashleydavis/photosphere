@@ -1,6 +1,6 @@
 import * as os from "os";
 import * as path from "path";
-import { readToml, writeToml, pathExists } from "node-utils";
+import { readToml, updateToml, pathExists } from "node-utils";
 import { databaseEntryToToml, tomlEntryToDatabaseEntry, type IDatabaseEntry, type ITomlDatabasesConfig } from "./databases-config-format";
 
 // Re-exported: this module has always been where the codebase imports the entry type from. The
@@ -117,6 +117,19 @@ function recentPathsToNames(recentPaths: string[], databases: IDatabaseEntry[]):
 //
 // Saves the databases configuration to disk.
 //
+// Written through updateToml, which takes the update lock beside the file, rather than through
+// writeToml, which just writes and renames. Several processes write this one file: the Electron main
+// process, the REST API and MCP utility processes, and the worker pool. Two of them saving at the
+// same moment used to have their renames overlap, and Windows refuses to rename over a file another
+// handle still holds, so the desktop smoke tests failed one to six of thirty three per run on
+// "EPERM: operation not permitted, rename ... databases.toml". The lock means the renames no longer
+// overlap.
+//
+// The mutator ignores the current contents on purpose. Every caller here has already read the file,
+// changed what it wanted and handed back a whole config, so this is still the last writer winning;
+// what changes is that the writers now take turns. Making them merge instead would mean reworking
+// each caller into a mutator, which is a larger change than the failure calls for.
+//
 export async function saveDatabasesConfig(config: IDatabasesConfig): Promise<void> {
     if (!Array.isArray(config.databases)) {
         config.databases = [];
@@ -124,7 +137,8 @@ export async function saveDatabasesConfig(config: IDatabasesConfig): Promise<voi
     if (!Array.isArray(config.recentDatabaseNames)) {
         config.recentDatabaseNames = [];
     }
-    await writeToml(DATABASES_FILE, databasesConfigToToml(config));
+    const next = databasesConfigToToml(config);
+    await updateToml<ITomlDatabasesConfig>(DATABASES_FILE, next, () => next);
 }
 
 //
