@@ -42,9 +42,10 @@ LAN_TIMEOUT=60
 cleanup_cli_pids() {
     local cli_pid
     for cli_pid in "${CLI_PIDS[@]+"${CLI_PIDS[@]}"}"; do
-        kill "$cli_pid" 2>/dev/null || true
-        sleep 0.3
-        kill -9 "$cli_pid" 2>/dev/null || true
+        # The tree, not just the pid. `bun run` is a wrapper and the process holding the UDP
+        # broadcast and the HTTPS server is its child, so killing the wrapper alone leaves that child
+        # broadcasting. That orphan is what the command-line pattern below this used to sweep up.
+        kill_process_tree "$cli_pid"
         wait "$cli_pid" 2>/dev/null || true
     done
     CLI_PIDS=()
@@ -54,11 +55,17 @@ cleanup_cli_pids() {
 # Global cleanup on script exit — terminates any lingering CLI receivers/senders
 # and any background jobs spawned by tests.
 #
+# No command-line matching here, deliberately. Selecting a process by what it looks like reaches
+# every process on the machine, and this suite's CLI is indistinguishable from the one another
+# worktree's run just started, so it used to kill that one instead. Everything this suite launches is
+# recorded in CLI_PIDS or is a job of this shell, and both are reachable by pid.
+#
 suite_cleanup() {
     cleanup_cli_pids
-    kill_matching_in_own_group "bun run.*secrets (send|receive)" TERM
-    kill_matching_in_own_group "bun run.*dbs (send|receive)" TERM
-    jobs -p 2>/dev/null | xargs -r kill 2>/dev/null || true
+    local job_pid
+    for job_pid in $(jobs -p 2>/dev/null); do
+        kill_process_tree "$job_pid"
+    done
 }
 trap suite_cleanup EXIT
 

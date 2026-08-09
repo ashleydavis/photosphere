@@ -95,12 +95,76 @@ kill_proc() {
     wait "$pid" 2>/dev/null || true
 }
 
-# Clean up after every test — kill any active receiver.
+# Every process this test started, so cleanup and the watchdog can reach all of them by pid.
+#
+# Nothing in this suite may ever select a process by matching its command line. `pkill -f` and
+# anything like it asks the kernel about every process on the machine, and the CLI's command line is
+# the same whichever checkout or worktree launched it, so it kills another run's identical process.
+# That happened: one suite's exit trap SIGTERMed another suite's sender mid-test, and the failure it
+# produced named an innocent test. A recorded pid belongs to this run and to nothing else.
+TEST_PIDS=()
+
+# The same pids on disk, for the watchdog.
+#
+# The watchdog is a background subshell, and a subshell gets a copy of the shell's variables at the
+# moment it forks, so it can never see a pid recorded after it started. That is every pid it needs.
+# A file is shared rather than copied, so the watchdog reads what the test has launched by the time
+# it fires. Set per test by run_test.
+TEST_PID_FILE=""
+
+# Records a process this test started, in the array cleanup reads and the file the watchdog reads.
+# Usage: track_test_pid <pid>
+track_test_pid() {
+    local pid="$1"
+    TEST_PIDS+=("$pid")
+    if [ -n "$TEST_PID_FILE" ]; then
+        echo "$pid" >> "$TEST_PID_FILE"
+    fi
+}
+
+# Runs a CLI command, recording its pid so it can be killed if the test hangs, and returns its exit
+# code once it finishes.
+#
+# Backgrounding and waiting rather than running in the foreground is the whole point: a foreground
+# child has no pid the watchdog can see, and that absence is what a command-line pattern used to
+# paper over. `wait` on a known pid gives the same blocking behaviour and the same exit code.
+# Usage: run_cli_tracked <log_file> <args...>
+run_cli_tracked() {
+    local log_file="$1"
+    shift
+
+    "$@" > "$log_file" 2>&1 &
+    local cli_pid=$!
+    track_test_pid "$cli_pid"
+
+    local status=0
+    wait "$cli_pid" || status=$?
+    return "$status"
+}
+
+# Kills everything this test started, deepest process first, and forgets them.
+#
+# The tree walk matters as much as the pid does: `bun run` is a wrapper, and the process that owns
+# the UDP broadcast and the HTTPS server is its child. Killing only the wrapper leaves that child
+# running and broadcasting, which is the orphan a command-line pattern used to sweep up afterwards.
+kill_test_pids() {
+    local pid
+    for pid in "${TEST_PIDS[@]+"${TEST_PIDS[@]}"}"; do
+        kill_process_tree "$pid"
+    done
+    TEST_PIDS=()
+    if [ -n "$TEST_PID_FILE" ]; then
+        : > "$TEST_PID_FILE"
+    fi
+}
+
+# Clean up after every test — kill any active receiver and anything else the test started.
 test_cleanup() {
     if [ -n "$RECEIVER_PID" ]; then
         kill_proc "$RECEIVER_PID"
         RECEIVER_PID=""
     fi
+    kill_test_pids
 }
 
 # Clean up on script exit.
@@ -199,6 +263,9 @@ start_receiver_with_code() {
     PHOTOSPHERE_CONFIG_DIR="$RECEIVER_CONFIG_DIR" \
         $CLI_CMD $cmd_prefix receive --yes --code "$code" > "$log_file" 2>&1 &
     RECEIVER_PID=$!
+    # Recorded as well as held in RECEIVER_PID, so the watchdog can reach it if the test hangs before
+    # the point where test_cleanup would normally take it down.
+    track_test_pid "$RECEIVER_PID"
 
     # Poll until the receiver logs that it is waiting for a sender.
     for attempt in $(seq 1 25); do
@@ -253,13 +320,19 @@ run_test() {
     local suite_tmp_dir="$TEST_TMP_DIR"
     use_test_temp_dir "$(photosphere_test_temp_dir "$test_func")"
 
-    # Background watchdog — kills stuck bun processes after timeout.
+    # Where this test records what it launches, inside the test's own directory so two runs cannot
+    # share it.
+    TEST_PIDS=()
+    TEST_PID_FILE="$TEST_TMP_DIR/test-pids"
+    : > "$TEST_PID_FILE"
+
+    # Background watchdog — kills what this test started, and only that, if it runs over time.
     (
         sleep "$TEST_TIMEOUT"
-        kill_matching_in_own_group "bun run start.*--yes" TERM
-        kill_matching_in_own_group "bun run.*udp-listen" TERM
-        sleep 1
-        kill_matching_in_own_group "bun run start.*--yes" KILL
+        while IFS= read -r stuck_pid; do
+            [ -n "$stuck_pid" ] || continue
+            kill_process_tree "$stuck_pid"
+        done < "$TEST_PID_FILE"
     ) &
     local watchdog_pid=$!
 
@@ -272,9 +345,6 @@ run_test() {
     wait "$watchdog_pid" 2>/dev/null || true
 
     test_cleanup
-
-    # Kill any lingering receivers between tests and wait for them to die.
-    kill_matching_in_own_group "bun run.*receive --yes" TERM
     sleep 0.3
 
     # Put the suite root back, so anything running between tests is not left pointing at the
@@ -313,9 +383,10 @@ test_share_database() {
     start_receiver_with_code "dbs" "$receiver_log" "$test_code" || return 1
 
     local sender_log="${TEST_TMP_DIR}/sender-db.log"
-    PHOTOSPHERE_VAULT_DIR="$SENDER_VAULT_DIR" \
-    PHOTOSPHERE_CONFIG_DIR="$SENDER_CONFIG_DIR" \
-        $CLI_CMD dbs send --name share-test-db --yes --code "$test_code" > "$sender_log" 2>&1 || true
+    run_cli_tracked "$sender_log" env \
+        PHOTOSPHERE_VAULT_DIR="$SENDER_VAULT_DIR" \
+        PHOTOSPHERE_CONFIG_DIR="$SENDER_CONFIG_DIR" \
+        $CLI_CMD dbs send --name share-test-db --yes --code "$test_code" || true
 
     # Give receiver a moment to process.
     sleep 0.2
@@ -367,9 +438,10 @@ test_share_secret() {
     start_receiver_with_code "secrets" "$receiver_log" "$test_code" || return 1
 
     local sender_log="${TEST_TMP_DIR}/sender-secret.log"
-    PHOTOSPHERE_VAULT_DIR="$SENDER_VAULT_DIR" \
-    PHOTOSPHERE_CONFIG_DIR="$SENDER_CONFIG_DIR" \
-        $CLI_CMD secrets send --name "apikey01" --yes --code "$test_code" > "$sender_log" 2>&1 || true
+    run_cli_tracked "$sender_log" env \
+        PHOTOSPHERE_VAULT_DIR="$SENDER_VAULT_DIR" \
+        PHOTOSPHERE_CONFIG_DIR="$SENDER_CONFIG_DIR" \
+        $CLI_CMD secrets send --name "apikey01" --yes --code "$test_code" || true
 
     sleep 0.2
 
@@ -416,9 +488,10 @@ test_wrong_pairing_code() {
     start_receiver_with_code "secrets" "$receiver_log" "$receiver_code" || return 1
 
     local sender_log="${TEST_TMP_DIR}/sender-wrong-code.log"
-    PHOTOSPHERE_VAULT_DIR="$SENDER_VAULT_DIR" \
-    PHOTOSPHERE_CONFIG_DIR="$SENDER_CONFIG_DIR" \
-        $CLI_CMD secrets send --name "apikey01" --yes --code "$wrong_code" > "$sender_log" 2>&1 || true
+    run_cli_tracked "$sender_log" env \
+        PHOTOSPHERE_VAULT_DIR="$SENDER_VAULT_DIR" \
+        PHOTOSPHERE_CONFIG_DIR="$SENDER_CONFIG_DIR" \
+        $CLI_CMD secrets send --name "apikey01" --yes --code "$wrong_code" || true
 
     if grep -q "Pairing code rejected" "$sender_log" 2>/dev/null; then
         log_success "Wrong code: sender reports rejection"
@@ -454,9 +527,10 @@ test_share_database_no_secrets() {
     start_receiver_with_code "dbs" "$receiver_log" "$test_code" || return 1
 
     local sender_log="${TEST_TMP_DIR}/sender-no-secrets.log"
-    PHOTOSPHERE_VAULT_DIR="$SENDER_VAULT_DIR" \
-    PHOTOSPHERE_CONFIG_DIR="$SENDER_CONFIG_DIR" \
-        $CLI_CMD dbs send --name plain-db --yes --code "$test_code" > "$sender_log" 2>&1 || true
+    run_cli_tracked "$sender_log" env \
+        PHOTOSPHERE_VAULT_DIR="$SENDER_VAULT_DIR" \
+        PHOTOSPHERE_CONFIG_DIR="$SENDER_CONFIG_DIR" \
+        $CLI_CMD dbs send --name plain-db --yes --code "$test_code" || true
 
     sleep 0.2
 
