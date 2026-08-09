@@ -24,7 +24,6 @@ jest.mock('node-utils', () => ({
 import {
     getConfigPath,
     loadDesktopConfig,
-    saveDesktopConfig,
     updateLastFolder,
     getTheme,
     setTheme,
@@ -33,6 +32,13 @@ import {
     addRecentSearch,
     removeRecentSearch,
     updateDesktopConfig,
+    tomlToDesktopConfig,
+    desktopConfigToToml,
+    asFolderConfigKey,
+    getFolderPath,
+    updateFolderPath,
+    FOLDER_CONFIG_KEYS,
+    MAX_RECENT_SEARCHES,
 } from '../../lib/desktop-config';
 
 describe('getConfigPath', () => {
@@ -86,29 +92,29 @@ describe('loadDesktopConfig', () => {
     });
 });
 
-describe('loadDesktopConfig migration', () => {
+//
+// Loading is a read and nothing else. It used to migrate an old desktop.json, write the TOML and
+// delete the JSON, so a read could take a lock, write a file and remove another. That is gone.
+//
+describe('loadDesktopConfig does not write', () => {
     beforeEach(() => jest.clearAllMocks());
 
-    test('migrates from JSON when TOML does not exist but JSON does', async () => {
-        mockPathExists.mockImplementation((filePath: string) => filePath.endsWith('.json'));
-        mockReadJson.mockResolvedValue({ theme: 'dark', lastFolder: '/photos' });
+    test('returns defaults and writes nothing when the file is absent', async () => {
+        mockPathExists.mockResolvedValue(false);
 
         const config = await loadDesktopConfig();
 
-        expect(config.theme).toBe('dark');
-        expect(config.lastFolder).toBe('/photos');
-        expect(mockWriteToml).toHaveBeenCalled();
-        expect(mockRemove).toHaveBeenCalledWith(expect.stringContaining('desktop.json'));
+        expect(config).toEqual({});
+        expect(mockWriteToml).not.toHaveBeenCalled();
+        expect(mockRemove).not.toHaveBeenCalled();
     });
 });
 
-describe('saveDesktopConfig', () => {
+describe('updateDesktopConfig writes snake_case TOML', () => {
     beforeEach(() => jest.clearAllMocks());
 
     test('writes TOML with snake_case keys', async () => {
-        const config = { theme: 'light' as const };
-
-        await saveDesktopConfig(config);
+        await updateDesktopConfig(config => { config.theme = 'light'; });
 
         expect(mockWriteToml).toHaveBeenCalledWith(
             expect.any(String),
@@ -117,15 +123,13 @@ describe('saveDesktopConfig', () => {
     });
 
     test('converts camelCase fields to snake_case in TOML', async () => {
-        const config = {
-            lastFolder: '/folder',
-            recentSearches: ['cats'],
-            lastDownloadFolder: '/downloads',
-            lastDatabase: '/db',
-            showFpsIndicator: true,
-        };
-
-        await saveDesktopConfig(config);
+        await updateDesktopConfig(config => {
+            config.lastFolder = '/folder';
+            config.recentSearches = ['cats'];
+            config.lastDownloadFolder = '/downloads';
+            config.lastDatabase = '/db';
+            config.showFpsIndicator = true;
+        });
 
         const tomlArg = mockWriteToml.mock.calls[0][1];
         expect(tomlArg.last_folder).toBe('/folder');
@@ -199,8 +203,8 @@ describe('showFpsIndicator config round-trip', () => {
         expect(config.showFpsIndicator).toBe(true);
     });
 
-    test('saveDesktopConfig writes showFpsIndicator to show_fps_indicator', async () => {
-        await saveDesktopConfig({ showFpsIndicator: true });
+    test('updateDesktopConfig writes showFpsIndicator to show_fps_indicator', async () => {
+        await updateDesktopConfig(config => { config.showFpsIndicator = true; });
 
         const tomlArg = mockWriteToml.mock.calls[0][1];
         expect(tomlArg.show_fps_indicator).toBe(true);
@@ -219,8 +223,8 @@ describe('devToolsOpen config round-trip', () => {
         expect(config.devToolsOpen).toBe(true);
     });
 
-    test('saveDesktopConfig writes devToolsOpen to dev_tools_open', async () => {
-        await saveDesktopConfig({ devToolsOpen: true });
+    test('updateDesktopConfig writes devToolsOpen to dev_tools_open', async () => {
+        await updateDesktopConfig(config => { config.devToolsOpen = true; });
 
         const tomlArg = mockWriteToml.mock.calls[0][1];
         expect(tomlArg.dev_tools_open).toBe(true);
@@ -240,8 +244,8 @@ describe('sync settings config round-trip', () => {
         expect(config.syncOnlyOnWifi).toBe(false);
     });
 
-    test('saveDesktopConfig writes sync settings to snake_case toml keys', async () => {
-        await saveDesktopConfig({ syncEnabled: true, syncOnlyOnWifi: false });
+    test('updateDesktopConfig writes sync settings to snake_case toml keys', async () => {
+        await updateDesktopConfig(config => { config.syncEnabled = true; config.syncOnlyOnWifi = false; });
 
         const tomlArg = mockWriteToml.mock.calls[0][1];
         expect(tomlArg.sync_enabled).toBe(true);
@@ -358,9 +362,7 @@ describe('developerMode persistence', () => {
     });
 
     test('writes developerMode to TOML as developer_mode', async () => {
-        const config = { developerMode: true };
-
-        await saveDesktopConfig(config);
+        await updateDesktopConfig(config => { config.developerMode = true; });
 
         const tomlArg = mockWriteToml.mock.calls[0][1];
         expect(tomlArg.developer_mode).toBe(true);
@@ -369,7 +371,7 @@ describe('developerMode persistence', () => {
     test('round-trips developerMode through save and load', async () => {
         mockPathExists.mockImplementation((filePath: string) => filePath.endsWith('.toml'));
 
-        await saveDesktopConfig({ developerMode: true });
+        await updateDesktopConfig(config => { config.developerMode = true; });
         const savedToml = mockWriteToml.mock.calls[0][1];
 
         mockReadToml.mockResolvedValue(savedToml);
@@ -397,3 +399,211 @@ describe('updateDesktopConfig', () => {
     });
 });
 
+
+//
+// The pure conversions between the on-disk TOML and the in-memory config. Both were private until
+// every function in this module was exported.
+//
+describe('tomlToDesktopConfig', () => {
+    test('converts every snake_case key to its camelCase field', () => {
+        const config = tomlToDesktopConfig({
+            last_folder: '/folder',
+            theme: 'dark',
+            recent_searches: ['cats'],
+            last_download_folder: '/downloads',
+            last_database: '/db',
+            show_fps_indicator: true,
+            developer_mode: true,
+            dev_tools_open: true,
+            sync_enabled: false,
+            sync_only_on_wifi: false,
+        });
+
+        expect(config).toEqual({
+            lastFolder: '/folder',
+            theme: 'dark',
+            recentSearches: ['cats'],
+            lastDownloadFolder: '/downloads',
+            lastDatabase: '/db',
+            showFpsIndicator: true,
+            developerMode: true,
+            devToolsOpen: true,
+            syncEnabled: false,
+            syncOnlyOnWifi: false,
+        });
+    });
+
+    test('leaves absent keys absent rather than filling in defaults', () => {
+        // The UI applies its own defaults, so an unset value has to stay unset rather than becoming
+        // false or an empty string here.
+        expect(tomlToDesktopConfig({})).toEqual({});
+    });
+});
+
+describe('desktopConfigToToml', () => {
+    test('converts every camelCase field to its snake_case key', () => {
+        const toml = desktopConfigToToml({
+            lastFolder: '/folder',
+            theme: 'dark',
+            recentSearches: ['cats'],
+            lastDownloadFolder: '/downloads',
+            lastDatabase: '/db',
+            showFpsIndicator: true,
+            developerMode: true,
+            devToolsOpen: true,
+            syncEnabled: false,
+            syncOnlyOnWifi: false,
+        });
+
+        expect(toml).toEqual({
+            last_folder: '/folder',
+            theme: 'dark',
+            recent_searches: ['cats'],
+            last_download_folder: '/downloads',
+            last_database: '/db',
+            show_fps_indicator: true,
+            developer_mode: true,
+            dev_tools_open: true,
+            sync_enabled: false,
+            sync_only_on_wifi: false,
+        });
+    });
+
+    test('omits absent fields rather than writing them as null', () => {
+        expect(desktopConfigToToml({})).toEqual({});
+    });
+
+    test('round trips a config through TOML and back unchanged', () => {
+        const original = { lastFolder: '/folder', theme: 'light' as const, recentSearches: ['dogs'] };
+
+        expect(tomlToDesktopConfig(desktopConfigToToml(original))).toEqual(original);
+    });
+});
+
+//
+// The point of routing every edit through updateDesktopConfig: a key set by someone else between
+// this edit's read and its write is still there afterwards. The load-then-save this replaced wrote
+// back a whole config read earlier, so it discarded anything changed in the meantime.
+//
+describe('updateDesktopConfig keeps concurrent changes', () => {
+    beforeEach(() => jest.clearAllMocks());
+
+    test('keeps a key written by someone else while this edit was being made', async () => {
+        mockPathExists.mockImplementation((filePath: string) => filePath.endsWith('.toml'));
+        mockReadToml.mockResolvedValue({ last_database: '/set-by-another-process' });
+
+        await updateDesktopConfig(config => {
+            config.theme = 'dark';
+        });
+
+        const tomlArg = mockWriteToml.mock.calls[0][1];
+        expect(tomlArg.theme).toBe('dark');
+        expect(tomlArg.last_database).toBe('/set-by-another-process');
+    });
+
+    test('caps the recent searches at MAX_RECENT_SEARCHES', async () => {
+        const existing = Array.from({ length: MAX_RECENT_SEARCHES }, (_unused, index) => `search${index}`);
+        mockPathExists.mockImplementation((filePath: string) => filePath.endsWith('.toml'));
+        mockReadToml.mockResolvedValue({ recent_searches: existing });
+
+        await addRecentSearch('newest');
+
+        const tomlArg = mockWriteToml.mock.calls[0][1];
+        expect(tomlArg.recent_searches).toHaveLength(MAX_RECENT_SEARCHES);
+        expect(tomlArg.recent_searches[0]).toBe('newest');
+        expect(tomlArg.recent_searches).not.toContain(existing[MAX_RECENT_SEARCHES - 1]);
+    });
+});
+
+describe('asFolderConfigKey', () => {
+    test('returns each of the keys a folder picker is allowed to use', () => {
+        for (const folderKey of FOLDER_CONFIG_KEYS) {
+            expect(asFolderConfigKey(folderKey)).toBe(folderKey);
+        }
+    });
+
+    test('throws on a key the config does not hold', () => {
+        expect(() => asFolderConfigKey('lastFolde')).toThrow(/Unknown folder config key "lastFolde"/);
+    });
+
+    test('names the keys it does accept, so the message says how to fix it', () => {
+        expect(() => asFolderConfigKey('theme')).toThrow(/lastFolder, lastDownloadFolder/);
+    });
+
+    test('throws on an empty key rather than treating it as the default', () => {
+        expect(() => asFolderConfigKey('')).toThrow(/Unknown folder config key/);
+    });
+});
+
+describe('getFolderPath', () => {
+    beforeEach(() => jest.clearAllMocks());
+
+    test('reads the folder remembered under the given key', async () => {
+        mockPathExists.mockResolvedValue(true);
+        mockReadToml.mockResolvedValue({ last_folder: '/photos', last_download_folder: '/downloads' });
+
+        expect(await getFolderPath('lastFolder')).toBe('/photos');
+        expect(await getFolderPath('lastDownloadFolder')).toBe('/downloads');
+    });
+
+    test('returns undefined when nothing is remembered under that key yet', async () => {
+        mockPathExists.mockResolvedValue(true);
+        mockReadToml.mockResolvedValue({ last_folder: '/photos' });
+
+        expect(await getFolderPath('lastDownloadFolder')).toBeUndefined();
+    });
+
+    test('returns undefined when there is no config file at all', async () => {
+        mockPathExists.mockResolvedValue(false);
+
+        expect(await getFolderPath('lastFolder')).toBeUndefined();
+    });
+
+    test('throws on an unknown key without reading the config', async () => {
+        await expect(getFolderPath('nonsense')).rejects.toThrow(/Unknown folder config key/);
+        expect(mockReadToml).not.toHaveBeenCalled();
+    });
+});
+
+describe('updateFolderPath', () => {
+    beforeEach(() => jest.clearAllMocks());
+
+    test('writes the chosen folder under the given key', async () => {
+        mockPathExists.mockResolvedValue(true);
+        mockReadToml.mockResolvedValue({});
+
+        await updateFolderPath('lastDownloadFolder', '/new/downloads');
+
+        expect(mockWriteToml.mock.calls[0][1].last_download_folder).toBe('/new/downloads');
+    });
+
+    test('replaces the folder previously remembered under that key', async () => {
+        mockPathExists.mockResolvedValue(true);
+        mockReadToml.mockResolvedValue({ last_folder: '/old' });
+
+        await updateFolderPath('lastFolder', '/new');
+
+        expect(mockWriteToml.mock.calls[0][1].last_folder).toBe('/new');
+    });
+
+    //
+    // A folder picker stays open for as long as the user takes to choose, so the config is written
+    // against its current contents rather than a copy read before the dialog opened.
+    //
+    test('leaves every other setting alone, including ones changed while the dialog was open', async () => {
+        mockPathExists.mockResolvedValue(true);
+        mockReadToml.mockResolvedValue({ theme: 'dark', last_database: '/set-while-dialog-was-open' });
+
+        await updateFolderPath('lastFolder', '/new/photos');
+
+        const tomlArg = mockWriteToml.mock.calls[0][1];
+        expect(tomlArg.last_folder).toBe('/new/photos');
+        expect(tomlArg.theme).toBe('dark');
+        expect(tomlArg.last_database).toBe('/set-while-dialog-was-open');
+    });
+
+    test('throws on an unknown key without writing anything', async () => {
+        await expect(updateFolderPath('nonsense', '/somewhere')).rejects.toThrow(/Unknown folder config key/);
+        expect(mockWriteToml).not.toHaveBeenCalled();
+    });
+});

@@ -1,7 +1,6 @@
 import { dialog, BrowserWindow } from 'electron';
 import { join, dirname } from 'path';
-import { loadDesktopConfig, saveDesktopConfig, updateLastDownloadFolder } from 'node-api';
-import type { IDesktopConfig } from 'node-api';
+import { loadDesktopConfig, getFolderPath, updateFolderPath, updateLastDownloadFolder } from 'node-api';
 
 //
 // Options for the native folder picker dialog.
@@ -42,9 +41,7 @@ export async function pickFolder(mainWindow: BrowserWindow | null, options?: IPi
         mainWindow.focus();
     }
 
-    const config = await loadDesktopConfig();
-    const configRecord = config as Record<string, IDesktopConfig[keyof IDesktopConfig]>;
-    const defaultPath = configRecord[folderKey] as string | undefined;
+    const defaultPath = await getFolderPath(folderKey);
 
     const properties: Electron.OpenDialogOptions['properties'] = ['openDirectory'];
     if (createDirectory) {
@@ -64,8 +61,7 @@ export async function pickFolder(mainWindow: BrowserWindow | null, options?: IPi
     }
 
     const chosen = result.filePaths[0];
-    configRecord[folderKey] = chosen;
-    await saveDesktopConfig(config);
+    await updateFolderPath(folderKey, chosen);
     return chosen;
 }
 

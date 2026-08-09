@@ -8,7 +8,7 @@ import { createAssetServer } from "rest-api";
 import { exec } from "child_process";
 import { promisify } from "util";
 import * as path from "path";
-import { createDatabase, createMediaFileDatabase, loadDesktopConfig, saveDesktopConfig, getDatabases, addDatabaseEntry, removeDatabaseEntry, updateLastFolder, markDatabaseOpened } from "node-api";
+import { createDatabase, createMediaFileDatabase, loadDesktopConfig, updateDesktopConfig, getFolderPath, updateFolderPath, getDatabases, addDatabaseEntry, removeDatabaseEntry, updateLastFolder, markDatabaseOpened } from "node-api";
 import { createStorage } from "storage";
 
 const execAsync = promisify(exec);
@@ -473,9 +473,11 @@ async function handleGetConfig(ws: WebSocket, key: string, requestId: unknown): 
 //
 async function handleSetConfig(ws: WebSocket, key: string, value: unknown, requestId: unknown): Promise<void> {
     try {
-        const config = await loadDesktopConfig();
-        (config as Record<string, unknown>)[key] = value;
-        await saveDesktopConfig(config);
+        // Written through updateDesktopConfig rather than load-then-save, so setting one key cannot
+        // discard another key set at the same moment by the desktop app or a worker.
+        await updateDesktopConfig(config => {
+            (config as Record<string, unknown>)[key] = value;
+        });
         ws.send(JSON.stringify({ type: "config-set", requestId }));
     }
     catch (error: any) {
@@ -520,9 +522,7 @@ async function handlePickFolder(ws: WebSocket, options: IPickFolderRequestOption
     const createDirectory = options?.createDirectory === true;
 
     try {
-        const config = await loadDesktopConfig();
-        const configRecord = config as Record<string, unknown>;
-        const defaultPath = typeof configRecord[folderKey] === "string" ? configRecord[folderKey] as string : undefined;
+        const defaultPath = await getFolderPath(folderKey);
 
         const chosen = await showDirectoryDialog(defaultPath, title, createDirectory);
         if (!chosen) {
@@ -530,8 +530,7 @@ async function handlePickFolder(ws: WebSocket, options: IPickFolderRequestOption
             return;
         }
 
-        configRecord[folderKey] = chosen;
-        await saveDesktopConfig(config);
+        await updateFolderPath(folderKey, chosen);
 
         ws.send(JSON.stringify({ type: "pick-folder-result", requestId, value: chosen }));
     }
