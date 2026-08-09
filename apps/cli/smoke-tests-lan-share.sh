@@ -256,10 +256,10 @@ run_test() {
     # Background watchdog — kills stuck bun processes after timeout.
     (
         sleep "$TEST_TIMEOUT"
-        pkill -f "bun run start.*--yes" 2>/dev/null || true
-        pkill -f "bun run.*udp-listen" 2>/dev/null || true
+        kill_matching_in_own_group "bun run start.*--yes" TERM
+        kill_matching_in_own_group "bun run.*udp-listen" TERM
         sleep 1
-        pkill -9 -f "bun run start.*--yes" 2>/dev/null || true
+        kill_matching_in_own_group "bun run start.*--yes" KILL
     ) &
     local watchdog_pid=$!
 
@@ -274,7 +274,7 @@ run_test() {
     test_cleanup
 
     # Kill any lingering receivers between tests and wait for them to die.
-    pkill -f "bun run.*receive --yes" 2>/dev/null || true
+    kill_matching_in_own_group "bun run.*receive --yes" TERM
     sleep 0.3
 
     # Put the suite root back, so anything running between tests is not left pointing at the
@@ -671,8 +671,13 @@ done
 
 mkdir -p "$TEST_TMP_DIR"
 
-# Kill any leftover receivers from previous runs.
-pkill -f "bun run.*receive --yes" 2>/dev/null || true
+# No machine-wide kill of leftover receivers here, deliberately. It cannot tell an orphan of a
+# previous run of this suite from the live receiver of a suite running right now, and killing the
+# latter is what made this suite and the CLI to desktop one fail each other. Two things cover what it
+# was for: this suite kills its own receiver through its tracked pid, tree and all, so it leaves no
+# orphan to begin with, and a sender ignores any receiver announcing a pairing code other than its
+# own (packages/lan-share-network/src/lib/lan-share-sender.ts), so one that did survive cannot
+# capture a later share.
 sleep 0.5
 
 SUITE_START=$SECONDS

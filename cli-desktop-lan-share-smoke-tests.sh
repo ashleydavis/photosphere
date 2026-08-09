@@ -56,8 +56,8 @@ cleanup_cli_pids() {
 #
 suite_cleanup() {
     cleanup_cli_pids
-    pkill -f "bun run.*secrets (send|receive)" 2>/dev/null || true
-    pkill -f "bun run.*dbs (send|receive)" 2>/dev/null || true
+    kill_matching_in_own_group "bun run.*secrets (send|receive)" TERM
+    kill_matching_in_own_group "bun run.*dbs (send|receive)" TERM
     jobs -p 2>/dev/null | xargs -r kill 2>/dev/null || true
 }
 trap suite_cleanup EXIT

@@ -117,6 +117,41 @@ kill_process_group() {
 }
 
 #
+# Kills the processes matching a command-line pattern that this script started, leaving every other
+# process on the machine alone. Sends the given signal, which the caller names in kill's own spelling
+# (TERM, KILL).
+#
+# `pkill -f` is what this replaces, and it matches on every process on the machine. Two suites whose
+# CLI invocations look alike therefore killed each other: the CLI to desktop LAN share suite ran
+# `pkill -f "bun run.*secrets (send|receive)"` in its exit trap, which matched the CLI to CLI suite's
+# `bun run start -- secrets send --name ... --yes`, so the sender of a test in another suite, in
+# another worktree, died mid-test with a SIGTERM. What that suite then reported was the assertion the
+# dead sender never got to satisfy, which points at the test rather than at the thing that killed it.
+#
+# A suite's own children inherit its process group, and another suite's children are in that suite's
+# group, so the group is what tells one suite's processes from another's. Nothing here can reach out
+# of this script, however loose the pattern is.
+# Usage: kill_matching_in_own_group <pattern> <signal>
+#
+kill_matching_in_own_group() {
+    local pattern="$1"
+    local signal="$2"
+    local own_pgid pid
+
+    own_pgid="$(process_group_of "$$")"
+    if [ -z "$own_pgid" ]; then
+        return 0
+    fi
+
+    for pid in $(pgrep -f "$pattern" 2>/dev/null); do
+        if [ "$(process_group_of "$pid")" = "$own_pgid" ]; then
+            kill "-$signal" "$pid" 2>/dev/null || true
+        fi
+    done
+    return 0
+}
+
+#
 # Proves, once per shell, that turning on bash job control puts a background job in a process group
 # of its own whose pgid is the job's own pid. Succeeds quietly and fails loudly.
 #
