@@ -40,19 +40,23 @@ send_command "$APP_PORT" type '{"dataId":"database-path-input","text":"source-db
 send_command "$APP_PORT" click '{"dataId":"add-database-confirm"}' || exit 1
 wait_for_log "$TMP_DIR" "Database entry added"
 
-send_command "$APP_PORT" navigate '{"page":"databases"}' || exit 1
-wait_for_log "$TMP_DIR" "Databases page loaded"
-
-# Confirming the Add Database dialog registers the entry and then opens that database, which
-# re-renders the card list. That open runs after "Database entry added" is logged, so wait for it to
-# settle before opening the menu: otherwise it lands mid-test and tears the menu down before the
-# action can be clicked. Polled from the navbar marker (rendered only while a database is open)
-# rather than a log line, because the open can complete either side of the page-loaded event and a
-# log wait would miss an early one. The navbar marker is no longer enough on its own: the open now
-# emits a second "Databases page loaded" render after "Database opened", which lands after the marker
-# appears and tears the menu down, so wait for that render too.
-wait_for_value "$APP_PORT" database-photo-count "photos"
+# Waited for here, before the navigation below, and not after it. Confirming the dialog registers the
+# entry and then opens that database, which emits "Database opened" and then a second "Databases page
+# loaded" render. Waiting on the render first consumed that pair from the wrong end: wait_for_log
+# carries a cursor, so matching the open's render moved the cursor past the "Database opened" that
+# preceded it, and the later wait for it then had nothing left to find and timed out. That is what
+# failed this test on the iOS runner, where the whole open completed before the test navigated at all.
+#
+# The navigation cannot be relied on to produce a render of its own either: the auto-open leaves the
+# app on the databases page already, and navigating to the route it is on emits nothing.
 wait_for_log "$TMP_DIR" "Database opened"
+
+send_command "$APP_PORT" navigate '{"page":"databases"}' || exit 1
+
+# The open re-renders the card list, so it has to settle before the menu is opened: otherwise it
+# lands mid-test and tears the menu down before the action can be clicked. The navbar marker is
+# rendered only while a database is open, and the render after it is what actually replaces the list.
+wait_for_value "$APP_PORT" database-photo-count "photos"
 wait_for_log "$TMP_DIR" "Databases page loaded"
 
 send_command "$APP_PORT" click '{"dataId":"entity-actions-menu"}' || exit 1
