@@ -39,8 +39,6 @@ const DATABASES_FILE = path.join(CONFIG_DIR, "databases.toml");
 
 //
 // Converts a TOML-shaped config object to the TypeScript IDatabasesConfig type.
-// Recognises only the new `recent_database_names` field; legacy `recent_database_paths`
-// migration is handled separately in `loadDatabasesConfig`.
 //
 function tomlToDatabasesConfig(toml: ITomlDatabasesConfig): IDatabasesConfig {
     const databases = Array.isArray(toml.databases)
@@ -71,9 +69,6 @@ function namesMatch(left: string, right: string): boolean {
 
 //
 // Loads the databases configuration from disk.
-// If the loaded TOML still uses the legacy `recent_database_paths` field, converts it
-// to `recent_database_names` (resolving each path to its current entry's name; dropping
-// paths that no longer match any entry) and rewrites the file.
 // Returns a default config with an empty list if the file does not exist.
 //
 export async function loadDatabasesConfig(): Promise<IDatabasesConfig> {
@@ -82,36 +77,7 @@ export async function loadDatabasesConfig(): Promise<IDatabasesConfig> {
     }
 
     const toml = await readToml<ITomlDatabasesConfig>(DATABASES_FILE);
-
-    // Legacy migration: convert recent_database_paths to recent_database_names and rewrite the file once.
-    if (!Array.isArray(toml.recent_database_names) && Array.isArray(toml.recent_database_paths)) {
-        const databases = Array.isArray(toml.databases)
-            ? toml.databases.map(tomlEntryToDatabaseEntry)
-            : [];
-        const migrated: IDatabasesConfig = {
-            databases,
-            recentDatabaseNames: recentPathsToNames(toml.recent_database_paths, databases),
-        };
-        await saveDatabasesConfig(migrated);
-        return migrated;
-    }
-
     return tomlToDatabasesConfig(toml);
-}
-
-//
-// Resolves the legacy recent-paths array into the new recent-names array by looking up
-// each path in the current databases list. Paths that don't match any entry are dropped.
-//
-function recentPathsToNames(recentPaths: string[], databases: IDatabaseEntry[]): string[] {
-    const result: string[] = [];
-    for (const recentPath of recentPaths) {
-        const match = databases.find(dbEntry => dbEntry.path === recentPath);
-        if (match) {
-            result.push(match.name);
-        }
-    }
-    return result;
 }
 
 //

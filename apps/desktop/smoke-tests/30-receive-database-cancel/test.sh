@@ -27,7 +27,6 @@ name = "test-db"
 description = ""
 path = "/tmp/smoke-test-db"
 
-[recent_database_paths]
 EOF
 
 start_app "$TMP_DIR/receiver" 0
