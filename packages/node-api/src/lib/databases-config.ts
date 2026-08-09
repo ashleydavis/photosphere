@@ -9,14 +9,15 @@ export type { IDatabaseEntry };
 //
 // Configuration for the databases list, stored in ~/.config/photosphere/databases.toml.
 //
-interface IDatabasesConfig {
+export interface IDatabasesConfig {
     //
     // Structured list of configured databases.
     //
     databases: IDatabaseEntry[];
 
     //
-    // Ordered list of recently opened database names (most recent first, max 5).
+    // Ordered list of recently opened database names, most recent first, capped at
+    // MAX_RECENT_DATABASES.
     //
     recentDatabaseNames: string[];
 }
@@ -38,9 +39,15 @@ const CONFIG_DIR = process.env.PHOTOSPHERE_CONFIG_DIR || (HOME_DIR ? path.join(H
 const DATABASES_FILE = path.join(CONFIG_DIR, "databases.toml");
 
 //
+// How many recently opened databases are remembered. Named once so the list that is trimmed and the
+// list that is read back cannot disagree about the number.
+//
+export const MAX_RECENT_DATABASES = 5;
+
+//
 // Converts a TOML-shaped config object to the TypeScript IDatabasesConfig type.
 //
-function tomlToDatabasesConfig(toml: ITomlDatabasesConfig): IDatabasesConfig {
+export function tomlToDatabasesConfig(toml: ITomlDatabasesConfig): IDatabasesConfig {
     const databases = Array.isArray(toml.databases)
         ? toml.databases.map(tomlEntryToDatabaseEntry)
         : [];
@@ -53,7 +60,7 @@ function tomlToDatabasesConfig(toml: ITomlDatabasesConfig): IDatabasesConfig {
 //
 // Converts the TypeScript IDatabasesConfig to the TOML on-disk shape.
 //
-function databasesConfigToToml(config: IDatabasesConfig): ITomlDatabasesConfig {
+export function databasesConfigToToml(config: IDatabasesConfig): ITomlDatabasesConfig {
     return {
         databases: config.databases.map(databaseEntryToToml),
         recent_database_names: config.recentDatabaseNames,
@@ -63,7 +70,7 @@ function databasesConfigToToml(config: IDatabasesConfig): ITomlDatabasesConfig {
 //
 // Returns true if the two names match case-insensitively.
 //
-function namesMatch(left: string, right: string): boolean {
+export function namesMatch(left: string, right: string): boolean {
     return left.toLowerCase() === right.toLowerCase();
 }
 
@@ -81,30 +88,32 @@ export async function loadDatabasesConfig(): Promise<IDatabasesConfig> {
 }
 
 //
-// Saves the databases configuration to disk.
+// Changes the databases configuration on disk. Every edit in this module goes through here.
 //
-// Written through updateToml, which takes the update lock beside the file, rather than through
-// writeToml, which just writes and renames. Several processes write this one file: the Electron main
-// process, the REST API and MCP utility processes, and the worker pool. Two of them saving at the
-// same moment used to have their renames overlap, and Windows refuses to rename over a file another
-// handle still holds, so the desktop smoke tests failed one to six of thirty three per run on
-// "EPERM: operation not permitted, rename ... databases.toml". The lock means the renames no longer
-// overlap.
+// The mutator is handed the file's CURRENT contents and returns the new ones. updateToml runs it
+// under the update lock beside the file, checks the file has not moved before renaming, and re-runs
+// the mutator against the new contents if it has. So two edits arriving together both survive: the
+// second is applied on top of the first rather than overwriting it.
 //
-// The mutator ignores the current contents on purpose. Every caller here has already read the file,
-// changed what it wanted and handed back a whole config, so this is still the last writer winning;
-// what changes is that the writers now take turns. Making them merge instead would mean reworking
-// each caller into a mutator, which is a larger change than the failure calls for.
+// This replaced a saveDatabasesConfig that took a whole config and wrote it. Every caller was
+// load-then-save, so two overlapping edits meant the later write silently discarded the earlier
+// one's change, with nothing to show for it. Several processes write this one file: the Electron
+// main process, the REST API and MCP utility processes, and the worker pool.
 //
-export async function saveDatabasesConfig(config: IDatabasesConfig): Promise<void> {
-    if (!Array.isArray(config.databases)) {
-        config.databases = [];
-    }
-    if (!Array.isArray(config.recentDatabaseNames)) {
-        config.recentDatabaseNames = [];
-    }
-    const next = databasesConfigToToml(config);
-    await updateToml<ITomlDatabasesConfig>(DATABASES_FILE, next, () => next);
+// Windows is where that stopped being silent. It refuses to rename over a file another handle still
+// holds, so the overlapping renames surfaced as "EPERM: operation not permitted, rename ...
+// databases.toml", failing one to six of the thirty three desktop smoke tests per run. Taking turns
+// fixes the visible failure on Windows and the invisible one everywhere else.
+//
+// A mutator that throws is left to throw. The lock is released on the way out, and the caller gets
+// its error rather than a half-applied change.
+//
+export async function updateDatabasesConfig(mutate: (config: IDatabasesConfig) => IDatabasesConfig): Promise<void> {
+    const emptyConfig: ITomlDatabasesConfig = { databases: [], recent_database_names: [] };
+    await updateToml<ITomlDatabasesConfig>(DATABASES_FILE, emptyConfig, currentToml => {
+        const updated = mutate(tomlToDatabasesConfig(currentToml));
+        return databasesConfigToToml(updated);
+    });
 }
 
 //
@@ -130,13 +139,16 @@ export async function findDatabase(name: string): Promise<IDatabaseEntry | undef
 // a storage-layer invariant in addition to any UX checks.
 //
 export async function addDatabaseEntry(entry: IDatabaseEntry): Promise<void> {
-    const config = await loadDatabasesConfig();
-    const existing = config.databases.find(dbEntry => namesMatch(dbEntry.name, entry.name));
-    if (existing) {
-        throw new Error(`A database named "${entry.name}" already exists.`);
-    }
-    config.databases = [...config.databases, entry];
-    await saveDatabasesConfig(config);
+    await updateDatabasesConfig(config => {
+        const existing = config.databases.find(dbEntry => namesMatch(dbEntry.name, entry.name));
+        if (existing) {
+            throw new Error(`A database named "${entry.name}" already exists.`);
+        }
+        return {
+            databases: [...config.databases, entry],
+            recentDatabaseNames: config.recentDatabaseNames,
+        };
+    });
 }
 
 //
@@ -147,25 +159,27 @@ export async function addDatabaseEntry(entry: IDatabaseEntry): Promise<void> {
 // `originalName` is found.
 //
 export async function updateDatabaseEntry(originalName: string, entry: IDatabaseEntry): Promise<void> {
-    const config = await loadDatabasesConfig();
-    const matchIndex = config.databases.findIndex(dbEntry => namesMatch(dbEntry.name, originalName));
-    if (matchIndex === -1) {
-        throw new Error(`No database named "${originalName}" found.`);
-    }
-    const renamed = !namesMatch(entry.name, originalName);
-    if (renamed) {
-        const collision = config.databases.find((dbEntry, dbIndex) => dbIndex !== matchIndex && namesMatch(dbEntry.name, entry.name));
-        if (collision) {
-            throw new Error(`A database named "${entry.name}" already exists.`);
+    await updateDatabasesConfig(config => {
+        const matchIndex = config.databases.findIndex(dbEntry => namesMatch(dbEntry.name, originalName));
+        if (matchIndex === -1) {
+            throw new Error(`No database named "${originalName}" found.`);
         }
-    }
-    const updatedDatabases = config.databases.slice();
-    updatedDatabases[matchIndex] = entry;
-    config.databases = updatedDatabases;
-    if (renamed) {
-        config.recentDatabaseNames = config.recentDatabaseNames.map(recentName => namesMatch(recentName, originalName) ? entry.name : recentName);
-    }
-    await saveDatabasesConfig(config);
+        const renamed = !namesMatch(entry.name, originalName);
+        if (renamed) {
+            const collision = config.databases.find((dbEntry, dbIndex) => dbIndex !== matchIndex && namesMatch(dbEntry.name, entry.name));
+            if (collision) {
+                throw new Error(`A database named "${entry.name}" already exists.`);
+            }
+        }
+        const updatedDatabases = config.databases.slice();
+        updatedDatabases[matchIndex] = entry;
+        return {
+            databases: updatedDatabases,
+            recentDatabaseNames: renamed
+                ? config.recentDatabaseNames.map(recentName => namesMatch(recentName, originalName) ? entry.name : recentName)
+                : config.recentDatabaseNames,
+        };
+    });
 }
 
 //
@@ -175,26 +189,23 @@ export async function updateDatabaseEntry(originalName: string, entry: IDatabase
 // No-op if no entry matches.
 //
 export async function removeDatabaseEntry(name: string): Promise<void> {
-    const config = await loadDatabasesConfig();
-    const matchIndex = config.databases.findIndex(dbEntry => namesMatch(dbEntry.name, name));
-    if (matchIndex === -1) {
-        // Still clean recents in case of stale state.
-        const filteredRecents = config.recentDatabaseNames.filter(recentName => !namesMatch(recentName, name));
-        if (filteredRecents.length !== config.recentDatabaseNames.length) {
-            config.recentDatabaseNames = filteredRecents;
-            await saveDatabasesConfig(config);
+    await updateDatabasesConfig(config => {
+        const matchIndex = config.databases.findIndex(dbEntry => namesMatch(dbEntry.name, name));
+        // Recents are cleaned whether or not the entry is there, in case of stale state naming an
+        // entry that has already gone.
+        const recentDatabaseNames = config.recentDatabaseNames.filter(recentName => !namesMatch(recentName, name));
+        if (matchIndex === -1) {
+            return { databases: config.databases, recentDatabaseNames };
         }
-        return;
-    }
-    const updatedDatabases = config.databases.slice();
-    updatedDatabases.splice(matchIndex, 1);
-    config.databases = updatedDatabases;
-    config.recentDatabaseNames = config.recentDatabaseNames.filter(recentName => !namesMatch(recentName, name));
-    await saveDatabasesConfig(config);
+        const updatedDatabases = config.databases.slice();
+        updatedDatabases.splice(matchIndex, 1);
+        return { databases: updatedDatabases, recentDatabaseNames };
+    });
 }
 
 //
-// Returns the top-5 most recently opened databases, ordered most-recent first.
+// Returns the most recently opened databases, ordered most-recent first, at most
+// MAX_RECENT_DATABASES of them.
 // Names that no longer resolve to an entry in the databases list are silently dropped.
 //
 export async function getRecentDatabases(): Promise<IDatabaseEntry[]> {
@@ -214,29 +225,29 @@ export async function getRecentDatabases(): Promise<IDatabaseEntry[]> {
 // in `databases` untouched. No-op if the name is not in the recent list.
 //
 export async function removeRecentDatabaseName(name: string): Promise<void> {
-    const config = await loadDatabasesConfig();
-    const filtered = config.recentDatabaseNames.filter(recentName => !namesMatch(recentName, name));
-    if (filtered.length === config.recentDatabaseNames.length) {
-        return;
-    }
-    config.recentDatabaseNames = filtered;
-    await saveDatabasesConfig(config);
+    await updateDatabasesConfig(config => ({
+        databases: config.databases,
+        recentDatabaseNames: config.recentDatabaseNames.filter(recentName => !namesMatch(recentName, name)),
+    }));
 }
 
 //
 // Moves the database entry matching the given name (case-insensitive) to the front of
-// recentDatabaseNames, trimming the list to a maximum of 5 entries, then saves.
+// recentDatabaseNames, trimming the list to MAX_RECENT_DATABASES entries.
 // No-op if no entry matches.
 //
 export async function markDatabaseOpened(name: string): Promise<void> {
-    const config = await loadDatabasesConfig();
-    const found = config.databases.find(dbEntry => namesMatch(dbEntry.name, name));
-    if (!found) {
-        return;
-    }
-    config.recentDatabaseNames = [
-        found.name,
-        ...config.recentDatabaseNames.filter(recentName => !namesMatch(recentName, found.name)),
-    ].slice(0, 5);
-    await saveDatabasesConfig(config);
+    await updateDatabasesConfig(config => {
+        const found = config.databases.find(dbEntry => namesMatch(dbEntry.name, name));
+        if (!found) {
+            return config;
+        }
+        return {
+            databases: config.databases,
+            recentDatabaseNames: [
+                found.name,
+                ...config.recentDatabaseNames.filter(recentName => !namesMatch(recentName, found.name)),
+            ].slice(0, MAX_RECENT_DATABASES),
+        };
+    });
 }
