@@ -1,12 +1,14 @@
-// Mock node-utils fs helpers so tests don't touch the real filesystem.
+// Mock node-utils fs helpers so tests do not touch the real filesystem. saveDatabasesConfig writes
+// through updateToml rather than writeToml, so that is what is mocked: the value it would write is
+// the second argument, and the third is the mutator it would apply on a retry.
 const mockPathExists = jest.fn();
 const mockReadToml = jest.fn();
-const mockWriteToml = jest.fn();
+const mockUpdateToml = jest.fn();
 
 jest.mock('node-utils', () => ({
     pathExists: mockPathExists,
     readToml: mockReadToml,
-    writeToml: mockWriteToml,
+    updateToml: mockUpdateToml,
 }));
 
 import {
@@ -110,8 +112,8 @@ describe('loadDatabasesConfig recents migration', () => {
         const config = await loadDatabasesConfig();
 
         expect(config.recentDatabaseNames).toEqual(['beta', 'alpha']);
-        expect(mockWriteToml).toHaveBeenCalledTimes(1);
-        const tomlArg = mockWriteToml.mock.calls[0][1];
+        expect(mockUpdateToml).toHaveBeenCalledTimes(1);
+        const tomlArg = mockUpdateToml.mock.calls[0][1];
         expect(tomlArg.recent_database_names).toEqual(['beta', 'alpha']);
         expect(tomlArg.recent_database_paths).toBeUndefined();
     });
@@ -137,9 +139,10 @@ describe('saveDatabasesConfig', () => {
 
         await saveDatabasesConfig(config);
 
-        expect(mockWriteToml).toHaveBeenCalledWith(
+        expect(mockUpdateToml).toHaveBeenCalledWith(
             expect.any(String),
-            expect.objectContaining({ recent_database_names: [] })
+            expect.objectContaining({ recent_database_names: [] }),
+            expect.any(Function)
         );
     });
 
@@ -149,7 +152,7 @@ describe('saveDatabasesConfig', () => {
 
         await saveDatabasesConfig(config);
 
-        const tomlArg = mockWriteToml.mock.calls[0][1];
+        const tomlArg = mockUpdateToml.mock.calls[0][1];
         expect(tomlArg.databases[0].s3_key).toBe('myKey');
         expect(tomlArg.databases[0].encryption_key).toBe('encKey');
         expect(tomlArg.databases[0].geocoding_key).toBe('geoKey');
@@ -214,7 +217,7 @@ describe('addDatabaseEntry', () => {
 
         await addDatabaseEntry(makeEntry('/b', 'beta'));
 
-        const tomlArg = mockWriteToml.mock.calls[0][1];
+        const tomlArg = mockUpdateToml.mock.calls[0][1];
         expect(tomlArg.databases).toHaveLength(2);
         expect(tomlArg.databases[1].path).toBe('/b');
     });
@@ -224,7 +227,7 @@ describe('addDatabaseEntry', () => {
         mockReadToml.mockResolvedValue({ databases: [makeTomlEntry('/a', 'Alpha')], recent_database_names: [] });
 
         await expect(addDatabaseEntry(makeEntry('/b', 'ALPHA'))).rejects.toThrow();
-        expect(mockWriteToml).not.toHaveBeenCalled();
+        expect(mockUpdateToml).not.toHaveBeenCalled();
     });
 });
 
@@ -237,7 +240,7 @@ describe('updateDatabaseEntry', () => {
 
         await updateDatabaseEntry('alpha', { name: 'alpha', description: 'changed', path: '/a' });
 
-        const tomlArg = mockWriteToml.mock.calls[0][1];
+        const tomlArg = mockUpdateToml.mock.calls[0][1];
         expect(tomlArg.databases[0].description).toBe('changed');
     });
 
@@ -250,7 +253,7 @@ describe('updateDatabaseEntry', () => {
 
         await updateDatabaseEntry('alpha', { name: 'gamma', description: '', path: '/a' });
 
-        const tomlArg = mockWriteToml.mock.calls[0][1];
+        const tomlArg = mockUpdateToml.mock.calls[0][1];
         expect(tomlArg.databases[0].name).toBe('gamma');
         expect(tomlArg.recent_database_names).toEqual(['beta', 'gamma']);
     });
@@ -263,7 +266,7 @@ describe('updateDatabaseEntry', () => {
         });
 
         await expect(updateDatabaseEntry('alpha', { name: 'BETA', description: '', path: '/a' })).rejects.toThrow();
-        expect(mockWriteToml).not.toHaveBeenCalled();
+        expect(mockUpdateToml).not.toHaveBeenCalled();
     });
 
     test('throws when no entry matches originalName', async () => {
@@ -286,7 +289,7 @@ describe('removeDatabaseEntry', () => {
 
         await removeDatabaseEntry('dup');
 
-        const tomlArg = mockWriteToml.mock.calls[0][1];
+        const tomlArg = mockUpdateToml.mock.calls[0][1];
         expect(tomlArg.databases).toHaveLength(2);
         expect(tomlArg.databases[0].path).toBe('/b');
         expect(tomlArg.databases[1].path).toBe('/c');
@@ -301,7 +304,7 @@ describe('removeDatabaseEntry', () => {
 
         await removeDatabaseEntry('alpha');
 
-        const tomlArg = mockWriteToml.mock.calls[0][1];
+        const tomlArg = mockUpdateToml.mock.calls[0][1];
         expect(tomlArg.recent_database_names).toEqual(['beta']);
     });
 
@@ -314,7 +317,7 @@ describe('removeDatabaseEntry', () => {
 
         await removeDatabaseEntry('missing');
 
-        expect(mockWriteToml).not.toHaveBeenCalled();
+        expect(mockUpdateToml).not.toHaveBeenCalled();
     });
 });
 
@@ -361,7 +364,7 @@ describe('markDatabaseOpened', () => {
 
         await markDatabaseOpened('alpha');
 
-        const tomlArg = mockWriteToml.mock.calls[0][1];
+        const tomlArg = mockUpdateToml.mock.calls[0][1];
         expect(tomlArg.recent_database_names[0]).toBe('alpha');
         expect(tomlArg.recent_database_names[1]).toBe('beta');
     });
@@ -377,7 +380,7 @@ describe('markDatabaseOpened', () => {
 
         await markDatabaseOpened('alpha');
 
-        const tomlArg = mockWriteToml.mock.calls[0][1];
+        const tomlArg = mockUpdateToml.mock.calls[0][1];
         expect(tomlArg.recent_database_names).toHaveLength(5);
         expect(tomlArg.recent_database_names[0]).toBe('alpha');
     });
@@ -388,7 +391,7 @@ describe('markDatabaseOpened', () => {
 
         await markDatabaseOpened('unknown');
 
-        expect(mockWriteToml).not.toHaveBeenCalled();
+        expect(mockUpdateToml).not.toHaveBeenCalled();
     });
 });
 
@@ -404,8 +407,8 @@ describe('removeRecentDatabaseName', () => {
 
         await removeRecentDatabaseName('alpha');
 
-        expect(mockWriteToml).toHaveBeenCalledTimes(1);
-        const tomlArg = mockWriteToml.mock.calls[0][1];
+        expect(mockUpdateToml).toHaveBeenCalledTimes(1);
+        const tomlArg = mockUpdateToml.mock.calls[0][1];
         expect(tomlArg.recent_database_names).toEqual(['beta']);
         expect(tomlArg.databases).toHaveLength(2);
     });
@@ -419,7 +422,7 @@ describe('removeRecentDatabaseName', () => {
 
         await removeRecentDatabaseName('alpha');
 
-        expect(mockWriteToml).not.toHaveBeenCalled();
+        expect(mockUpdateToml).not.toHaveBeenCalled();
     });
 
     test('leaves the entry in databases untouched', async () => {
@@ -431,8 +434,8 @@ describe('removeRecentDatabaseName', () => {
 
         await removeRecentDatabaseName('alpha');
 
-        expect(mockWriteToml).toHaveBeenCalledTimes(1);
-        const tomlArg = mockWriteToml.mock.calls[0][1];
+        expect(mockUpdateToml).toHaveBeenCalledTimes(1);
+        const tomlArg = mockUpdateToml.mock.calls[0][1];
         expect(tomlArg.databases).toHaveLength(1);
         expect(tomlArg.databases[0].path).toBe('/a');
     });
