@@ -12,6 +12,8 @@ source "$REPO_DIR/scripts/lib/allocate-test-temp-dir.sh"
 # launch records its process group in this file, and the check at the end looks at those groups and
 # nothing else. Exported, because the launches happen in the test.sh child processes.
 source "$REPO_DIR/scripts/lib/process-control.sh"
+# The per-test timeout every suite in this repository shares, and the reporting that goes with it.
+source "$REPO_DIR/scripts/lib/test-timeout.sh"
 export PHOTOSPHERE_LAUNCHED_GROUPS
 PHOTOSPHERE_LAUNCHED_GROUPS="$(mktemp "${TMPDIR:-/tmp}/photosphere-desktop-launches-XXXXXX")"
 
@@ -22,11 +24,12 @@ NC='\033[0m'
 
 USE_BINARY=false
 
-# Hard wall-clock limit per test. Generous because a concurrent Android suite run oversubscribes
-# the machine: an Electron app can be slow to reach /ready, and wait_for_ready relaunches once on a
-# timeout (up to two DEFAULT_WAIT_TIMEOUT waits), which must fit inside this cap plus the test's own
-# actions. A standalone run finishes each test in well under this.
-PER_TEST_TIMEOUT=300
+# Hard wall-clock limit per test, from scripts/lib/test-timeout.sh so every suite uses one number.
+# Generous because a concurrent Android suite run oversubscribes the machine: an Electron app can be
+# slow to reach /ready, and wait_for_ready relaunches once on a timeout (up to two
+# DEFAULT_WAIT_TIMEOUT waits), which must fit inside this cap plus the test's own actions. A
+# standalone run finishes each test in well under this.
+PER_TEST_TIMEOUT="$PHOTOSPHERE_PER_TEST_TIMEOUT"
 
 # Record start time for total duration reporting
 SMOKE_TESTS_START_TIME=$SECONDS
@@ -141,18 +144,26 @@ run_one() {
     log_file="$test_temp_dir/test-run.log"
     printf "${BLUE}RUN ${NC}  %2s  %s\n" "$num" "$name"
     local test_start=$SECONDS
-    if timeout "$PER_TEST_TIMEOUT" bash "$test_sh" >"$log_file" 2>&1; then
-        local test_duration
-        test_duration=$(format_duration $((SECONDS - test_start)))
+    local status=0
+    run_test_with_timeout "$PER_TEST_TIMEOUT" bash "$test_sh" >"$log_file" 2>&1 || status=$?
+    local test_duration
+    test_duration=$(format_duration $((SECONDS - test_start)))
+
+    if [ "$status" -eq 0 ]; then
         printf "${GREEN}PASS${NC}  %2s  %-30s  %s\n" "$num" "$name" "$test_duration"
         return 0
-    else
-        local test_duration
-        test_duration=$(format_duration $((SECONDS - test_start)))
-        printf "${RED}FAIL${NC}  %2s  %-30s  %s  (log: %s)\n" "$num" "$name" "$test_duration" "$log_file"
-        FAILED_TEST_LOGS+=("$log_file")
-        return 1
     fi
+
+    # A test that ran out of time is called out as such rather than being reported as a failure like
+    # any other. The two need different responses: a failure says the code is wrong, a timeout says
+    # the test never got as far as deciding, and the summary cannot tell them apart on its own.
+    if test_timed_out "$status"; then
+        report_test_timeout "$name" "$PER_TEST_TIMEOUT" "$log_file"
+    else
+        printf "${RED}FAIL${NC}  %2s  %-30s  %s  (log: %s)\n" "$num" "$name" "$test_duration" "$log_file"
+    fi
+    FAILED_TEST_LOGS+=("$log_file")
+    return 1
 }
 
 run_sequential() {
@@ -206,7 +217,7 @@ run_parallel_batch() {
             (
                 photosphere_export_test_temp "$test_temp_dir"
                 local_start=$SECONDS
-                timeout "$PER_TEST_TIMEOUT" bash "$t" >"$log_file" 2>&1
+                run_test_with_timeout "$PER_TEST_TIMEOUT" bash "$t" >"$log_file" 2>&1
                 local_exit=$?
                 echo $((SECONDS - local_start)) > "$test_temp_dir/test-duration.txt"
                 exit $local_exit
@@ -223,14 +234,20 @@ run_parallel_batch() {
             batch_temp_dir="${batch_temp_dirs[$k]}"
             local duration_file
             duration_file="$batch_temp_dir/test-duration.txt"
-            local test_duration
-            if wait "$pid"; then
-                test_duration=$(format_duration "$(cat "$duration_file" 2>/dev/null || echo 0)")
+            local test_duration batch_status=0
+            wait "$pid" || batch_status=$?
+            test_duration=$(format_duration "$(cat "$duration_file" 2>/dev/null || echo 0)")
+            if [ "$batch_status" -eq 0 ]; then
                 printf "${GREEN}PASS${NC}  %2s  %-30s  %s\n" "$num" "$name" "$test_duration"
                 eval "$pass_var=$(( ${!pass_var} + 1 ))"
             else
-                test_duration=$(format_duration "$(cat "$duration_file" 2>/dev/null || echo 0)")
-                printf "${RED}FAIL${NC}  %2s  %-30s  %s  (log: %s)\n" "$num" "$name" "$test_duration" "$batch_temp_dir/test-run.log"
+                # The subshell exits with whatever run_test_with_timeout returned, so a test that ran
+                # out of time still arrives here carrying the timeout code and can be named as one.
+                if test_timed_out "$batch_status"; then
+                    report_test_timeout "$name" "$PER_TEST_TIMEOUT" "$batch_temp_dir/test-run.log"
+                else
+                    printf "${RED}FAIL${NC}  %2s  %-30s  %s  (log: %s)\n" "$num" "$name" "$test_duration" "$batch_temp_dir/test-run.log"
+                fi
                 FAILED_TEST_LOGS+=("$batch_temp_dir/test-run.log")
                 eval "$fail_var=$(( ${!fail_var} + 1 ))"
             fi

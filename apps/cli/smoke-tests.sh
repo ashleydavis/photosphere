@@ -66,6 +66,9 @@ source "$_CLI_ABS_DIR/../../scripts/lib/allocate-test-temp-dir.sh"
 # leaking is the tree kill in the traps below.
 source "$_CLI_ABS_DIR/../../scripts/lib/process-control.sh"
 
+# The per-test timeout every suite in this repository shares, and the reporting that goes with it.
+source "$_CLI_ABS_DIR/../../scripts/lib/test-timeout.sh"
+
 # Test configuration
 #
 # The suite root, which holds the build output and whatever the setup and reset commands work on.
@@ -498,7 +501,12 @@ run_one() {
     printf "${BLUE}RUN ${NC}  %2s  %s\n" "$num" "$name"
     local test_start=$SECONDS
     local test_status=0
-    timeout 300 bash "$test_sh" >"$log_file" 2>&1 || test_status=$?
+    run_test_with_timeout "$PHOTOSPHERE_PER_TEST_TIMEOUT" bash "$test_sh" >"$log_file" 2>&1 || test_status=$?
+    if test_timed_out "$test_status"; then
+        report_test_timeout "$name" "$PHOTOSPHERE_PER_TEST_TIMEOUT" "$log_file"
+        FAILED_TEST_LOGS+=("$log_file")
+        return 1
+    fi
     if [ "$test_status" -eq "$TEST_SKIPPED_EXIT_CODE" ]; then
         local test_duration
         test_duration=$(format_duration $((SECONDS - test_start)))
@@ -578,7 +586,7 @@ run_parallel() {
             printf "${BLUE}RUN ${NC}  %2s  %s\n" "$num" "$name"
             (
                 local_start=$SECONDS
-                TEST_TMP_DIR="$test_dir" timeout 300 bash "$test_sh" >"$log_file" 2>&1
+                TEST_TMP_DIR="$test_dir" run_test_with_timeout "$PHOTOSPHERE_PER_TEST_TIMEOUT" bash "$test_sh" >"$log_file" 2>&1
                 local_exit=$?
 
                 # Retry once, and only when Bun itself crashed rather than a test failing an assertion.
@@ -606,7 +614,7 @@ run_parallel() {
                     # look at and the retry cannot inherit half-written files from it.
                     local retry_dir
                     retry_dir="$(allocate_isolated_test_dir "$dir_name")"
-                    TEST_TMP_DIR="$retry_dir" timeout 300 bash "$test_sh" >"$log_file" 2>&1
+                    TEST_TMP_DIR="$retry_dir" run_test_with_timeout "$PHOTOSPHERE_PER_TEST_TIMEOUT" bash "$test_sh" >"$log_file" 2>&1
                     local_exit=$?
                 fi
 
@@ -635,6 +643,13 @@ run_parallel() {
             elif [ "$wait_status" -eq 0 ]; then
                 printf "${GREEN}PASS${NC}  %2s  %-30s  %s\n" "$num" "$name" "$test_duration"
                 pass=$((pass + 1))
+            elif test_timed_out "$wait_status"; then
+                # The subshell exits with what run_test_with_timeout returned, so a test that ran out
+                # of time still arrives here carrying the timeout code and is named as one rather than
+                # being folded in with the assertion failures.
+                report_test_timeout "$name" "$PHOTOSPHERE_PER_TEST_TIMEOUT" "$batch_test_dir/test-run.log"
+                FAILED_TEST_LOGS+=("$batch_test_dir/test-run.log")
+                fail=$((fail + 1))
             else
                 printf "${RED}FAIL${NC}  %2s  %-30s  %s  (log: %s)\n" "$num" "$name" "$test_duration" "$batch_test_dir/test-run.log"
                 FAILED_TEST_LOGS+=("$batch_test_dir/test-run.log")

@@ -66,6 +66,13 @@ OUTPUT_DIR="$TEST_ROOT/outputs"
 # Starting and stopping background processes: the tree walk the trap below stops the writers with.
 source "$SCRIPT_DIR/../../scripts/lib/process-control.sh"
 
+# This suite is one script rather than a set of separate tests, so the script itself is what gets
+# held to the shared timeout. Without it a wedged run here had no limit at all and kept going until
+# something above it gave up, which in CI is the job timeout, and a job killed that way has its log
+# discarded rather than written.
+source "$SCRIPT_DIR/../../scripts/lib/test-timeout.sh"
+start_suite_watchdog "hash-cache-smoke-test"
+
 # Every writer this test backgrounds, so a run that ends early takes them with it.
 WRITER_PIDS=()
 

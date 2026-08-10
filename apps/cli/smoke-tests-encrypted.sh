@@ -25,6 +25,9 @@ NC='\033[0m'
 _ENCRYPTED_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$_ENCRYPTED_SCRIPT_DIR/../../scripts/lib/allocate-test-temp-dir.sh"
 
+# The per-test timeout every suite in this repository shares, and the reporting that goes with it.
+source "$_ENCRYPTED_SCRIPT_DIR/../../scripts/lib/test-timeout.sh"
+
 # Test configuration
 #
 # The suite root, holding the shared vault and config. It is NOT where a test runs: run_single_test
@@ -1390,11 +1393,29 @@ run_single_test() {
     local suite_tmp_dir="$TEST_TMP_DIR"
     photosphere_export_test_temp "$(photosphere_test_temp_dir "$name")"
 
+    # These tests are shell functions rather than separate scripts, so they are held to the shared
+    # timeout by the helper for that, which the CLI-to-desktop LAN share suite uses in the same way.
     local status=0
-    run_encrypted_test "$name" || status=$?
+    local tests_failed_before="$TESTS_FAILED"
+    ENCRYPTED_TEST_UNDER_TIMEOUT="$name"
+    run_test_function_with_timeout "$name" run_encrypted_test_under_timeout || status=$?
+
+    # A test that ran out of time can never be reported as having passed, whatever exit code the
+    # killed command left behind.
+    if [ "$status" -ne 0 ] && [ "$TESTS_FAILED" -eq "$tests_failed_before" ]; then
+        test_failed "$name"
+    fi
 
     photosphere_export_test_temp "$suite_tmp_dir"
     return "$status"
+}
+
+#
+# Calls the test named in ENCRYPTED_TEST_UNDER_TIMEOUT. run_test_function_with_timeout takes a
+# function name and no arguments, and run_encrypted_test needs the name, so this carries it across.
+#
+run_encrypted_test_under_timeout() {
+    run_encrypted_test "$ENCRYPTED_TEST_UNDER_TIMEOUT"
 }
 
 #

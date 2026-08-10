@@ -22,6 +22,13 @@ NC='\033[0m' # No Color
 _WRITE_LOCK_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$_WRITE_LOCK_SCRIPT_DIR/../../scripts/lib/allocate-test-temp-dir.sh"
 
+# This suite is one script rather than a set of separate tests, so the script itself is what gets
+# held to the shared timeout. Without it a wedged run here had no limit at all and kept going until
+# something above it gave up, which in CI is the job timeout, and a job killed that way has its log
+# discarded rather than written.
+source "$_WRITE_LOCK_SCRIPT_DIR/../../scripts/lib/test-timeout.sh"
+start_suite_watchdog "write-lock-smoke-test"
+
 # Test configuration.
 #
 # Everything this run writes lives under a directory allocated for this run alone. It used to be a

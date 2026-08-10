@@ -28,6 +28,9 @@ source "$_LAN_SHARE_SCRIPT_DIR/../../scripts/lib/allocate-test-temp-dir.sh"
 # caller.
 source "$_LAN_SHARE_SCRIPT_DIR/../../scripts/lib/process-control.sh"
 
+# The per-test timeout every suite in this repository shares, and the reporting that goes with it.
+source "$_LAN_SHARE_SCRIPT_DIR/../../scripts/lib/test-timeout.sh"
+
 # The suite root. It is NOT where a test runs: run_test points TEST_TMP_DIR at a uniquely named
 # directory for the length of each test.
 #
@@ -296,15 +299,15 @@ reset_dirs() {
     mkdir -p "$RECEIVER_VAULT_DIR" "$RECEIVER_CONFIG_DIR"
 }
 
-# Per-test timeout in seconds.
+# Per-test timeout in seconds, from scripts/lib/test-timeout.sh so every suite here holds its tests
+# to the same ceiling.
 #
-# 90 rather than a smaller number because of how discovery works. A sender ignores any receiver whose
-# pairing code does not match its own, so when a test deliberately uses the wrong code there is never
-# a match and the sender waits out its full 60 second discovery window before reporting. That is the
-# deliberate cost of not pairing with a stranger. Every other test here finishes in a few seconds, so
-# the number only matters for that one case, and one number is easier to reason about than a default
-# plus an override.
-TEST_TIMEOUT=90
+# This suite used to set its own 90, chosen to clear one case: a sender ignores any receiver whose
+# pairing code does not match its own, so a test that deliberately uses the wrong code never matches
+# and waits out the sender's full 60 second discovery window. That case still ends itself at 60
+# seconds when the sender gives up, so it passes under the shared ceiling exactly as it did under 90.
+# Nothing here needs a private number.
+TEST_TIMEOUT="$PHOTOSPHERE_PER_TEST_TIMEOUT"
 
 # Run a test function with per-test timeout, cleanup, and timing.
 # The test runs in the foreground (so counters and RECEIVER_PID work).
@@ -354,6 +357,11 @@ run_test() {
     local elapsed=$(( SECONDS - start_time ))
     if [ "$elapsed" -ge "$TEST_TIMEOUT" ]; then
         log_fail "$test_func timed out after ${TEST_TIMEOUT}s"
+        # These tests run as shell functions in the foreground, so everything the test printed is
+        # already above this on stdout and there is no separate log file to point at. The report is
+        # still worth printing: it is what says the run ended because the test stopped rather than
+        # because it decided something.
+        report_test_timeout "$test_func" "$TEST_TIMEOUT" ""
     fi
     echo -e "  ${YELLOW}(${elapsed}s)${NC}"
     echo ""

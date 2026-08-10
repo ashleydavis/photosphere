@@ -20,6 +20,9 @@ RUNNER_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # for every test it dispatches.
 source "$RUNNER_LIB_DIR/../../../scripts/lib/allocate-test-temp-dir.sh"
 
+# The per-test timeout every suite in this repository shares, and the reporting that goes with it.
+source "$RUNNER_LIB_DIR/../../../scripts/lib/test-timeout.sh"
+
 # Marker file name, matched against a test's own directory.
 EXCLUSIVE_MARKER=".exclusive"
 
@@ -31,7 +34,9 @@ EXCLUSIVE_MARKER=".exclusive"
 TEST_SKIPPED_EXIT_CODE=77
 
 # Seconds a single test may run before the pool kills it, so one wedged test cannot hang the suite.
-PER_TEST_TIMEOUT="${PHOTOSPHERE_PER_TEST_TIMEOUT:-600}"
+# The value comes from scripts/lib/test-timeout.sh, which every suite in this repository shares, so a
+# mobile test and a CLI test are held to the same ceiling rather than to whatever each runner grew.
+PER_TEST_TIMEOUT="$PHOTOSPHERE_PER_TEST_TIMEOUT"
 
 # How many tests a suite adds to its in-flight set at a time when it is competing with other suites.
 # This is a scheduling batch, NOT a cap on how many emulators a suite may use: a suite running on its
@@ -700,10 +705,10 @@ run_test() {
     local status=0
 
     if [ "$RUNNER_STREAM_OUTPUT" = "1" ]; then
-        run_test_timeout "$PER_TEST_TIMEOUT" bash "$test_path" 2>&1 | tee "$log_file"
+        run_test_with_timeout "$PER_TEST_TIMEOUT" bash "$test_path" 2>&1 | tee "$log_file"
         status="${PIPESTATUS[0]}"
     else
-        run_test_timeout "$PER_TEST_TIMEOUT" bash "$test_path" > "$log_file" 2>&1
+        run_test_with_timeout "$PER_TEST_TIMEOUT" bash "$test_path" > "$log_file" 2>&1
         status=$?
     fi
 
@@ -859,6 +864,12 @@ run_worker() {
         elif [ "$status" -eq 0 ]; then
             printf "${GREEN}PASS${NC}  %-32s  %ss\n" "$name" "$duration"
             echo "pass $name $duration $log_file" > "$results_dir/$name.result"
+        elif test_timed_out "$status"; then
+            # Called out separately from a failure. A failure says the code is wrong; a timeout says
+            # the test stopped making progress and never got as far as deciding, which is a different
+            # thing to go and look at. The two are indistinguishable in a summary otherwise.
+            report_test_timeout "$name" "$PER_TEST_TIMEOUT" "$log_file"
+            echo "fail $name $duration $log_file" > "$results_dir/$name.result"
         else
             printf "${RED}FAIL${NC}  %-32s  %ss  (log: %s)\n" "$name" "$duration" "$log_file"
             echo "fail $name $duration $log_file" > "$results_dir/$name.result"

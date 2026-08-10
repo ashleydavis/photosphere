@@ -23,6 +23,9 @@ CLI_DIR="$ROOT_DIR/apps/cli"
 # log_info / log_success / log_error.
 source "$DESKTOP_DIR/smoke-tests/lib/common.sh"
 
+# The per-test timeout every suite in this repository shares, and the reporting that goes with it.
+source "$ROOT_DIR/scripts/lib/test-timeout.sh"
+
 TMP_ROOT="$ROOT_DIR/tmp-cli-desktop-lan-share"
 
 # Counters and bookkeeping for the suite.
@@ -567,10 +570,22 @@ bundle_desktop
 
 SUITE_START=$SECONDS
 
-test_cli_to_desktop_secret
-test_cli_to_desktop_database
-test_desktop_to_cli_secret
-test_desktop_to_cli_database
+# Each test is held to the per-test timeout every suite in this repository shares. These tests are
+# shell functions that report by incrementing counters here, so they go through the helper for that
+# rather than being run in a subprocess. A test that runs out of time is killed, named, and counted
+# as a failure below rather than leaving the suite waiting on it.
+for lan_test in test_cli_to_desktop_secret test_cli_to_desktop_database \
+                test_desktop_to_cli_secret test_desktop_to_cli_database; do
+    tests_failed_before="$TESTS_FAILED"
+    if ! run_test_function_with_timeout "$lan_test" "$lan_test"; then
+        # A test killed for running too long never reached its own mark_fail, so the failure is
+        # recorded here. Guarded on the counter so a test that failed normally is not counted twice.
+        if [ "$TESTS_FAILED" -eq "$tests_failed_before" ]; then
+            TESTS_FAILED=$(( TESTS_FAILED + 1 ))
+            FAILED_TEST_NAMES+=("$lan_test")
+        fi
+    fi
+done
 
 SUITE_ELAPSED=$(( SECONDS - SUITE_START ))
 
