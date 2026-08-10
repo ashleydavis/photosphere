@@ -400,11 +400,19 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
     // cancel every other task running against that database: openDatabase calls this first, which is
     // enough to kill a replication of the same database that is already under way. dbPath is shared by
     // load-assets, create-database, move-assets, import, verify and check, so nothing that cancels on
-    // completion may use it. The tag is stable rather than a generated id: a second check of the same
-    // database reuses it, which is what the mobile pool's re-arm on addTask makes safe.
+    // completion may use it.
+    //
+    // The id is generated per call rather than being stable per database, for the same reason
+    // read-databases-config generates one. Two checks of the same database can overlap, and with a
+    // stable tag they shared a source: the first to finish ran shutdown(), which cancelled the
+    // source, which cancelled the second one's task while it was still running. awaitTask resolves
+    // undefined for a cancelled task, that became "check-database-exists task did not succeed:
+    // unknown error", and openDatabase reported it to the user as "Could not reach the database" for
+    // a database that was reachable all along. Desktop test 26 failed that way on two of three CI
+    // runs, once on macOS and once on Windows.
     //
     async function checkDatabaseExists(dbPath: string): Promise<boolean> {
-        const queue = new TaskQueue(uuidGenerator, `check-database-exists-${dbPath}`);
+        const queue = new TaskQueue(uuidGenerator, `check-database-exists-${uuidGenerator.generate()}`);
         try {
             const taskId = queue.addTask("check-database-exists", { databasePath: dbPath });
             const result = await queue.awaitTask(taskId);
