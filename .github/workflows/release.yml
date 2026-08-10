@@ -1492,8 +1492,14 @@ jobs:
         uses: ./.github/actions/install-what-changed
 
       # run.sh boots an iOS simulator and builds/installs the app via xcrun/xcodebuild.
+      #
+      # 75 rather than something closer to how long this usually takes, because when the ImageMagick
+      # cache misses this step builds ImageMagick from source, and that build alone has taken 37
+      # minutes on a slow runner. A cap sized on a cache hit kills a cache miss that was going to
+      # succeed: 40 did exactly that to the stories-ios job on run 31369570348, 40 minutes after it
+      # started "Building iOS ImageMagick from source". The job's own budget is 90.
       - name: Run iOS smoke tests
-        timeout-minutes: 40
+        timeout-minutes: 75
         run: bun run test:ios
 
   # The three story-player jobs below play every UI story on each shell and publish the screenshots
@@ -1690,9 +1696,12 @@ jobs:
           path: apps/ios-frontend/ios/App/vendor/im
           key: ${{ runner.os }}-ios-imagemagick-${{ hashFiles('apps/ios-frontend/ios/build-imagemagick.sh') }}
 
-      # The player boots an iOS simulator and builds/installs the app via xcrun/xcodebuild.
+      # The player boots an iOS simulator and builds/installs the app via xcrun/xcodebuild, and on an
+      # ImageMagick cache miss it builds ImageMagick from source first, which has taken 37 minutes on
+      # its own. 40 was not enough for that and killed this step 40 minutes after it started the
+      # build on run 31369570348. Sized to clear a cache miss, inside the job's 90.
       - name: Play the stories
-        timeout-minutes: 40
+        timeout-minutes: 75
         run: bun run stories:ios
 
       - name: Upload story screenshots
