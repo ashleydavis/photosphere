@@ -1817,7 +1817,13 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-electron-
 
+      # Capped because this is where the windows-latest leg hung for the full 60 minute job timeout on
+      # run 31365606896, and a job killed by its own timeout has its log discarded by GitHub rather
+      # than written, so that hang left nothing to read. The build itself costs between 107 and 156
+      # seconds across the four matrix legs (see the cache note below), so 20 minutes is far more than
+      # it can legitimately need.
       - name: Build Electron app
+        timeout-minutes: 20
         run: bun run build
 
       - name: Show release directory contents
