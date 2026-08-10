@@ -631,31 +631,16 @@ export class CloudStorage implements IStorage {
                     }
                 }
                 else {
-                    // Lock file exists but is corrupted, try to delete and retry
+                    // The write above was refused because the lock is there, but reading it back
+                    // returned nothing. This used to assume the lock was corrupt, delete it and take
+                    // it. It is not corrupt: the read simply raced its owner, who is still in the
+                    // critical section. Deleting it here let three processes write one database at
+                    // once and one of them lost its records (S3-LOCK-BROKEN-WHILE-HELD in
+                    // docs/flaky-tests-registry.md). Refuse instead and let the caller retry.
                     if (log.verboseEnabled) {
-                        log.verbose(`[LOCK] ${timestamp},ACQUIRE_CORRUPTED_BREAK,${processId},${owner},${filePath}`);
+                        log.verbose(`[LOCK] ${timestamp},ACQUIRE_FAILED_UNREADABLE,${processId},${owner},${filePath}`);
                     }
-                    
-                    try {
-                        await this.s3.send(new DeleteObjectCommand({
-                            Bucket: bucket,
-                            Key: key,
-                        }));
-
-                        const retryPutParams = { ...putParams, IfNoneMatch: undefined };
-                        await this.s3.send(new PutObjectCommand(retryPutParams));
-
-                        if (log.verboseEnabled) {
-                            log.verbose(`[LOCK] ${timestamp},ACQUIRE_SUCCESS_AFTER_CORRUPT,${processId},${owner},${filePath}`);
-                        }
-                        return true;
-                    }
-                    catch (retryErr) {
-                        if (log.verboseEnabled) {
-                            log.verbose(`[LOCK] ${timestamp},ACQUIRE_FAILED_RETRY,${processId},${owner},${filePath}`);
-                        }
-                        return false;
-                    }
+                    return false;
                 }
             }
             
