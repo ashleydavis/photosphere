@@ -150,6 +150,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
     //
     const handleStartReceiving = useCallback(async () => {
         receiveAbandoned.current = false;
+        const startedAt = Date.now();
         try {
             await platform.startShareReceive(enteredCode);
             setStep("waiting");
@@ -163,6 +164,13 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
             }
 
             if (!received) {
+                // Logged as well as shown, and with how long it waited, because this is the one way
+                // a receive ends without an error to report. Nothing was written here before, so a
+                // receive that was never reached left no trace at all: the smoke tests that wait on
+                // the review step below failed with a bare timeout, and the elapsed time is what
+                // separates a receiver that waited out its full 60s from one whose task was
+                // cancelled after a few hundred milliseconds. Diagnosing that took a whole session.
+                log.error(`Receive gave up after ${Date.now() - startedAt}ms with no payload: it either waited out its full timeout with no sender, or its task was cancelled.`);
                 setErrorMessage("No sender connected within 60 seconds.");
                 setStep("error");
                 return;
