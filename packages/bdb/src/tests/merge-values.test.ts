@@ -412,5 +412,38 @@ describe('mergeValues', () => {
         expect(result.value).toBe('value1'); // -100 > -200
         expect(result.metadata.timestamp).toBe(-100);
     });
+
+    // An absent field and an empty one are not the same thing here, and the difference decides
+    // whether a sync can lose an edit. These two hold that distinction still: it is what made smoke
+    // test 45 fail while the host-side sync tests, whose fixture record had no description field at
+    // all, went on passing.
+
+    test('an absent value loses to a present one whichever side it is on and whatever the timestamps', () => {
+        const absentIsNewer = mergeValues(
+            { value: undefined, metadata: { timestamp: 9000 } },
+            { value: 'present', metadata: { timestamp: 1000 } }
+        );
+        expect(absentIsNewer.value).toBe('present');
+
+        const absentIsNewerOnTheOtherSide = mergeValues(
+            { value: 'present', metadata: { timestamp: 1000 } },
+            { value: undefined, metadata: { timestamp: 9000 } }
+        );
+        expect(absentIsNewerOnTheOtherSide.value).toBe('present');
+    });
+
+    test('an empty string is a value rather than an absence, so it competes on its timestamp', () => {
+        const emptyIsNewer = mergeValues(
+            { value: '', metadata: { timestamp: 9000 } },
+            { value: 'present', metadata: { timestamp: 1000 } }
+        );
+        expect(emptyIsNewer.value).toBe('');
+
+        const emptyIsOlder = mergeValues(
+            { value: '', metadata: { timestamp: 1000 } },
+            { value: 'present', metadata: { timestamp: 9000 } }
+        );
+        expect(emptyIsOlder.value).toBe('present');
+    });
 });
 

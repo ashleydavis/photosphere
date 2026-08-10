@@ -523,7 +523,13 @@ describe('updateMetadata', () => {
         expect((addressMeta10.fields!.zip).timestamp).toBe(2000); // Deletion timestamp
     });
 
-    test('should return early when metadata.timestamp is greater than update timestamp', () => {
+    // These two used to assert that a write from a clock at or below the record's timestamp was left
+    // unstamped. updateFields wrote the value anyway, so the record ended up holding a new value with
+    // nothing saying when it was made, and the next sync merge read it as the older side and threw it
+    // away. A write is now stamped above the record it changed instead. See the comment block in
+    // update-metadata.ts, and docs/plans/new/plan-clock-independent-merge.md for the rest of the fix.
+
+    test('should stamp the write above the record when metadata.timestamp is greater than update timestamp', () => {
         const fields = { name: 'John' };
         const updates = { name: 'Jane' };
         const metadata: Metadata = {
@@ -533,16 +539,15 @@ describe('updateMetadata', () => {
             }
         };
         const timestamp = 2000; // Older than metadata.timestamp
-        
+
         const result = updateMetadata(fields, updates, metadata, timestamp);
-        
-        // Should return original metadata unchanged
-        expect(result).toBe(metadata);
+
+        // The record's own timestamp is untouched; the changed field is lifted above it.
         expect(result.timestamp).toBe(3000);
-        expect((result.fields!.name).timestamp).toBe(2500);
+        expect((result.fields!.name).timestamp).toBe(3001);
     });
 
-    test('should return early when metadata.timestamp equals update timestamp', () => {
+    test('should stamp the write above the record when metadata.timestamp equals update timestamp', () => {
         const fields = { name: 'John' };
         const updates = { name: 'Jane' };
         const metadata: Metadata = {
@@ -552,11 +557,41 @@ describe('updateMetadata', () => {
             }
         };
         const timestamp = 2000; // Equal to metadata.timestamp
-        
+
         const result = updateMetadata(fields, updates, metadata, timestamp);
-        
-        // Should return original metadata unchanged
-        expect(result).toBe(metadata);
+
+        expect(result.timestamp).toBe(2000);
+        expect((result.fields!.name).timestamp).toBe(2001);
+    });
+
+    test('should use the writing clock when it is already above the record', () => {
+        // The ordinary case, where the machine making the edit is not running behind the one that
+        // wrote the record. The clock reading is used as it stands, not lifted.
+        const fields = { name: 'John' };
+        const updates = { name: 'Jane' };
+        const metadata: Metadata = {
+            timestamp: 2000
+        };
+        const timestamp = 5000;
+
+        const result = updateMetadata(fields, updates, metadata, timestamp);
+
+        expect((result.fields!.name).timestamp).toBe(5000);
+    });
+
+    test('should stamp a deletion above the record when the writing clock is behind it', () => {
+        // Deletions are stamped on the same path and lose the same way: a tombstone below the record
+        // it removes is read as the older side and the deleted value comes back.
+        const fields = { name: 'John' };
+        const updates = { name: undefined };
+        const metadata: Metadata = {
+            timestamp: 3000
+        };
+        const timestamp = 1000;
+
+        const result = updateMetadata(fields, updates, metadata, timestamp);
+
+        expect((result.fields!.name).timestamp).toBe(3001);
     });
 
     test('should preserve root timestamp in result', () => {

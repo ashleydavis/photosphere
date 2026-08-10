@@ -47,6 +47,40 @@
 - `bun run test` passes, including the new bdb tests.
 - `bun run test:everything -- --force` passes three times in a row, with the emulator pool checked immediately before each run.
 
+## Findings
+
+**Step 4's answer: the push leg's merge drops the field.** The push leg runs, finds the record differing and merges it, and the merge picks the origin's empty description over the device's edit. It is not an early return, and it is not the test's read.
+
+The evidence, all from runs on this machine:
+
+- The failure reproduces standalone, not only under parallel load. Three standalone runs of `bun run test:and -- 45` passed and two failed. The margin that decides it is about four seconds, so it is not load that flips it, it is any few seconds of variation.
+- The worker's logcat is identical on passing and failing runs: `Finding differing records using hierarchical merkle trees...` then `Sync completed: 1 records merged.`, twice, once per leg, with no error and the task reporting success. So both legs ran and both merged, and nothing early-returned.
+- The origin's record after a PASSING run carries `metadata.timestamp 1786316805276` with `metadata.fields.description.timestamp 1786316809381`: the device's edit stamp, 4105ms above the record's.
+- The origin's record after a FAILING run carries `metadata.timestamp` and no `fields` at all, and the origin's root hash is unchanged. That is what a merge produces when the origin's own value wins: `mergeValues` returns the origin's side, whose description timestamp is inherited from the record, and `cleanupMetadata` then drops a field entry whose timestamp only equals the record's. The merged record is byte-for-byte the record already there, so nothing changes and nothing fails.
+- `psi root-hash` was checked by hand to change when only a description changes (`f936e5…` to `e934bb…` after a `bdb edit` of the description), so the unchanged hash is a real measurement. It just cannot tell "the merge kept the origin's value" from "the sync never reached the origin", which is why the old "syncDatabase took an early return" message was wrong.
+- Every asset the import path writes carries `description: ""` (`packages/node-api/src/lib/upload-asset.worker.ts`). That is a value, not an absence, so it competes on its timestamp. This is why the existing `sync-metadata-edit.test.ts` cases passed while test 45 failed: their fixture record had no description field, and `mergeValues` returns the other side outright when one value is `undefined`.
+- The five pool emulators run 21 to 23 seconds behind the host, sampled every ten seconds across the whole investigation, including during runs. The skew does not grow under load.
+- Test 45 reaches the edit about 26 seconds (host clock) after the host writes the record. Subtract the 22 second skew and the device stamps the edit about 4 seconds above the record. That 4 seconds is the entire safety margin.
+- A further defect sits behind it: when the device's clock is at or below the record's timestamp, `updateMetadata` (`packages/bdb/src/lib/update-metadata.ts`) returns the metadata untouched while `updateFields` still writes the new value, so the replica holds an edit with nothing recording when it was made. Two existing tests pin that early return in place.
+
+**Step 6: the fix went somewhere this plan did not list.** Nothing confined to `mergeValues`, `mergeFields`, `cleanupMetadata` or the push leg can fix this. Each of them is handed two numbers and no way to know that one came from a slower clock, and making an explicitly stamped field beat an inherited record timestamp would fix this case while breaking the legitimate one, where the origin genuinely holds the newer write.
+
+The change is in `updateMetadata` (`packages/bdb/src/lib/update-metadata.ts`) instead: a write is stamped `Math.max(clock, recordTimestamp + 1)`, so an edit can never be ordered before the value it replaced, however far behind the writing device's clock is. That removes the four second margin entirely rather than widening it.
+
+It also removes a second way the same edit was lost. The old code early-returned without stamping anything when the record was already stamped at or above the writing clock, while `updateFields` wrote the new value regardless, so the record held a change with nothing recording when it was made.
+
+This is a partial fix and is commented as such in the source. Two machines editing the same record independently are still ordered against each other by two unrelated wall clocks. Removing that needs ordering that does not come from a clock, which is `docs/plans/new/plan-clock-independent-merge.md`.
+
+Three existing tests asserted the old behaviour and now assert the new one: two in `packages/bdb/src/tests/update-metadata.test.ts` and one in `packages/bdb/src/tests/metadata.test.ts`. Each named the unstamped write as the intended outcome.
+
+**Steps 3 and 7 were done and then backed out.** Test 45 keeps one change: the failure message no longer claims `syncDatabase` took an early return, because the worker's log disproves it. The record dump and the bounded poll were both written, both used during the investigation, and both removed afterwards.
+
+The record dump (step 3) is what found the cause, by showing `description: ""` where `psi info` showed nothing. That work is done and does not need to sit in the test to stay done.
+
+The bounded poll (step 7) was added on this plan's say-so and never earned it. Every failing run still read an empty description after all ten reads over 27 seconds, so it rescued nothing and only made a failing run 27 seconds slower. The premise it rests on, that the origin might be caught mid-write, was never observed.
+
+**Step 9's result.** Test 45: 3 passes and 2 failures before the fix, then 12 consecutive passes after it, plus a full Android suite where all 43 tests passed, plus three `test:everything --force` runs where it passed each time (53s, 54s, 55s). `test:everything --force` does not go green, but the blocker is `44-receive-database-cancel`, which fails only under that load, passes alone in 10 seconds and passes in the full Android suite. Whether it predates this change is not established: reverting `update-metadata.ts` alone makes the unit tests fail, so `test:everything` stops before it reaches the Android suite, and a real control needs the source file and four test files reverted together.
+
 ## Notes
 
 - Evidence already gathered, none of it conclusive on its own: the edit reaches the device's disk (test 45 asserts this and it passes); the worker logs `Sync completed: 1 records merged.` twice, once per leg; the origin ends up without the description; the emulator clock is 26 seconds behind the host, measured twice.

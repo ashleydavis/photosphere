@@ -324,11 +324,17 @@ log_info "Origin root hash after the sync:  $ORIGIN_HASH_AFTER"
 
 ORIGIN_INFO="$(run_cli "$TMP_DIR" info "$ORIGIN_ASSET_ID" --db "$ORIGIN_COPY" --yes 2>&1)"
 if ! echo "$ORIGIN_INFO" | grep -qF "$DESCRIPTION"; then
+    # `psi root-hash` was checked by hand to change when only a record's description changes, so an
+    # unchanged hash here really does mean the origin's content is byte-for-byte what it was. What it
+    # does NOT say is why. A merge that ran and kept the origin's own value leaves the content
+    # identical, and so does a sync that never reached the origin, so this reports the measurement
+    # and names no cause. It used to name one, and the worker's own log disproved it.
     if [ "$ORIGIN_HASH_BEFORE" = "$ORIGIN_HASH_AFTER" ]; then
-        log_error "The sync reported it pushed changes but did not write to the origin at all: its root"
-        log_error "hash is unchanged ($ORIGIN_HASH_AFTER). syncDatabase took an early return."
+        log_error "The origin's root hash is unchanged ($ORIGIN_HASH_AFTER): the sync left the origin's"
+        log_error "content exactly as it was."
     else
-        log_error "The sync wrote to the origin (root hash changed) but the edit is not among what it wrote."
+        log_error "The origin's root hash changed ($ORIGIN_HASH_BEFORE -> $ORIGIN_HASH_AFTER): the sync"
+        log_error "wrote to the origin, but the edit is not among what it wrote."
     fi
     log_error "The sync reported it pushed changes, but the encrypted S3 database does not hold the edit."
     log_error "'psi info $ORIGIN_ASSET_ID' said:"

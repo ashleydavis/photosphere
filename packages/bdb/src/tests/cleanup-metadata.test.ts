@@ -397,5 +397,40 @@ describe('cleanupMetadata', () => {
         expect(result!.fields!.a.fields!.b.fields!.c).toBeDefined();
         expect(result!.fields!.a.fields!.b.fields!.c.timestamp).toBe(5000);
     });
+
+    // mergeRecords calls this with a cutoff of 0, and the recursion then measures each field against
+    // the record's own timestamp rather than that 0. So an edited field keeps its stamp only while
+    // that stamp is above the record's. When the winning side's field carries no stamp of its own and
+    // has inherited the record's, the two are equal and the entry is dropped, which is what leaves a
+    // merged record byte-for-byte identical to the one it was merged into. This holds the surviving
+    // case still: a field genuinely edited after the record was created keeps its timestamp.
+    test('a field stamped later than the record survives the cleanup mergeRecords performs', () => {
+        const metadata: Metadata = {
+            timestamp: 1786316805276,
+            fields: {
+                description: { timestamp: 1786316809381 }
+            }
+        };
+
+        const result = cleanupMetadata(metadata, 0);
+
+        expect(result).toBeDefined();
+        expect(result!.fields!.description).toBeDefined();
+        expect(result!.fields!.description.timestamp).toBe(1786316809381);
+    });
+
+    test('a field stamped no later than the record is dropped by the cleanup mergeRecords performs', () => {
+        const metadata: Metadata = {
+            timestamp: 1786316805276,
+            fields: {
+                description: { timestamp: 1786316805276 }
+            }
+        };
+
+        const result = cleanupMetadata(metadata, 0);
+
+        expect(result).toBeDefined();
+        expect(result!.fields).toBeUndefined();
+    });
 });
 

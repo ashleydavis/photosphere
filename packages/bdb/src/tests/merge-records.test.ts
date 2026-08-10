@@ -501,5 +501,78 @@ describe('mergeRecords', () => {
         expect(result.metadata.fields!.user).toBeDefined();
         expect(result.metadata.fields!.user.fields!.profile).toBeDefined();
     });
+
+    // The records below are the ones smoke test 45 produces, read out of the real databases it leaves
+    // behind with `bdb shard <db>/.db/bson metadata <shard>`.
+    //
+    // A freshly added asset carries `description: ""` as a real field (upload-asset.worker.ts writes
+    // it on every import) with no per-field metadata of its own, so the origin's side of the
+    // comparison falls back to the record-level timestamp, which is when the HOST created the record.
+    // The device edits the description and stamps it with its OWN clock, and the merge compares the
+    // two numbers without regard for which machine produced them.
+    //
+    // The emulator runs about 22 seconds behind the host, and test 45 reaches the edit about 26
+    // seconds after the host writes the record, so the edit is normally stamped only about 4 seconds
+    // above the record. Measured on a passing run: record 1786316805276, description 1786316809381,
+    // a margin of 4105ms. Any run that reaches the edit a few seconds sooner, or on a device a few
+    // seconds further behind, stamps it at or below the record and the origin's empty string wins.
+    // updateMetadata guarantees the edited field is stamped above the record it changed, however far
+    // behind the editing device's clock is, so the merge below is the one that actually runs. Without
+    // that guarantee the two sides came in equal and the origin's empty string won, which is the
+    // failure this pair of tests exists to keep out.
+    const HOST_RECORD_TIMESTAMP = 1786316805276;
+
+    test('an edit stamped above the record beats an untouched empty field on the other side', () => {
+        // The replica on the device. Replication copied the record verbatim, so the record-level
+        // timestamp is still the host's, and the edit carries the stamp updateMetadata gave it.
+        const deviceReplica: IInternalRecord = {
+            _id: '123',
+            fields: { description: 'Edited on the device' },
+            metadata: {
+                timestamp: HOST_RECORD_TIMESTAMP,
+                fields: {
+                    description: { timestamp: HOST_RECORD_TIMESTAMP + 1 }
+                }
+            }
+        };
+        // The origin in the bucket, untouched since the host created it.
+        const origin: IInternalRecord = {
+            _id: '123',
+            fields: { description: '' },
+            metadata: { timestamp: HOST_RECORD_TIMESTAMP }
+        };
+
+        // The argument order of the push leg in syncDatabases: the device replica is the source and
+        // the origin is the target.
+        const result = mergeRecords(deviceReplica, origin);
+
+        expect(result.fields.description).toBe('Edited on the device');
+    });
+
+    test('an edit that beat the record keeps its stamp through the merge, so it survives the next one', () => {
+        // cleanupMetadata drops a field entry whose timestamp only equals the record's, which is how
+        // the losing merge used to come out byte-for-byte identical to the record already stored: the
+        // origin's root hash never moved and nothing looked wrong. A winning edit must come out the
+        // other side still carrying its own stamp.
+        const deviceReplica: IInternalRecord = {
+            _id: '123',
+            fields: { description: 'Edited on the device' },
+            metadata: {
+                timestamp: HOST_RECORD_TIMESTAMP,
+                fields: {
+                    description: { timestamp: HOST_RECORD_TIMESTAMP + 1 }
+                }
+            }
+        };
+        const origin: IInternalRecord = {
+            _id: '123',
+            fields: { description: '' },
+            metadata: { timestamp: HOST_RECORD_TIMESTAMP }
+        };
+
+        const result = mergeRecords(deviceReplica, origin);
+
+        expect(result.metadata.fields!.description.timestamp).toBe(HOST_RECORD_TIMESTAMP + 1);
+    });
 });
 

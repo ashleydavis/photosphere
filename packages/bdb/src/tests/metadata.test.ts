@@ -281,7 +281,12 @@ describe('Collection Metadata and Timestamps', () => {
         expect(internal!.fields.name).toBeUndefined();
     });
 
-    test('updating nested object with same timestamp as parent omits nested metadata', async () => {
+    // This used to assert that an update stamped with the record's own timestamp produced no field
+    // metadata at all. The values were still written, so the record held a change with nothing saying
+    // when it was made, and a sync merge then read it as the older side and discarded it. The change
+    // is now stamped above the record. See update-metadata.ts, and
+    // docs/plans/new/plan-clock-independent-merge.md for the rest of the fix.
+    test('updating nested object with the same timestamp as the record stamps the change above it', async () => {
         const id = '123e4567-e89b-12d3-a456-426614174009';
         const insertTimestamp = 1000;
         timestampProvider.setTimestamp(insertTimestamp);
@@ -309,8 +314,13 @@ describe('Collection Metadata and Timestamps', () => {
         expect(internal).toBeDefined();
         expect(internal!.metadata.timestamp).toBe(insertTimestamp);
 
-        // Since timestamp is same as parent, no fields metadata should be created
-        expect(internal!.metadata.fields).toBeUndefined();
+        // The record's own timestamp stays put and each changed leaf is stamped one above it, so the
+        // change cannot be ordered before the values it replaced.
+        expect(internal!.fields.address.street).toBe('456 Oak Ave');
+        expect(internal!.fields.address.city).toBe('Boston');
+        const addressMeta = internal!.metadata.fields!.address;
+        expect(addressMeta.fields!.street.timestamp).toBe(insertTimestamp + 1);
+        expect(addressMeta.fields!.city.timestamp).toBe(insertTimestamp + 1);
     });
 
     test('deeply nested fields track timestamps correctly', async () => {
