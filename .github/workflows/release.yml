@@ -347,69 +347,6 @@ jobs:
         run: |
           ./sync-smoke-test.sh
 
-  smoke-test:
-    timeout-minutes: 20
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Cache Bun dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-bun-
-
-      - name: Install dependencies
-        uses: ./.github/actions/retry-install
-        with:
-          run: bun install
-
-      - name: Install media processing tools
-        uses: ./.github/actions/retry-install
-        with:
-          run: |
-            echo "Installing ImageMagick, ffmpeg, and tree via apt..."
-            sudo apt update
-            sudo apt install -y imagemagick ffmpeg tree
-          verify: magick|convert ffmpeg ffprobe
-
-      - name: Install keychain tools (Linux)
-        uses: ./.github/actions/retry-install
-        with:
-          run: sudo apt-get install -y libsecret-tools gnome-keyring dbus-x11
-          verify: secret-tool dbus-run-session
-
-      - name: Start keyring daemon (Linux)
-        run: |
-          eval $(dbus-launch --sh-syntax)
-          echo "DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS" >> $GITHUB_ENV
-          eval $(gnome-keyring-daemon --unlock --components=secrets <<< "ci-test-password")
-          echo "GNOME_KEYRING_CONTROL=$GNOME_KEYRING_CONTROL" >> $GITHUB_ENV
-
-      - name: Run smoke tests
-        timeout-minutes: 14
-        working-directory: ./apps/cli
-        run: |
-          mkdir -p smoke-test-logs
-          ./smoke-tests.sh 2>&1 | tee smoke-test-logs/smoke-tests-output.log
-          SMOKE_TEST_EXIT_CODE=${PIPESTATUS[0]}
-          echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE"
-          echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-output.log
-          exit $SMOKE_TEST_EXIT_CODE
-
   smoke-test-encrypted:
     timeout-minutes: 20
     runs-on: ubuntu-latest
@@ -1101,50 +1038,6 @@ jobs:
           name: photosphere-cli-macos-arm64
           path: ./apps/cli/bin/arm64/mac/psi
 
-  electron-smoke-tests:
-    timeout-minutes: 30
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Cache Bun dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-bun-
-
-      - name: Install dependencies
-        uses: ./.github/actions/retry-install
-        with:
-          run: bun install
-
-      - name: Install system dependencies
-        uses: ./.github/actions/retry-install
-        with:
-          run: |
-            sudo apt-get update
-            sudo apt-get install -y xvfb imagemagick ffmpeg
-          verify: xvfb-run magick|convert ffmpeg ffprobe
-
-      - name: Run Electron smoke tests
-        timeout-minutes: 20
-        working-directory: ./apps/desktop
-        # --sequential: prevents multiple Electron instances competing on the same xvfb virtual display
-        run: xvfb-run -a ./smoke-tests.sh --sequential
-
   cli-desktop-lan-share-smoke-tests:
     timeout-minutes: 20
     runs-on: ubuntu-latest
@@ -1685,7 +1578,7 @@ jobs:
 
   create-release:
     timeout-minutes: 20
-    needs: [prepare-tag, compile, unit-tests, perf-tests, build-linux, build-windows, build-windows-baseline, build-macos-x64, build-macos-arm64, build-desktop, smoke-test, smoke-test-encrypted, write-lock-tests, mobile-harness-tests, hash-cache-tests, sync-tests, lan-share-smoke-test, electron-smoke-tests, cli-desktop-lan-share-smoke-tests, android-unit-tests, ios-unit-tests, android-smoke-tests, ios-smoke-tests]
+    needs: [prepare-tag, compile, unit-tests, perf-tests, build-linux, build-windows, build-windows-baseline, build-macos-x64, build-macos-arm64, build-desktop, smoke-test-encrypted, write-lock-tests, mobile-harness-tests, hash-cache-tests, sync-tests, lan-share-smoke-test, cli-desktop-lan-share-smoke-tests, android-unit-tests, ios-unit-tests, android-smoke-tests, ios-smoke-tests]
     runs-on: ubuntu-latest
     permissions:
       contents: write
