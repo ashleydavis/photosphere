@@ -79,7 +79,17 @@ The record dump (step 3) is what found the cause, by showing `description: ""` w
 
 The bounded poll (step 7) was added on this plan's say-so and never earned it. Every failing run still read an empty description after all ten reads over 27 seconds, so it rescued nothing and only made a failing run 27 seconds slower. The premise it rests on, that the origin might be caught mid-write, was never observed.
 
-**Step 9's result.** Test 45: 3 passes and 2 failures before the fix, then 12 consecutive passes after it, plus a full Android suite where all 43 tests passed, plus three `test:everything --force` runs where it passed each time (53s, 54s, 55s). `test:everything --force` does not go green, but the blocker is `44-receive-database-cancel`, which fails only under that load, passes alone in 10 seconds and passes in the full Android suite. Whether it predates this change is not established: reverting `update-metadata.ts` alone makes the unit tests fail, so `test:everything` stops before it reaches the Android suite, and a real control needs the source file and four test files reverted together.
+**A second, unrelated defect this uncovered: four mobile tests shared one LAN pairing code.**
+
+Fixing test 45 made `44-receive-database-cancel` fail under `test:everything --force`, three runs out of three, while it passed alone and in the full Android suite. A control run with `update-metadata.ts` and its four test files reverted went fully green, so the failure really did follow this change.
+
+The change was not the defect, it was the trigger. Tests 26, 27, 44 and 45 all hardcoded the pairing code `4321`. A receiver announces `sha256(code)` to the whole subnet and a sender takes the first announcement whose hash matches its own code (`packages/lan-share-network/src/lib/lan-share-sender.ts`), so four tests on one code are indistinguishable and a sender pairs with whichever receiver it hears first. The runner spreads tests across every attached device, so 44 and 45 broadcast at the same time and took each other's senders. The loser waits out its timeout having never been contacted and reports that it never reached its review step, which names the wrong thing entirely. Fixing test 45 shifted its timing enough for the overlap to start landing.
+
+A fixed code is the machine-wide fixed name this repository forbids everywhere else, so this also collided across worktrees, and would have kept surfacing as an unexplained mobile flake.
+
+Every pairing code is now drawn per run: `allocate_pairing_code` in `apps/smoke-tests/lib/common.sh` for the four mobile tests, and the same expression for the two hardcoded codes (`1234`, `2345`) in `cli-desktop-lan-share-smoke-tests.sh`. The CLI suites already did this and are unchanged.
+
+**Step 9's result.** Test 45: 3 passes and 2 failures before the fix, then 12 consecutive passes after it, and it has passed in every full run since. With both fixes in, `bun run test:everything -- --force` passes all 13 scripts.
 
 ## Notes
 

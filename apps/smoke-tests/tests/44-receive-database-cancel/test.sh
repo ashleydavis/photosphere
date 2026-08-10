@@ -14,6 +14,9 @@ source "$TEST_DIR/../../lib/common.sh"
 
 print_test_header 44 "receive-database-cancel"
 
+# Drawn per run, never hardcoded: the code is the only thing that tells two concurrent shares apart.
+PAIRING_CODE="$(allocate_pairing_code)"
+
 
 # A host-side sender can only reach the device's receiver over the LAN bridge. Checked before the
 # stop_app trap is armed, so failing here does not run a teardown for an app that never started.
@@ -45,7 +48,7 @@ wait_for_log "$TMP_DIR" "Receive database dialog opened"
 # so only in a WARN, and the failure surfaces much later as the sender finding no device at all.
 wait_for_value "$APP_PORT" "receive-database-start-button" "Start"
 
-send_command "$APP_PORT" type '{"dataId":"receive-database-code-input","text":"4321"}' || exit 1
+send_command "$APP_PORT" type "{\"dataId\":\"receive-database-code-input\",\"text\":\"$PAIRING_CODE\"}" || exit 1
 send_command "$APP_PORT" click '{"dataId":"receive-database-start-button"}' || exit 1
 
 # The Cancel button only renders while the dialog is waiting for a sender, so its presence is proof
@@ -95,13 +98,13 @@ wait_for_log "$TMP_DIR" "Receive database dialog opened"
 # click.
 wait_for_value "$APP_PORT" "receive-database-start-button" "Start"
 
-send_command "$APP_PORT" type '{"dataId":"receive-database-code-input","text":"4321"}' || exit 1
+send_command "$APP_PORT" type "{\"dataId\":\"receive-database-code-input\",\"text\":\"$PAIRING_CODE\"}" || exit 1
 send_command "$APP_PORT" click '{"dataId":"receive-database-start-button"}' || exit 1
 
 # Give the receiver a moment to begin broadcasting, then send from the host with the real CLI.
 sleep 3
 log_info "Sending the database from the host CLI..."
-cli_send_expect_success "$TMP_DIR" dbs send --yes --name received-db --code 4321
+cli_send_expect_success "$TMP_DIR" dbs send --yes --name received-db --code "$PAIRING_CODE"
 
 wait_for_log "$TMP_DIR" "Database review step"
 

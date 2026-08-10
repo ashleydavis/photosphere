@@ -309,7 +309,11 @@ test_cli_to_desktop_secret() {
 
     seed_secret "$test_tmp/cli/vault" "shared-api-key" "api-key" "API_VALUE_FROM_CLI"
 
-    local code="1234"
+    # Drawn per run, never hardcoded. A receiver announces sha256(code) to the whole subnet and a
+    # sender takes the first announcement whose hash matches, so two shares on one code are
+    # indistinguishable and pair with whoever they hear first, leaving the loser waiting out its
+    # timeout. A fixed code collides with this same suite running from another worktree too.
+    local code=$(( (RANDOM % 9000) + 1000 ))
     local app_port
 
     # start_app binds an OS-assigned port and publishes it as the APP_PORT global. Copy it into a
@@ -368,7 +372,8 @@ test_cli_to_desktop_database() {
     seed_encryption_key "$test_tmp/cli/vault" "enc-cli-key"
     seed_databases_toml "$test_tmp/cli/config" "cli-shared-db" "s3:test-bucket:/photos" "s3-cli-key" "enc-cli-key"
 
-    local code="2345"
+    # Drawn per run, never hardcoded. See the note on the same line in the test above.
+    local code=$(( (RANDOM % 9000) + 1000 ))
     local app_port
 
     # start_app binds an OS-assigned port and publishes it as the APP_PORT global. Copy it into a

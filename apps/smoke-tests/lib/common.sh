@@ -845,6 +845,28 @@ run_cli() {
 }
 
 #
+# A four digit LAN pairing code for one test run, drawn at random so no two runs share one.
+#
+# The code is the only thing that tells two shares apart. A receiver announces sha256(code) to the
+# whole subnet and a sender takes the first announcement whose hash matches its own code, so two
+# shares using the same code are indistinguishable and the sender pairs with whichever it hears
+# first. The loser then waits out its full timeout having never been contacted, and the failure
+# names the wrong thing: the receiving test reports that it never reached its review step.
+#
+# Four mobile tests used to hardcode 4321 between them (26, 27, 44 and 45). The runner spreads tests
+# across every attached device, so those ran at the same time and stole each other's senders. It was
+# invisible for as long as the timing happened not to overlap, then became a hard failure the moment
+# anything shifted. A fixed code also collides with the same test running from another worktree,
+# which is the machine-wide fixed name this repository forbids anywhere else.
+#
+# Matches the CLI suites, which already draw theirs this way (see 78-dbs-share-cancel).
+# Usage: PAIRING_CODE="$(allocate_pairing_code)"
+#
+allocate_pairing_code() {
+    echo $(( (RANDOM % 9000) + 1000 ))
+}
+
+#
 # Fails the test unless the Android emulator is attached to the host LAN bridge. Host-to-device LAN
 # sharing needs it: under QEMU's default user-mode NAT the guest's discovery broadcast never reaches
 # the host and the host cannot open the return connection, so a host-side sender would silently wait

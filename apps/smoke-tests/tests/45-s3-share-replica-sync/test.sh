@@ -39,7 +39,8 @@ S3_SECRET_NAME="shared-s3"
 ENC_KEY_NAME="shared-enc-key"
 DB_NAME="shared-db"
 REPLICA_NAME="local-replica"
-PAIRING_CODE="4321"
+# Drawn per run, never hardcoded: the code is the only thing that tells two concurrent shares apart.
+PAIRING_CODE="$(allocate_pairing_code)"
 
 # The description typed on the device. Named once because it is written in the app, read back from the
 # app, and read out of the bucket by the CLI, and those three have to be asking about the same text.

@@ -14,6 +14,9 @@ source "$TEST_DIR/../../lib/common.sh"
 
 print_test_header 27 "receive-secret"
 
+# Drawn per run, never hardcoded: the code is the only thing that tells two concurrent shares apart.
+PAIRING_CODE="$(allocate_pairing_code)"
+
 # A host-side sender can only reach the device's receiver over the LAN bridge. Checked before the
 # stop_app trap is armed, so failing here does not run a teardown for an app that never started.
 require_lan_bridge
@@ -43,13 +46,13 @@ wait_for_log "$TMP_DIR" "Receive secret dialog opened"
 
 # Enter the pairing code the host sender uses, then start hosting the receiver. From here the device
 # broadcasts its availability on the LAN and the host CLI discovers it.
-send_command "$APP_PORT" type '{"dataId":"receive-secret-code-input","text":"4321"}' || exit 1
+send_command "$APP_PORT" type "{\"dataId\":\"receive-secret-code-input\",\"text\":\"$PAIRING_CODE\"}" || exit 1
 send_command "$APP_PORT" click '{"dataId":"receive-secret-start-button"}' || exit 1
 
 # Give the receiver a moment to begin broadcasting, then send from the host with the real CLI.
 sleep 3
 log_info "Sending the secret from the host CLI..."
-cli_send_expect_success "$TMP_DIR" secrets send --yes --name received-secret --code 4321
+cli_send_expect_success "$TMP_DIR" secrets send --yes --name received-secret --code "$PAIRING_CODE"
 
 # The receiver hands the delivered payload to the review step.
 wait_for_log "$TMP_DIR" "Secret review step"
