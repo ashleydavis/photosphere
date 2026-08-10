@@ -796,12 +796,17 @@ add_s3_secret_via_ui() {
 run_with_timeout() {
     local seconds="$1"
     shift
-    if command -v timeout >/dev/null 2>&1; then
-        timeout --kill-after=5 "$seconds" "$@"
-        return $?
+    # type -P and the resolved path, not `command -v` and a bare name. command -v finds shell
+    # functions, and function lookup beats PATH, so a caller that had defined its own `timeout`
+    # function would get that handed GNU's flags instead of the real command. That is not
+    # hypothetical: it is exactly how the shared helper broke every CLI test on macOS and Windows.
+    local timeout_bin
+    timeout_bin="$(type -P timeout 2>/dev/null)"
+    if [ -z "$timeout_bin" ]; then
+        timeout_bin="$(type -P gtimeout 2>/dev/null)"
     fi
-    if command -v gtimeout >/dev/null 2>&1; then
-        gtimeout --kill-after=5 "$seconds" "$@"
+    if [ -n "$timeout_bin" ]; then
+        "$timeout_bin" --kill-after=5 "$seconds" "$@"
         return $?
     fi
     "$@" &

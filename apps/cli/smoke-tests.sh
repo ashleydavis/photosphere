@@ -14,31 +14,6 @@ else
     _CLI_ABS_DIR="$SMOKE_TESTS_DIR"
 fi
 
-# macOS and Windows lack GNU timeout; provide a compatible implementation
-_timeout_fallback() {
-    local duration="$1"
-    shift
-    "$@" &
-    local child_pid=$!
-    ( sleep "$duration" && kill "$child_pid" 2>/dev/null ) &
-    local killer_pid=$!
-    wait "$child_pid"
-    local exit_status=$?
-    kill "$killer_pid" 2>/dev/null
-    wait "$killer_pid" 2>/dev/null
-    return $exit_status
-}
-
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    if command -v gtimeout &>/dev/null; then
-        timeout() { gtimeout "$@"; }
-    else
-        timeout() { _timeout_fallback "$@"; }
-    fi
-elif [[ "$OSTYPE" == "msys"* ]] || [[ "$OSTYPE" == "cygwin"* ]]; then
-    timeout() { _timeout_fallback "$@"; }
-fi
-
 # Set NODE_ENV to testing for deterministic UUID generation
 export NODE_ENV=testing
 

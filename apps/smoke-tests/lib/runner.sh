@@ -194,19 +194,6 @@ else
     echo "flock is not available on this platform; run-to-run device and build locking is disabled." >&2
 fi
 
-#
-# Caps a test's run time. GNU timeout does not exist on macOS, so this goes through common.sh's
-# run_with_timeout (which picks timeout, gtimeout, or a shell fallback) when it is available.
-# runner.test.sh sources this file on its own, without common.sh, and only ever runs on Linux, so
-# plain timeout stands in there rather than duplicating the portable version.
-#
-run_test_timeout() {
-    if command -v run_with_timeout >/dev/null 2>&1; then
-        run_with_timeout "$@"
-        return $?
-    fi
-    timeout "$@"
-}
 
 #
 # flock(1) where it exists, a no-op where it does not. Takes flock's own arguments. Returning success

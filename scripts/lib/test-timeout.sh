@@ -14,10 +14,16 @@
 # the work, it is the point past which the test is not running any more, it is stuck. Picking it per
 # suite invites the number to drift towards whatever the slowest test happened to take that week.
 #
-# 300 seconds, against a slowest legitimate test of about 75 seconds measured across the suites
-# (37-lan-share-timeout waits out a real 60 second window and lands at 69 to 70 seconds;
-# 43-s3-failure takes 72). That is four times the slowest real test, which leaves room for a machine
-# running several suites at once without leaving a hung test sitting there for an hour.
+# 600 seconds. The first figure here was 300, taken from a slowest legitimate test of about 75
+# seconds measured across the suites on this machine. That measurement was misleading: it came from
+# emulators attached to the LAN bridge, where the host is a fast hop away. On the NAT-only emulator
+# CI runs, a single step of 41-s3-database-lifecycle was still working at 122 seconds, because every
+# part of creating a database on S3 is a round trip to the host and there are hundreds of them. The
+# same test takes 24 seconds end to end locally.
+#
+# So the ceiling has to clear the slowest environment rather than the most convenient one. 600 gives
+# a test that needs a few minutes of genuine round trips room to finish, while still being far short
+# of the CI job budgets that used to absorb a wedged test in silence.
 #
 
 # Guard against being sourced twice through two different suites in one shell.
@@ -32,7 +38,7 @@ source "$TEST_TIMEOUT_LIB_DIR/process-control.sh"
 
 # Seconds any single test may run before it is treated as stuck. Overridable so a developer chasing
 # one slow test does not have to edit this file, but every suite reads the same default.
-PHOTOSPHERE_PER_TEST_TIMEOUT="${PHOTOSPHERE_PER_TEST_TIMEOUT:-300}"
+PHOTOSPHERE_PER_TEST_TIMEOUT="${PHOTOSPHERE_PER_TEST_TIMEOUT:-600}"
 
 # The exit code a timed-out test reports. 124 is what GNU timeout uses, so the value is the same
 # whether the timeout came from timeout(1) or from the fallback below, and a caller can tell "this
@@ -66,12 +72,17 @@ run_test_with_timeout() {
     local seconds="$1"
     shift
 
-    if command -v timeout >/dev/null 2>&1; then
-        timeout --kill-after=5 "$seconds" "$@"
-        return $?
+    # Found with type -P and run by its resolved path, so a shell function named `timeout` in a
+    # caller cannot be taken for the real command: command -v finds functions, and function lookup
+    # beats PATH whatever the check said. Handing GNU's --kill-after to something that expects a
+    # bare duration fails instantly and everywhere, so the two extra lines earn their place.
+    local timeout_bin
+    timeout_bin="$(type -P timeout 2>/dev/null)"
+    if [ -z "$timeout_bin" ]; then
+        timeout_bin="$(type -P gtimeout 2>/dev/null)"
     fi
-    if command -v gtimeout >/dev/null 2>&1; then
-        gtimeout --kill-after=5 "$seconds" "$@"
+    if [ -n "$timeout_bin" ]; then
+        "$timeout_bin" --kill-after=5 "$seconds" "$@"
         return $?
     fi
 
