@@ -2,7 +2,7 @@
 // A collection in a database that stores BSON records in a sharded format.
 //
 
-import { pathJoin, type IStorage } from 'storage';
+import { pathJoin, type IStorage, type IListResult } from 'storage';
 import type { IUuidGenerator, ITimestampProvider } from 'utils';
 import { SortIndex, type ISortIndex, type SortDirection } from './sort-index';
 import { updateMetadata } from './update-metadata';
@@ -474,7 +474,39 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     // Yields only shards that have records.
     //
     async *iterateShards(): AsyncGenerator<Iterable<IInternalRecord>, void, unknown> {
+        // The shards that exist are listed once, rather than reading all NUM_SHARDS of them to find
+        // out. A shard file that was never written still costs a storage read to discover, and on a
+        // remote store that read is a network round trip: scanning an empty collection cost 100 of
+        // them, and building the two sort indexes a new database starts with cost 200.
+        //
+        // That is what made 41-s3-database-lifecycle fail in CI. Creating a database on S3 from an
+        // emulator on QEMU's NAT spent over five minutes on those round trips and was killed before
+        // it finished, while the same test takes 24 seconds against a bridged emulator where the
+        // host is a fast hop away. One list in place of a hundred reads removes the difference
+        // rather than widening the timeout until it fits.
+        const shardsPath = pathJoin(this.bsonDbPath, "collections", this.name, "shards");
+        const shardIdsToRead = new Set<string>();
+        let next: string | undefined = undefined;
+        do {
+            const listed: IListResult = await this.storage.listFiles(shardsPath, NUM_SHARDS, next);
+            for (const name of listed.names) {
+                shardIdsToRead.add(name);
+            }
+            next = listed.next;
+        }
+        while (next);
+
+        // Shards already held in memory are included whether or not they have been written yet.
+        // Records live in the shard cache from the moment they are inserted until a commit flushes
+        // them, so a listing on its own would miss everything written since the last commit.
+        for (const cachedShardId of this.shardCache.keys()) {
+            shardIdsToRead.add(cachedShardId);
+        }
+
         for (let shardId = 0; shardId < NUM_SHARDS; shardId++) {
+            if (!shardIdsToRead.has(shardId.toString())) {
+                continue;
+            }
             const shard = this.shard(shardId.toString());
             const records = await shard.records();
             if (records.size > 0) {

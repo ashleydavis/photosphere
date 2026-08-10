@@ -120,9 +120,16 @@ resolve_platform() {
 #
 # Downloads the pinned MinIO binary into the cache if it is not already there, and prints its path.
 #
-# The download goes to a `.partial` name that is moved into place only once curl has succeeded, so an
-# interrupted download cannot leave a half-written file that the next run mistakes for a cached
-# binary and tries to execute.
+# The download goes to a uniquely named temporary file that is moved into place only once curl has
+# succeeded, so an interrupted download cannot leave a half-written file that the next run mistakes
+# for a cached binary and tries to execute.
+#
+# The temporary name has to be unique per download, and was not: it used to be a fixed
+# "<binary>.partial". Every S3 test starts its own emulator, so on a cold cache several of them
+# download at once, and they all wrote to that one path. When the first finished and renamed it into
+# place, the others were still writing to the same inode, which by then was the cached binary, and
+# anything that tried to run it got ETXTBSY, "Text file busy". That is how a fresh checkout failed
+# four S3 tests on its first run.
 #
 ensure_minio_binary() {
     local platform binaryExtension binaryPath partialPath
@@ -141,12 +148,14 @@ ensure_minio_binary() {
     fi
 
     mkdir -p "$CACHE_DIR"
-    partialPath="$binaryPath.partial"
-    rm -f "$partialPath"
+    partialPath="$(mktemp "$binaryPath.partial.XXXXXX")"
     log "Downloading MinIO $MINIO_VERSION for $platform (cached at $binaryPath)..."
     curl -sL --fail -o "$partialPath" \
         "https://dl.min.io/server/minio/release/$platform/archive/minio.$MINIO_VERSION"
     chmod +x "$partialPath"
+    # A rename onto the final path, which is atomic, so a concurrent downloader either sees no
+    # cached binary at all or sees a complete one. Whichever download lands last wins, and they are
+    # all the same pinned version, so which one wins does not matter.
     mv "$partialPath" "$binaryPath"
     echo "$binaryPath"
 }
