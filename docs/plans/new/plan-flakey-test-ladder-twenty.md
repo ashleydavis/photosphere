@@ -1,8 +1,10 @@
-# Climb the flaky-test ladder at ten runs a rung
+# Climb the flaky-test ladder at twenty runs a rung
 
 ## Overview
 
-Prove the four test suites are not flaky by climbing the `find-flakey-tests` ladder with a ten-run streak required of each rung, and fix, one at a time, whatever the climb turns red. The ladder runs `bun run test`, then `bun run test:cli`, then `bun run test:electron`, then `bun run test:and`, cheapest first, and stops at the first rung that fails. Every failure is treated as a real defect in that one test and is fixed at its cause, with the smallest change that removes the cause and nothing else committed alongside it. After each fix the climb restarts, because a streak with a failure in it is not a streak. The work is done when the ladder reports ten consecutive green runs of all four rungs on one tree.
+Prove the four test suites are not flaky by climbing the `find-flakey-tests` ladder with a twenty-run streak required of each rung, and fix, one at a time, whatever the climb turns red. The ladder runs `bun run test`, then `bun run test:cli`, then `bun run test:electron`, then `bun run test:and`, cheapest first, and stops at the first rung that fails. Every failure is treated as a real defect in that one test and is fixed at its cause, with the smallest change that removes the cause and nothing else committed alongside it. After each fix the climb restarts, because a streak with a failure in it is not a streak. The work is done when the ladder reports twenty consecutive green runs of all four rungs on one tree.
+
+This is the ten-run plan raised to twenty after it passed. The ten-run climb is recorded under "Previous outcome" at the end, along with the three fixes it produced and the modes it left open. Twenty runs a rung is roughly seven hours of climbing when nothing fails, so expect it to take considerably longer than the ten-run pass did.
 
 ## Issues
 
@@ -12,9 +14,9 @@ Prove the four test suites are not flaky by climbing the `find-flakey-tests` lad
 
 1. **Check the emulator pool at the moment of starting, not before.** Run `bun run emu:and:pool:status` and read the exit code: 0 means at least one pool emulator is on the LAN bridge, 1 means none is. The Android rung cannot run without it. If the pool is down, still start the climb, because the first three rungs do not touch a device, and record in this plan's Notes that the pool must be up before the ladder reaches `test:and`.
 
-2. **Start the climb and capture the output.** Run `bun run find-flakey-tests -- --ladder --target 10`, piping through `tee` into a log file under the session scratchpad so the whole stdout is readable afterwards. Run it in the background and let it notify on exit rather than polling it: a full climb is hours, and each rung's own per-run logs are written under `tmp/find-flakey-tests/<timestamp>/<NN>-<suite>/` regardless. Do not pass `--script`, `--test` or `--command`, which cannot be combined with `--ladder`.
+2. **Start the climb and capture the output.** Run `bun run find-flakey-tests -- --ladder --target 20`, writing stdout to a log file under the session scratchpad so the whole thing is readable afterwards. Start it with `setsid` so it is its own session: started as an ordinary background task it is swept up whenever background tasks are cleared, which killed four climbs in the ten-run pass, each within a minute of starting and each looking like a failure when nothing had failed. Record its pid. Each rung's own per-run logs are written under `tmp/find-flakey-tests/<timestamp>/<NN>-<suite>/` regardless. Do not pass `--script`, `--test` or `--command`, which cannot be combined with `--ladder`.
 
-3. **On a green climb, stop.** The last lines of stdout name the session directory. Confirm the script exited 0 and that every rung reported ten green runs, then report the session path and finish. Exit 1 is a test failure, 2 is bad usage, 3 is too many consecutive Bun crashes, and 4 is an Android pool that stopped being healthy and did not come back. Only 0 counts as done, and 3 and 4 mean the result is meaningless rather than red, so the climb restarts from the same rung with `--resume` for the greens already banked.
+3. **On a green climb, stop.** The last lines of stdout name the session directory. Confirm the script exited 0 and that every rung reported twenty green runs, then report the session path and finish. Exit 1 is a test failure, 2 is bad usage, 3 is too many consecutive Bun crashes, and 4 is an Android pool that stopped being healthy and did not come back. Only 0 counts as done, and 3 and 4 mean the result is meaningless rather than red, so the climb restarts from the same rung with `--resume` for the greens already banked.
 
 4. **On a failure, read the report before touching any code.** `tmp/find-flakey-tests/<timestamp>/report.txt` names the failing rung, the failing lane and test, the tail of that run's output, the snapshotted suite-side logs from the failing run, and the machine state at the time (memory, attached devices, recent kernel out-of-memory kills). Read the failing run's own log in the rung subdirectory as well as the report. Identify the one test that failed and the earliest error line in it, never a downstream "not ready" or timeout that follows from it.
 
@@ -34,7 +36,7 @@ Prove the four test suites are not flaky by climbing the `find-flakey-tests` lad
 
 12. **Commit the fix on its own.** One commit per flaky fix, containing the fix, its test, and the registry entry, and nothing else. Check `git status` and `git diff HEAD` first, since the human stages work as they review it and the staging area changes without warning. Never commit with verification disabled: `--no-verify`, `-n`, and every other way of skipping the hook are banned outright, and a hook refusal is reported to the human, not worked around.
 
-13. **Restart the climb from the bottom.** After each committed fix, start `bun run find-flakey-tests -- --ladder --target 10` again from the first rung rather than resuming above the failed one. `--resume` is only sound when the tree has not changed since those greens were banked, and a fix changes the tree, so the rungs below have to be re-proven on it. Repeat steps 2 through 12 until a climb comes back green.
+13. **Restart the climb from the bottom.** After each committed fix, start `bun run find-flakey-tests -- --ladder --target 20` again from the first rung rather than resuming above the failed one. `--resume` is only sound when the tree has not changed since those greens were banked, and a fix changes the tree, so the rungs below have to be re-proven on it. Repeat steps 2 through 12 until a climb comes back green.
 
 14. **Report each cycle as it happens.** After every failure, say which test failed, what the cause was, what the fix changed, and what evidence proved it. After the final green climb, report the session directory and the number of fixes the climb required.
 
@@ -55,7 +57,7 @@ Prove the four test suites are not flaky by climbing the `find-flakey-tests` lad
 - `bun run compile` passes.
 - `bun run test` passes, including every unit test added by a fix.
 - `bun run test:everything -- --force` passes.
-- `bun run find-flakey-tests -- --ladder --target 10` exits 0 with ten consecutive green runs recorded for `test`, `test:cli`, `test:electron` and `test:and`, on the tree that carries every fix.
+- `bun run find-flakey-tests -- --ladder --target 20` exits 0 with twenty consecutive green runs recorded for `test`, `test:cli`, `test:electron` and `test:and`, on the tree that carries every fix.
 - `docs/flaky-tests-registry.md` has an entry for every mode the climb found, each with its fix commit recorded and its Fixed box ticked by the final green climb.
 
 ## Notes
@@ -64,12 +66,13 @@ Prove the four test suites are not flaky by climbing the `find-flakey-tests` lad
 - A sick Android emulator pool pauses the loop rather than failing it: the loop says the pool is sick and waits, keeping the streak, and gives up only after `DEVICE_WAIT_SECONDS` or after `DEVICE_FAILURE_RETRIES` red runs in a row. That pause only applies to commands that actually drive the emulators, so the first three rungs are unaffected.
 - A Bun SIGSEGV or SIGILL is retried rather than counted, up to `BUN_CRASH_RETRIES` in a row, and every crash is still reported in the summary. A crash is not a flaky test and must not be fixed as one.
 - Per-test temporary directories accumulate, one per test per run, and nothing removes them. That is deliberate. The session prints the count at the end, and a long climb will push it up.
-- Ten runs a rung is a much weaker claim than the script's default of a hundred. A mode that fails one run in fifty will very likely pass a ten-run streak, so a green climb at this target says the obvious flakiness is gone, not that the suites are clean. Raise the target on a later session rather than reading this one as proof.
+- Twenty runs a rung is still well short of the script's default of a hundred. A mode that fails one run in fifty will more often than not pass a twenty-run streak, so a green climb at this target says the suites are cleaner than ten runs proved, not that they are clean.
+- The ten-run climb that passed ran alone on a quiet machine, and every mobile LAN-share failure in that session needed a busy one. If this climb is also to be run alone, its mobile rung carries the same weakness. Running something else alongside it would test more, at the cost of not knowing whether a failure was the suite or the company it was keeping.
 - The first attempt at this climb was killed during rung 1 after one green run of `bun run test`, so it produced no findings.
 
-## Outcome
+## Previous outcome, at ten runs a rung
 
-Done on 2026-08-11. The ladder came back green on the tree carrying all three fixes: session `tmp/find-flakey-tests/20260811-140520`, `every rung of the ladder is clean, 10 consecutive green runs each`, 3h 28m total (`test` 18m 12s, `test:cli` 31m 04s, `test:electron` 1h 04m, `test:and` 1h 34m).
+Done on 2026-08-11, then reinstated at twenty. The ladder came back green on the tree carrying all three fixes: session `tmp/find-flakey-tests/20260811-140520`, `every rung of the ladder is clean, 10 consecutive green runs each`, 3h 28m total (`test` 18m 12s, `test:cli` 31m 04s, `test:electron` 1h 04m, `test:and` 1h 34m).
 
 Three fixes, one commit each, each landed through a full green pre-commit hook and none with verification disabled:
 
