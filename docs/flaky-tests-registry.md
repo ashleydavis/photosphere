@@ -360,10 +360,10 @@ Two of the three are now fixed by the per-test temporary directories on the `mob
 
 ### S3-LOCK-BROKEN-WHILE-HELD
 
-- [ ] Fixed and verified (10x clean)
+- [x] Fixed and verified (10x clean). `bun run test:cli` passed 10 consecutive runs on the ladder in session `tmp/find-flakey-tests/20260811-140520`, and 10 more in the climb before it, on the tree carrying the fix. Test 76 itself passed 360 executions with 4 contending writers each, where the same harness lost a record on run 4 before the fix.
 - Suite: CLI smoke tests (`bun run test:cli`), test 76 (s3-write-locks)
 - Pattern: `\w[\w.-]* survived the concurrent writes \(pattern '[^']+' not found in output\)`
-- Fix commit: recorded once a repeated clean run of the suite backs it up
+- Fix commit: 97c1b199
 - First seen: 2026-08-10, `bun run find-flakey-tests -- --ladder --target 10`, session `tmp/find-flakey-tests/20260810-200614`, rung `test:cli` run 2 of 10. The rung below it (`bun run test`) had already banked its full 10 green runs.
 - Recurrences:
   - 2026-08-10, 6 concurrent copies of test 76, run 4 of a 40-run loop, session `tmp/find-flakey-tests/20260810-212217`. Lost `test-1.jpeg`.
@@ -379,7 +379,8 @@ Two of the three are now fixed by the per-test temporary directories on the `mob
 - Suite: mobile smoke tests (`bun run test:and`), any test where the device receives over the LAN. Seen on 44 (receive-database-cancel) and 26 (receive-database).
 - Pattern: `Timed out waiting for log pattern: Database review step`
 - Also matches (same mode, seen from the sender's side): `The CLI sender did not report a successful transfer` with `No device found within 60 seconds` in the sender log
-- Fix commit: none
+- Fix commit: 60272a8e for the sub-second presentation. None for the full-timeout presentation, whose cause is not established.
+- Since the fix: `bun run test:and` passed 10 consecutive runs on the ladder in session `tmp/find-flakey-tests/20260811-140520`, and test 44 passed 25 consecutive runs on its own. That is evidence for the sub-second presentation being fixed, and no evidence either way about the full-timeout one, which needs a busy machine to appear at all.
 - First seen: 2026-08-11, the `.githooks/pre-commit` run of `bun run test:everything`, test 44, 1 of 43 mobile tests failed.
 - Recurrences: repeatedly on 2026-08-11 while the machine was busy, on both test 44 and test 26, at rates between 1 run in 6 and 1 run in 1. Sessions `tmp/find-flakey-tests/20260811-065301`, `20260811-070...` onwards.
 - Two presentations, told apart by how long the receive waited before giving up, which the log line added in the fix commit below reports:
@@ -392,5 +393,6 @@ Two of the three are now fixed by the per-test temporary directories on the `mob
   - A pairing-code collision. `allocate_pairing_code` is a bare `RANDOM % 9000` with no uniqueness check, which is worth fixing on its own, but 12 concurrent draws came back all distinct and the codes in the failing runs were unique to those runs.
   - Bun's ICMP-closes-the-socket behaviour. Android's `UdpHost.udpSend` returns an error envelope and leaves the socket open.
 - Load dependence: with the machine quiet, test 26 passed 50 consecutive runs (20 with a host listener bound to the discovery port, 20 without, plus an earlier 10). Every failure so far happened while a full parallel suite or several loops were running. That is why nothing here is proven: the mode cannot currently be reproduced on demand.
+- Strongest lead for the full-timeout presentation, observed directly on 2026-08-11 and not yet tied to a specific failing run: **the emulator pool loses the LAN bridge under sustained load.** During the mobile rung of session `tmp/find-flakey-tests/20260811-140520`, three emulators lost `192.168.55.1` within 42 seconds of each other (`5558` at 16:07:44, `5556` and `5562` at 16:08:26), the runner withdrew and retried each, and shortly afterwards four of the five emulators had vanished from `adb` entirely with the survivor off the bridge. There were no kernel out-of-memory kills and 44GB was free, so this is not `EMULATOR-POOL-OOM-KILLED`. A device off the bridge cannot get its discovery broadcasts to the host, which is exactly this presentation: receiver healthy, engine silent, sender hears nothing. Three devices losing the host at once says the bridge drops rather than that individual emulators fail. What is missing is a failing run whose own device is shown to have been off the bridge at the time; the health watcher samples every 2s and passed for the runs captured here, so a shorter outage than that would go unrecorded.
 - Two silent paths found on the way, neither shown to cause this, both worth knowing: `UdpHost.udpSend` returns success when the socket id is unknown, and `LanShareReceiver` swallows every UDP discovery error on the grounds that discovery is best-effort, when a receiver that never advertises can never be reached. The embedded JS engine the receiver runs in has no logging wiring at all, so nothing in that code can report anything.
 - Evidence: `/tmp/photosphere-tests/44-receive-database-cancel-{upHBI4,NMC255,GP7qMA,7RklsN,HoyQVP}` and `26-receive-database-fe0RSB`. The app log of every one ends at the Start click with, after the change in this commit, `Receive gave up after 60602ms with no payload`.

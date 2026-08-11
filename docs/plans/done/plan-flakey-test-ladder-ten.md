@@ -66,3 +66,21 @@ Prove the four test suites are not flaky by climbing the `find-flakey-tests` lad
 - Per-test temporary directories accumulate, one per test per run, and nothing removes them. That is deliberate. The session prints the count at the end, and a long climb will push it up.
 - Ten runs a rung is a much weaker claim than the script's default of a hundred. A mode that fails one run in fifty will very likely pass a ten-run streak, so a green climb at this target says the obvious flakiness is gone, not that the suites are clean. Raise the target on a later session rather than reading this one as proof.
 - The first attempt at this climb was killed during rung 1 after one green run of `bun run test`, so it produced no findings.
+
+## Outcome
+
+Done on 2026-08-11. The ladder came back green on the tree carrying all three fixes: session `tmp/find-flakey-tests/20260811-140520`, `every rung of the ladder is clean, 10 consecutive green runs each`, 3h 28m total (`test` 18m 12s, `test:cli` 31m 04s, `test:electron` 1h 04m, `test:and` 1h 34m).
+
+Three fixes, one commit each, each landed through a full green pre-commit hook and none with verification disabled:
+
+- `97c1b199` Stopped a live S3 write lock being broken as a corrupt one. Found by rung `test:cli` failing on run 2 of the first climb. `CloudStorage.acquireWriteLock` treated a lock it could not read back as corrupt, deleted it, and took it with an unconditional write, putting three processes in the critical section at once and losing one writer's records. Registry entry `S3-LOCK-BROKEN-WHILE-HELD`, now ticked.
+- `580c2d48` Made a receive that is never reached say so. The receive dialog's one give-up path set on-screen text and logged nothing, so a mobile LAN-share failure left no trace and could not be diagnosed. It logs how long the wait lasted, which is what told the next two failures apart.
+- `60272a8e` Stopped a cancelled receive taking the next receive with it. Found by rung `test:and` failing on run 2 of the second climb, and readable only because of the log line above: both receives gave up in under a second, so the second was cancelled rather than unserved. `cancelShareReceive` now waits for the cancelled receive's task to settle before returning. Registry entry `MOBILE-LAN-RECEIVER-NEVER-DISCOVERED`.
+
+Left unfixed, recorded rather than guessed at:
+
+- The full-timeout presentation of `MOBILE-LAN-RECEIVER-NEVER-DISCOVERED`, where the receiver waits out its whole 60 seconds and is never reached. Cause not established. The strongest lead is the emulator pool losing the LAN bridge under load, seen directly during this session's mobile rung: three emulators lost `192.168.55.1` within 42 seconds and four of five later vanished from `adb`, with no out-of-memory kills and 44GB free.
+- Bun crashes: `SIGILL` twice during `psi verify` and a segfault once in `test:cli:encrypted`. A crash is not a flaky test. The ladder retries them; the commit hook does not, so they can refuse a commit.
+- `find-flakey-tests --test` sends its filter to the wrong command for `test`, `test:cli` and `test:electron`, because those package.json scripts end in `&& what-changed baseline capture`. The suite runs in full and then fails on the stray argument, which reads as a test failure. `bun run tc -- <n>` works; `--test` works for `test:and`, whose script has no trailing command.
+
+Caveats worth carrying forward, beyond the ten-runs-is-a-weak-claim note above: this climb ran alone on a quiet machine, and every mobile LAN-share failure this session needed a busy one, so the mobile rung's ten greens are the weakest of the four.
