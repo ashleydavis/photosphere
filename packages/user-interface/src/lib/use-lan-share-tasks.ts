@@ -180,8 +180,24 @@ export function useLanShareTasks(): ILanShareTasks {
     // Cancels an in-flight receive, clearing the pending-receive promise.
     //
     async function cancelShareReceive(): Promise<void> {
+        const pending = pendingReceiveRef.current;
         pendingReceiveRef.current = null;
         getQueueBackend().cancelTasks(LAN_SHARE_SOURCE);
+
+        // Wait for the cancelled receive to actually finish before reporting the cancel as done.
+        //
+        // cancelTasks only asks: on mobile it crosses to the native engine pool and is applied some
+        // time later, measured at 361-532ms. Every LAN-share task shares one source tag, and a
+        // cancel takes the whole tag, so a receive started inside that window is cancelled by the
+        // previous receive's cancel. Mobile test 44 caught exactly that: the second receive ended
+        // 361ms in, far short of its 60s timeout, and the first receive's outcome landed in the
+        // second one's dialog because handleStartReceiving had already reset its abandoned flag.
+        //
+        // The task settling is the proof that the engine applied the cancel, which is why this waits
+        // on the task rather than on cancelTasks. It is bounded by the receive's own timeout.
+        if (pending) {
+            await pending;
+        }
     }
 
     //

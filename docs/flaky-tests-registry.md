@@ -375,18 +375,20 @@ Two of the three are now fixed by the per-test temporary directories on the `mob
 
 ### MOBILE-LAN-RECEIVER-NEVER-DISCOVERED
 
-- [ ] Fixed and verified (10x clean). Not fixed: the cause is not established. The change recorded below only makes the next occurrence readable.
+- [ ] Fixed and verified (10x clean). Partly fixed: this test fails in two presentations that the log now tells apart, and only one of them has a cause and a fix. See "Two presentations" below.
 - Suite: mobile smoke tests (`bun run test:and`), any test where the device receives over the LAN. Seen on 44 (receive-database-cancel) and 26 (receive-database).
 - Pattern: `Timed out waiting for log pattern: Database review step`
 - Also matches (same mode, seen from the sender's side): `The CLI sender did not report a successful transfer` with `No device found within 60 seconds` in the sender log
 - Fix commit: none
 - First seen: 2026-08-11, the `.githooks/pre-commit` run of `bun run test:everything`, test 44, 1 of 43 mobile tests failed.
 - Recurrences: repeatedly on 2026-08-11 while the machine was busy, on both test 44 and test 26, at rates between 1 run in 6 and 1 run in 1. Sessions `tmp/find-flakey-tests/20260811-065301`, `20260811-070...` onwards.
-- Root cause: **not established.** What is measured: the device's receive task runs to its full 60-second timeout and returns a null payload, the engine logs no error and no failed task (logcat, tags `JsEngineQuickJs`/`JsEngineHost`), and the host sender reports either that it found no device at all or that it delivered successfully to something that was not this receiver. So the receiver believes it is healthy while its announcements do not reach the host.
-- Ruled out, each by measurement rather than argument:
+- Two presentations, told apart by how long the receive waited before giving up, which the log line added in the fix commit below reports:
+  - **Sub-second (361ms, 532ms): cause established and fixed.** Every LAN-share task runs under one source tag and `cancelTasks` takes the whole tag. On mobile that call crosses to the native engine pool and is applied several hundred milliseconds later, but `cancelShareReceive` returned as soon as it had asked, so the dialog closed and the test started its second receive inside that window and the first receive's cancel took the second receive with it. The same window let the first receive's outcome land in the second one's dialog, because `handleStartReceiving` resets the shared `receiveAbandoned` flag on the way in. Seen on the `test:and` rung of session `tmp/find-flakey-tests/20260811-113930`, run 2, artifact `/tmp/photosphere-tests/44-receive-database-cancel-jUAegB`: two give-ups at 532ms and 361ms, both logged, and the second far short of the 60s timeout.
+  - **Full timeout (60590-60866ms): cause not established.** The receive task runs its whole timeout and returns null, the engine logs no error and no failed task (logcat, tags `JsEngineQuickJs`/`JsEngineHost`), and the host sender reports either that it found no device at all or that it delivered successfully to something that was not this receiver. So the receiver believes it is healthy while its announcements do not reach the host. Nothing here explains that, and the fix below does not address it.
+- Ruled out for the full-timeout presentation, each by measurement rather than argument:
   - A late cancel. The cancelled receive's task settles 389-447ms after the click, seconds before the sender starts, measured in three separate failures.
-  - The second receive being cancelled by the first. It runs its full 60s (60590-60866ms measured).
-  - Anything specific to cancelling. Test 26 has no cancel in it and fails identically.
+  - The second receive being cancelled by the first. It runs its full 60s (60590-60866ms measured). This is what separates it from the sub-second presentation above, where the second receive is cancelled.
+  - Anything specific to cancelling. Test 26 has no cancel in it and fails the same way.
   - A pairing-code collision. `allocate_pairing_code` is a bare `RANDOM % 9000` with no uniqueness check, which is worth fixing on its own, but 12 concurrent draws came back all distinct and the codes in the failing runs were unique to those runs.
   - Bun's ICMP-closes-the-socket behaviour. Android's `UdpHost.udpSend` returns an error envelope and leaves the socket open.
 - Load dependence: with the machine quiet, test 26 passed 50 consecutive runs (20 with a host listener bound to the discovery port, 20 without, plus an earlier 10). Every failure so far happened while a full parallel suite or several loops were running. That is why nothing here is proven: the mode cannot currently be reproduced on demand.
