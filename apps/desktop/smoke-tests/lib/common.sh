@@ -368,6 +368,14 @@ wait_for_ready() {
         if [ "$attempt" -lt "$max_attempts" ]; then
             log_info "Relaunching app and retrying..."
             _kill_app "$APP_TMP_DIR"
+            # Keep the failed launch's log. start_app redirects with ">", which truncates, so the
+            # relaunch below wipes the only record of why the app never became ready. That left
+            # "App failed to become ready" impossible to diagnose from a retained test directory:
+            # every artifact held the log of the attempt that worked, not the one that did not.
+            if [ -f "$APP_TMP_DIR/app.log" ]; then
+                mv "$APP_TMP_DIR/app.log" "$APP_TMP_DIR/app-failed-attempt-$attempt.log"
+                log_info "Kept the failed launch's log as app-failed-attempt-$attempt.log"
+            fi
             start_app "$APP_TMP_DIR" "$APP_X_POS"
         fi
         attempt=$((attempt + 1))
