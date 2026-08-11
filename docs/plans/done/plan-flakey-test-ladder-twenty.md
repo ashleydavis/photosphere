@@ -70,6 +70,22 @@ This is the ten-run plan raised to twenty after it passed. The ten-run climb is 
 - The ten-run climb that passed ran alone on a quiet machine, and every mobile LAN-share failure in that session needed a busy one. If this climb is also to be run alone, its mobile rung carries the same weakness. Running something else alongside it would test more, at the cost of not knowing whether a failure was the suite or the company it was keeping.
 - The first attempt at this climb was killed during rung 1 after one green run of `bun run test`, so it produced no findings.
 
+## Outcome, at twenty runs a rung
+
+Done on 2026-08-12. The ladder came back green: session `tmp/find-flakey-tests/20260811-195218`, `every rung of the ladder is clean, 20 consecutive green runs each`, 4h 19m total (`test` 15m 17s, `test:cli` 1h 02m, `test:electron` 2h 09m, `test:and` 52m 33s). Eighty runs across the four suites with no failure, no Bun crash and no sick pool.
+
+The twenty-run climb found one new mode and produced one commit:
+
+- `fe71a37f` Kept the failed launch's log when the Electron app is relaunched. Found by rung `test:electron` failing on run 1 of the first twenty-run climb, Electron test 7 (share-secret). The test clicks Send on the sender before the receiver is launched, because the pairing code only renders after that click, which opens the sender's 60-second discovery window; the receiver's first launch then missed its 120-second readiness window and was relaunched, so by the time it started listening the sender had given up. The defect underneath is the app taking over two minutes to start, and it could not be diagnosed because `start_app` redirects with `>` and the relaunch overwrote the failing launch's log. Registry entry `SHARE-SENDER-EXPIRES-DURING-RECEIVER-RELAUNCH`, unticked, root cause not established.
+
+Three climbs were needed. Climb 1 died on the Electron rung as above. Climb 2 was stopped deliberately once `fe71a37f` landed, because a streak is only meaningful as N runs of one tree. Climb 3 is the green one.
+
+What this climb does not show, and what to carry into any future raise of the target:
+
+- It ran alone on a quiet machine. Every mobile LAN-share failure in the ten-run session needed a busy one, so the mobile rung's twenty greens say less than the number suggests. Running the climb alongside other work would test more, at the cost of not knowing whether a failure was the suite or the company.
+- `SHARE-SENDER-EXPIRES-DURING-RECEIVER-RELAUNCH` fired once in 31 Electron runs. Twenty green runs is what a mode at that rate does most of the time, so it is not evidence the mode is gone.
+- Still open from the ten-run pass: the full-timeout presentation of `MOBILE-LAN-RECEIVER-NEVER-DISCOVERED`, Bun crashes (SIGILL twice, a segfault once), and `find-flakey-tests --test` sending its filter to the wrong command for `test`, `test:cli` and `test:electron`.
+
 ## Previous outcome, at ten runs a rung
 
 Done on 2026-08-11, then reinstated at twenty. The ladder came back green on the tree carrying all three fixes: session `tmp/find-flakey-tests/20260811-140520`, `every rung of the ladder is clean, 10 consecutive green runs each`, 3h 28m total (`test` 18m 12s, `test:cli` 31m 04s, `test:electron` 1h 04m, `test:and` 1h 34m).
