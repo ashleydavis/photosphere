@@ -17,6 +17,7 @@ import { HashCache } from "./hash-cache";
 import { scanPaths } from "./file-scanner";
 import { IHashFileData, IHashFileResult } from "./hash-file.worker";
 import { IUploadAssetData, IUploadAssetResult, IAssetDatabaseData } from "./upload-asset.worker";
+import { IImportAssetsResult, IImportedAsset, ISkippedImport } from "api/src/lib/import-assets.types";
 
 //
 // Payload for the import-assets task. Contains the paths to scan plus the configuration
@@ -38,6 +39,12 @@ export interface IImportAssetsData {
     // When true, files are scanned and hashed but not written to the database.
     dryRun: boolean;
 }
+
+//
+// What an import reports back. Defined in `packages/api` because the mobile frontend reads it too:
+// there the import runs in the embedded engine and the loop that drives it runs in the WebView.
+//
+export type { IImportedAsset, ISkippedImport, IImportAssetsResult };
 
 //
 // A single pending database update gathered from a completed upload-asset task.
@@ -62,9 +69,13 @@ interface IPendingDatabaseUpdate {
 // upload-asset tasks for new files, and batches all database writes under a single
 // throttled write lock per batch.
 //
-export async function importAssetsHandler(data: IImportAssetsData, context: ITaskContext): Promise<void> {
+export async function importAssetsHandler(data: IImportAssetsData, context: ITaskContext): Promise<IImportAssetsResult> {
     const { paths, storageDescriptor, googleApiKey, sessionId, dryRun } = data;
     const { uuidGenerator, timestampProvider } = context;
+
+    // The same outcome the messages below report, gathered so a caller that cannot see the messages
+    // (an orchestrator task running in a worker) can still read what happened.
+    const result: IImportAssetsResult = { imported: [], skipped: [], failedCount: 0 };
     const hashCacheDir = path.join(getProcessTmpDir(), "photosphere");
 
     const { s3Config, encryptionKeyPems } = await resolveStorageCredentials(storageDescriptor.databasePath, storageDescriptor.encryptionKey);
@@ -140,6 +151,7 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
                 }
 
                 log.verbose(`Added file "${logicalPath}" to the database with ID "${assetData.assetId}".`);
+                result.imported.push({ assetId: assetData.assetId, logicalPath, asset: assetData.assetRecord });
                 context.sendMessage({ type: "import-success", assetId: assetData.assetId, logicalPath, micro: assetData.assetRecord.micro, asset: assetData.assetRecord });
             }
 
@@ -201,15 +213,15 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
     // to this import session. The source filter prevents concurrent imports from
     // processing each other's completions.
     //
-    queue.onTaskComplete(async (result) => { //todo: would be good to have two separate handles here for better type checking!
+    queue.onTaskComplete(async (taskResult) => { //todo: would be good to have two separate handles here for better type checking!
         if (context.isCancelled()) {
             return;
         }
 
-        if (result.type === "hash-file") {
-            const hashFileData = result.inputs as IHashFileData;
-            if (result.status === TaskStatus.Succeeded) {
-                const hashResult = result.outputs as IHashFileResult;
+        if (taskResult.type === "hash-file") {
+            const hashFileData = taskResult.inputs as IHashFileData;
+            if (taskResult.status === TaskStatus.Succeeded) {
+                const hashResult = taskResult.outputs as IHashFileResult;
 
                 if (!hashResult.hashFromCache) {
                     localHashCache.addHash(hashFileData.filePath, {
@@ -224,6 +236,10 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
                 }
 
                 if (hashResult.filesAlreadyAdded) {
+                    result.skipped.push({
+                        logicalPath: hashFileData.logicalPath,
+                        contentHash: Buffer.from(hashResult.hash).toString("hex"),
+                    });
                     context.sendMessage({ type: "import-skipped", assetId: hashFileData.assetId, logicalPath: hashFileData.logicalPath });
                 }
                 else {
@@ -249,15 +265,16 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
                     }
                 }
             }
-            else if (result.status === TaskStatus.Failed) {
-                log.error(`Failed to hash file "${hashFileData.logicalPath}": ${result.errorMessage}`);
+            else if (taskResult.status === TaskStatus.Failed) {
+                log.error(`Failed to hash file "${hashFileData.logicalPath}": ${taskResult.errorMessage}`);
+                result.failedCount += 1;
                 context.sendMessage({ type: "import-failed", assetId: hashFileData.assetId, logicalPath: hashFileData.logicalPath });
             }
         }
-        else if (result.type === "upload-asset") {
-            const uploadData = result.inputs as IUploadAssetData;
-            if (result.status === TaskStatus.Succeeded) {
-                const uploadResult = result.outputs as IUploadAssetResult;
+        else if (taskResult.type === "upload-asset") {
+            const uploadData = taskResult.inputs as IUploadAssetData;
+            if (taskResult.status === TaskStatus.Succeeded) {
+                const uploadResult = taskResult.outputs as IUploadAssetResult;
                 pendingDatabaseUpdates.push({
                     assetData: uploadResult.assetData,
                     logicalPath: uploadData.logicalPath,
@@ -266,8 +283,9 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
                 });
                 throttledProcessQueue();
             }
-            else if (result.status === TaskStatus.Failed) {
-                log.error(`Failed to upload file "${uploadData.logicalPath}": ${result.errorMessage}`);
+            else if (taskResult.status === TaskStatus.Failed) {
+                log.error(`Failed to upload file "${uploadData.logicalPath}": ${taskResult.errorMessage}`);
+                result.failedCount += 1;
                 context.sendMessage({ type: "import-failed", assetId: uploadData.assetId, logicalPath: uploadData.logicalPath });
             }
         }
@@ -325,7 +343,7 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
         await queue.awaitAllTasks();
 
         if (context.isCancelled()) {
-            return;
+            return result;
         }
 
         // Flush the throttled queue and wait for any in-progress batch to finish.
@@ -357,4 +375,6 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
         queue.shutdown();
         await swallowError(() => remove(sessionTempDir));
     }
+
+    return result;
 }

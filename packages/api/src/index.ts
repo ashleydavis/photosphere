@@ -14,6 +14,8 @@ export * from "./lib/database-op-record";
 export * from "./lib/asset-query";
 export * from "./lib/replicate-database.types";
 export * from "./lib/sync-database.types";
+export * from "./lib/auto-import-settings";
+export * from "./lib/retention-policy";
 export * from "./lan-share/index";
 export * from "./lan-share/lan-share-resolve";
 export * from "./lan-share/lan-share-receive";

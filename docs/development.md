@@ -95,6 +95,18 @@ The commands that run the app rebuild it first, so what you are running is alway
 
 To run the CLI, the dev-server, or the dev-frontend on their own, see [apps/cli](../apps/cli/README.md), [apps/dev-server](../apps/dev-server/README.md), and [apps/dev-frontend](../apps/dev-frontend/README.md).
 
+## Automatic import
+
+`psi watch` watches folders for new media and imports it on its own, pushing it to a remote when one is configured, and optionally deleting the source file or dropping local originals the remote already holds. `psi connect` joins a standalone database to a remote, creating it, consolidating into it, or simply recording it as the origin.
+
+```bash
+psi watch --db ./photos                  # watch this machine's photo folders
+psi watch --db ./photos --once           # import everything once, then exit
+psi connect --db ./photos ./backup       # join this database to a remote
+```
+
+The desktop and mobile apps do the same thing from a toggle in the settings, watching this machine's photo folders or the device's photo library. The loop behind all three is platform-neutral and lives in `packages/api`, driven from a worker task on the CLI and the desktop and from the WebView on mobile. See [Automatic photo backup](automatic-photo-backup.md) for the two import lanes, the retention policies and how to switch the active one, what consolidation does, why mobile drives the loop differently, and what each platform supports.
+
 ## Checking how the UI looks
 
 The [stories browser](../packages/user-interface/src/stories/README.md) mounts every page, modal, dialog, and component in isolation with mock data, so you can look at a UI surface without seeding a real database.
@@ -126,6 +138,7 @@ The local iOS environment is pinned to macOS 12.7.6 / Xcode 14.2, which is why t
 - [UI stories](../packages/user-interface/src/stories/README.md) - The stories browser and the cross-platform story player.
 - [Testing](testing/README.md) - Running the tests, the manual e2e scripts, and the stories.
 - [Git hooks](git-hooks.md) - The local commit and push gate, and how to install it.
+- [Automatic photo backup](automatic-photo-backup.md) - Watching for new photos, importing them, and keeping a remote copy.
 - [Background tasks](background-tasks.md) - Adding a new background task type.
 - [Mobile native media tools](mobile-native-media.md) - How the bundled mobile ImageMagick/ffmpeg are wired up.
 - [Updating mobile ImageMagick/ffmpeg](updating-mobile-imagemagick-ffmpeg.md) - Updating the bundled versions.

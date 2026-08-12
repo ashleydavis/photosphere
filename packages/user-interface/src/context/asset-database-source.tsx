@@ -16,6 +16,7 @@ import { useApi } from "./api-context";
 import type { IDownloadAssetItem } from "./platform-context";
 import { useToast } from "./toast-context";
 import { useUuidGenerator } from "./uuid-generator-context";
+import { markRecentArrival } from "../lib/recent-arrivals";
 
 //
 // Adds "asset database" specific functionality to the gallery source.
@@ -812,12 +813,16 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
     }, [databasePath]);
 
     //
-    // Subscribe to import-success task messages and add newly imported assets to the gallery
-    // immediately, so the user sees them without needing to reload.
+    // Subscribe to import-success and auto-import-item task messages and add newly imported assets
+    // to the gallery immediately, so the user sees them without needing to reload.
+    //
+    // Automatic import arrivals come down the same path as manual ones. That is the point: a photo
+    // that turned up on its own should land in the gallery exactly as one the user imported does,
+    // rather than through a second arrival route that can drift out of step with the first.
     //
     useEffect(() => {
         const unsubscribeImportSuccess = platform.onTaskMessage((_taskId, message) => {
-            if (message.type !== 'import-success') {
+            if (message.type !== 'import-success' && message.type !== 'auto-import-item') {
                 return;
             }
 
@@ -826,11 +831,25 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
                 return;
             }
 
+            if (message.type === 'auto-import-item') {
+                // Automatic import writes to the default database, which is not necessarily the one
+                // on screen. An arrival in another database is not this gallery's to show, and one
+                // taken in before this database has loaded is shown twice: once now and once by the
+                // load. Both are the same check.
+                if (!databasePath || message.databasePath !== databasePath) {
+                    return;
+                }
+
+                // Only automatic arrivals are marked. A photo the user imported is something they
+                // are already watching happen, so animating it would be noise.
+                markRecentArrival(asset._id, Date.now());
+            }
+
             _onNewItems([asset]);
         });
 
         return () => { unsubscribeImportSuccess(); };
-    }, [platform]);
+    }, [platform, databasePath]);
 
     //
     // Load assets when database path changes.

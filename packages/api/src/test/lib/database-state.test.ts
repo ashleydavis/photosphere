@@ -12,6 +12,8 @@ describe("database-state", () => {
             lastModifiedAt: "2026-01-02T03:04:05.000Z",
             lastSyncedAt: "2026-01-02T03:04:06.000Z",
             lastReplicatedAt: "2026-01-02T03:04:07.000Z",
+            autoImportBackfillCursor: "/home/someone/Pictures/holiday/IMG_0042.jpg",
+            autoImportBackfillCompleted: true,
         };
 
         await saveDatabaseState(storage, state);
@@ -19,6 +21,37 @@ describe("database-state", () => {
 
         expect(loaded).toEqual(state);
         expect(loaded!.contentHash!.equals(state.contentHash!)).toBe(true);
+    });
+
+    test("round-trips a backfill in progress", async () => {
+        const storage = new MockStorage();
+
+        await saveDatabaseState(storage, { autoImportBackfillCursor: "/photos/IMG_0007.jpg" });
+        const loaded = await loadDatabaseState(storage);
+
+        expect(loaded!.autoImportBackfillCursor).toBe("/photos/IMG_0007.jpg");
+        expect(loaded!.autoImportBackfillCompleted).toBeUndefined();
+    });
+
+    test("a state with no backfill comes back without one", async () => {
+        const storage = new MockStorage();
+
+        await saveDatabaseState(storage, { lastSyncedAt: "2026-01-02T03:04:06.000Z" });
+        const loaded = await loadDatabaseState(storage);
+
+        expect(loaded!.autoImportBackfillCursor).toBeUndefined();
+        expect(loaded!.autoImportBackfillCompleted).toBeUndefined();
+    });
+
+    test("the backfill cursor survives a merge that does not mention it", async () => {
+        const storage = new MockStorage();
+
+        await saveDatabaseState(storage, { autoImportBackfillCursor: "/photos/IMG_0007.jpg" });
+        await mergeDatabaseState(storage, { lastSyncedAt: "2026-01-02T03:04:06.000Z" });
+        const loaded = await loadDatabaseState(storage);
+
+        expect(loaded!.autoImportBackfillCursor).toBe("/photos/IMG_0007.jpg");
+        expect(loaded!.lastSyncedAt).toBe("2026-01-02T03:04:06.000Z");
     });
 
     test("omits absent fields on load", async () => {

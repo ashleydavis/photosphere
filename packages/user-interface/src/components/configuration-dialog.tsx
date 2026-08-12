@@ -14,6 +14,7 @@ import { useConfig } from "../context/config-context";
 import { useGalleryLayout } from "../context/gallery-layout-context";
 import { useSync } from "../context/sync-context";
 import { createDialogKeyHandler } from "../lib/dialog-keys";
+import { AutoImportSettings } from "./auto-import-settings";
 
 export interface IConfigurationDialogProps {
     //
@@ -103,6 +104,8 @@ export function ConfigurationDialog({ open, onClose }: IConfigurationDialogProps
                                 <Switch readOnly checked={syncOnlyOnWifi} sx={{ pointerEvents: "none" }} />
                             </Stack>
                         </Stack>
+
+                        <AutoImportSettings />
                     </Stack>
                 </DialogContent>
         </ResponsiveDialog>

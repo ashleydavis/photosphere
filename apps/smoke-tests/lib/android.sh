@@ -747,6 +747,134 @@ android_reset_app_state() {
 }
 
 #
+# The directory pushed test photos go into on the device, which is where a camera puts them.
+#
+ANDROID_MEDIA_DIR="/sdcard/DCIM/Camera"
+
+#
+# Puts a photo into the device's photo library, from outside the app.
+#
+# Two steps, and both are needed: pushing the file only puts bytes on the filesystem, and MediaStore
+# is a database that knows nothing about them until it is told. `cmd media rescan` is not available
+# on this emulator image (there is no "media" service), so the scan goes through the provider's own
+# scan_file method, which is. Whichever is used has to be confirmed against the image the pool runs
+# rather than assumed, because the available route differs by API level.
+#
+# Usage: android_seed_media <host_file> <remote_name>
+#
+android_seed_media() {
+    local host_src="$1"
+    local remote_name="$2"
+    local remote_path="$ANDROID_MEDIA_DIR/$remote_name"
+
+    adb shell mkdir -p "$ANDROID_MEDIA_DIR" >/dev/null 2>&1 || true
+    adb push "$host_src" "$remote_path" >/dev/null || return 1
+
+    local scan_result
+    scan_result="$(adb shell content call --uri content://media/external/file --method scan_file --arg "$remote_path" 2>&1 | tr -d '\r')"
+    if ! echo "$scan_result" | grep -q "Result:"; then
+        log_error "MediaStore would not scan $remote_path: $scan_result"
+        return 1
+    fi
+
+    log_info "Put '$remote_name' into the device photo library"
+}
+
+#
+# Removes a photo this test put into the device photo library, so the next run starts clean.
+# Usage: android_remove_media <remote_name>
+#
+android_remove_media() {
+    local remote_name="$1"
+    adb shell rm -f "$ANDROID_MEDIA_DIR/$remote_name" >/dev/null 2>&1 || true
+    adb shell content delete --uri content://media/external/file --where "_display_name='$remote_name'" >/dev/null 2>&1 || true
+}
+
+#
+# Refuses the app the photo library permission, from outside the app, in a way that answers the next
+# request without a dialog.
+#
+# Revoking alone is not enough: the next request would put the system dialog up, and a test cannot tap
+# it. The user-fixed flag is what the system sets when a user chooses "Don't allow" and means it, and
+# a request for a user-fixed permission comes straight back as denied. Which permissions to refuse
+# depends on the device's API level, exactly as the app's own request does.
+#
+# Usage: android_refuse_media_permission
+#
+android_refuse_media_permission() {
+    local sdk
+    sdk="$(adb shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r')"
+
+    local permissions
+    if [ "${sdk:-0}" -ge 33 ]; then
+        permissions="android.permission.READ_MEDIA_IMAGES android.permission.READ_MEDIA_VIDEO"
+    else
+        permissions="android.permission.READ_EXTERNAL_STORAGE"
+    fi
+
+    local permission
+    for permission in $permissions; do
+        adb shell pm revoke "$APP_ID" "$permission" >/dev/null 2>&1 || true
+
+        local result
+        result="$(adb shell pm set-permission-flags "$APP_ID" "$permission" user-fixed 2>&1 | tr -d '\r')"
+        if [ -n "$result" ]; then
+            log_error "Could not mark $permission as refused on ${ANDROID_SERIAL:-this device}: $result"
+            return 1
+        fi
+    done
+
+    log_info "Refused the photo library permission, as a user who chose \"Don't allow\""
+}
+
+#
+# Removes every photo whose name starts with the given prefix from the device photo library.
+#
+# This is for the start of a test rather than the end of one: a run killed outright never reaches its
+# exit trap, and the photo it left behind would be imported by the next run and throw its counts out.
+# Safe to do because a test holds its emulator under a lock for its whole run, so nothing else is
+# using the library at the time.
+#
+# Usage: android_remove_media_matching <name_prefix>
+#
+android_remove_media_matching() {
+    local prefix="$1"
+    adb shell "rm -f $ANDROID_MEDIA_DIR/$prefix*" >/dev/null 2>&1 || true
+    adb shell content delete --uri content://media/external/file --where "_display_name LIKE '$prefix%'" >/dev/null 2>&1 || true
+}
+
+#
+# Whether a photo is still in the device photo library.
+# Usage: android_media_exists <remote_name>
+#
+android_media_exists() {
+    local remote_name="$1"
+    local result
+    result="$(adb shell content query --uri content://media/external/file --projection _id --where "_display_name='$remote_name'" 2>&1 | tr -d '\r')"
+    echo "$result" | grep -q "_id="
+}
+
+#
+# Grants the app the photo library permission, from outside the app, so no permission dialog has to
+# be tapped. Which permission to grant depends on the device's API level, exactly as the app's own
+# request does.
+# Usage: android_grant_media_permission
+#
+android_grant_media_permission() {
+    local sdk
+    sdk="$(adb shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r')"
+
+    if [ "${sdk:-0}" -ge 33 ]; then
+        adb shell pm grant "$APP_ID" android.permission.READ_MEDIA_IMAGES >/dev/null 2>&1 || true
+        adb shell pm grant "$APP_ID" android.permission.READ_MEDIA_VIDEO >/dev/null 2>&1 || true
+    else
+        adb shell pm grant "$APP_ID" android.permission.READ_EXTERNAL_STORAGE >/dev/null 2>&1 || true
+    fi
+
+    log_info "Granted the photo library permission from outside the app"
+}
+
+#
 # Clears the app's stored data once a test has finished with the device, so nothing a test wrote is
 # still on the emulator when the next one starts.
 #

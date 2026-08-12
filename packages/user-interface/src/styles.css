@@ -500,3 +500,30 @@ body.mobile .photo-container .full.loaded {
     background-color: #f0f0f0;
 }
 
+
+/*
+ * A photo that automatic import brought in on its own fades and scales into place, so the user can
+ * see something happened. Only automatic arrivals get this class: a photo the user imported is
+ * something they are already watching, and animating the whole gallery on load would be noise.
+ */
+@keyframes gallery-thumb-arrive {
+    from {
+        opacity: 0;
+        transform: scale(0.85);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.gallery-thumb-arrived {
+    animation: gallery-thumb-arrive 400ms ease-out;
+}
+
+/* Anyone who has asked not to be shown motion gets the photo, without the movement. */
+@media (prefers-reduced-motion: reduce) {
+    .gallery-thumb-arrived {
+        animation: none;
+    }
+}

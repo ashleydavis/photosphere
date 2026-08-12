@@ -30,6 +30,10 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Photosphere reads your photo library so it can import your photos into your own database and keep a backup copy of them.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Photosphere saves photos back to your photo library when you export them.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

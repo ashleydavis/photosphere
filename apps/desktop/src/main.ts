@@ -11,6 +11,8 @@ import { RandomUuidGenerator, TimestampProvider, logExceptions, log, noLogDetail
 import { loadDatabaseConfig, updateDatabaseConfig } from 'api';
 import type { IReplicateDatabaseData } from 'api';
 import { loadDesktopConfig, updateDesktopConfig, updateLastFolder, updateLastDownloadFolder, getTheme, setTheme, getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry, getRecentDatabases, markDatabaseOpened, removeRecentDatabaseName, findDatabase, fetchNews, getShownNewsIds, addShownNewsIds, getLastShownUpdateVersion, setLastShownUpdateVersion } from 'node-api';
+import { checkDatabaseExists, planDesktopAutoImport, AUTO_IMPORT_TASK_SOURCE, DEFAULT_DATABASE_DISPLAY_NAME } from 'node-api';
+import { getDefaultPhotoFolders } from 'node-utils';
 import type { IDatabaseEntry, IDesktopConfig } from 'node-api';
 import type { ISaveAssetItem } from 'api';
 import type { IWorkerPoolOptions } from './lib/worker-pool-electron-main';
@@ -78,6 +80,17 @@ let testControlServer: ITestControlServer | null = null;
 // `once`, and it can fire before the test control server exists, so the server has to be able to
 // ask after the fact whether it has already missed it.
 let mainWindowFinishedLoading = false;
+
+// Generates the session ids the automatic import and eviction tasks take the write lock under.
+const autoImportUuidGenerator = new RandomUuidGenerator();
+
+// The config keys that change what automatic import should be doing, so writing one restarts it.
+const AUTO_IMPORT_CONFIG_KEYS: string[] = [
+    'autoImportEnabled',
+    'autoImportSources',
+    'autoImportCleanupEnabled',
+    'defaultDatabasePath',
+];
 
 // URL of the news feed published in the Photosphere GitHub repo. Overridable via
 // PHOTOSPHERE_NEWS_URL for the local demo script (apps/desktop/demo-news.sh) and
@@ -348,6 +361,10 @@ app.whenReady().then(async () => {
     await createMainWindow();
     log.event('Main window created');
 
+    // Automatic import picks up where it left off, so a machine that was backing photos up before it
+    // was shut down carries on without the user having to open anything.
+    ensureAutoImport().catch(error => log.exception('Error starting automatic import', error as Error));
+
     if (process.env.PHOTOSPHERE_TEST_MODE === '1' && mainWindow) {
         if (!workerPool) {
             throw new Error('Worker pool not initialized');
@@ -385,6 +402,15 @@ app.on('before-quit', async () => {
     isShuttingDown = true;
 
     stopPeriodicSync();
+
+    // The automatic import task holds filesystem watchers and a temporary directory, so it is told
+    // to stop before the worker pool goes away under it.
+    if (workerPool && autoImportRunning) {
+        workerPool.cancelTasks(AUTO_IMPORT_TASK_SOURCE);
+        autoImportRunning = false;
+        autoImportDatabasePath = null;
+    }
+
     if (syncDebounceTimer !== null) { //todo: this should be a function call to clean up.
         clearTimeout(syncDebounceTimer);
         syncDebounceTimer = null;
@@ -763,6 +789,12 @@ ipcMain.handle('set-config', logExceptions(async (_event, { key, value }: ISetCo
     if (key === 'theme' && mainWindow) {
         mainWindow.webContents.send('theme-changed', value);
     }
+    // Switching automatic import on or off, or changing what it watches, takes effect now rather
+    // than at the next restart. The main process reads the same config the renderer just wrote, so
+    // this needs no channel of its own.
+    if (AUTO_IMPORT_CONFIG_KEYS.includes(key)) {
+        await ensureAutoImport();
+    }
 }, 'Error setting config value'));
 
 // IPC handler for saving an asset to disk. When `destPath` is provided (e.g. by the MCP
@@ -977,6 +1009,14 @@ function initWorkers() {
             if (result.status !== TaskStatus.Succeeded && mainWindow) {
                 mainWindow.webContents.send('sync-completed');
             }
+            else if (result.status === TaskStatus.Succeeded) {
+                // Only what the origin now holds may be dropped, so eviction waits for a sync that
+                // actually succeeded rather than being scheduled alongside it.
+                const syncInputs = result.inputs as { databasePath?: string };
+                if (syncInputs?.databasePath) {
+                    enqueueEvictOriginals(syncInputs.databasePath);
+                }
+            }
         }
         if (result.type === "import-assets" && mainWindow) {
             if (result.status === TaskStatus.Succeeded) {
@@ -1025,6 +1065,146 @@ function initWorkers() {
             }
         }
     });
+}
+
+//
+// The automatic import task currently running, or null when it is not running.
+//
+// Held so the task can be stopped when the setting is switched off or the app quits. It is a source
+// tag rather than a task id because that is what the worker pool cancels by.
+//
+let autoImportRunning = false;
+
+//
+// The database automatic import is writing to, or null when it is not running.
+//
+let autoImportDatabasePath: string | null = null;
+
+// The settings the running task was started with, as JSON, or null when it is not running.
+//
+// Compared against the current settings to decide whether the task has to be restarted. Comparing
+// only the database path was not enough: switching cleanup on, or changing which folders are
+// watched, left the old task running with the old settings and the change appeared to do nothing
+// until the app was restarted.
+//
+let autoImportSettingsJson: string | null = null;
+
+//
+// Set while ensureAutoImport is part way through, so two config writes arriving together do not
+// both create the default database.
+//
+let autoImportStarting = false;
+
+//
+// Creates the default private database and records it, returning its path.
+//
+// This is what "Create my private photo database" does: it queues the same create-database task the
+// Manage Databases page uses, lists it, and remembers it as the default. Nothing about it is special
+// beyond where it goes and that it is the one automatic import writes to.
+//
+async function createDefaultDatabase(databasePath: string): Promise<void> {
+    log.info(`Creating the default photo database at "${databasePath}".`);
+
+    const taskResult = await runWorkerTask("create-database", { databasePath }, databasePath);
+    if (taskResult.status !== TaskStatus.Succeeded) {
+        throw new Error(`Failed to create the default photo database at "${databasePath}": ${taskResult.errorMessage}`);
+    }
+
+    const existingDatabases = await getDatabases();
+    if (!existingDatabases.find(entry => entry.path === databasePath)) {
+        await addDatabaseEntry({
+            name: DEFAULT_DATABASE_DISPLAY_NAME,
+            description: '',
+            path: databasePath,
+        });
+    }
+
+    await updateDesktopConfig(config => {
+        config.defaultDatabasePath = databasePath;
+    });
+
+    if (mainWindow) {
+        mainWindow.webContents.send('databases-changed');
+    }
+}
+
+//
+// Starts or stops automatic import to match the current config.
+//
+// Called at startup and whenever one of the automatic import settings is written, so switching the
+// toggle takes effect without restarting the app.
+//
+async function ensureAutoImport(): Promise<void> {
+    if (!workerPool || autoImportStarting) {
+        return;
+    }
+
+    const config = await loadDesktopConfig();
+    const plan = planDesktopAutoImport(config, getDefaultPhotoFolders(), app.getPath('userData'));
+
+    const plannedSettingsJson = JSON.stringify(plan.settings);
+
+    if (!plan.shouldRun) {
+        if (autoImportRunning) {
+            log.info('Stopping automatic import.');
+            workerPool.cancelTasks(AUTO_IMPORT_TASK_SOURCE);
+            autoImportRunning = false;
+            autoImportDatabasePath = null;
+            autoImportSettingsJson = null;
+        }
+        return;
+    }
+
+    // Already running against the right database with the same settings.
+    if (autoImportRunning && autoImportDatabasePath === plan.databasePath && autoImportSettingsJson === plannedSettingsJson) {
+        return;
+    }
+
+    autoImportStarting = true;
+    try {
+        if (autoImportRunning) {
+            workerPool.cancelTasks(AUTO_IMPORT_TASK_SOURCE);
+            autoImportRunning = false;
+            autoImportDatabasePath = null;
+            autoImportSettingsJson = null;
+        }
+
+        if (plan.isNewDefault || !await checkDatabaseExists(plan.databasePath)) {
+            await createDefaultDatabase(plan.databasePath);
+        }
+
+        log.info(`Starting automatic import into "${plan.databasePath}".`);
+        workerPool.addTask("auto-import", {
+            storageDescriptor: { databasePath: plan.databasePath },
+            settings: plan.settings,
+            sessionId: autoImportUuidGenerator.generate(),
+            once: false,
+        }, AUTO_IMPORT_TASK_SOURCE);
+
+        autoImportRunning = true;
+        autoImportDatabasePath = plan.databasePath;
+        autoImportSettingsJson = plannedSettingsJson;
+    }
+    finally {
+        autoImportStarting = false;
+    }
+}
+
+//
+// Drops local originals the origin already holds, after the default database has synced.
+//
+// Only the default database is considered: it is the one automatic import fills, and the only one
+// the app decides retention for on the user's behalf.
+//
+function enqueueEvictOriginals(databasePath: string): void {
+    if (!workerPool || autoImportDatabasePath !== databasePath) {
+        return;
+    }
+
+    workerPool.addTask("evict-originals", {
+        databasePath,
+        sessionId: autoImportUuidGenerator.generate(),
+    }, AUTO_IMPORT_TASK_SOURCE);
 }
 
 //

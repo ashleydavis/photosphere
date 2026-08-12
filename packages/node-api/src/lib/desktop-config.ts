@@ -1,6 +1,7 @@
 import * as os from "os";
 import * as path from "path";
 import { readToml, updateToml, pathExists } from "node-utils";
+import { IAutoImportSource } from "api";
 
 //
 // Configuration for the desktop app stored in ~/.config/photosphere/desktop.toml
@@ -55,6 +56,28 @@ export interface IDesktopConfig {
     // Whether automatic syncing is restricted to Wi-Fi. Defaults to true when unset (applied by the UI).
     //
     syncOnlyOnWifi?: boolean;
+
+    //
+    // Whether automatic photo import is switched on. Defaults to false when unset.
+    //
+    autoImportEnabled?: boolean;
+
+    //
+    // The path of the database automatic import writes to; absent until one has been made the default.
+    //
+    defaultDatabasePath?: string;
+
+    //
+    // The places automatic import watches. On desktop these are folders; the type is the shared
+    // union so the same settings mean the same thing on every platform.
+    //
+    autoImportSources?: IAutoImportSource[];
+
+    //
+    // Whether the source file is deleted once the photo is confirmed in the database. Defaults to
+    // false when unset.
+    //
+    autoImportCleanupEnabled?: boolean;
 }
 
 //
@@ -90,6 +113,18 @@ interface ITomlDesktopConfig {
 
     // Whether automatic syncing is restricted to Wi-Fi.
     sync_only_on_wifi?: boolean;
+
+    // Whether automatic photo import is switched on.
+    auto_import_enabled?: boolean;
+
+    // The path of the database automatic import writes to.
+    default_database_path?: string;
+
+    // The places automatic import watches, written as an array of TOML tables.
+    auto_import_sources?: IAutoImportSource[];
+
+    // Whether the source file is deleted once the photo is confirmed in the database.
+    auto_import_cleanup_enabled?: boolean;
 }
 
 const CONFIG_DIR = process.env.PHOTOSPHERE_CONFIG_DIR || path.join(os.homedir(), ".config", "photosphere");
@@ -131,6 +166,18 @@ export function tomlToDesktopConfig(toml: ITomlDesktopConfig): IDesktopConfig {
     if (toml.sync_only_on_wifi !== undefined) {
         config.syncOnlyOnWifi = toml.sync_only_on_wifi;
     }
+    if (toml.auto_import_enabled !== undefined) {
+        config.autoImportEnabled = toml.auto_import_enabled;
+    }
+    if (toml.default_database_path !== undefined) {
+        config.defaultDatabasePath = toml.default_database_path;
+    }
+    if (toml.auto_import_sources !== undefined) {
+        config.autoImportSources = toml.auto_import_sources;
+    }
+    if (toml.auto_import_cleanup_enabled !== undefined) {
+        config.autoImportCleanupEnabled = toml.auto_import_cleanup_enabled;
+    }
     return config;
 }
 
@@ -168,6 +215,18 @@ export function desktopConfigToToml(config: IDesktopConfig): ITomlDesktopConfig 
     }
     if (config.syncOnlyOnWifi !== undefined) {
         toml.sync_only_on_wifi = config.syncOnlyOnWifi;
+    }
+    if (config.autoImportEnabled !== undefined) {
+        toml.auto_import_enabled = config.autoImportEnabled;
+    }
+    if (config.defaultDatabasePath !== undefined) {
+        toml.default_database_path = config.defaultDatabasePath;
+    }
+    if (config.autoImportSources !== undefined) {
+        toml.auto_import_sources = config.autoImportSources;
+    }
+    if (config.autoImportCleanupEnabled !== undefined) {
+        toml.auto_import_cleanup_enabled = config.autoImportCleanupEnabled;
     }
     return toml;
 }

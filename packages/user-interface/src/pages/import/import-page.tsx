@@ -11,6 +11,7 @@ import Typography from "@mui/joy/Typography";
 import { FileUpload, CheckCircle, Cancel, HourglassEmpty, RemoveCircle } from "@mui/icons-material";
 import { useIsMobile } from "../../lib/use-is-mobile";
 import type { IImportItem } from "../../context/import-context";
+import { AutoImportProgress } from "../../components/auto-import-progress";
 
 //
 // Shown when no database is loaded.
@@ -295,6 +296,11 @@ export function ImportPage() {
 
     return (
         <Box className="flex flex-col" sx={{ height: "calc(100vh - 60px)" }}>
+
+            {/* What automatic import is doing, when it is doing anything. */}
+            <Box sx={{ px: 2, pt: 2, flexShrink: 0 }}>
+                <AutoImportProgress />
+            </Box>
 
             {/* Header bar */}
             <Box

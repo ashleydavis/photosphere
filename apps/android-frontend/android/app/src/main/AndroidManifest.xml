@@ -41,4 +41,15 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!--
+      Automatic import reads the device photo library. Android 13 split the old storage permission
+      into per-type media ones, so both are declared: the new ones for 13 and later, and the old one
+      capped below 13 for the versions that only understand it.
+    -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
 </manifest>

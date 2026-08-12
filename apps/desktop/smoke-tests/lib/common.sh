@@ -240,6 +240,17 @@ wait_for_test_port() {
 # show the window instead (useful for debugging a failing test). xvfb-run is
 # Linux-only; on macOS/Windows the UI is always shown.
 #
+#
+# Extra arguments passed to every app launch, empty unless a test sets it.
+#
+# This exists for Electron's own switches, which the app never sees as its own options. The one that
+# needs it is --user-data-dir: the directory app.getPath('userData') returns is not covered by any of
+# the PHOTOSPHERE_* variables above, so anything the app writes there (the default photo database,
+# for one) would land in the real user's data directory and be shared by every test run on the
+# machine. A test that writes there sets this to a directory of its own.
+#
+EXTRA_APP_ARGS=()
+
 start_app() {
     local tmp_dir="$1"
     local x_pos="${2:-0}"
@@ -290,7 +301,7 @@ start_app() {
             PHOTOSPHERE_NEWS_URL="${PHOTOSPHERE_NEWS_URL:-}" \
             TEST_TMP_DIR="$tmp_dir" \
             NODE_ENV=testing \
-            "${wrapper[@]}" "${launch_args[@]}" --no-sandbox --disable-gpu -geometry "${PHOTOSPHERE_TEST_GEOMETRY:-960x800+${x_pos}+0}")
+            "${wrapper[@]}" "${launch_args[@]}" --no-sandbox --disable-gpu "${EXTRA_APP_ARGS[@]}" -geometry "${PHOTOSPHERE_TEST_GEOMETRY:-960x800+${x_pos}+0}")
     echo "$launched_pid" > "$tmp_dir/app.pid"
     echo "$launched_pgid" > "$tmp_dir/app.pgid"
 

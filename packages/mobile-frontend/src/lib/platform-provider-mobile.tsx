@@ -1,13 +1,33 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
 import eruda from "eruda";
 import { Network } from "@capacitor/network";
-import { PlatformContextProvider, ConfigContextProvider, createConfig, useLanShareTasks, readBrowserNetworkStatus, subscribeBrowserNetworkStatus, signalTestAppReady, TEST_MENU_EVENT, TEST_OPEN_DATABASE_EVENT, TEST_SEED_NEWS_EVENT, TEST_PICK_FILES_EVENT, TEST_STAGE_EXPORT_EVENT, TEST_STAGE_PICK_FOLDER_EVENT, TEST_NOTIFY_DATABASE_EDITED_EVENT, type IPlatformContext, type IPlatformEvent, type INetworkStatus, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions, type ISaveDownloadResult, UuidGeneratorProvider } from "user-interface";
+import { PlatformContextProvider, ConfigContextProvider, createConfig, useLanShareTasks, readBrowserNetworkStatus, subscribeBrowserNetworkStatus, signalTestAppReady, TEST_MENU_EVENT, TEST_OPEN_DATABASE_EVENT, TEST_SEED_NEWS_EVENT, TEST_PICK_FILES_EVENT, TEST_STAGE_EXPORT_EVENT, TEST_STAGE_DELETE_EVENT, TEST_STAGE_PICK_FOLDER_EVENT, TEST_NOTIFY_DATABASE_EDITED_EVENT, type IPlatformContext, type IPlatformEvent, type INetworkStatus, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions, type ISaveDownloadResult, UuidGeneratorProvider } from "user-interface";
 import { TaskQueue, TaskStatus, getQueueBackend } from "task-queue";
 import type { ITaskResult } from "task-queue";
 import type { ISaveAssetItem } from "api";
 import { log, RandomUuidGenerator, TestUuidGenerator, type IUuidGenerator } from "utils";
-import { cancelMobileTasks, subscribeMobileTaskMessage, subscribeMobileTaskComplete, pickMobileFiles, setInjectedPickedFiles } from "./mobile-platform-tasks";
+import { cancelMobileTasks, publishLocalTaskMessage, subscribeMobileTaskMessage, subscribeMobileTaskComplete, pickMobileFiles, setInjectedPickedFiles } from "./mobile-platform-tasks";
 import { pickMobileFolder, saveMobileDownloadedFile, saveMobileDownloadedFiles, setInjectedExportOutcome, setInjectedPickFolderResult } from "./mobile-export";
+import { setInjectedDeleteOutcome } from "./mobile-media-cleanup";
+import { getDefaultDatabasePath, loadAutoImportSettings, saveAutoImportSettings, setDefaultDatabasePath } from "user-interface";
+import type { IAutoImportItemMessage, IAutoImportProgressMessage } from "api/src/lib/auto-import-loop";
+import type { IImportAssetsResult } from "api/src/lib/import-assets.types";
+import type { IGetContentHashesResult } from "node-api/src/lib/get-content-hashes.worker";
+import { DEFAULT_DATABASE_DISPLAY_NAME, planMobileAutoImport } from "./mobile-auto-import";
+import { readPermissionState, resolveMediaPermission } from "./mobile-media-permission";
+import { JsEngine } from "./js-engine-plugin";
+import { PluginDeviceMediaLibrary } from "./device-media-library";
+import { AUTO_IMPORT_TASK_SOURCE, MobileAutoImportScheduler } from "./mobile-auto-import-scheduler";
+import { loadBackfillCursor, saveBackfillCursor } from "./mobile-backfill-cursor";
+
+//
+// How often the automatic import settings are re-read, in milliseconds.
+//
+// The settings card writes them through the config store, which has no change notification, so this
+// is how a change reaches the scheduler. A read of local storage costs almost nothing and nothing
+// happens unless something actually changed.
+//
+const AUTO_IMPORT_SETTINGS_POLL_MS = 2000;
 import * as configStore from "./mobile-config-store";
 import { MobileSecretStore } from "./mobile-secure-store";
 import { createCapacitorSecureStore } from "./secure-store-plugin";
@@ -131,6 +151,13 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
 
     // The mobile background-sync scheduler (debounce + periodic + gate), created once. It enqueues
     // sync-database tasks onto the embedded worker queue when the gate permits.
+    // The automatic import run in progress, or undefined when automatic import is switched off.
+    const autoImportSchedulerRef = useRef<MobileAutoImportScheduler | undefined>(undefined);
+
+    // The settings the run in progress was started with, so a change to them restarts it and an
+    // unchanged read does nothing.
+    const autoImportSettingsRef = useRef<string | undefined>(undefined);
+
     const syncSchedulerRef = useRef<MobileSyncScheduler | null>(null);
     const getSyncScheduler = useCallback((): MobileSyncScheduler => {
         if (!syncSchedulerRef.current) {
@@ -211,6 +238,14 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
             const outcome = (event as CustomEvent<"shared" | "cancelled">).detail;
             setInjectedExportOutcome(outcome);
         };
+        // Test setup: stage the answer to the next photo library delete request, so the smoke test
+        // drives both the confirmed and the declined path without the system confirmation, which no
+        // automated test can tap. Everything above the dialog stays real.
+        const handleStageDelete = (event: Event) => {
+            const outcome = (event as CustomEvent<"deleted" | "cancelled">).detail;
+            setInjectedDeleteOutcome(outcome)
+                .catch(error => log.exception("Failed to stage the delete outcome", error as Error));
+        };
         // Test setup: stage the result of the next pickFolder name prompt (a sandbox-relative path, or
         // null to simulate the user cancelling), so the "Browse" flow needs no native prompt.
         const handleStagePickFolder = (event: Event) => {
@@ -225,6 +260,7 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         window.addEventListener(TEST_OPEN_DATABASE_EVENT, handleOpenDatabase);
         window.addEventListener(TEST_PICK_FILES_EVENT, handlePickFiles);
         window.addEventListener(TEST_STAGE_EXPORT_EVENT, handleStageExport);
+        window.addEventListener(TEST_STAGE_DELETE_EVENT, handleStageDelete);
         window.addEventListener(TEST_STAGE_PICK_FOLDER_EVENT, handleStagePickFolder);
         window.addEventListener(TEST_NOTIFY_DATABASE_EDITED_EVENT, handleNotifyDatabaseEdited);
         // The test-command listeners are now registered, so it is safe to tell the host bridge the
@@ -237,6 +273,7 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
             window.removeEventListener(TEST_OPEN_DATABASE_EVENT, handleOpenDatabase);
             window.removeEventListener(TEST_PICK_FILES_EVENT, handlePickFiles);
             window.removeEventListener(TEST_STAGE_EXPORT_EVENT, handleStageExport);
+            window.removeEventListener(TEST_STAGE_DELETE_EVENT, handleStageDelete);
             window.removeEventListener(TEST_STAGE_PICK_FOLDER_EVENT, handleStagePickFolder);
             window.removeEventListener(TEST_NOTIFY_DATABASE_EDITED_EVENT, handleNotifyDatabaseEdited);
         };
@@ -659,6 +696,226 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
             configStore.setConfigValue(persistentStore, key, value);
         }
     );
+
+    // Starts automatic import when it is switched on, and stops it when it is switched off.
+    //
+    // The loop runs here in the WebView rather than in a worker task, which is the one thing mobile
+    // does differently from the desktop. The embedded engine pool has three slots; the asset server
+    // holds one for the life of the app, so a long-running orchestrator task in a second slot leaves
+    // nothing for the tasks the import it queues needs in turn, and the import waits for a slot that
+    // can never come free. Driven from here it occupies no slot, and the import it queues behaves
+    // exactly as a manual import does.
+    useEffect(() => {
+        let cancelled = false;
+
+        // True while a settings read is part way through acting on what it found. Without it the
+        // timer below can fire again during the permission request or while the default database is
+        // being created, and both calls get past the "already running" check on their way to
+        // building a scheduler each. Two loops walking the same library import everything twice and
+        // race over the same backfill position.
+        let acting = false;
+
+        const ensureAutoImport = async (): Promise<void> => {
+            if (acting) {
+                return;
+            }
+
+            acting = true;
+            try {
+                await ensureAutoImportOnce();
+            }
+            finally {
+                acting = false;
+            }
+        };
+
+        const ensureAutoImportOnce = async (): Promise<void> => {
+            const settings = await loadAutoImportSettings(config);
+            const defaultDatabasePath = await getDefaultDatabasePath(config);
+            const plan = planMobileAutoImport(settings, defaultDatabasePath);
+
+            if (cancelled) {
+                return;
+            }
+
+            if (!plan.shouldRun) {
+                if (autoImportSchedulerRef.current) {
+                    log.info("Stopping automatic import.");
+                    const scheduler = autoImportSchedulerRef.current;
+                    autoImportSchedulerRef.current = undefined;
+                    autoImportSettingsRef.current = undefined;
+                    cancelMobileTasks(AUTO_IMPORT_TASK_SOURCE);
+                    await scheduler.stop();
+                }
+                return;
+            }
+
+            const plannedSettingsJson = JSON.stringify(plan.settings);
+            if (autoImportSchedulerRef.current && autoImportSettingsRef.current === plannedSettingsJson) {
+                return;
+            }
+
+            // Asking for the permission before anything else: without it the library reads nothing,
+            // and the setting has to go back off rather than looking as though photos are being
+            // backed up when none can even be seen.
+            const permission = readPermissionState(await JsEngine.requestMediaPermission());
+            const outcome = resolveMediaPermission(permission);
+            if (!outcome.enabled) {
+                await saveAutoImportSettings(config, { ...plan.settings, enabled: false });
+                log.info(`Automatic import switched off: ${outcome.message}`);
+                return;
+            }
+
+            if (autoImportSchedulerRef.current) {
+                const previous = autoImportSchedulerRef.current;
+                autoImportSchedulerRef.current = undefined;
+                await previous.stop();
+            }
+
+            if (plan.isNewDefault) {
+                log.info(`Creating the default photo database at "${plan.databasePath}".`);
+                const createQueue = new TaskQueue(uuidGenerator, plan.databasePath);
+                try {
+                    const createTaskId = createQueue.addTask("create-database", { databasePath: plan.databasePath });
+                    const createResult = await createQueue.awaitTask(createTaskId);
+                    if (!createResult || createResult.status !== TaskStatus.Succeeded) {
+                        log.error(`Failed to create the default photo database: ${createResult?.errorMessage}`);
+                        return;
+                    }
+                }
+                finally {
+                    createQueue.shutdown();
+                }
+
+                await configStore.addDatabase(mobileDatabasesConfigFile, {
+                    name: DEFAULT_DATABASE_DISPLAY_NAME,
+                    description: "",
+                    path: plan.databasePath,
+                });
+                await setDefaultDatabasePath(config, plan.databasePath);
+            }
+
+            // Checked again here, not only at the top: the permission request and creating the
+            // database both take a while, and the provider can have gone away in the meantime. A run
+            // started after that has nothing left to stop it.
+            if (cancelled) {
+                return;
+            }
+
+            const databasePath = plan.databasePath;
+            const sessionId = uuidGenerator.generate();
+            const scheduler = new MobileAutoImportScheduler({
+                library: new PluginDeviceMediaLibrary(),
+                databasePath,
+
+                //
+                // Hands one batch to the existing import task, the same one a manual import uses.
+                //
+                importBatch: async (paths: string[]) => {
+                    const importQueue = new TaskQueue(uuidGenerator, AUTO_IMPORT_TASK_SOURCE);
+                    try {
+                        const importTaskId = importQueue.addTask("import-assets", {
+                            paths,
+                            storageDescriptor: { databasePath },
+                            sessionId,
+                            dryRun: false,
+                        });
+                        const importResult = await importQueue.awaitTask(importTaskId);
+
+                        if (importResult === undefined) {
+                            // The queue was shut down before the import finished, which happens when
+                            // automatic import is being switched off.
+                            return undefined;
+                        }
+
+                        if (importResult.status !== TaskStatus.Succeeded) {
+                            // The whole batch failed rather than individual files, so every file in
+                            // it is a failure. Reporting none would report a clean run over an import
+                            // that did not happen.
+                            log.error(`Automatic import batch of ${paths.length} item(s) failed: ${importResult.errorMessage}`);
+                            return { imported: [], skipped: [], failedCount: paths.length };
+                        }
+
+                        return importResult.outputs as IImportAssetsResult;
+                    }
+                    finally {
+                        importQueue.shutdown();
+                    }
+                },
+
+                //
+                // Asks the database itself which content hashes it holds, which is what makes
+                // deleting a photo off the device safe.
+                //
+                loadDatabaseHashes: async () => {
+                    const hashQueue = new TaskQueue(uuidGenerator, AUTO_IMPORT_TASK_SOURCE);
+                    try {
+                        const hashTaskId = hashQueue.addTask("get-content-hashes", { databasePath });
+                        const hashResult = await hashQueue.awaitTask(hashTaskId);
+                        if (!hashResult || hashResult.status !== TaskStatus.Succeeded) {
+                            // An empty set confirms nothing, so nothing is deleted from the device.
+                            // The candidates stay on the list and are looked at again next batch.
+                            log.error(`Automatic import could not read the database's content hashes: ${hashResult?.errorMessage}`);
+                            return new Set<string>();
+                        }
+                        return new Set((hashResult.outputs as IGetContentHashesResult).contentHashes);
+                    }
+                    finally {
+                        hashQueue.shutdown();
+                    }
+                },
+
+                persistCursor: cursor => saveBackfillCursor(config, databasePath, cursor),
+
+                // The progress panel and the gallery's arrivals are shared with the desktop and read
+                // task messages, so these go down the same path rather than a second one only mobile
+                // has. The task id is the session, which is what identifies this run.
+                onProgress: (message: IAutoImportProgressMessage) => {
+                    log.info(`Automatic import: ${message.imported} imported, ${message.skipped} already there, ${message.failed} failed, ${message.deletedFromSource} deleted from the device, ${message.backfillRemaining} waiting.`);
+                    publishLocalTaskMessage(sessionId, message as unknown as Record<string, unknown>);
+                },
+
+                onItem: (message: IAutoImportItemMessage) => {
+                    publishLocalTaskMessage(sessionId, message as unknown as Record<string, unknown>);
+                },
+
+                logInfo: (message: string) => log.info(message),
+                logError: (message: string) => log.error(message),
+            });
+
+            autoImportSchedulerRef.current = scheduler;
+            autoImportSettingsRef.current = plannedSettingsJson;
+
+            log.info(`Starting automatic import into "${databasePath}".`);
+
+            const startCursor = await loadBackfillCursor(config, databasePath);
+
+            // Not awaited: this runs for as long as automatic import is switched on. It is only
+            // reached for again to stop it, and any failure is reported rather than swallowed.
+            scheduler.start(plan.settings, startCursor)
+                .then(() => log.info("Automatic import stopped."))
+                .catch(error => log.exception("Automatic import stopped with an error", error as Error));
+        };
+
+        ensureAutoImport().catch(error => log.exception("Failed to start automatic import", error as Error));
+
+        // The settings are written by the settings card through the same config store, which has no
+        // change notification, so this re-reads on a timer. It is a read of local storage and nothing
+        // happens unless something actually changed.
+        const timer = setInterval(() => {
+            ensureAutoImport().catch(error => log.exception("Failed to update automatic import", error as Error));
+        }, AUTO_IMPORT_SETTINGS_POLL_MS);
+
+        return () => {
+            cancelled = true;
+            clearInterval(timer);
+            const scheduler = autoImportSchedulerRef.current;
+            autoImportSchedulerRef.current = undefined;
+            if (scheduler) {
+                scheduler.stop().catch(error => log.exception("Failed to stop automatic import", error as Error));
+            }
+        };
+    }, []);
 
     return (
         <UuidGeneratorProvider value={uuidGenerator}>

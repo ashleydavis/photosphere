@@ -11,6 +11,7 @@ import { DarkMode, LightMode, SettingsBrightness, PhotoSizeSelectLarge } from "@
 import { useConfig } from "../context/config-context";
 import { useGalleryLayout } from "../context/gallery-layout-context";
 import { useIsMobile } from "../lib/use-is-mobile";
+import { AutoImportSettings } from "../components/auto-import-settings";
 
 //
 // The configuration page for the Photosphere app.
@@ -104,6 +105,8 @@ export function ConfigurationPage() {
                         }
                     />
                 </Card>
+
+                <AutoImportSettings />
             </Stack>
         </Box>
     );

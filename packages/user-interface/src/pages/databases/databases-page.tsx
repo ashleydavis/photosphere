@@ -5,7 +5,7 @@ import Typography from '@mui/joy/Typography';
 import Button from '@mui/joy/Button';
 import Table from '@mui/joy/Table';
 import IconButton from '@mui/joy/IconButton';
-import { Edit, Delete, Refresh, FolderOpen, IosShare, Visibility, FileCopy, Add, NoteAdd, Download, Storage } from '@mui/icons-material';
+import { Edit, Delete, Refresh, FolderOpen, IosShare, Visibility, FileCopy, Add, NoteAdd, Download, Storage, Star, CloudSync } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { usePlatform, type IDatabaseEntry } from '../../context/platform-context';
 import { useApp } from '../../context/app-context';
@@ -21,12 +21,17 @@ import { ShareDatabaseDialog } from '../../components/share-database-dialog';
 import { ReceiveDatabaseDialog } from '../../components/receive-database-dialog';
 import { ViewDatabaseDialog } from '../../components/view-database-dialog';
 import { ReplicateDatabaseDialog } from '../../components/replicate-database-dialog';
+import { ConnectDatabaseDialog } from '../../components/connect-database-dialog';
+import { useConfig } from '../../context/config-context';
+import { getDefaultDatabasePath, setDefaultDatabasePath } from '../../lib/auto-import-config';
+import Chip from '@mui/joy/Chip';
 
 //
 // Full CRUD management page for configured database entries.
 //
 export function DatabasesPage() {
     const platform = usePlatform();
+    const config = useConfig();
     const { dbs: databases, secrets, refresh } = useApp();
     const { openDatabase } = useAssetDatabase();
     const navigate = useNavigate();
@@ -74,6 +79,18 @@ export function DatabasesPage() {
     // The database entry currently being replicated (undefined when the dialog is closed).
     const [replicatingEntry, setReplicatingEntry] = useState<IDatabaseEntry | undefined>(undefined);
 
+    // The database entry being connected to a remote (undefined when the dialog is closed).
+    const [connectingEntry, setConnectingEntry] = useState<IDatabaseEntry | undefined>(undefined);
+
+    // The path of the database automatic import writes to, or undefined when none has been chosen.
+    const [defaultDatabasePath, setDefaultDatabasePathState] = useState<string | undefined>(undefined);
+
+    useEffect(() => {
+        getDefaultDatabasePath(config)
+            .then(path => setDefaultDatabasePathState(path))
+            .catch(error => log.exception('Failed to read the default database', error as Error));
+    }, [config, databases]);
+
     // Re-read the databases/secrets lists when the page mounts, so state seeded or changed outside
     // this provider instance (e.g. mobile test setup) is reflected when the page is entered.
     useEffect(() => {
@@ -94,6 +111,18 @@ export function DatabasesPage() {
             new Promise(resolve => setTimeout(resolve, 500)),
         ]);
         setRefreshing(false);
+    }
+
+    //
+    // Makes this the database automatic import writes to.
+    //
+    // Exactly one database may hold it, which is what writing a single path achieves: whichever was
+    // the default before simply stops being it.
+    //
+    async function makeDefault(entry: IDatabaseEntry): Promise<void> {
+        await setDefaultDatabasePath(config, entry.path);
+        setDefaultDatabasePathState(entry.path);
+        log.event('Default database set');
     }
 
     //
@@ -143,6 +172,20 @@ export function DatabasesPage() {
                 icon: <FileCopy fontSize="small" />,
                 dataId: 'replicate-database-button',
                 onClick: () => { log.info('Replicate database dialog opened'); setReplicatingEntry(entry); },
+            },
+            {
+                label: 'Set as default',
+                icon: <Star fontSize="small" />,
+                dataId: 'set-default-database-button',
+                onClick: () => {
+                    makeDefault(entry).catch(error => log.exception('Failed to set the default database', error as Error));
+                },
+            },
+            {
+                label: 'Connect to remote',
+                icon: <CloudSync fontSize="small" />,
+                dataId: 'connect-database-button',
+                onClick: () => { log.info('Connect to remote dialog opened'); setConnectingEntry(entry); },
             },
             {
                 label: 'Edit',
@@ -237,9 +280,21 @@ export function DatabasesPage() {
                         </tr>
                     </thead>
                     <tbody>
-                        {databases.map(entry => (
+                        {databases.map((entry, entryIndex) => (
                             <tr key={entry.name}>
-                                <td data-id={`database-row-name-${entry.name}`}>{entry.name}</td>
+                                <td data-id={`database-row-name-${entry.name}`}>
+                                    {entry.name}
+                                    {entry.path === defaultDatabasePath
+                                        && <Chip
+                                            size="sm"
+                                            color="primary"
+                                            sx={{ ml: 1 }}
+                                            data-id={`database-default-badge-${entryIndex}`}
+                                            >
+                                            Default
+                                        </Chip>
+                                    }
+                                </td>
                                 <td>{entry.description}</td>
                                 <td>{entry.path}</td>
                                 <td>{entry.origin ?? ''}</td>
@@ -279,6 +334,26 @@ export function DatabasesPage() {
                                         onClick={() => { log.info('Replicate database dialog opened'); setReplicatingEntry(entry); }}
                                     >
                                         <FileCopy fontSize="small" />
+                                    </IconButton>
+                                    <IconButton
+                                        data-id="set-default-database-button"
+                                        size="sm"
+                                        variant="plain"
+                                        title="Set as the database automatic import writes to"
+                                        onClick={() => {
+                                            makeDefault(entry).catch(error => log.exception('Failed to set the default database', error as Error));
+                                        }}
+                                    >
+                                        <Star fontSize="small" />
+                                    </IconButton>
+                                    <IconButton
+                                        data-id="connect-database-button"
+                                        size="sm"
+                                        variant="plain"
+                                        title="Connect to remote"
+                                        onClick={() => { log.info('Connect to remote dialog opened'); setConnectingEntry(entry); }}
+                                    >
+                                        <CloudSync fontSize="small" />
                                     </IconButton>
                                     <IconButton
                                         data-id="edit-database-button"
@@ -368,6 +443,17 @@ export function DatabasesPage() {
                     s3Secrets={s3Secrets}
                     geocodingSecrets={geocodingSecrets}
                     onClose={() => setReplicatingEntry(undefined)}
+                />
+            )}
+
+            {connectingEntry !== undefined && (
+                <ConnectDatabaseDialog
+                    open={connectingEntry !== undefined}
+                    entry={connectingEntry!}
+                    onClose={() => {
+                        setConnectingEntry(undefined);
+                        refresh().catch(error => log.exception('Failed to refresh after connecting', error as Error));
+                    }}
                 />
             )}
         </Box>

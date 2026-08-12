@@ -30,10 +30,33 @@ export function subscribeMobileTaskMessage(handler: (taskId: string, message: Re
             void handle.remove();
         }
     });
+
+    localTaskMessageHandlers.add(handler);
+
     return () => {
         removed = true;
+        localTaskMessageHandlers.delete(handler);
         void handlePromise.then(handle => handle.remove());
     };
+}
+
+//
+// Subscribers that also want messages produced in the WebView rather than by an engine.
+//
+// Automatic import is the only such producer: its loop runs here rather than in a task, because a
+// long-running task would starve the engine pool. The interface that shows its progress is shared
+// with the desktop and reads task messages, so its messages are delivered down the same path rather
+// than through a second one that only mobile has.
+//
+const localTaskMessageHandlers = new Set<(taskId: string, message: Record<string, unknown>) => void>();
+
+//
+// Delivers a message produced in the WebView to everything subscribed to task messages.
+//
+export function publishLocalTaskMessage(taskId: string, message: Record<string, unknown>): void {
+    for (const handler of localTaskMessageHandlers) {
+        handler(taskId, message);
+    }
 }
 
 //

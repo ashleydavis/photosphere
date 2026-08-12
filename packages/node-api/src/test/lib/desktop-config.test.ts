@@ -141,6 +141,46 @@ describe('updateDesktopConfig writes snake_case TOML', () => {
     });
 });
 
+describe('the automatic import settings', () => {
+    beforeEach(() => jest.clearAllMocks());
+
+    test('are written with snake_case keys', async () => {
+        await updateDesktopConfig(config => {
+            config.autoImportEnabled = true;
+            config.defaultDatabasePath = '/home/someone/photosphere-default';
+            config.autoImportSources = [{ type: 'folder', path: '/home/someone/Pictures', recurse: true }];
+            config.autoImportCleanupEnabled = true;
+        });
+
+        const tomlArg = mockWriteToml.mock.calls[0][1];
+        expect(tomlArg.auto_import_enabled).toBe(true);
+        expect(tomlArg.default_database_path).toBe('/home/someone/photosphere-default');
+        expect(tomlArg.auto_import_sources).toEqual([{ type: 'folder', path: '/home/someone/Pictures', recurse: true }]);
+        expect(tomlArg.auto_import_cleanup_enabled).toBe(true);
+        expect(tomlArg.autoImportEnabled).toBeUndefined();
+    });
+
+    test('round-trip through the TOML shape', () => {
+        const config = {
+            autoImportEnabled: true,
+            defaultDatabasePath: '/photos',
+            autoImportSources: [{ type: 'folder' as const, path: '/photos', recurse: false }],
+            autoImportCleanupEnabled: false,
+        };
+
+        expect(tomlToDesktopConfig(desktopConfigToToml(config))).toEqual(config);
+    });
+
+    test('are absent from a config that does not mention them', () => {
+        const config = tomlToDesktopConfig({ theme: 'dark' });
+
+        expect(config.autoImportEnabled).toBeUndefined();
+        expect(config.defaultDatabasePath).toBeUndefined();
+        expect(config.autoImportSources).toBeUndefined();
+        expect(config.autoImportCleanupEnabled).toBeUndefined();
+    });
+});
+
 describe('updateLastFolder', () => {
     beforeEach(() => jest.clearAllMocks());
 

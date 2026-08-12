@@ -901,6 +901,13 @@ export async function loadDatabase(
         }
     }
 
+    // Note that the storage handed back here is deliberately NOT the lazy, origin-backed storage a
+    // partial database reads through. Sync, replicate, repair and verify all compare this database
+    // against its origin, and a local read that quietly falls back to the origin would make the two
+    // look identical when they are not: sync found nothing to do and silently stopped bringing
+    // changes down. A command that wants to read an evicted original asks for that storage itself,
+    // as `psi export` does through openLazyOriginStorage.
+
     // Create database instance (v6 layout: BSON under .db/bson)
     const database = createMediaFileDatabase(assetStorage, uuidGenerator, timestampProvider);
 

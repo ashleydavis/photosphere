@@ -50,6 +50,11 @@ public class JsEnginePlugin: CAPPlugin, EnginePoolDelegate {
     private var bufferedMessages: [[String: Any]] = []
 
     //
+    // The photo library the frontend reads through, created on first use. See frontendMediaLibrary().
+    //
+    private var frontendMediaLibraryHost: MediaLibraryHost?
+
+    //
     // Resolves the storage root the host functions are sandboxed to. Uses the app's Documents
     // directory, the writable sandbox location on iOS. All task-supplied paths are resolved
     // relative to this root and may never escape it.
@@ -300,6 +305,139 @@ public class JsEnginePlugin: CAPPlugin, EnginePoolDelegate {
     private func resolveExportFiles(_ call: CAPPluginCall, root: URL, paths: [String], cancelled: Bool) {
         let exported = ExportTemp.finishExportBatch(root: root, relativePaths: paths, cancelled: cancelled)
         call.resolve(["paths": exported ?? NSNull()])
+    }
+
+    //
+    // requestMediaPermission: asks for the photo library permission and reports whether it was
+    // granted, as { granted: Bool }.
+    //
+    // Only read access is asked for. Limited access (the user choosing particular photos) counts as
+    // granted: automatic import can only see what it was given, and telling the user it was refused
+    // when they deliberately shared a few photos would be wrong.
+    //
+    @objc func requestMediaPermission(_ call: CAPPluginCall) {
+        PHPhotoLibrary.requestAuthorization { status in
+            let granted: Bool
+            if #available(iOS 14, *) {
+                granted = status == .authorized || status == .limited
+            }
+            else {
+                granted = status == .authorized
+            }
+            call.resolve(["granted": granted])
+        }
+    }
+
+    //
+    // stageMediaDeleteOutcome: stages the answer to the next photo library delete request, instead
+    // of presenting the system confirmation.
+    //
+    // The confirmation cannot be tapped by an automated test. Staging the answer leaves everything
+    // above it under test: choosing which photos are confirmed, batching them into one request, and
+    // handling both answers. Nothing stages an outcome in production, so the real request is issued.
+    //
+    @objc func stageMediaDeleteOutcome(_ call: CAPPluginCall) {
+        guard let outcome = call.getString("outcome") else {
+            call.reject("outcome is required")
+            return
+        }
+
+        MediaDeleteStaging.stage(deleted: outcome == "deleted")
+        call.resolve()
+    }
+
+    //
+    // Returns the frontend's photo library, creating it on first use.
+    //
+    // The engines have one of these each through their host bridge. This is a second one, for the
+    // WebView, and it is deliberately not shared with them: automatic import is driven from the
+    // WebView precisely so that it occupies none of the engine slots, and routing its library reads
+    // back through an engine would put it straight back into one.
+    //
+    private func frontendMediaLibrary() -> MediaLibraryHost {
+        lock.lock()
+        defer { lock.unlock() }
+
+        if let existing = frontendMediaLibraryHost {
+            return existing
+        }
+
+        let created = MediaLibraryHost(storageRoot: storageRoot())
+        frontendMediaLibraryHost = created
+        return created
+    }
+
+    //
+    // mediaLibraryList: one page of the device photo library, as { json: String }.
+    //
+    // The page comes back as a JSON string rather than as a Capacitor object because that is what
+    // MediaLibraryHost already produces for the engines, and re-marshalling it only to have the
+    // WebView parse it again would be two conversions where one will do.
+    //
+    @objc func mediaLibraryList(_ call: CAPPluginCall) {
+        guard let pageSize = call.getInt("pageSize") else {
+            call.reject("mediaLibraryList requires pageSize")
+            return
+        }
+
+        let cursor = call.getString("cursor")
+        call.resolve(["json": frontendMediaLibrary().mediaLibraryList(cursor: cursor, pageSize: pageSize)])
+    }
+
+    //
+    // mediaLibraryAlbums: the albums in the device photo library, as { json: String }.
+    //
+    @objc func mediaLibraryAlbums(_ call: CAPPluginCall) {
+        call.resolve(["json": frontendMediaLibrary().mediaLibraryAlbums()])
+    }
+
+    //
+    // mediaLibraryExport: copies one library item into the sandbox, resolving { path: String } with
+    // the sandbox-relative path the import can read it from.
+    //
+    @objc func mediaLibraryExport(_ call: CAPPluginCall) {
+        guard let itemId = call.getString("itemId") else {
+            call.reject("mediaLibraryExport requires itemId")
+            return
+        }
+
+        do {
+            call.resolve(["path": try frontendMediaLibrary().mediaLibraryExport(itemId: itemId)])
+        }
+        catch {
+            call.reject(error.localizedDescription, nil, error)
+        }
+    }
+
+    //
+    // mediaLibraryRelease: deletes the sandbox copy an export made.
+    //
+    @objc func mediaLibraryRelease(_ call: CAPPluginCall) {
+        guard let itemId = call.getString("itemId") else {
+            call.reject("mediaLibraryRelease requires itemId")
+            return
+        }
+
+        frontendMediaLibrary().mediaLibraryRelease(itemId: itemId)
+        call.resolve()
+    }
+
+    //
+    // mediaLibraryDelete: asks to delete the named items as one system confirmation, resolving
+    // { json: String } with which of them went and which did not.
+    //
+    @objc func mediaLibraryDelete(_ call: CAPPluginCall) {
+        guard let itemIdsJson = call.getString("itemIdsJson") else {
+            call.reject("mediaLibraryDelete requires itemIdsJson")
+            return
+        }
+
+        do {
+            call.resolve(["json": try frontendMediaLibrary().mediaLibraryDelete(itemIdsJson: itemIdsJson)])
+        }
+        catch {
+            call.reject(error.localizedDescription, nil, error)
+        }
     }
 
     //

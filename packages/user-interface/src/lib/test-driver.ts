@@ -44,6 +44,9 @@ export interface ITestCommandPayload {
     // Outcome to stage for the next mobile asset export (stage-export command).
     exportOutcome?: "shared" | "cancelled";
 
+    // Answer to stage for the next photo library delete request (stage-delete command).
+    deleteOutcome?: "deleted" | "cancelled";
+
     // Result to stage for the next mobile pickFolder name prompt: a path, or null for cancel
     // (stage-pick-folder command).
     folderResult?: string | null;
@@ -385,6 +388,22 @@ export function doStageExport(outcome: "shared" | "cancelled"): void {
 }
 
 //
+// Window event name used to stage the answer to the next photo library delete request in tests.
+//
+export const TEST_STAGE_DELETE_EVENT = "photosphere-test:stage-delete";
+
+//
+// Stages the answer to the next photo library delete request by dispatching a window event the
+// mobile platform provider listens for, so the deletion runs its real completion path without
+// presenting the system confirmation, which no automated test can tap. The smoke test calls this
+// before the cleanup runs, to drive both the confirmed and the declined path.
+//
+export function doStageDelete(outcome: "deleted" | "cancelled"): void {
+    console.log(`test-stage-delete: staging delete outcome "${outcome}"`);
+    window.dispatchEvent(new CustomEvent(TEST_STAGE_DELETE_EVENT, { detail: outcome }));
+}
+
+//
 // Window event name used to stage the result of the next mobile pickFolder name prompt in tests.
 //
 export const TEST_STAGE_PICK_FOLDER_EVENT = "photosphere-test:stage-pick-folder";
@@ -555,6 +574,9 @@ export function installTestDriver(transport: ITestTransport): void {
                 return undefined;
             case 'stage-export':
                 doStageExport(payload.exportOutcome!);
+                return undefined;
+            case 'stage-delete':
+                doStageDelete(payload.deleteOutcome!);
                 return undefined;
             case 'stage-pick-folder':
                 doStagePickFolder(payload.folderResult ?? null);

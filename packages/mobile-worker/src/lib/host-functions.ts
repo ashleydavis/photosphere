@@ -146,6 +146,14 @@ export interface IHost {
 }
 
 //
+// The device photo library is deliberately absent from this list. Automatic import reads it from the
+// WebView, through the Capacitor plugin's mediaLibrary* methods, because its loop cannot run in an
+// engine: the pool has three slots, the asset server holds one for the life of the app, and a
+// long-running loop in a second leaves nothing for the tasks the import it queues needs in turn.
+// Nothing inside an engine has any reason to read the library, so nothing here does.
+//
+
+//
 // The host functions the bundle expects the native side to install. Any name in
 // this list that native did not install gets a function that throws the
 // NOT IMPLEMENTED error, so a missing native function fails loudly instead of

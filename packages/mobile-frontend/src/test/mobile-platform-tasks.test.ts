@@ -1,4 +1,4 @@
-import { cancelMobileTasks, subscribeMobileTaskMessage, subscribeMobileTaskComplete, pickMobileFiles, setInjectedPickedFiles } from "../lib/mobile-platform-tasks";
+import { cancelMobileTasks, publishLocalTaskMessage, subscribeMobileTaskMessage, subscribeMobileTaskComplete, pickMobileFiles, setInjectedPickedFiles } from "../lib/mobile-platform-tasks";
 import type { IJsEnginePlugin } from "../lib/js-engine-plugin";
 
 //
@@ -97,6 +97,31 @@ describe("mobile platform task bindings", () => {
         const paths = await pickMobileFiles("Import photos", plugin);
 
         expect(paths).toBeUndefined();
+    });
+
+    test("a message produced in the WebView reaches the same subscribers as a native one", async () => {
+        const plugin = makeMockPlugin();
+        const received: { taskId: string, message: Record<string, unknown> }[] = [];
+        subscribeMobileTaskMessage((taskId, message) => received.push({ taskId, message }), plugin as unknown as IJsEnginePlugin);
+
+        // Automatic import runs in the WebView rather than in an engine, so its progress arrives
+        // this way. The interface that shows it is shared with the desktop and reads task messages.
+        publishLocalTaskMessage("session-1", { type: "auto-import-progress", imported: 3 });
+
+        expect(received).toHaveLength(1);
+        expect(received[0].taskId).toBe("session-1");
+        expect(received[0].message).toEqual({ type: "auto-import-progress", imported: 3 });
+    });
+
+    test("an unsubscribed handler stops receiving WebView messages", async () => {
+        const plugin = makeMockPlugin();
+        const received: Record<string, unknown>[] = [];
+        const unsubscribe = subscribeMobileTaskMessage((_taskId, message) => received.push(message), plugin as unknown as IJsEnginePlugin);
+
+        unsubscribe();
+        publishLocalTaskMessage("session-1", { type: "auto-import-progress" });
+
+        expect(received).toEqual([]);
     });
 
     test("pickMobileFiles returns injected test paths without calling the plugin", async () => {

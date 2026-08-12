@@ -28,6 +28,8 @@ import { databaseIdCommand } from './src/cmd/database-id';
 import { syncCommand } from './src/cmd/sync';
 import { originCommand } from './src/cmd/origin';
 import { setOriginCommand, ISetOriginCommandOptions } from './src/cmd/set-origin';
+import { watchCommand, IWatchCommandOptions } from './src/cmd/watch';
+import { connectCommand, IConnectCommandOptions } from './src/cmd/connect';
 import { encryptCommand } from './src/cmd/encrypt';
 import { decryptCommand } from './src/cmd/decrypt';
 import { secretsCommand } from './src/cmd/secrets';
@@ -400,6 +402,40 @@ Resources:
         .option(...yesOption)
         .option(...cwdOption)
         .action(initContext((ctx, path: string, options: ISetOriginCommandOptions) => setOriginCommand(ctx, options, path)));
+
+    program
+        .command("watch")
+        .alias("w")
+        .description("Watches folders for new media and imports it automatically, syncing to the origin when one is configured.")
+        .argument("[folders...]", "The folders to watch. Defaults to this operating system's photo folders.")
+        .option(...dbOption)
+        .option(...keyOption)
+        .option("--once", "Import everything once and exit, rather than watching.", false)
+        .option("--no-sync", "Do not sync to the origin after importing.")
+        .option("--cleanup", "Delete each source file once the asset is confirmed in the local database.", false)
+        .option("--evict", "Drop local originals the origin already holds, after each successful sync.", false)
+        .option("--evict-budget <bytes>", "Keep local originals under this many bytes, instead of the built-in retention policy.")
+        .option(...verboseOption)
+        .option(...toolsOption)
+        .option(...yesOption)
+        .option(...cwdOption)
+        .option(...sessionIdOption)
+        .addHelpText('after', getCommandExamplesHelp('watch'))
+        .action(initContext((ctx, folders: string[], options: IWatchCommandOptions) => watchCommand(ctx, folders, options)));
+
+    program
+        .command("connect")
+        .description("Connects this database to a remote one, creating it, consolidating into it, or simply recording it as the origin.")
+        .argument("<remote>", "Path or URI of the remote database (a directory or an s3: location).")
+        .option(...dbOption)
+        .option(...keyOption)
+        .option(...destKeyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option(...cwdOption)
+        .option(...sessionIdOption)
+        .addHelpText('after', getCommandExamplesHelp('connect'))
+        .action(initContext((ctx, remote: string, options: IConnectCommandOptions) => connectCommand(ctx, remote, options)));
 
     program
         .command("list")

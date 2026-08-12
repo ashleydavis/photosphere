@@ -26,6 +26,8 @@ import { checkDatabaseExistsHandler } from "node-api/src/lib/check-database-exis
 import { syncDatabaseHandler } from "node-api/src/lib/sync-database.worker";
 import { listS3DirsHandler } from "node-api/src/lib/list-s3-dirs.worker";
 import { readDatabasesConfigHandler, writeDatabasesConfigHandler } from "node-api/src/lib/databases-config.worker";
+import { evictOriginalsHandler } from "node-api/src/lib/evict-originals.worker";
+import { getContentHashesHandler } from "node-api/src/lib/get-content-hashes.worker";
 import { installWorkerGlobal } from "./src/index";
 
 //
@@ -111,6 +113,17 @@ registerHandler("list-s3-dirs", listS3DirsHandler);
 // the config is read and written.
 registerHandler("read-databases-config", readDatabasesConfigHandler);
 registerHandler("write-databases-config", writeDatabasesConfigHandler);
+
+// Automatic import is deliberately NOT registered here, and must not be. The engine pool has three
+// slots; the asset server holds one for the life of the app, so a long-running auto-import task in a
+// second slot leaves nothing for the tasks the import it queues needs in turn, and the import waits
+// for a slot that can never come free. Mobile runs the same loop from the WebView instead, where it
+// occupies no slot: see MobileAutoImportScheduler in packages/mobile-frontend.
+//
+// The two short tasks it needs from in here are registered, because those start, finish and hand
+// their slot back.
+registerHandler("evict-originals", evictOriginalsHandler);
+registerHandler("get-content-hashes", getContentHashesHandler);
 
 // Expose the worker entry point (globalThis.__photosphereWorker = { runTask }).
 installWorkerGlobal();

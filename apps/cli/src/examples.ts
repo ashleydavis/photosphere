@@ -22,6 +22,22 @@ export const COMMAND_EXAMPLES: ICommandExamples = {
         { command: "psi add --db ./photos ~/Downloads/photos", description: "Adds a directory recursively." }
     ],
     
+    watch: [
+        { command: "psi watch --db ./photos", description: "Watches this operating system's photo folders and imports new media as it appears." },
+        { command: "psi watch --db ./photos ~/Pictures ~/Camera", description: "Watches specific folders instead of the default ones." },
+        { command: "psi watch --db ./photos --once", description: "Imports everything in the watched folders once, then exits." },
+        { command: "psi watch --db ./photos --cleanup", description: "Deletes each source file once the asset is confirmed in the local database." },
+        { command: "psi watch --db ./photos --evict", description: "Drops local originals the origin already holds, after each successful sync." },
+        { command: "psi watch --db ./photos --evict --evict-budget 500000000", description: "Keeps local originals under 500 MB instead of the built-in retention policy." },
+        { command: "psi watch --db ./photos --no-sync", description: "Imports without syncing to the origin." }
+    ],
+
+    connect: [
+        { command: "psi connect --db ./photos ./backup", description: "Creates the remote as a copy of this database when nothing is there." },
+        { command: "psi connect --db ./photos s3:my-bucket:/photos", description: "Connects to an S3 remote, consolidating into it when it already holds a different database." },
+        { command: "psi connect --db ./photos ./shared", description: "Records an already-related remote as this database's origin." }
+    ],
+
     check: [
         { command: "psi check --db ./photos ~/Pictures", description: "Checks which files from ~/Pictures are already in database." },
         { command: "psi check --db ./photos image.jpg", description: "Checks if the specific file is already in database." },

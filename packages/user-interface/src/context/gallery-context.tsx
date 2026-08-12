@@ -468,9 +468,15 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     //
     // Invokes subscriptions for new assets.
     //
-    function _onNewItems(items: IGalleryItem[]) { 
+    function _onNewItems(items: IGalleryItem[]) {
 
-        const newItems = removeDeletedAssets(items);
+        // An asset the gallery already holds is not new, and appending it again shows the same photo
+        // twice. It happens for real: an automatically imported photo is announced both by the import
+        // task, as import-success, and by the automatic import loop, as auto-import-item. Both are
+        // wanted (the second is what marks the photo as a fresh arrival), and neither knows about the
+        // other, so the list is what has to refuse the duplicate.
+        const newItems = removeDeletedAssets(items)
+            .filter(item => !allItemsIndex.current.has(item._id));
         const baseIndex = allItems.current.length;
         allItems.current = allItems.current.concat(newItems);
         for (let i = 0; i < newItems.length; i++) {

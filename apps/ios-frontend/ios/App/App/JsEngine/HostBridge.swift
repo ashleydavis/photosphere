@@ -535,6 +535,12 @@ final class HostBridge {
         }
         host.setValue(JSValue(object: ffprobe, in: context), forProperty: "ffprobe")
 
+        // The device photo library is deliberately not installed here. Automatic import reads it from
+        // the WebView, through JsEnginePlugin's mediaLibrary* methods, because its loop cannot run in
+        // an engine: the pool has three slots, the asset server holds one for the life of the app,
+        // and a long-running loop in a second leaves nothing for the tasks the import it queues needs
+        // in turn. Nothing inside an engine reads the library, so nothing here installs it.
+
         context.globalObject.setValue(host, forProperty: "host")
     }
 

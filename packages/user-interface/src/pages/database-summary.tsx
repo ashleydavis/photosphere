@@ -5,12 +5,14 @@ import Box from "@mui/joy/Box";
 import Card from "@mui/joy/Card";
 import Typography from "@mui/joy/Typography";
 import CircularProgress from "@mui/joy/CircularProgress";
-import { Storage, Photo, Folder, Save } from "@mui/icons-material";
+import { Storage, Photo, Folder, Save, CloudSync } from "@mui/icons-material";
 import { useAssetDatabase } from "../context/asset-database-source";
 import { useUuidGenerator } from "../context/uuid-generator-context";
 import { useIsMobile } from "../lib/use-is-mobile";
 import type { IDatabaseSummary } from "node-api";
 import type { IGetDatabaseSummaryData } from "node-api";
+import Button from "@mui/joy/Button";
+import { ConnectDatabaseDialog } from "../components/connect-database-dialog";
 
 //
 // Formats a byte count into a human-readable string (e.g. "1.5 GiB").
@@ -154,6 +156,9 @@ export function DatabaseSummaryPage() {
     //
     const [isLoading, setIsLoading] = useState(false);
 
+    // Whether the connect-to-remote dialog is open.
+    const [connectOpen, setConnectOpen] = useState(false);
+
     //
     // The task queue used to run the get-database-summary task.
     // Held in a ref so it persists across renders and can be shut down on cleanup.
@@ -266,6 +271,23 @@ export function DatabaseSummaryPage() {
                             }
                         </SummarySection>
 
+                        <SummarySection title="Remote copy">
+                            <Typography level="body-sm" sx={{ color: 'text.tertiary', mb: 1 }}>
+                                Keeps a copy of this database on a remote. If the remote already holds a
+                                different database, the two are joined and nothing it already has is
+                                uploaded again.
+                            </Typography>
+                            <Button
+                                size="sm"
+                                variant="outlined"
+                                startDecorator={<CloudSync />}
+                                data-id="summary-connect-database-button"
+                                onClick={() => { log.info('Connect to remote dialog opened'); setConnectOpen(true); }}
+                                >
+                                Connect to remote
+                            </Button>
+                        </SummarySection>
+
                         {summary
                             && <SummarySection title="Integrity">
                                 {summary.filesHash
@@ -280,6 +302,14 @@ export function DatabaseSummaryPage() {
                     </>
                 }
             </Box>
+
+            {connectOpen && databasePath
+                && <ConnectDatabaseDialog
+                    open={connectOpen}
+                    entry={{ name: databasePath, description: '', path: databasePath }}
+                    onClose={() => setConnectOpen(false)}
+                />
+            }
         </Box>
     );
 }

@@ -94,6 +94,9 @@ interface IBridgePayload {
     // Outcome to stage for the next mobile asset export share sheet (stage-export).
     exportOutcome?: "shared" | "cancelled";
 
+    // Answer to stage for the next photo library delete request (stage-delete).
+    deleteOutcome?: "deleted" | "cancelled";
+
     // Result to stage for the next mobile pickFolder name prompt (stage-pick-folder): a
     // sandbox-relative path, or null to simulate the user cancelling.
     folderResult?: string | null;
@@ -398,6 +401,10 @@ export class ControlBridge {
 
         this.expressApp.post("/stage-export", (req: Request, res: Response) => {
             void this.forward("stage-export", { exportOutcome: req.body.exportOutcome }, res);
+        });
+
+        this.expressApp.post("/stage-delete", (req: Request, res: Response) => {
+            void this.forward("stage-delete", { deleteOutcome: req.body.deleteOutcome }, res);
         });
 
         this.expressApp.post("/stage-pick-folder", (req: Request, res: Response) => {

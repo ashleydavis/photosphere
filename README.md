@@ -47,6 +47,8 @@ To move assets from Google Photos:
 - Use Google Takeout to export all your assets to a series of large zip files.
 - Then use `psi add` on the directory containing the zip files (it can unpack zip files for you).
 
+To have Photosphere do it for you, switch on "Automatic import" in the desktop or mobile app's settings: it makes a private photo database for you, watches your photo folders or your phone's photo library, and imports new photos as they appear. From the command line the same thing is `psi watch`, with `psi connect` to keep a remote copy in step. See [Automatic photo backup](docs/automatic-photo-backup.md).
+
 ## Bundled tools and licences
 
 The desktop and CLI builds use ImageMagick and ffmpeg installed on the host system. The mobile apps (iOS and Android) instead bundle in-process builds of ImageMagick (ImageMagick licence) and ffmpeg (LGPL-2.1+), together with ImageMagick's libjpeg, libpng, and zlib delegates, so image and video processing works without system binaries. Full attribution and licences are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Photosphere's own code is MIT licensed (see [LICENSE](LICENSE)). To update the bundled versions, see [docs/updating-mobile-imagemagick-ffmpeg.md](docs/updating-mobile-imagemagick-ffmpeg.md) and `scripts/update-mobile-media-tools.sh`.

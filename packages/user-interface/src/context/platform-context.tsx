@@ -123,6 +123,10 @@ export interface IDatabaseEntry {
 
     // Vault secret name for the geocoding API key.
     geocodingKey?: string;
+
+    // Whether this is the database automatic import writes to. Exactly one entry may hold it, and
+    // making a second one the default clears the first.
+    isDefault?: boolean;
 }
 
 

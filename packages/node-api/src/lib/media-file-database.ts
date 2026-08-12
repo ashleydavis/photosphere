@@ -660,6 +660,36 @@ export async function createLazyDatabaseStorage(
 }
 
 //
+// Wraps an already-open local storage so that files a partial database does not hold are fetched
+// from its origin. A full database, or one with no origin, is handed back unchanged.
+//
+// This exists alongside createLazyDatabaseStorage because a caller that has already opened the
+// database (and resolved its encryption keys and S3 credentials) should not open it a second time
+// just to add the wrapper.
+//
+// Reach for this only on a read path that wants the whole database, such as exporting an original
+// that has been dropped locally. It must not be used for sync, replicate, repair or verify: those
+// compare the local database against its origin, and a local read that falls back to the origin
+// makes the two look identical when they are not.
+//
+export async function openLazyOriginStorage(localStorage: IStorage, localRawStorage: IStorage): Promise<IStorage> {
+    const config = await loadDatabaseConfig(localRawStorage);
+    if (!config?.origin) {
+        return localStorage;
+    }
+
+    const merkleTree = await loadMerkleTree(localStorage);
+    if (!merkleTree?.databaseMetadata?.isPartial) {
+        return localStorage;
+    }
+
+    const { s3Config: originS3Config, encryptionKeyPems: originEncryptionKeyPems } = await resolveStorageCredentials(config.origin);
+    const { options: originStorageOptions } = await loadEncryptionKeysFromPem(originEncryptionKeyPems);
+    const originStorage = createStorage(config.origin, originS3Config, originStorageOptions).storage;
+    return new LazyOriginStorage(localStorage, originStorage);
+}
+
+//
 // Returns true when a database exists at the given path. Works for any storage path (local
 // filesystem, S3, network).
 //

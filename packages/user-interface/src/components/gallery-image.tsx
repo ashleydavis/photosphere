@@ -3,6 +3,7 @@ import { log } from "utils";
 import { useGallery } from "../context/gallery-context";
 import { IGalleryItem } from "../lib/gallery-item";
 import { useLongPress } from "../lib/long-press";
+import { isRecentArrival } from "../lib/recent-arrivals";
 
 export interface IGalleryImageProps {
     //
@@ -43,6 +44,10 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
     const [microDataURL, setMicroDataURL] = useState<string | undefined>(item.micro != undefined ? `data:image/jpeg;base64,${item.micro}` : undefined);
     const [thumbObjectURL, setThumbObjectURL] = useState<string | undefined>(undefined);
     const [isHovered, setIsHovered] = useState<boolean>(false);
+
+    // Whether this photo arrived on its own just now, decided once when the thumbnail first appears
+    // so scrolling it out of view and back does not play the animation a second time.
+    const [isNewArrival] = useState<boolean>(() => isRecentArrival(item._id, Date.now()));
 
     const { loadAsset, unloadAsset, addToMultipleSelection, removeFromMultipleSelection, selectedItems, isSelecting, enableSelecting, addArrayValue, removeArrayValue, lastSelectedItemId, setLastSelectedItemId, selectRange } = useGallery();
 
@@ -122,7 +127,7 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
     return (
         <div
             data-id="gallery-thumb"
-            className="gallery-thumb-container"
+            className={isNewArrival ? "gallery-thumb-container gallery-thumb-arrived" : "gallery-thumb-container"}
             style={{
                 position: "absolute",
                 left: `${x}px`,

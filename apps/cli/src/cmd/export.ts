@@ -6,6 +6,7 @@ import { createWriteStream } from "fs";
 import { pipeline } from "stream/promises";
 import { ensureDir } from "node-utils";
 import { log } from "utils";
+import { openLazyOriginStorage } from "node-api";
 import { loadDatabase, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
 
 export type AssetType = "original" | "display" | "thumb";
@@ -25,8 +26,13 @@ export async function exportCommand(context: ICommandContext, assetId: string, o
     const assetType = options.type || "original";
     const dbPath = options.db || process.cwd();
 
-    const { bsonDatabase: metadataDatabase, assetStorage } = await loadDatabase(dbPath, options, uuidGenerator, timestampProvider, sessionId);
+    const { bsonDatabase: metadataDatabase, assetStorage: localStorage, rawAssetStorage } = await loadDatabase(dbPath, options, uuidGenerator, timestampProvider, sessionId);
     const metadataCollection = metadataDatabase.collection("metadata");
+
+    // A partial database may have dropped this original locally because the origin holds it. Reading
+    // through origin-backed storage is what fetches it back, so exporting works whether the file is
+    // on this machine or only on the remote.
+    const assetStorage = await openLazyOriginStorage(localStorage, rawAssetStorage);
     
     const asset = await metadataCollection.getOne(assetId);
     if (!asset) {
@@ -56,14 +62,13 @@ export async function exportCommand(context: ICommandContext, assetId: string, o
     };
 
     const assetStoragePath = getAssetStoragePath(assetType);
-    
-    // Check if the asset exists in storage
-    const assetExists = await assetStorage.fileExists(assetStoragePath);    
-    if (!assetExists) {
-        log.error(`Asset ${assetId} not found in database.`)
-        await exit(1);
-        return;
-    }
+
+    // There is deliberately no existence check on the file here. A partial database does not hold
+    // every original on disk: an original the origin already has may have been dropped to save
+    // space, and is fetched back from the origin when it is read. An existence check only ever looks
+    // locally, so it reported an evicted original as missing from the database when the record was
+    // right there and the file was one read away. The read below is what decides: if the file is
+    // absent locally and the origin cannot supply it, it fails and says so.
 
     // Prepare output path
     const outputDir = path.dirname(outputPath);

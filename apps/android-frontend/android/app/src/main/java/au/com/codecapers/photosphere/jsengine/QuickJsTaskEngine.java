@@ -524,6 +524,12 @@ public final class QuickJsTaskEngine implements TaskEngine {
         host.setProperty("ffprobe", (JSCallFunction) args -> safeString(() ->
             hostBridge.ffprobe((String) args[0])));
 
+        // The device photo library is deliberately not installed here. Automatic import reads it from
+        // the WebView, through JsEnginePlugin's mediaLibrary* methods, because its loop cannot run in
+        // an engine: the pool has three slots, the asset server holds one for the life of the app,
+        // and a long-running loop in a second leaves nothing for the tasks the import it queues needs
+        // in turn. Nothing inside an engine reads the library, so nothing here installs it.
+
         // Native-backed UDP functions: LAN-share discovery binds a datagram socket and broadcasts /
         // receives through these. Inbound datagrams are pushed into the engine via globalThis.__udpEvent.
         host.setProperty("udpBind", (JSCallFunction) args -> safeString(() ->

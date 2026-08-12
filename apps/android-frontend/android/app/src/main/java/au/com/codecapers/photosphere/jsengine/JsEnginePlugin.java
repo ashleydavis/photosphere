@@ -15,8 +15,11 @@ import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
+import com.getcapacitor.PermissionState;
 import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -45,7 +48,26 @@ import java.util.UUID;
 // listener is registered, events are buffered per-taskId while no listener exists and flushed
 // when one registers.
 //
-@CapacitorPlugin(name = "JsEngine")
+// The photo library permissions are declared here, as aliases, because that is how Capacitor asks
+// for a permission and how it delivers the answer back. Requesting straight through
+// ActivityCompat.requestPermissions instead looks like it works and does not: the result goes to the
+// Activity, and Capacitor only forwards it to the plugin it believes made the request, so a request
+// it never saw is answered into nothing and the call waits forever. There are two aliases because
+// Android 13 split the storage permission into per-type media ones and an alias names a fixed list,
+// so the version decides which one is asked for.
+@CapacitorPlugin(
+    name = "JsEngine",
+    permissions = {
+        @Permission(
+            alias = MediaPermissions.PER_TYPE_MEDIA_ALIAS,
+            strings = { MediaPermissions.READ_MEDIA_IMAGES, MediaPermissions.READ_MEDIA_VIDEO }
+        ),
+        @Permission(
+            alias = MediaPermissions.LEGACY_STORAGE_ALIAS,
+            strings = { MediaPermissions.READ_EXTERNAL_STORAGE }
+        ),
+    }
+)
 public final class JsEnginePlugin extends Plugin {
 
     //
@@ -341,6 +363,121 @@ public final class JsEnginePlugin extends Plugin {
     public void load() {
         super.load();
         ExportTemp.sweep(getStorageRoot());
+
+        // Registers what can present the system delete confirmation for removing photos from the
+        // device library. The engines that ask for a deletion run on background threads with no
+        // Activity of their own, so they read it from here.
+        MediaDeleteBroker.register(new MediaLibraryHost.DeleteRequester() {
+            @Override
+            public boolean requestDelete(List<Uri> itemUris) {
+                return requestMediaDelete(itemUris);
+            }
+        });
+    }
+
+    //
+    // Presents the system confirmation for deleting the given library items, and blocks the calling
+    // engine thread until the user answers.
+    //
+    // Blocking is deliberate: the host function it serves is synchronous, because everything across
+    // the engine bridge is. The wait is bounded, so a dialog that never comes back (the app being
+    // backgrounded, say) fails as "not deleted" rather than holding an engine thread forever.
+    //
+    private boolean requestMediaDelete(List<Uri> itemUris) {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) {
+            // Before Android 11 an app with the storage permission may delete media directly, and
+            // there is no system confirmation to present.
+            int deleted = 0;
+            for (Uri itemUri : itemUris) {
+                deleted += getContext().getContentResolver().delete(itemUri, null, null);
+            }
+            return deleted == itemUris.size();
+        }
+
+        android.app.PendingIntent pendingIntent =
+            android.provider.MediaStore.createDeleteRequest(getContext().getContentResolver(), itemUris);
+
+        final java.util.concurrent.CountDownLatch answered = new java.util.concurrent.CountDownLatch(1);
+        final boolean[] wasDeleted = new boolean[] { false };
+
+        mediaDeleteAnswer = new MediaDeleteAnswer(answered, wasDeleted);
+
+        try {
+            getActivity().startIntentSenderForResult(
+                pendingIntent.getIntentSender(), MEDIA_DELETE_REQUEST_CODE, null, 0, 0, 0);
+        }
+        catch (android.content.IntentSender.SendIntentException error) {
+            Log.e(LOG_TAG, "Could not present the delete confirmation", error);
+            mediaDeleteAnswer = null;
+            return false;
+        }
+
+        try {
+            if (!answered.await(MEDIA_DELETE_TIMEOUT_SECONDS, java.util.concurrent.TimeUnit.SECONDS)) {
+                Log.e(LOG_TAG, "The delete confirmation was never answered");
+                return false;
+            }
+        }
+        catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+        finally {
+            mediaDeleteAnswer = null;
+        }
+
+        return wasDeleted[0];
+    }
+
+    //
+    // The request code the delete confirmation is answered under.
+    //
+    private static final int MEDIA_DELETE_REQUEST_CODE = 9318;
+
+    //
+    // How long to wait for the user to answer the delete confirmation before giving up on it.
+    //
+    private static final int MEDIA_DELETE_TIMEOUT_SECONDS = 120;
+
+    //
+    // What a waiting delete request is answered through.
+    //
+    private static final class MediaDeleteAnswer {
+        // Released once the user has answered.
+        final java.util.concurrent.CountDownLatch answered;
+
+        // Set to the answer before the latch is released.
+        final boolean[] wasDeleted;
+
+        MediaDeleteAnswer(java.util.concurrent.CountDownLatch answered, boolean[] wasDeleted) {
+            this.answered = answered;
+            this.wasDeleted = wasDeleted;
+        }
+    }
+
+    //
+    // The delete request currently waiting on an answer, or null when none is.
+    //
+    private volatile MediaDeleteAnswer mediaDeleteAnswer;
+
+    //
+    // Hands the user's answer to the delete confirmation back to the engine thread waiting on it.
+    //
+    @Override
+    protected void handleOnActivityResult(int requestCode, int resultCode, Intent data) {
+        super.handleOnActivityResult(requestCode, resultCode, data);
+
+        if (requestCode != MEDIA_DELETE_REQUEST_CODE) {
+            return;
+        }
+
+        MediaDeleteAnswer answer = mediaDeleteAnswer;
+        if (answer == null) {
+            return;
+        }
+
+        answer.wasDeleted[0] = resultCode == Activity.RESULT_OK;
+        answer.answered.countDown();
     }
 
     //
@@ -550,6 +687,203 @@ public final class JsEnginePlugin extends Plugin {
             response.put("paths", exportedArray);
         }
         call.resolve(response);
+    }
+
+    //
+    // requestMediaPermission: asks for the photo library permission and reports whether it was
+    // granted, as { granted: boolean }.
+    //
+    // Android 13 split the old storage permission into per-type media ones, so which permission to
+    // ask for depends on the version the app is running on, not the one it was built against.
+    //
+    @PluginMethod
+    public void requestMediaPermission(PluginCall call) {
+        String alias = MediaPermissions.aliasForVersion(android.os.Build.VERSION.SDK_INT);
+
+        if (getPermissionState(alias) == PermissionState.GRANTED) {
+            resolveMediaPermission(call, alias);
+            return;
+        }
+
+        requestPermissionForAlias(alias, call, "mediaPermissionCallback");
+    }
+
+    //
+    // Reports the photo library permission answer back to the call that asked for it.
+    //
+    // A permission the user has refused for good is answered here without a dialog, which is what a
+    // refusal has to look like: the call comes back denied rather than waiting for an answer that is
+    // never coming.
+    //
+    @PermissionCallback
+    private void mediaPermissionCallback(PluginCall call) {
+        resolveMediaPermission(call, MediaPermissions.aliasForVersion(android.os.Build.VERSION.SDK_INT));
+    }
+
+    //
+    // Resolves a photo library permission call with what the platform says about the alias.
+    //
+    // Granted means every permission in the alias was granted, which is what Capacitor reports:
+    // automatic import reads both images and videos, and a half-granted answer would silently back
+    // up only half the library.
+    //
+    private void resolveMediaPermission(PluginCall call, String alias) {
+        JSObject result = new JSObject();
+        result.put("granted", getPermissionState(alias) == PermissionState.GRANTED);
+        call.resolve(result);
+    }
+
+    //
+    // stageMediaDeleteOutcome: stages the answer to the next photo library delete request, instead
+    // of presenting the system confirmation.
+    //
+    // The confirmation cannot be tapped by an automated test, and its wording and controls change
+    // between Android versions. Staging the answer leaves everything above the dialog under test:
+    // choosing which photos are confirmed, batching them into one request, and handling both
+    // answers. Nothing stages an outcome in production, so the real request is issued.
+    //
+    @PluginMethod
+    public void stageMediaDeleteOutcome(PluginCall call) {
+        String outcome = call.getString("outcome");
+        if (outcome == null) {
+            call.reject("outcome is required");
+            return;
+        }
+
+        MediaDeleteBroker.stageOutcome("deleted".equals(outcome));
+        Log.i(LOG_TAG, "Staged the next photo library delete request as \"" + outcome + "\"");
+        call.resolve();
+    }
+
+    //
+    // The photo library the frontend reads through, created on first use.
+    //
+    // The engines have one of these each through their host bridge. This is a second one, for the
+    // WebView, and it is deliberately not shared with them: automatic import is driven from the
+    // WebView precisely so that it occupies none of the three engine slots, and routing its library
+    // reads back through an engine would put it straight back into one.
+    //
+    private MediaLibraryHost frontendMediaLibrary;
+
+    //
+    // Returns the frontend's photo library, creating it on first use.
+    //
+    private synchronized MediaLibraryHost frontendMediaLibrary() {
+        if (frontendMediaLibrary == null) {
+            frontendMediaLibrary = new MediaLibraryHost(getContext(), getStorageRoot());
+            frontendMediaLibrary.setDeleteRequester(MediaDeleteBroker.requester());
+        }
+        return frontendMediaLibrary;
+    }
+
+    //
+    // mediaLibraryList: one page of the device photo library, as { json: string }.
+    //
+    // The page comes back as a JSON string rather than as a Capacitor object because that is what
+    // MediaLibraryHost already produces for the engines, and re-marshalling it into JSObject only to
+    // have the WebView parse it again would be two conversions where one will do.
+    //
+    @PluginMethod
+    public void mediaLibraryList(PluginCall call) {
+        String cursor = call.getString("cursor", "");
+        Integer pageSize = call.getInt("pageSize");
+        if (pageSize == null) {
+            call.reject("mediaLibraryList requires pageSize");
+            return;
+        }
+
+        try {
+            JSObject result = new JSObject();
+            result.put("json", frontendMediaLibrary().mediaLibraryList(cursor, pageSize));
+            call.resolve(result);
+        }
+        catch (RuntimeException error) {
+            Log.e(LOG_TAG, "Could not list the photo library", error);
+            call.reject(error.getMessage(), error);
+        }
+    }
+
+    //
+    // mediaLibraryAlbums: the albums in the device photo library, as { json: string }.
+    //
+    @PluginMethod
+    public void mediaLibraryAlbums(PluginCall call) {
+        try {
+            JSObject result = new JSObject();
+            result.put("json", frontendMediaLibrary().mediaLibraryAlbums());
+            call.resolve(result);
+        }
+        catch (RuntimeException error) {
+            Log.e(LOG_TAG, "Could not list the photo library albums", error);
+            call.reject(error.getMessage(), error);
+        }
+    }
+
+    //
+    // mediaLibraryExport: copies one library item into the sandbox, resolving { path: string } with
+    // the sandbox-relative path the import can read it from.
+    //
+    @PluginMethod
+    public void mediaLibraryExport(PluginCall call) {
+        String itemId = call.getString("itemId");
+        if (itemId == null) {
+            call.reject("mediaLibraryExport requires itemId");
+            return;
+        }
+
+        try {
+            JSObject result = new JSObject();
+            result.put("path", frontendMediaLibrary().mediaLibraryExport(itemId));
+            call.resolve(result);
+        }
+        catch (RuntimeException error) {
+            Log.e(LOG_TAG, "Could not export a photo library item", error);
+            call.reject(error.getMessage(), error);
+        }
+    }
+
+    //
+    // mediaLibraryRelease: deletes the sandbox copy an export made.
+    //
+    @PluginMethod
+    public void mediaLibraryRelease(PluginCall call) {
+        String itemId = call.getString("itemId");
+        if (itemId == null) {
+            call.reject("mediaLibraryRelease requires itemId");
+            return;
+        }
+
+        try {
+            frontendMediaLibrary().mediaLibraryRelease(itemId);
+            call.resolve();
+        }
+        catch (RuntimeException error) {
+            Log.e(LOG_TAG, "Could not release an exported photo library item", error);
+            call.reject(error.getMessage(), error);
+        }
+    }
+
+    //
+    // mediaLibraryDelete: asks to delete the named items as one system confirmation, resolving
+    // { json: string } with which of them went and which did not.
+    //
+    @PluginMethod
+    public void mediaLibraryDelete(PluginCall call) {
+        String itemIdsJson = call.getString("itemIdsJson");
+        if (itemIdsJson == null) {
+            call.reject("mediaLibraryDelete requires itemIdsJson");
+            return;
+        }
+
+        try {
+            JSObject result = new JSObject();
+            result.put("json", frontendMediaLibrary().mediaLibraryDelete(itemIdsJson));
+            call.resolve(result);
+        }
+        catch (RuntimeException error) {
+            Log.e(LOG_TAG, "Could not delete photo library items", error);
+            call.reject(error.getMessage(), error);
+        }
     }
 
     //
