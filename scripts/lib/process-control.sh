@@ -143,7 +143,7 @@ kill_process_group() {
 #
 # The probe is a real background job, because the question is what the kernel did and not what the
 # manual says. It is killed as soon as its group has been read, so it costs one process spawn rather
-# than the second its sleep asks for, and it happens once for the life of the shell.
+# than the minute its sleep asks for, and it happens once for the life of the shell.
 # Usage: process_control_verify_job_control
 #
 process_control_verify_job_control() {
@@ -182,8 +182,15 @@ process_control_verify_job_control() {
             ;;
     esac
 
+    # The probe has to still be alive when its group is read below, so it sleeps far longer than that
+    # read can take. It used to sleep one second, and on a machine busy running another suite the `ps`
+    # in process_group_of ran after the probe had already exited. `ps` prints nothing for a dead pid,
+    # the empty result was read as "job control gave this job no group of its own", and every suite
+    # that checks this refused to launch anything. That is why test:and failed with `probe pid N
+    # landed in group ''` only when another suite was running beside it, and passed on its own. The
+    # probe is killed the moment its group has been read, so the longer sleep costs nothing.
     set -m
-    sleep 1 &
+    sleep 60 &
     probe_pid=$!
     if [ "$monitor_was_on" = "no" ]; then
         set +m
