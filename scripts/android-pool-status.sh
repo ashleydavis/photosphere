@@ -53,6 +53,11 @@ REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 # prevent.
 source "$REPO_DIR/apps/android-frontend/scripts/emulator-config.sh"
 
+# The readings themselves: where adb is, whether a guest is on the bridge, and how much room it has
+# left. Shared with the pool monitor and with emulator.sh's repair path, so the three cannot disagree
+# about whether an emulator is usable. See emulator-status-lib.sh.
+source "$REPO_DIR/apps/android-frontend/scripts/emulator-status-lib.sh"
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
@@ -61,66 +66,18 @@ NC='\033[0m'
 # Suppress the summary line and answer with the exit code alone.
 QUIET="false"
 
-# How long to wait on any one adb call. An emulator that has locked up does not answer at all, and
-# without this the check inherits its hang instead of reporting it.
-ADB_TIMEOUT_SECONDS=8
-
-# How little free space on a pool emulator's /data is too little to start a suite on.
-#
-# The debug APK is around 110MB and an install needs several times that: adb streams a copy into the
-# staging area, the package manager keeps the installed copy, the native libraries are extracted
-# beside it and dex optimisation writes more again. Every test then writes databases, imported photos
-# and video thumbnails into app storage on top. An emulator with 400MB free has been seen to refuse
-# the install outright, which is where this number comes from: it is the point at which an install is
-# no longer safe to assume, not the point at which one is certain to fail.
-LOW_SPACE_MB=1024
-
-# The device path the free-space reading is taken at: the app's data volume, which is what an install
-# and everything a test writes both land on. /data itself reports the whole partition and is not what
-# the package manager measures against.
-DEVICE_DATA_PATH="/data/user/0"
+# How long to wait on any one adb call, how little free space is too little, and where that reading
+# is taken. All three come from emulator-status-lib.sh, which is where the readings themselves live,
+# so the number this reports low space against is the same one the repair path acts on.
+ADB_TIMEOUT_SECONDS="$EMULATOR_STATUS_ADB_TIMEOUT_SECONDS"
+LOW_SPACE_MB="$EMULATOR_STATUS_LOW_SPACE_MB"
+DEVICE_DATA_PATH="$EMULATOR_STATUS_DEVICE_DATA_PATH"
 
 # One "<serial> <megabytes>" entry per pool emulator found below LOW_SPACE_MB. Filled while the
 # emulators are walked and printed after the verdict, so the headline still comes first. A global
 # rather than a local passed around, because an empty array cannot be expanded into a function's
 # arguments under `set -u` without a guard that reads worse than this does.
 LOW_SPACE_FOUND=()
-
-#
-# Prints the path to adb, or nothing when it cannot be found. Looks on PATH first and then in the SDK,
-# the same two places emulator.sh looks.
-#
-adb_path() {
-    if command -v adb >/dev/null 2>&1; then
-        command -v adb
-        return 0
-    fi
-
-    local sdk_adb="${ANDROID_HOME:-$HOME/Android/Sdk}/platform-tools/adb"
-    if [ -x "$sdk_adb" ]; then
-        echo "$sdk_adb"
-    fi
-}
-
-#
-# Prints the megabytes free on the given device's app data volume, or nothing when the device cannot
-# be asked. Android's df reports 1K blocks by default, and the fourth column is what is available.
-# Usage: device_free_mb <adb> <serial>
-#
-device_free_mb() {
-    local adb="$1"
-    local serial="$2"
-    local available_kb
-    available_kb="$(timeout "$ADB_TIMEOUT_SECONDS" "$adb" -s "$serial" shell df "$DEVICE_DATA_PATH" 2>/dev/null | tr -d '\r' | awk 'NR > 1 { print $4; exit }' || true)"
-    # Only a plain number is believed. A device that answered with an error, a warning or nothing at
-    # all must not be reported as having some particular amount of room.
-    case "$available_kb" in
-        ''|*[!0-9]*)
-            return 0
-            ;;
-    esac
-    echo "$(( available_kb / 1024 ))"
-}
 
 #
 # Prints a line per pool emulator in LOW_SPACE_FOUND, and nothing at all when every one of them has
@@ -158,7 +115,7 @@ main() {
     done
 
     local adb
-    adb="$(adb_path)"
+    adb="$(emulator_status_adb)"
     if [ -z "$adb" ]; then
         if [ "$QUIET" = "false" ]; then
             echo -e "${RED}pool down${NC}: adb not found on PATH or in \${ANDROID_HOME:-\$HOME/Android/Sdk}/platform-tools"
@@ -186,7 +143,7 @@ main() {
 
         running=$(( running + 1 ))
 
-        guest="$(timeout "$ADB_TIMEOUT_SECONDS" "$adb" -s "$serial" shell ip addr show wlan0 2>/dev/null | tr -d '\r' | awk '/inet 192\.168\.55\./ { print $2 }' || true)"
+        guest="$(emulator_bridge_address "$serial")"
         if [ -n "$guest" ]; then
             on_bridge=$(( on_bridge + 1 ))
         fi
@@ -194,7 +151,7 @@ main() {
         # Asked of every running pool emulator, on or off the bridge. Being off the bridge is the
         # louder problem but it is not the only one, and an emulator brought back onto the bridge is
         # still unusable if it has no room.
-        free_mb="$(device_free_mb "$adb" "$serial")"
+        free_mb="$(emulator_free_mb "$serial")"
         if [ -n "$free_mb" ] && [ "$free_mb" -lt "$LOW_SPACE_MB" ]; then
             LOW_SPACE_FOUND+=("$serial $free_mb")
         fi

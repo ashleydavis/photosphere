@@ -35,21 +35,19 @@ set -euo pipefail
 # Name of the bridge (the virtual switch). Prefixed so it is obvious what created it.
 BRIDGE_NAME="br-psphere"
 
-# How many emulators the pool brings up. Only `pool-up` reads this; `up` is always a single emulator.
-#
-# Reduced from 5 to 3 to lighten the load on the development machine. Five emulators sat at roughly
-# 5GB resident each once warm, which together with the test suite left the machine with very little
-# headroom, and a run in that state saw four of the five die inside ten minutes. Three is enough for
-# the mobile smoke suite to keep running several tests at once; it is slower than five, not broken.
-#
-# Override with the environment variable to go back up, for example
-# PHOTOSPHERE_EMULATOR_COUNT=5 bun run emu:and:pool
-PHOTOSPHERE_EMULATOR_COUNT="${PHOTOSPHERE_EMULATOR_COUNT:-5}"
-
-# The tap and AVD names, shared with the smoke-test harness and the run script. Sourced rather than
-# repeated, so a rename cannot leave one side looking for an interface or an AVD the other never
-# creates. See emulator-config.sh for what each one is for.
+# The tap and AVD names, how many emulators the pool has, and the harness's device lock path, shared
+# with the smoke-test harness and the run script. Sourced rather than repeated, so a rename cannot
+# leave one side looking for an interface or an AVD the other never creates. See emulator-config.sh
+# for what each one is for.
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/emulator-config.sh"
+
+# The readings that say whether an emulator is healthy, shared with scripts/android-pool-status.sh
+# and the pool monitor so all three judge an emulator the same way. See emulator-status-lib.sh.
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/emulator-status-lib.sh"
+
+# kill_process_tree, for the one case systemd cannot cover: an emulator process that outlived its
+# unit. Never a match on a command line; only pids read from the AVD's own lock file are passed to it.
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../../scripts/lib/process-control.sh"
 
 #
 # Prints the tap interface name for the single emulator.
@@ -70,6 +68,26 @@ pool_netcard_name() {
 #
 pool_avd_name() {
     echo "$POOL_AVD_PREFIX-$1"
+}
+
+#
+# Prints the systemd user unit name for the given pool instance index.
+#
+# One definition, used by the code that starts a pool emulator and by the code that stops and
+# diagnoses one, so the two cannot disagree about what a unit is called. POOL_UNIT_GLOB above matches
+# every name this prints.
+#
+pool_unit_name() {
+    echo "psphere-emu-pool-$1"
+}
+
+#
+# Prints the path of the log one emulator's unit writes to, for the given log suffix ("single", or
+# "pool-<index>"). One definition, so the code that points a unit at a log and the code that reads
+# that log back cannot look at different files.
+#
+pool_log_path() {
+    echo "/tmp/psphere-emulator-$1.log"
 }
 
 #
@@ -157,6 +175,30 @@ AVD_DATA_PARTITION_SIZE="12G"
 # because the wait is normally a moment; it is generous only so that a loaded machine is not failed
 # for being slow.
 POOL_UNIT_RELEASE_TIMEOUT_SECONDS=60
+
+# How long `systemctl stop` is given for one pool emulator before it is escalated to SIGKILL, and how
+# long the SIGKILL is then given.
+#
+# Bounded because an unbounded stop is what a recovery cannot afford. On 2026-08-09 a unit sat in
+# stop-sigterm and `systemctl stop` blocked on it for two minutes with nothing to say why, during an
+# incident where five emulators were already down.
+POOL_STOP_TIMEOUT_SECONDS=30
+POOL_KILL_TIMEOUT_SECONDS=15
+
+# How long a pool emulator is left alone after its unit went active before pool-repair will judge it
+# broken. A cold boot takes well over a minute, and an emulator part way through one looks exactly
+# like a broken one: no adb device, or a device with no address yet.
+POOL_REPAIR_GRACE_SECONDS="${POOL_REPAIR_GRACE_SECONDS:-90}"
+
+# How long pool-repair waits for an emulator it restarted to reach the LAN bridge before calling the
+# repair failed. Generous, because this is a cold boot with -wipe-data on a machine that is usually
+# busy: pool-up allows 600s for a whole pool, and this is one emulator's share of that with room.
+POOL_REPAIR_BOOT_TIMEOUT_SECONDS="${POOL_REPAIR_BOOT_TIMEOUT_SECONDS:-420}"
+
+# Exit status stop_pool_emulator and repair_pool_index use to say an emulator was left alone because
+# a test run holds its lock. Distinct from a failure, because nothing went wrong and nothing was
+# changed; the caller reports it and moves on to the next index.
+POOL_REPAIR_SKIPPED_STATUS=2
 
 #
 # True when the DHCP server we started is still alive.
@@ -888,7 +930,18 @@ start_emulator_bg() {
         fi
     done
 
-    local unit="psphere-emu-$log_suffix"
+    # A pool emulator's unit name comes from pool_unit_name rather than being built here, so the
+    # repair and diagnostic code, which has only an index to work from, cannot end up looking at a
+    # different name from the one this started.
+    local unit
+    case "$log_suffix" in
+        pool-*)
+            unit="$(pool_unit_name "${log_suffix#pool-}")"
+            ;;
+        *)
+            unit="psphere-emu-$log_suffix"
+            ;;
+    esac
 
     # A transient unit disappears once it has stopped, but one whose emulator exited non-zero stays
     # behind in the failed state, and starting this name again would collide with it. This clears
@@ -928,13 +981,20 @@ start_emulator_bg() {
     # ${setenv_args[@]+"${setenv_args[@]}"} rather than "${setenv_args[@]}" because this script runs
     # under `set -u`, where expanding an empty array is an unbound-variable error on older bash. The
     # + form expands to nothing at all when the array is empty, which is what is wanted.
+    #
+    # append: rather than file:. file: truncates the log when the unit opens it, so restarting an
+    # emulator destroys the output of the one that just died, which is the only account of why it
+    # died. During the recovery on 2026-08-09 the pool's logs held nothing but crash output from
+    # earlier boots, and there was no way to tell whether the processes that had just been started
+    # had written anything at all. The logs now grow rather than being reset each time; they live in
+    # /tmp, so a reboot clears them, and pool-diagnose reads the tail rather than the whole file.
     systemd-run --user --unit="$unit" \
         --slice="$POOL_SLICE" \
         --description="Photosphere emulator: $avd on $netcard" \
         -p MemoryHigh=8G \
         -p MemorySwapMax=2G \
-        -p StandardOutput="file:/tmp/psphere-emulator-$log_suffix.log" \
-        -p StandardError="file:/tmp/psphere-emulator-$log_suffix.log" \
+        -p StandardOutput="append:$(pool_log_path "$log_suffix")" \
+        -p StandardError="append:$(pool_log_path "$log_suffix")" \
         ${setenv_args[@]+"${setenv_args[@]}"} \
         "${emulator_argv[@]}"
 }
@@ -1298,6 +1358,712 @@ cmd_pool_restart() {
 }
 
 #
+# Prints "<active_state> <result> <main_pid>" for one pool index's unit, and "inactive none 0" when
+# no such unit exists. Read-only: it looks at the unit and changes nothing about it.
+#
+# Never prints an empty field, so a caller can read the three with one `read` and compare them
+# without first working out whether the unit was there at all. A transient unit disappears completely
+# once it has stopped, so "no such unit" is the ordinary state of a pool index whose emulator is not
+# running, not an error.
+#
+# The properties are read by name rather than positionally. `systemctl show --value` prints them in
+# systemd's own order and not in the order they were asked for, which was confirmed here: asking for
+# ActiveState, Result and MainPID prints the pid first.
+# Usage: pool_unit_state <index>
+#
+pool_unit_state() {
+    local unit properties load active result main_pid
+    unit="$(pool_unit_name "$1")"
+
+    if ! command -v systemctl >/dev/null 2>&1; then
+        echo "inactive none 0"
+        return 0
+    fi
+
+    properties="$(systemctl --user show -p LoadState -p ActiveState -p Result -p MainPID "$unit" 2>/dev/null || true)"
+    load="$(printf '%s\n' "$properties" | awk -F= '$1 == "LoadState" { print $2 }')"
+    if [ -z "$load" ] || [ "$load" = "not-found" ]; then
+        echo "inactive none 0"
+        return 0
+    fi
+
+    active="$(printf '%s\n' "$properties" | awk -F= '$1 == "ActiveState" { print $2 }')"
+    result="$(printf '%s\n' "$properties" | awk -F= '$1 == "Result" { print $2 }')"
+    main_pid="$(printf '%s\n' "$properties" | awk -F= '$1 == "MainPID" { print $2 }')"
+    echo "${active:-inactive} ${result:-none} ${main_pid:-0}"
+}
+
+#
+# Prints how many seconds ago one pool index's unit became active, or nothing when it is not active.
+# Read-only.
+#
+# Read from the unit rather than from the guest, because an emulator that is not answering adb cannot
+# be asked how long it has been up, and that is exactly the emulator whose age matters. Systemd's
+# monotonic timestamp is microseconds since boot and /proc/uptime is seconds since boot; a machine
+# that suspended counts that time in one and not the other, which is a few seconds' drift on an hours
+# long figure and does not change any decision made from it.
+# Usage: pool_unit_uptime_seconds <index>
+#
+pool_unit_uptime_seconds() {
+    local unit monotonic uptime active
+    unit="$(pool_unit_name "$1")"
+
+    if ! command -v systemctl >/dev/null 2>&1; then
+        return 0
+    fi
+
+    # A unit that has failed keeps the timestamp of when it last went active, so the state is checked
+    # rather than inferred from the timestamp being there. An emulator that died an hour ago is not
+    # an emulator that has been up all day.
+    active="$(systemctl --user show -p ActiveState --value "$unit" 2>/dev/null || true)"
+    if [ "$active" != "active" ]; then
+        return 0
+    fi
+
+    monotonic="$(systemctl --user show -p ActiveEnterTimestampMonotonic --value "$unit" 2>/dev/null || true)"
+    case "$monotonic" in
+        ''|*[!0-9]*|0)
+            return 0
+            ;;
+    esac
+
+    uptime="$(awk '{ print int($1) }' /proc/uptime 2>/dev/null || true)"
+    case "$uptime" in
+        ''|*[!0-9]*)
+            return 0
+            ;;
+    esac
+
+    echo "$(( uptime - monotonic / 1000000 ))"
+}
+
+#
+# Prints the process ids recorded in the given AVD's own lock files, one per line, and nothing when
+# the AVD holds no lock. Read-only.
+#
+# What is actually there, read from a running pool AVD on this machine rather than assumed:
+#
+#   hardware-qemu.ini.lock   8 bytes, mode 0600. The pid of the emulator's qemu process in ASCII
+#                            digits followed by a NUL. Confirmed against /proc: the pid in
+#                            psphere-pool-0.avd named the qemu-system-x86_64 process running
+#                            "-avd psphere-pool-0 ... -wifi-tap emu-pool-0".
+#   multiinstance.lock       0 bytes. An flock target, so it carries no pid and there is nothing here
+#                            to read from it.
+#
+# This exists because cmd_pool_down stops emulators only through `adb emu kill`, so an emulator that
+# has crashed far enough for adb to drop it is never stopped at all. It keeps its AVD lock, and the
+# next start of that AVD refuses. That is the state the pool was left in on 2026-08-09.
+# Usage: pool_avd_lock_pids <avd_name>
+#
+pool_avd_lock_pids() {
+    local avd="$1"
+    local lock_file pid
+    lock_file="$(avd_home)/$avd.avd/hardware-qemu.ini.lock"
+
+    if [ ! -f "$lock_file" ]; then
+        return 0
+    fi
+
+    # Everything that is not a digit is dropped, which covers the trailing NUL and any newline.
+    pid="$(tr -dc '0-9' < "$lock_file" 2>/dev/null || true)"
+    if [ -n "$pid" ]; then
+        echo "$pid"
+    fi
+}
+
+#
+# True when the given pid is alive and is the emulator running the given AVD. Read-only.
+#
+# The pid comes from that AVD's own lock file, so this is a check on something that was recorded
+# rather than a search for a process by name: the AVD name is compared against one whole argument in
+# the process's command line, so psphere-pool-1 can never match psphere-pool-10.
+# Usage: pid_is_emulator_for_avd <pid> <avd_name>
+#
+pid_is_emulator_for_avd() {
+    local pid="$1"
+    local avd="$2"
+
+    if [ ! -d "/proc/$pid" ]; then
+        return 1
+    fi
+
+    tr '\0' '\n' < "/proc/$pid/cmdline" 2>/dev/null | grep -Fxq "$avd"
+}
+
+#
+# Waits until systemd has released ONE pool index's transient unit name, so that name can be started
+# again. Read-only: it stops nothing.
+#
+# Scoped to one unit, unlike wait_for_pool_units_released, which waits for the whole pool's glob and
+# is right for pool-down, where every emulator is going. A repair restarts one emulator while the
+# others keep running, so waiting on the glob would wait for units that are meant to still be there
+# and time out every time.
+#
+# The reasoning is otherwise that function's: adb drops an emulator as soon as its socket goes but
+# systemd keeps the unit loaded a moment longer while it reaps the process, and systemd-run refuses a
+# name that is still loaded. A unit whose emulator died is failed instead, and stays loaded
+# indefinitely, so that is cleared rather than waited on.
+# Usage: wait_for_pool_unit_released <index>
+#
+wait_for_pool_unit_released() {
+    local unit waited=0
+    unit="$(pool_unit_name "$1")"
+
+    if ! command -v systemctl >/dev/null 2>&1; then
+        return 0
+    fi
+
+    while [ "$waited" -lt "$POOL_UNIT_RELEASE_TIMEOUT_SECONDS" ]; do
+        # Inside the loop, not once before it: a unit on its way out when this starts can reach the
+        # failed state part way through the wait, and would then never be cleared at all.
+        systemctl --user reset-failed "$unit" >/dev/null 2>&1 || true
+
+        if [ "$(systemctl --user list-units --all --no-legend --plain "$unit.service" 2>/dev/null | wc -l)" -eq 0 ]; then
+            return 0
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+
+    echo "ERROR: systemd still has $unit loaded after ${POOL_UNIT_RELEASE_TIMEOUT_SECONDS}s," >&2
+    echo "so starting it again would collide with it." >&2
+    systemctl --user list-units --all --no-legend --plain "$unit.service" >&2 2>/dev/null || true
+    return 1
+}
+
+#
+# Stops one pool emulator and says what it took, escalating rather than waiting indefinitely. Returns
+# non-zero when the emulator is still alive at the end, so a caller never mistakes a stubborn one for
+# a stopped one.
+#
+# Three stages, each bounded: `systemctl stop`, then SIGKILL through the unit, then, for a process
+# that outlived its unit entirely, kill_process_tree on the pid recorded in the AVD's lock file. The
+# last one is what `pool-down` cannot do: it kills through `adb emu kill`, which needs an emulator adb
+# can still see, and a crashed emulator is exactly the one adb has dropped.
+#
+# Nothing here selects a process by matching a command line. The only pid it ever signals came out of
+# that AVD's own lock file, and it is checked against /proc before it is touched.
+# Usage: stop_pool_emulator <index>
+#
+stop_pool_emulator() {
+    local index="$1"
+    local unit avd load pid waited
+    unit="$(pool_unit_name "$index")"
+    avd="$(pool_avd_name "$index")"
+
+    if command -v systemctl >/dev/null 2>&1; then
+        echo "  stopping $unit (up to ${POOL_STOP_TIMEOUT_SECONDS}s)..."
+        if ! timeout "$POOL_STOP_TIMEOUT_SECONDS" systemctl --user stop "$unit" >/dev/null 2>&1; then
+            echo "  $unit did not stop within ${POOL_STOP_TIMEOUT_SECONDS}s."
+        fi
+
+        load="$(systemctl --user show -p LoadState --value "$unit" 2>/dev/null || true)"
+        if [ -n "$load" ] && [ "$load" != "not-found" ]; then
+            echo "  $unit is still loaded; sending SIGKILL through the unit."
+            systemctl --user kill --signal=SIGKILL "$unit" >/dev/null 2>&1 || true
+
+            waited=0
+            while [ "$waited" -lt "$POOL_KILL_TIMEOUT_SECONDS" ]; do
+                load="$(systemctl --user show -p LoadState --value "$unit" 2>/dev/null || true)"
+                if [ -z "$load" ] || [ "$load" = "not-found" ]; then
+                    break
+                fi
+                sleep 1
+                waited=$((waited + 1))
+            done
+        fi
+
+        systemctl --user reset-failed "$unit" >/dev/null 2>&1 || true
+    fi
+
+    # Whatever systemd thinks, the AVD's lock is what blocks the next start, so the pid in it is
+    # checked directly.
+    for pid in $(pool_avd_lock_pids "$avd"); do
+        if pid_is_emulator_for_avd "$pid" "$avd"; then
+            echo "  pid $pid is still running '$avd' after the unit went; killing it and its children."
+            kill_process_tree "$pid"
+        fi
+    done
+
+    for pid in $(pool_avd_lock_pids "$avd"); do
+        if pid_is_emulator_for_avd "$pid" "$avd"; then
+            echo "  ERROR: pid $pid is still running '$avd'. Index $index was not stopped." >&2
+            return 1
+        fi
+    done
+
+    echo "  index $index is stopped."
+}
+
+#
+# Refuses, with the reason, when the pool's network is not there, and says who can put it back.
+# Returns non-zero when anything is missing, and never runs sudo.
+#
+# This is what makes pool-repair a command with no privileges at all. The bridge, the taps and the
+# DHCP server are the only parts of the pool that need root, they survive an emulator restart, and
+# nothing in a restart requires them to be recreated. A repair therefore either finds them in place
+# and needs nothing, or finds them gone and stops here.
+#
+require_pool_network() {
+    local missing=() index netcard
+
+    if ! ip link show "$BRIDGE_NAME" >/dev/null 2>&1; then
+        missing+=("the bridge $BRIDGE_NAME does not exist")
+    fi
+
+    for index in $(seq 0 $((PHOTOSPHERE_EMULATOR_COUNT - 1))); do
+        netcard="$(pool_netcard_name "$index")"
+        if ! ip link show "$netcard" >/dev/null 2>&1; then
+            missing+=("the tap $netcard does not exist")
+        fi
+    done
+
+    if ! dnsmasq_running; then
+        missing+=("the DHCP server (dnsmasq) is not running")
+    fi
+
+    if [ "${#missing[@]}" -eq 0 ]; then
+        return 0
+    fi
+
+    echo "ERROR: the pool's network is not in place, so there is nothing here that can be repaired:" >&2
+    local reason
+    for reason in "${missing[@]}"; do
+        echo "  - $reason" >&2
+    done
+    echo "" >&2
+    echo "Only 'bun run emu:and:pool:up' creates those, and it needs sudo to do it. This command" >&2
+    echo "never runs sudo and never creates or removes a tap, which is the whole point of it: it" >&2
+    echo "restarts emulators and nothing else." >&2
+    echo "" >&2
+    echo "If you are an agent, stop here and ask the human to run 'bun run emu:and:pool:up'." >&2
+    return 1
+}
+
+#
+# Prints the adb serial of the attached emulator running the given pool index's AVD, or nothing when
+# no such emulator is attached. Read-only.
+# Usage: pool_serial_for_index <index>
+#
+pool_serial_for_index() {
+    local avd
+    avd="$(pool_avd_name "$1")"
+    attached_emulators | awk -v want="$avd" '$2 == want { print $1; exit }'
+}
+
+# The pool index pool_repair_wait_serials answers for. wait_for_ready takes the NAME of a function
+# that prints serials and re-reads it on every poll, so the index it should be watching has to reach
+# that function some other way than an argument.
+POOL_REPAIR_WAIT_INDEX=""
+
+#
+# Prints the serial of the emulator for POOL_REPAIR_WAIT_INDEX, for wait_for_ready to count. Read-only.
+#
+pool_repair_wait_serials() {
+    if [ -z "$POOL_REPAIR_WAIT_INDEX" ]; then
+        return 0
+    fi
+    pool_serial_for_index "$POOL_REPAIR_WAIT_INDEX"
+}
+
+#
+# Prints one tab-separated line describing one pool index, and changes nothing. The fields, in order:
+#
+#   index    the pool index this line is about
+#   serial   its adb serial, or "-" when adb does not list it
+#   unit     its unit's ActiveState: active, inactive, failed, activating, deactivating
+#   uptime   seconds since its unit went active, or "-" when it is not active
+#   verdict  one word: the emulator_health_verdict of its emulator, or "stopped" when the unit is not
+#            running, or "no-device" when the unit is running but adb has no serial for it
+#   repair   yes when it should be restarted, no when it should be left alone
+#   reason   why, in words, or "-" when there is nothing to say
+#
+# Everything that judges a pool index reads it from here: pool-repair, pool-check, and through
+# pool-check the monitor. Every adb reading is taken once, which matters because a sick emulator
+# answers nothing and costs the full timeout on every call to it.
+#
+# An emulator inside its grace period is never reported as needing repair however bad it looks,
+# because a cold boot looks exactly like a failure from the outside: no adb device for the first half
+# minute, then a device with no address for a while after that. Restarting one of those turns a boot
+# that was going to finish into a boot that never does.
+# Usage: pool_index_report <index>
+#
+pool_index_report() {
+    local index="$1"
+    local active result main_pid serial verdict uptime young="no" repair="no" reason="-"
+
+    read -r active result main_pid <<< "$(pool_unit_state "$index")"
+    uptime="$(pool_unit_uptime_seconds "$index")"
+    serial="$(pool_serial_for_index "$index")"
+
+    if [ -n "$uptime" ] && [ "$uptime" -lt "$POOL_REPAIR_GRACE_SECONDS" ]; then
+        young="yes"
+    fi
+
+    if [ "$active" != "active" ]; then
+        verdict="stopped"
+        repair="yes"
+        reason="its unit is $active (result: $result)"
+    elif [ -z "$serial" ]; then
+        verdict="no-device"
+        if [ "$young" = "yes" ]; then
+            reason="its unit is $uptime second(s) old, inside the ${POOL_REPAIR_GRACE_SECONDS}s a boot is allowed"
+        else
+            repair="yes"
+            reason="its unit is active (pid $main_pid) but adb does not list its emulator"
+        fi
+    else
+        verdict="$(emulator_health_verdict "$serial")"
+        if [ "$verdict" = "healthy" ]; then
+            reason="-"
+        elif [ "$young" = "yes" ]; then
+            reason="$serial is $verdict, and its unit is only $uptime second(s) old"
+        else
+            repair="yes"
+            case "$verdict" in
+                low-space)
+                    reason="$serial has under ${EMULATOR_STATUS_LOW_SPACE_MB}MB free on $EMULATOR_STATUS_DEVICE_DATA_PATH"
+                    ;;
+                *)
+                    reason="$serial is $verdict"
+                    ;;
+            esac
+        fi
+    fi
+
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+        "$index" "${serial:--}" "$active" "${uptime:--}" "$verdict" "$repair" "$reason"
+}
+
+#
+# Prints why one pool index needs repairing, and nothing at all when it does not. Read-only.
+# Usage: pool_index_repair_reason <index>
+#
+pool_index_repair_reason() {
+    local index serial unit uptime verdict repair reason
+    IFS=$'\t' read -r index serial unit uptime verdict repair reason <<< "$(pool_index_report "$1")"
+    if [ "$repair" = "yes" ]; then
+        echo "$reason"
+    fi
+}
+
+#
+# Prints one pool_index_report line for every pool index and changes nothing. This is what a program
+# reads: the monitor takes its whole decision from it, so the monitor and pool-repair can never
+# disagree about which emulator is broken.
+#
+cmd_pool_check() {
+    local index
+    for index in $(seq 0 $((PHOTOSPHERE_EMULATOR_COUNT - 1))); do
+        pool_index_report "$index"
+    done
+}
+
+#
+# Stops one pool index and starts it again, waiting for it to reach the LAN bridge. Returns 0 when it
+# is back on the bridge, POOL_REPAIR_SKIPPED_STATUS when a test run holds its lock and it was left
+# alone, and 1 when the repair failed.
+#
+# The harness lock is held for the whole repair rather than probed and released, because a probe
+# leaves a window in which a test claims the device between the answer and the restart. See
+# android_device_lock_path in emulator-config.sh for the lock itself.
+# Usage: repair_pool_index <index>
+#
+repair_pool_index() {
+    local index="$1"
+    local serial fd status
+
+    serial="$(pool_serial_for_index "$index")"
+    if [ -z "$serial" ]; then
+        # Nothing is attached for this index, so no test can be running on it and there is no lock to
+        # take: a lock is on a serial, and adb has no serial to give.
+        repair_pool_index_locked "$index"
+        return $?
+    fi
+
+    if ! command -v flock >/dev/null 2>&1; then
+        echo "  flock is not installed, so whether a test is using $serial cannot be established. Leaving index $index alone."
+        return "$POOL_REPAIR_SKIPPED_STATUS"
+    fi
+
+    exec {fd}<>"$(android_device_lock_path "$serial")"
+    if ! flock -n "$fd"; then
+        exec {fd}>&-
+        echo "  $serial is locked by a test run, which is using it right now. Leaving index $index alone."
+        return "$POOL_REPAIR_SKIPPED_STATUS"
+    fi
+
+    status=0
+    repair_pool_index_locked "$index" || status=$?
+    exec {fd}>&-
+    return "$status"
+}
+
+#
+# The repair itself, with the emulator's harness lock already held (or established not to exist).
+# Usage: repair_pool_index_locked <index>
+#
+repair_pool_index_locked() {
+    local index="$1"
+    local avd netcard
+
+    avd="$(pool_avd_name "$index")"
+    netcard="$(pool_netcard_name "$index")"
+
+    if ! stop_pool_emulator "$index"; then
+        return 1
+    fi
+
+    if ! wait_for_pool_unit_released "$index"; then
+        return 1
+    fi
+
+    if ! ensure_avd_data_partition_size "$avd"; then
+        return 1
+    fi
+
+    start_emulator_bg "$avd" "$netcard" "pool-$index" "wipe"
+
+    echo "  waiting up to ${POOL_REPAIR_BOOT_TIMEOUT_SECONDS}s for index $index to reach the bridge..."
+    POOL_REPAIR_WAIT_INDEX="$index"
+    if wait_for_ready "$POOL_REPAIR_BOOT_TIMEOUT_SECONDS" 1 pool_repair_wait_serials; then
+        POOL_REPAIR_WAIT_INDEX=""
+        echo "  index $index is back on the bridge."
+        return 0
+    fi
+
+    POOL_REPAIR_WAIT_INDEX=""
+    echo "  index $index did not reach the bridge within ${POOL_REPAIR_BOOT_TIMEOUT_SECONDS}s." >&2
+    return 1
+}
+
+#
+# Restarts broken pool emulators, one at a time, without needing any privileges.
+#
+# It never touches the bridge, a tap or the DHCP server, and so never runs sudo and never blocks on a
+# password prompt. That is what makes it the repair an unattended run, or an agent with no terminal,
+# can actually perform: `pool-restart` cannot, because it begins by removing the pool's taps.
+#
+# With no arguments it works out which indexes are broken and repairs those. --index N repairs one,
+# whatever state it is in. --all repairs every index.
+#
+# Repairs run in order and never in parallel. Five cold boots with -wipe-data at once is a large load
+# on the machine, and the pool died under load in the first place; a repair that recreates the
+# original conditions is not a repair. It also means a partly working pool never goes fully dark.
+# Usage: cmd_pool_repair [--index N] [--all]
+#
+cmd_pool_repair() {
+    if [ "$(id -u)" -eq 0 ]; then
+        echo "ERROR: run 'pool-repair' as your user. It needs no privileges at all, and an emulator" >&2
+        echo "started as root could not open its tap anyway." >&2
+        exit 1
+    fi
+
+    local wanted_index="" repair_all="no"
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --index)
+                shift
+                if [ "$#" -eq 0 ]; then
+                    echo "ERROR: --index needs the index of a pool emulator." >&2
+                    exit 1
+                fi
+                wanted_index="$1"
+                ;;
+            --all)
+                repair_all="yes"
+                ;;
+            *)
+                echo "ERROR: unknown argument to pool-repair: $1 (only --index N and --all are understood)." >&2
+                exit 1
+                ;;
+        esac
+        shift
+    done
+
+    if [ -n "$wanted_index" ]; then
+        case "$wanted_index" in
+            ''|*[!0-9]*)
+                echo "ERROR: --index takes a number, not '$wanted_index'." >&2
+                exit 1
+                ;;
+        esac
+        if [ "$wanted_index" -ge "$PHOTOSPHERE_EMULATOR_COUNT" ]; then
+            echo "ERROR: index $wanted_index is outside the pool, which is $PHOTOSPHERE_EMULATOR_COUNT emulator(s), so 0 to $((PHOTOSPHERE_EMULATOR_COUNT - 1))." >&2
+            exit 1
+        fi
+    fi
+
+    if ! require_pool_network; then
+        exit 1
+    fi
+
+    # Which indexes to repair, decided before any of them is touched, so the list cannot grow as a
+    # restart momentarily takes an emulator off the bridge.
+    local index reason
+    local -a indexes=()
+    local -a reasons=()
+
+    if [ -n "$wanted_index" ]; then
+        indexes+=("$wanted_index")
+        reasons+=("--index $wanted_index was given")
+    elif [ "$repair_all" = "yes" ]; then
+        for index in $(seq 0 $((PHOTOSPHERE_EMULATOR_COUNT - 1))); do
+            indexes+=("$index")
+            reasons+=("--all was given")
+        done
+    else
+        echo "Looking for broken pool emulators..."
+        for index in $(seq 0 $((PHOTOSPHERE_EMULATOR_COUNT - 1))); do
+            reason="$(pool_index_repair_reason "$index")"
+            if [ -n "$reason" ]; then
+                indexes+=("$index")
+                reasons+=("$reason")
+            else
+                echo "  index $index is fine."
+            fi
+        done
+    fi
+
+    if [ "${#indexes[@]}" -eq 0 ]; then
+        echo "Nothing to repair: every pool emulator is healthy."
+        return 0
+    fi
+
+    local position=0 failed=0 skipped=0 repaired=0 status
+    for index in "${indexes[@]}"; do
+        echo ""
+        echo "Repairing index $index: ${reasons[$position]}"
+        position=$((position + 1))
+
+        status=0
+        repair_pool_index "$index" || status=$?
+        case "$status" in
+            0)
+                repaired=$((repaired + 1))
+                ;;
+            "$POOL_REPAIR_SKIPPED_STATUS")
+                skipped=$((skipped + 1))
+                ;;
+            *)
+                failed=$((failed + 1))
+                ;;
+        esac
+    done
+
+    echo ""
+    echo "pool-repair: $repaired repaired, $skipped left alone, $failed failed."
+
+    if [ "$failed" -gt 0 ]; then
+        echo ""
+        echo "A repair failed, so here is everything the pool can be asked about right now:"
+        cmd_pool_diagnose || true
+        return 1
+    fi
+
+    if [ "$skipped" -gt 0 ]; then
+        echo "The ones left alone are in use by a test run. Run this again when it has finished."
+    fi
+    return 0
+}
+
+#
+# Prints everything that can be read about every pool emulator, and changes nothing.
+#
+# This is the reading the 2026-08-09 recovery had to gather by hand, one command at a time, while
+# guessing at causes: emulator processes that were resident but burning no CPU, holding no descriptor
+# on /dev/kvm or on their tap, listening on no console port and writing nothing to their logs. Four
+# explanations were proposed for that and all four were wrong. Nothing here proposes a fifth; it puts
+# the facts in one place so the next occurrence is diagnosed from data.
+#
+# With an index it reports that one alone, which is what the monitor asks for when it has given up on
+# a single emulator and wants the account of it in its log.
+# Usage: cmd_pool_diagnose [index]
+#
+cmd_pool_diagnose() {
+    local wanted_index="${1:-}"
+    local index unit avd active result main_pid serial uptime pid
+    local clock_ticks cpu_seconds log_file
+    local indexes
+
+    clock_ticks="$(getconf CLK_TCK 2>/dev/null || echo 100)"
+
+    if [ -n "$wanted_index" ]; then
+        case "$wanted_index" in
+            ''|*[!0-9]*)
+                echo "ERROR: pool-diagnose takes the index of a pool emulator, not '$wanted_index'." >&2
+                return 1
+                ;;
+        esac
+        indexes="$wanted_index"
+    else
+        indexes="$(seq 0 $((PHOTOSPHERE_EMULATOR_COUNT - 1)))"
+    fi
+
+    for index in $indexes; do
+        unit="$(pool_unit_name "$index")"
+        avd="$(pool_avd_name "$index")"
+        read -r active result main_pid <<< "$(pool_unit_state "$index")"
+        serial="$(pool_serial_for_index "$index")"
+        uptime="$(pool_unit_uptime_seconds "$index")"
+
+        echo "================================================================"
+        echo "pool index $index: unit $unit, AVD $avd"
+        echo "  ActiveState: $active   Result: $result   MainPID: $main_pid"
+        echo "  adb serial:  ${serial:-<not attached>}"
+        echo "  unit active for: ${uptime:-<not active>} second(s)"
+
+        if command -v systemctl >/dev/null 2>&1; then
+            echo "  --- systemctl --user status $unit"
+            systemctl --user status "$unit" --no-pager --lines=0 2>&1 | sed 's/^/  /' || true
+        fi
+
+        pid="$main_pid"
+        if [ "$pid" = "0" ] || [ ! -d "/proc/$pid" ]; then
+            echo "  --- no main process to read"
+        else
+            # utime and stime, in clock ticks, from /proc/<pid>/stat. The command name can contain
+            # spaces and brackets, so everything up to and including the closing bracket is dropped
+            # first; the remaining fields are the original ones shifted by two, which puts utime at 12
+            # and stime at 13.
+            cpu_seconds="$(awk -v ticks="$clock_ticks" '{ sub(/^.*\) /, ""); printf "%.1f", ($12 + $13) / ticks }' "/proc/$pid/stat" 2>/dev/null || true)"
+            echo "  --- main process $pid"
+            echo "  CPU time used: ${cpu_seconds:-<unreadable>} second(s)"
+
+            # A descriptor on /dev/kvm says the emulator got hardware virtualisation, and one on
+            # /dev/net/tun says it opened a tap. The tap's own name is not in the link, because the
+            # interface is bound with an ioctl after the device is opened, so this says a tap was
+            # opened and not which one.
+            if ls -l "/proc/$pid/fd" 2>/dev/null | grep -q '/dev/kvm'; then
+                echo "  /dev/kvm:      open"
+            else
+                echo "  /dev/kvm:      NOT open"
+            fi
+            if ls -l "/proc/$pid/fd" 2>/dev/null | grep -q '/dev/net/tun'; then
+                echo "  tap (/dev/net/tun): open"
+            else
+                echo "  tap (/dev/net/tun): NOT open"
+            fi
+
+            if command -v ss >/dev/null 2>&1; then
+                echo "  listening sockets:"
+                ss -ltnp 2>/dev/null | grep "pid=$pid," | sed 's/^/    /' || echo "    none"
+            fi
+        fi
+
+        echo "  AVD lock pid(s): $(pool_avd_lock_pids "$avd" | tr '\n' ' ')"
+
+        log_file="$(pool_log_path "pool-$index")"
+        if [ -f "$log_file" ]; then
+            echo "  --- last 40 lines of $log_file"
+            tail -40 "$log_file" 2>/dev/null | sed 's/^/  /' || true
+        else
+            echo "  --- no log at $log_file"
+        fi
+    done
+}
+
+#
 # Prints a one-word verdict on the first line -- "ready" or "not ready" -- with a short reason on
 # the next line, and sets the exit code to match (0 = ready, non-zero = not ready) so callers such
 # as `test:and` can gate on it.
@@ -1388,6 +2154,24 @@ case "${1:-}" in
     pool-restart)
         cmd_pool_restart
         ;;
+    pool-repair)
+        # shift for the same reason pool-up does it, leaving --index/--all for cmd_pool_repair.
+        shift
+        cmd_pool_repair ${@+"$@"}
+        ;;
+    pool-diagnose)
+        shift
+        cmd_pool_diagnose ${@+"$@"}
+        ;;
+    pool-check)
+        cmd_pool_check
+        ;;
+    pool-network)
+        # The network precondition on its own, so the monitor can say the bridge is gone and go on
+        # waiting for it rather than finding out by attempting a repair. Read-only, and it is the
+        # same function pool-repair refuses on.
+        require_pool_network
+        ;;
     # Internal: the privileged bridge steps, run with sudo by up/down/pool. Not for direct use.
     __bridge-up)
         bridge_up
@@ -1396,7 +2180,7 @@ case "${1:-}" in
         bridge_down
         ;;
     *)
-        echo "Usage: $0 {up|down|restart|status|pool-up [--wipe]|pool-down|pool-restart}"
+        echo "Usage: $0 {up|down|restart|status|pool-up [--wipe]|pool-down|pool-restart|pool-repair [--index N|--all]|pool-diagnose}"
         echo ""
         echo "  up          Bring the '$SINGLE_AVD_NAME' emulator up on the LAN bridge and wait"
         echo "              until ready. Runs alongside 'pool-up' without disturbing it."
@@ -1412,6 +2196,21 @@ case "${1:-}" in
         echo "              The wipe resets each emulator's data partition to baseline, which is how"
         echo "              a disk-size change takes effect and how a full partition is cleared. The"
         echo "              app is reinstalled on the first 'test:and' afterwards."
+        echo "  pool-repair Restart broken pool emulators, one at a time, leaving the bridge and the"
+        echo "              taps exactly as they are. Needs no sudo and never prompts. With no"
+        echo "              arguments it repairs the emulators it finds broken; --index N repairs one"
+        echo "              and --all repairs every one. An emulator a test run is using is skipped."
+        echo "              Useless when the taps or the bridge are gone: only pool-up can make those."
+        echo "  pool-diagnose"
+        echo "              Print everything readable about every pool emulator (unit state, CPU time,"
+        echo "              /dev/kvm and tap descriptors, listening sockets, AVD lock pids, log tail)."
+        echo "              Read-only."
+        echo "  pool-check  One tab-separated line per pool index for a program to read:"
+        echo "              index, serial, unit state, uptime, verdict, repair yes/no, reason."
+        echo "              Read-only; it is where pool-repair and the monitor both get their verdict."
+        echo "  pool-network"
+        echo "              Check the bridge, the pool's taps and the DHCP server are in place, and"
+        echo "              say what is missing when they are not. Read-only, exit 0 when all present."
         echo ""
         echo "The bridge, DHCP and NAT are shared: they are only torn down once no taps are left."
         echo "Both 'up' and 'pool-up' run on clones of a base AVD, which is auto-selected (override with"

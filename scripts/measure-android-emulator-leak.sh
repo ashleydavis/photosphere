@@ -18,7 +18,7 @@
 #   RSS drops by hundreds of megabytes when the kernel pages an idle emulator out and climbs again
 #   when it is touched. Watching RSS shows a sawtooth that says nothing about leaking.
 #
-#   memory.current is useless too, for the reason set out in emulator-health.sh: it counts page
+#   memory.current is useless too, for the reason set out in emulator-pool-monitor.sh: it counts page
 #   cache, cache grows to fill whatever it is allowed, and a healthy emulator therefore sits near
 #   100% of its limit forever.
 #

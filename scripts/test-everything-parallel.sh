@@ -329,7 +329,7 @@ require_android_emulator() {
     if [ "$healthy" -eq 0 ]; then
         echo "No emulator is on the LAN bridge, so the Android suites cannot run." >&2
         echo "Nothing has been started: the whole set is refused rather than run against a pool that is down." >&2
-        echo "Check it with 'bun run emu:and:status', watch it with 'bun run emu:and:health'." >&2
+        echo "Check it with 'bun run emu:and:status'. To bring it up and keep it up: 'bun run emu:and:pool:monitor'." >&2
         exit 1
     fi
 }

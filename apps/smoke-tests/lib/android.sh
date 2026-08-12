@@ -73,8 +73,88 @@ android_hardware_devices() {
 # physical LAN as the host already has one. Demanding the bridge would refuse a run on the very device
 # that needs it least.
 #
+#
+# Refuses the whole run when the machine has almost no memory left, before anything is built or
+# installed.
+#
+# This is the mechanical part of stopping 2026-08-09 happening again. Five pool emulators hold 6.0 to
+# 6.7GB each under a suite run, and the third Android run that day was started onto a machine already
+# carrying twelve other lanes and a degraded pool. Every one of the five emulators was killed with
+# SIGSEGV, and no rule stopped the run starting because rules are advice and this is a precondition.
+#
+# It skips silently where /proc/meminfo does not exist, which is every non-Linux host, and where the
+# figure cannot be read as a number: refusing a run on a reading nobody could take would be worse
+# than the risk it guards against.
+#
+# PHOTOSPHERE_MIN_AVAILABLE_MB overrides the limit, and is named in the refusal so whoever reads it
+# can decide for themselves.
+#
+android_require_headroom() {
+    local limit available
+    limit="${PHOTOSPHERE_MIN_AVAILABLE_MB:-4096}"
+
+    if [ ! -f /proc/meminfo ]; then
+        return 0
+    fi
+
+    available="$(awk '/^MemAvailable:/ { print int($2 / 1024); exit }' /proc/meminfo)"
+    case "$available" in
+        ''|*[!0-9]*)
+            return 0
+            ;;
+    esac
+
+    if [ "$available" -lt "$limit" ]; then
+        log_error "This machine has ${available}MB of memory available and this run needs at least ${limit}MB."
+        log_error "Starting an Android suite onto a machine with no headroom is what killed all five pool"
+        log_error "emulators on 2026-08-09. Wait for the other runs to finish, or raise the limit with"
+        log_error "PHOTOSPHERE_MIN_AVAILABLE_MB if you are certain."
+        exit 1
+    fi
+}
+
+#
+# Warns, without refusing, when fewer of the pool's emulators are on the LAN bridge than the pool is
+# supposed to have, and names the command that puts them back.
+#
+# A warning and not a refusal, because a run on a partial pool is legitimate: it is slower, not wrong.
+# It deliberately does not repair anything either. A test run that started restarting the machine's
+# emulators would be doing it underneath every other run using them.
+#
+android_warn_degraded_pool() {
+    local serial avd index
+    local present=" "
+    local missing=""
+
+    for serial in $(android_pool_devices); do
+        avd="$(adb -s "$serial" emu avd name 2>/dev/null | head -1 | tr -d '\r')"
+        present="$present${avd#$POOL_AVD_PREFIX-} "
+    done
+
+    for index in $(seq 0 $((PHOTOSPHERE_EMULATOR_COUNT - 1))); do
+        case "$present" in
+            *" $index "*)
+                ;;
+            *)
+                missing="$missing $index"
+                ;;
+        esac
+    done
+
+    if [ -z "$missing" ]; then
+        return 0
+    fi
+
+    log_info "The pool is short of emulators: index(es)$missing are not on the LAN bridge, out of $PHOTOSPHERE_EMULATOR_COUNT."
+    log_info "This run will use what is there and take longer for it. To bring them back:"
+    log_info "  bun run --filter=android-frontend emu:pool:repair"
+}
+
 android_require_ready() {
     local hardware_devices
+
+    android_require_headroom
+
     hardware_devices="$(android_hardware_devices)"
     if [ -n "$hardware_devices" ]; then
         log_info "Real device(s) attached, so the run will use them rather than the emulator pool:"
@@ -98,6 +178,8 @@ android_require_ready() {
         log_error "Start it and bring up the bridge yourself, then rerun. This script will not touch the emulator."
         exit 1
     fi
+
+    android_warn_degraded_pool
 }
 
 #

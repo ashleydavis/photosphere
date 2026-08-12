@@ -17,10 +17,12 @@
     "emu:pool:up": "bash ./scripts/emulator.sh pool-up",
     "emu:pool:down": "bash ./scripts/emulator.sh pool-down",
     "emu:pool:restart": "bash ./scripts/emulator.sh pool-restart",
+    "emu:pool:repair": "bash ./scripts/emulator.sh pool-repair",
+    "emu:pool:diagnose": "bash ./scripts/emulator.sh pool-diagnose",
     "emu:down": "bash ./scripts/emulator.sh down",
     "emu:restart": "bash ./scripts/emulator.sh restart",
     "emu:status": "bash ./scripts/emulator.sh status",
-    "emu:health": "bash ./scripts/emulator-health.sh",
+    "emu:pool:monitor": "bash ./scripts/emulator-pool-monitor.sh",
     "test:unit": "bun run sync && bash ./scripts/android-gradle.sh :app:testDebugUnitTest --rerun-tasks"
   },
   "dependencies": {

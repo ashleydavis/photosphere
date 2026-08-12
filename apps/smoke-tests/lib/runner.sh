@@ -23,6 +23,11 @@ source "$RUNNER_LIB_DIR/../../../scripts/lib/allocate-test-temp-dir.sh"
 # The per-test timeout every suite in this repository shares, and the reporting that goes with it.
 source "$RUNNER_LIB_DIR/../../../scripts/lib/test-timeout.sh"
 
+# The device lock path, from the one file that defines it. Sourced here rather than written out
+# again, because the emulator repair path takes the same lock before it restarts an emulator and a
+# second copy of the path that drifted would let it restart one mid-test.
+source "$RUNNER_LIB_DIR/../../android-frontend/scripts/emulator-config.sh"
+
 # Marker file name, matched against a test's own directory.
 EXCLUSIVE_MARKER=".exclusive"
 
@@ -453,7 +458,7 @@ acquire_device() {
                     adjust_held 1 >/dev/null
                     return 0
                 fi
-                exec {fd}<>"/tmp/photosphere-android-device-$serial.lock"
+                exec {fd}<>"$(android_device_lock_path "$serial")"
                 if runner_flock -n "$fd"; then
                     ACQUIRED_DEVICE="$serial"
                     ACQUIRED_FD="$fd"
@@ -494,7 +499,7 @@ with_device() {
         "$@" || status=$?
         return "$status"
     fi
-    exec {fd}<>"/tmp/photosphere-android-device-$serial.lock"
+    exec {fd}<>"$(android_device_lock_path "$serial")"
     # Bounded, because this wait used to have no end. The install and cleanup loops in run.sh call
     # this for EVERY device in turn, before any test runs, so a single device whose lock is never
     # released stalls the entire suite rather than costing it that one device. That is not

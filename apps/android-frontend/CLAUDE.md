@@ -2,27 +2,50 @@
 
 Guidance for working in the Android frontend, especially the emulator + LAN bridge used by the mobile smoke tests.
 
-## DO NOT touch the emulator. Ever. This is the most important rule here.
+## The line is at the privileges, not at the emulator
 
-Getting the emulator started and on the LAN bridge is the human's job, not yours. You do not set it up, and you do not "fix" it.
+The bridge, the taps, the DHCP server and the whole-pool teardown are the human's. Everything that needs root is the human's. You have three commands that need no privileges at all, restart one emulator at a time, and respect the locks a running test holds, and those you may run.
 
-- Never kill, restart, reboot, wipe (`-wipe-data`), or re-launch the emulator.
-- Never change settings on the guest: no `svc wifi disable/enable`, no `cmd wifi ...`, no toggling airplane mode, no `adb reboot`, no reconfiguring the network.
-- Never run `emu:and:up` / `emu:and:down` / `emu:and:restart` (or `emulator.sh`) to "fix" state. The emulator + bridge are the human's to manage.
+**First: when the monitor is running, a broken emulator is not yours to fix.** `bun run emu:and:pool:monitor` repairs every unhealthy pool emulator by itself, one at a time, within seconds of it going bad, so a repair you start is a second one racing it. Check before you reach for `emu:pool:repair`, and do not guess, because the human starts and stops the monitor without announcing it:
 
-Reads are fine (`adb devices`, `adb shell ip addr ...`, `status`). Changes are not. If the emulator looks wrong, **report it and stop**, do not try to repair it. Fiddling with a shared emulator once cost hours: killing a working, bridged emulator broke the very thing that was passing, and every "fix" attempt made it worse.
+```
+flock -n /tmp/photosphere-emulator-pool-monitor.lock true
+```
+
+Exit 1 means a monitor holds the lock and is running: say the emulator is broken, say the monitor will pick it up within seconds, and leave it alone. Exit 0 means no monitor is running and the repair is yours to run. The probe changes nothing; it takes the lock only long enough to find out and gives it straight back.
+
+**You may run these:**
+
+- `bun run emu:and:pool:status` - read-only, and the only way to say whether the pool is up.
+- `bun run --filter=android-frontend emu:pool:diagnose` - read-only. Everything readable about every pool emulator: unit state, CPU time, whether it holds `/dev/kvm` and a tap, listening sockets, AVD lock pids, log tail.
+- `bun run --filter=android-frontend emu:pool:repair` - restarts broken pool emulators, one at a time. Never touches a tap or the bridge, never runs sudo, never prompts, and skips any emulator a test run is using. `--index N` for one, `--all` for every one.
+Not `bun run emu:and:pool:monitor`. That brings the pool up when it is not there, which needs sudo for the bridge and the taps, and it runs until stopped. It is the human's.
+
+Repair and diagnose are written out in full above because only the status and monitor entries exist in the root `package.json`; a shortened form of the other two sends you looking for a script that is not there.
+
+**You still may not:**
+
+- Run `emu:and:up`, `emu:and:down`, `emu:and:restart`, `emu:and:pool:up`, `emu:and:pool:down` or `emu:and:pool:restart`.
+- Create or remove a tap or the bridge, or run `sudo` for any reason.
+- Reconfigure a guest: no `svc wifi disable/enable`, no `cmd wifi ...`, no toggling airplane mode, no `adb reboot`.
+- Kill, wipe or re-launch an emulator by hand. `emu:pool:repair` is how an emulator gets restarted, because it takes the device lock first; a bare `adb emu kill` does not, and can take a device out from under a running test.
+
+If something is wrong that these commands do not fix, **report it and stop**. Fiddling with a shared emulator once cost hours: killing a working, bridged emulator broke the very thing that was passing, and every "fix" attempt made it worse.
 
 ## Emulator + LAN bridge (`scripts/emulator.sh`)
 
-Host-to-device LAN sharing, and the smoke tests that exercise it (`26-receive-database`, `27-receive-secret`), only work when the emulator is on a real layer-2 segment shared with the host. `scripts/emulator.sh` manages the whole lifecycle (emulator + bridge). Full explanation in `scripts/emulator.md`. **These are for the human to run, not you** (see the rule above).
+Host-to-device LAN sharing, and the smoke tests that exercise it (`26-receive-database`, `27-receive-secret`), only work when the emulator is on a real layer-2 segment shared with the host. `scripts/emulator.sh` manages the whole lifecycle (emulator + bridge). Full explanation in `scripts/emulator.md`. **The ones below are for the human to run, not you**, except where the section above says otherwise.
 
 - `bun run emu:and:up` - bring the hand-testing emulator up on the LAN bridge and wait until ready. Sets the bridge up automatically (prompts for sudo only for that part). It runs on its own AVD, `psphere-single`, cloned from an auto-selected base AVD (override the base with `ANDROID_AVD`). That name is how it is told apart from a pool emulator: `up` used to ask only whether *any* device was attached, so a running pool made it report success and start nothing.
 - `bun run emu:and:down` - stop that emulator (the one running `psphere-single`, and only that one) and remove its tap. Leaves a running pool alone, and leaves an emulator you started yourself alone too.
 - `bun run emu:and:restart` - down then up.
-- `bun run emu:and:pool:up` - bring up a pool of emulators for the smoke tests (`PHOTOSPHERE_EMULATOR_COUNT`, default 3), each on its own writable clone of the base AVD and its own tap. Runs alongside `emu:and:up` without disturbing it.
+- `bun run emu:and:pool:up` - bring up a pool of emulators for the smoke tests (`PHOTOSPHERE_EMULATOR_COUNT`, default 5, defined in `scripts/emulator-config.sh`), each on its own writable clone of the base AVD and its own tap. Runs alongside `emu:and:up` without disturbing it.
 - `bun run emu:and:pool:down` - stop only the pool's emulators and remove only the pool's taps.
 - `bun run emu:and:pool:restart` - pool down then pool up, leaving the hand-testing emulator alone. This is how a change to the pool's memory limits takes effect, since the limits are read when an emulator starts. It also resets each pool emulator's data partition to baseline, by starting it with `-wipe-data`, which is how a change to the partition size takes effect (the partition is sized when userdata is created, so a bigger number does nothing to an emulator that already has one) and how a partition that has filled up gets cleared. The first `test:and` afterwards reinstalls the app on every emulator, because the wipe removes the checksum stamp it compares against. **You still do not run this**, per the rule at the top of this file; it is the human's.
 - `bun run emu:and:status` - **read-only** readiness check (see below).
+- `bun run --filter=android-frontend emu:pool:repair` - restart the pool emulators that are broken, one at a time, leaving the bridge and the taps exactly as they are. This is the repair that needs no root: `pool-restart` cannot run unattended because it begins by removing the pool's taps, which needs sudo. Useless when the taps or the bridge are gone (after a reboot, or after `pool-down`); only `pool-up` can make those.
+- `bun run --filter=android-frontend emu:pool:diagnose` - **read-only**. Everything readable about every pool emulator. Run this rather than guessing when an Android run is unexplainedly slow or an emulator looks wrong.
+- `bun run emu:and:pool:monitor` - the one command for the pool, and it takes no arguments. It brings the pool up when it is not there (which asks for sudo only when the bridge or the taps have to be made), repairs every emulator that is not healthy, and then keeps doing that as they go bad, one at a time and never one a test is using. It also recycles a healthy emulator that has been up over 12 hours while the rest are healthy. On a terminal it shows the table of emulators with CPU, memory and swap graphs; redirected to a file it prints one line per pass. One monitor per machine. This replaces `emu:and:health`, which is gone.
 
 The bridge, DHCP and NAT are shared between the single emulator and the pool, so they are only torn down once no taps are left. Each pool emulator needs its own AVD because an AVD's disk images are single-writer; the clones are about 8KB each, since the system image lives in the SDK and is shared.
 
@@ -71,3 +94,7 @@ The locking is covered by an automated stress test, `apps/smoke-tests/android-lo
 - **A booted guest keeps its DHCP lease after dnsmasq stops.** So "DHCP server not running" does not mean LAN sharing is broken; only a freshly booting guest needs the server.
 - **`wlan0` showing no address, or `NO-CARRIER`, is often transient** (association gap, adb busy), not proof the emulator is off the bridge.
 - **Don't restate a diagnosis as fact.** If you claimed something is blocked, re-verify by running the real thing before repeating it.
+- **Check the pool before starting anything that uses it.** `bun run emu:and:pool:status`, at the moment you need the answer, not a reading taken earlier in the session.
+- **Never stack the Android suite against other suites by hand.** On 2026-08-09 the Android suite was run beside twelve other lanes on a machine already short of memory, and all five pool emulators died with SIGSEGV. `test:and` now refuses to start below `PHOTOSPHERE_MIN_AVAILABLE_MB` (4096) of available memory, which is a floor and not permission to run at 4.1GB.
+- **An unexplained slow Android run is a signal, not something to wait out.** Run `bun run --filter=android-frontend emu:pool:diagnose`. An emulator thrashing on memory stays listed by adb and accepts connections while answering nothing, so it looks present and costs every test its full timeout.
+- **Never assert what killed an emulator before reading `systemctl --user status`.** Four causes were proposed during the 2026-08-09 recovery and all four were wrong. `Result: core-dump` in the unit is the difference between a crash and a kill, and it takes one command to read.

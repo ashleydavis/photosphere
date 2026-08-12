@@ -93,7 +93,7 @@
     "emu:and:restart": "bun run --filter=android-frontend emu:restart",
     "emu:and:status": "bun run --filter=android-frontend emu:status",
     "emu:and:pool:status": "bash ./scripts/android-pool-status.sh",
-    "emu:and:health": "bash ./apps/android-frontend/scripts/emulator-health.sh",
+    "emu:and:pool:monitor": "bash ./apps/android-frontend/scripts/emulator-pool-monitor.sh",
     "screenshots": "bun run bundle && bash ./apps/desktop/screenshots/capture-ux.sh",
     "perf": "bun --filter '*' perf"
   },

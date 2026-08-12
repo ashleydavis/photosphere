@@ -8,6 +8,19 @@
 # silently stop matching the day it was renamed, and the tests would quietly start reinstalling over
 # somebody's own emulator.
 
+# How many emulators the pool brings up. Only `pool-up` creates them; `up` is always a single
+# emulator. It lives here rather than in emulator.sh because the smoke-test harness reads it too, to
+# say how many of the pool's emulators are missing when a run starts on a reduced pool.
+#
+# Five. The comment that used to sit above this said it had been reduced to three to lighten the load
+# on the development machine, while the value said five, and the value is what runs: five emulators
+# were up when the pool collapsed on 2026-08-09 and five is what the memory limits in
+# psphere-pool.slice were measured against. The count and the account of it now agree.
+#
+# Override with the environment variable, for example
+# PHOTOSPHERE_EMULATOR_COUNT=3 bun run emu:and:pool:up
+PHOTOSPHERE_EMULATOR_COUNT="${PHOTOSPHERE_EMULATOR_COUNT:-5}"
+
 # Prefix of the cloned AVDs the emulator pool runs on. Each pool instance gets its own clone, because
 # an AVD's disk images are single-writer and every pool emulator has to be writable.
 POOL_AVD_PREFIX="psphere-pool"
@@ -28,3 +41,22 @@ SINGLE_AVD_NAME="psphere-single"
 # so bringing either up or down never disturbs the other.
 NETCARD_PREFIX="emu-netcard"
 POOL_NETCARD_PREFIX="emu-pool"
+
+#
+# Prints the path of the lock file held for the whole of one test while that test is using the device
+# with the given adb serial. The smoke-test harness takes it in apps/smoke-tests/lib/runner.sh, and
+# the emulator repair path takes it non-blocking before it touches an emulator, which is what stops a
+# repair restarting a device out from under a running test.
+#
+# One definition rather than one literal per caller, because two copies that drifted apart would
+# leave the repair locking a path nobody else respects, and the failure that produced would be a test
+# dying mid-run with nothing to say why.
+#
+# The name says android for the same reason the literal it replaces did: it was written for the
+# emulator pool. The harness uses it for an iOS simulator too, which is a name that reads oddly rather
+# than a second lock.
+# Usage: android_device_lock_path <serial>
+#
+android_device_lock_path() {
+    echo "/tmp/photosphere-android-device-$1.lock"
+}

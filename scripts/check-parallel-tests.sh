@@ -219,6 +219,29 @@ check_devices_healthy() {
     check_devices_responding
 }
 
+#
+# Prints how many pool emulators are on the LAN bridge, and 0 when none is or the check cannot run.
+#
+# This is the count that matters after a pair including test:and, and it is not the same as the
+# attached device count check_devices_healthy uses: an emulator killed for using too much memory
+# disappears from both, but one that is up and off the bridge is still attached and is useless to
+# every mobile test. Read-only, as android-pool-status.sh is.
+#
+pool_bridge_count() {
+    local output
+    output="$(bash "$ROOT/scripts/android-pool-status.sh" 2>/dev/null || true)"
+    # The summary line is "pool up: N of M pool emulator(s) on the LAN bridge" or "pool up: N pool
+    # emulator(s) on the LAN bridge", and the first number in it is the count on the bridge.
+    printf '%s\n' "$output" | sed 's/\x1b\[[0-9;]*m//g' | awk '/on the LAN bridge/ { print $3; exit }' | grep -E '^[0-9]+$' || echo 0
+}
+
+# How many pool emulators were on the LAN bridge when the sweep started, and whether that reading was
+# taken at all. The sweep pairs test:and against every other suite, which is the deliberate stacking
+# that killed two emulators, so a sweep that has cost the pool an emulator is stopped rather than
+# carried on: every later pair would be measuring a smaller pool, and a pair reported as interfering
+# on those results names the wrong thing.
+POOL_BRIDGE_COUNT_AT_START=0
+
 # The desktop-side scripts checked when none are named. The mobile suites this machine can run are
 # added to these, which is why a default run is slow.
 DEFAULT_SCRIPTS="test test:cli test:electron"
@@ -675,7 +698,7 @@ write_report() {
 run_pair_phase() {
     local pair script_a script_b
     local either_failed failing_side failing_log
-    local verdict snapshot_dir
+    local verdict snapshot_dir pool_bridge_count_now
     local pairs=()
 
     # The whole list is read up front rather than being streamed into the loop. Streaming it made the
@@ -727,6 +750,27 @@ run_pair_phase() {
                     echo "suite logs:       $snapshot_dir" >> "$REPORT"
                 fi
             fi
+        fi
+
+        # After the pair rather than before the next one, so the pair that cost the emulator is the
+        # one named. Only for pairs that included test:and: the desktop suites cannot take an
+        # emulator off the bridge, and a pool that lost one while they ran lost it to something else.
+        if [ "$POOL_BRIDGE_COUNT_AT_START" -gt 0 ]; then
+            case " $script_a $script_b " in
+                *" test:and "*)
+                    pool_bridge_count_now="$(pool_bridge_count)"
+                    if [ "$pool_bridge_count_now" -lt "$POOL_BRIDGE_COUNT_AT_START" ]; then
+                        echo
+                        echo "check-parallel-tests: STOPPING after $script_a with $script_b: the pool has lost an emulator."
+                        echo "  $POOL_BRIDGE_COUNT_AT_START pool emulator(s) were on the LAN bridge when this sweep started, $pool_bridge_count_now are now."
+                        echo "  Every later pair would be measured against a smaller pool, so the results would be about the wrong thing."
+                        echo "  Nothing here changed anything on any device. To put the pool back:"
+                        echo "    bun run --filter=android-frontend emu:pool:repair"
+                        echo "LOGS=$SESSION_DIR"
+                        exit 4
+                    fi
+                    ;;
+            esac
         fi
 
         verdict="$(classify_pair "$script_a" "$script_b" "$either_failed")"
@@ -808,6 +852,7 @@ DEVICE_COUNT_AT_START=0
 case " ${SELECTED[*]} " in
     *" test:and "*)
         DEVICE_COUNT_AT_START="$(adb devices 2>/dev/null | grep -c "device$")"
+        POOL_BRIDGE_COUNT_AT_START="$(pool_bridge_count)"
         ;;
 esac
 
@@ -823,6 +868,7 @@ if [ "${#SKIPPED_REASONS[@]}" -gt 0 ]; then
 fi
 if [ "$DEVICE_COUNT_AT_START" -gt 0 ]; then
     echo "check-parallel-tests: $DEVICE_COUNT_AT_START device(s) attached. The run stops if that changes or one stops answering."
+    echo "check-parallel-tests: $POOL_BRIDGE_COUNT_AT_START pool emulator(s) on the LAN bridge. The run stops if a pair including test:and leaves fewer."
 fi
 echo "check-parallel-tests: logs in $SESSION_DIR"
 echo

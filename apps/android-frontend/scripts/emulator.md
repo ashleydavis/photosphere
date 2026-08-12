@@ -40,6 +40,58 @@ bun run emu:and:status
 lan bridge`, the emulator ignored `-wifi-tap` and is still behind the virtual router (`10.0.2.16`);
 `bun run emu:and:restart` for a clean bridged boot, then see troubleshooting below.
 
+### Repairing the pool without root
+
+`pool-restart` cannot be run unattended, and cannot be run by an agent at all: it starts by removing the pool's taps, which needs `sudo`, and a `sudo` prompt with nobody at the keyboard is where a recovery stops. On 2026-08-09 all five pool emulators died during a run and nothing could bring them back for exactly that reason.
+
+`pool-repair` is the repair that needs no privileges:
+
+```
+bun run --filter=android-frontend emu:pool:repair             # restart whichever are broken
+bun run --filter=android-frontend emu:pool:repair -- --index 2   # restart one
+bun run --filter=android-frontend emu:pool:repair -- --all       # restart every one
+```
+
+It has no entry in the root `package.json` on purpose, so the full `--filter` form above is how it is invoked.
+
+Why it needs no root: the bridge, the taps and the DHCP server are the only privileged parts of the pool, they survive an emulator restart, and nothing about restarting an emulator requires them to be recreated. `pool-repair` never creates or removes one, so it never reaches a `sudo` call by any path. It checks they are there first and refuses with what is missing when they are not, which is the one case it cannot fix: after a reboot, or after `pool-down`, only `bun run emu:and:pool:up` can put them back.
+
+What a repair does to one emulator, in order: `systemctl --user stop` bounded at 30 seconds, escalating to SIGKILL through the unit and then, for a process that outlived its unit, to the pid recorded in the AVD's own `hardware-qemu.ini.lock`; `reset-failed`, so a crashed emulator's failed unit stops blocking the name; a wait for systemd to release that one unit; then a cold boot with `-wipe-data`, and a wait of up to 420 seconds for it to reach the bridge. That last stage is why `pool-down` cannot do this job: it stops emulators with `adb emu kill`, which needs an emulator adb can still see, and a crashed one is exactly the emulator adb has dropped.
+
+It repairs one emulator at a time, never in parallel, so a partly working pool never goes fully dark and the machine never carries five cold boots at once. Before it touches an emulator it takes that emulator's harness lock (`/tmp/photosphere-android-device-<serial>.lock`, the same lock `apps/smoke-tests/lib/runner.sh` holds for the length of a test) without waiting: an emulator a test is using is reported and skipped.
+
+### Reading what is wrong
+
+```
+bun run --filter=android-frontend emu:pool:diagnose      # every index
+bun run --filter=android-frontend emu:pool:diagnose -- 2 # one index
+```
+
+Read-only. For every pool index it prints the unit's state, result and main pid, `systemctl --user status`, the process's accumulated CPU time, whether it holds a descriptor on `/dev/kvm` and on a tap, its listening sockets, the pids in the AVD's lock files, and the last 40 lines of its log. `pool-repair` prints this by itself when a repair fails.
+
+This is the set of facts the 2026-08-09 recovery had to gather by hand, one command at a time, while guessing at causes. The emulator logs also now append rather than truncate, so a restart no longer destroys the account of why the last one died.
+
+### Watching, and repairing by itself
+
+`emulator-pool-monitor.sh` is one watcher that reports and, when asked, repairs:
+
+```
+bun run emu:and:pool:monitor                     # the whole thing
+bun run emu:and:pool:monitor 2>&1 | tee pool.log # same, as a log
+```
+
+It takes no arguments. Started with an empty machine it calls `pool-up`, which asks for sudo when the bridge or the taps have to be made, and starts every emulator at once keeping its data. Then it repairs whatever is not healthy, one emulator at a time, and carries on doing that as they go bad. It replaces the old `emu:and:health`, which was the same watcher without the fixing.
+
+The display picks itself rather than being asked for: on a terminal, the table with the CPU, memory and swap graphs under it, redrawn in place; redirected to a file, one timestamped line per pass, because a redraw-in-place display is unreadable in a log.
+
+It looks at the pool every five seconds, so a crashed emulator is usually back on the bridge about as fast as it can cold boot. A start of the whole pool, though, is attempted once per outage rather than once per pass: a machine with no bridge and nobody at the keyboard would otherwise be asked for a password every few seconds, and every one of those attempts fails the same way. The next attempt comes when an emulator is seen running again, or when the monitor is restarted.
+
+Each pass classifies every pool index and repairs at most one, by calling `pool-repair --index N`. It never repairs an emulator whose harness lock is held, and it watches every attached emulator while only ever repairing pool ones, so a hand-testing emulator appears in the table and is never touched. It never touches the bridge or the taps and never runs `sudo`; when the bridge is missing it says so and keeps watching, because the human putting it back is a normal thing to wait for.
+
+Two limits on it. After three failed repairs of one index in a row it gives up on that index: it keeps reporting it as broken on every pass, writes the `pool-diagnose` report for it once, and never restarts it again, because a machine-level fault otherwise turns into an endless cold-boot loop that makes the machine worse. And a healthy emulator that has been up over 12 hours is recycled while nothing is using it, but only when every other index is healthy and its lock is free: the emulators that died had been up 23.5 hours holding 6.6 to 6.7GB each plus up to 2GB of swap.
+
+One repairing monitor runs per machine, held with `flock` on `/tmp/photosphere-emulator-pool-monitor.lock`. Watching takes no lock, so any number of people can have the display open.
+
 ### Memory limits
 
 Every emulator is started as a transient systemd user service inside a slice called `psphere-pool.slice`, which is what stops a pool of them exhausting the machine. A "slice" is a named group of processes that the kernel applies a resource limit to as a group, so the limit covers all the emulators added together rather than each one separately. Without it, a pool was able to use up all of the machine's memory and its swap, at which point `systemd-oomd` killed the terminal the pool had been started from, and every shell in it.

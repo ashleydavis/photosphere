@@ -153,7 +153,7 @@ The verdict is not the total growth. Memory that grows and then stops is a cache
 
 Resident set size is useless here. The pool emulators are allowed to swap, so RSS drops by hundreds of megabytes when the kernel pages an idle emulator out and climbs again when it is touched. It shows a sawtooth that says nothing about leaking.
 
-`memory.current` is useless too, for the reason set out in `apps/android-frontend/scripts/emulator-health.sh`: it counts page cache, cache grows to fill whatever it is allowed, and a healthy emulator therefore sits near 100% of its limit forever.
+`memory.current` is useless too, for the reason set out in `apps/android-frontend/scripts/emulator-pool-monitor.sh`: it counts page cache, cache grows to fill whatever it is allowed, and a healthy emulator therefore sits near 100% of its limit forever.
 
 Anonymous memory cannot be reclaimed, so it is the part that actually runs an emulator out of room. Adding the swapped-out part back means a page moving to swap does not look like memory being freed. That sum is the number that only goes up when something leaks.
 
