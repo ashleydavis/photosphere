@@ -3,7 +3,7 @@ name: Release
 env:
   BUN_VERSION: "1.3.14"
   NODE_VERSION: "24.15.0"
-  WHAT_CHANGED_VERSION: "v0.0.4"
+  WHAT_CHANGED_VERSION: "v0.0.5"
 
 on:
   push:

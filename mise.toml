@@ -2,4 +2,4 @@
 bun = "1.3.14"
 node = "24.15.0"
 jq = "1.7.1"
-"github:ashleydavis/what-changed" = "0.0.4"
+"github:ashleydavis/what-changed" = "0.0.5"
