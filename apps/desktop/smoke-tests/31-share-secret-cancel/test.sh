@@ -20,30 +20,6 @@ mkdir -p "$TMP_DIR/sender/vault" "$TMP_DIR/sender/config" "$TMP_DIR/receiver/vau
 
 write_vault_secret "$TMP_DIR/sender/vault" test-secret api-key "TESTAPIKEY123"
 
-#
-# Reads the pairing code the sender is displaying, waiting until it is a four digit code.
-# Prints the code on stdout, or nothing if it never appeared.
-#
-read_pairing_code() {
-    local port="$1"
-    local elapsed=0
-    local response=""
-    local code=""
-
-    while [ "$elapsed" -lt 30 ]; do
-        response=$(curl -sf "http://localhost:$port/get-value?dataId=share-pairing-code" 2>/dev/null || true)
-        code=$(echo "$response" | sed 's/.*"value":"\([^"]*\)".*/\1/')
-        if [ -n "$code" ] && echo "$code" | grep -qE '^[0-9]{4}$'; then
-            echo "$code"
-            return 0
-        fi
-        sleep 1
-        elapsed=$((elapsed + 1))
-    done
-
-    return 1
-}
-
 start_app "$TMP_DIR/sender" 0
 SENDER_PORT="$APP_PORT"
 wait_for_ready "$SENDER_PORT"
@@ -70,9 +46,12 @@ send_command "$SENDER_PORT" click '{"dataId":"share-secret-cancel-button"}'
 # share and satisfied the wait. The response is now required to have arrived before its value is
 # believed, and still_showing starts at the code the sender was displaying so a run where every
 # request failed ends in the failure below rather than in a pass.
-elapsed=0
+#
+# The condition is a pattern test rather than the substring test wait_for_value_gone does, so this
+# stays a loop of its own: any four digit code means the share is still up, not one particular one.
+deadline=$((SECONDS + DEFAULT_WAIT_TIMEOUT))
 still_showing="$first_code"
-while [ "$elapsed" -lt 15 ]; do
+while [ "$SECONDS" -lt "$deadline" ]; do
     response=$(curl -sf "http://localhost:$SENDER_PORT/get-value?dataId=share-pairing-code" 2>/dev/null || true)
     if [ -n "$response" ]; then
         still_showing=$(echo "$response" | sed 's/.*"value":"\([^"]*\)".*/\1/')
@@ -80,8 +59,7 @@ while [ "$elapsed" -lt 15 ]; do
             break
         fi
     fi
-    sleep 1
-    elapsed=$((elapsed + 1))
+    sleep "$WAIT_POLL_INTERVAL"
 done
 
 if [ -n "$still_showing" ] && echo "$still_showing" | grep -qE '^[0-9]{4}$'; then

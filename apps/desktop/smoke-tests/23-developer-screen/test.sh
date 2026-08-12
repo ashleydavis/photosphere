@@ -12,54 +12,6 @@ cleanup() {
 }
 trap cleanup EXIT
 
-#
-# Polls get-value for the given data-id until its value contains the expected substring.
-# Usage: wait_for_value <port> <data-id> <expected-substring>
-#
-wait_for_value() {
-    local port="$1"
-    local data_id="$2"
-    local expected="$3"
-    local elapsed=0
-    while [ "$elapsed" -lt 30 ]; do
-        local response
-        response=$(curl -sf "http://localhost:$port/get-value?dataId=$data_id" 2>/dev/null || true)
-        if echo "$response" | grep -q "$expected"; then
-            return 0
-        fi
-        sleep 1
-        elapsed=$((elapsed + 1))
-    done
-    log_error "Timed out waiting for data-id '$data_id' to contain '$expected' (last response: $response)"
-    exit 1
-}
-
-#
-# Polls get-value for the given data-id until its value no longer contains the
-# expected substring (e.g. an overlay that has been hidden).
-# Usage: wait_for_value_gone <port> <data-id> <substring>
-#
-wait_for_value_gone() {
-    local port="$1"
-    local data_id="$2"
-    local substring="$3"
-    local elapsed=0
-    while [ "$elapsed" -lt 30 ]; do
-        local response
-        response=$(curl -sf "http://localhost:$port/get-value?dataId=$data_id" 2>/dev/null || true)
-        # The response has to have arrived before its absence of the substring means anything. An
-        # empty response is a failed request, and returning success on one made this helper report
-        # "the overlay is gone" for an app that had died.
-        if [ -n "$response" ] && ! echo "$response" | grep -q "$substring"; then
-            return 0
-        fi
-        sleep 1
-        elapsed=$((elapsed + 1))
-    done
-    log_error "Timed out waiting for data-id '$data_id' to stop containing '$substring' (last response: $response)"
-    exit 1
-}
-
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
@@ -102,7 +54,7 @@ wait_for_value "$APP_PORT" "developer-tool-fps-toggle" "Show FPS indicator"
 send_command "$APP_PORT" click '{"dataId":"developer-tool-fps-toggle"}'
 wait_for_value "$APP_PORT" "fps-indicator" "FPS"
 send_command "$APP_PORT" click '{"dataId":"developer-tool-fps-toggle"}'
-wait_for_value_gone "$APP_PORT" "fps-indicator" "FPS"
+wait_for_value_gone "$APP_PORT" "fps-indicator" "FPS" || exit 1
 
 # The Dev Tools item is a persisted toggle. Clicking opens the native DevTools
 # and logs the state change; clicking again closes it. Assert via the log so the

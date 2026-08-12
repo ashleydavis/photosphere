@@ -76,30 +76,10 @@ wait_for_value "$APP_PORT" "import-cancel-button" "Cancel"
 send_command "$APP_PORT" click '{"dataId":"import-cancel-button"}'
 
 # The button goes away when the import leaves the running state.
-#
-# An empty response means the request itself failed, which is not the same as the import having
-# stopped, and this loop used to treat the two alike: an app that had died read exactly like a
-# cancelled import and satisfied the wait. The response is now required to have arrived before its
-# value is believed, and still_running starts at "Cancel" so a run where every request failed ends in
-# the failure below rather than in a pass.
-elapsed=0
-still_running="Cancel"
-while [ "$elapsed" -lt 30 ]; do
-    response=$(curl -sf "http://localhost:$APP_PORT/get-value?dataId=import-cancel-button" 2>/dev/null || true)
-    if [ -n "$response" ]; then
-        still_running=$(echo "$response" | sed 's/.*"value":"\([^"]*\)".*/\1/')
-        if [ "$still_running" != "Cancel" ]; then
-            break
-        fi
-    fi
-    sleep 1
-    elapsed=$((elapsed + 1))
-done
-
-if [ "$still_running" = "Cancel" ]; then
-    log_error "The import is still running 30s after it was cancelled"
+wait_for_value_gone "$APP_PORT" "import-cancel-button" "Cancel" || {
+    log_error "The import is still running after it was cancelled"
     exit 1
-fi
+}
 log_success "The cancelled import stopped"
 
 # Give any task that was already in flight when the cancel landed time to finish writing, so the

@@ -21,11 +21,14 @@ trap cleanup EXIT
 
 mkdir -p "$TMP_DIR/sender/vault" "$TMP_DIR/sender/config" "$TMP_DIR/receiver/vault" "$TMP_DIR/receiver/config"
 
-cat > "$TMP_DIR/sender/config/databases.toml" << 'EOF'
+# The path is inside this test's own temporary directory, not a fixed name under /tmp. Nothing
+# creates it (the entry is here to be listed and shared, not opened), but a fixed machine-wide path
+# is a thing two runs of this suite would share, and this suite now runs more of itself at once.
+cat > "$TMP_DIR/sender/config/databases.toml" << EOF
 [[databases]]
 name = "test-db"
 description = ""
-path = "/tmp/smoke-test-db"
+path = "$TMP_DIR/smoke-test-db"
 
 EOF
 
@@ -52,30 +55,10 @@ send_command "$RECEIVER_PORT" click '{"dataId":"receive-database-cancel-button"}
 
 # Cancelling closes the dialog, so the code input goes with it. Waiting for that keeps the test from
 # running ahead and reopening the dialog while the first receive is still in flight.
-#
-# An empty response means the request itself failed, which is not the same as the dialog having
-# closed, and this loop used to treat the two alike: an app that had died read exactly like a
-# cancelled dialog and satisfied the wait. The response is now required to have arrived before its
-# value is believed, and still_waiting starts at "Cancel" so a run where every request failed ends in
-# the failure below rather than in a pass.
-elapsed=0
-still_waiting="Cancel"
-while [ "$elapsed" -lt 15 ]; do
-    response=$(curl -sf "http://localhost:$RECEIVER_PORT/get-value?dataId=receive-database-cancel-button" 2>/dev/null || true)
-    if [ -n "$response" ]; then
-        still_waiting=$(echo "$response" | sed 's/.*"value":"\([^"]*\)".*/\1/')
-        if [ "$still_waiting" != "Cancel" ]; then
-            break
-        fi
-    fi
-    sleep 1
-    elapsed=$((elapsed + 1))
-done
-
-if [ "$still_waiting" = "Cancel" ]; then
+wait_for_value_gone "$RECEIVER_PORT" "receive-database-cancel-button" "Cancel" || {
     log_error "Receiver is still waiting for a sender after the receive was cancelled"
     exit 1
-fi
+}
 log_success "The cancelled receive stopped and the dialog closed"
 
 # --- 2. Receive again, this time with a real sender. ---
@@ -90,22 +73,10 @@ wait_for_log "$TMP_DIR/sender" "Databases page loaded"
 send_command "$SENDER_PORT" click '{"dataId":"share-database-button"}'
 send_command "$SENDER_PORT" click '{"dataId":"share-database-send-button"}'
 
-code=""
-elapsed=0
-while [ "$elapsed" -lt 30 ]; do
-    response=$(curl -sf "http://localhost:$SENDER_PORT/get-value?dataId=share-pairing-code" 2>/dev/null || true)
-    code=$(echo "$response" | sed 's/.*"value":"\([^"]*\)".*/\1/')
-    if [ -n "$code" ] && echo "$code" | grep -qE '^[0-9]{4}$'; then
-        break
-    fi
-    sleep 1
-    elapsed=$((elapsed + 1))
-done
-
-if [ -z "$code" ] || ! echo "$code" | grep -qE '^[0-9]{4}$'; then
+code="$(read_pairing_code "$SENDER_PORT")" || {
     log_error "Sender never displayed a pairing code"
     exit 1
-fi
+}
 log_info "Pairing code: $code"
 
 send_command "$RECEIVER_PORT" click '{"dataId":"receive-database-button"}'

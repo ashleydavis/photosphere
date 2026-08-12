@@ -247,8 +247,11 @@ wait_for_health() {
     local port="$1"
     local logFile="$2"
     local serverPid="$3"
-    local elapsed=0
-    while [ "$elapsed" -lt "$HEALTH_TIMEOUT_SECONDS" ]; do
+    # A deadline read off bash's SECONDS, polled four times a second. The server is usually up in
+    # well under a second, and a whole second between looks was charged to every suite that starts
+    # one. The timeout it is held to is unchanged.
+    local deadline=$((SECONDS + HEALTH_TIMEOUT_SECONDS))
+    while [ "$SECONDS" -lt "$deadline" ]; do
         # Our process is checked before the port, not after: once it has exited, a healthy answer
         # from that port can only have come from somebody else's server, and treating that as
         # success is the very thing this is here to prevent.
@@ -260,8 +263,7 @@ wait_for_health() {
         if curl -sf --max-time 2 "http://127.0.0.1:$port/minio/health/live" >/dev/null 2>&1; then
             return 0
         fi
-        sleep 1
-        elapsed=$((elapsed + 1))
+        sleep 0.25
     done
     log "MinIO did not become healthy on port $port within ${HEALTH_TIMEOUT_SECONDS}s. Server log:"
     cat "$logFile" >&2 || true

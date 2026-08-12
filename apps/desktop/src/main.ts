@@ -74,6 +74,11 @@ let fileLogger: FileLoggerElectron | null = null;
 // Test control server instance, only created when PHOTOSPHERE_TEST_MODE=1.
 let testControlServer: ITestControlServer | null = null;
 
+// Whether the main window's renderer has finished loading. The did-finish-load handler below is a
+// `once`, and it can fire before the test control server exists, so the server has to be able to
+// ask after the fact whether it has already missed it.
+let mainWindowFinishedLoading = false;
+
 // URL of the news feed published in the Photosphere GitHub repo. Overridable via
 // PHOTOSPHERE_NEWS_URL for the local demo script (apps/desktop/demo-news.sh) and
 // for Electron smoke test 17, both of which point at a checked-in test yaml file.
@@ -155,7 +160,9 @@ async function createMainWindow() {
         }
     });
 
+    mainWindowFinishedLoading = false;
     mainWindow.webContents.once('did-finish-load', () => {
+        mainWindowFinishedLoading = true;
         if (testControlServer) {
             testControlServer.notifyReady();
         }
@@ -336,6 +343,17 @@ app.whenReady().then(async () => {
         const server = new TestControlServer(mainWindow, workerPool, () => currentDatabasePath);
         server.start();
         testControlServer = server;
+
+        // The renderer may already have finished loading while the awaits above ran, in which case
+        // the once('did-finish-load') handler has been and gone with no server to tell, and nothing
+        // will ever fire it again. Without this the app answers /ready with 503 for the rest of its
+        // life: the window is up and usable, but every test driving it waits out its whole timeout
+        // and then relaunches. It showed up as test 17 taking 2m 20s instead of 18s, and it gets
+        // likelier the more apps start at once, because that is what makes the main process slow to
+        // come back here.
+        if (mainWindowFinishedLoading) {
+            server.notifyReady();
+        }
     }
 
     app.on('activate', async () => {

@@ -35,22 +35,10 @@ send_command "$SENDER_PORT" click '{"dataId":"share-secret-send-button"}'
 
 # Wait for pairing code element to be populated, then read it
 log_info "Waiting for pairing code..."
-code=""
-elapsed=0
-while [ "$elapsed" -lt 30 ]; do
-    response=$(curl -sf "http://localhost:$SENDER_PORT/get-value?dataId=share-pairing-code" 2>/dev/null || true)
-    code=$(echo "$response" | sed 's/.*"value":"\([^"]*\)".*/\1/')
-    if [ -n "$code" ] && echo "$code" | grep -qE '^[0-9]{4}$'; then
-        break
-    fi
-    sleep 1
-    elapsed=$((elapsed + 1))
-done
-
-if [ -z "$code" ] || ! echo "$code" | grep -qE '^[0-9]{4}$'; then
+code="$(read_pairing_code "$SENDER_PORT")" || {
     log_error "Failed to read pairing code from sender"
     exit 1
-fi
+}
 log_info "Pairing code: $code"
 
 # Start receiver app
@@ -74,22 +62,7 @@ wait_for_log "$TMP_DIR/receiver" "Secret saved"
 # After import completes the list on the page behind the success dialog must already reflect the
 # new secret — the user should not need to dismiss the dialog or hit Refresh for the row to appear.
 log_info "Waiting for receiver row to appear after import (before closing dialog)..."
-row_text=""
-elapsed=0
-while [ "$elapsed" -lt 10 ]; do
-    response=$(curl -sf "http://localhost:$RECEIVER_PORT/get-value?dataId=secret-row-name-test-secret" 2>/dev/null || true)
-    row_text=$(echo "$response" | sed 's/.*"value":"\([^"]*\)".*/\1/')
-    if [ "$row_text" = "test-secret" ]; then
-        break
-    fi
-    sleep 1
-    elapsed=$((elapsed + 1))
-done
-
-if [ "$row_text" != "test-secret" ]; then
-    log_error "Expected receiver Manage Secrets row 'test-secret' to appear in the DOM after import, but it did not (still empty after 10s with the success dialog still open)"
-    exit 1
-fi
+wait_for_value "$RECEIVER_PORT" "secret-row-name-test-secret" "test-secret"
 
 # Assert receiver vault contains the secret
 if ! vault_has_secret "$TMP_DIR/receiver/vault" test-secret; then

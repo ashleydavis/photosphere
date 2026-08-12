@@ -41,8 +41,10 @@ wait_for_ready "$APP_PORT"
 log_info "Opening the left sidebar..."
 send_command "$APP_PORT" click '{"dataId":"sidebar-toggle-button"}'
 
-# Wait for the drawer to mount and the recent databases list to render.
-sleep 1
+# Wait for the drawer to mount and the recent databases list to render. Waiting for the row this
+# test is about to act on is both quicker than a fixed pause and stricter: a pause that expired
+# early clicked into a drawer that was not there yet, and one that expired late cost the difference.
+wait_for_value "$APP_PORT" "recent-database-name-0" "test-db-a"
 
 log_info "Clicking the trash icon for the first recent database..."
 send_command "$APP_PORT" click '{"dataId":"remove-recent-database-button-0"}'

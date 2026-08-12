@@ -22,41 +22,20 @@ cleanup() {
 trap cleanup EXIT
 
 #
-# Polls get-value for the given data-id until its value contains the expected substring.
-# Usage: wait_for_value <port> <data-id> <expected-substring>
-#
-wait_for_value() {
-    local port="$1"
-    local data_id="$2"
-    local expected="$3"
-    local elapsed=0
-    while [ "$elapsed" -lt 30 ]; do
-        local response
-        response=$(curl -sf "http://localhost:$port/get-value?dataId=$data_id" 2>/dev/null || true)
-        if echo "$response" | grep -q "$expected"; then
-            return 0
-        fi
-        sleep 1
-        elapsed=$((elapsed + 1))
-    done
-    log_error "Timed out waiting for data-id '$data_id' to contain '$expected' (last response: $response)"
-    exit 1
-}
-
-#
-# Polls a TOML file until it contains a line matching the given extended-regex pattern.
+# Polls a TOML file until it contains a line matching the given extended-regex pattern. The only
+# wait here that is not one of the shared ones, because it watches a file the app writes rather than
+# the app itself.
 # Usage: wait_for_toml <file> <ere-pattern>
 #
 wait_for_toml() {
     local file="$1"
     local pattern="$2"
-    local elapsed=0
-    while [ "$elapsed" -lt 15 ]; do
+    local deadline=$((SECONDS + DEFAULT_WAIT_TIMEOUT))
+    while [ "$SECONDS" -lt "$deadline" ]; do
         if [ -f "$file" ] && grep -Eq "$pattern" "$file"; then
             return 0
         fi
-        sleep 1
-        elapsed=$((elapsed + 1))
+        sleep "$WAIT_POLL_INTERVAL"
     done
     log_error "Timed out waiting for pattern '$pattern' in $file"
     [ -f "$file" ] && cat "$file"

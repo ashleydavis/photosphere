@@ -104,6 +104,15 @@ A suite of end-to-end shell smoke tests lives in `smoke-tests/`. Each test is a 
 ./smoke-tests.sh
 ```
 
+Tests run in a rolling pool: as many as the pool is wide are kept going at once, and the next test starts the moment any of them finishes. The width comes from the machine's core count (a quarter of it, at least 2 and at most 6). `--parallel N` sets it explicitly and beats everything else, and the `PHOTOSPHERE_TEST_PARALLEL` environment variable sets it for a caller that is running other suites beside this one, which is how `scripts/test-everything-parallel.sh` shares the machine out between its lanes. A value in that variable that is not a positive integer is refused rather than guessed at.
+
+Tests whose directory holds a `.sequential` marker are left out of the pool and run one at a time after it has drained. Only `7-share-secret` and `8-share-database` are marked, because each is a full LAN share flow and two of those at once interfere over the broadcast.
+
+```bash
+./smoke-tests.sh --parallel 3               # a pool of 3
+PHOTOSPHERE_TEST_PARALLEL=3 ./smoke-tests.sh # the same, from the environment
+```
+
 **Run all tests sequentially:**
 
 ```bash

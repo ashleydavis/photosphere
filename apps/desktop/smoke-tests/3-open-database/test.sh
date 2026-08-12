@@ -39,8 +39,10 @@ wait_for_log "$TMP_DIR" "Database opened"
 log_info "Opening the left sidebar..."
 send_command "$APP_PORT" click '{"dataId":"sidebar-toggle-button"}'
 
-# Wait for the drawer to mount and its links to render.
-sleep 1
+# Wait for the drawer to mount and its links to render. Waiting for the link this test is about to
+# click is both quicker than a fixed pause and stricter: a pause that expired early clicked into a
+# drawer that was not there yet, and one that expired late cost the difference.
+wait_for_value "$APP_PORT" "sidebar-database-summary" "Database Info"
 
 send_command "$APP_PORT" click '{"dataId":"sidebar-database-summary"}'
 wait_for_log "$TMP_DIR" "Database summary loaded:"

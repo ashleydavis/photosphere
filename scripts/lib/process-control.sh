@@ -31,6 +31,11 @@ PROCESS_CONTROL_JOB_CONTROL_VERIFIED=""
 # shut down on its own terms before it is taken out.
 PROCESS_CONTROL_TERM_GRACE_SECONDS=1
 
+# Seconds between looks while the kill helpers wait out that grace. The grace is a limit, not a
+# duration: almost everything this library launches is gone in well under it, and sleeping the whole
+# second regardless charged every teardown for an exit that had already happened.
+PROCESS_CONTROL_POLL_INTERVAL=0.1
+
 #
 # Prints the process group id of the given process, or nothing when it cannot be read (which
 # includes a process that has already exited).
@@ -42,6 +47,65 @@ process_group_of() {
         return 0
     fi
     ps -o pgid= -p "$pid" 2>/dev/null | tr -d ' ' || true
+}
+
+#
+# Returns success while at least one process is still in the given process group, and failure once
+# the group is empty (or when no group id was given).
+#
+# `kill -0` asks the kernel whether a signal could be delivered without delivering one, and the
+# negative pgid form asks that of a whole group, so it succeeds while any member lives. Nothing this
+# library launches can answer this after it has died: launch_in_process_group's job runs inside the
+# process substitution in the caller, so the app is reparented to init and reaped there rather than
+# left unwaited as a zombie in the test's own shell.
+# Usage: process_group_alive <pgid>
+#
+process_group_alive() {
+    local pgid="$1"
+    if [ -z "$pgid" ]; then
+        return 1
+    fi
+    kill -0 -- "-$pgid" 2>/dev/null
+}
+
+#
+# Prints how many polls of PROCESS_CONTROL_POLL_INTERVAL cover the given number of seconds, rounded
+# to the nearest whole poll and never less than one.
+#
+# Counted rather than measured against bash's SECONDS, because SECONDS counts whole seconds and the
+# graces waited out here are measured in them: a deadline of SECONDS + 1 expires anywhere between
+# immediately and a second later, which would cut short the grace a process is entitled to. The work
+# inside each poll is a `kill -0`, a shell builtin, so counting cannot drift the way it would around
+# something slow.
+# Usage: process_control_poll_count <seconds>
+#
+process_control_poll_count() {
+    local seconds="$1"
+    awk -v total="$seconds" -v interval="$PROCESS_CONTROL_POLL_INTERVAL" \
+        'BEGIN { count = int((total / interval) + 0.5); if (count < 1) { count = 1 } print count }'
+}
+
+#
+# Waits for every process in the given group to go, returning 0 once the group is empty and 1 when
+# the timeout passed with something still in it.
+# Usage: wait_for_process_group_exit <pgid> <timeout_seconds>
+#
+wait_for_process_group_exit() {
+    local pgid="$1"
+    local timeout_seconds="$2"
+    local polls_remaining
+    polls_remaining="$(process_control_poll_count "$timeout_seconds")"
+    while [ "$polls_remaining" -gt 0 ]; do
+        if ! process_group_alive "$pgid"; then
+            return 0
+        fi
+        sleep "$PROCESS_CONTROL_POLL_INTERVAL"
+        polls_remaining=$((polls_remaining - 1))
+    done
+    if process_group_alive "$pgid"; then
+        return 1
+    fi
+    return 0
 }
 
 #
@@ -83,7 +147,27 @@ kill_process_tree() {
     for tree_pid in $tree_pids; do
         kill -TERM "$tree_pid" 2>/dev/null || true
     done
-    sleep "$PROCESS_CONTROL_TERM_GRACE_SECONDS"
+
+    # The grace is a limit rather than a wait: poll the pids that were signalled and stop as soon as
+    # the last of them has gone, which is the usual case and used to cost a whole second regardless.
+    # A process that ignores the SIGTERM still gets the full grace and then the SIGKILL below.
+    local polls_remaining still_running
+    polls_remaining="$(process_control_poll_count "$PROCESS_CONTROL_TERM_GRACE_SECONDS")"
+    while [ "$polls_remaining" -gt 0 ]; do
+        still_running="no"
+        for tree_pid in $tree_pids; do
+            if kill -0 "$tree_pid" 2>/dev/null; then
+                still_running="yes"
+                break
+            fi
+        done
+        if [ "$still_running" = "no" ]; then
+            return 0
+        fi
+        sleep "$PROCESS_CONTROL_POLL_INTERVAL"
+        polls_remaining=$((polls_remaining - 1))
+    done
+
     for tree_pid in $tree_pids; do
         kill -KILL "$tree_pid" 2>/dev/null || true
     done
@@ -110,8 +194,15 @@ kill_process_group() {
         echo "kill_process_group refused to kill process group $pgid, which is this script's own group." >&2
         return 1
     fi
+    # Nothing left in the group means there is nothing to signal. Every teardown reaches here through
+    # a cleanup that runs whether or not the app has already stopped, so this is the common path.
+    if ! process_group_alive "$pgid"; then
+        return 0
+    fi
     kill -TERM -- "-$pgid" 2>/dev/null || true
-    sleep "$PROCESS_CONTROL_TERM_GRACE_SECONDS"
+    if wait_for_process_group_exit "$pgid" "$PROCESS_CONTROL_TERM_GRACE_SECONDS"; then
+        return 0
+    fi
     kill -KILL -- "-$pgid" 2>/dev/null || true
     return 0
 }

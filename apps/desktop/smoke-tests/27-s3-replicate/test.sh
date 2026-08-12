@@ -85,8 +85,25 @@ send_command "$APP_PORT" click '{"dataId":"replicate-dest-type-option-s3"}'
 send_command "$APP_PORT" click '{"dataId":"replicate-configure-secrets-button"}'
 wait_for_value "$APP_PORT" "configure-secrets-save" "Save"
 send_command "$APP_PORT" click '{"dataId":"configure-secrets-s3-select"}'
+# The option has to be on screen before it is clicked. The select opens its list asynchronously, and
+# a click sent into a list that has not rendered goes nowhere while the test carries on regardless.
+wait_for_value "$APP_PORT" "configure-secrets-s3-option-$SECRET_NAME" "$SECRET_NAME"
 send_command "$APP_PORT" click "{\"dataId\":\"configure-secrets-s3-option-$SECRET_NAME\"}"
 send_command "$APP_PORT" click '{"dataId":"configure-secrets-save"}'
+
+# The secrets modal must be gone before the replicate dialog underneath it is typed into. Without
+# this the next three commands can land while the modal is still closing, and the failure that
+# produces is silent: every click is logged as delivered, the start button does nothing useful, and
+# the test waits out its whole timeout for a replication that was never started. Seen once in a
+# sequential run, where an idle machine put all of these inside 600ms.
+wait_for_value_gone "$APP_PORT" "configure-secrets-save" "Save" || exit 1
+
+# Choosing the credentials opens the source database, and the databases page behind the modal
+# reloads when that load finishes. The destination typed before that lands is lost to the re-render,
+# and the Start button then does nothing at all: every click is still logged as delivered, so the
+# test sits out its whole timeout waiting for a replication that was never started. Seen twice, once
+# in a sequential run and once with two copies of the suite running at the same time.
+wait_for_log "$TMP_DIR" "Load assets task completed"
 
 send_command "$APP_PORT" type "{\"dataId\":\"replicate-dest-path-input\",\"text\":\"$S3_DEST_PATH\"}"
 send_command "$APP_PORT" click '{"dataId":"replicate-mode-full"}'

@@ -91,41 +91,41 @@ send_command "$APP_PORT" menu '{"itemId":"open-database"}'
 wait_for_log "$TMP_DIR" "Open database dialog opened"
 send_command "$APP_PORT" click '{"dataId":"database-list-item-0"}'
 
-# The app must report a failure. The alternative it must not do is finish the load reporting zero
-# assets, which renders an empty gallery that looks exactly like an empty database.
+# Two outcomes are possible and only one of them is allowed, so this watches for both at once and
+# stops at whichever arrives. The app must report a failure. What it must not do is finish the load
+# reporting zero assets, which renders an empty gallery that looks exactly like an empty database.
 #
-# wait_for_log exits on timeout rather than returning, so it runs in a subshell here: the exit ends
-# the subshell and this test sees the non-zero status, instead of disappearing before it can say what
-# went wrong.
-if ( wait_for_log "$TMP_DIR" "Load assets task completed: 0 assets loaded" 30 ); then
-    log_error "The app reported a successful load of 0 assets from an unreachable bucket"
-    log_error "There are two assets in that bucket; an empty gallery here is indistinguishable from an empty database"
-    exit 1
-fi
-log_success "The app did not report an empty-but-successful load from the unreachable bucket"
-
-# Falls through to the error check below, which decides the test.
-
-# Something has to say the load failed, and it has to be about THIS database. The AWS SDK retries a
-# connection several times before giving up, so this waits well past that rather than deciding after
-# one look: the question is whether the app EVER says anything, not whether it says it quickly.
+# Watching both together rather than one after the other is what makes this test quick. Proving the
+# empty-but-successful line absent used to take a fixed 30 seconds of its own, and the error line
+# that arrives about 20 seconds in disproves it anyway: the load cannot both fail and complete.
+#
+# The error has to be about THIS database. The AWS SDK retries a connection several times before
+# giving up, so this waits well past that rather than deciding after one look: the question is
+# whether the app EVER says anything, not whether it says it quickly.
 #
 # Matched on openDatabase's own message naming the database path, not on any [ERROR] line that is not
 # the Chromium dbus one. That older check passed on any unrelated error the app happened to log, so it
 # could report "the app reported an error for the unreachable bucket" for an error about something
 # else entirely, which is exactly the confusion this test exists to prevent.
 EXPECTED_ERROR="Could not reach the database at $S3_DB_PATH"
+EMPTY_LOAD="Load assets task completed: 0 assets loaded"
 ERROR_WAIT_SECONDS=90
-error_elapsed=0
-while [ "$error_elapsed" -lt "$ERROR_WAIT_SECONDS" ]; do
+error_deadline=$((SECONDS + ERROR_WAIT_SECONDS))
+error_started=$SECONDS
+while [ "$SECONDS" -lt "$error_deadline" ]; do
     if grep -qF "$EXPECTED_ERROR" "$TMP_DIR/app.log" 2>/dev/null; then
-        log_success "The app reported an error for the unreachable bucket after ${error_elapsed}s"
+        log_success "The app did not report an empty-but-successful load from the unreachable bucket"
+        log_success "The app reported an error for the unreachable bucket after $((SECONDS - error_started))s"
         stop_app "$APP_PORT" "$TMP_DIR"
         log_success "Test 28 passed: s3-failure"
         exit 0
     fi
-    sleep 1
-    error_elapsed=$((error_elapsed + 1))
+    if grep -qF "$EMPTY_LOAD" "$TMP_DIR/app.log" 2>/dev/null; then
+        log_error "The app reported a successful load of 0 assets from an unreachable bucket"
+        log_error "There are two assets in that bucket; an empty gallery here is indistinguishable from an empty database"
+        exit 1
+    fi
+    sleep "$WAIT_POLL_INTERVAL"
 done
 
 log_error "The app never logged \"$EXPECTED_ERROR\" in ${ERROR_WAIT_SECONDS}s"

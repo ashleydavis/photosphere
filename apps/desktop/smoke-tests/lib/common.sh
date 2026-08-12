@@ -27,6 +27,14 @@ source "$REPO_DIR/scripts/lib/process-control.sh"
 # suite run sharing the machine (which slows everything) does not trip a spurious timeout.
 DEFAULT_WAIT_TIMEOUT=120
 
+# Seconds between looks in every wait below. A quarter second, not one second and not a hundredth.
+# At one second a wait cost half a second on average for an event that had already happened, and the
+# suite does about three hundred of them. At a hundredth it would put a hundred curl or awk processes
+# a second on the machine per test in flight, which the whole pool running at once turns into real
+# contention with the apps the tests are driving. A quarter second costs about an eighth of a second
+# per wait and four processes a second per test.
+WAIT_POLL_INTERVAL=0.25
+
 # Absolute path to the repository root, for reaching the helper scripts under scripts/. Resolved from
 # this file's own location (apps/desktop/smoke-tests/lib) so it does not depend on the caller's cwd.
 SMOKE_REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
@@ -175,14 +183,15 @@ resolve_electron_binary() {
 #
 wait_for_test_port() {
     local port_file="$1"
-    local elapsed=0
-    while [ "$elapsed" -lt "$DEFAULT_WAIT_TIMEOUT" ]; do
+    # A deadline read off bash's SECONDS rather than a count of polls, so the declared timeout stays
+    # the number of seconds it says it is however slow a single look turns out to be.
+    local deadline=$((SECONDS + DEFAULT_WAIT_TIMEOUT))
+    while [ "$SECONDS" -lt "$deadline" ]; do
         if [ -s "$port_file" ]; then
             cat "$port_file"
             return 0
         fi
-        sleep 1
-        elapsed=$((elapsed + 1))
+        sleep "$WAIT_POLL_INTERVAL"
     done
     log_error "Test control server did not report a listening port within ${DEFAULT_WAIT_TIMEOUT}s" >&2
     return 1
@@ -354,15 +363,14 @@ wait_for_ready() {
     local port_var="${2:-APP_PORT}"
     log_info "Waiting for app to be ready on port $APP_PORT..."
     while [ "$attempt" -le "$max_attempts" ]; do
-        local elapsed=0
-        while [ "$elapsed" -lt "$DEFAULT_WAIT_TIMEOUT" ]; do
+        local deadline=$((SECONDS + DEFAULT_WAIT_TIMEOUT))
+        while [ "$SECONDS" -lt "$deadline" ]; do
             if curl -sf "http://localhost:$APP_PORT/ready" > /dev/null 2>&1; then
                 printf -v "$port_var" '%s' "$APP_PORT"
                 log_info "App is ready"
                 return 0
             fi
-            sleep 1
-            elapsed=$((elapsed + 1))
+            sleep "$WAIT_POLL_INTERVAL"
         done
         log_error "Timed out waiting for app to be ready after ${DEFAULT_WAIT_TIMEOUT}s (attempt $attempt of $max_attempts)"
         if [ "$attempt" -lt "$max_attempts" ]; then
@@ -398,14 +406,16 @@ wait_for_log() {
     local tmp_dir="$1"
     local pattern="$2"
     local timeout="${3:-$DEFAULT_WAIT_TIMEOUT}"
-    local elapsed=0
     local cursor_file="$tmp_dir/.log-cursor"
     local start_line=0
     if [ -f "$cursor_file" ]; then
         start_line=$(cat "$cursor_file")
     fi
     log_info "Waiting for log pattern: $pattern (after line $start_line)"
-    while [ "$elapsed" -lt "$timeout" ]; do
+    # A deadline rather than a count of polls: the awk below reads a log that grows as the test runs,
+    # so a poll is not a fixed cost, and counting them would quietly stretch the declared timeout.
+    local deadline=$((SECONDS + timeout))
+    while [ "$SECONDS" -lt "$deadline" ]; do
         if [ -f "$tmp_dir/app.log" ]; then
             local matched_line
             matched_line=$(awk -v start="$start_line" -v pat="$pattern" '
@@ -417,8 +427,7 @@ wait_for_log() {
                 return 0
             fi
         fi
-        sleep 1
-        elapsed=$((elapsed + 1))
+        sleep "$WAIT_POLL_INTERVAL"
     done
     log_error "Timed out waiting for log pattern: $pattern"
     log_error "Last 30 lines of app.log:"
@@ -457,18 +466,70 @@ wait_for_value() {
     local data_id="$2"
     local expected="$3"
     local timeout="${4:-$DEFAULT_WAIT_TIMEOUT}"
-    local elapsed=0
     local response=""
-    while [ "$elapsed" -lt "$timeout" ]; do
+    local deadline=$((SECONDS + timeout))
+    while [ "$SECONDS" -lt "$deadline" ]; do
         response=$(curl -sf "http://localhost:$port/get-value?dataId=$data_id" 2>/dev/null || true)
         if echo "$response" | grep -q "$expected"; then
             return 0
         fi
-        sleep 1
-        elapsed=$((elapsed + 1))
+        sleep "$WAIT_POLL_INTERVAL"
     done
     log_error "Timed out waiting for data-id '$data_id' to contain '$expected' (last response: $response)"
     exit 1
+}
+
+#
+# The opposite wait: polls the given data-id until its value no longer contains the substring, for
+# watching a control leave a state (a button that says Cancel while a job runs, a dialog that shows
+# a pairing code until it is dismissed).
+#
+# A non-empty response is required first. Without that a dead app, which answers nothing at all,
+# reads exactly like a dialog that has closed, and the test passes on the strength of the app having
+# crashed.
+# Usage: wait_for_value_gone <port> <data-id> <substring> [timeout]
+#
+wait_for_value_gone() {
+    local port="$1"
+    local data_id="$2"
+    local unwanted="$3"
+    local timeout="${4:-$DEFAULT_WAIT_TIMEOUT}"
+    local response=""
+    local deadline=$((SECONDS + timeout))
+    while [ "$SECONDS" -lt "$deadline" ]; do
+        response=$(curl -sf "http://localhost:$port/get-value?dataId=$data_id" 2>/dev/null || true)
+        if [ -n "$response" ] && ! echo "$response" | grep -q "$unwanted"; then
+            return 0
+        fi
+        sleep "$WAIT_POLL_INTERVAL"
+    done
+    log_error "Timed out waiting for data-id '$data_id' to stop containing '$unwanted' (last response: $response)"
+    return 1
+}
+
+#
+# Polls the share dialog's pairing code until it reads as four digits, prints it on stdout and
+# returns non-zero when none appeared inside the timeout.
+#
+# The four digit test is what distinguishes a code from the placeholder the dialog shows while it is
+# still being generated. Value-returning, so it reports failure by return rather than exiting: the
+# caller prints its own message naming which side of the share was waiting.
+# Usage: read_pairing_code <port> [timeout]
+#
+read_pairing_code() {
+    local port="$1"
+    local timeout="${2:-$DEFAULT_WAIT_TIMEOUT}"
+    local code=""
+    local deadline=$((SECONDS + timeout))
+    while [ "$SECONDS" -lt "$deadline" ]; do
+        code=$(read_value "$port" share-pairing-code)
+        if [[ "$code" =~ ^[0-9]{4}$ ]]; then
+            echo "$code"
+            return 0
+        fi
+        sleep "$WAIT_POLL_INTERVAL"
+    done
+    return 1
 }
 
 #
@@ -514,13 +575,28 @@ send_command() {
 
 #
 # Sends /quit, then kills the app process if it does not exit within a few seconds.
+#
+# The wait watches the app's process group empty rather than sleeping a fixed period at it. A clean
+# shutdown takes a measured 1.1s, so a flat sleep charged every teardown for time the app did not
+# need, and there are 44 of them in a full run. A wedged app is stopped exactly as before:
+# cleanup_apps runs either way, and it is what kills anything the wait gave up on.
 # Usage: stop_app <port> <tmp_dir>
 #
 stop_app() {
     local port="$1"
     local tmp_dir="$2"
     send_command "$port" quit '{}' 2>/dev/null || true
-    sleep 2
+    local pgid=""
+    if [ -f "$tmp_dir/app.pgid" ]; then
+        pgid="$(cat "$tmp_dir/app.pgid" 2>/dev/null || true)"
+    fi
+    if [ -n "$pgid" ]; then
+        wait_for_process_group_exit "$pgid" 5 || true
+    else
+        # No recorded group means start_app never got as far as writing one, so there is nothing to
+        # watch and the old fixed pause is all that is left.
+        sleep 2
+    fi
     cleanup_apps "$tmp_dir"
 }
 
