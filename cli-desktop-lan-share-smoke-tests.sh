@@ -234,15 +234,23 @@ start_cli_receiver() {
     ) > "$log_file" 2>&1 &
     local cli_pid=$!
     CLI_PIDS+=("$cli_pid")
+    # Counted in seconds, like every other wait in this file. This loop used to sleep half a second
+    # per increment while comparing the count against 15, so it gave up after 7.5 seconds rather than
+    # the 15 it reads as. A cold CLI start is about 230ms on this machine when nothing else is
+    # running, but test:everything runs ten suites at once: under that load the receiver had not
+    # printed its first line within 7.5 seconds and the test failed with "CLI receiver did not start
+    # within timeout" against a receiver that was still starting normally. LAN_TIMEOUT is what the
+    # rest of the suite already waits. A longer wait costs nothing when the receiver is healthy,
+    # because the loop returns the moment its log line appears, and returns early if it has exited.
     local elapsed=0
-    while [ "$elapsed" -lt 15 ]; do
+    while [ "$elapsed" -lt "$LAN_TIMEOUT" ]; do
         if grep -q "Waiting for sender\|imported successfully\|Pairing code rejected" "$log_file" 2>/dev/null; then
             return 0
         fi
         if ! kill -0 "$cli_pid" 2>/dev/null; then
             return 0
         fi
-        sleep 0.5
+        sleep 1
         elapsed=$((elapsed + 1))
     done
     log_error "CLI receiver did not start within timeout. Log:"
