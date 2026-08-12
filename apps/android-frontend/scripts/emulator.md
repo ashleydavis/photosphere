@@ -88,9 +88,24 @@ It looks at the pool every five seconds, so a crashed emulator is usually back o
 
 Each pass classifies every pool index and repairs at most one, by calling `pool-repair --index N`. It never repairs an emulator whose harness lock is held, and it watches every attached emulator while only ever repairing pool ones, so a hand-testing emulator appears in the table and is never touched. It never touches the bridge or the taps and never runs `sudo`; when the bridge is missing it says so and keeps watching, because the human putting it back is a normal thing to wait for.
 
-Two limits on it. After three failed repairs of one index in a row it gives up on that index: it keeps reporting it as broken on every pass, writes the `pool-diagnose` report for it once, and never restarts it again, because a machine-level fault otherwise turns into an endless cold-boot loop that makes the machine worse. And a healthy emulator that has been up over 12 hours is recycled while nothing is using it, but only when every other index is healthy and its lock is free: the emulators that died had been up 23.5 hours holding 6.6 to 6.7GB each plus up to 2GB of swap.
+Two limits on it. After three failed repairs of one index in a row it leaves that index alone for ten minutes, writes the `pool-diagnose` report for it, and then gives it another three attempts; the wait doubles each round to an hour, and being repaired or being found healthy clears it. The wait is what stops a machine-level fault turning into an endless cold-boot loop that makes the machine worse, and the retry is what stops a loaded machine costing you the emulator for the rest of the day: on 2026-08-12 the monitor abandoned three of the five permanently, and every one of those repairs had failed with `did not reach the bridge within 420s`, which is what a cold boot does on a machine too busy to finish one inside the timeout. And a healthy emulator that has been up over 12 hours is recycled while nothing is using it, but only when every other index is healthy and its lock is free: the emulators that died had been up 23.5 hours holding 6.6 to 6.7GB each plus up to 2GB of swap.
 
 One repairing monitor runs per machine, held with `flock` on `/tmp/photosphere-emulator-pool-monitor.lock`. Watching takes no lock, so any number of people can have the display open.
+
+### The logs, and what to read when something has gone wrong
+
+The monitor keeps two rolling logs, written whichever way it was being displayed. They are the record of what happened when the terminal it happened in has been closed or has scrolled away.
+
+```
+/tmp/photosphere-emulator-pool-monitor.log          every line the monitor said, plus a summary a minute
+/tmp/photosphere-emulator-pool-monitor-repairs.log  each repair's own output, including the diagnosis after a run of failures
+```
+
+The event log holds the monitor starting and stopping with its pid, every repair started and how it went, every wait and every retry, the bridge going and coming back, and a summary line a minute giving the healthy count, CPU, memory, swap and each emulator's state. That last one is the point of it: it says what the machine looked like in the hours before a failure, which is what nothing recorded during the 2026-08-12 incident. The wording of that line is the same one the redirected display prints, so a log written while watching a table on screen reads the same as one written by a monitor pointed at a file.
+
+Both roll at 4MB, keeping a single previous generation as `<name>.1`, so at most 16MB of the two together, and a reboot clears `/tmp` regardless. A log is never rolled while a repair is writing to it, so no repair's output is split across two files.
+
+Start with the event log and find the time the trouble began, then read the same stretch of the repair log for what the repairs themselves printed. `bun run --filter=android-frontend emu:pool:diagnose` gives the state now; these two give the state then.
 
 ### Memory limits
 

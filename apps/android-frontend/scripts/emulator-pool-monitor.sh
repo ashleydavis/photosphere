@@ -27,6 +27,14 @@
 # first, so an emulator a test run is using is reported and left alone. It never removes a tap or the
 # bridge.
 #
+# What it leaves behind to read afterwards, whichever display it used:
+#
+#   /tmp/photosphere-emulator-pool-monitor.log          every line it said, plus a summary a minute
+#   /tmp/photosphere-emulator-pool-monitor-repairs.log  each repair's own output
+#
+# Both roll at 4MB, keeping one previous generation as <name>.1, and /tmp clears on a reboot. These
+# are the two files to read when the pool has misbehaved and the terminal it happened in is gone.
+#
 # Usage:
 #   apps/android-frontend/scripts/emulator-pool-monitor.sh   # bun run emu:and:pool:monitor
 #
@@ -146,6 +154,25 @@ MONITOR_REPAIR_INDEX=""
 # ago is still there. A fixed path for the same reason the monitor's lock has one: there is one
 # monitor on this machine. It lives in /tmp, so a reboot clears it.
 MONITOR_REPAIR_LOG_PATH="/tmp/photosphere-emulator-pool-monitor-repairs.log"
+
+# Where everything this monitor says goes, whichever way it is being displayed.
+#
+# On a terminal the table is redrawn in place and the lines under it scroll away, so until this
+# existed a monitor watched on screen left no record at all. The 2026-08-12 incident had to be
+# reconstructed from the repair log and a paste of what was on screen at the time, and what was
+# missing from both was the ordinary state of the pool in the hours before it. This is that record:
+# every event, plus a summary line a minute, in both display modes.
+MONITOR_EVENT_LOG_PATH="/tmp/photosphere-emulator-pool-monitor.log"
+
+# How large either log may get before it is rolled, and how often the summary line is written.
+#
+# Rolling keeps one previous generation: at the cap the log becomes <name>.1, replacing the last one,
+# and a fresh log starts. Two generations of each log is at most 16MB, and a machine that reboots
+# clears /tmp anyway. A summary a minute is 1440 lines a day, which is what makes the log worth
+# reading afterwards: it says what the pool and the machine looked like in the run-up to a failure,
+# not only that the failure happened.
+MONITOR_LOG_MAX_BYTES="${MONITOR_LOG_MAX_BYTES:-4194304}"
+MONITOR_LOG_SUMMARY_SECONDS="${MONITOR_LOG_SUMMARY_SECONDS:-60}"
 
 
 #
@@ -288,6 +315,10 @@ restore_terminal() {
         echo "Stopping the repair of pool-$MONITOR_REPAIR_INDEX that was still running."
         kill_process_tree "$MONITOR_REPAIR_PID"
     fi
+
+    # Says in the log that this monitor stopped, so a log read afterwards tells a monitor that was
+    # asked to stop from one that died or was never running at the time in question.
+    log_only "monitor stopped (pid $$)."
 
     exit 0
 }
@@ -718,6 +749,59 @@ draw_display() {
 monitor_log() {
     MONITOR_OUTPUT_SEEN="yes"
     printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
+    log_only "$@"
+}
+
+#
+# Writes one timestamped line to the event log and nowhere else. This is for what the display is
+# already showing in another form, above all the summary line: on a terminal the table says how the
+# pool is far better than a line of text could, but the table is gone the moment it is redrawn, and
+# the log is the only thing left to read afterwards.
+# Usage: log_only <words...>
+#
+log_only() {
+    printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$MONITOR_EVENT_LOG_PATH"
+}
+
+#
+# Rolls a log that has reached the cap, keeping one previous generation.
+#
+# A rename rather than a copy, so nothing is lost in the gap between the two, and the next append
+# creates the file again. Left alone while a repair is running, because that repair is writing to the
+# repair log through a descriptor it opened before the rename, and its output would carry on into the
+# renamed file and be split across two of them.
+# Usage: roll_log <path>
+#
+roll_log() {
+    local path="$1"
+    local size
+
+    if [ -n "$MONITOR_REPAIR_PID" ] || [ ! -f "$path" ]; then
+        return 0
+    fi
+
+    size="$(stat -c %s "$path" 2>/dev/null)"
+    case "$size" in
+        ''|*[!0-9]*)
+            return 0
+            ;;
+    esac
+
+    if [ "$size" -lt "$MONITOR_LOG_MAX_BYTES" ]; then
+        return 0
+    fi
+
+    mv -f "$path" "$path.1"
+    log_only "rolled $path at $size bytes. What was in it is now in $path.1."
+}
+
+#
+# Rolls both logs. Called once per pass, which is often enough that neither can run away and cheap
+# enough not to matter: it is one stat of each.
+#
+roll_logs() {
+    roll_log "$MONITOR_EVENT_LOG_PATH"
+    roll_log "$MONITOR_REPAIR_LOG_PATH"
 }
 
 # Whether anything has been printed since this was last set to "no". The table redraws itself in
@@ -1122,10 +1206,35 @@ line_pass() {
 }
 
 #
+# Writes the state of the pool and the machine to the event log as one line.
+#
+# Takes what the table was drawn from, in the same order draw_display takes it, so the two can never
+# disagree about what was on screen at that moment. The wording matches the line the redirected
+# display prints, so a log written while watching on a terminal reads the same as one written by a
+# monitor redirected to a file.
+# Usage: log_pool_summary <healthy> <total> <cpu%> <mem%> <mem used> <mem total> <swap%> <swap used> <swap total> [rows...]
+#
+log_pool_summary() {
+    local healthy="$1" total="$2" cpu="$3"
+    local memory_percent="$4" memory_used="$5" memory_total="$6"
+    local swap_percent="$7" swap_used="$8" swap_total="$9"
+    shift 9
+    local row label serial status detail summary=""
+
+    for row in "$@"; do
+        IFS='|' read -r label serial status detail _ <<< "$row"
+        summary="$summary $label/$serial=$status($detail)"
+    done
+
+    log_only "$healthy of $total healthy | cpu ${cpu}% mem ${memory_percent}% (${memory_used}/${memory_total} GB) swap ${swap_percent}% (${swap_used}/${swap_total} GB) |${summary:- no devices attached}"
+}
+
+#
 # The loop used when this is not on a terminal: one line per pass, then a look at the pool.
 #
 line_loop() {
     while true; do
+        roll_logs
         line_pass
         repair_pass
         sleep "$MONITOR_INTERVAL_SECONDS"
@@ -1148,12 +1257,17 @@ if ! command -v flock >/dev/null 2>&1; then
 fi
 exec {monitor_lock_fd}<>"$MONITOR_LOCK_PATH"
 if ! flock -n "$monitor_lock_fd"; then
+    log_only "refused to start: a monitor is already running and holds $MONITOR_LOCK_PATH."
     echo "ERROR: a monitor is already running on this machine (it holds $MONITOR_LOCK_PATH)." >&2
     echo "Stop that one first. To read the pool without starting a second monitor:" >&2
     echo "  bun run emu:and:pool:status" >&2
     echo "  bun run --filter=android-frontend emu:pool:diagnose" >&2
     exit 1
 fi
+
+# Says in the log that this monitor started, which is what tells a restart from a monitor that has
+# been up all along when the log is read days later.
+log_only "monitor started (pid $$). Repairs are logged separately in $MONITOR_REPAIR_LOG_PATH."
 
 # Primes the CPU counters, so the first reading reports the change since now rather than the average
 # since the machine booted.
@@ -1178,6 +1292,9 @@ printf '\033[?25l'
 # Set an interval back, so the first pass looks at the pool straight away rather than after the first
 # interval of watching.
 last_repair_at=$(( SECONDS - MONITOR_INTERVAL_SECONDS ))
+
+# The summary is written as soon as the first frame has something in it, and then once a minute.
+last_summary_at=$(( SECONDS - MONITOR_LOG_SUMMARY_SECONDS ))
 
 while true; do
     if [ $(( sample_index % HEALTH_EVERY_SAMPLES )) -eq 0 ]; then
@@ -1323,6 +1440,19 @@ while true; do
         "$total_count" \
         ${rows[@]+"${rows[@]}"}
 
+    # The table says all of this and says it better, but only until the next frame overwrites it. A
+    # line a minute in the log is what makes the hours before a failure readable afterwards.
+    if [ $(( SECONDS - last_summary_at )) -ge "$MONITOR_LOG_SUMMARY_SECONDS" ]; then
+        log_pool_summary \
+            "$healthy_count" \
+            "$total_count" \
+            "$cpu_percent" \
+            "$memory_percent" "$memory_used" "$memory_total" \
+            "$swap_percent" "$swap_used" "$swap_total" \
+            ${rows[@]+"${rows[@]}"}
+        last_summary_at="$SECONDS"
+    fi
+
     # A pool check that finds nothing to do prints nothing, and the display carries on redrawing in
     # place. One that has something to say prints it under the table, and the next frame then starts
     # a fresh table below that, so the account of what was done stays on screen rather than being
@@ -1331,6 +1461,7 @@ while true; do
 
     if [ $(( SECONDS - last_repair_at )) -ge "$MONITOR_INTERVAL_SECONDS" ]; then
         MONITOR_OUTPUT_SEEN="no"
+        roll_logs
         repair_pass
         last_repair_at="$SECONDS"
         if [ "$MONITOR_OUTPUT_SEEN" = "yes" ]; then
