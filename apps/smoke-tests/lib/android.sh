@@ -452,11 +452,41 @@ android_install() {
     adb shell "echo $(android_apk_checksum) > $ANDROID_APK_STAMP" >/dev/null 2>&1 || true
 }
 
+# The APK checksum last computed, and the file identity it was computed from. Remembered because
+# android_ensure_apk runs before every single test, and hashing 117MB of APK 43 times over reads
+# roughly 5GB of it to answer the same question every time.
+ANDROID_APK_CHECKSUM=""
+ANDROID_APK_CHECKSUM_KEY=""
+
+#
+# Leaves a checksum of the APK this run built in ANDROID_APK_CHECKSUM.
+#
+# The answer comes back in a global rather than on stdout because a command substitution runs in a
+# subshell, and a cache filled inside one dies with it: read through $(...) this would hash the APK
+# every time and the cache would never hold anything.
+#
+# Cached against the APK's size and modification time rather than against nothing, so a rebuilt APK
+# is hashed again. The build happens once, before any test, and under the build lock, so within a run
+# the cache is filled by the first caller and answers every one after it.
+#
+android_read_apk_checksum() {
+    local key
+    # -c is GNU and -f is BSD. The iOS suite never calls this, but this file is sourced on macOS, so
+    # both forms are tried rather than resting on which one exists.
+    key="$(stat -c '%s %Y' "$ANDROID_APK" 2>/dev/null || stat -f '%z %m' "$ANDROID_APK" 2>/dev/null || echo "")"
+    if [ -n "$key" ] && [ "$key" = "$ANDROID_APK_CHECKSUM_KEY" ] && [ -n "$ANDROID_APK_CHECKSUM" ]; then
+        return 0
+    fi
+    ANDROID_APK_CHECKSUM="$(sha256sum "$ANDROID_APK" | cut -d' ' -f1)"
+    ANDROID_APK_CHECKSUM_KEY="$key"
+}
+
 #
 # Prints a checksum of the APK this run built.
 #
 android_apk_checksum() {
-    sha256sum "$ANDROID_APK" | cut -d' ' -f1
+    android_read_apk_checksum
+    printf '%s\n' "$ANDROID_APK_CHECKSUM"
 }
 
 #
@@ -471,10 +501,12 @@ android_apk_checksum() {
 # timestamps or "did we build" flags means an unnoticed swap can never look like a match.
 #
 android_ensure_apk() {
-    local installed expected
-    expected="$(android_apk_checksum)"
+    local installed
+    # Sets ANDROID_APK_CHECKSUM in this shell, so the hash is computed on the first test of a run and
+    # read from memory on the other 42.
+    android_read_apk_checksum
     installed="$(adb shell cat "$ANDROID_APK_STAMP" 2>/dev/null | tr -d '\r\n')"
-    if [ "$installed" = "$expected" ]; then
+    if [ "$installed" = "$ANDROID_APK_CHECKSUM" ]; then
         return 0
     fi
     log_info "Another build is installed on ${ANDROID_SERIAL:-this device}; reinstalling this run's APK."

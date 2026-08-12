@@ -255,6 +255,47 @@ seed_databases_config() {
         bun ../smoke-tests/lib/write-databases-config.ts "${config_dir}/databases.toml"
 }
 
+#
+# Prints a four digit LAN pairing code, drawn at random so no two runs share one.
+#
+# The code is the only thing that tells two shares apart on the segment. A receiver announces
+# sha256(code) to the whole subnet and a sender takes the first announcement whose hash matches its
+# own code, so two shares using the same code are indistinguishable and the sender pairs with
+# whichever it hears first.
+#
+# Every test here used to hardcode one (1234, 2345, 3456, 4567, 5678, 6789, 8901). A second copy of
+# this suite therefore announced the same hashes, and the two runs took each other's senders: the
+# sender reported success having paired with the other run's receiver, and this run's receiver vault
+# was left empty. `bun run test:parallel` reports it as interference on the self-pair. A fixed code
+# is the machine-wide fixed name this repository forbids everywhere else, and it collides with
+# another worktree's run just as readily as with a second copy here.
+#
+# Matches allocate_pairing_code in apps/smoke-tests/lib/common.sh and CLI tests 78 and 79, which all
+# draw theirs the same way.
+# Usage: code="$(allocate_pairing_code)"
+#
+allocate_pairing_code() {
+    echo $(( (RANDOM % 9000) + 1000 ))
+}
+
+#
+# Prints a four digit pairing code that is not the one given, for the test that needs a sender's code
+# to differ from its receiver's. Drawing both independently would collide once in nine thousand runs
+# and turn that test into a rare, baffling failure.
+# Usage: wrong="$(allocate_different_pairing_code "$receiver_code")"
+#
+allocate_different_pairing_code() {
+    local avoid="$1"
+    local code
+    while true; do
+        code="$(allocate_pairing_code)"
+        if [ "$code" != "$avoid" ]; then
+            echo "$code"
+            return 0
+        fi
+    done
+}
+
 # Start a receiver in background with the given pairing code and wait for it to be ready.
 # Sets: RECEIVER_PID
 start_receiver_with_code() {
@@ -386,7 +427,8 @@ test_share_database() {
     seed_databases_config "$SENDER_CONFIG_DIR" \
         '[{"name":"share-test-db","description":"A database for LAN share testing","path":"s3:test-bucket/photos","s3Key":"s3sender","encryptionKey":"encsndr1"}]'
 
-    local test_code="1234"
+    local test_code
+    test_code="$(allocate_pairing_code)"
     local receiver_log="${TEST_TMP_DIR}/receiver-db.log"
     start_receiver_with_code "dbs" "$receiver_log" "$test_code" || return 1
 
@@ -441,7 +483,8 @@ test_share_secret() {
     seed_vault_secret "$SENDER_VAULT_DIR" "apikey01" "api-key" \
         'AIzaFakeKey123'
 
-    local test_code="2345"
+    local test_code
+    test_code="$(allocate_pairing_code)"
     local receiver_log="${TEST_TMP_DIR}/receiver-secret.log"
     start_receiver_with_code "secrets" "$receiver_log" "$test_code" || return 1
 
@@ -488,8 +531,10 @@ test_wrong_pairing_code() {
     seed_vault_secret "$SENDER_VAULT_DIR" "apikey01" "api-key" \
         'AIzaFakeKey123'
 
-    local receiver_code="3456"
-    local wrong_code="7890"
+    local receiver_code
+    receiver_code="$(allocate_pairing_code)"
+    local wrong_code
+    wrong_code="$(allocate_different_pairing_code "$receiver_code")"
     log_info "Receiver code: $receiver_code, sender will use wrong code: $wrong_code"
 
     local receiver_log="${TEST_TMP_DIR}/receiver-wrong-code.log"
@@ -530,7 +575,8 @@ test_share_database_no_secrets() {
     seed_databases_config "$SENDER_CONFIG_DIR" \
         '[{"name":"plain-db","description":"No secrets attached","path":"/tmp/plain-db"}]'
 
-    local test_code="4567"
+    local test_code
+    test_code="$(allocate_pairing_code)"
     local receiver_log="${TEST_TMP_DIR}/receiver-no-secrets.log"
     start_receiver_with_code "dbs" "$receiver_log" "$test_code" || return 1
 
@@ -577,7 +623,7 @@ test_receiver_cancel() {
     mkdir -p "$RECEIVER_VAULT_DIR" "$RECEIVER_CONFIG_DIR"
 
     local receiver_log="${TEST_TMP_DIR}/receiver-timeout.log"
-    start_receiver_with_code "secrets" "$receiver_log" "5678" || return 1
+    start_receiver_with_code "secrets" "$receiver_log" "$(allocate_pairing_code)" || return 1
     log_info "Receiver started (no sender will connect)"
 
     kill -INT "$RECEIVER_PID" 2>/dev/null || true
@@ -604,12 +650,19 @@ test_rogue_receiver_rejected() {
     seed_vault_secret "$SENDER_VAULT_DIR" "roguekey" "api-key" \
         'ROGUE_SECRET_VALUE_12345'
 
+    local receiver_code
+    receiver_code="$(allocate_pairing_code)"
     local receiver_log="${TEST_TMP_DIR}/receiver-rogue.log"
-    start_receiver_with_code "secrets" "$receiver_log" "6789" || return 1
+    start_receiver_with_code "secrets" "$receiver_log" "$receiver_code" || return 1
     log_info "Rogue test: receiver started"
 
+    # Matched on this receiver's own code hash, so a receiver belonging to another suite broadcasting
+    # on the same segment is ignored rather than attacked. See test/udp-listen.ts.
+    local receiver_code_hash
+    receiver_code_hash=$(echo -n "$receiver_code" | sha256sum | cut -d' ' -f1)
+
     local broadcast_msg
-    broadcast_msg=$(timeout 5 bun run test/udp-listen.ts 2>/dev/null || true)
+    broadcast_msg=$(timeout 5 bun run test/udp-listen.ts "$receiver_code_hash" 2>/dev/null || true)
 
     if [ -z "$broadcast_msg" ]; then
         log_fail "Rogue test: could not capture UDP broadcast"
@@ -677,11 +730,19 @@ test_cert_fingerprint_matches_broadcast() {
     rm -rf "$RECEIVER_VAULT_DIR" "$RECEIVER_CONFIG_DIR"
     mkdir -p "$RECEIVER_VAULT_DIR" "$RECEIVER_CONFIG_DIR"
 
+    local receiver_code
+    receiver_code="$(allocate_pairing_code)"
     local receiver_log="${TEST_TMP_DIR}/receiver-cert.log"
-    start_receiver_with_code "secrets" "$receiver_log" "8901" || return 1
+    start_receiver_with_code "secrets" "$receiver_log" "$receiver_code" || return 1
+
+    # This receiver's own broadcast, not whichever one the segment carries first. Without this the
+    # fingerprint compared below could be another suite's receiver's, against a TLS connection to a
+    # port that receiver holds, and the test would be asserting nothing about the one it started.
+    local receiver_code_hash
+    receiver_code_hash=$(echo -n "$receiver_code" | sha256sum | cut -d' ' -f1)
 
     local broadcast_msg
-    broadcast_msg=$(timeout 5 bun run test/udp-listen.ts 2>/dev/null || true)
+    broadcast_msg=$(timeout 5 bun run test/udp-listen.ts "$receiver_code_hash" 2>/dev/null || true)
 
     if [ -z "$broadcast_msg" ]; then
         log_fail "Cert test: could not capture UDP broadcast"

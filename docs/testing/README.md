@@ -184,6 +184,17 @@ The check itself has no automated test. Like `find-flakey-tests`, it is an instr
 
 `bun run test:and` uses every emulator that is on the LAN bridge, one worker per device, so the suite finishes several times faster. Measured on this repo: 375s originally, 276s after the wait helpers were made to poll five times a second, and 113s across six emulators.
 
+Measured again on five emulators with 43 tests, standalone with a warm build and nothing else running: **161s before, 135-138s after**. It came down from four places, none of which deleted a test, skipped one or loosened an assertion:
+
+- One test waited out a fixed minute for an outcome the app had already ruled out (`43-s3-failure`, 73s to 11s).
+- The kill helpers poll for the process being gone instead of sleeping a fixed second per test.
+- The APK checksum is hashed once per run rather than once before each of the 43 tests.
+- The LAN-share tests are no longer serialised against each other, which was 102s that could not overlap inside a 145s loop.
+
+See `docs/plans/done/plan-halve-test-and-duration.md` for every measurement.
+
+Take any measurement only when the machine is quiet. The same suite measured 231s while another `bun run test:everything` was running beside it, because `suite_share` hands a competing suite a fraction of the emulators.
+
 Bring up a pool of five alongside your own emulator:
 
 ```bash
@@ -196,7 +207,9 @@ bun run emu:and:down           # stops only your own emulator
 
 Each pool emulator runs on a writable clone of your base AVD, about 8KB each, because two emulators cannot share one AVD. Set `PHOTOSPHERE_EMULATOR_COUNT` to change the pool size. Pin a run to particular devices with `PHOTOSPHERE_ANDROID_DEVICES="emulator-5556 emulator-5558"`, for example to leave your hand-testing emulator out of it.
 
-Tests are dispatched in the order they are numbered. One marker file in a test's own directory changes scheduling, documented in [apps/smoke-tests/tests/README.md](../../apps/smoke-tests/tests/README.md): `.exclusive` serialises a test across the whole pool (the LAN-share tests need it, because discovery broadcasts on the segment every emulator shares).
+Tests are dispatched in the order they are numbered, and nothing reorders or serialises them: there are no scheduling markers, so any test may run beside any other. The LAN-share tests are safe in company because discovery is disambiguated by the pairing code rather than by scheduling. See [apps/smoke-tests/tests/README.md](../../apps/smoke-tests/tests/README.md).
+
+Every run ends with a timing block: where the wall clock went (build, install, loop, total), how many seconds of test work were done across how many workers, the packing efficiency (test work as a share of the emulators' available time, so a low number means they sat idle rather than that the tests are slow), and the ten slowest tests. That block is how to tell whether a change made the suite faster, and it is where to look for the test that is setting the length of a run.
 
 With more than one worker, each test's output goes to `test-run.log` inside that test's own temporary directory (see [Every test gets its own directory](#every-test-gets-its-own-directory)) and only its status line is printed, since concurrent output would interleave. A single device keeps streaming to the terminal. The `FAIL` line and the run summary both print the full path.
 

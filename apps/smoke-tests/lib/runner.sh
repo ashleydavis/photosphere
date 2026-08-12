@@ -6,11 +6,11 @@
 # every device the run was given (one worker per device), pulling from a single shared queue so a
 # fast worker keeps taking work instead of idling behind a slow one.
 #
-# Tests are dispatched in the order they are given. One marker in a test's directory controls
-# scheduling (see tests/README.md):
-#   .exclusive  Only one such test runs at a time across the whole pool. The LAN-share tests need
-#               this: discovery is a UDP broadcast on the segment every emulator shares, so two of
-#               them running at once see each other's traffic.
+# Tests are dispatched in the order they are given, and nothing reorders or serialises them. Two
+# LAN-share tests may therefore run at the same time on different emulators, which is safe because
+# discovery is disambiguated by the pairing code rather than by scheduling: a sender ignores any
+# receiver whose code hash is not its own (packages/lan-share-network/src/lib/lan-share-sender.ts),
+# a receiver rejects a payload carrying the wrong code, and every test draws a random code.
 
 # Directory holding this file, used to reach the shared per-test temp directory helpers.
 RUNNER_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -27,9 +27,6 @@ source "$RUNNER_LIB_DIR/../../../scripts/lib/test-timeout.sh"
 # again, because the emulator repair path takes the same lock before it restarts an emulator and a
 # second copy of the path that drifted would let it restart one mid-test.
 source "$RUNNER_LIB_DIR/../../android-frontend/scripts/emulator-config.sh"
-
-# Marker file name, matched against a test's own directory.
-EXCLUSIVE_MARKER=".exclusive"
 
 # Exit code a test uses to say it did not run its body, so the runner can report it as skipped rather
 # than as a pass. Before this existed a gated test (no LAN bridge, or an Android-only test dispatched
@@ -160,11 +157,6 @@ adjust_held() {
 # runner's own tests set it directly. A single empty entry means "no device binding".
 RUNNER_SLOTS=()
 
-# The emulators are shared by every suite on the machine, so the lock that serialises .exclusive
-# tests has to be at a fixed path rather than inside one run's temp directory. Two suites both
-# running a LAN test would otherwise broadcast over each other on the shared bridge.
-EXCLUSIVE_LOCK_FILE="/tmp/photosphere-android-exclusive.lock"
-
 # Serialises the build between suites running out of the SAME checkout. `cap sync` deletes and
 # rewrites files under that checkout's android project directory
 # (capacitor-cordova-android-plugins/build.gradle among them), so two suites building there at once
@@ -183,8 +175,8 @@ BUILD_LOCK_FILE="/tmp/photosphere-android-build-$(printf '%s' "$REPO_DIR" | cksu
 # command, so every lock below would fail there.
 #
 # Where it is missing the locks become no-ops rather than errors, which is what lets an iOS run work.
-# That is only sound for a run with ONE worker. Two of these locks guard against concurrent suites
-# (the build lock, the exclusive-test lock) and losing those merely costs correctness between runs,
+# That is only sound for a run with ONE worker. The build lock guards against concurrent suites and
+# losing it merely costs correctness between runs,
 # but the queue lock guards a read-modify-write between the workers of a SINGLE run: without it two
 # workers pop the same entry and skip others, which the runner's own tests demonstrate. run.sh
 # therefore refuses to start on more than one device when this is 0, rather than producing a run
@@ -248,11 +240,10 @@ RUNNER_QUARANTINE_DIR=""
 # would interleave into nonsense, so it goes to per-test log files instead.
 RUNNER_STREAM_OUTPUT=0
 
-# File descriptors used for the two locks. Deliberately NOT 9: run.sh is exec'd by android-lock.sh,
+# File descriptor used for the queue lock. Deliberately NOT 9: run.sh is exec'd by android-lock.sh,
 # which holds the machine-wide run lock open on fd 9 for the whole life of this process. Reusing it
 # here would close that lock and let a second test:and run start on top of this one.
 QUEUE_LOCK_FD=7
-EXCLUSIVE_LOCK_FD=6
 
 # How long a worker waits for an emulator to come free before giving up on its test.
 DEVICE_CLAIM_TIMEOUT="${PHOTOSPHERE_DEVICE_CLAIM_TIMEOUT:-1800}"
@@ -405,12 +396,11 @@ start_device_health_watch() {
     # descriptors for the test for exactly this reason.
     #
     # The device descriptor is only closed when one is held: `{var}>&-` with an empty var is an
-    # ambiguous redirect, which would stop the watcher starting at all. Closing the fixed
-    # exclusive-lock descriptor is safe whether or not it is open.
+    # ambiguous redirect, which would stop the watcher starting at all.
     if [ -n "$ACQUIRED_FD" ]; then
-        device_health_watch_loop "$serial" "$marker_file" >/dev/null 2>&1 {ACQUIRED_FD}>&- 6>&- &
+        device_health_watch_loop "$serial" "$marker_file" >/dev/null 2>&1 {ACQUIRED_FD}>&- &
     else
-        device_health_watch_loop "$serial" "$marker_file" >/dev/null 2>&1 6>&- &
+        device_health_watch_loop "$serial" "$marker_file" >/dev/null 2>&1 &
     fi
     echo $!
 }
@@ -630,16 +620,6 @@ queue_pop() {
 }
 
 #
-# Returns 0 when the test's own directory contains the named marker file.
-# Usage: test_has_marker <test_path> <marker_name>
-#
-test_has_marker() {
-    local test_path="$1"
-    local marker="$2"
-    [ -f "$(dirname "$test_path")/$marker" ]
-}
-
-#
 # Returns 0 when a test's own directory name is selected by the given filter, so a single test can
 # be iterated on without the full build-install-every-test cycle. An empty filter selects every test.
 #
@@ -717,16 +697,15 @@ run_test() {
 # Closing them here leaves this shell's own copies, which are what actually hold the locks.
 #
 # The device descriptor is only closed when one is held: `{var}>&-` with an empty var is an
-# ambiguous redirect, which would stop the test running at all. Closing the fixed exclusive-lock
-# descriptor is safe whether or not it is open.
+# ambiguous redirect, which would stop the test running at all.
 # Usage: run_test_isolated <test_path> <log_file> <duration_file>
 #
 run_test_isolated() {
     if [ -n "$ACQUIRED_FD" ]; then
-        run_test "$1" "$2" "$3" {ACQUIRED_FD}>&- 6>&-
+        run_test "$1" "$2" "$3" {ACQUIRED_FD}>&-
         return $?
     fi
-    run_test "$1" "$2" "$3" 6>&-
+    run_test "$1" "$2" "$3"
 }
 
 #
@@ -734,15 +713,13 @@ run_test_isolated() {
 # handing it straight back afterwards. There is a worker per emulator, so a suite on its own fills
 # every one; when suites compete, acquire_device holds each to its fair share.
 #
-# An .exclusive-marked test is run while holding the machine-wide exclusive lock, so at most one of
-# them is in flight across every suite on the machine. Each test's verdict is written to its own file
-# in the results directory, so concurrent workers never interleave a shared results file.
-# Usage: run_worker <queue_file> <exclusive_lock_file> <results_dir>
+# Each test's verdict is written to its own file in the results directory, so concurrent workers
+# never interleave a shared results file.
+# Usage: run_worker <queue_file> <results_dir>
 #
 run_worker() {
     local queue_file="$1"
-    local exclusive_lock="$2"
-    local results_dir="$3"
+    local results_dir="$2"
 
     while true; do
         local test_path
@@ -787,15 +764,7 @@ run_worker() {
         health_watcher="$(start_device_health_watch "$ACQUIRED_DEVICE" "$health_marker")"
 
         local status=0
-        if test_has_marker "$test_path" "$EXCLUSIVE_MARKER"; then
-            eval "exec $EXCLUSIVE_LOCK_FD<>\"\$exclusive_lock\""
-            runner_flock "$EXCLUSIVE_LOCK_FD"
-            run_test_isolated "$test_path" "$log_file" "$duration_file" || status=$?
-            runner_flock -u "$EXCLUSIVE_LOCK_FD"
-            eval "exec $EXCLUSIVE_LOCK_FD>&-"
-        else
-            run_test_isolated "$test_path" "$log_file" "$duration_file" || status=$?
-        fi
+        run_test_isolated "$test_path" "$log_file" "$duration_file" || status=$?
 
         # A test that failed on a device which can no longer reach the host tells us nothing about
         # the test: the app cannot talk to the control bridge without the host, so it was never
@@ -871,8 +840,8 @@ run_worker() {
 
 #
 # Runs every given test across the device slots in RUNNER_SLOTS, one worker per slot. Returns
-# non-zero if any test failed. The queue and the exclusive lock live in a temp directory that is
-# removed when the pool finishes.
+# non-zero if any test failed. The queue lives in a temp directory that is removed when the pool
+# finishes.
 # Usage: run_pool <results_dir> <test_path...>
 #
 run_pool() {
@@ -904,11 +873,9 @@ run_pool() {
         RUNNER_STREAM_OUTPUT=0
     fi
 
-    local work_dir queue_file exclusive_lock
+    local work_dir queue_file
     work_dir="$(mktemp -d)"
     queue_file="$work_dir/queue"
-    exclusive_lock="$EXCLUSIVE_LOCK_FILE"
-    touch "$exclusive_lock" 2>/dev/null || true
     queue_init "$queue_file" "$@"
     mkdir -p "$results_dir"
 
@@ -917,7 +884,7 @@ run_pool() {
     local pids=()
     local worker
     for worker in $(seq 1 "$workers"); do
-        run_worker "$queue_file" "$exclusive_lock" "$results_dir" &
+        run_worker "$queue_file" "$results_dir" &
         pids+=($!)
     done
 

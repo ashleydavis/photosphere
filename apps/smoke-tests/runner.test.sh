@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests lib/runner.sh: the work queue, the scheduling markers, and the worker pool's exclusivity.
+# Tests lib/runner.sh: the work queue, the test filter, and the worker pool.
 # Everything here runs against stub test scripts in a temp directory: no device, no emulator, and no
 # real smoke test is involved, so this is safe to run anywhere.
 set -uo pipefail
@@ -33,14 +33,13 @@ check() { # <description> <expected> <actual>
 
 #
 # Creates a stub test at <dir>/test.sh that exits with the given status, optionally sleeping first,
-# and prints the path. Any extra arguments are marker file names to create alongside it.
-# Usage: make_stub <name> <exit_status> <sleep_seconds> [marker...]
+# and prints the path.
+# Usage: make_stub <name> <exit_status> <sleep_seconds>
 #
 make_stub() {
     local name="$1"
     local exit_status="$2"
     local sleep_seconds="$3"
-    shift 3
     local dir="$WORK/tests/$name"
     mkdir -p "$dir"
     {
@@ -48,22 +47,17 @@ make_stub() {
         echo "sleep $sleep_seconds"
         echo "exit $exit_status"
     } > "$dir/test.sh"
-    local marker
-    for marker in "$@"; do
-        touch "$dir/$marker"
-    done
     echo "$dir/test.sh"
 }
 
 #
 # Creates a stub that records concurrent execution: it bumps a counter under a lock on entry, notes
 # the high-water mark, sleeps, then decrements. Lets a test prove whether two stubs ever overlapped.
-# Usage: make_concurrency_stub <name> <counter_dir> [marker...]
+# Usage: make_concurrency_stub <name> <counter_dir>
 #
 make_concurrency_stub() {
     local name="$1"
     local counter_dir="$2"
-    shift 2
     local dir="$WORK/tests/$name"
     mkdir -p "$dir"
     cat > "$dir/test.sh" <<STUB
@@ -83,10 +77,6 @@ echo \$(( \$(cat "\$COUNTER_DIR/current") - 1 )) > "\$COUNTER_DIR/current"
 flock -u 5
 exit 0
 STUB
-    local marker
-    for marker in "$@"; do
-        touch "$dir/$marker"
-    done
     echo "$dir/test.sh"
 }
 
@@ -154,17 +144,6 @@ UNIQUE_POPPED="$(cat "$POPPED_DIR"/popper-* 2>/dev/null | sort -u | wc -l)"
 check "every queue entry was popped exactly once (total)" "60" "$TOTAL_POPPED"
 check "every queue entry was popped exactly once (unique)" "60" "$UNIQUE_POPPED"
 
-echo "== test_has_marker =="
-
-MARKED="$(make_stub marked 0 0 .exclusive)"
-UNMARKED="$(make_stub unmarked 0 0)"
-test_has_marker "$MARKED" ".exclusive"
-check "test_has_marker is true for a directory with the marker" "0" "$?"
-test_has_marker "$UNMARKED" ".exclusive"
-check "test_has_marker is false for a directory without the marker" "1" "$?"
-test_has_marker "$WORK/tests/absent/test.sh" ".exclusive"
-check "test_has_marker is false for a missing directory" "1" "$?"
-
 echo "== test_matches_filter =="
 
 test_matches_filter "2-create-database" ""
@@ -221,20 +200,10 @@ HANGING_STATUS=$?
 PER_TEST_TIMEOUT="$SAVED_TIMEOUT"
 check "run_test kills a test that exceeds the timeout" "yes" "$([ "$HANGING_STATUS" -ne 0 ] && echo yes || echo no)"
 
-echo "== run_worker exclusivity =="
+echo "== run_worker concurrency =="
 
-# Two workers over two .exclusive tests must never overlap.
-EXCLUSIVE_COUNTER="$(make_counter_dir exclusive)"
-EXCLUSIVE_ONE="$(make_concurrency_stub exclusive-one "$EXCLUSIVE_COUNTER" .exclusive)"
-EXCLUSIVE_TWO="$(make_concurrency_stub exclusive-two "$EXCLUSIVE_COUNTER" .exclusive)"
-RESULTS="$WORK/results-exclusive"
-mkdir -p "$RESULTS"
-RUNNER_SLOTS=("" "")
-run_pool "$RESULTS" "$EXCLUSIVE_ONE" "$EXCLUSIVE_TWO" >/dev/null 2>&1
-check "two .exclusive tests never run at the same time" "1" "$(cat "$EXCLUSIVE_COUNTER/max")"
-
-# The same two workers over non-exclusive tests must overlap, proving the lock is not accidentally
-# serialising everything.
+# Two workers must actually overlap: nothing serialises tests any more, so a pool with two slots has
+# to have both of them running at once.
 SHARED_COUNTER="$(make_counter_dir shared)"
 SHARED_ONE="$(make_concurrency_stub shared-one "$SHARED_COUNTER")"
 SHARED_TWO="$(make_concurrency_stub shared-two "$SHARED_COUNTER")"

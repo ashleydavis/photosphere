@@ -494,6 +494,60 @@ wait_for_log() {
     exit 1
 }
 
+# Which of the two patterns wait_for_either_log matched: "first", "second", or empty when it timed
+# out. A global rather than stdout because the logging below goes to stdout and would be captured
+# along with the answer by any caller reading it through $(...).
+WAIT_FOR_EITHER_MATCH=""
+
+#
+# Polls app.log for two patterns at once and reports whichever the app logs first in
+# WAIT_FOR_EITHER_MATCH: "first", "second", or empty if neither appears before the timeout. Returns 0
+# when one of them matched and 1 on the timeout, so a caller can tell "neither happened" apart from
+# either outcome.
+#
+# This is for a test whose pass and fail conditions are two mutually exclusive things the app may do,
+# where waiting out the full timeout for one of them to be absent is the same answer arrived at far
+# more slowly. Waiting for absence is still the right thing where the two are not exclusive; this
+# helper does not replace that and must not be used to.
+#
+# Shares wait_for_log's cursor file, so a later wait_for_log carries on after the line matched here.
+# Usage: wait_for_either_log <tmp_dir> <timeout> <first_pattern> <second_pattern>
+#
+wait_for_either_log() {
+    local tmp_dir="$1"
+    local timeout="$2"
+    local first_pattern="$3"
+    local second_pattern="$4"
+    local ticks=$((timeout * POLL_TICKS_PER_SECOND))
+    local cursor_file="$tmp_dir/.log-cursor"
+    local start_line=0
+    if [ -f "$cursor_file" ]; then
+        start_line=$(cat "$cursor_file")
+    fi
+    WAIT_FOR_EITHER_MATCH=""
+    log_info "Waiting for whichever comes first: '$first_pattern' or '$second_pattern' (after line $start_line)"
+    while [ "$ticks" -gt 0 ]; do
+        if [ -f "$tmp_dir/app.log" ]; then
+            local matched
+            # One pass over the log rather than two greps, so a tick in which both patterns are
+            # already present still reports the one the app logged earlier.
+            matched=$(awk -v start="$start_line" -v first_pat="$first_pattern" -v second_pat="$second_pattern" '
+                NR > start && index($0, first_pat) > 0 { print "first " NR; exit }
+                NR > start && index($0, second_pat) > 0 { print "second " NR; exit }
+            ' "$tmp_dir/app.log" 2>/dev/null)
+            if [ -n "$matched" ]; then
+                echo "${matched#* }" > "$cursor_file"
+                WAIT_FOR_EITHER_MATCH="${matched%% *}"
+                log_info "Found the $WAIT_FOR_EITHER_MATCH pattern (line ${matched#* })"
+                return 0
+            fi
+        fi
+        sleep "$POLL_INTERVAL_SECONDS"
+        ticks=$((ticks - 1))
+    done
+    return 1
+}
+
 #
 # Posts a JSON command to the control bridge.
 # Usage: send_command <port> <endpoint> [json_body]

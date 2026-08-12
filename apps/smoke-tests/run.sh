@@ -77,14 +77,79 @@ discover_tests() {
 #
 cleanup_all_devices() {
     local slot
+    local cleanup_pids=()
+    # One job per device rather than one device after another: each already takes its own lock and
+    # exports its own serial, so five `pm clear`s that used to run end to end now overlap. Each pid is
+    # recorded as it is started so every job is waited for below and none outlives the run.
     for slot in "${RUNNER_SLOTS[@]}"; do
+        with_device "$slot" "${PLATFORM}_cleanup" &
+        cleanup_pids+=($!)
+    done
+    local cleanup_pid
+    for cleanup_pid in "${cleanup_pids[@]}"; do
         # A device this run can no longer claim is skipped rather than waited on. This runs from the
         # EXIT trap, so blocking here would leave the run unable to finish at all.
-        with_device "$slot" "${PLATFORM}_cleanup" || true
+        wait "$cleanup_pid" || true
     done
 }
 
+#
+# Prints the timing block for a finished run: where the wall clock went, how much test work was done,
+# and whether the emulators were kept busy while it was done.
+#
+# Every saving this suite claims has to be the difference between two of these blocks, so the numbers
+# come from what the run actually recorded: the phase boundaries the caller timed, and the per-test
+# durations already written into the result files by run_test.
+#
+# Usage: print_timing_block <results_dir> <build_seconds> <install_seconds> <loop_seconds> <total_seconds> <workers>
+#
+print_timing_block() {
+    local results_dir="$1"
+    local build_seconds="$2"
+    local install_seconds="$3"
+    local loop_seconds="$4"
+    local total_seconds="$5"
+    local workers="$6"
+
+    local durations_file
+    durations_file="$(mktemp)"
+    local result_file duration name test_seconds=0 test_count=0
+    for result_file in "$results_dir"/*.result; do
+        [ -e "$result_file" ] || continue
+        duration="$(awk '{ print $3 }' "$result_file")"
+        name="$(awk '{ print $2 }' "$result_file")"
+        case "$duration" in
+            ''|*[!0-9]*) duration=0 ;;
+        esac
+        test_seconds=$((test_seconds + duration))
+        test_count=$((test_count + 1))
+        printf '%s %s\n' "$duration" "$name" >> "$durations_file"
+    done
+
+    echo ""
+    echo "Timing:"
+    printf "  build            %ss\n" "$build_seconds"
+    printf "  install          %ss\n" "$install_seconds"
+    printf "  loop             %ss\n" "$loop_seconds"
+    printf "  total            %ss\n" "$total_seconds"
+    printf "  test work        %ss across %s test(s) on %s worker(s)\n" "$test_seconds" "$test_count" "$workers"
+    # How much of the emulators' available time was spent running tests. A low number means the
+    # emulators sat idle while a long test finished alone, which is a scheduling problem rather than
+    # a slow-test problem, and the two are fixed in completely different places.
+    if [ "$loop_seconds" -gt 0 ] && [ "$workers" -gt 0 ]; then
+        printf "  packing          %s%%\n" \
+            "$(awk -v work="$test_seconds" -v loop="$loop_seconds" -v workers="$workers" 'BEGIN { printf "%.0f", (work * 100) / (loop * workers) }')"
+    fi
+    echo "  slowest tests:"
+    sort -rn "$durations_file" | head -10 | while read -r duration name; do
+        printf "    %-34s %ss\n" "$name" "$duration"
+    done
+    rm -f "$durations_file"
+}
+
 main() {
+    local run_start="$SECONDS"
+
     # Optional first argument narrows the run to one test, by number ("29") or by name
     # ("29-stale-recent-database" or "stale-recent"), so it can be iterated on without the full
     # build-install-every-test cycle. See test_matches_filter. An absent argument runs every test.
@@ -134,6 +199,7 @@ main() {
 
     # One suite builds at a time: concurrent builds out of one checkout corrupt each other.
     with_build_lock "${PLATFORM}_build"
+    local build_seconds=$((SECONDS - run_start))
 
     # Every ready device is a candidate. Nothing is reserved here: a worker takes an emulator for one
     # test and hands it back, so other suites running at the same time get their turn too.
@@ -172,19 +238,46 @@ main() {
     # which is where the emulators' memory was going. Each emulator kept roughly 40MB of host memory
     # per run and never gave it back, so a repeated run walked them into their 8G limit and killed
     # them with SIGSEGV after a couple of hours. A single build is installed once and then reused.
+    #
+    # One background job per device rather than one device after another. Each device already takes
+    # its own lock through with_device and gets ANDROID_SERIAL exported inside its own subshell, so
+    # they do not contend with each other, and a reinstall is 117MB per device: done in turn, a run
+    # that follows another worktree's run pays five of those end to end. Each job's pid is recorded
+    # the moment it is started, and each one's exit status is collected below, so a device that
+    # cannot be claimed is still dropped and any other failure still fails the run.
+    #
     local slot
     local usable_slots=()
-    local install_status
+    local install_pids=()
     for slot in "${RUNNER_SLOTS[@]}"; do
-        install_status=0
-        with_device "$slot" "${PLATFORM}_ensure_apk" || install_status=$?
-        if [ "$install_status" -eq 0 ]; then
-            usable_slots+=("$slot")
-        elif [ "$install_status" -ne "$DEVICE_UNAVAILABLE_STATUS" ]; then
-            log_error "Installing the app on $slot failed (exit $install_status)."
-            exit 1
-        fi
+        with_device "$slot" "${PLATFORM}_ensure_apk" &
+        install_pids+=($!)
     done
+
+    # Every job is waited for before the run gives up on any of them, so a failure on one device
+    # cannot leave the other four installs running behind an exited script.
+    local install_status
+    local failed_slot=""
+    local failed_status=0
+    local install_index=0
+    while [ "$install_index" -lt "${#RUNNER_SLOTS[@]}" ]; do
+        install_status=0
+        wait "${install_pids[$install_index]}" || install_status=$?
+        if [ "$install_status" -eq 0 ]; then
+            usable_slots+=("${RUNNER_SLOTS[$install_index]}")
+        elif [ "$install_status" -ne "$DEVICE_UNAVAILABLE_STATUS" ]; then
+            failed_slot="${RUNNER_SLOTS[$install_index]}"
+            failed_status="$install_status"
+        fi
+        install_index=$((install_index + 1))
+    done
+
+    if [ -n "$failed_slot" ]; then
+        log_error "Installing the app on $failed_slot failed (exit $failed_status)."
+        exit 1
+    fi
+
+    local install_seconds=$((SECONDS - run_start - build_seconds))
 
     if [ ${#usable_slots[@]} -eq 0 ]; then
         log_error "Every device is held by another suite, so this run has nothing to test on."
@@ -203,7 +296,9 @@ main() {
 
     local results_dir
     results_dir="$(mktemp -d)"
+    local loop_start="$SECONDS"
     run_pool "$results_dir" "${tests[@]}" || true
+    local loop_seconds=$((SECONDS - loop_start))
 
     local pass=0
     local fail=0
@@ -231,7 +326,6 @@ main() {
             failed_logs+=("$log_path")
         fi
     done
-    rm -rf "$results_dir"
 
     echo ""
     # Printed before the verdict, and named one per line, so a run that skipped something can never
@@ -259,6 +353,10 @@ main() {
             failed_index=$((failed_index + 1))
         done
     fi
+    print_timing_block "$results_dir" "$build_seconds" "$install_seconds" "$loop_seconds" \
+        "$((SECONDS - run_start))" "${#RUNNER_SLOTS[@]}"
+    rm -rf "$results_dir"
+
     # A run that leaves control bridges behind has failed even when every test passed.
     local leaked=0
     check_for_leaked_processes || leaked=1

@@ -75,41 +75,45 @@ send_command "$APP_PORT" menu '{"itemId":"open-database"}' || exit 1
 wait_for_log "$TMP_DIR" "Open database dialog opened"
 send_command "$APP_PORT" click '{"dataId":"database-list-item-0"}' || exit 1
 
-# The app must not finish the load reporting zero assets: that renders an empty gallery which looks
-# exactly like an empty database, while there is one asset sitting in the bucket.
+# Two outcomes, and the app can only produce one of them for this open.
 #
-# wait_for_log exits on timeout rather than returning, so it runs in a subshell here: the exit ends
-# the subshell and this test sees the non-zero status, instead of disappearing before it can say what
-# went wrong.
-if ( wait_for_log "$TMP_DIR" "Load assets task completed: 0 assets loaded" 60 ); then
+# The failure this test exists to catch is the app finishing the load reporting zero assets: that
+# renders an empty gallery which looks exactly like an empty database, while there is one asset
+# sitting in the bucket. The pass is the app saying it could not reach the database.
+#
+# They are mutually exclusive by construction, not by timing: openDatabase in
+# packages/user-interface/src/context/asset-database-source.tsx logs "Could not reach the database at
+# ..." and RETURNS without setting the database path, so no load task is ever started and the
+# "Load assets task completed" line cannot follow it. Waiting out a fixed 60s window to prove the
+# empty load is absent and only then looking for the error therefore reached the same verdict a
+# minute later than the app had already given it. Whichever line appears first is the app's answer.
+#
+# The window is generous rather than tight, because the AWS SDK retries a connection several times
+# before giving up: the question is whether the app EVER says anything, not whether it says it
+# quickly.
+#
+# The error is matched on openDatabase's own message naming the database path, not on any [ERROR]
+# line at all. That older check passed on any unrelated error the app happened to log, which the
+# header above already admitted could be a credential failure rather than the unreachable bucket.
+EXPECTED_ERROR="Could not reach the database at $S3_DB_PATH"
+EMPTY_LOAD="Load assets task completed: 0 assets loaded"
+OUTCOME_WAIT_SECONDS=90
+
+if ! wait_for_either_log "$TMP_DIR" "$OUTCOME_WAIT_SECONDS" "$EXPECTED_ERROR" "$EMPTY_LOAD"; then
+    log_error "The app never logged \"$EXPECTED_ERROR\" in ${OUTCOME_WAIT_SECONDS}s"
+    log_error "It neither completed the load nor logged an error, so the user is left looking at a screen that never resolves"
+    log_error "Last 30 lines of app.log:"
+    tail -30 "$TMP_DIR/app.log"
+    exit 1
+fi
+
+if [ "$WAIT_FOR_EITHER_MATCH" = "second" ]; then
     log_error "The app reported a successful load of 0 assets from an unreachable bucket"
     log_error "There is an asset in that bucket; an empty gallery here is indistinguishable from an empty database"
     exit 1
 fi
+
 log_success "The app did not report an empty-but-successful load from the unreachable bucket"
-
-# Something has to say the load failed, and it has to be about THIS database. The AWS SDK retries a
-# connection several times before giving up, so this waits well past that: the question is whether the
-# app EVER says anything, not whether it says it quickly.
-#
-# Matched on openDatabase's own message naming the database path, not on any [ERROR] line at all. That
-# older check passed on any unrelated error the app happened to log, which the header above already
-# admitted could be a credential failure rather than the unreachable bucket this test is about.
-EXPECTED_ERROR="Could not reach the database at $S3_DB_PATH"
-ERROR_WAIT_SECONDS=90
-error_elapsed=0
-while [ "$error_elapsed" -lt "$ERROR_WAIT_SECONDS" ]; do
-    if grep -qF "$EXPECTED_ERROR" "$TMP_DIR/app.log" 2>/dev/null; then
-        log_success "The app reported an error for the unreachable bucket after ${error_elapsed}s"
-        log_success "Test 43 passed: s3-failure"
-        exit 0
-    fi
-    sleep 1
-    error_elapsed=$((error_elapsed + 1))
-done
-
-log_error "The app never logged \"$EXPECTED_ERROR\" in ${ERROR_WAIT_SECONDS}s"
-log_error "It neither completed the load nor logged an error, so the user is left looking at a screen that never resolves"
-log_error "Last 30 lines of app.log:"
-tail -30 "$TMP_DIR/app.log"
-exit 1
+log_success "The app reported an error for the unreachable bucket"
+log_success "Test 43 passed: s3-failure"
+exit 0
