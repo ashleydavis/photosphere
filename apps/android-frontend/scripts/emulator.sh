@@ -1976,8 +1976,8 @@ cmd_pool_repair() {
 # explanations were proposed for that and all four were wrong. Nothing here proposes a fifth; it puts
 # the facts in one place so the next occurrence is diagnosed from data.
 #
-# With an index it reports that one alone, which is what the monitor asks for when it has given up on
-# a single emulator and wants the account of it in its log.
+# With an index it reports that one alone, which is what the monitor asks for when a run of repairs
+# on a single emulator has failed and it wants the account of it in its log before waiting.
 # Usage: cmd_pool_diagnose [index]
 #
 cmd_pool_diagnose() {

@@ -80,14 +80,33 @@ ADB_TIMEOUT_SECONDS="$EMULATOR_STATUS_ADB_TIMEOUT_SECONDS"
 # the real ones. Not an argument: nobody typing this command has a reason to choose.
 MONITOR_INTERVAL_SECONDS="${MONITOR_INTERVAL_SECONDS:-5}"
 
-# How many repairs of one index may fail in a row before this stops repairing that index.
+# How many repairs of one index may fail in a row before this waits a while before trying it again.
 #
 # Without a limit a machine-level fault turns into an endless cold-boot loop that makes the machine
 # worse, which is close to what the recovery attempts on 2026-08-09 did by hand: emulator after
 # emulator started into a state where it burned no CPU and opened nothing, and each attempt cost the
-# machine another few gigabytes. An index this has given up on keeps being reported on every pass; it
-# is simply never restarted again.
+# machine another few gigabytes. Reaching this limit starts the wait below rather than abandoning the
+# index.
 MONITOR_MAX_CONSECUTIVE_FAILURES="${MONITOR_MAX_CONSECUTIVE_FAILURES:-3}"
+
+# How long an index is left alone after a run of failed repairs, and the longest that wait may grow
+# to. It doubles each time a run of repairs fails: ten minutes, twenty, forty, then an hour from then
+# on.
+#
+# This used to be permanent: an index whose repairs failed three times in a row was never restarted
+# again for the life of the monitor. On 2026-08-12 that stranded three of the five emulators for
+# hours. Every one of those repairs had failed the same way, `did not reach the bridge within 420s`,
+# because the machine was loaded at the time, and a loaded machine is temporary. The proof is in the
+# same log: index 1 failed twice and came back on the third attempt, and when the monitor was
+# restarted the three abandoned emulators each repaired first time in about thirty seconds. Nothing
+# was wrong with them that another attempt would not have fixed, and the monitor had stopped making
+# any.
+#
+# So a failing index is now waited on rather than abandoned, and the wait grows so a genuine
+# machine-level fault still cannot turn into a cold-boot loop. At the longest wait an index costs the
+# machine three cold boots an hour, against the 720 an unlimited retry would attempt.
+MONITOR_BACKOFF_SECONDS="${MONITOR_BACKOFF_SECONDS:-600}"
+MONITOR_MAX_BACKOFF_SECONDS="${MONITOR_MAX_BACKOFF_SECONDS:-3600}"
 
 # How long a healthy pool emulator may stay up before it is recycled while nothing is using it.
 #
@@ -707,10 +726,12 @@ monitor_log() {
 # fresh frame only when there was something to say, rather than after every pool check.
 MONITOR_OUTPUT_SEEN="no"
 
-# How many repairs of each index have failed in a row, and which indexes this monitor has stopped
-# repairing. Keyed by pool index.
+# How many repairs of each index have failed in a row, the reading of SECONDS before which each index
+# is not to be repaired again, and how many runs of failed repairs each index has had (which is what
+# the wait doubles on). All keyed by pool index.
 declare -A MONITOR_FAILURES=()
-declare -A MONITOR_GIVEN_UP=()
+declare -A MONITOR_WAIT_UNTIL=()
+declare -A MONITOR_WAIT_ROUNDS=()
 
 # Whether the missing-network message has already been printed, so a monitor left running while the
 # bridge is down says so once rather than on every pass.
@@ -743,17 +764,32 @@ device_lock_is_free() {
 }
 
 #
+# Forgets everything this monitor is holding against one index: the failures counted against it, the
+# wait it is serving, and how many waits it has served. Called when an index is repaired or is found
+# healthy, so the next trouble it has starts from a clean slate rather than from a run of failures
+# that is over.
+# Usage: clear_repair_history <index>
+#
+clear_repair_history() {
+    local index="$1"
+
+    MONITOR_FAILURES["$index"]=0
+    unset "MONITOR_WAIT_UNTIL[$index]"
+    unset "MONITOR_WAIT_ROUNDS[$index]"
+}
+
+#
 # Records that a repair of one index has finished, keeping the count of how many in a row have
-# failed and giving up on an index that will not come back.
+# failed and starting a wait when a run of them has failed.
 # Usage: record_repair_outcome <index> <exit_status>
 #
 record_repair_outcome() {
     local index="$1"
     local status="$2"
-    local failures
+    local failures rounds wait_seconds
 
     if [ "$status" -eq 0 ]; then
-        MONITOR_FAILURES["$index"]=0
+        clear_repair_history "$index"
         return 0
     fi
 
@@ -761,11 +797,30 @@ record_repair_outcome() {
     MONITOR_FAILURES["$index"]="$failures"
     monitor_log "repairing pool-$index failed ($failures in a row). What it printed is in $MONITOR_REPAIR_LOG_PATH."
 
-    if [ "$failures" -ge "$MONITOR_MAX_CONSECUTIVE_FAILURES" ]; then
-        MONITOR_GIVEN_UP["$index"]="yes"
-        monitor_log "giving up on pool-$index after $failures failed repair(s) in a row. It will keep being reported as broken and will not be restarted again by this monitor: restarting an emulator that will not come back only makes the machine worse. Everything that can be read about it follows."
-        "$EMULATOR_SCRIPT" pool-diagnose "$index" 2>&1 | sed 's/^/    /' || true
+    if [ "$failures" -lt "$MONITOR_MAX_CONSECUTIVE_FAILURES" ]; then
+        return 0
     fi
+
+    # The wait doubles per round rather than per failure, so each round is a fresh set of attempts
+    # after a longer rest, and the rounds are counted before the wait is worked out so the first one
+    # is the base wait rather than half of it.
+    rounds=$(( ${MONITOR_WAIT_ROUNDS[$index]:-0} + 1 ))
+    MONITOR_WAIT_ROUNDS["$index"]="$rounds"
+
+    wait_seconds="$MONITOR_BACKOFF_SECONDS"
+    while [ "$rounds" -gt 1 ] && [ "$wait_seconds" -lt "$MONITOR_MAX_BACKOFF_SECONDS" ]; do
+        wait_seconds=$(( wait_seconds * 2 ))
+        rounds=$(( rounds - 1 ))
+    done
+    if [ "$wait_seconds" -gt "$MONITOR_MAX_BACKOFF_SECONDS" ]; then
+        wait_seconds="$MONITOR_MAX_BACKOFF_SECONDS"
+    fi
+
+    MONITOR_WAIT_UNTIL["$index"]=$(( SECONDS + wait_seconds ))
+    MONITOR_FAILURES["$index"]=0
+
+    monitor_log "leaving pool-$index alone for $(( wait_seconds / 60 )) minute(s) after $failures failed repair(s) in a row, then trying again. Repairs fail this way when the machine is too loaded to boot an emulator inside the timeout, which passes. Everything that can be read about it follows."
+    "$EMULATOR_SCRIPT" pool-diagnose "$index" 2>&1 | sed 's/^/    /' || true
 }
 
 #
@@ -942,10 +997,18 @@ repair_pass() {
 
         if [ "$repair" = "yes" ]; then
             broken=$(( broken + 1 ))
-            if [ "${MONITOR_GIVEN_UP[$index]:-no}" = "yes" ]; then
-                monitor_log "index $index is still broken ($reason). This monitor gave up on it and will not restart it again."
-                continue
+
+            # Serving a wait after a run of failed repairs. Nothing is said about it here: it said
+            # how long it would be when the wait started, and a pass runs every few seconds, so
+            # saying it again on each of them is how three dead emulators printed for hours.
+            if [ -n "${MONITOR_WAIT_UNTIL[$index]:-}" ]; then
+                if [ "$SECONDS" -lt "${MONITOR_WAIT_UNTIL[$index]}" ]; then
+                    continue
+                fi
+                unset "MONITOR_WAIT_UNTIL[$index]"
+                monitor_log "the wait on pool-$index is up, so it is due for another repair."
             fi
+
             if [ -z "$candidate" ]; then
                 candidate="$index"
                 candidate_serial="$serial"
@@ -961,6 +1024,11 @@ repair_pass() {
             monitor_log "index $index is $verdict and is being left alone: $reason"
             continue
         fi
+
+        # Healthy, so the run of failures that was being waited out is over, whether this monitor's
+        # last repair ended it or somebody fixed it by hand. The next trouble this index has gets a
+        # full set of attempts rather than inheriting an hour-long wait from the last one.
+        clear_repair_history "$index"
 
         # A minute's margin before a later index displaces an earlier one as the oldest. Each index's
         # reading is taken in turn and each takes a second or two, so a pool whose emulators all
