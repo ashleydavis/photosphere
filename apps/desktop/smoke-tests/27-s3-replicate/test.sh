@@ -67,18 +67,35 @@ send_command "$APP_PORT" type "{\"dataId\":\"database-path-input\",\"text\":\"$S
 send_command "$APP_PORT" click '{"dataId":"add-database-confirm"}'
 wait_for_log "$TMP_DIR" "Database entry added"
 
+# Registering the entry also opens the database, which spawns a worker, reads the assets and re-renders
+# the databases page underneath whatever is on top of it. That takes tens of seconds, so left alone it
+# lands in the middle of section 4 and disturbs the dialogs there: it has been seen closing the
+# Configure Secrets modal's open Select between the option being clicked and the click being handled,
+# leaving the modal saved with no credentials and the Start button disabled forever after. Waiting for
+# it here means the rest of the test drives a quiet app.
+#
+# The wait is sound in a way the one that used to sit further down was not: the open is started by the
+# registration above, so its completion is always after the line just matched, whichever order the two
+# finish in. Down in section 4 the cursor had often already passed the line, and the test then waited
+# out its timeout for a load that had already happened.
+wait_for_log "$TMP_DIR" "Load assets task completed"
+
 # --- 4. Replicate it into the bucket. ---
 
-send_command "$APP_PORT" navigate '{"page":"databases"}'
-wait_for_log "$TMP_DIR" "Databases page loaded"
-
+# No navigation back to the databases page: section 3 is already on it, and re-entering a route the
+# app is already showing does not remount the page. The "Databases page loaded" event only fires when
+# the databases or secrets lists change, so waiting for one after a no-op navigation waits for
+# something nothing is going to emit. The two the registration above does cause are both behind the
+# cursor by the time the wait for the load lands, which is what made this time out.
 send_command "$APP_PORT" click '{"dataId":"replicate-database-button"}'
 wait_for_log "$TMP_DIR" "Replicate database dialog opened"
 
 # Switch the destination to S3. The destination path field is cleared by this change, so it is typed
-# afterwards.
+# afterwards, and the Select's button is read back so a click the list never took is caught here
+# rather than several steps later where it looks like something else.
 send_command "$APP_PORT" click '{"dataId":"replicate-dest-type-select"}'
 send_command "$APP_PORT" click '{"dataId":"replicate-dest-type-option-s3"}'
+wait_for_value "$APP_PORT" "replicate-dest-type-select" "S3"
 
 # Choose the destination's S3 credentials through the Configure Secrets modal. Replication to S3 is
 # blocked until a credential is chosen, so this is not optional decoration.
@@ -89,6 +106,11 @@ send_command "$APP_PORT" click '{"dataId":"configure-secrets-s3-select"}'
 # a click sent into a list that has not rendered goes nowhere while the test carries on regardless.
 wait_for_value "$APP_PORT" "configure-secrets-s3-option-$SECRET_NAME" "$SECRET_NAME"
 send_command "$APP_PORT" click "{\"dataId\":\"configure-secrets-s3-option-$SECRET_NAME\"}"
+# The Select's button reads back whatever is chosen, so the choice is confirmed there before the modal
+# is saved. Clicking an Option that is on screen is not the same as the Select having taken it: a
+# re-render that closes the list between the two leaves the click landing on nothing, the modal saves
+# with no credentials, and every failure after that points somewhere else.
+wait_for_value "$APP_PORT" "configure-secrets-s3-select" "$SECRET_NAME"
 send_command "$APP_PORT" click '{"dataId":"configure-secrets-save"}'
 
 # The secrets modal must be gone before the replicate dialog underneath it is typed into. Without
