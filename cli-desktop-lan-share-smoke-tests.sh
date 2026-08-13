@@ -26,7 +26,25 @@ source "$DESKTOP_DIR/smoke-tests/lib/common.sh"
 # The per-test timeout every suite in this repository shares, and the reporting that goes with it.
 source "$ROOT_DIR/scripts/lib/test-timeout.sh"
 
-TMP_ROOT="$ROOT_DIR/tmp-cli-desktop-lan-share"
+# Where this run's four tests keep their vaults, configs, databases and logs. One directory per run,
+# from the allocator every other shell suite here uses, whose mktemp name cannot collide with a
+# second run's however close together the two start.
+#
+# It was `$ROOT_DIR/tmp-cli-desktop-lan-share`, the same path for every run started from this
+# worktree, and the Main section below deletes and recreates it on the way in. Two runs at once
+# therefore shared every file underneath it: each test's `rm -rf "$TMP_ROOT/$test_name"` deleted the
+# other run's fixtures mid-test, and both desktop apps opened the one `<test>/desktop/app.log` with
+# `>`, so each truncated what the other had written and the waits that read that file by line number
+# read the other run's lines. Proven by running this suite against a second copy of itself
+# (`bun run test:parallel -- --scripts "test:lan-share:cli-desktop"`): one side timed out waiting for
+# `Secret review step` while its app.log held both apps' output interleaved, a half-written line, two
+# `shutting down` lines and a FATAL from a pid that side never started. A run whose evidence has been
+# rewritten by another run is also why a failure here could report one thing while the artifacts left
+# behind showed another (`SECRET-SHARE-FAILED-WITH-EVERY-ARTIFACT-GREEN` in the flaky-test registry).
+#
+# The allocator's root is outside the repository and nothing here deletes it, so a failed run's
+# evidence survives instead of being wiped by the next run's `rm -rf`.
+TMP_ROOT="$(photosphere_test_temp_dir cli-desktop-lan-share)"
 
 # Counters and bookkeeping for the suite.
 TESTS_PASSED=0
