@@ -1,320 +1,346 @@
-# Port the Photosphere core to Zig, one package at a time
+# Port Photosphere to Zig and Vercel Native, in a new repository
 
 ## Overview
 
-Photosphere's core is sixteen TypeScript packages under `packages/`, shared by the CLI, the Electron desktop app, and the iOS and Android apps. This plan replaces those implementations with Zig, **in place, one package at a time**, behind the interfaces that already exist. `packages/storage/src/index.ts` keeps exporting `IStorage`, `FileStorage` and `createStorage`; what changes is that the class bodies forward to a Zig library instead of doing the work themselves. Every consumer of a ported package is untouched.
+Photosphere today is sixteen TypeScript packages under `packages/` plus ten apps under `apps/`, wrapped for the desktop by Electron and for the phone by Capacitor, with background work running inside an embedded JavaScript engine (QuickJS on Android, JavaScriptCore on iOS) driven by a host bridge.
 
-This replaces an earlier version of this plan that built a parallel Zig tree (`zig/`, `apps/desktop-zig/`, `apps/android-frontend-zig/`, `apps/ios-frontend-zig/`) alongside the TypeScript one. That version was attempted and abandoned. It is recorded here as the approach not to take, and why, in "Why this can only be done incrementally" below.
+This plan replaces all of that with a **new repository** containing a Zig core, a Zig command line tool, and a single **Vercel Native** application shell that covers Windows, Linux, macOS, Android and iOS. Electron and Capacitor both go. The React user interface is carried across unchanged and is not ported: Vercel Native embeds a directory of built frontend assets and serves them to the system WebView, so the UI keeps being TypeScript and React and becomes the only TypeScript that ships.
 
-## Why this can only be done incrementally
+**Bun stays.** Wherever TypeScript or a script survives into the new repository, Bun is what runs it: the workspace and its dependencies, every `package.json` script, the bundling of the React frontend, the TypeScript unit tests, and the host-side pieces of the smoke test harness. The one thing that may not be Bun's to run is the Vercel Native CLI itself, which ships on npm and states Node 22.15+ as its requirement; whether it runs under Bun is settled by the first spike and not assumed here.
 
-**This was already attempted twice, each time as a single piece of work, and neither attempt finished.** Both were made against the parallel-tree version of this plan, with the whole forty-five steps treated as one session.
+The work is cut into individually testable packages of work, each with a written specification, unit tests and (where the package can be reached from outside) smoke tests. The intended way to execute it is autonomous: an orchestrator picks the next ready package, an implementation subagent builds it in its own transient worktree and commits, a review subagent checks it against the specification and runs the tests, and the two hand back and forth until the review passes. The final section of this document tells the human how to set that up and what it cannot do without them.
 
-The first ran in the `zig-core-port` worktree and got a long way: seven spikes and roughly 27,000 lines of Zig across sixteen module directories, with about 1,030 test blocks (see the Notes for exactly what is in there and how to treat it). It still stopped well short of a working application, and none of it was ever committed or shown to pass. The second ran in the main working copy and stopped at the end of step 2, the `CLAUDE.md` amendments and the provisional toolchain pin.
+**Step 1 stops.** The first thing that happens in the new repository is a `CLAUDE.md`, and then nothing else until the human has read and accepted it.
 
-The lesson from both is the same, and it is the reason this plan exists in its current form. The port is roughly fifty thousand lines across sixteen packages. It is not a single piece of work, no session is going to hold it, and the failure is not one of effort: writing tens of thousands of lines of Zig that no application runs produces no evidence that any of it is right. It must never be attempted as one piece again.
+### A concern worth stating before the plan starts
 
-The parallel-tree approach produced nothing testable until roughly two thirds of the way through: forty-five steps, with the first runnable artefact at step thirty. Everything before that was Zig code whose only evidence of correctness was its own unit tests, checked against the TypeScript through committed fixtures and comparison scripts that themselves had to be built and trusted. That is not a plan that can be stopped at, and a port of fifty thousand lines will be stopped at, many times.
+The previous version of this plan existed because two attempts at a big-bang Zig port failed, and its central finding was that a parallel tree produces nothing testable until roughly two thirds of the way through, which is why it ported packages in place behind the existing interfaces so that the existing smoke suites were the evidence after every increment.
 
-The incremental approach inverts the evidence. After each increment the repository's existing smoke suites run against the real apps on every platform, and they exercise the Zig code because the TypeScript that used to do the work now calls into it. There is no new comparison infrastructure to build and no second implementation to keep in step, because at any moment there is exactly one implementation of each ported package.
+A new repository throws that safety net away by construction. There is no existing application calling the new code, so the same failure is available again. The plan below answers it in a different way rather than pretending the risk is gone: the walking skeleton (a launchable window, a working control bridge and one passing smoke test) is built before any core library, the command line tool comes online early because its eighty smoke tests are headless and can run anywhere, and every work package after the skeleton has to make at least one more real test pass in a real binary. If a work package cannot state which test goes from red to green, it is the wrong package.
 
-The cost is real and is stated up front rather than discovered: bridging asynchronous and stream-based interfaces across a native boundary is more total work than a clean cut would be. That cost buys a plan where every step ships.
+## What the new repository contains
 
-**No step in this plan may be taken out of order to "get ahead" on a later package.** The increment contract below is the whole plan.
+This layout is the plan's proposal, not a settled fact. Step 1 writes it out in full as a document in the new repository, down to the file, and the human checks it before any of it is built.
 
-## The increment contract
+```
+docs/                     the full documentation set, written in step 1
+frontend/                 the React UI, built by Bun to a dist that app.zon embeds
+  packages/user-interface   carried over from the old repo, near unchanged
+  packages/config           carried over if still needed by the UI
+  src/platform-native.tsx   the one platform provider, over window.zero
+src/                      the Vercel Native host: bridge handlers, wake/drain, servers
+  main.zig
+  asset_server.zig        localhost HTTP with range requests, for media bytes
+  events.zig              WebSocket channel for pushed events
+lib/psi-core/src/         the port of packages/, one directory per old package
+apps/cli/                 the Zig command line tool (replaces apps/cli)
+tests/
+  unit/                   Zig test blocks live beside their source; this is the runner
+  cli/                    the eighty numbered CLI smoke tests plus the five other suites
+  app/                    the deduped UI smoke tests, run on every platform
+  lib/                    the shared shell harness: runner, control bridge, process control
+app.zon                   manifest: windows, capabilities, security, frontend
+build.zig                 owned (ejected) build, because C libraries have to be linked
+package.json              Bun workspace, Bun scripts, the pinned Vercel Native CLI
+bunfig.toml               Bun configuration, if the workspace needs any
+mise.toml                 pins Zig 0.16.0 and Bun, and Node only if the SDK CLI needs it
+automation/               the work package specifications and the orchestrator state
+```
 
-One increment is one package, or one clearly separable half of a package (see step 8 for why halves matter). An increment is complete only when all of the following hold:
+What is Zig: everything that was `packages/` except the user interface, everything that was `packages/node-api`, `packages/rest-api` and `packages/mobile-worker`, the command line tool, and the application host.
 
-- `bun run compile` passes and `mise exec -- zig build test` passes, including the leak, `ReleaseSafe` and allocation-failure passes described in the phase 1 preamble.
-- `bun run test` passes. The ported package's existing Jest suite is not rewritten. It now tests the Zig implementation through the same exported names, which is the point.
-- **Every smoke suite that reaches the ported package passes, on every platform that runs it.** For most increments that means all of: `bun run test:cli`, `bun run test:cli:encrypted`, `bun run test:cli:lan-share`, `bun run test:cli:hash-cache`, `bun run test:lan-share:cli-desktop`, `bun run test:electron`, `bun run test:and`, and `bun run test:ios` on macOS. The counts must match what the same suites reported before the increment. A suite that gets faster or slower is fine; a suite that loses a test is not.
-- `bun run tev -- --force` passes.
-- The TypeScript implementation the increment replaces is deleted, not left beside the Zig one. Two implementations of the same function is the thing this plan exists to avoid.
+What stays TypeScript: `packages/user-interface` and whatever it needs, the host-side smoke test control bridge, and the build tooling. All of it is run by Bun, and none of it is present at runtime in a shipped binary.
 
-If a smoke suite fails, the increment is not finished. It is not "finished with a known issue", and the next increment does not start. This is the rule that makes the plan safe to stop at any point.
+Bun's specific jobs, so that no part of this is left to preference:
 
-## How TypeScript reaches Zig
+- **The workspace.** `bun install`, workspace packages, and the lockfile, exactly as the current repository does it.
+- **Every script.** `bun run compile`, `bun run test`, `bun run test:cli` and the rest, with the same naming as today so the muscle memory carries over. Shell scripts are still shell and are still invoked through their `bun run` name rather than directly.
+- **Bundling the frontend.** `bun build` is the intended bundler. The current frontend is built by Vite with the React plugin, Tailwind and PostCSS, so this needs an answer for the Tailwind and PostCSS pipeline, which `bun build` does not carry. Step 2 settles it: either Bun drives Tailwind's own CLI as a separate build step, or Vite stays and Bun invokes it. Do not decide it here and do not assume `bun build` alone is enough.
+- **TypeScript tests.** `bun test` for whatever unit tests the frontend keeps, replacing Jest and `ts-jest`. Zig tests stay with `zig build test`.
+- **Typechecking.** `tsc --noEmit` under Bun, as now.
 
-There are three runtimes in this repository and only two of them can call native code. This determines which packages can be ported and in what order, so it is settled here rather than per-step.
+What disappears with no replacement: Electron, Capacitor, the embedded JavaScript engines and their host bridge, `packages/mobile-worker` and its nineteen Node shims, `packages/rest-api` and Express, the Electron worker pool, the Node-API addon route the previous plan needed, the `@aws-sdk` packages, `bson`, and the mobile crypto polyfill set that existed only to run the AWS SDK inside a bare JavaScript engine.
 
-**CLI and Electron main process: a Node-API addon.** Both are Node-compatible runtimes that load `.node` addons, and both run the packages directly. Async is handled with `napi_async_work`, so a Zig call runs on a worker thread and resolves a real Promise, leaving the event loop free. Buffers cross by pointer with `napi_get_buffer_info` inbound and `napi_create_external_buffer` outbound. Native objects are held by an opaque handle wrapped with `napi_wrap` plus a finalizer, so the Zig object is freed when the JavaScript wrapper is collected. Electron's Node ABI differs from Bun's, so one addon binary is built per ABI and each asserts `process.versions.modules` at load, failing with both numbers in the message.
+## Vercel Native: what it gives, what it costs
 
-**Mobile: the existing host bridge.** The mobile apps run the same packages inside QuickJS on Android and JavaScriptCore on iOS, driven by `packages/mobile-worker`. Neither engine can load a `.node` addon. The route is instead one new function on the existing `host.*` bridge in `packages/mobile-worker/src/lib/host-functions.ts`, dispatching into the Zig static library linked into the app. The bridge already carries binary as base64 strings (`fsReadFile`, `fsWriteFile`, `tcpWrite`, `tlsWrite`, `udpSend` all do), so this follows an established pattern rather than inventing one.
+Everything here comes from the probe repository at https://github.com/ashleydavis/electron-alternative-vercel-native and its README, which is the record of what was built and run rather than what the vendor documents claim.
 
-**The renderer and the WebView cannot call Zig at all.** `packages/user-interface` runs in a browser context with no native route and no plausible one. Any package it imports therefore cannot be ported wholesale; only the half the browser does not use can move. This rules out `packages/utils` (thirty-five imports from `user-interface`) and `packages/encryption` (imported by `configure-secrets-modal.tsx`) as whole-package increments, and both are split accordingly below. Check this before starting any increment, not after.
+Three channels between the frontend and Zig, because they solve different problems:
 
-**Streams never cross the boundary.** `IStorage.readStream` returns a Node `Readable` and `writeStream` takes a `NodeJS.ReadableStream`, with sixty-seven non-test call sites between them. The stream objects stay in TypeScript. A `Readable` subclass calls an addon `readChunk(handle, offset, n)`; `writeStream` consumes its input stream in TypeScript and pushes chunks in. Zig only ever sees byte ranges.
+- **The bridge**, for control flow. `await window.zero.invoke("native.command", payload)` runs a Zig handler and resolves with a JSON value. Zig pushes the other way with `runtime.emitWindowEvent(window, "name", detail)`, received by `window.zero.on`. Events carry validated JSON and escaped names, so there is no script injection surface. This replaces every Electron IPC channel and every Capacitor plugin call.
+- **A localhost HTTP server**, for bytes. The bridge settles a promise with a JSON value, so images and video cannot go through it. The probe serves media from `127.0.0.1` on an OS-assigned port with range request support, and the page asks Zig for the port over the bridge because the page is on `zero://app` and is therefore cross-origin to the server. This is what the asset server becomes.
+- **A WebSocket**, for a long-lived duplex channel. This is what task progress, toasts and news notifications become.
 
-## Phase 0: foundations and three blocking spikes
+The threading rule that everything obeys: the WebView belongs to the UI thread. A worker publishes into atomics and calls `wake()`, which is a bounded non-blocking enqueue any thread may call; the loop thread then drains and emits. Nothing but the drain touches the WebView.
 
-1. **Amend the `CLAUDE.md` rules this plan collides with.** Three bullets currently forbid the work outright. Amend all three in one edit:
-   - "THIS REPOSITORY USES TYPESCRIPT AND SHELL SCRIPT. NOTHING ELSE." Add Zig as a permitted language, scoped to `zig/`.
-   - The bullet banning hand-written wire protocols and request signing that "a maintained library already does". Amend it so that a protocol implementation shipping in the Zig standard library (`std.http.Client`, `std.http.Server`, `std.crypto.tls`, `std.net`, `std.compress`) counts as a maintained library, exactly as `node:http` and `node:tls` do on the TypeScript side. Anything outside the standard library still requires a vendor library: S3 and SigV4 from the AWS C runtime, RSA and AES-CBC and PEM from OpenSSL or BoringSSL, BSON from libbson.
-   - The same bullet's ban on reimplementing a library's behaviour. Amend it to permit a from-scratch implementation of a presentation surface whose output contract is pinned by this repository's own smoke tests rather than by a wire format. This covers terminal output only and never anything crossing a process or machine boundary.
+The costs, each of which the plan has to deal with:
 
-   Add a bullet stating that Zig files under `zig/` follow the porting rules in `docs/zig-port/README.md`. Do not touch the bullets covering `.githooks/pre-commit`, `scripts/install-hooks.sh` and `scripts/test-everything-parallel.sh`; those files stay frozen.
+- **Zig 0.16.0 exactly**, pinned by the SDK. Zig 0.16 routes sleeping and other blocking through a `std.Io` instance rather than free functions, which changes how every blocking call in the port is written.
+- **A JavaScript runtime is a build-time dependency** for a Zig program, because the SDK ships as an npm CLI and states Node 22.15+ as its requirement. Bun installs it and Bun runs the scripts around it either way; the open question is whether the CLI's own code runs under Bun or needs Node underneath it. Step 2 answers it by running `native build`, `native check`, `native package` and both mobile targets under Bun. If any of them needs Node, Node is pinned in `mise.toml` for that one purpose and nothing else, and the port says so where a reader will find it.
+- **Build on the target operating system.** Zig cross-compiles readily on its own, but this links against platform SDKs and system libraries, so Windows, macOS and Linux each need their own runner. The previous plan's four-target cross-build story is gone.
+- **Linux needs GTK4 and WebKitGTK 6.0 development packages**, and the runtime needs `libgtk-4-1` and `libwebkitgtk-6.0-4`. Ubuntu ships the GTK3-era `libwebkit2gtk-4.1` by default, so this asks more of a user's machine than Electron does and has to be declared in whatever gets shipped.
+- **Ubuntu 24.04 and friends restrict unprivileged user namespaces**, which kills WebKit's sandbox and makes the app exit at launch. The probe works around it by disabling the WebView sandbox in dev, which is not acceptable for anything shipped. The shipping answer is a decision this port has to make and record.
+- **Mobile is vendor-labelled experimental and nothing has been built for a phone.** The CLI carries a real mobile toolchain (it generates an Xcode project with pbxproj, scheme, `Info.plist` and asset catalog, and drives the NDK, writes an `AndroidManifest.xml`, assembles a debug APK, boots an emulator and installs over adb), and all of that is read from the CLI rather than run. The mobile docs page is a 404.
+- **The probe's own note about porting**, worth repeating because it is about this exact application: the Zig core and the bridge would come across unchanged, but the localhost HTTP server and the WebSocket both bind loopback sockets, which iOS is unfriendly about, and a fixed window size means nothing on a phone.
+- **`@native-sdk/cli` went from 0.0.0 to 0.8.4 in about five weeks.** Pin the exact version, never a range, and treat an upgrade as its own work package with the full suite behind it.
+- **The SDK's documentation is not a reliable specification.** Two of the three central APIs in the probe's `src/main.zig` were undocumented or documented wrongly and had to be recovered by reading `node_modules/@native-sdk/cli/src`. Budget for reading the SDK source.
+- **Zero-config means no `build.zig`.** This port needs one, because it links C libraries (the AWS C runtime, OpenSSL or BoringSSL, libbson). `npx native eject` writes an owned `build.zig` and `build.zig.zon`. Whether an ejected build still gets the mobile toolchain, the asset embedding and the packaging commands is the first thing the shell spike has to answer.
 
-2. **Pin the Zig toolchain provisionally.** Run `mise ls-remote zig`, pick the latest stable release, add `zig = "<version>"` to `mise.toml` under `[tools]`, and record it in `docs/zig-port/README.md` marked **provisional until step 7 passes**. Step 7 is the first thing that tests the release against Xcode 14.2 and macOS 12.7.6. Every Zig command from here is run as `mise exec -- zig ...`. Verify with `mise exec -- zig version`.
+## Two rules for every line of Zig in this port
 
-3. **Create the Zig workspace skeleton.** Create `zig/build.zig`, `zig/build.zig.zon` and `zig/package.json`, with `zig/lib/psi-core/src/` holding one subdirectory per ported package and `zig/apps/psi-node/src/` holding the Node-API addon. Build steps are named for what they produce: `lib`, `node`, `mobile-android` (all three Android ABIs together, because Gradle needs them in one `jniLibs` tree), `mobile-ios` (both iOS targets lipo'd, because Xcode needs one fat library), and `test`. The default `zig build` builds `lib` and `node` for the host only.
+These are not style preferences. They are what makes the port reviewable by a human and by a review subagent, and they belong in the new repository's `CLAUDE.md`.
 
-   `zig/package.json` declares `{"name": "zig", "scripts": {"compile": "mise exec -- zig build --summary none", "test": "bash ./run-tests.sh", "clean": "rm -rf zig-out .zig-cache"}}`. Add `"zig"` to the root `package.json` `workspaces` array. Not `"zig/*"`: the package file is at `zig/package.json`, so that glob would match `zig/apps` and `zig/lib` and pick up nothing.
+### 1. The Zig emulates the TypeScript, so the two can be compared line by line
 
-   `package.json`, `mise.toml`, `what-changed.json` and everything under `scripts/` are in `alwaysPaths` in `what-changed.json`, so each edit to them forces a full suite run. Add `"zig"` to the `paths` of the existing `compile` and `test` targets in the same edit, and confirm with `bun run everything:plan` that a Zig-only change now runs them. Without this a Zig-only change matches no target and runs nothing.
+The reason this port can be trusted at all is that a reader can put the TypeScript and the Zig side by side and check them against each other. That only works if the Zig is a transliteration rather than a redesign.
 
-   Run `bun install`, then `bun run compile` and `bun run test`, and confirm the Zig tree is visibly built rather than assuming the workspace entry works.
+- One Zig file per TypeScript file, at the same relative path, base name with `-` replaced by `_`.
+- Every Zig file opens with `// Port of packages/<pkg>/src/lib/<file>.ts` naming the source in the old repository.
+- Declaration order matches the TypeScript. Function names match the TypeScript. Parameter order matches the TypeScript.
+- Control flow matches the TypeScript: the same branches, in the same order, with the same early returns. Do not merge two loops into one, do not hoist a condition, do not replace a loop with a cleverer formulation.
+- TypeScript doc comments are ported verbatim.
+- Interfaces lose the `I` prefix and become a struct with a vtable (`IStorage` becomes `Storage`), and their method names are unchanged.
+- Where the Zig cannot mirror the TypeScript, the divergence gets a `// Diverges from the TypeScript:` comment at the site saying what changed and why, and an entry in the port's divergence document. The known ones are listed at the end of this plan.
+- Improvements are not free. A better algorithm, a tighter data structure or a fixed bug in the middle of a port destroys the comparison for everything around it. If something in the TypeScript is wrong, port it faithfully, say so at the time, and let the human decide whether to fix it in both or in neither.
 
-4. **Write the porting rules document, `docs/zig-port/README.md`.** One Zig file per TypeScript file, same relative path, base name with `-` replaced by `_`. Every Zig file opens with `// Port of packages/<pkg>/src/lib/<file>.ts`. Declaration order and function names match the TypeScript. Interfaces lose the `I` prefix and become a struct with a vtable (`IStorage` becomes `Storage`). TypeScript doc comments are ported verbatim. Every allocating function takes `allocator: std.mem.Allocator` first. `throw` becomes a Zig error in an error set. The repo comment rules in `CLAUDE.md` apply unchanged.
+### 2. Pure and functional, with globals only at the edges
 
-5. **Record the async decision and the cancellation contract that follows from it.** Zig has no `async`/`await`, so every `async function` becomes blocking and the concurrency `packages/task-queue` gets from the event loop comes from a `std.Thread.Pool`. Blocking threads cannot be interrupted from outside, so cancellation is cooperative and must be designed now, not when the task queue is ported:
-   - Every handler receives a `*const CancelToken` on its `TaskContext`: an atomic flag plus a `std.Thread.ResetEvent`. `cancelTasks(source)` sets the flag on every token belonging to that source and signals the event.
-   - Every handler checks `context.cancel.requested()` at each iteration of any loop over files, assets, records or chunks, and returns `error.Cancelled`. Wherever the TypeScript checks a cancellation signal the Zig checks the token in the same place.
-   - Every blocking call that can wait indefinitely takes a deadline: `SO_RCVTIMEO` and `SO_SNDTIMEO` on sockets, `ResetEvent.timedWait` instead of `wait`, a request timeout on AWS CRT requests. One named shared constant.
-   - The two long-lived handlers (the asset server and the LAN share receiver) each own a listening socket; cancellation sets the token and closes the socket, and the accept loop exits on the next wake-up.
-   - Shutdown means: cancel every token, wait for every pool thread with a bounded timeout, then free. A thread that has not returned by the deadline aborts loudly rather than having memory freed underneath it.
+- A core library function takes what it needs as parameters and returns what it produces. No process-wide state, no lazily initialised singleton, no module-level mutable variable, no hidden cache, no ambient logger, no ambient allocator.
+- `lib/psi-core/**` gets no mutable globals at all. Constants are fine. A `const` table is fine. A `var` at module scope is not, whatever it is protecting itself with.
+- State that has to exist lives in a struct the caller owns and passes in, so two of them can exist at once and a test can make one.
+- Effects are parameters: the allocator, the clock, the UUID source, the filesystem, the network and the process spawner all arrive as vtable structs, which is also what makes the deterministic test implementations the smoke tests rely on possible.
+- Globals are tolerated only at the edges: `src/main.zig` and the platform host it talks to, the CLI entry point, and the process-level runtime the SDK owns. Even there, the global is a container that is constructed once at startup and passed down, never reached back up into.
+- The old `setQueueBackend`/`getQueueBackend` process singleton is the exact pattern this rule exists to stop. It does not come across.
 
-6. **SPIKE: prove the Node-API addon route, and settle the compiled-CLI question.** This is the enabler for every increment on CLI and Electron, so it comes before any porting and not at the end.
+## Phase 0: the rules and documentation checkpoint
 
-   Build a throwaway addon in `zig/spikes/napi/` exporting one synchronous function and one asynchronous one using `napi_async_work`. Prove all of:
-   - It loads and is callable from a Jest test under `ts-jest`, which is how every package's `test` script runs.
-   - It loads and is callable from the Electron main process on the pinned Electron version, and can invoke a callback on the main thread from a Zig worker thread using `napi_threadsafe_function`, which is what streaming task progress will require.
-   - It cross-builds for `x86_64-linux`, `x86_64-windows`, `x86_64-macos` and `aarch64-macos`, which are the four targets `electron-builder` packages for. A cross-build failure found at packaging time is found too late.
-   - `electron-builder` packages it: add it to `apps/desktop/package.json`'s `build.extraResources` or `build.files`, build a packaged artefact, unpack it and confirm the addon for that platform is present and loadable outside the asar.
+**1. Create the new repository, write its `CLAUDE.md` and its entire documentation set, and then stop and wait.**
 
-   **The open question this spike must answer:** `apps/cli` ships as a single executable via `bun build --compile` (see `build-linux` and friends in `apps/cli/package.json`), and whether a `.node` addon can live inside such a binary is not known. Determine it. If it cannot, the options are to ship the addon next to the binary and change the release layout `bin/<arch>/<platform>/psi` that the `upgrade` command depends on, or to accept that the compiled CLI is the last thing ported. Record the finding and the chosen option in `docs/zig-port/README.md`. Note that the CLI smoke suites default to `bun run start --` and not the compiled binary (`USE_BINARY=false` at `apps/cli/smoke-tests.sh:81`), so this does not block the spike, but it does block shipping.
+No code, no build files, no manifest, no toolchain pin. Words only. Nothing else is written until the human has read all of it and said it is acceptable, and the rest of the plan does not start while it is outstanding. This is the cheapest place in the whole port to find out that the structure or the rules are wrong, and the most expensive thing to change once forty work packages have been built on top of it.
 
-   Pin Electron to an exact version in `apps/desktop/package.json` (it currently floats at `^40.0.0`) and record the ABI number in `docs/zig-port/README.md`. A floating minor that crosses an ABI boundary breaks the addon at load with no build error.
+**The project map is the centrepiece.** `docs/project-structure.md` is a tree of the repository as it will exist when the port is finished: every directory, every significant file, and one line each saying what it holds and why it is there. It covers the Zig core module by module, the application host, the CLI, the frontend, all four test trees, the build and manifest files, and the automation directory. Where a directory corresponds to something in the old repository, the line names it, so the map doubles as the porting index. The current repository has no document like this, which is part of why this one starts with it.
 
-   If the addon route fails outright, stop and report. The fallback (spawning a Zig CLI as a child process with a line-delimited JSON protocol) would need a subcommand for each of the roughly forty direct `ipcMain.handle` calls in `apps/desktop/src/main.ts`, which is a phase of its own and is a decision for the human.
+The rest of the set, all written in step 1 and all reviewed together:
 
-7. **SPIKE: prove Zig links into the mobile apps, and fix the toolchain pin.** Build a one-function static library for `aarch64-linux-android`, `armv7a-linux-androideabi` and `x86_64-linux-android`, link all three into `apps/android-frontend`, and call it over JNI. Do the same for `aarch64-ios` and `x86_64-ios-simulator` linked into `apps/ios-frontend`, called from Swift. This must be done against the pinned iOS environment named in `CLAUDE.md`: Xcode 14.2 and macOS 12.7.6. The spike passes when a native unit test on each platform calls into Zig and gets a value back, on device or simulator as well as in the linker.
+- `README.md`: what the project is, what it runs on, and how to build and run it.
+- `docs/development.md`: the day to day loop, the toolchain, the Bun scripts, and an index of every other document.
+- `docs/testing/README.md`: the four kinds of test (Zig unit, TypeScript unit, CLI smoke, application smoke), how to run each, how the harness allocates ports and directories, and what parallel safety requires of a new test.
+- `docs/architecture.md`: the three channels between the frontend and Zig, the threading rule, where state lives, and how a request travels from a click to storage and back.
+- `docs/background-tasks.md`: what a task handler is now, the single registration site, and how to add one.
+- `docs/zig-conventions.md`: the two writing rules in full, with worked examples of a TypeScript file and its Zig counterpart side by side, and the divergence document's format.
+- `docs/porting.md`: the map from old package to new module, the work package contract, and the implementation and review loop.
+- `docs/building-and-packaging.md`: per platform requirements, the system libraries, packaging, and the release layout.
+- `docs/mobile.md`: the Android and iOS toolchains, what the SDK generates, and the pinned Apple environment.
+- `docs/git-hooks.md`: what the hook runs and why it is never bypassed.
+- `THIRD-PARTY-NOTICES.md`: started now with the SDK and the C libraries, extended as each lands.
 
-   This decides the toolchain version step 2 pinned provisionally. If Xcode 14.2's linker rejects what the release emits, work backwards through the release list until one links, re-pin `mise.toml`, and record every version tried with its exact error. If none links, stop and report: raising the Xcode or macOS requirement is forbidden by `CLAUDE.md` and is the human's decision.
+Documents written before the code they describe will contain claims that turn out to be wrong. That is acceptable and expected: they are a specification at this point, and each work package that contradicts one has to correct it as part of its own review. What is not acceptable is a document that describes something as working when nobody has run it, so every claim about behaviour in the step 1 set is written as intent rather than as fact, and the spikes in phase 1 are what convert them.
 
-   Do this spike early even though mobile is the last thing ported. It is the single failure that would invalidate the mobile half of the port's value, and it is cheap to run now. Finding out after a dozen packages are ported is the worst possible time.
+**The `CLAUDE.md`** starts from the existing one in this repository. Keep everything that is about how the human works and what they will not tolerate, drop everything that is about Electron, Capacitor and the embedded JavaScript engines, and add what Zig and Vercel Native need. It has to cover at least:
 
-8. **SPIKE: port the first increment end to end and prove the smoke suites pass on all four platforms.** This is the proof that every later increment in this plan will work. It is deliberately the most expensive increment in the plan, because it builds the machinery all the others reuse.
+- **Platforms and apps.** One application shell across Windows, Linux, macOS, Android and iOS, plus a command line tool on the three desktop platforms.
+- **Languages.** Zig, TypeScript (frontend and host-side test harness only) and shell script. Nothing else, with the same explicit ban on Python, Perl, Ruby and Go, and the same rule that a shell script contains shell and never an embedded interpreter.
+- **Bun.** Bun runs the workspace, every script, the frontend bundle, the TypeScript tests and the typecheck. Never a bare `bun`, `node` or `zig`: every invocation goes through `mise exec --` so the pinned versions are the ones that run. Never invoke a shell script directly when it has a `bun run` name. If the Vercel Native CLI turns out to need Node, that is the only thing Node is for and the rule says so by name.
+- **The two writing rules above**, in full, because they are the two things a review subagent checks that nothing else can check for it.
+- **The testing rules**, carried over unchanged in substance: never a fake test, never a test that has not been watched fail, never make a test pass by faking the thing under test, run every test you write, and never report a compile as evidence of behaviour.
+- **The parallel-safety rules**, carried over unchanged: no fixed port, no fixed path, no machine-wide name, every started process's pid recorded at the moment it starts, never kill by matching a command line, and every suite has to survive running beside another copy of itself. The human runs several worktrees at once and the orchestrator in this plan runs several agents at once, so this matters more here than it did before.
+- **The git rules**, carried over unchanged: no destructive git without an explicit instruction, never commit with verification disabled, never modify the hook or its scripts, and never assume the working tree is as you left it.
+- **Zig specifics**: `mise exec -- zig ...` for every invocation, every allocating function takes `allocator: std.mem.Allocator` first, `std.testing.allocator` in every test so a leak fails it, a `std.testing.checkAllAllocationFailures` test for anything that can fail to allocate, `ReleaseSafe` as a second test pass, Valgrind as a third where C libraries are linked, and errors as error sets rather than exceptions.
+- **The failure rules**, carried over unchanged: all failures noisy, no stub that pretends to work, no silent no-op, and a missing capability throws and names itself.
+- **The library rules**, carried over and adjusted: no hand-written wire protocol, request signing or vendor SDK, with the Zig standard library counted as a maintained library for what ships in it (`std.http`, `std.crypto`, `std.net`, `std.compress`) and anything outside it requiring a real vendor library.
+- **The autonomy contract**: what a work package is, what an implementation agent may and may not do, what a review agent checks, and the escalation rule when they cannot agree.
+- **Documentation and comment rules**, carried over unchanged, including the ban on em dashes, on `---` separators, on hard-wrapped prose, on the words this repository bans, and on machine-specific absolute paths in anything checked in.
 
-   **The increment is the synchronous half of `packages/serialization`:** `BinarySerializer`, `BinaryDeserializer`, `CompressedBinarySerializer`, `CompressedBinaryDeserializer` and `UnsupportedVersionError` (lines 167 to 540 of `packages/serialization/src/lib/serialization.ts`). The asynchronous `save`, `load`, `loadVersion` and `verify` stay TypeScript for now and call the Zig-backed classes, so this increment needs no async binding and no stream binding.
+## Phase 1: the spikes that can stop this plan dead
 
-   It is the right first increment for four reasons, each of which is a criterion to apply when choosing any later one:
-   - It is small and self-contained: one file, and the sync half of it is buffer in, buffer out.
-   - No frontend package imports `serialization`, so there is no browser code path that cannot reach Zig.
-   - It is consumed by `bdb`, `merkle-tree` and `api`, all of which run on mobile inside QuickJS, so the mobile smoke tests genuinely exercise the Zig code rather than passing trivially.
-   - The on-disk format it produces is asserted by the CLI smoke tests through `psi root-hash` and `psi summary`, so a format divergence fails loudly and immediately.
+Each of these can end the port. All four are cheap relative to the port and all four run before any core library is written. If one fails there is no permitted workaround, so stop and report.
 
-   `packages/fuzzy-match` is smaller and looks like the obvious first choice. It is not: its only consumer is `apps/cli/src/lib/init-cmd.ts`, so it is unreachable on mobile and its passing smoke suites would prove nothing about three of the four platforms.
+**2. SPIKE: the desktop shell, ejected, on all three desktop platforms.** Stand up a minimal app: one window, one bridge command, one emitted event, one localhost HTTP route with a range request, one WebSocket. Then run `npx native eject` and prove the whole of that still builds and runs from the owned `build.zig`, because the port cannot use the zero-config path once it links C libraries. Prove it builds and runs on Linux (GTK4 and WebKitGTK 6.0), on Windows (WebView2) and on macOS. Record the exact SDK version, the exact Zig version, and the system packages each platform needs.
 
-   What this increment must build:
-   - The Zig implementation in `zig/lib/psi-core/src/serialization/serialization.zig`, with its unit tests ported from `packages/serialization/src/test/`.
-   - The Node-API bindings in `zig/apps/psi-node/`, on the step 6 spike.
-   - The one new `host.*` function in `packages/mobile-worker/src/lib/host-functions.ts` that dispatches into the Zig static library, plus its native adapter on Android and iOS, on the step 7 spike.
-   - A single loader in `packages/serialization` that picks the addon or the host bridge at runtime, so no later increment has to solve platform selection again. Where this loader lives is a decision this step makes and records in `docs/zig-port/README.md`; it must not be duplicated per package.
-   - The rewritten class bodies, forwarding to whichever route the loader selected, with the TypeScript implementation deleted.
+Four things this spike must settle and write down:
 
-   The spike passes when every one of these reports the same counts it reported before the increment: `bun run test`, `bun run test:cli`, `bun run test:cli:encrypted`, `bun run test:cli:lan-share`, `bun run test:cli:hash-cache`, `bun run test:lan-share:cli-desktop`, `bun run test:electron` (34 tests under `apps/desktop/smoke-tests/`), `bun run test:and` (41 tests under `apps/smoke-tests/tests/`) and `bun run test:ios` (the same 41 on macOS). The numbers to match are whatever the suites report on the day, not the numbers written here.
+- **Whether the SDK CLI runs under Bun**, across `native build`, `native check`, `native package` and both mobile targets. If it needs Node, say which commands and pin Node for that alone.
+- **How the frontend is bundled by Bun**, given Tailwind and PostCSS. Either `bun build` plus Tailwind's own CLI as a separate Bun-driven step, or Vite invoked by Bun. Build the real UI, not a placeholder page, because a page with no Tailwind in it proves nothing.
+- **How the frontend gets a fast development loop**: a watched build writing into the embedded dist, or an allowed development origin in `app.zon`'s navigation policy, and what the second does to the security model.
+- **What the shipping answer is for the WebKit sandbox** on distributions that restrict unprivileged user namespaces, given that disabling it is not shippable.
 
-   **If this spike does not pass on all four platforms, stop and report.** Every increment below rests on it. Do not begin step 9 while any suite is red, and do not begin it on the argument that the failure is unrelated.
+**3. SPIKE: iOS under the pinned Apple toolchain.** The local Apple environment is macOS 12.7.6 and Xcode 14.2, and that is the reason the current repository is stuck on Capacitor 5. Vercel Native generates an Xcode project and expects `xcodebuild -scheme <app> archive` to work with no hand edits. Whether the generated project builds under Xcode 14.2 is unknown, and nothing in the probe repository has ever been built for a phone.
 
-## Phase 1: leaf increments
+The spike passes when the minimal app from step 2 builds, installs and launches on the iOS simulator from the pinned toolchain, its bridge command returns a value, and its emitted event reaches the page. If loopback sockets are refused or restricted on iOS, that is part of the finding, because the asset server depends on them.
 
-Each increment from here follows the increment contract above, and additionally:
-- Every new function has a `test` block in its own file, using `std.testing.allocator` so a leak fails the test rather than being invisible.
-- `mise exec -- zig build test -Doptimize=ReleaseSafe` passes as well as the plain run.
-- Every function that can fail to allocate has a `std.testing.checkAllAllocationFailures` test. This is coverage with no TypeScript equivalent, because TypeScript never sees an allocation failure.
-- Where the module links a C library, the tests also run under Valgrind if it is present. `std.testing.allocator` sees only Zig-side allocations and cannot see a leak inside a C library. `zig/run-tests.sh` runs all three passes and skips the Valgrind one with a printed message, never silently.
+If it fails under Xcode 14.2, the options are all the human's: raise the Apple toolchain requirement and lose local iOS development on the current Mac, get a newer Mac, or drop iOS from the port. Do not pick one. Report what failed, with the exact error, and wait.
 
-9. **Finish `packages/serialization`:** port `save`, `load`, `loadVersion` and `verify`. These take an `IStorage` and are asynchronous, so this is the first increment to use the `napi_async_work` binding for real. `loadVersion` reads the first four bytes through `storage.readStream`, which is the first place the stream rule from "How TypeScript reaches Zig" applies: the `Readable` stays in TypeScript.
+**4. SPIKE: Android through the SDK's own toolchain.** Build the same minimal app for Android through `native dev --target android`, install it on an emulator from the existing pool, and prove the same three things (bridge, event, loopback socket). The existing pool and its monitor belong to the human; use them as they are and do not start, stop or repair anything the repository's rules reserve to them.
 
-10. **Port `packages/fuzzy-match`** to `zig/lib/psi-core/src/fuzzy_match/fuzzy_match.zig`. Forty-seven lines, `levenshteinDistance` and `fuzzyMatch`. Port the existing Jest cases as Zig `test` blocks, value for value. Reached only by the CLI smoke suites, and that is fine now that step 8 has proved the mechanism on all four platforms.
+**5. SPIKE: the C libraries, on every target.** The port needs the AWS C runtime for S3 (`aws-c-s3` and its stack, plus `s2n-tls` on Linux and Android and the Apple TLS stack on macOS and iOS), OpenSSL or BoringSSL for AES-CBC, RSA and PEM (Zig's standard library has no CBC mode and no RSA), and libbson for BSON. Prove all three build and link into the ejected build from step 2, for Linux, Windows, macOS, both iOS targets and all three Android ABIs.
 
-11. **Port `packages/merkle-tree`:** `merkle_tree` (1,969 lines, the bulk), `merkle_diff`, `visualize`, `compare`, `traverse`, `buffer_map`, `buffer_set`. The persisted tree and its root hash are asserted by the CLI smoke tests through `psi root-hash` and `psi summary`, which is this increment's strongest evidence.
+Pin every C dependency in `build.zig.zon` by exact tag and content hash, never a branch or a floating reference, so a swapped upstream artefact fails a hash check rather than being fetched silently. Record each library's pinned version, repository and licence, and a named check to run against the upstream advisory feeds before each release. This stack links into every shipped binary on every platform.
 
-12. **Port the Node-side half of `packages/encryption`:** `encryption_constants`, `encryption_types`, `encrypt_buffer`, `encrypt_stream`, `key_utils`. The format is AES-256-CBC with an RSA-wrapped key (`ENCRYPTION_TYPE` is `A2CB`).
+## Phase 2: the walking skeleton
 
-    **Zig's standard library has no CBC mode.** `std.crypto` ships the AES block functions and the CTR and AEAD modes and nothing else. Writing CBC by hand is hand-writing a crypto mode and is banned. CBC, RSA key handling and PKCS#8/SPKI PEM parsing all come from the OpenSSL or BoringSSL link this increment introduces. State that in `docs/zig-port/README.md`, because "AES is in std" is exactly the assumption that leads someone to write the mode themselves.
+**6. The repository skeleton and the toolchain.** `mise.toml` pinning Zig 0.16.0 and Bun (and Node only if step 2 found it necessary), `build.zig` from the step 2 eject, `app.zon`, the Bun workspace with `@native-sdk/cli` pinned to an exact version, the frontend directory with the carried-over React UI building to a dist through whichever bundler step 2 settled on, and a `tests/` tree. One Bun script builds everything, one runs every Zig test in all three passes, one runs the TypeScript tests, and one runs a named smoke suite. The script names match the current repository's wherever the thing they do is the same.
 
-    `packages/user-interface` imports this package from `configure-secrets-modal.tsx`, so the browser-reachable half stays TypeScript. Identify exactly which exports the renderer uses before starting, and port only the rest. `bun run test:electron` is the suite that catches getting this wrong.
+This is also the step that reconciles the repository against `docs/project-structure.md` from step 1. Where the skeleton has to differ from the map, the map is corrected in the same commit and the difference is called out, so the document the human approved does not quietly stop being true on the first day.
 
-13. **Port the Node-side half of `packages/utils`:** `sleep`, `retry`, `retry_or_log`, `try_or_log`, `swallow_error`, `uuid_generator`, `random_uuid_generator`, `test_uuid_generator`, `wrapped_error`, `fatal_error`, `log`, `timestamp_provider`, `mock_timestamp_provider`, `random_generator`, `format`, `log_exceptions`, `batch_generator`, `image`, `reverse_geocode`. `IUuidGenerator` and `ITimestampProvider` become vtable structs with the same deterministic test implementations the smoke tests rely on through `NODE_ENV=testing`.
+**7. The test harness, ported before the thing it tests.** Bring across `apps/smoke-tests/lib/runner.sh`, the control bridge, the process control library and the temp directory allocator, because they already solve the hard parts (per-test temporary directories, OS-assigned ports, recorded pids, process group cleanup, timeouts, parallel safety) and because both the desktop and the mobile suites in the current repository already drive the application through the same control bridge and the same shared test driver inside the UI. That is what makes the deduplication in step 9 possible rather than aspirational.
 
-    `packages/user-interface` has thirty-five imports from this package and `packages/mobile-frontend` has two. The browser-safe half stays TypeScript. Enumerate those imports first and port only what is left.
+**8. The walking skeleton, end to end.** The real application shell: the real React UI, loaded from the embedded dist, talking to a real Zig host over the bridge, with the control bridge attached in test mode. One smoke test launches it, waits for ready, navigates, and asserts the page reached a known state, on Linux, Android and iOS.
 
-    `reverse_geocode` performs HTTP. Use `std.http.Client`, not the AWS CRT, and test it against a local `std.http.Server` returning a canned response so no test reaches the network. Record in `docs/zig-port/README.md` where each platform's root certificates come from.
+Nothing else starts until this passes on all three. It is the equivalent of the previous plan's step 8 and it carries the same instruction: if it cannot get every platform green, the approach does not work, and that is worth knowing now rather than after fifteen packages.
 
-## Phase 2: storage and the database
+**9. Fix the smoke test parity target.** The current repository has 34 UI smoke tests under `apps/desktop/smoke-tests/` and 43 under `apps/smoke-tests/tests/`. By name they share 27, with 7 desktop-only and 16 mobile-only, so the deduplicated union is 50. That number is arithmetic on directory names and is the starting point, not the answer: go through them pair by pair, confirm that a shared name is genuinely the same test rather than two different tests that happen to be numbered alike, and produce a written list of the deduplicated suite with, for each test, which platforms it runs on and why any platform is excluded. The command line suites do not dedupe: the eighty numbered tests plus the encrypted, LAN share, hash cache, sync and write lock suites all come across as they are.
 
-14. **SPIKE: prove S3 and plain HTTP work from Zig.** `packages/storage` uses `@aws-sdk/client-s3` and `@aws-sdk/lib-storage`. Zig has no AWS SDK and hand-writing SigV4 is banned, so the only acceptable route is linking AWS's own C runtime: `aws-c-s3` and its stack (`aws-c-auth`, `aws-c-http`, `aws-c-io`, `aws-c-cal`, `aws-c-compression`, `aws-c-sdkutils`, `aws-c-common`, `aws-checksums`), plus `s2n-tls` on Linux and Android and the Apple TLS stack on macOS and iOS.
+## Phase 3: the port, as work packages
 
-    The spike passes when a throwaway program in `zig/spikes/s3/` can put an object to the local S3 emulator (`bun run s3-emulator`), get it back byte-identical, list a prefix and delete it, **and** the same build links for all five mobile targets. If the CRT cannot be built for Android or iOS, stop and report: every workaround is banned and the fallback is the human's decision.
+Everything from here is a work package. The list below is the division of the work; the contract that governs each one is in the next section. Dependencies are on package numbers, and the orchestrator runs a package only when its dependencies have merged.
 
-    Pin every C dependency in `zig/build.zig.zon` by exact tag and content hash, never a branch or floating ref, so a swapped upstream artefact fails the hash check rather than being fetched silently. Record each library's pinned version, repository and licence in `docs/zig-port/README.md`, plus a named check to run before each release against the upstream advisory feeds. This stack links into every shipped binary on every platform, so a CVE in it is a CVE in Photosphere.
+Ordering is bottom-up through the library graph, with the command line tool brought online as early as its dependencies allow, because the CLI suites are headless, cheap, run anywhere including a container with no display, and are therefore the evidence engine for the autonomous loop.
 
-15. **Port `packages/storage` as a single increment, not four.** `IStorage` is seventeen asynchronous methods, two of which carry Node streams, and `FileStorage`, `CloudStorage`, `EncryptedStorage` and `StoragePrefixWrapper` compose with each other inside `createStorage`. Splitting them means building a boundary between Zig and TypeScript implementations of the same interface, in both directions, and then deleting it again. Port them together.
+| # | Work package | Depends on | Evidence it must produce |
+| --- | --- | --- | --- |
+| 10 | `utils`: sleep, retry, try/swallow, uuid and timestamp vtables, logging, format, batch generator, wrapped and fatal errors | 6 | Ported unit tests; deterministic uuid and clock implementations the suites need |
+| 11 | `serialization`: the binary and compressed serialisers and deserialisers, then save/load/verify | 10 | Ported unit tests; byte-identical output against fixtures written by the TypeScript |
+| 12 | `fuzzy-match` | 10 | Ported unit tests, value for value |
+| 13 | `merkle-tree`: tree, diff, visualise, compare, traverse, buffer map and set | 10, 11 | Ported unit tests; root hashes matching the TypeScript on the checked-in fixtures |
+| 14 | `encryption`: constants, types, buffer and stream encryption, key utilities, over OpenSSL or BoringSSL | 5, 10 | Ported unit tests; a file encrypted by the TypeScript decrypting, and the reverse |
+| 15 | `storage` local half: the vtable, file storage, directory walk, prefix wrapper, factory, mock storage, encryption header reader, and the path sandbox ported from the Java and Swift | 10, 14 | Full vtable tests; factory descriptor parsing case by case; sandbox escape cases |
+| 16 | `storage` cloud half: cloud storage over the AWS C runtime, S3 paths, ranged reads, encrypted storage | 5, 15 | Tests against the local S3 emulator: multipart interrupted and retried, cancellation, ranged reads at and past end of file, distinct named errors |
+| 17 | `bdb` BSON conformance: the per-type comparison against what the `bson` npm package writes, before any collection code | 5, 10 | A conformance test per type, each naming the type on failure |
+| 18 | `bdb` records: shard, merge records, update fields, update metadata, merkle tree and its reference | 17 | Ported unit tests |
+| 19 | `bdb` collection and index: collection, sort index, database, mocks | 18 | Ported unit tests; a database written by the TypeScript reading back record for record and index for index |
+| 20 | `vault`: plaintext, macOS, Linux and Windows keychains, selection, plus the mobile secure store backend | 10, 15 | Selection tests per platform; the Windows PowerShell escaping tested against every hostile input; a real round trip on each platform |
+| 21 | `tools`: image, video, file info, verification, download, over the external binaries; and the mobile path over the native runners | 10, 15 | Tests against real fixture media; the mobile path tested against a recording stub |
+| 22 | `api`: constants, write lock, database update, load and save assets, config, state, descriptor, asset, ops, queries | 10, 11 | Ported unit tests |
+| 23 | `task-queue`: types, context, backend vtable, queue, worker, and a thread pool backend with cooperative cancellation | 10 | Cancellation of pending and running tasks; a handler that ignores its token reported as a timeout rather than hanging shutdown |
+| 24 | `node-api` core: media file database, storage opening, credential resolution, databases config and its format, desktop config, file scanner, hashing and the hash cache | 16, 19, 20, 22 | Ported unit tests; the hash cache concurrency suite |
+| 25 | CLI part one: create, add, list, view, summary, export, verify | 24 | CLI smoke tests 01 to 16 pass |
+| 26 | `node-api` operations: tree, verify, check, repair, replicate, sync, import, apply ops, encrypt, decrypt, zip, lazy origin storage | 24 | Ported unit tests |
+| 27 | CLI part two: replicate, compare, repair, the version upgrade paths | 26 | CLI smoke tests 17 to 34 pass |
+| 28 | CLI part three: sync | 26 | CLI smoke tests 35 to 43 pass, plus the sync suite |
+| 29 | CLI part four: databases config, vault and secrets commands | 20, 24 | CLI smoke tests 44 to 64 pass, plus the keychain suite |
+| 30 | CLI part five: the S3 command paths | 16, 26 | CLI smoke tests 65 to 77 pass |
+| 31 | `lan-share-network`: types, receiver and sender over UDP discovery and TCP transfer, and secret import | 22, 23 | The CLI LAN share suite passes; cancelling mid transfer aborts rather than completes |
+| 32 | CLI part six: share and receive, cancellation, asset metadata | 31 | CLI smoke tests 78 to 80 pass; the write lock suite passes |
+| 33 | The task handlers: nineteen files producing the full handler set, and one registration site instead of the current two | 23, 24, 26, 31 | A registration test asserting the set, so a lost handler names itself |
+| 34 | The asset server over `std.http.Server`, with route parameter validation, wired to the shell's localhost server | 8, 24 | Range requests, rejected inputs case by case, and a real thumbnail served to the WebView |
+| 35 | The news fetcher over `std.http.Client`, tested against a local `std.http.Server` | 10 | No test reaches the network |
+| 36 | The frontend platform provider over `window.zero`, replacing the Electron and Capacitor providers, plus the event channel over the WebSocket | 8, 33 | The UI reaches every host capability it used to reach through IPC or a Capacitor plugin |
+| 37 to 45 | The deduplicated UI smoke suite, in groups of five or six tests, each group a work package | 36, and whichever handlers the group needs | Each group passes on Linux, Android and iOS |
+| 46 | Packaging: `native package` for each platform, the release layout, and the upgrade path the CLI depends on | all | A packaged artefact installs and runs on each platform |
+| 47 | Documentation reconciliation: every document from step 1 checked against what was built, the project map updated to the tree as it exists, and third party notices completed with every linked C library and its licence | all | The project map matches the repository file for file; no document describes intent that was never built |
 
-    Files: `storage` (the vtable, `IListResult`, `IFileInfo`, `IWriteLockInfo`), `file_storage`, `walk_directory`, `mock_storage`, `cloud_storage`, `s3_path`, `s3_range_readable_stream`, `encrypted_storage`, `storage_prefix_wrapper`, `storage_factory`, `read_encryption_header`. `MockStorage` is exported from the package index and used widely by tests; port it so the Zig tests have the same in-memory implementation, but keep the TypeScript one too, since Jest suites that use it never need to touch Zig.
+Not ported, for the same reasons as before: the Model Context Protocol integration, which has no Zig equivalent and stays TypeScript in whatever form the shell can host, and the React UI itself.
 
-    Tests this increment must have, since most of these have no Jest suite to port:
-    - `FileStorage`: every vtable method against a temporary directory, `info` on a missing file returning `undefined` rather than erroring, `read` of a missing file, `listFiles` paging with `max` smaller than the directory, `deleteDir` on a non-empty tree, `copyTo` overwriting an existing destination, and a non-ASCII file name round-tripping through `write`, `listFiles` and `read`.
-    - `CloudStorage` against the local emulator: multipart upload interrupted after the second part leaving no partial object visible and a retry from scratch succeeding; a multipart upload cancelled through the step 5 token returning `error.Cancelled` and aborting rather than completing; a ranged read starting past end-of-file and one straddling it, each matching what `s3-range-readable-stream.ts` does today (read that file, do not assume, and name the TypeScript behaviour in a comment); and distinct named errors for a missing key, a missing prefix and invalid credentials.
-    - `EncryptedStorage`: buffer and stream round trips; `info` reporting whichever length the TypeScript reports; an unsupported header version or type failing with the named error; a plaintext file read through encrypted storage failing rather than returning rubbish; a read with the wrong key failing loudly.
-    - `StoragePrefixWrapper`: every method prepending the prefix; `listFiles` and `listDirs` stripping it; a prefix with and without a trailing separator behaving identically; a `..` escape rejected.
-    - `read_encryption_header`: a valid header, a file shorter than the header, a wrong magic tag, an empty file.
-    - `storage_factory`: `fs:` with absolute and relative paths, `s3:bucket:/path` with and without a leading slash, a bare path with no scheme, an unknown scheme, an empty descriptor, and a scheme with no body. The CLI smoke tests pass these strings on the command line, so each case names its expected result or error.
-    - Write locks: two owners racing with exactly one winning; the loser succeeding after release; an expired lock being acquirable by a second owner; `refreshWriteLock` extending an expiry so the second owner still fails; and `refreshWriteLock` by a non-owner failing. Drive the clock from the `TimestampProvider` vtable rather than sleeping.
+## The work package contract
 
-16. **Add the path sandbox, `zig/lib/psi-core/src/storage/path_sandbox.zig`.** `PathSandbox.java` and `PathSandbox.swift` confine the mobile engine's filesystem access to the app's own directories. Once `FileStorage` is Zig, that confinement has to exist in Zig or the library gets the app's whole sandbox with nothing checking it.
+Every package of work handed to a subagent is a written specification, checked into `automation/packages/<id>.md` in the new repository, and it contains all of:
 
-    Port it from the Java and Swift, configured with the roots the library may touch and consulted by `FileStorage` before every open, create, delete and directory walk when running on mobile. A path outside the roots is a named error, never a silent failure. On desktop and CLI it is configured with no restriction, matching today's behaviour, and `docs/zig-port/README.md` says so explicitly so nobody reads the unrestricted desktop case as the sandbox being unused. Port the Java tests plus: an absolute path outside the roots, a relative path climbing out with `..`, a symlink inside a root pointing outside it (checked after resolution, not before), a path that normalises into a root only after resolving `..`, and a non-ASCII path inside a root being allowed.
+- **Goal**, in one paragraph: what exists after this and did not exist before.
+- **Source of truth**: the exact list of files in the old repository being ported, by path, with their line counts. The implementation agent reads all of them.
+- **Files to create**, by path, in the new repository.
+- **Public interface**: the functions, structs and vtables this package exposes, with their signatures, so the next package can be specified before this one is written.
+- **Divergences allowed**: the specific places this package may depart from the TypeScript, with the reason. Anything not listed here is a divergence that has to be raised, not taken.
+- **Unit tests required**: named cases, not a count. Where the old repository has a Jest suite, the requirement is that suite ported case for case, plus the allocation-failure and leak coverage the TypeScript never needed.
+- **Smoke evidence required**: which smoke tests go from red to green, by name. A package with no smoke evidence says so and says why (a pure library with no external surface is the only acceptable reason).
+- **Dependencies**: the package numbers that must have merged first.
+- **Done when**: the exact commands that must pass, and on which platforms.
 
-17. **Port `packages/bdb`,** in dependency order: `shard` (452), `merge_records` (207), `update_fields` (44), `update_metadata` (71), `merkle_tree` (330), `merkle_tree_ref` (161), `collection` (735), `sort_index` (2,609, the largest single file in the port), `database` (196), plus `mock_database` and `mock_collection`. BSON comes from libbson, not from a hand-written codec.
+A package that cannot be written down in this form is too big and gets split before anyone starts on it.
 
-    **Before any collection code is ported, write a per-type BSON conformance test.** The two BSON implementations agree on the specification but not necessarily on what it leaves open, and every database in the wild was written by the `bson` npm package. Enumerate the types by reading what `packages/bdb` actually writes, not by listing the specification, and record the enumeration in the module's `README.md`. At minimum: the binary subtype the npm package emits for a `Buffer` (subtype 0 and subtype 2 have different framing) against what libbson emits and accepts; integers at the int32/int64 boundary, including a value that fits in 32 bits, to find out whether one implementation narrows it and the other does not; a JavaScript number that is integral but stored as a double; dates; `null` against a missing field; an empty document, an empty array and an empty string; a string with non-ASCII and one with an embedded NUL; and a document nested more than one level deep. A mismatch must name the type, not surface as "a database failed to open".
+## The implementation and review loop
 
-    Only then the whole-database test: open a database written by the TypeScript `bdb` (build one with `bun run --filter=bdb-cli`) and assert every record and every sort index reads back identically. That is the backstop, not the defence.
+One cycle per work package. The orchestrator owns the loop; the two agents never talk to each other except through the worktree and the notes file.
 
-    `apps/bdb-cli` and `apps/mk-cli` depend on `packages/bdb`, `packages/merkle-tree` and `packages/storage`. They are not in scope for this port, and because the packages are replaced in place rather than duplicated, both tools now run on the Zig implementations. Their smoke coverage is part of `bun run test:cli`, which must still pass.
+1. **Orchestrator** picks the next package whose dependencies have merged, creates a branch and a transient worktree for it, and starts an implementation agent with the specification.
+2. **Implementation agent** works only inside its worktree. It reads the named source files in the old repository, writes the Zig, writes the tests, runs them, and iterates until they pass. It commits on its branch with the verification hook enabled, always. It writes a handover note saying what it built, what it ran, what passed, and anything it could not do and why.
+3. **Review agent** starts fresh in the same worktree with the same specification and the implementation agent's note. It does not trust the note. It checks:
+   - Every file the specification named exists, and nothing beyond the specification was changed.
+   - The Zig mirrors the TypeScript file for file and function for function, and every divergence is either listed in the specification or commented and raised.
+   - No mutable global anywhere in `lib/psi-core/**`, and no hidden state in a core library.
+   - Every named unit test case exists and asserts something that would fail if the code were wrong. It picks at least two, breaks the code, and confirms they go red.
+   - It runs the tests itself: all three Zig passes, the unit suite, and every smoke suite the specification named, on the platforms the specification named.
+   - The repository rules are met: comment blocks on globals and fields, no banned words, no absolute paths, no test-only scaffolding in application code, no stub that pretends to work.
+   - The documentation still matches. Any document from step 1 that this package contradicts has been corrected in the same commits, `docs/project-structure.md` included. A package that changes the tree without changing the map fails review.
+4. **If the review fails**, it writes numbered, specific findings to `review-notes.md` in the worktree, each naming a file and a line and what has to change, and hands back. The implementation agent fixes and commits again. Repeat.
+5. **After three failed rounds** the orchestrator stops that package, leaves the worktree in place, and escalates to the human with the notes from every round. Three rounds of the same disagreement means the specification is wrong, not the code.
+6. **When the review passes**, the orchestrator merges the branch into the main branch, runs the full suite on the main branch, removes the worktree, marks the package done in the state file, and moves on. If the full suite fails after a merge that passed in its worktree, the package goes back with that failure as its finding, because it means the package interacts with something it did not declare.
 
-18. **Port `packages/vault`:** `vault`, `plaintext_vault`, `get_vault`, `keychain_types`, `macos_keychain_vault`, `linux_keychain_vault`, `windows_keychain_vault`. The keychain backends shell out today to `security`, `secret-tool` and PowerShell; keep that with `std.process.Child`, passing arguments as an argv array with no shell in between, exactly as the TypeScript does.
+Two packages may run at once only when their dependencies are satisfied and the file sets their specifications declare are disjoint. Merges are always serialised, one at a time, on the main branch.
 
-    Two things about secrets crossing the process boundary have to be said rather than inherited silently:
-    - The macOS path passes the secret JSON as an argument to `security add-generic-password -w <json>`, and process arguments are readable by other processes. The Linux path avoids this by piping to `secret-tool store` on stdin. Port both verbatim so behaviour matches, record the macOS exposure in `docs/zig-port/README.md` as a pre-existing property this port carries over unchanged, and raise it with the human when this increment lands. Do not "fix" it here: changing how secrets reach the macOS keychain changes what existing installations can read back.
-    - The Windows path builds a PowerShell script as a string with the service, account and secret interpolated into single-quoted literals, escaped by doubling each `'`. That escaping is the only thing between a secret and PowerShell's parser. Port it as a named function in its own file with the TypeScript's exact rule, and test it against `'`, `''`, a backtick, `$(...)`, `$env:X`, a newline, a NUL and a non-ASCII character, plus a real store-and-retrieve round trip when running on Windows. If the round trip shows the doubling rule is insufficient for some value, stop and report rather than inventing a different scheme: it would mean the TypeScript has the same hole.
+## What "complete" means
 
-    Respect `PHOTOSPHERE_VAULT_DIR` and `PHOTOSPHERE_VAULT_TYPE`, which the smoke tests set. Test `get_vault` selection directly: each valid type selecting its backend, an unset variable selecting the platform default on each platform, and an unrecognised value failing with a named error rather than falling back silently.
+Parity is not a judgement call. The port is complete when all of these are true at once, on a single revision of the main branch:
 
-    On mobile there is no `security`, no `secret-tool` and no PowerShell. The mobile vault is a fourth backend reaching the existing native `SecureStore` (Android `EncryptedSharedPreferences` over the hardware-backed Keystore, iOS Keychain) through the host bridge. `SecureStore.java`, `SecureStore.swift` and both `SecureStorePlugin` files stay: they are the keychain itself and the WebView's route to it, not engine bridges. Test the mobile backend against an in-memory host implementation, matching how `SecureStore` is already unit-tested on a plain JVM through its `Backing` interface.
+- Every unit test from the old repository has a counterpart, and they all pass. The old repository has 164 unit test files across `packages/` and `apps/`; each one is accounted for as ported, superseded by a named Zig test, or written off with a reason.
+- All eighty numbered CLI smoke tests pass, plus the encrypted, LAN share, hash cache, sync, write lock and keychain suites.
+- The deduplicated UI smoke suite passes on Linux, Windows, macOS, Android and iOS. Where a test cannot run on a platform, the exclusion is written down with its reason and the human has accepted it.
+- The CLI to application LAN share suite passes, replacing the current CLI to desktop one.
+- A packaged artefact for each platform installs and launches, and the walking skeleton test passes against the packaged build rather than only against the development build.
+- No TypeScript remains outside the frontend and the test harness, and every script, bundle, typecheck and TypeScript test runs under Bun.
+- The documentation describes the new application, `docs/project-structure.md` matches the repository file for file, and the third party notices list every C library linked into a shipped binary with its licence and pinned version.
 
-19. **Port `packages/tools`:** `types`, `image`, `video`, `file_info`, `tool_verification`, `tool_downloader`. On desktop and CLI these shell out to `magick`, `identify`, `convert`, `ffmpeg` and `ffprobe`; port that verbatim with `std.process.Child`.
+## How to run this autonomously
 
-    On mobile a process cannot be spawned, and media goes through the existing `ImageMagickRunner`, `FfmpegKitRunner` and `MediaToolRunner`. Define a `MediaTools` vtable with a second implementation that reaches those runners through the host bridge, and test it in Zig against a stub that records the request and returns canned responses, so the marshalling is covered without a device.
+This section is for the human. It is the setup, not part of the port.
 
-## Phase 3: the API layer and the task handlers
+### The three lanes, and why there have to be three
 
-20. **Port `packages/api`:** `constants`, `write_lock`, `database_update`, `load_assets` and its types, `save_assets.types`, `database_config`, `database_state`, `database_descriptor`, `asset`, `op`, `database_op`, `database_op_record`, `asset_query`, `replicate_database.types`, `sync_database.types`, and `lan_share/`. `packages/user-interface` imports `IAsset`, `IDatabaseOp` and `IConflictResolution` and `packages/mobile-frontend` imports one name, so those types stay TypeScript declarations. Enumerate them before starting.
+The work divides by what a machine can verify, and no single machine can verify all of it:
 
-21. **Port `packages/lan-share-network`,** and `importShareSecrets` from `packages/lan-share-core`. `lan_share_types`, `lan_share_receiver` and `lan_share_sender` over UDP discovery and TCP transfer, mapping onto `std.net`. `packages/lan-share-core` itself must stay: `packages/mobile-frontend` imports it.
+- **The headless lane**: Zig compilation, all three test passes, every unit test, and all of the CLI smoke suites. Needs Linux, a toolchain, and the local S3 emulator. No display, no GPU, no virtualisation. This is most of the port by volume and all of packages 10 to 33.
+- **The desktop application lane**: the UI smoke suite on a desktop. Needs GTK4 and WebKitGTK 6.0 and a display, which `xvfb` provides on Linux exactly as it does for the current Electron suite. Windows and macOS need their own runners, because the SDK links platform libraries and is built on the target operating system.
+- **The device lane**: Android and iOS. Android needs a real emulator, which needs KVM. iOS needs macOS and Xcode, and the pinned Apple environment is a specific machine.
 
-    This is a format that crosses machines, and it is the one place a Zig implementation meets a TypeScript one in the field, because a phone and a desktop will not be upgraded on the same day. `bun run test:cli:lan-share` and `bun run test:lan-share:cli-desktop` are the suites that cover it, and both must pass. The receiver is one of the two long-lived handlers from step 5: a socket read timeout, a token checked each time round the accept loop, and the listening socket closed on cancel, with a test asserting that cancelling mid-transfer aborts rather than completes.
+### Where to run each lane
 
-22. **Port `packages/task-queue`'s worker half:** `types`, `task_context`, `queue_backend`, `task_queue`, `worker`, `worker_queue_backend`. The frontend half (`TaskQueue`, `types`, `queue-backend`) is imported by `packages/user-interface` and stays TypeScript.
+**Remote Claude sessions first, if they are available to this account.** Claude Code can run agents in a cloud environment, and the headless lane is exactly what that environment suits: a container, a toolchain, no display, no devices. Check availability before planning around it, and check two things about the environment specifically: whether it can reach the network to fetch the pinned Zig, the SDK and the C dependencies, and whether the repository can be pushed and pulled from it. If both hold, the headless lane runs there and costs no hardware.
 
-    `TaskHandler`'s `(data, context) => Promise<any>` becomes a blocking function over a JSON value; `registerHandler`, `getHandler` and `executeTaskHandler` keep their names. Replace the process-singleton `setQueueBackend`/`getQueueBackend` with a backend passed in explicitly, and record the divergence. Add a `ThreadPoolBackend` running handlers on a `std.Thread.Pool` with cancel-by-source and streamed messages, which is what `WorkerPoolBun`, `WorkerPoolElectronMain` and the native `EnginePool` each provide today. Cancelling a pending task drops it from the queue; cancelling a running one sets its token and lets the handler return `error.Cancelled` at its next check. Test both, plus a handler that ignores its token being reported as a cancellation timeout rather than hanging shutdown.
+**A DigitalOcean droplet as the fallback, and as the always-on orchestrator either way.** A plain Linux droplet runs the headless lane without difficulty. Before committing to it for the device lane, run `ls -l /dev/kvm` on the droplet: without it, an Android emulator falls back to software translation and is slow enough to be useless for a suite this size. If it is absent, either take a provider that exposes nested virtualisation, or keep Android on the existing local emulator pool. Do not plan around the droplet having KVM until that command has been run and its output read.
 
-23. **Port the non-handler parts of `packages/node-api`:** `media_file_database` (714 lines, the centre of the API), `open_storage`, `resolve_storage_credentials`, `databases_config`, `databases_config_format`, `desktop_config`, `file_scanner`, `hash`, `hash_cache`, `hash_file`, `image`, `video`, `validation`, `tree`, `verify`, `check`, `repair`, `replicate`, `replicate_database`, `sync`, `import`, `apply_database_ops`, `encrypt`, `decrypt`, `zip_utils`, `lazy_origin_storage`, `news_fetcher`, `news_state`. `news_fetcher` uses `std.http.Client`, tested against a local `std.http.Server`. `packages/user-interface` imports exactly four names (`IDatabaseSummary`, `IGetDatabaseSummaryData`, `IMoveAssetsData`, `ISaveAssetItem`), which stay as TypeScript declarations.
+Recommended arrangement: the orchestrator runs continuously on the droplet, drives the headless lane itself, and queues platform-restricted packages for the other two lanes. The Android emulator pool stays on the local machine where it already works and is already monitored. iOS stays on the pinned Mac. The desktop application lane runs on the droplet for Linux under `xvfb`, and on the Mac and on a Windows runner for the other two.
 
-    Replicate and sync are the other format crossing machines. `bun run test:cli` covers them; `psi replicate`, `psi sync` and `psi verify` are the assertions that matter.
+The consequence, stated up front: **the autonomous system converges to "everything green except the device lanes", and it cannot finish without the human's machines being reachable.** Full parity requires runs on Apple and Android hardware, and no amount of remote compute substitutes for them.
 
-24. **Port the task handlers,** one file each, from `packages/node-api/src/lib/*.worker.ts`. There are **nineteen handler files producing twenty-two handler names**, because `lan-share.worker.ts` exports three from one file: `verify`, `check`, `load_assets`, `upload_asset`, `prefetch_database`, `sync_database`, `replicate_database`, `save_asset`, `save_assets_batch`, `create_database`, `import_assets`, `hash_file`, `get_database_summary`, `move_assets`, `asset_server`, `lan_share`, `check_database_exists`, `list_s3_dirs`, `databases_config`.
+### Setting it up
 
-    There are **two registration sites, not one**, and they register different sets. Port both:
-    - `packages/node-api/src/lib/task-handlers.ts` registers **nineteen names from seventeen files**. It does not register `list-s3-dirs`, `read-databases-config` or `write-databases-config`, and does not import those two files at all. This is the set the CLI and the Electron main process use.
-    - `packages/mobile-worker/mobile-worker-entry.ts` registers **twenty-two names from nineteen files**: the nineteen above plus those three. This is the set the mobile apps use, and it is the only place those three are registered anywhere in the repository. Losing it costs the mobile apps S3 directory listing and the databases config entirely.
+1. **Create the new repository** and push an empty main branch. Decide its name. The port branches off it and never touches this repository.
+2. **Run step 1 by hand**: start a session, have it write `CLAUDE.md` and the whole documentation set, read them, and accept or change them. Read `docs/project-structure.md` first and hardest, because every work package is specified against it. Nothing else starts until this is done. The autonomous system inherits whatever is in these files, so this is the highest-leverage reading in the plan.
+3. **Run the four spikes** with a human watching. They are the four ways this plan dies, and each one ends in a decision that is yours, not an agent's.
+4. **Provision the runners**: the droplet or the cloud sessions for the headless lane, with mise, the Zig and Bun versions the spikes pinned (plus Node if step 2 found the SDK CLI needs it), the GTK4 and WebKitGTK 6.0 development packages, `xvfb`, the C library build dependencies, and the S3 emulator. Confirm the pinned toolchain installs from a clean machine and write down the exact commands, because that list is also what a new developer needs.
+5. **Write the work package specifications** for at least packages 10 to 20 before starting the loop. The loop consumes specifications faster than it produces them, and an agent writing its own specification is an agent marking its own homework.
+6. **Set up the orchestrator.** Two ways, and the second is the fallback for the first:
+   - A slash command in the new repository (`/port:next`) that performs exactly one cycle of the loop above and exits, driven on a schedule so that each tick picks up wherever the last one stopped. Scheduling can be a cron entry created from inside a session or a plain system cron calling headless mode.
+   - A shell script on the droplet in a loop, calling Claude Code in headless mode with the same command, one cycle per invocation, sleeping between cycles.
+   Either way the unit of work is one cycle, not one package and never the whole port, so a crashed or killed process loses one cycle.
+7. **Keep the state outside the agent.** `automation/state/packages.json` in the repository holds, per package: status (ready, in progress, in review, blocked, merged), the branch, the worktree path, the round count and the last finding. The orchestrator reads it at the start of a cycle and writes it at the end. An agent's memory of what it was doing does not survive a restart; a file does.
+8. **Set the escalation path.** Three failed review rounds, a failed merge, a red suite on the main branch, or any spike-level failure stops that package and notifies you. A push notification or a message to a session you watch is enough. Everything else keeps running.
+9. **Set the limits before starting, not after.** A token or spend ceiling per cycle and per day, a maximum number of concurrent packages (two or three, because merges serialise anyway), and a stop file that the orchestrator checks at the top of every cycle so you can halt the whole thing without killing a process mid-commit.
+10. **Review the merge stream daily, not the code.** The review agent reads the code; you read what merged, which tests moved from red to green, and every escalation. If the same finding keeps appearing across packages, that is a `CLAUDE.md` amendment, not a per-package fix.
 
-    The drift test reads **both** TypeScript files and asserts each Zig registration set matches its counterpart, and additionally that the two differ by exactly those three names. If a future change moves a registration between them, the test fails and names the handler.
+### What the autonomous system must never be allowed to do
 
-25. **Port the asset server:** `asset_server_core` and `asset_server_routes` from `packages/node-api`, plus `packages/rest-api/src/lib/asset-server.ts` (98 lines of Express wiring). In Zig it is `std.http.Server`, serving the same routes. HTTP parsing comes from the standard library and is not written here, which is what step 1's second amendment covers. **Do not build a request parser over raw `std.net`**; if `std.http.Server` cannot serve these routes, stop and report.
+- Commit with the verification hook disabled, in any form, for any reason.
+- Modify the hook or the scripts it calls.
+- Force push, rewrite history, or delete a branch that has not merged.
+- Touch this repository. It reads from it and writes only to the new one.
+- Start, stop or repair the Android emulator pool beyond the repair commands the current repository already allows an agent to run.
+- Mark a package done on the strength of a report rather than a run. The review agent runs the tests itself, and the orchestrator runs the full suite after the merge.
+- Skip, disable or weaken a test to make a package pass. A failing test that cannot be fixed is an escalation.
 
-    The mobile gallery loads thumbnails through this server (see the `1-load-fixture` mobile smoke test), so its route contract is load-bearing and `bun run test:and` is the suite that proves it.
+## Risks, in the order they can bite
 
-    Every route parameter arrives from a request path or query string, so validate before touching storage, with a test naming each rejected input: `id` must be a well-formed UUID; `type` must match a fixed constant list exactly; `databasePath` must resolve, after normalisation, to one of the databases the server was configured with; and any component containing `/`, `\`, `..`, a NUL or a leading `~` is rejected before normalisation, so a rejected path cannot become an accepted one by being resolved. The Express implementation does none of this today and relies on the storage layer to fail. Say plainly when this increment lands that it is a hardening the TypeScript server did not have, so the human can decide whether that was a bug worth reporting separately.
-
-    This is also the increment that makes `packages/rest-api` empty. Delete it.
-
-## Phase 4: retire the mobile worker
-
-26. **Replace the embedded JavaScript engine with a direct C ABI.** By this point every package the mobile worker runs is Zig behind a host-bridge call, so QuickJS and JavaScriptCore are executing a thin layer of TypeScript whose only job is to marshal into Zig and back. This increment removes that layer.
-
-    Export a C ABI from `zig/apps/psi-mobile/`: `psi_init`, `psi_add_task`, `psi_cancel_tasks`, `psi_shutdown`, `psi_free_string`, callback registrations for task completion and task messages, and the host callbacks for media and the vault. `psi_init` registers the mobile handler set from step 24, not the shared one.
-
-    A C ABI with no written memory and threading contract is a use-after-free waiting to happen, and neither Java nor Swift can infer the rules. Write them in `zig/apps/psi-mobile/README.md` next to the header and encode each as a test:
-    - **Inbound strings** are borrowed for the duration of the call only; the library copies anything it keeps. This is what lets Java pass a `GetStringUTFChars` pointer and release it immediately.
-    - **Outbound strings** are allocated by the library and returned with `psi_free_string`. The library never frees one on its own schedule and never hands out a pointer into its own state.
-    - **Encoding** is UTF-8, NUL-terminated, with no separate length. Non-ASCII paths are the normal case on a phone. Test a non-ASCII path, an emoji outside the basic multilingual plane, a combining sequence, and the two cases where Java's modified UTF-8 differs from standard UTF-8 (`U+0000` inside a string, and a surrogate pair), each round-tripping through `psi_add_task` and back out unchanged, asserted from Zig, Java and Swift.
-    - **Threading:** `psi_init`, `psi_register_host` and `psi_shutdown` are single-threaded and not safe to call concurrently with anything. `psi_add_task` and `psi_cancel_tasks` are safe from any thread. Callbacks are invoked from pool threads, never the caller's, so the native side marshals to its own main thread. Host callbacks are invoked from pool threads, must be thread-safe, and must not re-enter the library.
-    - **Lifecycle:** `psi_add_task` before init or after shutdown returns a named error and never crashes. `psi_shutdown` follows the step 5 contract, and every in-flight task gets its completion callback with a cancelled result so the native side never waits forever. `psi_init` after `psi_shutdown` starts a clean library, which is what an Android process that survives activity restarts needs.
-    - **Errors:** no function can panic across the boundary. Every Zig error becomes a return code plus an outbound error string; a panic in a pool thread aborts loudly rather than unwinding into Java or Swift, which is undefined behaviour on both.
-
-    Test all of it **from Zig first** with stub callbacks, so a failure names the ABI rather than the platform. The Java and Swift tests then cover only the platform half: JNI and Swift string conversion for the same values, callbacks marshalled onto the platform main thread, and the media and secure-store callbacks dispatching to the real runners and `SecureStore`.
-
-    On Android, `QuickJsTaskEngine.java` is replaced by a `ZigTaskEngine.java` implementing the same `TaskEngine` interface, so `EnginePool` is untouched. `EngineCallbacks.java` is kept and re-pointed. `HostFunctions.java`, `HostBridge.java`, `TlsHost.java`, `TcpHost.java`, `UdpHost.java`, `CryptoHost.java` and `SecureStoreHost.java` are deleted: their only purpose was servicing `host.*` calls from an embedded JavaScript engine. `PathSandbox.java` is deleted **because `path_sandbox.zig` from step 16 replaces it**, not because the confinement stopped being wanted. `SecureStore.java`, `SecureStorePlugin.java`, `JsEnginePlugin.java`, `EnginePool.java`, `PooledTask.java`, `CancellationState.java`, `ImportPicker.java`, `ExportTemp.java`, the four media runner files and `cpp/run_magick.c` are all kept: every one has a caller that is not the JavaScript engine. iOS is the mirror image, with `JavaScriptCoreTaskEngine.swift` replaced by `ZigTaskEngine.swift` and `JsEnginePlugin.m`, `SecureStorePlugin.m` and `run_magick.h` kept alongside their Swift counterparts.
-
-    Remove the `build:bundle` and `copy:bundle` steps from the mobile apps' `sync` scripts and add a build step that produces the Zig static library first: a Gradle task on Android, an Xcode build phase invoking `mise exec -- zig build mobile-ios` on iOS. The Xcode phase must work under Xcode 14.2.
-
-    Then delete `packages/mobile-worker` (7,045 lines: the runtime, the host functions, `install-globals`, `install-url`, `media-commands`, and all nineteen Node shims), along with `WorkerBundleParityTests.swift` which exists to guard the bundle. `packages/mobile-frontend` and `packages/user-interface` are not modified: the new engine keeps the same `IJsEnginePlugin` contract.
-
-27. **Retire the Electron JavaScript worker pool.** With the handlers in Zig, `apps/desktop/src/lib/worker-pool-electron-main.ts` is replaced by a backend forwarding to the addon, and `apps/desktop/src/worker.ts`, `src/rest-api-worker.ts` and `src/lib/worker-log-electron.ts` (roughly 1,300 lines together) are deleted with their `bundle:worker` script. `preload.ts` and every IPC channel name stay exactly as they are, so the renderer is untouched and no new IPC channel is added.
-
-## Phase 5: documentation and shipping
-
-28. **Update the six documents this port makes wrong:** `docs/development.md` (the Zig toolchain, `mise exec -- zig build`, the `zig` workspace package), `docs/testing/README.md` (`zig/run-tests.sh` and its three passes), `docs/background-tasks.md` (a handler is now Zig, and there are still two registration sites), `docs/git-hooks.md` (the `what-changed.json` additions from step 3), `docs/mobile-native-media.md` (media arrives through the host callback, not the `host.*` bridge), and the root `README.md`. Add `docs/zig-port/README.md` to the guides index in `CLAUDE.md` and `docs/development.md`.
-
-29. **Update `THIRD-PARTY-NOTICES.md`** for everything now linked into shipped binaries: the AWS C runtime (`aws-c-s3`, `aws-c-auth`, `aws-c-http`, `aws-c-io`, `aws-c-cal`, `aws-c-compression`, `aws-c-sdkutils`, `aws-c-common`, `aws-checksums`), `s2n-tls`, OpenSSL or BoringSSL whichever step 12 chose, and libbson. Licence and pinned version for each, matching the format the existing entries use. This is a shipping requirement, not paperwork.
-
-30. **Settle the compiled-CLI question from step 6.** If the addon can live inside a `bun build --compile` executable, nothing more is needed. If it cannot, implement whichever option step 6 recorded, and update `apps/cli`'s `upgrade` command and `apps/cli/smoke-tests-lan-share.sh`, both of which resolve paths from the `bin/<arch>/<platform>/psi` layout. Run all five CLI smoke suites with `USE_BINARY=true` as the acceptance test, since the default runs from source and would not catch this.
-
-## Deferred, not ported
-
-- `apps/cli/src/cmd/mcp.ts` and `apps/desktop/src/lib/mcp/` depend on `@modelcontextprotocol/sdk`, which has no Zig equivalent. They stay TypeScript, calling the Zig-backed packages like everything else.
-- `apps/cli` itself, `apps/bdb-cli` and `apps/mk-cli` stay TypeScript. Because packages are replaced in place, all three run on the Zig implementations without being ported. Rewriting the CLI in Zig would mean reproducing Commander's exact help text, error wording and exit codes, which `apps/cli/smoke-tests.sh` asserts on, and it buys nothing this plan needs.
-- `packages/user-interface`, `packages/desktop-frontend`, `packages/mobile-frontend`, `packages/lan-share-core` and `packages/config` are not ported. The UI stays React.
-
-## What this removes as it goes
-
-Unlike the parallel-tree version, removal happens inside the increments rather than being deferred to a decision at the end. Line counts are from the current tree, counting `src/**/*.ts` and `src/**/*.tsx` excluding `test/`.
-
-| Increment | What goes | Lines |
-| --- | --- | --- |
-| 26 | `packages/mobile-worker` entirely: the runtime, host functions, and all nineteen Node shims | 7,045 |
-| 25 | `packages/rest-api` | 98 |
-| 27 | The Electron JS worker pool and its entry points | ~1,300 |
-| 17 | `packages/bdb` implementation (types stay) | 13,703 |
-| 23, 24 | `packages/node-api` implementation; `packages/user-interface` imports four type names, which stay | 9,283 |
-| 15 | `packages/storage` implementation | 3,192 |
-| 11 | `packages/merkle-tree` implementation | 2,724 |
-| 18 | `packages/vault` implementation | 1,058 |
-| 19 | `packages/tools` implementation | 911 |
-| 9 | `packages/serialization` implementation | 836 |
-| 21 | `packages/lan-share-network` implementation | 796 |
-| 12 | `packages/encryption`, less what the renderer imports | 656 |
-| 13 | `packages/utils` Node-side half; the browser-safe half stays | part of 891 |
-| 20 | `packages/api` implementation; the types the frontends import stay | part of 1,240 |
-| 10 | `packages/fuzzy-match` | 47 |
-| 22 | `packages/task-queue` worker half; the frontend half stays | ~240 of 956 |
-
-Third-party dependencies that go with them: `@aws-sdk/client-s3` and `@aws-sdk/lib-storage`, `bson`, `express`, and the mobile crypto and polyfill set pulled in only to run the AWS SDK inside a bare JavaScript engine (`browserify-aes`, `buffer`, `create-hash`, `create-hmac`, `hash.js`, `pako`, `randombytes`, `whatwg-url`). `commander` stays, because the CLI stays TypeScript.
-
-`packages/node-utils` (1,572 lines of Node-only helpers: `exec`, `fs`, `dir`, `pipe`, `find-available-port`, termination, exit codes, test generators) is not a separate increment. Its Zig equivalents are `std.fs`, `std.process` and `std.net`, so each helper is absorbed into whichever module calls it, and the package shrinks to whatever `apps/cli` still uses directly.
-
-## Verify
-
-At the end of every increment, without exception:
-
-1. `bun run compile` passes.
-2. `mise exec -- zig build` completes with no errors or warnings for the host.
-3. `zig/run-tests.sh` passes all three passes: `zig build test`, `zig build test -Doptimize=ReleaseSafe`, and the Valgrind pass over the C-linking modules, or prints visibly that Valgrind is absent.
-4. `bun run test` passes.
-5. Every smoke suite listed in the increment contract passes, with the same counts as before the increment.
-6. `bun run tev -- --force` passes.
-7. The TypeScript implementation the increment replaced is gone from the tree.
-
-Additionally, once per phase:
-
-8. `mise exec -- zig build mobile-android` and `mise exec -- zig build mobile-ios` complete for all five mobile targets (`aarch64-linux-android`, `armv7a-linux-androideabi`, `x86_64-linux-android`, `aarch64-ios`, `x86_64-ios-simulator`).
-9. `mise exec -- zig build node` completes for all four desktop targets (`x86_64-linux`, `x86_64-windows`, `x86_64-macos`, `aarch64-macos`), and a packaged Electron artefact contains a loadable addon for its platform.
+1. **iOS under Xcode 14.2** (step 3). The generated Xcode project is the newest, least documented part of the SDK and the pinned Apple toolchain is three years older than it. This is the most likely single point of failure in the plan.
+2. **The SDK's mobile support being experimental in the vendor's own words**, with a 404 for its documentation and nothing in the probe ever built for a phone. Steps 3 and 4 are the only evidence that will exist.
+3. **The C libraries on mobile targets** (step 5). The AWS C runtime failing to build for Android or iOS has no permitted workaround.
+4. **An SDK moving from 0.0.0 to 0.8.4 in five weeks** under a port that will take months. Pin exactly, upgrade deliberately, and expect breaking changes.
+5. **WebKitGTK 6.0 not being on users' machines.** This is a shipping problem rather than a development one, and it needs an answer before the first release rather than after.
+6. **The comparison rule decaying.** The line-by-line correspondence is what makes the port reviewable, and it degrades one small improvement at a time. The review agent checking it on every package is the only thing that holds it.
 
 ## Notes
 
-- **Three things can stop this plan dead**, and all three are spiked in phase 0 for exactly that reason: the Node-API addon route for Electron and the compiled CLI (step 6), Zig linking under Xcode 14.2 (step 7), and the AWS C runtime building for Android and iOS (step 14, spiked before `storage` rather than in phase 0 because nothing before it needs S3). If any fails there is no permitted workaround inside this repository's rules, so stop and report rather than improvise.
-- **Step 8 is the plan.** Everything after it is repetition of a mechanism that step 8 either proved or did not. If step 8 cannot get all four platforms green, the incremental approach does not work either, and that is worth knowing after one package rather than after fifteen.
-- **`CLAUDE.md` forbids this work outright** in three separate bullets, not one. Step 1 amends all three. Amending only the language ban would leave steps 21, 25 and the standard-library HTTP decisions in violation.
-- **The frozen files stay frozen.** `.githooks/pre-commit`, `scripts/install-hooks.sh` and `scripts/test-everything-parallel.sh` are not touched. The consequence is that `scripts/test-everything-parallel.sh` hardcodes its script set, so `bun run tev` picks up the Zig build and unit tests through the `zig` workspace package and the `what-changed.json` path additions in step 3, but nothing new beyond that. The smoke suites in the increment contract already exist and are already in `tev`, which is precisely why this plan uses them as its evidence rather than adding new ones.
-- **Deliberate divergences from the TypeScript**, all recorded in `docs/zig-port/README.md`: async becomes blocking plus an explicit thread pool, with cooperative cancellation through an explicit token because a blocking thread cannot be interrupted from outside; interfaces become vtable structs; every allocating function threads an allocator; the queue backend stops being a process singleton; the path sandbox moves out of Java and Swift into `path_sandbox.zig`; the asset server validates its route parameters where the Express one does not; and BSON, RSA, AES-CBC and PEM come from C libraries, because Zig's standard library has no CBC mode and no RSA.
-- **There is no drift problem in this plan.** The parallel-tree version needed `ported.json`, blob-hash tracking and a drift report because two implementations of every package coexisted for months. Replace-in-place has exactly one implementation of each package at any moment, so there is nothing to drift.
-- **The `zig-core-port` worktree is kept for reference and will not be used again.** The abandoned attempt created a git worktree at `.claude/worktrees/zig-core-port`, on a branch of the same name, and it holds a substantial amount of work: 117 Zig source files, roughly 27,000 lines, across sixteen module directories under `zig/lib/psi-core/src/` (`api`, `bdb`, `config`, `encryption`, `fuzzy_match`, `lan_share_core`, `lan_share_network`, `merkle_tree`, `node_api`, `node_utils`, `serialization`, `storage`, `task_queue`, `tools`, `utils`, `vault`), with about 1,030 `test` blocks. It also contains seven spikes under `zig/spikes/`: `s3`, `napi`, `android`, `http`, `flate`, `crossenc` and `cloudcheck`. Alongside those it has edits to `CLAUDE.md`, `mise.toml`, `package.json` and `bun.lock`, and a `docs/zig-port/README.md`.
-
-  Three things about it matter. **None of it is committed:** the branch has no commits beyond `mobile`, so every one of those files is staged or untracked working-tree state that an ill-judged `git checkout` or `git clean` in that worktree would destroy. **None of it is verified here:** whether it builds, whether those 1,030 test blocks pass, and how far each module actually got are unknown as of this rewrite, and nothing in this plan should be read as claiming otherwise. And **it was written against the superseded parallel-tree design**, so its structure assumes a second implementation living beside the TypeScript one, which is exactly what this plan does not do.
-
-  It is deliberately not deleted. The right way to use it is as a reference to read: the `s3` and `napi` spikes may well answer questions that steps 6 and 14 ask, and a module already ported there is a starting point worth reading before porting the same module again. Do not work in it, do not merge it, and do not treat anything in it as current or as evidence that a package is done. All work on this plan happens in the main working copy, and a module is ported only when it has passed the increment contract above.
-- **Facts established by review of the previous version of this plan**, carried forward here so they are not rediscovered: `IStorage` has seventeen methods, not twenty; the handlers are nineteen files producing twenty-two names across two registration sites, not one; `apps/smoke-tests/tests/` holds 41 tests and `apps/desktop/smoke-tests/` holds 34, and in both cases the number to match is whatever the run reports on the day; `apps/cli/smoke-tests.sh` and `smoke-tests-encrypted.sh` have separate copies of `get_cli_command()` while `smoke-tests-lan-share.sh` has none and sets `CLI_CMD` instead; `std.crypto` has no CBC mode; and `packages/mobile-worker/mobile-worker-entry.ts` is the only place in the repository that registers `list-s3-dirs`, `read-databases-config` and `write-databases-config`.
+- **Facts about the old repository, carried forward so they are not rediscovered**: `IStorage` has seventeen methods; the task handlers are nineteen files producing twenty-two names across two registration sites (`packages/node-api/src/lib/task-handlers.ts` registers nineteen, and `packages/mobile-worker/mobile-worker-entry.ts` registers those plus `list-s3-dirs`, `read-databases-config` and `write-databases-config`, and is the only place in the repository that registers those three); `apps/desktop/smoke-tests/` holds 34 tests and `apps/smoke-tests/tests/` holds 43, sharing 27 names for a union of 50; `apps/cli/smoke-tests/` holds 80 numbered tests; there are 164 unit test files under `packages/` and `apps/`; `std.crypto` has no CBC mode and no RSA; and both the desktop and mobile suites already drive the application through the same control bridge and the same shared test driver in `packages/user-interface`, which is what makes one deduplicated UI suite possible.
+- **The two registration sites become one.** One application, one handler set, and a test that asserts it, so a handler cannot be lost silently the way the mobile-only three could be today.
+- **Known divergences from the TypeScript**, to be recorded in the port's divergence document as they land: `async` becomes blocking plus an explicit thread pool, with cooperative cancellation through an explicit token because a blocking thread cannot be interrupted from outside; interfaces become vtable structs; every allocating function threads an allocator; the queue backend stops being a process singleton and is passed explicitly; the path sandbox moves out of Java and Swift into Zig; the asset server validates its route parameters where the Express one does not; BSON, RSA, AES-CBC and PEM come from C libraries; every Electron IPC channel and every Capacitor plugin call becomes a bridge command; and Zig 0.16 routes blocking calls through a `std.Io` instance.
+- **The macOS keychain exposure comes across unchanged.** The current code passes the secret as an argument to `security add-generic-password -w <json>`, and process arguments are readable by other processes. Port it as it is so existing installations can still read their secrets back, record it, and raise it with the human when that package lands. Do not fix it in passing.
+- **The abandoned worktree in this repository is reference material and nothing more.** `.claude/worktrees/zig-core-port` holds roughly 27,000 lines of Zig across sixteen module directories with about 1,030 test blocks, plus seven spikes. None of it is committed, none of it has been verified to build or pass, and it was written against a superseded design that assumed a parallel tree beside the TypeScript. Read it before porting a module it already covers, particularly the `s3` and `napi` spikes, and treat nothing in it as done. Do not work in it and do not merge it.
+- **This plan is transient.** Nothing that outlives the port may reference it. Anything in here worth keeping (the writing rules, the divergence list, the toolchain versions, the packaging steps) gets copied into the new repository's own permanent documents, in full, at the point it is needed.
