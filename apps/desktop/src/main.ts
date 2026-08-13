@@ -673,7 +673,7 @@ ipcMain.handle('notify-database-opened', logExceptions(async (_event, databasePa
     });
     isDatabaseOpen = true;
     await updateMenu();
-    resetSyncState();
+    resetSyncState(databasePath);
     currentDatabasePath = databasePath;
     log.event(`Database opened: ${basename(databasePath)}`);
 }, 'Error notifying database opened'));
@@ -1086,8 +1086,19 @@ async function handleReplicateSucceeded(inputs: IReplicateDatabaseData): Promise
 // Cancels any running sync task for the current database, resets the running flag,
 // and clears the debounce timer. Call this whenever the active database changes.
 //
-function resetSyncState(): void {
-    if (currentDatabasePath && workerPool) {
+// nextDatabasePath is the database about to become active, or undefined when none is. Tasks are
+// cancelled only when that is a different database from the one running now. Cancelling is by
+// database path, and the load that fills the gallery is tagged with that same path, so cancelling on
+// a reopen of the database already open kills the load the renderer has just started for it. The
+// task then reports success having read nothing and the gallery shows an empty database.
+//
+// That is what desktop smoke test 26 has been catching: it restarts the app and reopens a database on
+// S3 holding two assets, and the app restores that same database at startup, so the reopen was the
+// second one and cancelled its own load. A CLI run against the same bucket moments earlier read both
+// assets back, and the app's log showed the load completing with none and never touching the index.
+//
+function resetSyncState(nextDatabasePath?: string): void {
+    if (currentDatabasePath && workerPool && currentDatabasePath !== nextDatabasePath) {
         workerPool.cancelTasks(currentDatabasePath);
     }
     syncStopped();
