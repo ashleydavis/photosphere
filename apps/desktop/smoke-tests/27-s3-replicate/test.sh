@@ -98,6 +98,14 @@ send_command "$APP_PORT" click '{"dataId":"configure-secrets-save"}'
 # sequential run, where an idle machine put all of these inside 600ms.
 wait_for_value_gone "$APP_PORT" "configure-secrets-save" "Save" || exit 1
 
+# The modal having closed is not the same as the credential having reached the replicate dialog's
+# form, and it is the form that Start reads: the button stays disabled while the destination is S3
+# and no S3 key is set. A disabled button swallows the click in silence, so the test then waits out
+# its whole timeout for a replication that was never started (the driver now warns when a click
+# lands on a disabled control, which is how this was caught). The dialog shows the chosen secret in
+# its own text, so waiting for that is waiting for the state Start actually depends on.
+wait_for_value "$APP_PORT" "replicate-database-dialog" "S3: $SECRET_NAME" || exit 1
+
 # Choosing the credentials opens the source database, and the databases page behind the modal
 # reloads when that load finishes. The destination typed before that lands is lost to the re-render,
 # and the Start button then does nothing at all: every click is still logged as delivered, so the
