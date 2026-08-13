@@ -535,14 +535,62 @@ final class HostBridge {
         }
         host.setValue(JSValue(object: ffprobe, in: context), forProperty: "ffprobe")
 
-        // The device photo library is deliberately not installed here. Automatic import reads it from
-        // the WebView, through JsEnginePlugin's mediaLibrary* methods, because its loop cannot run in
-        // an engine: the pool has three slots, the asset server holds one for the life of the app,
-        // and a long-running loop in a second leaves nothing for the tasks the import it queues needs
-        // in turn. Nothing inside an engine reads the library, so nothing here installs it.
+        // The device photo library host functions. Automatic import reads the library through these,
+        // the same way it reads folders through the fs functions on desktop. Each returns JSON, or an
+        // @@HOSTERR@@ envelope on failure, which the mobile shim decodes into a coded Error.
+
+        // mediaLibraryList(cursor, pageSize): one page of the device photo library, as JSON.
+        let mediaLibraryList: @convention(block) (String, Int) -> JSValue = { [weak self] cursor, pageSize in
+            guard let self = self else { return JSValue(nullIn: context) }
+            return JSValue(object: self.mediaLibraryHost.mediaLibraryList(cursor: cursor, pageSize: pageSize), in: context)
+        }
+        host.setValue(JSValue(object: mediaLibraryList, in: context), forProperty: "mediaLibraryList")
+
+        // mediaLibraryAlbums(): the albums in the device photo library, as JSON.
+        let mediaLibraryAlbums: @convention(block) () -> JSValue = { [weak self] in
+            guard let self = self else { return JSValue(nullIn: context) }
+            return JSValue(object: self.mediaLibraryHost.mediaLibraryAlbums(), in: context)
+        }
+        host.setValue(JSValue(object: mediaLibraryAlbums, in: context), forProperty: "mediaLibraryAlbums")
+
+        // mediaLibraryOpen(itemId): copies one library item into the sandbox, returning its path.
+        let mediaLibraryOpen: @convention(block) (String) -> JSValue = { [weak self] itemId in
+            guard let self = self else { return JSValue(nullIn: context) }
+            do {
+                return JSValue(object: try self.mediaLibraryHost.mediaLibraryOpen(itemId: itemId), in: context)
+            }
+            catch {
+                return JSValue(object: HostBridge.hostErrorEnvelope(error), in: context)
+            }
+        }
+        host.setValue(JSValue(object: mediaLibraryOpen, in: context), forProperty: "mediaLibraryOpen")
+
+        // mediaLibraryClose(itemId): deletes the sandbox copy an open made.
+        let mediaLibraryClose: @convention(block) (String) -> Void = { [weak self] itemId in
+            self?.mediaLibraryHost.mediaLibraryClose(itemId: itemId)
+        }
+        host.setValue(JSValue(object: mediaLibraryClose, in: context), forProperty: "mediaLibraryClose")
+
+        // mediaLibraryDelete(itemIdsJson): asks to delete the named items from the photo library.
+        let mediaLibraryDelete: @convention(block) (String) -> JSValue = { [weak self] itemIdsJson in
+            guard let self = self else { return JSValue(nullIn: context) }
+            do {
+                return JSValue(object: try self.mediaLibraryHost.mediaLibraryDelete(itemIdsJson: itemIdsJson), in: context)
+            }
+            catch {
+                return JSValue(object: HostBridge.hostErrorEnvelope(error), in: context)
+            }
+        }
+        host.setValue(JSValue(object: mediaLibraryDelete, in: context), forProperty: "mediaLibraryDelete")
 
         context.globalObject.setValue(host, forProperty: "host")
     }
+
+    //
+    // The device photo library reader (the host.mediaLibrary* functions), created lazily so an
+    // engine that never touches the library never asks the Photos framework for anything.
+    //
+    private lazy var mediaLibraryHost = MediaLibraryHost(storageRoot: storageRoot)
 
     //
     // The ImageMagick runner (host.imageMagick). Stateless; safe to share across contexts.

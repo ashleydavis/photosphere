@@ -5,6 +5,35 @@ import { usePlatform } from "./platform-context";
 import type { IImportSession, IPlatformContext } from "./platform-context";
 import { useAssetDatabase } from "./asset-database-source";
 import { useUuidGenerator } from "./uuid-generator-context";
+import { log } from "utils";
+import type { IImportRecord, IImportRecordEntry } from "api/src/lib/import-record";
+
+//
+// Turns one recorded import into the list item the Import page shows, so a photo imported last week
+// looks exactly like one imported a moment ago.
+//
+function entryToImportItem(entry: IImportRecordEntry): IImportItem {
+    return {
+        assetId: entry.assetId,
+        logicalPath: entry.logicalPath,
+        status: entry.outcome === "imported" ? "success" : entry.outcome === "skipped" ? "skipped" : "failure",
+        micro: entry.micro,
+        source: entry.source,
+    };
+}
+
+//
+// Reads what a database has imported. Returns an empty record rather than throwing when there is
+// nothing to read: a database that has imported nothing is not an error.
+//
+async function loadImportRecord(queue: TaskQueue, databasePath: string): Promise<IImportRecord> {
+    const taskId = queue.addTask("get-import-record", { databasePath });
+    const result = await queue.awaitTask(taskId);
+    if (!result || result.status !== "succeeded") {
+        return { entries: [], truncated: false };
+    }
+    return result.outputs as IImportRecord;
+}
 
 //
 // Dependencies required by the standalone import-orchestration helpers below.
@@ -110,6 +139,10 @@ export interface IImportItem {
     // Base64-encoded JPEG micro-thumbnail. Populated when status transitions to 'success'.
     // Undefined while pending, on failure, on skip, or when no thumbnail was generated.
     micro?: string;
+
+    // Whether the user asked for this import or it arrived on its own. Undefined for an item still
+    // in flight from a manual import, which the user is already watching happen.
+    source?: 'manual' | 'automatic';
 }
 
 //
@@ -119,8 +152,12 @@ export interface IImportContext {
     // Current import lifecycle status.
     status: ImportStatus;
 
-    // Ordered list of all items seen in the current import session, in arrival order.
+    // Everything this database has taken in, newest first: what is happening now, then what the
+    // database recorded before the app opened. Manual and automatic imports are in the same list.
     importItems: IImportItem[];
+
+    // True when older imports than these were dropped for being past the cap.
+    recordTruncated: boolean;
 
     // Imports the given directories and sets status to 'running'.
     // When paths are supplied they are used directly; when omitted a directory picker is shown.
@@ -168,6 +205,13 @@ export function ImportContextProvider({ children }: IImportContextProviderProps)
 
     // Ordered list of all items seen in the current import session.
     const [importItems, setImportItems] = useState<IImportItem[]>([]);
+
+    // What this database imported before the app was opened, newest first, read from its own record.
+    const [recordedItems, setRecordedItems] = useState<IImportItem[]>([]);
+
+    // True when the record is full and older imports than these were dropped, so the interface can
+    // say that what it is showing is not the whole history.
+    const [recordTruncated, setRecordTruncated] = useState<boolean>(false);
 
     // Session info recorded when an import starts.
     const sessionRef = useRef<IImportSession | null>(null);
@@ -390,9 +434,48 @@ export function ImportContextProvider({ children }: IImportContextProviderProps)
         clearImport();
     }, [databasePath, clearImport]);
 
+    //
+    // Loads what this database has imported before, so opening it shows its history rather than only
+    // what has happened while the app has been running.
+    //
+    // Manual and automatic imports come back in the same list, newest first. It is capped, and
+    // `recordTruncated` says whether anything older was dropped, so the interface can say that what
+    // it is showing is not everything.
+    //
+    useEffect(() => {
+        if (!databasePath) {
+            setRecordedItems([]);
+            setRecordTruncated(false);
+            return;
+        }
+
+        let cancelled = false;
+        const queue = new TaskQueue(uuidGenerator, `import-record-${databasePath}`);
+
+        loadImportRecord(queue, databasePath)
+            .then(record => {
+                if (cancelled) {
+                    return;
+                }
+                setRecordedItems(record.entries.map(entryToImportItem));
+                setRecordTruncated(record.truncated);
+            })
+            .catch(error => {
+                // A missing or unreadable record is not worth an error in the user's face: it is a
+                // note about what happened, not the photos. The page simply shows nothing.
+                log.exception(`Failed to read what "${databasePath}" has imported`, error as Error);
+            })
+            .finally(() => queue.shutdown());
+
+        return () => {
+            cancelled = true;
+        };
+    }, [databasePath]);
+
     const contextValue: IImportContext = {
         status,
-        importItems,
+        importItems: importItems.concat(recordedItems),
+        recordTruncated,
         startImportDirectories,
         startImportFiles,
         isPicking,

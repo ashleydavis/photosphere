@@ -434,7 +434,7 @@ public final class QuickJsTaskEngine implements TaskEngine {
 
         context = QuickJSContext.create();
         QuickJSLoader.initConsoleLog(context);
-        hostBridge = new HostBridge(callbacks, cancellationState, sessionId, storageRoot);
+        hostBridge = new HostBridge(callbacks, cancellationState, sessionId, storageRoot, androidContext);
 
         // Build the device keychain before installing host.secureStore*, so the worker vault can read
         // secrets natively. A failure here is logged, not fatal: the secureStore* functions throw when
@@ -524,11 +524,22 @@ public final class QuickJsTaskEngine implements TaskEngine {
         host.setProperty("ffprobe", (JSCallFunction) args -> safeString(() ->
             hostBridge.ffprobe((String) args[0])));
 
-        // The device photo library is deliberately not installed here. Automatic import reads it from
-        // the WebView, through JsEnginePlugin's mediaLibrary* methods, because its loop cannot run in
-        // an engine: the pool has three slots, the asset server holds one for the life of the app,
-        // and a long-running loop in a second leaves nothing for the tasks the import it queues needs
-        // in turn. Nothing inside an engine reads the library, so nothing here installs it.
+        // Native-backed device photo library functions: automatic import walks the library, copies a
+        // chosen item into the sandbox so the import task can read it as a file, and asks to delete
+        // source photos once they are confirmed in the database. Each returns JSON, or an @@HOSTERR@@
+        // envelope on failure, exactly as the iOS HostBridge installs them.
+        host.setProperty("mediaLibraryList", (JSCallFunction) args -> safeString(() ->
+            hostBridge.mediaLibraryList((String) args[0], ((Number) args[1]).intValue())));
+        host.setProperty("mediaLibraryAlbums", (JSCallFunction) args -> safeString(() ->
+            hostBridge.mediaLibraryAlbums()));
+        host.setProperty("mediaLibraryOpen", (JSCallFunction) args -> safeString(() ->
+            hostBridge.mediaLibraryOpen((String) args[0])));
+        host.setProperty("mediaLibraryClose", (JSCallFunction) args -> {
+            hostBridge.mediaLibraryClose((String) args[0]);
+            return null;
+        });
+        host.setProperty("mediaLibraryDelete", (JSCallFunction) args -> safeString(() ->
+            hostBridge.mediaLibraryDelete((String) args[0])));
 
         // Native-backed UDP functions: LAN-share discovery binds a datagram socket and broadcasts /
         // receives through these. Inbound datagrams are pushed into the engine via globalThis.__udpEvent.

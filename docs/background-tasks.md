@@ -244,3 +244,9 @@ The `onTaskMessage` filter matches only messages whose `type` field equals the g
 | `"create-database"` | `create-database.worker.ts` | Initialize a new database |
 | `"get-database-summary"` | `get-database-summary.worker.ts` | Compute database statistics |
 | `"asset-server"` | `asset-server.worker.ts` | Long-running express asset server bound to a loopback port (serves `/asset`, applies database ops) |
+
+## On mobile
+
+Mobile runs these same tasks, but in a pool of embedded JavaScript engines rather than worker threads, and that pool is small. A task that queues another task and waits for it needs two slots at once, and running out of slots hangs rather than slows: nothing errors and nothing appears in a log.
+
+Read [Mobile background tasks](mobile-background-tasks.md) before adding a task that mobile will run, and before changing the pool size.

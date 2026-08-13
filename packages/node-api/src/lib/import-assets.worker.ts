@@ -18,6 +18,8 @@ import { scanPaths } from "./file-scanner";
 import { IHashFileData, IHashFileResult } from "./hash-file.worker";
 import { IUploadAssetData, IUploadAssetResult, IAssetDatabaseData } from "./upload-asset.worker";
 import { IImportAssetsResult, IImportedAsset, ISkippedImport } from "api/src/lib/import-assets.types";
+import { IImportRecordEntry, ImportSource } from "api/src/lib/import-record";
+import { recordImports } from "./import-record-storage";
 
 //
 // Payload for the import-assets task. Contains the paths to scan plus the configuration
@@ -38,6 +40,10 @@ export interface IImportAssetsData {
 
     // When true, files are scanned and hashed but not written to the database.
     dryRun: boolean;
+
+    // Who asked for this import, recorded against every file it takes in so the Import page can say
+    // which arrived on their own. Absent means the user asked, which is what a manual import is.
+    source?: ImportSource;
 }
 
 //
@@ -76,6 +82,16 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
     // The same outcome the messages below report, gathered so a caller that cannot see the messages
     // (an orchestrator task running in a worker) can still read what happened.
     const result: IImportAssetsResult = { imported: [], skipped: [], failedCount: 0 };
+
+    // What this run did, for the database's import record. Gathered as it goes and written once at
+    // the end, so a long import is one write rather than one per file.
+    const recordEntries: IImportRecordEntry[] = [];
+
+    // Whether the user asked for this import or it arrived on its own. Recorded against every entry
+    // so the Import page can say which is which. Nothing passing a source is a manual import, which
+    // is what every caller but automatic import is.
+    const importSource: ImportSource = data.source ?? "manual";
+
     const hashCacheDir = path.join(getProcessTmpDir(), "photosphere");
 
     const { s3Config, encryptionKeyPems } = await resolveStorageCredentials(storageDescriptor.databasePath, storageDescriptor.encryptionKey);
@@ -152,6 +168,14 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
 
                 log.verbose(`Added file "${logicalPath}" to the database with ID "${assetData.assetId}".`);
                 result.imported.push({ assetId: assetData.assetId, logicalPath, asset: assetData.assetRecord });
+                recordEntries.push({
+                    assetId: assetData.assetId,
+                    logicalPath,
+                    outcome: "imported",
+                    importedAt: new Date(timestampProvider.dateNow()).toISOString(),
+                    source: importSource,
+                    micro: assetData.assetRecord.micro,
+                });
                 context.sendMessage({ type: "import-success", assetId: assetData.assetId, logicalPath, micro: assetData.assetRecord.micro, asset: assetData.assetRecord });
             }
 
@@ -240,6 +264,13 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
                         logicalPath: hashFileData.logicalPath,
                         contentHash: Buffer.from(hashResult.hash).toString("hex"),
                     });
+                    recordEntries.push({
+                        assetId: hashFileData.assetId,
+                        logicalPath: hashFileData.logicalPath,
+                        outcome: "skipped",
+                        importedAt: new Date(timestampProvider.dateNow()).toISOString(),
+                        source: importSource,
+                    });
                     context.sendMessage({ type: "import-skipped", assetId: hashFileData.assetId, logicalPath: hashFileData.logicalPath });
                 }
                 else {
@@ -268,6 +299,7 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
             else if (taskResult.status === TaskStatus.Failed) {
                 log.error(`Failed to hash file "${hashFileData.logicalPath}": ${taskResult.errorMessage}`);
                 result.failedCount += 1;
+                recordEntries.push({ assetId: hashFileData.assetId, logicalPath: hashFileData.logicalPath, outcome: "failed", importedAt: new Date(timestampProvider.dateNow()).toISOString(), source: importSource });
                 context.sendMessage({ type: "import-failed", assetId: hashFileData.assetId, logicalPath: hashFileData.logicalPath });
             }
         }
@@ -286,6 +318,7 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
             else if (taskResult.status === TaskStatus.Failed) {
                 log.error(`Failed to upload file "${uploadData.logicalPath}": ${taskResult.errorMessage}`);
                 result.failedCount += 1;
+                recordEntries.push({ assetId: uploadData.assetId, logicalPath: uploadData.logicalPath, outcome: "failed", importedAt: new Date(timestampProvider.dateNow()).toISOString(), source: importSource });
                 context.sendMessage({ type: "import-failed", assetId: uploadData.assetId, logicalPath: uploadData.logicalPath });
             }
         }
@@ -374,6 +407,13 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
     finally {
         queue.shutdown();
         await swallowError(() => remove(sessionTempDir));
+
+        // Written even when the import failed part way, because what it did take in before failing
+        // is exactly what a user asking "what happened?" wants to see. A dry run records nothing:
+        // it changed nothing.
+        if (!dryRun) {
+            await recordImports(storage, recordEntries);
+        }
     }
 
     return result;

@@ -203,53 +203,6 @@ export interface IStageMediaDeleteOptions {
     outcome: "deleted" | "cancelled";
 }
 
-//
-// Options for reading one page of the device photo library.
-//
-export interface IMediaLibraryListOptions {
-    // Where to resume from. An empty string starts at the beginning of the library.
-    cursor: string;
-
-    // How many items to return.
-    pageSize: number;
-}
-
-//
-// A native photo library answer that is a JSON document.
-//
-// The native side already produces these as JSON strings for the embedded engines, whose bridge
-// carries nothing else. Handing the same string to the WebView keeps one producer rather than two,
-// at the cost of one parse here.
-//
-export interface IMediaLibraryJsonResult {
-    // The JSON document, to be parsed by the caller.
-    json: string;
-}
-
-//
-// Options naming a single item in the device photo library.
-//
-export interface IMediaLibraryItemOptions {
-    // The platform's own identifier for the item.
-    itemId: string;
-}
-
-//
-// The sandbox path an exported library item was written to.
-//
-export interface IMediaLibraryExportResult {
-    // The sandbox-relative path the import can read the item's bytes from.
-    path: string;
-}
-
-//
-// Options for deleting items from the device photo library.
-//
-export interface IMediaLibraryDeleteOptions {
-    // The identifiers to delete, as a JSON array of strings.
-    itemIdsJson: string;
-}
-
 export interface IJsEnginePlugin {
     //
     // Dispatches a task into the engine pool. Fire-and-forget from the backend: the id
@@ -290,36 +243,6 @@ export interface IJsEnginePlugin {
     // the system confirmation an automated test cannot tap. Nothing stages one in production.
     //
     stageMediaDeleteOutcome(options: IStageMediaDeleteOptions): Promise<void>;
-
-    //
-    // Returns one page of the device photo library.
-    //
-    // Automatic import reads the library through these five methods rather than through the engine's
-    // host bridge, because the loop that drives it runs in the WebView. The engine pool has three
-    // slots and the asset server holds one for the life of the app, so a long-running import loop in
-    // a second slot leaves nothing for the tasks the import it queues needs in turn.
-    //
-    mediaLibraryList(options: IMediaLibraryListOptions): Promise<IMediaLibraryJsonResult>;
-
-    //
-    // Returns the albums in the device photo library.
-    //
-    mediaLibraryAlbums(): Promise<IMediaLibraryJsonResult>;
-
-    //
-    // Copies one library item into the sandbox and returns the path the import can read it from.
-    //
-    mediaLibraryExport(options: IMediaLibraryItemOptions): Promise<IMediaLibraryExportResult>;
-
-    //
-    // Deletes the sandbox copy an export made.
-    //
-    mediaLibraryRelease(options: IMediaLibraryItemOptions): Promise<void>;
-
-    //
-    // Asks to delete the named items, as one system confirmation, and returns the outcome.
-    //
-    mediaLibraryDelete(options: IMediaLibraryDeleteOptions): Promise<IMediaLibraryJsonResult>;
 
     //
     // Tears down the engine pool and releases native resources.

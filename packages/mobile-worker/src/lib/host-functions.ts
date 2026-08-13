@@ -143,15 +143,22 @@ export interface IHost {
 
     // Deletes a secret from the device keychain (a missing key is not an error).
     secureStoreDelete: (key: string) => void;
-}
 
-//
-// The device photo library is deliberately absent from this list. Automatic import reads it from the
-// WebView, through the Capacitor plugin's mediaLibrary* methods, because its loop cannot run in an
-// engine: the pool has three slots, the asset server holds one for the life of the app, and a
-// long-running loop in a second leaves nothing for the tasks the import it queues needs in turn.
-// Nothing inside an engine has any reason to read the library, so nothing here does.
-//
+    // Returns one page of the device photo library as JSON, given a cursor and a page size.
+    mediaLibraryList: (cursor: string, pageSize: number) => string;
+
+    // Returns the albums in the device photo library as JSON.
+    mediaLibraryAlbums: () => string;
+
+    // Copies one library item into the sandbox and returns the path it was written to.
+    mediaLibraryOpen: (itemId: string) => string;
+
+    // Deletes the sandbox copy an open made.
+    mediaLibraryClose: (itemId: string) => void;
+
+    // Asks to delete the named items from the photo library, and returns the outcome as JSON.
+    mediaLibraryDelete: (itemIdsJson: string) => string;
+}
 
 //
 // The host functions the bundle expects the native side to install. Any name in
@@ -198,6 +205,11 @@ export const EXPECTED_HOST_FUNCTIONS: string[] = [
     "secureStoreGet",
     "secureStoreSet",
     "secureStoreDelete",
+    "mediaLibraryList",
+    "mediaLibraryAlbums",
+    "mediaLibraryOpen",
+    "mediaLibraryClose",
+    "mediaLibraryDelete",
 ];
 
 //

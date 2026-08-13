@@ -62,12 +62,12 @@ class ListMediaSource implements IMediaSource {
         };
     }
 
-    async exportItem(item: IMediaItem): Promise<string> {
+    async openItem(item: IMediaItem): Promise<string> {
         this.exported.push(item.sourceId);
         return item.filePath;
     }
 
-    async releaseItem(item: IMediaItem): Promise<void> {
+    async closeItem(item: IMediaItem): Promise<void> {
         this.released.push(item.sourceId);
     }
 
@@ -228,7 +228,7 @@ describe("CompositeMediaSource", () => {
         const composite = new CompositeMediaSource([first, second]);
 
         const items = await listAll(composite, 10);
-        await composite.exportItem(items[1]);
+        await composite.openItem(items[1]);
 
         expect(first.exported).toEqual([]);
         expect(second.exported).toEqual(["second/b.jpg"]);
@@ -240,7 +240,7 @@ describe("CompositeMediaSource", () => {
         const composite = new CompositeMediaSource([first, second]);
 
         const items = await listAll(composite, 10);
-        await composite.releaseItem(items[0]);
+        await composite.closeItem(items[0]);
 
         expect(first.released).toEqual(["first/a.jpg"]);
         expect(second.released).toEqual([]);

@@ -83,6 +83,23 @@ wait_for_file_gone() {
     exit 1
 }
 
+#
+# Waits until a file appears.
+#
+wait_for_file() {
+    local file="$1"
+    local elapsed=0
+    while [ "$elapsed" -lt 90 ]; do
+        if [ -f "$file" ]; then
+            return 0
+        fi
+        sleep 1
+        elapsed=$((elapsed + 1))
+    done
+    log_error "The file was still not there after 90s: $file"
+    exit 1
+}
+
 mkdir -p "$WATCH_DIR"
 
 # The folder to watch is written before the app starts, so switching automatic import on has
@@ -161,6 +178,47 @@ log_info "Dropped a second photo, with cleanup switched on"
 wait_for_asset_count 2
 wait_for_file_gone "$WATCH_DIR/cleaned-up.jpg"
 log_success "The source file was deleted once the photo was in the database"
+
+# --- What was imported is remembered, and survives closing the app. ---
+
+# The record is what lets a user ask what came in. It is written by the import itself, so it is
+# already on disk here; the point of reading it after a restart is that it is not merely in memory.
+RECORD_FILE="$DEFAULT_DB_DIR/.db/imports.dat"
+
+wait_for_file "$RECORD_FILE"
+log_success "The imports were recorded"
+
+if ! grep -q '"source":"automatic"' "$RECORD_FILE"; then
+    log_error "Photos brought in by automatic import were not badged automatic in $RECORD_FILE"
+    exit 1
+fi
+log_success "The automatic imports are badged automatic"
+
+check_no_errors "$TMP_DIR"
+
+stop_app "$APP_PORT" "$TMP_DIR"
+
+# --- Reopen, and the Import page shows what this database took in before. ---
+
+# The relaunched app starts a fresh app.log, so the cursor from the first run points past the end of
+# it and every wait below would time out on a line that is there.
+rm -f "$TMP_DIR/.log-cursor"
+
+start_app "$TMP_DIR"
+wait_for_ready "$APP_PORT"
+
+send_command "$APP_PORT" menu '{"itemId":"open-database"}'
+wait_for_log "$TMP_DIR" "Open database dialog opened"
+send_command "$APP_PORT" click '{"dataId":"database-list-item-0"}'
+wait_for_log "$TMP_DIR" "Database opened"
+
+send_command "$APP_PORT" navigate '{"page":"/import"}'
+wait_for_log "$TMP_DIR" "Import page ready"
+
+# The badge is the proof: this row came from the record on disk, not from an import that happened
+# while the page was open, because no import has happened since the app started.
+wait_for_value "$APP_PORT" "import-source-automatic" "Automatic"
+log_success "Reopening the database shows what it imported before"
 
 check_no_errors "$TMP_DIR"
 

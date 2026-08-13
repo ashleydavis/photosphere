@@ -18,13 +18,13 @@ import { type IDatabaseEntry } from '../context/platform-context';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
 
 //
-// Props for the ConnectDatabaseDialog component.
+// Props for the ConsolidateDatabaseDialog component.
 //
-export interface IConnectDatabaseDialogProps {
+export interface IConsolidateDatabaseDialogProps {
     // Whether the dialog is visible.
     open: boolean;
 
-    // The database being connected to a remote.
+    // The database being joined to a remote.
     entry: IDatabaseEntry;
 
     // Called when the dialog should close.
@@ -32,23 +32,23 @@ export interface IConnectDatabaseDialogProps {
 }
 
 //
-// Where the connect flow has got to.
+// Where the consolidation has got to.
 //
-type ConnectStep = "configure" | "running" | "success" | "error";
+type ConsolidateStep = "configure" | "running" | "success" | "error";
 
 //
-// Connects a database to a remote one.
+// Joins a database to a remote one so the two can sync.
 //
 // The remote may be empty, may hold an unrelated database, or may already be this one; the task
 // works out which and does the right thing, so this dialog asks only where the remote is. What comes
 // back says how much was pushed and how much the remote already had, because "nothing was pushed"
 // and "everything was pushed" look the same from outside and mean very different things.
 //
-export function ConnectDatabaseDialog({ open, entry, onClose }: IConnectDatabaseDialogProps) {
+export function ConsolidateDatabaseDialog({ open, entry, onClose }: IConsolidateDatabaseDialogProps) {
     const uuidGenerator = useUuidGenerator();
 
     const [remotePath, setRemotePath] = useState('');
-    const [step, setStep] = useState<ConnectStep>("configure");
+    const [step, setStep] = useState<ConsolidateStep>("configure");
     const [errorMessage, setErrorMessage] = useState('');
     const [pushedCount, setPushedCount] = useState(0);
     const [alreadyPresentCount, setAlreadyPresentCount] = useState(0);
@@ -56,11 +56,11 @@ export function ConnectDatabaseDialog({ open, entry, onClose }: IConnectDatabase
     //
     // Runs the consolidation task and reports what it did.
     //
-    async function connect(): Promise<void> {
+    async function consolidate(): Promise<void> {
         setStep("running");
         setErrorMessage('');
 
-        const queue = new TaskQueue(uuidGenerator, `connect-${entry.path}`);
+        const queue = new TaskQueue(uuidGenerator, `consolidate-${entry.path}`);
         try {
             const taskId = queue.addTask("consolidate-database", {
                 databasePath: entry.path,
@@ -70,9 +70,9 @@ export function ConnectDatabaseDialog({ open, entry, onClose }: IConnectDatabase
             const taskResult = await queue.awaitTask(taskId);
 
             if (!taskResult || taskResult.status !== TaskStatus.Succeeded) {
-                setErrorMessage(taskResult?.errorMessage || 'The connection could not be completed.');
+                setErrorMessage(taskResult?.errorMessage || 'The consolidation could not be completed.');
                 setStep("error");
-                log.event('Connect to remote failed');
+                log.event("Consolidate into remote failed");
                 return;
             }
 
@@ -80,12 +80,12 @@ export function ConnectDatabaseDialog({ open, entry, onClose }: IConnectDatabase
             setPushedCount(outputs?.pushedCount ?? 0);
             setAlreadyPresentCount(outputs?.alreadyPresentCount ?? 0);
             setStep("success");
-            log.event('Connected to remote');
+            log.event("Consolidated into remote");
         }
         catch (error: any) {
             setErrorMessage(error.message || String(error));
             setStep("error");
-            log.event('Connect to remote failed');
+            log.event("Consolidate into remote failed");
         }
         finally {
             queue.shutdown();
@@ -111,13 +111,13 @@ export function ConnectDatabaseDialog({ open, entry, onClose }: IConnectDatabase
             maxWidth={560}
             onKeyDown={createDialogKeyHandler(
                 () => {
-                    connect().catch(error => log.exception('Failed to connect to the remote', error as Error));
+                    consolidate().catch(error => log.exception("Failed to consolidate into the remote", error as Error));
                 },
                 step !== "configure" || remotePath.trim().length === 0
             )}
-            data-id="connect-database-dialog"
+            data-id="consolidate-database-dialog"
             >
-            <DialogTitle>Connect to remote</DialogTitle>
+            <DialogTitle>Consolidate into remote</DialogTitle>
             <DialogContent>
                 {step === "configure"
                     && <>
@@ -129,7 +129,7 @@ export function ConnectDatabaseDialog({ open, entry, onClose }: IConnectDatabase
                         <FormControl>
                             <FormLabel>Remote path</FormLabel>
                             <Input
-                                data-id="connect-remote-path-input"
+                                data-id="consolidate-remote-path-input"
                                 value={remotePath}
                                 placeholder="/path/to/backup or s3:bucket:/prefix"
                                 onChange={event => setRemotePath(event.target.value)}
@@ -141,14 +141,14 @@ export function ConnectDatabaseDialog({ open, entry, onClose }: IConnectDatabase
                 {step === "running"
                     && <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 2 }}>
                         <CircularProgress size="sm" />
-                        <Typography level="body-sm">Connecting...</Typography>
+                        <Typography level="body-sm">Consolidating...</Typography>
                     </Box>
                 }
 
                 {step === "success"
-                    && <Alert color="success" data-id="connect-database-success">
+                    && <Alert color="success" data-id="consolidate-database-success">
                         <Box>
-                            <Typography level="body-sm">Connected to {remotePath}.</Typography>
+                            <Typography level="body-sm">Consolidated into {remotePath}.</Typography>
                             <Typography level="body-sm">Photos uploaded: {pushedCount}</Typography>
                             <Typography level="body-sm">Already on the remote: {alreadyPresentCount}</Typography>
                         </Box>
@@ -156,7 +156,7 @@ export function ConnectDatabaseDialog({ open, entry, onClose }: IConnectDatabase
                 }
 
                 {step === "error"
-                    && <Alert color="danger" data-id="connect-database-error">
+                    && <Alert color="danger" data-id="consolidate-database-error">
                         {errorMessage}
                     </Alert>
                 }
@@ -164,16 +164,16 @@ export function ConnectDatabaseDialog({ open, entry, onClose }: IConnectDatabase
             <DialogActions>
                 {step === "configure"
                     && <Button
-                        data-id="connect-database-confirm"
+                        data-id="consolidate-database-confirm"
                         disabled={remotePath.trim().length === 0}
                         onClick={() => {
-                            connect().catch(error => log.exception('Failed to connect to the remote', error as Error));
+                            consolidate().catch(error => log.exception("Failed to consolidate into the remote", error as Error));
                         }}
                         >
-                        Connect
+                        Consolidate
                     </Button>
                 }
-                <Button variant="plain" data-id="connect-database-close" onClick={close}>
+                <Button variant="plain" data-id="consolidate-database-close" onClick={close}>
                     {step === "success" ? 'Done' : 'Cancel'}
                 </Button>
             </DialogActions>

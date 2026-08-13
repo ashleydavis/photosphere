@@ -214,15 +214,15 @@ describe("FolderMediaSource", () => {
         expect(page.nextCursor).toBeUndefined();
     });
 
-    test("exportItem returns the file path unchanged and releaseItem does nothing", async () => {
+    test("openItem returns the file path unchanged and closeItem does nothing", async () => {
         const filePath = path.join(photosDir, "a.jpg");
         writeFile(filePath, "photo");
 
         const source = new FolderMediaSource([folderSource(photosDir, true)], 60000, sessionTempDir, uuidGenerator);
         const page = await source.listPage(undefined, 10);
 
-        expect(await source.exportItem(page.items[0])).toBe(filePath);
-        await source.releaseItem(page.items[0]);
+        expect(await source.openItem(page.items[0])).toBe(filePath);
+        await source.closeItem(page.items[0]);
         expect(fsSync.existsSync(filePath)).toBe(true);
     });
 

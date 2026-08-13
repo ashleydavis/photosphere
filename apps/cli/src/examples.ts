@@ -32,10 +32,10 @@ export const COMMAND_EXAMPLES: ICommandExamples = {
         { command: "psi watch --db ./photos --no-sync", description: "Imports without syncing to the origin." }
     ],
 
-    connect: [
-        { command: "psi connect --db ./photos ./backup", description: "Creates the remote as a copy of this database when nothing is there." },
-        { command: "psi connect --db ./photos s3:my-bucket:/photos", description: "Connects to an S3 remote, consolidating into it when it already holds a different database." },
-        { command: "psi connect --db ./photos ./shared", description: "Records an already-related remote as this database's origin." }
+    consolidate: [
+        { command: "psi consolidate --db ./photos ./backup", description: "Creates the remote as a copy of this database when nothing is there." },
+        { command: "psi consolidate --db ./photos s3:my-bucket:/photos", description: "Joins an S3 remote that already holds a different database, so the two can sync." },
+        { command: "psi consolidate --db ./photos ./shared", description: "Records an already-related remote as this database's origin." }
     ],
 
     check: [

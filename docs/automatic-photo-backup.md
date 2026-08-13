@@ -76,11 +76,11 @@ The active one is `ACTIVE_RETENTION_POLICY` at the bottom of that file, set to a
 
 ## Connecting to a remote
 
-Sync refuses to run between two databases that are not related to each other, and this feature does not weaken that refusal. `psi connect` is the separate, explicit operation that makes them related:
+Sync refuses to run between two databases that are not related to each other, and this feature does not weaken that refusal. `psi consolidate` is the separate, explicit operation that makes them related:
 
 ```bash
-psi connect --db ./photos ./backup                  # a directory
-psi connect --db ./photos s3:my-bucket:/photos      # an S3 location
+psi consolidate --db ./photos ./backup                  # a directory
+psi consolidate --db ./photos s3:my-bucket:/photos      # an S3 location
 ```
 
 It looks at what is there and picks between three cases:
@@ -92,6 +92,16 @@ It looks at what is there and picks between three cases:
 After any of the three, ordinary `psi sync` works.
 
 Two machines each connected to the same remote end up with each other's photos: each pushes what the remote does not have, and each pulls the rest.
+
+## What was imported
+
+Every import, whether the user asked for it or it arrived on its own, is written to the database's own import record at `.db/imports.dat`. The Import page shows it, newest first, so opening a database answers "what came in?" rather than only showing what has happened since the app started. Each row is badged **manual** or **automatic**, because a photo that arrived on its own is the one a user is most likely to be asking about.
+
+The record holds the last 1000 imports. When it is full the oldest go and the page says so, rather than presenting a partial history as a complete one.
+
+**It never travels.** It is written straight to storage and is deliberately not added to the merkle tree, which is what keeps it out of sync, replication and consolidation: those copy what the tree indexes. It is this machine's account of what it did, not part of the photo collection, and a record that quietly travelled would show one machine's imports as another's. `87-import-record` proves it stays put while the photos themselves go.
+
+Losing it costs nothing but the history: an unreadable record reads as empty, and a record that cannot be written does not fail the import, because by then the photos are already in the database.
 
 ## What each platform can do
 
@@ -106,13 +116,9 @@ The engine is platform-neutral and lives in `packages/api`, with the Node-side p
 
 On the desktop the settings live on the configuration dialog and the settings page: a toggle, the folders being watched, and whether the source file is deleted after import. Switching the toggle on creates a private photo database under the application data directory, lists it as "My Photos" and marks it as the one automatic import writes to. The main process starts and stops the task as the settings change, so nothing needs restarting.
 
-On mobile the same thing happens, and the user does the same thing: switch the toggle on, and the app makes its private database, asks for the photo permission, walks the device photo library and imports what it finds, including photos taken while it is running.
+On mobile the same thing happens and the user does the same thing: switch the toggle on, and the app makes its private database, asks for the photo permission, walks the device photo library and imports what it finds, including photos taken while it is running. It runs the same `auto-import` task the CLI and the desktop run, reading the photo library through the same host bridge the rest of the worker code uses. The only difference is which media source is registered underneath.
 
-One thing is arranged differently, and it matters. The loop runs in the WebView rather than in a worker task. The embedded engine pool has three slots (`EnginePool.POOL_SIZE`); the asset server holds one for the life of the app, so a long-running orchestrator task in a second slot leaves nothing for the tasks the import it queues needs in turn, and the import waits for a slot that can never come free. That is not a theory: the task started, handed over one batch, and nothing ever completed. Driven from the WebView the loop occupies no slot, and the import it queues behaves exactly as a manual import does.
-
-That is why the loop itself lives in `packages/api` as `runAutoImportLoop`, with the CLI and the desktop driving it from the `auto-import` task and mobile driving it from `MobileAutoImportScheduler`. One loop, two drivers, rather than two implementations that drift apart. It is also why mobile reads the photo library through the Capacitor plugin's `mediaLibrary*` methods rather than through the engine's host bridge: same native code, called from the side that is doing the work. Nothing inside an engine reads the photo library, deliberately.
-
-Two things a WebView cannot do are passed into the loop instead: running the import (the `import-assets` task, as everywhere else) and reading the database's content hashes (the `get-content-hashes` task, which is what confirms a photo is safe to delete off the device). Where the backfill has reached is kept in the app's own config rather than in the database state, because the WebView cannot take the write lock; losing it costs time and nothing else, since the import recognises what it already holds by content hash.
+That task holds an engine slot for as long as automatic import is on, and the `import-assets` task it queues holds another, and the `hash-file` and `upload-asset` tasks that import queues in turn hold more. On a phone that chain has to fit inside `EnginePool.POOL_SIZE`, which is why the pool is five rather than three: at three it deadlocked, and the failure was silent, with the setting on, the task running and the counts at zero forever. See [Mobile background tasks](mobile-background-tasks.md) before changing anything about that.
 
 ## Where the code is
 
@@ -125,23 +131,23 @@ Two things a WebView cannot do are passed into the loop instead: running the imp
 | `packages/api/src/lib/media-source.ts` | The source abstraction the loop reads through. |
 | `packages/api/src/lib/auto-import-queue.ts` | The two lanes and the pacing, with no I/O in it at all. |
 | `packages/api/src/lib/source-cleanup.ts` | Choosing and deleting confirmed source files. |
+| `packages/api/src/lib/import-record.ts` | What a database imported, capped and newest first. |
+| `packages/node-api/src/lib/import-record-storage.ts` | Reading and writing that record, deliberately outside the merkle tree so it never travels. |
+| `packages/node-api/src/lib/get-import-record.worker.ts` | Reading it for the interface, which cannot open the database itself. |
 | `packages/node-api/src/lib/media-source-registry.ts` | How a platform registers the source kinds it can serve. |
 | `packages/node-api/src/lib/folder-media-source.ts` | Folders on a filesystem, watched and polled. |
-| `packages/node-api/src/lib/auto-import.worker.ts` | The task the CLI and the desktop drive the loop from. |
-| `packages/node-api/src/lib/get-content-hashes.worker.ts` | What the database holds, for a caller that cannot open its storage. |
+| `packages/node-api/src/lib/auto-import.worker.ts` | The task every platform runs it from. |
 | `packages/node-api/src/lib/evict-originals.worker.ts` | Dropping local originals the origin holds. |
 | `packages/node-api/src/lib/consolidate.ts` | Joining a standalone database to a remote that already has content. |
 | `packages/node-api/src/lib/auto-import-desktop.ts` | What the desktop app should do about automatic import, worked out from its config. |
 | `packages/user-interface/src/lib/auto-import-config.ts` | Reading and writing the settings through the app's config store. |
 | `packages/user-interface/src/components/auto-import-settings.tsx` | The "Automatic import" card. |
-| `packages/user-interface/src/components/connect-database-dialog.tsx` | Connecting a database to a remote. |
-| `packages/mobile-frontend/src/lib/mobile-auto-import-scheduler.ts` | What mobile drives the loop from, in the WebView. |
-| `packages/mobile-frontend/src/lib/device-media-source.ts` | The device photo library as a media source. |
-| `packages/mobile-frontend/src/lib/device-media-library.ts` | Reading the photo library through the Capacitor plugin. |
-| `packages/mobile-frontend/src/lib/mobile-backfill-cursor.ts` | Where the backfill has reached, kept in the app's config. |
+| `packages/user-interface/src/components/consolidate-database-dialog.tsx` | Joining a database to a remote so the two can sync. |
+| `packages/mobile-worker/src/lib/device-media-source.ts` | The device photo library as a media source. |
+| `packages/mobile-worker/src/shims/media-library.ts` | Typed access to the native photo library host functions. |
 | `packages/mobile-frontend/src/lib/mobile-media-permission.ts` | What to do when the photo permission is refused. |
 | `packages/mobile-frontend/src/lib/mobile-media-cleanup.ts` | Batching the device deletes the system asks the user to confirm. |
-| `apps/android-frontend/.../jsengine/MediaLibrary.java`, `MediaLibraryHost.java` | The Android photo library: paging, export and delete over `MediaStore`. |
+| `apps/android-frontend/.../jsengine/MediaLibrary.java`, `MediaLibraryHost.java` | The Android photo library: paging, copying out and delete over `MediaStore`. |
 | `apps/android-frontend/.../jsengine/MediaPermissions.java`, `MediaDeleteBroker.java` | The per-version photo permission, and the staged delete confirmation. |
 | `apps/ios-frontend/.../MediaLibrary.swift`, `MediaLibraryHost.swift` | The same for iOS, over the Photos framework. |
 | `apps/cli/src/cmd/watch.ts`, `apps/cli/src/cmd/connect.ts` | The two commands. |
@@ -156,15 +162,16 @@ Unit tests sit beside each of those files under `src/test/`. The end-to-end beha
 | `82-watch-continuous` | A file created while the command is running is imported, and Ctrl-C stops it. |
 | `83-watch-cleanup` | A confirmed source file is deleted and one that failed to import is not. |
 | `84-watch-sync-evict` | Imports reach the origin, confirmed originals are dropped, thumbnails stay, and the dropped original is fetched back from the origin on demand. |
-| `85-connect` | Creating a remote, consolidating into an unrelated one without duplicating shared content, and sync working afterwards where it refused before. |
+| `85-consolidate` | Creating a remote, consolidating into an unrelated one without duplicating shared content, and sync working afterwards where it refused before. |
 | `86-multi-device` | Two databases connected to one remote each end up with the other's photos. |
+| `87-import-record` | What a database imported is remembered across restarts, manual and automatic imports are badged apart, and the record never travels: sync, consolidation and replication all leave `.db/imports.dat` behind while the photos themselves go. |
 
 And by Electron smoke tests, which drive the real app:
 
 | Test | What it proves |
 |---|---|
-| `35-auto-import` | Switching the toggle on creates the default private database, lists it with the default badge, imports a photo dropped into a watched folder with nothing else done, and deletes the source file once the cleanup toggle is on. |
-| `36-connect-database` | Only one database can be the default, and connecting to an unrelated remote through Manage Databases uploads only what the remote does not have and leaves ordinary sync working. |
+| `35-auto-import` | Switching the toggle on creates the default private database, lists it with the default badge, imports a photo dropped into a watched folder with nothing else done, deletes the source file once the cleanup toggle is on, and shows what the database imported when the app is closed and reopened. |
+| `36-consolidate-database` | Only one database can be the default, and consolidating into an unrelated remote through Manage Databases uploads only what the remote does not have and leaves ordinary sync working. |
 
 And by a mobile smoke test, which drives the real app on an Android emulator:
 
@@ -175,7 +182,7 @@ And by a mobile smoke test, which drives the real app on an Android emulator:
 
 Both are Android only. The iOS simulator has no supported way to remove a seeded photo, and a test that leaves one behind poisons every run after it.
 
-Test 47 is the one that would have caught the engine-pool deadlock. It waits for the photo to arrive rather than for the task to start, because a deadlocked import looks exactly like a working one from outside: the setting is on, the loop is running, and the counts sit at zero forever.
+Test 47 is the one that caught the engine-pool deadlock, and the one that would catch it again. It waits for the photo to arrive rather than for the task to start, because a deadlocked import looks exactly like a working one from outside: the setting is on, the task is running, and the counts sit at zero forever.
 
 Writing those two found three further defects that nothing else had:
 

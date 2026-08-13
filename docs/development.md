@@ -97,12 +97,12 @@ To run the CLI, the dev-server, or the dev-frontend on their own, see [apps/cli]
 
 ## Automatic import
 
-`psi watch` watches folders for new media and imports it on its own, pushing it to a remote when one is configured, and optionally deleting the source file or dropping local originals the remote already holds. `psi connect` joins a standalone database to a remote, creating it, consolidating into it, or simply recording it as the origin.
+`psi watch` watches folders for new media and imports it on its own, pushing it to a remote when one is configured, and optionally deleting the source file or dropping local originals the remote already holds. `psi consolidate` joins a standalone database to a remote, creating it, consolidating into it, or simply recording it as the origin.
 
 ```bash
 psi watch --db ./photos                  # watch this machine's photo folders
 psi watch --db ./photos --once           # import everything once, then exit
-psi connect --db ./photos ./backup       # join this database to a remote
+psi consolidate --db ./photos ./backup       # join this database to a remote
 ```
 
 The desktop and mobile apps do the same thing from a toggle in the settings, watching this machine's photo folders or the device's photo library. The loop behind all three is platform-neutral and lives in `packages/api`, driven from a worker task on the CLI and the desktop and from the WebView on mobile. See [Automatic photo backup](automatic-photo-backup.md) for the two import lanes, the retention policies and how to switch the active one, what consolidation does, why mobile drives the loop differently, and what each platform supports.
@@ -140,6 +140,7 @@ The local iOS environment is pinned to macOS 12.7.6 / Xcode 14.2, which is why t
 - [Git hooks](git-hooks.md) - The local commit and push gate, and how to install it.
 - [Automatic photo backup](automatic-photo-backup.md) - Watching for new photos, importing them, and keeping a remote copy.
 - [Background tasks](background-tasks.md) - Adding a new background task type.
+- [Mobile background tasks](mobile-background-tasks.md) - The mobile engine pool: what a slot is, what holds one, and why running out hangs the app.
 - [Mobile native media tools](mobile-native-media.md) - How the bundled mobile ImageMagick/ffmpeg are wired up.
 - [Updating mobile ImageMagick/ffmpeg](updating-mobile-imagemagick-ffmpeg.md) - Updating the bundled versions.
 - [Theme override](theme-override.md) - Forcing the startup theme with `PHOTOSPHERE_THEME`.

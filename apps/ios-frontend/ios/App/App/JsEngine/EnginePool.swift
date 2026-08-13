@@ -1,11 +1,24 @@
 import Foundation
 
 //
-// The single source of truth for the engine pool size. Default 3. A size of 1 degrades the pool to
-// serial execution and is a supported, tested configuration. Nothing else in the plugin reads or
-// writes pool size; if a runtime/tunable source is wanted later it replaces this constant.
+// The single source of truth for the engine pool size. A size of 1 degrades the pool to serial
+// execution and is a supported, tested configuration. Nothing else in the plugin reads or writes
+// pool size; if a runtime/tunable source is wanted later it replaces this constant. Keep it in step
+// with POOL_SIZE in the Android EnginePool.java.
 //
-let POOL_SIZE = 3
+// Five, because that is what the deepest chain of tasks needs plus one to spare. Automatic import is
+// the deepest: the asset server holds a slot for the life of the app, auto-import holds one for as
+// long as the setting is on, the import-assets task it queues holds a third, and the hash-file and
+// upload-asset tasks that import queues in turn need a fourth. At four that chain fits exactly and
+// nothing else can run beside it, so a sync waits and only one file is hashed at a time. The fifth
+// is that headroom.
+//
+// A task that waits on a task it queued must never be able to use the last free slot, because both
+// then wait forever and it looks from outside exactly like a slow import: the setting is on, the
+// task is running, and the counts stay at zero. That is not theoretical; it is what this pool did at
+// three.
+//
+let POOL_SIZE = 5
 
 //
 // A pool slot pairing one engine with its busy/idle state. The dispatcher assigns the next pending

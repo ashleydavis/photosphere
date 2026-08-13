@@ -167,6 +167,20 @@ function ImportItemRow({ item }: { item: IImportItem }) {
             <Typography level="body-sm" sx={{ flexGrow: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {item.logicalPath}
             </Typography>
+
+            {/* Which asked for it. A photo that arrived on its own is the one a user is most likely
+                to be asking about, so it is marked rather than left to be guessed at. */}
+            {item.source && (
+                <Chip
+                    size="sm"
+                    variant="soft"
+                    color={item.source === 'automatic' ? 'primary' : 'neutral'}
+                    data-id={`import-source-${item.source}`}
+                    sx={{ flexShrink: 0 }}
+                >
+                    {item.source === 'automatic' ? 'Automatic' : 'Manual'}
+                </Chip>
+            )}
         </Box>
     );
 }
@@ -178,7 +192,7 @@ function ImportItemRow({ item }: { item: IImportItem }) {
 export function ImportPage() {
     const { databasePath } = useAssetDatabase();
     const platform = usePlatform();
-    const { status, importItems, startImportDirectories, startImportFiles, isPicking, cancelImport, clearImport } = useImport();
+    const { status, importItems, recordTruncated, startImportDirectories, startImportFiles, isPicking, cancelImport, clearImport } = useImport();
 
     // Drives the phone layout: stacked full-width import buttons, chips for the summary.
     const isMobile = useIsMobile();
@@ -434,8 +448,11 @@ export function ImportPage() {
                     </Box>
                 )}
 
-                {/* Running/completed/cancelled state: show summary + item list */}
-                {(status === 'running' || status === 'completed' || status === 'cancelled') && (
+                {/* The list shows while an import is happening or has just finished, and also when
+                    nothing is happening but this database has imported something before. That last
+                    case is the point of the record: opening a database should answer "what came in?"
+                    without the user having to import something first. */}
+                {(status === 'running' || status === 'completed' || status === 'cancelled' || importItems.length > 0) && (
                     <Box className="flex flex-col flex-grow overflow-hidden">
 
                         {/* Summary (only when done). Chips in a wrapping row, so the outcome reads at
@@ -473,9 +490,21 @@ export function ImportPage() {
                             ref={listRef}
                             className="flex-grow overflow-y-auto"
                         >
-                            {importItems.map(item => (
-                                <ImportItemRow key={item.assetId} item={item} />
+                            {importItems.map((item, index) => (
+                                <ImportItemRow key={`${item.assetId}-${index}`} item={item} />
                             ))}
+
+                            {/* Said out loud when the record is full, because a list that silently
+                                stops is read as the whole history. */}
+                            {recordTruncated && (
+                                <Typography
+                                    level="body-xs"
+                                    data-id="import-record-truncated"
+                                    sx={{ color: 'text.tertiary', textAlign: 'center', py: 1.5 }}
+                                >
+                                    Imports older than these are not remembered.
+                                </Typography>
+                            )}
                         </Box>
 
                         {/* Clear button. Full width at the bottom of a phone screen, under the thumb. */}

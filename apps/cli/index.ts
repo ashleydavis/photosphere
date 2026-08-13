@@ -29,7 +29,7 @@ import { syncCommand } from './src/cmd/sync';
 import { originCommand } from './src/cmd/origin';
 import { setOriginCommand, ISetOriginCommandOptions } from './src/cmd/set-origin';
 import { watchCommand, IWatchCommandOptions } from './src/cmd/watch';
-import { connectCommand, IConnectCommandOptions } from './src/cmd/connect';
+import { consolidateCommand, IConsolidateCommandOptions } from './src/cmd/consolidate';
 import { encryptCommand } from './src/cmd/encrypt';
 import { decryptCommand } from './src/cmd/decrypt';
 import { secretsCommand } from './src/cmd/secrets';
@@ -424,8 +424,8 @@ Resources:
         .action(initContext((ctx, folders: string[], options: IWatchCommandOptions) => watchCommand(ctx, folders, options)));
 
     program
-        .command("connect")
-        .description("Connects this database to a remote one, creating it, consolidating into it, or simply recording it as the origin.")
+        .command("consolidate")
+        .description("Joins this database to a remote one so the two can sync, creating the remote when it does not exist and recording it as the origin.")
         .argument("<remote>", "Path or URI of the remote database (a directory or an s3: location).")
         .option(...dbOption)
         .option(...keyOption)
@@ -434,8 +434,8 @@ Resources:
         .option(...yesOption)
         .option(...cwdOption)
         .option(...sessionIdOption)
-        .addHelpText('after', getCommandExamplesHelp('connect'))
-        .action(initContext((ctx, remote: string, options: IConnectCommandOptions) => connectCommand(ctx, remote, options)));
+        .addHelpText('after', getCommandExamplesHelp('consolidate'))
+        .action(initContext((ctx, remote: string, options: IConsolidateCommandOptions) => consolidateCommand(ctx, remote, options)));
 
     program
         .command("list")

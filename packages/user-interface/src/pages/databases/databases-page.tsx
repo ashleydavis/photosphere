@@ -21,7 +21,7 @@ import { ShareDatabaseDialog } from '../../components/share-database-dialog';
 import { ReceiveDatabaseDialog } from '../../components/receive-database-dialog';
 import { ViewDatabaseDialog } from '../../components/view-database-dialog';
 import { ReplicateDatabaseDialog } from '../../components/replicate-database-dialog';
-import { ConnectDatabaseDialog } from '../../components/connect-database-dialog';
+import { ConsolidateDatabaseDialog } from '../../components/consolidate-database-dialog';
 import { useConfig } from '../../context/config-context';
 import { getDefaultDatabasePath, setDefaultDatabasePath } from '../../lib/auto-import-config';
 import Chip from '@mui/joy/Chip';
@@ -80,7 +80,7 @@ export function DatabasesPage() {
     const [replicatingEntry, setReplicatingEntry] = useState<IDatabaseEntry | undefined>(undefined);
 
     // The database entry being connected to a remote (undefined when the dialog is closed).
-    const [connectingEntry, setConnectingEntry] = useState<IDatabaseEntry | undefined>(undefined);
+    const [consolidatingEntry, setConsolidatingEntry] = useState<IDatabaseEntry | undefined>(undefined);
 
     // The path of the database automatic import writes to, or undefined when none has been chosen.
     const [defaultDatabasePath, setDefaultDatabasePathState] = useState<string | undefined>(undefined);
@@ -182,10 +182,10 @@ export function DatabasesPage() {
                 },
             },
             {
-                label: 'Connect to remote',
+                label: 'Consolidate into remote',
                 icon: <CloudSync fontSize="small" />,
-                dataId: 'connect-database-button',
-                onClick: () => { log.info('Connect to remote dialog opened'); setConnectingEntry(entry); },
+                dataId: 'consolidate-database-button',
+                onClick: () => { log.info('Consolidate into remote dialog opened'); setConsolidatingEntry(entry); },
             },
             {
                 label: 'Edit',
@@ -347,11 +347,11 @@ export function DatabasesPage() {
                                         <Star fontSize="small" />
                                     </IconButton>
                                     <IconButton
-                                        data-id="connect-database-button"
+                                        data-id="consolidate-database-button"
                                         size="sm"
                                         variant="plain"
-                                        title="Connect to remote"
-                                        onClick={() => { log.info('Connect to remote dialog opened'); setConnectingEntry(entry); }}
+                                        title="Consolidate into remote"
+                                        onClick={() => { log.info('Consolidate into remote dialog opened'); setConsolidatingEntry(entry); }}
                                     >
                                         <CloudSync fontSize="small" />
                                     </IconButton>
@@ -446,12 +446,12 @@ export function DatabasesPage() {
                 />
             )}
 
-            {connectingEntry !== undefined && (
-                <ConnectDatabaseDialog
-                    open={connectingEntry !== undefined}
-                    entry={connectingEntry!}
+            {consolidatingEntry !== undefined && (
+                <ConsolidateDatabaseDialog
+                    open={consolidatingEntry !== undefined}
+                    entry={consolidatingEntry!}
                     onClose={() => {
-                        setConnectingEntry(undefined);
+                        setConsolidatingEntry(undefined);
                         refresh().catch(error => log.exception('Failed to refresh after connecting', error as Error));
                     }}
                 />

@@ -177,13 +177,13 @@ final class MediaLibraryHost {
     }
 
     //
-    // host.mediaLibraryExport(itemId): copies one library item into the sandbox and returns the
+    // host.mediaLibraryOpen(itemId): copies one library item into the sandbox and returns the
     // sandbox-relative path the import can read it from.
     //
     // A library asset is not a file the import can open, which is why this exists. The copy is
-    // deleted again by mediaLibraryRelease once the import has finished with it.
+    // deleted again by mediaLibraryClose once the import has finished with it.
     //
-    func mediaLibraryExport(itemId: String) throws -> String {
+    func mediaLibraryOpen(itemId: String) throws -> String {
         let assets = PHAsset.fetchAssets(withLocalIdentifiers: [itemId], options: nil)
         guard assets.count > 0 else {
             throw MediaLibraryError.itemNotFound(itemId)
@@ -229,12 +229,12 @@ final class MediaLibraryHost {
     }
 
     //
-    // host.mediaLibraryRelease(itemId): deletes the sandbox copy the export made.
+    // host.mediaLibraryClose(itemId): deletes the sandbox copy the export made.
     //
     // The library asset itself is untouched. Removing a photo from the device is cleanup, which is a
     // separate operation the user confirms.
     //
-    func mediaLibraryRelease(itemId: String) {
+    func mediaLibraryClose(itemId: String) {
         guard let tempDir = try? PathSandbox.resolveWithin(root: storageRoot, candidate: MediaLibrary.mediaTempDir) else {
             return
         }

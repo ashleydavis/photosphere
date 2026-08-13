@@ -48,12 +48,12 @@ class FakeMediaSource implements IMediaSource {
         };
     }
 
-    async exportItem(item: IMediaItem): Promise<string> {
+    async openItem(item: IMediaItem): Promise<string> {
         this.exportedIds.push(item.sourceId);
         return `/exported/${item.sourceId}`;
     }
 
-    async releaseItem(item: IMediaItem): Promise<void> {
+    async closeItem(item: IMediaItem): Promise<void> {
         this.releasedIds.push(item.sourceId);
     }
 
@@ -407,8 +407,8 @@ describe("runAutoImportLoop", () => {
         const stuck: IMediaSource = {
             listPage: async () => ({ items: [], nextCursor: "same" }),
             watch: () => () => { /* nothing to unsubscribe. */ },
-            exportItem: async () => "",
-            releaseItem: async () => { /* nothing exported. */ },
+            openItem: async () => "",
+            closeItem: async () => { /* nothing exported. */ },
             deleteItems: async () => { /* nothing to delete. */ },
         };
 

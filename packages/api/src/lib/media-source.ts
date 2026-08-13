@@ -17,8 +17,8 @@ export interface IMediaItem {
     sourceId: string;
 
     // Where the importer can read the bytes. Absolute on desktop, sandbox-relative on mobile. For a
-    // source that materialises a temporary copy this is only valid between exportItem and
-    // releaseItem.
+    // source that materialises a temporary copy this is only valid between openItem and
+    // closeItem.
     filePath: string;
 
     // What to show the user while this item is being imported.
@@ -75,13 +75,13 @@ export interface IMediaSource {
     // Returns a path the importer can read the item's bytes from. A source whose items are already
     // files returns the path unchanged; one that has to materialise a copy makes it here.
     //
-    exportItem(item: IMediaItem): Promise<string>;
+    openItem(item: IMediaItem): Promise<string>;
 
     //
-    // Releases whatever exportItem materialised. Does nothing for a source whose items are already
+    // Releases whatever openItem materialised. Does nothing for a source whose items are already
     // files.
     //
-    releaseItem(item: IMediaItem): Promise<void>;
+    closeItem(item: IMediaItem): Promise<void>;
 
     //
     // Deletes the named items from the source. Throws MediaSourceDeleteError naming the items it

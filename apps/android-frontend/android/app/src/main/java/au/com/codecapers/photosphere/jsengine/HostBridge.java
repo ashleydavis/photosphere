@@ -1,5 +1,7 @@
 package au.com.codecapers.photosphere.jsengine;
 
+import android.content.Context;
+
 import java.io.File;
 
 //
@@ -46,13 +48,84 @@ public final class HostBridge {
     private final File storageRoot;
 
     //
-    // Constructs the bridge for one engine context.
+    // The Android context the device photo library is read through, or null on a bridge created
+    // without one (the plain-JVM unit tests). The library reader is only built when something asks
+    // for it, so a bridge with no context works for everything else.
+    //
+    private final Context androidContext;
+
+    //
+    // Constructs the bridge for one engine context, without an Android context. For tests, and for
+    // anything that will never read the device photo library.
     //
     public HostBridge(EngineCallbacks callbacks, CancellationState cancellationState, String sessionId, File storageRoot) {
+        this(callbacks, cancellationState, sessionId, storageRoot, null);
+    }
+
+    //
+    // Constructs the bridge for one engine context, with the Android context the device photo
+    // library needs.
+    //
+    public HostBridge(EngineCallbacks callbacks, CancellationState cancellationState, String sessionId, File storageRoot, Context androidContext) {
         this.callbacks = callbacks;
         this.cancellationState = cancellationState;
         this.sessionId = sessionId;
         this.storageRoot = storageRoot;
+        this.androidContext = androidContext;
+    }
+
+    //
+    // The device photo library, created lazily and only when automatic import actually reads it.
+    //
+    private MediaLibraryHost mediaLibraryHost;
+
+    //
+    // Returns the device photo library reader, creating it on first use.
+    //
+    private synchronized MediaLibraryHost mediaLibrary() {
+        if (mediaLibraryHost == null) {
+            if (androidContext == null) {
+                throw new RuntimeException("The device photo library needs an Android context, and this engine was created without one.");
+            }
+            mediaLibraryHost = new MediaLibraryHost(androidContext, storageRoot);
+            mediaLibraryHost.setDeleteRequester(MediaDeleteBroker.requester());
+        }
+        return mediaLibraryHost;
+    }
+
+    //
+    // host.mediaLibraryList(cursor, pageSize): one page of the device photo library, as JSON.
+    //
+    public String mediaLibraryList(String cursor, int pageSize) {
+        return mediaLibrary().mediaLibraryList(cursor, pageSize);
+    }
+
+    //
+    // host.mediaLibraryAlbums(): the albums in the device photo library, as JSON.
+    //
+    public String mediaLibraryAlbums() {
+        return mediaLibrary().mediaLibraryAlbums();
+    }
+
+    //
+    // host.mediaLibraryOpen(itemId): copies one library item into the sandbox and returns its path.
+    //
+    public String mediaLibraryOpen(String itemId) {
+        return mediaLibrary().mediaLibraryOpen(itemId);
+    }
+
+    //
+    // host.mediaLibraryClose(itemId): deletes the sandbox copy an open made.
+    //
+    public void mediaLibraryClose(String itemId) {
+        mediaLibrary().mediaLibraryClose(itemId);
+    }
+
+    //
+    // host.mediaLibraryDelete(itemIdsJson): asks to delete the named items from the photo library.
+    //
+    public String mediaLibraryDelete(String itemIdsJson) {
+        return mediaLibrary().mediaLibraryDelete(itemIdsJson);
     }
 
     //

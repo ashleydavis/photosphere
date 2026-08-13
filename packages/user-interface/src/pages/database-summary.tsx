@@ -12,7 +12,7 @@ import { useIsMobile } from "../lib/use-is-mobile";
 import type { IDatabaseSummary } from "node-api";
 import type { IGetDatabaseSummaryData } from "node-api";
 import Button from "@mui/joy/Button";
-import { ConnectDatabaseDialog } from "../components/connect-database-dialog";
+import { ConsolidateDatabaseDialog } from "../components/consolidate-database-dialog";
 
 //
 // Formats a byte count into a human-readable string (e.g. "1.5 GiB").
@@ -157,7 +157,7 @@ export function DatabaseSummaryPage() {
     const [isLoading, setIsLoading] = useState(false);
 
     // Whether the connect-to-remote dialog is open.
-    const [connectOpen, setConnectOpen] = useState(false);
+    const [consolidateOpen, setConsolidateOpen] = useState(false);
 
     //
     // The task queue used to run the get-database-summary task.
@@ -281,10 +281,10 @@ export function DatabaseSummaryPage() {
                                 size="sm"
                                 variant="outlined"
                                 startDecorator={<CloudSync />}
-                                data-id="summary-connect-database-button"
-                                onClick={() => { log.info('Connect to remote dialog opened'); setConnectOpen(true); }}
+                                data-id="summary-consolidate-database-button"
+                                onClick={() => { log.info('Consolidate into remote dialog opened'); setConsolidateOpen(true); }}
                                 >
-                                Connect to remote
+                                Consolidate into remote
                             </Button>
                         </SummarySection>
 
@@ -303,11 +303,11 @@ export function DatabaseSummaryPage() {
                 }
             </Box>
 
-            {connectOpen && databasePath
-                && <ConnectDatabaseDialog
-                    open={connectOpen}
+            {consolidateOpen && databasePath
+                && <ConsolidateDatabaseDialog
+                    open={consolidateOpen}
                     entry={{ name: databasePath, description: '', path: databasePath }}
-                    onClose={() => setConnectOpen(false)}
+                    onClose={() => setConsolidateOpen(false)}
                 />
             }
         </Box>

@@ -20,12 +20,19 @@ import { buildMediaSource, registerMediaSourceBuilder } from "./media-source-reg
 import { IImportAssetsResult } from "./import-assets.worker";
 
 //
-// The long-running task that notices photos and imports them on its own, on the CLI and the desktop.
+// The long-running task that notices photos and imports them on its own. The same task runs on the
+// CLI, the desktop and mobile; only the media source underneath it differs, and the task talks to
+// that through IMediaSource without knowing which it has.
 //
-// The loop itself is `runAutoImportLoop` in `packages/api`, because mobile has to drive the same
-// loop from the WebView rather than from a task. Everything here is what a worker can do and a
-// WebView cannot: opening the database's storage, reading its content hashes, persisting the
-// backfill cursor under the write lock, and queueing the import task.
+// The decisions are `runAutoImportLoop` in `packages/api`, kept apart so they can be tested with no
+// filesystem, no photo library and no clock. Everything here is the part that needs a worker:
+// opening the database's storage, reading its content hashes, persisting the backfill cursor under
+// the write lock, and queueing the import task.
+//
+// This task holds an engine slot for as long as it runs, and the import it queues holds another,
+// and the hash-file and upload-asset tasks that import queues in turn hold more. On mobile that
+// chain has to fit inside EnginePool.POOL_SIZE with room to spare, or it deadlocks and the counts
+// sit at zero forever with no error anywhere.
 //
 
 //
@@ -55,8 +62,8 @@ export interface IAutoImportData {
 }
 
 //
-// The progress and arrival messages, and the result. Defined in `packages/api` beside the loop that
-// produces them, because mobile drives that loop from the WebView and reads the same messages.
+// The progress and arrival messages, and the result. Defined in `packages/api` beside the code that
+// produces them, and re-exported here because every caller reaches for them through this task.
 //
 export type { IAutoImportProgressMessage, IAutoImportItemMessage, IAutoImportResult };
 
@@ -167,6 +174,9 @@ export async function autoImportHandler(data: IAutoImportData, context: ITaskCon
                     googleApiKey: data.googleApiKey,
                     sessionId: data.sessionId,
                     dryRun: false,
+                    // Every photo this brings in is badged as having arrived on its own, so the
+                    // Import page can tell it from one the user asked for.
+                    source: "automatic" as const,
                 });
                 const importTaskResult = await importQueue.awaitTask(importTaskId);
 

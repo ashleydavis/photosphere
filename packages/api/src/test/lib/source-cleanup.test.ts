@@ -36,11 +36,11 @@ class RecordingMediaSource implements IMediaSource {
         return () => {};
     }
 
-    async exportItem(item: IMediaItem): Promise<string> {
+    async openItem(item: IMediaItem): Promise<string> {
         return item.filePath;
     }
 
-    async releaseItem(item: IMediaItem): Promise<void> {
+    async closeItem(item: IMediaItem): Promise<void> {
     }
 
     async deleteItems(sourceIds: string[]): Promise<void> {

@@ -7,12 +7,18 @@ import {
     IMediaSourceUnsubscribe,
     MediaSourceDeleteError,
 } from "api/src/lib/media-source";
-import { IDeviceMediaLibrary, IDeviceMediaLibraryItem } from "./device-media-library";
+import {
+    closeMediaLibraryItem,
+    deleteMediaLibraryItems,
+    listMediaLibraryPage,
+    openMediaLibraryItem,
+    IMediaLibraryItem,
+} from "../shims/media-library";
 
 //
 // The device photo library, presented as a media source.
 //
-// This is what lets the automatic import loop run unchanged on a phone: the loop only ever talks to
+// This is what lets the automatic import task run unchanged on a phone: the task only ever talks to
 // IMediaSource, and this is the mobile implementation of it, exactly as FolderMediaSource is the
 // desktop one.
 //
@@ -33,10 +39,7 @@ export class DeviceMediaSource implements IMediaSource {
     // How often the library is re-listed, in milliseconds.
     private readonly pollIntervalMs: number;
 
-    // Where the library is actually read from.
-    private readonly library: IDeviceMediaLibrary;
-
-    constructor(sources: IDeviceAlbumAutoImportSource[], pollIntervalMs: number, library: IDeviceMediaLibrary) {
+    constructor(sources: IDeviceAlbumAutoImportSource[], pollIntervalMs: number) {
         // The reserved "everything" id is not an album to filter by: a source list that includes it
         // covers the whole library, which is what a user gets before they choose albums.
         const watchesWholeLibrary = sources.some(source => source.albumId === ALL_DEVICE_MEDIA_ALBUM_ID);
@@ -44,14 +47,13 @@ export class DeviceMediaSource implements IMediaSource {
             ? []
             : sources.map(source => source.albumId).filter(albumId => albumId.length > 0);
         this.pollIntervalMs = pollIntervalMs > 0 ? pollIntervalMs : DEFAULT_POLL_INTERVAL_MS;
-        this.library = library;
     }
 
     //
     // Whether an item is one this source offers. An empty album list means the whole library; a
     // configured list keeps only the albums named in it.
     //
-    private isWanted(item: IDeviceMediaLibraryItem): boolean {
+    private isWanted(item: IMediaLibraryItem): boolean {
         if (this.albumIds.length === 0) {
             return true;
         }
@@ -65,13 +67,13 @@ export class DeviceMediaSource implements IMediaSource {
     // next page rather than stopping at the first page that happened to hold nothing wanted.
     //
     async listPage(cursor: string | undefined, pageSize: number): Promise<IMediaSourceListPage> {
-        const page = await this.library.listPage(cursor, pageSize);
+        const page = listMediaLibraryPage(cursor, pageSize);
 
         const items: IMediaItem[] = page.items
             .filter(item => this.isWanted(item))
             .map(item => ({
                 sourceId: item.id,
-                // The path is only known once the item has been exported, which the loop does just
+                // The path is only known once the item has been opened, which the task does just
                 // before handing the item to the import. Until then there is nothing to read.
                 filePath: "",
                 displayName: item.displayName,
@@ -97,16 +99,16 @@ export class DeviceMediaSource implements IMediaSource {
     // Copies the item out of the photo library into the sandbox and returns the path the import can
     // read it from. A library item is not a file the import can open, which is why this exists.
     //
-    async exportItem(item: IMediaItem): Promise<string> {
-        return await this.library.exportItem(item.sourceId);
+    async openItem(item: IMediaItem): Promise<string> {
+        return openMediaLibraryItem(item.sourceId);
     }
 
     //
-    // Deletes the sandbox copy the export made. The item itself is untouched: removing it from the
+    // Deletes the sandbox copy the open made. The item itself is untouched: removing it from the
     // device is cleanup, and is a separate, confirmed operation.
     //
-    async releaseItem(item: IMediaItem): Promise<void> {
-        await this.library.releaseItem(item.sourceId);
+    async closeItem(item: IMediaItem): Promise<void> {
+        closeMediaLibraryItem(item.sourceId);
     }
 
     //
@@ -118,7 +120,7 @@ export class DeviceMediaSource implements IMediaSource {
     // which photos are still on the device.
     //
     async deleteItems(sourceIds: string[]): Promise<void> {
-        const result = await this.library.deleteItems(sourceIds);
+        const result = deleteMediaLibraryItems(sourceIds);
         if (result.failedIds.length > 0) {
             throw new MediaSourceDeleteError(
                 `The photo library did not delete ${result.failedIds.length} item(s).`,

@@ -20,7 +20,14 @@ jest.mock('node-utils', () => ({
 
 jest.mock('storage', () => ({
     createStorage: jest.fn().mockReturnValue({
-        storage: {},
+        // read and write are here because the import writes what it took in to the database's import
+        // record on the way out. This mock swallowError is a pass-through rather than a swallow, so a
+        // storage that cannot be written surfaces here rather than being quietly ignored as it is in
+        // production.
+        storage: {
+            read: jest.fn().mockResolvedValue(undefined),
+            write: jest.fn().mockResolvedValue(undefined),
+        },
         rawStorage: {},
         normalizedPath: '/test/db',
         type: 'fs',

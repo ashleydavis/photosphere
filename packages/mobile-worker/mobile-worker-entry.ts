@@ -18,6 +18,7 @@ import { importAssetsHandler } from "node-api/src/lib/import-assets.worker";
 import { hashFileHandler } from "node-api/src/lib/hash-file.worker";
 import { uploadAssetHandler } from "node-api/src/lib/upload-asset.worker";
 import { getDatabaseSummaryHandler } from "node-api/src/lib/get-database-summary.worker";
+import { getImportRecordHandler } from "node-api/src/lib/get-import-record.worker";
 import { prefetchDatabaseHandler } from "node-api/src/lib/prefetch-database.worker";
 import { verifyFileHandler } from "node-api/src/lib/verify.worker";
 import { checkFileHandler } from "node-api/src/lib/check.worker";
@@ -26,8 +27,11 @@ import { checkDatabaseExistsHandler } from "node-api/src/lib/check-database-exis
 import { syncDatabaseHandler } from "node-api/src/lib/sync-database.worker";
 import { listS3DirsHandler } from "node-api/src/lib/list-s3-dirs.worker";
 import { readDatabasesConfigHandler, writeDatabasesConfigHandler } from "node-api/src/lib/databases-config.worker";
+import { autoImportHandler } from "node-api/src/lib/auto-import.worker";
 import { evictOriginalsHandler } from "node-api/src/lib/evict-originals.worker";
-import { getContentHashesHandler } from "node-api/src/lib/get-content-hashes.worker";
+import { registerMediaSourceBuilder } from "node-api/src/lib/media-source-registry";
+import { IDeviceAlbumAutoImportSource } from "api/src/lib/auto-import-settings";
+import { DeviceMediaSource } from "./src/lib/device-media-source";
 import { installWorkerGlobal } from "./src/index";
 
 //
@@ -75,6 +79,7 @@ registerHandler("upload-asset", uploadAssetHandler);
 // Register the get-database-summary handler: the /database-summary page dispatches this task to
 // compute the summary of the open database (photo/file counts, total size, integrity hashes).
 registerHandler("get-database-summary", getDatabaseSummaryHandler);
+registerHandler("get-import-record", getImportRecordHandler);
 
 // Register the prefetch-database handler: load-assets fire-and-forget queues this for a partial
 // database to pull the missing thumbnails and BSON database files from origin storage.
@@ -114,16 +119,23 @@ registerHandler("list-s3-dirs", listS3DirsHandler);
 registerHandler("read-databases-config", readDatabasesConfigHandler);
 registerHandler("write-databases-config", writeDatabasesConfigHandler);
 
-// Automatic import is deliberately NOT registered here, and must not be. The engine pool has three
-// slots; the asset server holds one for the life of the app, so a long-running auto-import task in a
-// second slot leaves nothing for the tasks the import it queues needs in turn, and the import waits
-// for a slot that can never come free. Mobile runs the same loop from the WebView instead, where it
-// occupies no slot: see MobileAutoImportScheduler in packages/mobile-frontend.
+// Register the device photo library as a media source. The auto-import task only ever talks to the
+// IMediaSource interface, so registering this here is what lets the same task that watches folders on
+// desktop watch the photo library on a phone, with nothing in the task itself knowing the difference.
+registerMediaSourceBuilder("device-album", (sources, options) => {
+    return new DeviceMediaSource(sources as IDeviceAlbumAutoImportSource[], options.pollIntervalMs);
+});
+
+// Register the automatic import and eviction handlers: the same tasks the desktop app runs, reading
+// the device photo library through the source registered above.
 //
-// The two short tasks it needs from in here are registered, because those start, finish and hand
-// their slot back.
+// Automatic import holds an engine slot for as long as the setting is on, and the import task it
+// queues holds another, and the hash-file and upload-asset tasks that import queues in turn hold
+// more. EnginePool.POOL_SIZE is sized for that whole chain with one slot to spare. Shrinking it
+// deadlocks automatic import, and the failure is silent: the setting stays on, the task stays
+// running, and the counts stay at zero.
+registerHandler("auto-import", autoImportHandler);
 registerHandler("evict-originals", evictOriginalsHandler);
-registerHandler("get-content-hashes", getContentHashesHandler);
 
 // Expose the worker entry point (globalThis.__photosphereWorker = { runTask }).
 installWorkerGlobal();

@@ -90,6 +90,11 @@ function createMockHost(sessionId: string): IMockHost {
         secureStoreGet: () => null,
         secureStoreSet: () => { /* no-op */ },
         secureStoreDelete: () => { /* no-op */ },
+        mediaLibraryList: () => JSON.stringify({ items: [] }),
+        mediaLibraryAlbums: () => JSON.stringify([]),
+        mediaLibraryOpen: () => "",
+        mediaLibraryClose: () => { /* no-op */ },
+        mediaLibraryDelete: () => JSON.stringify({ deletedIds: [], failedIds: [] }),
     };
 
     return mockHost;

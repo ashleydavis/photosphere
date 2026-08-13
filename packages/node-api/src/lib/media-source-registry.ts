@@ -194,17 +194,17 @@ export class CompositeMediaSource implements IMediaSource {
     //
     // Exports through the child the item came from.
     //
-    async exportItem(item: IMediaItem): Promise<string> {
+    async openItem(item: IMediaItem): Promise<string> {
         const stamped = parseChildIndex(item.sourceId);
-        return await this.childAt(stamped.childIndex).exportItem(withSourceId(item, stamped.sourceId));
+        return await this.childAt(stamped.childIndex).openItem(withSourceId(item, stamped.sourceId));
     }
 
     //
     // Releases through the child the item came from.
     //
-    async releaseItem(item: IMediaItem): Promise<void> {
+    async closeItem(item: IMediaItem): Promise<void> {
         const stamped = parseChildIndex(item.sourceId);
-        await this.childAt(stamped.childIndex).releaseItem(withSourceId(item, stamped.sourceId));
+        await this.childAt(stamped.childIndex).closeItem(withSourceId(item, stamped.sourceId));
     }
 
     //

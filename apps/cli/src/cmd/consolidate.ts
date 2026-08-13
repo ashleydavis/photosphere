@@ -11,7 +11,7 @@ import { loadMerkleTree } from "node-api";
 //
 // Options for the connect command.
 //
-export interface IConnectCommandOptions extends IBaseCommandOptions {
+export interface IConsolidateCommandOptions extends IBaseCommandOptions {
     //
     // Path to the encryption key for the remote database.
     //
@@ -30,7 +30,7 @@ export interface IConnectCommandOptions extends IBaseCommandOptions {
 //   * A database that is already related: the origin is simply recorded, because ordinary sync
 //     already covers them.
 //
-export async function connectCommand(context: ICommandContext, remotePath: string, options: IConnectCommandOptions): Promise<void> {
+export async function consolidateCommand(context: ICommandContext, remotePath: string, options: IConsolidateCommandOptions): Promise<void> {
     const { uuidGenerator, timestampProvider, sessionId } = context;
 
     const nonInteractive = options.yes || false;
@@ -87,7 +87,7 @@ export async function connectCommand(context: ICommandContext, remotePath: strin
         // Already the same database, so nothing has to move: recording the origin is the whole job.
         const existingConfig = await loadDatabaseConfig(localRawStorage);
         if (existingConfig?.origin === remotePath) {
-            log.info(pc.green(`✓ Already connected to ${remotePath}.`));
+            log.info(pc.green(`✓ Already joined to ${remotePath}.`));
         }
         else {
             await updateDatabaseConfig(localRawStorage, { origin: remotePath });
@@ -101,7 +101,7 @@ export async function connectCommand(context: ICommandContext, remotePath: strin
     log.info("Content the remote already has is not pushed a second time.");
     log.info("");
 
-    const queue = new TaskQueue(uuidGenerator, `connect-${sessionId}`);
+    const queue = new TaskQueue(uuidGenerator, `consolidate-${sessionId}`);
     try {
         const taskId = queue.addTask("consolidate-database", {
             databasePath: databaseDir,

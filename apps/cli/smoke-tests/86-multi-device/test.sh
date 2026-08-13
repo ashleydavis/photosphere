@@ -25,7 +25,7 @@ cp "$TEST_FILES_DIR/test.jpg" "$DEVICE_B_PHOTOS/from-b.jpg"
 
 invoke_command "Initialize device A" "$CLI_COMMAND init --db $DEVICE_A_DB --yes"
 invoke_command "Device A imports its folder" "$CLI_COMMAND watch --db $DEVICE_A_DB $DEVICE_A_PHOTOS --once --yes"
-invoke_command "Device A connects to the remote" "$CLI_COMMAND connect --db $DEVICE_A_DB $REMOTE_DB --yes"
+invoke_command "Device A consolidates into the remote" "$CLI_COMMAND consolidate --db $DEVICE_A_DB $REMOTE_DB --yes"
 
 REMOTE_ASSETS=$(ls -1 "$REMOTE_DB/asset" 2>/dev/null | wc -l | tr -d ' ')
 expect_value "$REMOTE_ASSETS" 1 "The remote holds device A's photo"
@@ -36,7 +36,7 @@ invoke_command "Initialize device B" "$CLI_COMMAND init --db $DEVICE_B_DB --yes"
 invoke_command "Device B imports its folder" "$CLI_COMMAND watch --db $DEVICE_B_DB $DEVICE_B_PHOTOS --once --yes"
 
 CONNECT_OUTPUT=""
-invoke_command "Device B connects to the same remote" "$CLI_COMMAND connect --db $DEVICE_B_DB $REMOTE_DB --yes" 0 CONNECT_OUTPUT
+invoke_command "Device B consolidates into the same remote" "$CLI_COMMAND consolidate --db $DEVICE_B_DB $REMOTE_DB --yes" 0 CONNECT_OUTPUT
 expect_output_value "$CONNECT_OUTPUT" "Assets pushed to the remote:" 1 "Device B pushed its own photo"
 
 REMOTE_ASSETS=$(ls -1 "$REMOTE_DB/asset" 2>/dev/null | wc -l | tr -d ' ')

@@ -12,12 +12,9 @@ import { IImportedSourceItem, runSourceCleanup, selectConfirmedForCleanup } from
 // content hash, the write lock, derivative generation and the hash cache all behave exactly as they
 // do for a manual import.
 //
-// It lives here, rather than inside the auto-import task, because mobile cannot run it from a task.
-// The embedded engine pool has three slots; the asset server holds one for the life of the app, so
-// a long-running orchestrator task in a second slot leaves nothing for the tasks the import it
-// queues needs in turn, and the import waits for a slot that can never come free. Mobile therefore
-// drives this loop from the WebView, which occupies no slot, and the CLI and the desktop drive it
-// from the auto-import task. One loop, two drivers, rather than two implementations that drift.
+// It lives here, apart from the auto-import task that runs it, so the decisions can be tested with
+// no filesystem, no photo library, no task queue and no clock: the current time, the sleep, the
+// import and the database read are all passed in.
 //
 
 //
@@ -129,9 +126,9 @@ export interface IAutoImportResult {
 //
 // Everything the loop needs from the platform driving it.
 //
-// Each of these is the one thing a WebView cannot do the way a worker does, which is why they are
-// passed in rather than reached for: the import runs somewhere else, the database is read somewhere
-// else, and the clock and the sleep are injected so the pacing can be tested without waiting.
+// Everything with a side effect is passed in rather than reached for, which is what lets the whole
+// loop be tested without a filesystem, a photo library or a task queue, and lets the pacing be
+// walked forward without waiting for real time to pass.
 //
 export interface IAutoImportLoopDeps {
     // Where media arrives, already built for the configured sources.
@@ -356,7 +353,7 @@ export async function runAutoImportLoop(deps: IAutoImportLoopDeps): Promise<IAut
         const paths: string[] = [];
 
         for (const item of batch) {
-            const exportedPath = await source.exportItem(item);
+            const exportedPath = await source.openItem(item);
             paths.push(exportedPath);
             sourceIdByImportPath.set(exportedPath, item.sourceId);
             currentItem = item.displayName;
@@ -377,7 +374,7 @@ export async function runAutoImportLoop(deps: IAutoImportLoopDeps): Promise<IAut
         recordImportOutcome(importResult);
 
         for (const item of batch) {
-            await source.releaseItem(item);
+            await source.closeItem(item);
         }
         for (const exportedPath of paths) {
             sourceIdByImportPath.delete(exportedPath);

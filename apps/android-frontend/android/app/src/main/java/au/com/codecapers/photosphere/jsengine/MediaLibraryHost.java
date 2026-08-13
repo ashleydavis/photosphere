@@ -297,13 +297,13 @@ public final class MediaLibraryHost {
     }
 
     //
-    // host.mediaLibraryExport(itemId): copies one library item into the sandbox and returns the
+    // host.mediaLibraryOpen(itemId): copies one library item into the sandbox and returns the
     // sandbox-relative path the import can read it from.
     //
     // A library item is not a file the import can open, which is why this exists. The copy is
-    // deleted again by mediaLibraryRelease once the import has finished with it.
+    // deleted again by mediaLibraryClose once the import has finished with it.
     //
-    public String mediaLibraryExport(String itemId) {
+    public String mediaLibraryOpen(String itemId) {
         Uri itemUri = uriForItem(itemId);
 
         String displayName = null;
@@ -368,12 +368,12 @@ public final class MediaLibraryHost {
     }
 
     //
-    // host.mediaLibraryRelease(itemId): deletes the sandbox copy the export made.
+    // host.mediaLibraryClose(itemId): deletes the sandbox copy the export made.
     //
     // The library item itself is untouched. Removing a photo from the device is cleanup, which is a
     // separate operation the user confirms.
     //
-    public void mediaLibraryRelease(String itemId) {
+    public void mediaLibraryClose(String itemId) {
         // The export path depends on the item's name and type, which are no longer needed: every
         // file in the temp directory whose name starts with this item's id is this item's copy.
         File tempDir = PathSandbox.resolveWithin(storageRoot, MediaLibrary.MEDIA_TEMP_DIR);

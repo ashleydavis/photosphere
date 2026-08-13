@@ -380,6 +380,7 @@ export function mockImportContext(overrides?: Partial<IImportContext>): IImportC
     const base: IImportContext = {
         status: 'idle',
         importItems: [],
+        recordTruncated: false,
         startImportDirectories: async () => false,
         startImportFiles: async () => false,
         isPicking: false,

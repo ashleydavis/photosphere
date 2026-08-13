@@ -6,19 +6,14 @@ import { TaskQueue, TaskStatus, getQueueBackend } from "task-queue";
 import type { ITaskResult } from "task-queue";
 import type { ISaveAssetItem } from "api";
 import { log, RandomUuidGenerator, TestUuidGenerator, type IUuidGenerator } from "utils";
-import { cancelMobileTasks, publishLocalTaskMessage, subscribeMobileTaskMessage, subscribeMobileTaskComplete, pickMobileFiles, setInjectedPickedFiles } from "./mobile-platform-tasks";
+import { cancelMobileTasks, subscribeMobileTaskMessage, subscribeMobileTaskComplete, pickMobileFiles, setInjectedPickedFiles } from "./mobile-platform-tasks";
 import { pickMobileFolder, saveMobileDownloadedFile, saveMobileDownloadedFiles, setInjectedExportOutcome, setInjectedPickFolderResult } from "./mobile-export";
 import { setInjectedDeleteOutcome } from "./mobile-media-cleanup";
 import { getDefaultDatabasePath, loadAutoImportSettings, saveAutoImportSettings, setDefaultDatabasePath } from "user-interface";
-import type { IAutoImportItemMessage, IAutoImportProgressMessage } from "api/src/lib/auto-import-loop";
-import type { IImportAssetsResult } from "api/src/lib/import-assets.types";
-import type { IGetContentHashesResult } from "node-api/src/lib/get-content-hashes.worker";
-import { DEFAULT_DATABASE_DISPLAY_NAME, planMobileAutoImport } from "./mobile-auto-import";
+import type { IAutoImportProgressMessage } from "api/src/lib/auto-import-loop";
+import { AUTO_IMPORT_TASK_SOURCE, DEFAULT_DATABASE_DISPLAY_NAME, planMobileAutoImport } from "./mobile-auto-import";
 import { readPermissionState, resolveMediaPermission } from "./mobile-media-permission";
 import { JsEngine } from "./js-engine-plugin";
-import { PluginDeviceMediaLibrary } from "./device-media-library";
-import { AUTO_IMPORT_TASK_SOURCE, MobileAutoImportScheduler } from "./mobile-auto-import-scheduler";
-import { loadBackfillCursor, saveBackfillCursor } from "./mobile-backfill-cursor";
 
 //
 // How often the automatic import settings are re-read, in milliseconds.
@@ -151,11 +146,9 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
 
     // The mobile background-sync scheduler (debounce + periodic + gate), created once. It enqueues
     // sync-database tasks onto the embedded worker queue when the gate permits.
-    // The automatic import run in progress, or undefined when automatic import is switched off.
-    const autoImportSchedulerRef = useRef<MobileAutoImportScheduler | undefined>(undefined);
-
-    // The settings the run in progress was started with, so a change to them restarts it and an
-    // unchanged read does nothing.
+    // Whether the automatic import task is running, and the settings it was started with, so a
+    // change to the settings restarts it and an unchanged read does nothing.
+    const autoImportRunningRef = useRef<boolean>(false);
     const autoImportSettingsRef = useRef<string | undefined>(undefined);
 
     const syncSchedulerRef = useRef<MobileSyncScheduler | null>(null);
@@ -697,22 +690,17 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         }
     );
 
-    // Starts automatic import when it is switched on, and stops it when it is switched off.
-    //
-    // The loop runs here in the WebView rather than in a worker task, which is the one thing mobile
-    // does differently from the desktop. The embedded engine pool has three slots; the asset server
-    // holds one for the life of the app, so a long-running orchestrator task in a second slot leaves
-    // nothing for the tasks the import it queues needs in turn, and the import waits for a slot that
-    // can never come free. Driven from here it occupies no slot, and the import it queues behaves
-    // exactly as a manual import does.
+    // Starts automatic import when it is switched on, and stops it when it is switched off. This is
+    // the mobile counterpart of what the desktop main process does: the same auto-import task, read
+    // from the same settings the settings card writes, so switching the toggle takes effect without
+    // a restart.
     useEffect(() => {
         let cancelled = false;
 
         // True while a settings read is part way through acting on what it found. Without it the
         // timer below can fire again during the permission request or while the default database is
-        // being created, and both calls get past the "already running" check on their way to
-        // building a scheduler each. Two loops walking the same library import everything twice and
-        // race over the same backfill position.
+        // being created, and both calls get past the "already running" check on their way to queueing
+        // a task each. Two automatic imports walking the same library import everything twice.
         let acting = false;
 
         const ensureAutoImport = async (): Promise<void> => {
@@ -739,19 +727,17 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
             }
 
             if (!plan.shouldRun) {
-                if (autoImportSchedulerRef.current) {
+                if (autoImportRunningRef.current) {
                     log.info("Stopping automatic import.");
-                    const scheduler = autoImportSchedulerRef.current;
-                    autoImportSchedulerRef.current = undefined;
+                    autoImportRunningRef.current = false;
                     autoImportSettingsRef.current = undefined;
                     cancelMobileTasks(AUTO_IMPORT_TASK_SOURCE);
-                    await scheduler.stop();
                 }
                 return;
             }
 
             const plannedSettingsJson = JSON.stringify(plan.settings);
-            if (autoImportSchedulerRef.current && autoImportSettingsRef.current === plannedSettingsJson) {
+            if (autoImportRunningRef.current && autoImportSettingsRef.current === plannedSettingsJson) {
                 return;
             }
 
@@ -766,10 +752,9 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
                 return;
             }
 
-            if (autoImportSchedulerRef.current) {
-                const previous = autoImportSchedulerRef.current;
-                autoImportSchedulerRef.current = undefined;
-                await previous.stop();
+            if (autoImportRunningRef.current) {
+                cancelMobileTasks(AUTO_IMPORT_TASK_SOURCE);
+                autoImportRunningRef.current = false;
             }
 
             if (plan.isNewDefault) {
@@ -796,106 +781,54 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
             }
 
             // Checked again here, not only at the top: the permission request and creating the
-            // database both take a while, and the provider can have gone away in the meantime. A run
-            // started after that has nothing left to stop it.
+            // database both take a while, and the provider can have gone away in the meantime.
             if (cancelled) {
                 return;
             }
 
-            const databasePath = plan.databasePath;
-            const sessionId = uuidGenerator.generate();
-            const scheduler = new MobileAutoImportScheduler({
-                library: new PluginDeviceMediaLibrary(),
-                databasePath,
+            log.info(`Starting automatic import into "${plan.databasePath}".`);
 
-                //
-                // Hands one batch to the existing import task, the same one a manual import uses.
-                //
-                importBatch: async (paths: string[]) => {
-                    const importQueue = new TaskQueue(uuidGenerator, AUTO_IMPORT_TASK_SOURCE);
-                    try {
-                        const importTaskId = importQueue.addTask("import-assets", {
-                            paths,
-                            storageDescriptor: { databasePath },
-                            sessionId,
-                            dryRun: false,
-                        });
-                        const importResult = await importQueue.awaitTask(importTaskId);
-
-                        if (importResult === undefined) {
-                            // The queue was shut down before the import finished, which happens when
-                            // automatic import is being switched off.
-                            return undefined;
-                        }
-
-                        if (importResult.status !== TaskStatus.Succeeded) {
-                            // The whole batch failed rather than individual files, so every file in
-                            // it is a failure. Reporting none would report a clean run over an import
-                            // that did not happen.
-                            log.error(`Automatic import batch of ${paths.length} item(s) failed: ${importResult.errorMessage}`);
-                            return { imported: [], skipped: [], failedCount: paths.length };
-                        }
-
-                        return importResult.outputs as IImportAssetsResult;
-                    }
-                    finally {
-                        importQueue.shutdown();
-                    }
-                },
-
-                //
-                // Asks the database itself which content hashes it holds, which is what makes
-                // deleting a photo off the device safe.
-                //
-                loadDatabaseHashes: async () => {
-                    const hashQueue = new TaskQueue(uuidGenerator, AUTO_IMPORT_TASK_SOURCE);
-                    try {
-                        const hashTaskId = hashQueue.addTask("get-content-hashes", { databasePath });
-                        const hashResult = await hashQueue.awaitTask(hashTaskId);
-                        if (!hashResult || hashResult.status !== TaskStatus.Succeeded) {
-                            // An empty set confirms nothing, so nothing is deleted from the device.
-                            // The candidates stay on the list and are looked at again next batch.
-                            log.error(`Automatic import could not read the database's content hashes: ${hashResult?.errorMessage}`);
-                            return new Set<string>();
-                        }
-                        return new Set((hashResult.outputs as IGetContentHashesResult).contentHashes);
-                    }
-                    finally {
-                        hashQueue.shutdown();
-                    }
-                },
-
-                persistCursor: cursor => saveBackfillCursor(config, databasePath, cursor),
-
-                // The progress panel and the gallery's arrivals are shared with the desktop and read
-                // task messages, so these go down the same path rather than a second one only mobile
-                // has. The task id is the session, which is what identifies this run.
-                onProgress: (message: IAutoImportProgressMessage) => {
-                    log.info(`Automatic import: ${message.imported} imported, ${message.skipped} already there, ${message.failed} failed, ${message.deletedFromSource} deleted from the device, ${message.backfillRemaining} waiting.`);
-                    publishLocalTaskMessage(sessionId, message as unknown as Record<string, unknown>);
-                },
-
-                onItem: (message: IAutoImportItemMessage) => {
-                    publishLocalTaskMessage(sessionId, message as unknown as Record<string, unknown>);
-                },
-
-                logInfo: (message: string) => log.info(message),
-                logError: (message: string) => log.error(message),
+            // A task queued and never awaited fails silently, and this one is meant to run for the
+            // lifetime of the app: without this, automatic import quietly stopping looks exactly like
+            // automatic import finding nothing to do.
+            const autoImportUnsubscribe = subscribeMobileTaskComplete((taskId, result) => {
+                const completed = result as unknown as ICompletedTaskResult;
+                if (completed.type !== "auto-import") {
+                    return;
+                }
+                autoImportRunningRef.current = false;
+                autoImportSettingsRef.current = undefined;
+                if (completed.status !== TaskStatus.Succeeded) {
+                    log.error(`Automatic import stopped: ${(result as { errorMessage?: string }).errorMessage}`);
+                }
+                else {
+                    log.info("Automatic import stopped.");
+                }
+                autoImportUnsubscribe();
             });
 
-            autoImportSchedulerRef.current = scheduler;
+            getQueueBackend().addTask("auto-import", {
+                storageDescriptor: { databasePath: plan.databasePath },
+                settings: plan.settings,
+                sessionId: uuidGenerator.generate(),
+                once: false,
+            }, AUTO_IMPORT_TASK_SOURCE);
+
+            autoImportRunningRef.current = true;
             autoImportSettingsRef.current = plannedSettingsJson;
-
-            log.info(`Starting automatic import into "${databasePath}".`);
-
-            const startCursor = await loadBackfillCursor(config, databasePath);
-
-            // Not awaited: this runs for as long as automatic import is switched on. It is only
-            // reached for again to stop it, and any failure is reported rather than swallowed.
-            scheduler.start(plan.settings, startCursor)
-                .then(() => log.info("Automatic import stopped."))
-                .catch(error => log.exception("Automatic import stopped with an error", error as Error));
         };
+
+        // The task's own log lines run inside the embedded engine and do not reach the app log, so
+        // what automatic import is doing is only visible through the progress it streams back.
+        // Logged rather than only shown on screen, because a phone doing nothing and a phone quietly
+        // failing look the same in the interface.
+        const progressUnsubscribe = subscribeMobileTaskMessage((_taskId, message) => {
+            if ((message as Record<string, unknown>).type !== "auto-import-progress") {
+                return;
+            }
+            const progress = message as unknown as IAutoImportProgressMessage;
+            log.info(`Automatic import: ${progress.imported} imported, ${progress.skipped} already there, ${progress.failed} failed, ${progress.deletedFromSource} deleted from the device, ${progress.backfillRemaining} waiting.`);
+        });
 
         ensureAutoImport().catch(error => log.exception("Failed to start automatic import", error as Error));
 
@@ -909,10 +842,10 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         return () => {
             cancelled = true;
             clearInterval(timer);
-            const scheduler = autoImportSchedulerRef.current;
-            autoImportSchedulerRef.current = undefined;
-            if (scheduler) {
-                scheduler.stop().catch(error => log.exception("Failed to stop automatic import", error as Error));
+            progressUnsubscribe();
+            if (autoImportRunningRef.current) {
+                autoImportRunningRef.current = false;
+                cancelMobileTasks(AUTO_IMPORT_TASK_SOURCE);
             }
         };
     }, []);

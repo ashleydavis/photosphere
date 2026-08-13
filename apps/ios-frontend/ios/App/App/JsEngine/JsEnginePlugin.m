@@ -17,9 +17,4 @@ CAP_PLUGIN(JsEnginePlugin, "JsEngine",
     CAP_PLUGIN_METHOD(exportFiles, CAPPluginReturnPromise);
     CAP_PLUGIN_METHOD(requestMediaPermission, CAPPluginReturnPromise);
     CAP_PLUGIN_METHOD(stageMediaDeleteOutcome, CAPPluginReturnPromise);
-    CAP_PLUGIN_METHOD(mediaLibraryList, CAPPluginReturnPromise);
-    CAP_PLUGIN_METHOD(mediaLibraryAlbums, CAPPluginReturnPromise);
-    CAP_PLUGIN_METHOD(mediaLibraryExport, CAPPluginReturnPromise);
-    CAP_PLUGIN_METHOD(mediaLibraryRelease, CAPPluginReturnPromise);
-    CAP_PLUGIN_METHOD(mediaLibraryDelete, CAPPluginReturnPromise);
 )

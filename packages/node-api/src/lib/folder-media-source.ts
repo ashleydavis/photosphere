@@ -204,14 +204,14 @@ export class FolderMediaSource implements IMediaSource {
     //
     // A folder item is already a file, so there is nothing to materialise.
     //
-    async exportItem(item: IMediaItem): Promise<string> {
+    async openItem(item: IMediaItem): Promise<string> {
         return item.filePath;
     }
 
     //
     // Nothing was materialised, so there is nothing to release.
     //
-    async releaseItem(item: IMediaItem): Promise<void> {
+    async closeItem(item: IMediaItem): Promise<void> {
     }
 
     //
