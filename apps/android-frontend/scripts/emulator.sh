@@ -850,6 +850,33 @@ ensure_pool_slice() {
 # minidump symboliser is installed), and the dump has been kept for that. What is established is
 # narrower: "off" causes WebView start-up hangs, and this setting exists to avoid them without going
 # back to a backend chosen at runtime.
+#
+# -crash-report-mode never stops the emulator asking a human for permission before it will start.
+#
+# The emulator's default crash reporting mode is "ask". On launch it looks in its crash database for
+# reports left by earlier runs, and for each one it opens a modal consent dialog and waits for a
+# click before it initialises anything else: no guest, no adb console, no wifi. The database at
+# /tmp/android-ash/emu-crash-<version>.db is shared by every emulator on the machine, so one crash
+# puts that dialog in front of every emulator started afterwards and not only the one that died.
+#
+# That is what happened overnight on 2026-08-13. Pool indexes 2, 4 and 0 died with SIGSEGV between
+# 21:36 and 21:38, and every restart from then until 06:40 the next morning stopped at the dialog.
+# The unit read as active and the process was alive, so nothing looked wrong from the outside, but
+# each one burned between 2 and 17 seconds of CPU in an hour and never started the guest, so it
+# never reached the bridge and pool-repair timed out at its full 420s every time. The monitor
+# repaired each index three times, waited, and repaired them all again, for eight hours. The pool
+# came back only when a human clicked "Don't send" five times. An emulator started by a script has
+# nobody to answer a dialog, so asking is the same as refusing to start.
+#
+# "never" rather than "disabled". "never" answers the consent question no and deletes the report,
+# and leaves the crash detection and its log output alone, which is the only account there is of why
+# an emulator died and is what the GPU backend above was chosen from. "disabled" turns crash
+# reporting off altogether and takes that away with it.
+#
+# -no-metrics is the same class of thing from the other direction: its own help says it exists to
+# bypass any blocking metrics prompt during launch. No such prompt has been seen here, so this is
+# preventing rather than fixing something, but it costs nothing and the failure it would cause is
+# the one above.
 # Usage: emulator_launch_argv <emulator_binary> <avd_name> <tap_name> <wipe>
 #
 emulator_launch_argv() {
@@ -865,6 +892,9 @@ emulator_launch_argv() {
     echo "-no-boot-anim"
     echo "-gpu"
     echo "swiftshader_indirect"
+    echo "-crash-report-mode"
+    echo "never"
+    echo "-no-metrics"
     echo "-wifi-tap"
     echo "$netcard"
 

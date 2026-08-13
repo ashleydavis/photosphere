@@ -389,7 +389,13 @@ android_prepare() {
         return 1
     fi
     log_info "No device attached; booting emulator '$avd' (left running for faster reruns)..."
-    nohup emulator -avd "$avd" -no-boot-anim >/dev/null 2>&1 &
+
+    # -crash-report-mode never and -no-metrics for the same reason emulator_launch_argv passes them:
+    # the emulator's default is to open a modal dialog asking for consent to send any crash report
+    # left by an earlier run, and to wait for a click before it starts the guest at all. Nothing is
+    # watching this launch, so the wait below would run out with the emulator sitting there alive and
+    # doing nothing. See apps/android-frontend/scripts/emulator.sh for what that cost once.
+    nohup emulator -avd "$avd" -no-boot-anim -crash-report-mode never -no-metrics >/dev/null 2>&1 &
 
     log_info "Waiting for an Android device/emulator..."
     adb wait-for-device
