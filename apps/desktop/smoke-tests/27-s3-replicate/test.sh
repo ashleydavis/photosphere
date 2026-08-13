@@ -106,12 +106,18 @@ wait_for_value_gone "$APP_PORT" "configure-secrets-save" "Save" || exit 1
 # its own text, so waiting for that is waiting for the state Start actually depends on.
 wait_for_value "$APP_PORT" "replicate-database-dialog" "S3: $SECRET_NAME" || exit 1
 
-# Choosing the credentials opens the source database, and the databases page behind the modal
-# reloads when that load finishes. The destination typed before that lands is lost to the re-render,
-# and the Start button then does nothing at all: every click is still logged as delivered, so the
-# test sits out its whole timeout waiting for a replication that was never started. Seen twice, once
-# in a sequential run and once with two copies of the suite running at the same time.
-wait_for_log "$TMP_DIR" "Load assets task completed"
+# Opening the source database reloads the databases page behind the modal. A destination typed
+# before that load lands is lost to the re-render, and the Start button then does nothing at all:
+# every click is still logged as delivered, so the test sits out its whole timeout waiting for a
+# replication that was never started. Seen twice, once in a sequential run and once with two copies
+# of the suite running at the same time.
+#
+# Waiting on the completion line was not sound, because when the load happens is not fixed: it can
+# run before this point or after it, and wait_for_log only searches after the last line it matched.
+# Ahead of the cursor it returned at once on a load already finished; behind it, it could never match
+# and burned the full 120s, which is how run 9 of a climb failed. Waiting for every load that started
+# to have finished asks the real question and does not care about the order.
+wait_for_asset_loads_to_settle "$TMP_DIR" || exit 1
 
 send_command "$APP_PORT" type "{\"dataId\":\"replicate-dest-path-input\",\"text\":\"$S3_DEST_PATH\"}"
 send_command "$APP_PORT" click '{"dataId":"replicate-mode-full"}'

@@ -176,6 +176,37 @@ resolve_electron_binary() {
 }
 
 #
+# Waits until every asset load the app has begun has also finished, so nothing is still in flight
+# that could re-render a dialog and discard what the test is about to type into it.
+#
+# Counting is what makes this reliable. The obvious form, waiting for the "Load assets task
+# completed" line, cannot express it: wait_for_log searches only after the last line it matched, so
+# whether it works depends on whether the load happened before or after the previous pattern, and
+# both orders occur. Ahead of the cursor it returns instantly on a load that has nothing to do with
+# what is being waited for; behind the cursor it can never match at all and burns the full timeout.
+# Comparing the counts asks the question that was meant all along, and gives the same answer whatever
+# order the lines arrived in.
+# Usage: wait_for_asset_loads_to_settle <tmp-dir> [timeout]
+#
+wait_for_asset_loads_to_settle() {
+    local tmp_dir="$1"
+    local timeout="${2:-$DEFAULT_WAIT_TIMEOUT}"
+    local deadline=$((SECONDS + timeout))
+    local started=0
+    local finished=0
+    while [ "$SECONDS" -lt "$deadline" ]; do
+        started=$(grep -c "\[loadAssets\] Starting load" "$tmp_dir/app.log" 2>/dev/null || true)
+        finished=$(grep -c "Load assets task completed" "$tmp_dir/app.log" 2>/dev/null || true)
+        if [ "${started:-0}" -gt 0 ] && [ "${finished:-0}" -ge "${started:-0}" ]; then
+            return 0
+        fi
+        sleep "$WAIT_POLL_INTERVAL"
+    done
+    log_error "Asset loads did not settle within ${timeout}s: ${started:-0} started, ${finished:-0} finished."
+    return 1
+}
+
+#
 # Waits for the app to publish the OS-assigned port its test control server bound and prints it.
 # The app binds port 0 and writes the actual port to $tmp_dir/test-control.port. Diagnostics go to
 # stderr so callers can capture the port from stdout.
