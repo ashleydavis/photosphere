@@ -22,7 +22,12 @@ write_vault_secret "$TMP_DIR/sender/vault" test-secret api-key "TESTAPIKEY123"
 
 start_app "$TMP_DIR/sender" 0
 SENDER_PORT="$APP_PORT"
-wait_for_ready "$SENDER_PORT"
+# The variable name is passed as a second argument so wait_for_ready can write back the port the app
+# ends up on. This test drives two instances, so it has to keep each one's port in its own variable.
+# When a launch times out, wait_for_ready relaunches the app, which binds a new OS-assigned port.
+# Without the name it can only update APP_PORT, leaving the variable below pointing at the instance
+# it just killed, and every send_command after that posts to a dead port and fails with curl exit 1.
+wait_for_ready "$SENDER_PORT" SENDER_PORT
 
 send_command "$SENDER_PORT" navigate '{"page":"secrets"}'
 wait_for_log "$TMP_DIR/sender" "Secrets page loaded"
@@ -81,7 +86,7 @@ log_info "Second pairing code: $second_code"
 
 start_app "$TMP_DIR/receiver" 960
 RECEIVER_PORT="$APP_PORT"
-wait_for_ready "$RECEIVER_PORT"
+wait_for_ready "$RECEIVER_PORT" RECEIVER_PORT
 
 send_command "$RECEIVER_PORT" navigate '{"page":"secrets"}'
 wait_for_log "$TMP_DIR/receiver" "Secrets page loaded"
