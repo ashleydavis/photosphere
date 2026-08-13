@@ -322,7 +322,19 @@ app.whenReady().then(async () => {
         isShuttingDown: () => isShuttingDown,
         onWorkerLog: (message) => handleWorkerLogMessage(message, 'MCP Worker'),
     });
-    await initMcpServer();
+    // A slow MCP start must not stop the app starting. initMcpServer rejects when the MCP utility
+    // process does not answer within its fixed timeout, which happens on a loaded machine (the
+    // smoke tests run many app instances at once). Uncaught, that rejection skipped every step
+    // below it: the menu, the workers, the periodic sync, the main window, and the test control
+    // server, so the app never opened a window and the smoke tests waited out their full timeout
+    // against a control port that was never bound. MCP is one optional feature, so a failure to
+    // start it is logged and the rest of startup carries on.
+    try {
+        await initMcpServer();
+    }
+    catch (error: any) {
+        log.exception('MCP server failed to start, continuing without it', error);
+    }
 
     // Create application menu
     await createMenu();
