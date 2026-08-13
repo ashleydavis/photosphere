@@ -637,12 +637,19 @@ jobs:
       - name: Install ffmpeg
         uses: ./.github/actions/install-ffmpeg-windows
 
+      # Only imagemagick, and only because the runner image already has it, so Chocolatey answers from
+      # what is installed rather than fetching. Anything it has to fetch is currently refused: ffmpeg
+      # moved to a GitHub release above for that reason, and tree went the same way immediately after,
+      # failing five attempts with "the package was not found with the source(s) listed".
+      #
+      # tree is not installed at all now. The smoke tests' show_tree already falls back to ls when it
+      # is missing, and Windows ships a tree of its own in cmd, so nothing needed the Chocolatey one.
       - name: Install media processing tools
         uses: ./.github/actions/retry-install
         with:
           run: |
-            echo "Installing ImageMagick and tree via Chocolatey..."
-            choco install imagemagick tree -y
+            echo "Installing ImageMagick via Chocolatey..."
+            choco install imagemagick -y
           verify: magick|convert
 
       - name: Verify media tool versions
