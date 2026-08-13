@@ -1,5 +1,5 @@
 ---
-description: Prove the test suites are sound alone and in company. Runs the parallel-interference check, then the flaky-test ladder at 10 runs a rung, and fixes what they turn red, one minimal committed fix at a time in a worktree, until both pass.
+description: Prove the test suites are sound alone and in company. Asks how many runs a rung, then runs the parallel-interference check and the flaky-test ladder, and fixes what they turn red, one minimal committed fix at a time in a worktree, until both pass.
 ---
 
 # Harden the tests
@@ -7,16 +7,26 @@ description: Prove the test suites are sound alone and in company. Runs the para
 Two scripts, run one after the other, cheapest first. Keep going until both pass.
 
 - `bun run test:parallel` (`scripts/check-parallel-tests.sh`) proves a suite is sound in company: every suite alone, then every combination of two, self-pairs included. Four solo runs then ten pairs, about an hour.
-- `bun run find-flakey-tests -- --ladder --target 10` (`scripts/find-flakey-tests.sh`) proves a suite is sound alone: 10 consecutive green runs of `test`, then `test:cli`, then `test:electron`, then `test:and`. Forty runs, three and a half hours when nothing fails.
+- `bun run find-flakey-tests -- --ladder --target <target>` (`scripts/find-flakey-tests.sh`) proves a suite is sound alone: `<target>` consecutive green runs of `test`, then `test:cli`, then `test:electron`, then `test:and`. Four times `<target>` runs, hours rather than minutes. The human chooses `<target>`, see below.
 
 The parallel check is the cheaper of the two, so it goes first.
 
-## First, print the goal
+## First, ask how many runs a rung
 
-Before running anything, print this for the human to paste into `/goal`, so there is something outside the conversation holding the work to finishing rather than to reporting progress:
+Before anything else, ask the human how many consecutive green runs of each suite the ladder should require, and wait for the answer. It decides how long the whole job takes and how much a green result is worth, so it is never assumed.
+
+- 10 is the usual answer. The ladder took about three and a half hours at 10 and about four and a half at 20 on this machine, though a failure stops it far sooner than that.
+- Below about 10 the result says very little: a mode that fails one run in fifty passes a short streak most of the time.
+- The parallel check has no equivalent number. It runs each combination exactly once, whatever is chosen here.
+
+Whatever the answer is, use it everywhere `<target>` appears below.
+
+## Then print the goal
+
+Print this for the human to paste into `/goal`, with `<target>` filled in, so there is something outside the conversation holding the work to finishing rather than to reporting progress:
 
 ```
-Get scripts/check-parallel-tests.sh and scripts/find-flakey-tests.sh (ladder, --target 10) both fully green on one tree. Work only in a git worktree, never the main checkout. On each failure make the smallest, most targeted fix for that one problem, comment it with what it fixes and why, commit it on its own with the hook passing (never --no-verify), then re-run whichever script failed. If the same failure returns, remove that commit rather than reverting it and try again. Do not stop, do not declare partial success, and do not widen the scope until a single run of each script passes end to end.
+Get scripts/check-parallel-tests.sh and scripts/find-flakey-tests.sh (ladder, --target <target>) both fully green on one tree. Work only in a git worktree, never the main checkout. On each failure make the smallest, most targeted fix for that one problem, comment it with what it fixes and why, commit it on its own with the hook passing (never --no-verify), then re-run whichever script failed. If the same failure returns, remove that commit rather than reverting it and try again. Do not stop, do not declare partial success, and do not widen the scope until a single run of each script passes end to end.
 ```
 
 Print it and carry straight on. Do not wait for the human to set it.
@@ -24,7 +34,7 @@ Print it and carry straight on. Do not wait for the human to set it.
 ## The loop
 
 1. Run `bun run test:parallel`.
-2. Run `bun run find-flakey-tests -- --ladder --target 10`.
+2. Run `bun run find-flakey-tests -- --ladder --target <target>`.
 3. Both passed: write the summary (see "Finishing") and stop.
 
 On a failure of either: fix it as described in "Fixing a failure", then go back to the step that failed, not to the top. A fix that landed while chasing step 2 does not send you back to step 1.
@@ -72,10 +82,10 @@ Read the exit status before reading anything else.
 - 0: every rung green. Move on.
 - 1: a run failed. Read `tmp/find-flakey-tests/<timestamp>/report.txt` and the failing run's own log in the rung subdirectory. This is a failure to fix.
 - 2: bad usage.
-- 3: too many Bun crashes. Report and restart the rung, using `--ladder "<remaining rungs>" --target 10 --resume <greens>` exactly as the script prints.
+- 3: too many Bun crashes. Report and restart the rung, using `--ladder "<remaining rungs>" --target <target> --resume <greens>` exactly as the script prints.
 - 4: the pool stopped being healthy and did not come back. See "A sick pool".
 
-On macOS the ladder is `-- --ladder "test test:cli test:electron test:and test:ios" --target 10`.
+On macOS the ladder is `-- --ladder "test test:cli test:electron test:and test:ios" --target <target>`.
 
 ## Fixing a failure
 
@@ -149,6 +159,6 @@ Both scripts green in one pass each. Then write:
 - The session directories: `tmp/parallel-check/<timestamp>` and `tmp/find-flakey-tests/<timestamp>`.
 - **The worktree path and branch the work is on**, so the human can go and look at it themselves.
 
-Say plainly what these runs do not show: one clean run per combination is not a rate, and ten runs a rung will pass most of the time against a mode that fails one run in fifty. Green here means cleaner than before, not clean.
+Say plainly what these runs do not show: one clean run per combination is not a rate, and a streak of `<target>` will pass most of the time against a mode that fails less often than one run in `<target>`. Say the number that was chosen, so the claim is read against it. Green here means cleaner than before, not clean.
 
 Do not offer to merge, push, or otherwise move the work anywhere.
