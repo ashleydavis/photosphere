@@ -149,12 +149,24 @@ export class TestControlServer implements ITestControlServer {
             res.json({ ok: true });
         });
 
+        // Reads a control's value through the shared test driver, which the renderer publishes on
+        // window.__photosphereGetValue in test mode.
+        //
+        // This route used to read the DOM itself, with `el.value || el.textContent || ''` against the
+        // first element carrying the data-id. That can never read a Joy Input: the data-id sits on the
+        // Input's wrapper div, which has neither a value nor any text, so every Input in the app read
+        // back as the empty string and every wait on one timed out claiming the field was empty when
+        // it was not. It also read hidden elements, so a value from a closed dialog could be returned
+        // in place of the one on screen. The shared driver handles both, and is what the mobile shells
+        // already use, so this now calls it instead of keeping a second, worse copy here.
         expressApp.get('/get-value', async (req, res) => {
             const dataId = req.query.dataId as string;
             const value = await this.mainWindow.webContents.executeJavaScript(`
                 (() => {
-                    const el = document.querySelector('[data-id="${dataId}"]');
-                    return el ? (el.value || el.textContent || '') : '';
+                    if (!window.__photosphereGetValue) {
+                        throw new Error("The renderer's test driver is not installed, so no value can be read.");
+                    }
+                    return window.__photosphereGetValue(${JSON.stringify(dataId)});
                 })()
             `);
             res.json({ ok: true, value });

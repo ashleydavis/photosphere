@@ -21,8 +21,9 @@ import Alert from '@mui/joy/Alert';
 import CircularProgress from '@mui/joy/CircularProgress';
 import { usePlatform, type IDatabaseEntry, type ISharedSecretEntry } from '../context/platform-context';
 import { S3BrowserModal } from './s3-browser-modal';
-import { ConfigureSecretsModal, type IDatabaseSecretsSelection } from './configure-secrets-modal';
+import { ConfigureSecretsModal } from './configure-secrets-modal';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
+import { applyDestinationTypeChange, emptyReplicateFormState, type IReplicateFormState, type ReplicateMode } from '../lib/replicate-form';
 
 //
 // Props for the ReplicateDatabaseDialog component.
@@ -53,45 +54,6 @@ export interface IReplicateDatabaseDialogProps {
 type ReplicateStep = "configure" | "running" | "success" | "error";
 
 //
-// Replication mode.
-//
-type ReplicateMode = "partial" | "full";
-
-//
-// Destination storage type.
-//
-type StorageType = "filesystem" | "s3";
-
-//
-// Form state for the replicate dialog.
-//
-interface IReplicateFormState {
-    // Selected destination storage type.
-    storageType: StorageType;
-
-    // Destination database path (filesystem path or s3:bucket/prefix).
-    destPath: string;
-
-    // Selected replication mode.
-    mode: ReplicateMode;
-
-    // Vault secret references for the destination (S3, encryption, geocoding).
-    secrets: IDatabaseSecretsSelection;
-}
-
-//
-// Returns an empty form state.
-//
-function emptyFormState(): IReplicateFormState {
-    return {
-        storageType: 'filesystem',
-        destPath: '',
-        mode: 'partial',
-        secrets: { s3Key: undefined, encryptionKey: undefined, geocodingKey: undefined },
-    };
-}
-
-//
 // Dialog for replicating a database to a new destination via the worker pool.
 // Lets the user pick a destination path, choose between Partial and Full mode,
 // and select destination encryption and (when applicable) S3 credentials.
@@ -103,7 +65,7 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
     const uuidGenerator = useUuidGenerator();
 
     const [step, setStep] = useState<ReplicateStep>("configure");
-    const [form, setForm] = useState<IReplicateFormState>(emptyFormState());
+    const [form, setForm] = useState<IReplicateFormState>(emptyReplicateFormState());
     const [progress, setProgress] = useState<string>("");
     const [errorMessage, setErrorMessage] = useState<string>("");
     const [s3BrowserOpen, setS3BrowserOpen] = useState(false);
@@ -112,7 +74,7 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
     useEffect(() => {
         if (open) {
             setStep("configure");
-            setForm(emptyFormState());
+            setForm(emptyReplicateFormState());
             setProgress("");
             setErrorMessage("");
         }
@@ -226,11 +188,7 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
                             <FormLabel>Destination type</FormLabel>
                             <Select
                                 value={form.storageType}
-                                onChange={(_event, value) => setForm(prev => ({
-                                    ...prev,
-                                    storageType: (value as StorageType) ?? 'filesystem',
-                                    destPath: '',
-                                }))}
+                                onChange={(_event, value) => setForm(prev => applyDestinationTypeChange(prev, value as string | null))}
                                 slotProps={{ button: { 'data-id': 'replicate-dest-type-select' } }}
                             >
                                 <Option data-id="replicate-dest-type-option-filesystem" value="filesystem">File system</Option>
@@ -241,7 +199,7 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
                         <FormControl sx={{ mb: 2 }}>
                             <FormLabel>Destination secrets</FormLabel>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Typography level="body-sm" sx={{ flexGrow: 1 }} color="neutral">
+                                <Typography data-id="replicate-dest-secrets-summary" level="body-sm" sx={{ flexGrow: 1 }} color="neutral">
                                     {summariseDestSecrets()}
                                 </Typography>
                                 <Button

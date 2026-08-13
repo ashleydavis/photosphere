@@ -120,6 +120,8 @@ wait_for_value "$APP_PORT" "replicate-database-dialog" "S3: $SECRET_NAME" || exi
 wait_for_asset_loads_to_settle "$TMP_DIR" || exit 1
 
 send_command "$APP_PORT" type "{\"dataId\":\"replicate-dest-path-input\",\"text\":\"$S3_DEST_PATH\"}"
+wait_for_value "$APP_PORT" "replicate-dest-path-input" "$S3_DEST_PATH"
+
 send_command "$APP_PORT" click '{"dataId":"replicate-mode-full"}'
 send_command "$APP_PORT" click '{"dataId":"replicate-start-button"}'
 

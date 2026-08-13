@@ -4,8 +4,17 @@ import { App } from './app';
 import '@fortawesome/fontawesome-free/css/all.css';
 import './tailwind.css';
 import type { IElectronAPI, LogLevel } from "./lib/electron-ipc";
-import { installTestDriver } from "user-interface";
+import { installTestDriver, getValue } from "user-interface";
 import type { ITestTransport, ITestCommandPayload } from "user-interface";
+
+declare global {
+    interface Window {
+        // The shared test driver's element-value reader, installed in test mode only. The main
+        // process's test control server calls it through executeJavaScript to serve /get-value,
+        // because the read has to happen in the renderer where the DOM is.
+        __photosphereGetValue?: (dataId: string) => string;
+    }
+}
 
 //
 // Get the Electron API for forwarding errors to main process
@@ -101,6 +110,11 @@ if (isTestMode && electronAPI) {
         },
     };
     installTestDriver(transport);
+
+    // The driver's value reader has no command of its own on this transport: the test control server
+    // reads values straight out of the renderer with executeJavaScript, so it needs the function
+    // published where that can reach it.
+    window.__photosphereGetValue = getValue;
 }
 
 const container = document.getElementById('root');
