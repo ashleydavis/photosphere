@@ -22,6 +22,11 @@ set -euo pipefail
 # what the tests run against overnight.
 MINIO_VERSION="RELEASE.2025-09-07T16-13-09Z"
 
+# How many times to fetch the MinIO binary before giving up. A download that arrives incomplete is
+# indistinguishable from a good one until it is run, and the runner network is what spoils it, so
+# another go at it is what fixes it.
+MINIO_DOWNLOAD_ATTEMPTS=3
+
 # The bucket the tests browse, and the root credentials the server is started with. MinIO requires a
 # root password of at least 8 characters. These are local-only test credentials for a server that
 # lives for the duration of one test.
@@ -142,22 +147,53 @@ ensure_minio_binary() {
     fi
     binaryPath="$CACHE_DIR/minio-$platform-$MINIO_VERSION$binaryExtension"
 
-    if [ -x "$binaryPath" ]; then
+    # A cached copy is used only if it runs. The execute bit says nothing about whether the file is
+    # complete, and a download that arrived cut short is cached looking exactly like a good one, so
+    # asking the binary for its version is the only way to tell them apart. Without this a single bad
+    # download poisons the cache for every S3 test that follows it.
+    if [ -x "$binaryPath" ] && "$binaryPath" --version >/dev/null 2>&1; then
         echo "$binaryPath"
         return 0
     fi
 
     mkdir -p "$CACHE_DIR"
-    partialPath="$(mktemp "$binaryPath.partial.XXXXXX")"
-    log "Downloading MinIO $MINIO_VERSION for $platform (cached at $binaryPath)..."
-    curl -sL --fail -o "$partialPath" \
-        "https://dl.min.io/server/minio/release/$platform/archive/minio.$MINIO_VERSION"
-    chmod +x "$partialPath"
-    # A rename onto the final path, which is atomic, so a concurrent downloader either sees no
-    # cached binary at all or sees a complete one. Whichever download lands last wins, and they are
-    # all the same pinned version, so which one wins does not matter.
-    mv "$partialPath" "$binaryPath"
-    echo "$binaryPath"
+
+    # The download is proved to run before it is cached, and tried again when it does not.
+    #
+    # curl reports success on a body that was cut short, as long as the server answered 200 and the
+    # connection did not break, so a download spoiled by a network wobble arrives here looking fine.
+    # It was then chmod +x'd and moved into the cache, and the first anyone knew of it was MinIO
+    # exiting the instant it was started, with an empty server log to explain it. The cache made that
+    # permanent for the rest of the job: the check above finds the broken copy executable and hands
+    # it to every S3 test that follows. That is how the windows-latest build-windows job lost every
+    # S3 test it had in run 31674221187, on a runner where electron's postinstall died with
+    # "socket hang up" in the same minute. Running the binary is the only check that catches it,
+    # because a truncated file is still a file of the right name with the execute bit set.
+    local downloadAttempt=1
+    while [ "$downloadAttempt" -le "$MINIO_DOWNLOAD_ATTEMPTS" ]; do
+        partialPath="$(mktemp "$binaryPath.partial.XXXXXX")"
+        log "Downloading MinIO $MINIO_VERSION for $platform (cached at $binaryPath)..."
+        if curl -sL --fail -o "$partialPath" \
+            "https://dl.min.io/server/minio/release/$platform/archive/minio.$MINIO_VERSION"; then
+            chmod +x "$partialPath"
+            if "$partialPath" --version >/dev/null 2>&1; then
+                # A rename onto the final path, which is atomic, so a concurrent downloader either sees
+                # no cached binary at all or sees a complete one. Whichever download lands last wins,
+                # and they are all the same pinned version, so which one wins does not matter.
+                mv "$partialPath" "$binaryPath"
+                echo "$binaryPath"
+                return 0
+            fi
+            log "The MinIO download would not run, so it arrived incomplete (attempt $downloadAttempt of $MINIO_DOWNLOAD_ATTEMPTS)."
+        else
+            log "The MinIO download failed (attempt $downloadAttempt of $MINIO_DOWNLOAD_ATTEMPTS)."
+        fi
+        rm -f "$partialPath"
+        downloadAttempt=$((downloadAttempt + 1))
+    done
+
+    log "Could not download a working MinIO binary for $platform after $MINIO_DOWNLOAD_ATTEMPTS attempts."
+    return 1
 }
 
 #
