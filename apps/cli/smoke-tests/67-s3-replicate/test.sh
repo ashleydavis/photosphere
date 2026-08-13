@@ -63,8 +63,7 @@ test_s3_replicate() {
 
     # --- Build the source database on the local filesystem. ---
 
-    invoke_command "Initialize the source database" "$(get_cli_command) init --db $source_db --yes" 0
-    populate_db_with_5_files "$source_db"
+    create_db_with_5_files "$source_db"
 
     local source_hash source_id
     source_hash="$(read_root_hash "$source_db")"
@@ -103,7 +102,7 @@ test_s3_replicate() {
 
     # --- 3. A second replication picks up exactly the newly added file. ---
 
-    # test.webp is the one standard fixture populate_db_with_5_files does not add, so this genuinely
+    # test.webp is the one standard fixture create_db_with_5_files does not add, so this genuinely
     # adds a sixth file rather than being rejected as a duplicate.
     invoke_command "Add one more file to the source" \
         "$(get_cli_command) add --db $source_db $TEST_FILES_DIR/test.webp --yes" 0

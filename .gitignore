@@ -31,6 +31,7 @@ tsconfig.tsbuildinfo
 apps/cli/psi
 apps/cli/bin/
 apps/mk-cli/bin/
+apps/bdb-cli/bin/
 # apps/cli/test/db
 tools/upload/log.*
 apps/cli/test-db

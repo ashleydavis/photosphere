@@ -87,9 +87,8 @@ The smoke tests require the following tools to be installed:
 # Run specific tests by number (e.g., tests 1-5)
 ./smoke-tests.sh to 5
 
-# Run in debug mode (uses 'bun run start --' instead of built executable)
-./smoke-tests.sh --debug all
-./smoke-tests.sh -d to 10
+# Run against the TypeScript sources instead of the built executables
+./smoke-tests.sh --source
 
 # Run individual tests
 ./smoke-tests.sh create-database  # Test 1: Create database
@@ -102,6 +101,14 @@ The smoke tests require the following tools to be installed:
 # Check if required tools are installed
 ./smoke-tests.sh check-tools
 ```
+
+### How a full run is scheduled
+
+A full run keeps several tests going at once in a rolling pool: as soon as one test finishes its slot is refilled, so no lane sits idle waiting for a slower test beside it. The pool itself is `scripts/lib/test-pool.sh`, shared with the desktop suite.
+
+- **How many at once.** Taken from the core count (a quarter of it, capped at 6). `--parallel N` sets it explicitly and beats everything else. `PHOTOSPHERE_TEST_PARALLEL` sets it for a caller that is running other suites beside this one, which is how `scripts/test-everything-parallel.sh` hands each lane a share of the machine; a value that is not a positive integer is refused rather than guessed at. The run prints the width it chose.
+- **The five-file database is built once.** 18 tests need a database holding the five standard test files, and each used to build its own at about 5 seconds a time. The run now builds one before the tests start and each test copies it, through `create_db_with_5_files` in `smoke-tests/lib/common.sh`. The copy includes the UUID counter, without which a test that adds an asset after copying would mint a UUID the copied database already holds. A test run on its own from the command line has no fixture and builds the database itself, and so does the S3 test whose database lives in a bucket rather than in a directory.
+- **The tests run against the compiled binaries.** A full run builds `psi`, `mk` and `bdb` first and runs everything against them, which is both what ships and about 0.10s an invocation cheaper than going through `bun run start`. `--source` runs against the TypeScript instead.
 
 ## Encrypted database smoke tests
 

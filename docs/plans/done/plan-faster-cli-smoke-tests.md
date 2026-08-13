@@ -91,6 +91,29 @@ The suites this plan changes are themselves the end-to-end coverage, so the chec
 - `bun run test:everything -- --force` passes, and the CLI lane inside it is reported.
 - `bun run emu:and:pool:status` is run immediately before `test:everything` and its exit code reported, since that run includes the Android suite.
 
+## Result
+
+Measured on 2026-08-13 on the 24 core / 62GB machine, with four Android emulators up throughout and another worktree's suites running for part of it, so none of these was taken on a quiet machine. The load average at each run is given where it matters.
+
+- **`bun run test:cli`: 1m 15s, 1m 18s, 1m 15s, all 80 tests green, three consecutive runs** (load average 66, 31 and 15 at the end of each). The baseline was 3m 17s quiet and 5m 41s busy, so this is under the 2 minute target even on a machine that was not quiet.
+- Sequential (`--sequential`): all 80 green in 6m 2s. This is where the `.slow` markers came from: the longest tests alone are 69-s3-sync 25s, 70-s3-verify-repair 16s, 67-s3-replicate 14s, 64-config-timestamps 14s, 74-s3-failures 12s, 72-s3-paths 12s, 37-sync-edit-field 12s, 38-sync-edit-field-reverse 11s, 36-sync-copy-to-original 11s, 35-sync-original-to-copy 10s, 41-replicate-deleted-asset 9s, and 77-s3-large-file, 68-s3-encrypted, 40-sync-delete-asset-reverse and 39-sync-delete-asset at 8s. Everything at 8s or more is marked. Ordinary tests now run in 0 to 3s each, which is what the shared fixture and the compiled binaries did to them.
+- `--source`: all 80 green in 1m 29s, so the TypeScript path still works and costs about 14s more than the binaries over a whole run.
+- `--parallel 2`: reported "up to 2 at a time", all 80 green in 3m 20s. `PHOTOSPHERE_TEST_PARALLEL=3`: reported 3, all 80 green in 3m 47s. Set to `0`, `-1` and `abc` the run is refused with a message naming the value and exit 1.
+- Single tests with no fixture built, which is the fallback path in `create_db_with_5_files`: test 13 by number, `verify` by name and test 21 all pass.
+- A test made to fail on purpose is reported as `FAIL`, counted (1 of 82 failed), and its log dumped after the summary; a test made to skip is reported as `SKIP` and counted separately (1 skipped), never folded into the pass total.
+- The run interrupted mid-flight prints "Interrupted.", exits 130, and leaves nothing in its process group. This was done with SIGTERM rather than SIGINT, because the harness the check ran from starts commands with SIGINT ignored and bash will not install an INT trap it inherited as ignored. The suite routes both signals to the same handler.
+- `bun run test:electron`: all 34 green in 1m 31s, against 1m 28s before the pool was extracted, which is the same within noise.
+- `bun run test:parallel -- --scripts "test:cli test:electron"`: no interference across all three combinations, self-pairs included.
+- `bun run test:everything -- --force`: all 13 scripts green in 13m 45s across 12 lanes, with `bun run emu:and:pool:status` reporting 4 pool emulators on the LAN bridge and exit 0 immediately beforehand. The CLI lane took 4m 07s inside that run, which is the whole machine being shared by 12 lanes at once rather than by one suite; the other CLI suites that share `smoke-tests/lib/common.sh` all passed in it (`test:cli:encrypted` 4m 08s, `test:cli:lan-share` 1m 26s, `test:cli:sync` 1m 05s, `test:cli:write-lock` 3m 03s, `test:cli:hash-cache` 18s).
+
+## Deviations from the plan
+
+- **Step 5 was implemented and then removed at the human's request.** `.slow` markers, `is_slow` and `order_slow_first` are gone, and `CLAUDE.md` now bans marker files outright: a marker records a judgement once and nothing re-checks it, so it goes stale silently. The suite starts its tests in numeric order again. The three runs recorded below were taken with the markers in place; three more taken after removing them were 1m 20s, 1m 19s and 1m 24s, all 80 green, so the ordering was worth nothing measurable once the shared fixture and the compiled binaries had flattened the per-test costs.
+- **Step 6 said to put `create_db_with_5_files` in all 18 callers including `70-s3-verify-repair`, whose database lives in an S3 bucket.** A directory cannot be copied into a bucket, so `create_db_with_5_files` detects a non-local destination and builds instead. Test 70 calls the same helper and gets the build path; `populate_db_with_5_files` therefore stays rather than being deleted, because the helper's fallback and the fixture builder both call it.
+- **The fixture is built by `apps/cli/smoke-tests/lib/build-5-file-fixture.sh` rather than by code in the runner.** The runner does not source `smoke-tests/lib/common.sh`, so building it in the runner would have meant a second definition of what the five-file database is. The script sources common.sh and calls the same `populate_db_with_5_files` every test used to call.
+- **`USE_BINARY` is exported in `main` as well as in `run_all_tests`.** Without that, `--binary` on a single test does nothing at all, which is what the flag has always done.
+- **`apps/bdb-cli/bin/` added to `.gitignore`.** Every full run now builds bdb, and only `apps/cli/bin/` and `apps/mk-cli/bin/` were ignored, so a run left the working tree dirty.
+
 ## Notes
 
 - **Where the measurements came from.** The 5m 41s run on 2026-08-13 was taken on a machine carrying load average 60 to 114 from five Android emulators and another worktree's suites, so its absolute numbers are inflated. What is not inflated is the structure it exposes, because both halves of the ratio suffer the same contention: 912s of test time against 283s of batch wall clock, where a pool at width 5 would have taken 182s. The 3m 17s quiet baseline is the figure the 2 minute target is measured against, and it was recorded on 2026-08-12 in the verification of the Electron suite's speed-up.

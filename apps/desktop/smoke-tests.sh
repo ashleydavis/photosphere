@@ -17,6 +17,9 @@ source "$REPO_DIR/scripts/lib/test-timeout.sh"
 # How wide the pool runs: read from the machine, or handed down by a caller that is running other
 # suites beside this one.
 source "$REPO_DIR/scripts/lib/test-concurrency.sh"
+# The rolling pool itself, shared with the CLI suite so there is one scheduler rather than a copy per
+# suite.
+source "$REPO_DIR/scripts/lib/test-pool.sh"
 export PHOTOSPHERE_LAUNCHED_GROUPS
 PHOTOSPHERE_LAUNCHED_GROUPS="$(mktemp "${TMPDIR:-/tmp}/photosphere-desktop-launches-XXXXXX")"
 
@@ -161,21 +164,47 @@ run_sequential() {
     return $((fail > 0 ? 1 : 0))
 }
 
-# Seconds between looks at the running tests in run_parallel_pool. A tenth of a second, because this
-# is what decides how long a freed slot sits empty before the next test starts, and the poll itself
-# is a `kill -0` per running test.
-POOL_POLL_INTERVAL=0.1
+#
+# Starts one test in the background for run_test_pool, which takes its pid from TEST_POOL_JOB_PID and
+# hands the test's directory back to the reporter through TEST_POOL_JOB_CONTEXT.
+# Usage: start_desktop_pool_job <test.sh>
+#
+start_desktop_pool_job() {
+    local test_sh="$1"
+    local test_temp_dir log_file
+    # Allocated out here rather than inside the job, because the reporter needs it to find the test's
+    # log and its duration once the job has gone, and a subshell cannot hand a variable back to its
+    # parent.
+    test_temp_dir="$(photosphere_test_temp_dir "$(test_name "$test_sh")")"
+    log_file="$test_temp_dir/test-run.log"
+    printf "${BLUE}RUN ${NC}  %2s  %s\n" "$(test_number "$test_sh")" "$(test_name "$test_sh")"
+    # Started here in the pool's own shell, never through a command substitution: a job started
+    # inside one is the subshell's child, so this shell could not `wait` for it and would have no
+    # exit status to report.
+    (
+        photosphere_export_test_temp "$test_temp_dir"
+        local_start=$SECONDS
+        run_test_with_timeout "$PER_TEST_TIMEOUT" bash "$test_sh" >"$log_file" 2>&1
+        local_exit=$?
+        echo $((SECONDS - local_start)) > "$test_temp_dir/test-duration.txt"
+        exit $local_exit
+    ) &
+    TEST_POOL_JOB_PID="$!"
+    TEST_POOL_JOB_CONTEXT="$test_temp_dir"
+}
 
 #
 # Reports a finished test and counts it, taking the exit status the job left behind.
-# Usage: report_pool_result <status> <test.sh> <temp_dir> <pass_var> <fail_var>
+#
+# The counters are run_mixed's own `pass` and `fail`, reached the way bash reaches a caller's
+# variables, so the pool library does not have to know that this suite counts two outcomes and the
+# CLI suite counts three.
+# Usage: report_pool_result <status> <test.sh> <temp_dir>
 #
 report_pool_result() {
     local status="$1"
     local test_sh="$2"
     local test_temp_dir="$3"
-    local pass_var="$4"
-    local fail_var="$5"
     local num name test_duration log_file
     num="$(test_number "$test_sh")"
     name="$(test_name "$test_sh")"
@@ -184,7 +213,7 @@ report_pool_result() {
 
     if [ "$status" -eq 0 ]; then
         printf "${GREEN}PASS${NC}  %2s  %-30s  %s\n" "$num" "$name" "$test_duration"
-        eval "$pass_var=$(( ${!pass_var} + 1 ))"
+        pass=$((pass + 1))
         return 0
     fi
 
@@ -196,100 +225,8 @@ report_pool_result() {
         printf "${RED}FAIL${NC}  %2s  %-30s  %s  (log: %s)\n" "$num" "$name" "$test_duration" "$log_file"
     fi
     FAILED_TEST_LOGS+=("$log_file")
-    eval "$fail_var=$(( ${!fail_var} + 1 ))"
+    fail=$((fail + 1))
     return 0
-}
-
-#
-# Runs a list of tests, keeping at most N of them going at once, and returns pass/fail via out-vars.
-#
-# A rolling pool rather than batches. Batches waited for every test in one before starting any of the
-# next, so a batch cost as much as its slowest member and the machine sat idle for the difference:
-# test 28 ran for 1m 2s while its partner sat finished for 42 seconds of it. Here a slot is refilled
-# the moment the test in it finishes.
-#
-# Three indexed arrays hold the slots rather than one array of records, and the slots are polled with
-# `kill -0` rather than waited on with `wait -n`, because the bash macOS ships is 3.2: it has neither
-# associative arrays nor `wait -n`. `wait` is still what reads the exit status, and it returns
-# immediately for a job already known to have finished.
-#
-# Results print as tests finish rather than in test order, which is what the batch runner already did
-# within a batch.
-# Usage: run_parallel_pool <n> <pass_var> <fail_var> <test...>
-run_parallel_pool() {
-    local n="$1"
-    local pass_var="$2"
-    local fail_var="$3"
-    shift 3
-    local tests=("$@")
-    local total="${#tests[@]}"
-    local next=0
-    local in_flight=0
-
-    # Slot i holds the pid of the test running in it, the test it is running and where that test was
-    # told to write. An empty pid means the slot is free.
-    local pool_pids=()
-    local pool_tests=()
-    local pool_temp_dirs=()
-    local slot=0
-    while ((slot < n)); do
-        pool_pids[slot]=""
-        pool_tests[slot]=""
-        pool_temp_dirs[slot]=""
-        slot=$((slot + 1))
-    done
-
-    while ((next < total || in_flight > 0)); do
-        # Fill every free slot before looking at anything, so a test starts the moment there is room
-        # for it.
-        slot=0
-        while ((slot < n && next < total)); do
-            if [ -z "${pool_pids[slot]}" ]; then
-                local test_sh test_temp_dir log_file
-                test_sh="${tests[next]}"
-                # Allocated out here rather than inside the job, because the pool needs it to find
-                # the test's log and its duration once the job has gone, and a subshell cannot hand
-                # a variable back to its parent.
-                test_temp_dir="$(photosphere_test_temp_dir "$(test_name "$test_sh")")"
-                log_file="$test_temp_dir/test-run.log"
-                printf "${BLUE}RUN ${NC}  %2s  %s\n" "$(test_number "$test_sh")" "$(test_name "$test_sh")"
-                # Started here in the pool's own shell, never through a command substitution: a job
-                # started inside one is the subshell's child, so this shell could not `wait` for it
-                # and would have no exit status to report.
-                (
-                    photosphere_export_test_temp "$test_temp_dir"
-                    local_start=$SECONDS
-                    run_test_with_timeout "$PER_TEST_TIMEOUT" bash "$test_sh" >"$log_file" 2>&1
-                    local_exit=$?
-                    echo $((SECONDS - local_start)) > "$test_temp_dir/test-duration.txt"
-                    exit $local_exit
-                ) &
-                pool_pids[slot]="$!"
-                pool_tests[slot]="$test_sh"
-                pool_temp_dirs[slot]="$test_temp_dir"
-                in_flight=$((in_flight + 1))
-                next=$((next + 1))
-            fi
-            slot=$((slot + 1))
-        done
-
-        sleep "$POOL_POLL_INTERVAL"
-
-        slot=0
-        while ((slot < n)); do
-            local slot_pid="${pool_pids[slot]}"
-            if [ -n "$slot_pid" ] && ! kill -0 "$slot_pid" 2>/dev/null; then
-                local slot_status=0
-                wait "$slot_pid" || slot_status=$?
-                report_pool_result "$slot_status" "${pool_tests[slot]}" "${pool_temp_dirs[slot]}" "$pass_var" "$fail_var"
-                pool_pids[slot]=""
-                pool_tests[slot]=""
-                pool_temp_dirs[slot]=""
-                in_flight=$((in_flight - 1))
-            fi
-            slot=$((slot + 1))
-        done
-    done
 }
 
 # Runs parallelisable tests in a rolling pool and sequential-marked tests one at a time.
@@ -314,7 +251,7 @@ run_mixed() {
     local fail=0
 
     if [[ ${#parallel_tests[@]} -gt 0 ]]; then
-        run_parallel_pool "$n" pass fail "${parallel_tests[@]}"
+        run_test_pool "$n" start_desktop_pool_job report_pool_result "${parallel_tests[@]}"
     fi
 
     for t in "${sequential_tests[@]}"; do

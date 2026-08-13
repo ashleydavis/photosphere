@@ -853,6 +853,60 @@ seed_s3_vault_secret() {
         "{\"region\":\"us-east-1\",\"accessKeyId\":\"$S3_EMULATOR_ACCESS_KEY\",\"secretAccessKey\":\"$S3_EMULATOR_SECRET_KEY\",\"endpoint\":\"$S3_ENDPOINT\"}"
 }
 
+#
+# Returns 0 when the given database path is a plain local directory, which is the only kind that can
+# be produced by copying one.
+#
+# The S3 tests pass their path with the quotes still around it, because invoke_command evals what it
+# is given, so those are stripped before the scheme is looked at.
+# Usage: is_local_db_path <db-path>
+#
+is_local_db_path() {
+    local db_path="$1"
+    db_path="${db_path#\"}"
+    db_path="${db_path%\"}"
+    case "$db_path" in
+        s3:*|fs:*)
+            return 1
+            ;;
+        *)
+            return 0
+            ;;
+    esac
+}
+
+#
+# Creates a database holding the 5 standard test files (PNG, JPG, MP4, 2 from multiple-files).
+#
+# A copy of the run's prebuilt fixture when there is one, because 18 tests each spent about 5 seconds
+# building the identical 7.5MB database and copying it takes under a second. PHOTOSPHERE_SMOKE_FIXTURE_5_FILES
+# names the directory the runner built it in, holding the database at db/ and the UUID counter beside
+# it.
+#
+# The counter is copied with it, and that is not tidiness. TestUuidGenerator counts from zero per
+# TEST_TMP_DIR, so a test that copied the fixture and then added an asset would be handed counter 1
+# again and mint a UUID the copied database already contains.
+#
+# Falls back to building the database when there is no fixture (a single test run from the command
+# line) or when the destination is not a local directory (the S3 tests, whose database lives in a
+# bucket and cannot be copied into place).
+# Usage: create_db_with_5_files <db-path>
+#
+create_db_with_5_files() {
+    local db_dir="$1"
+    if [ -n "${PHOTOSPHERE_SMOKE_FIXTURE_5_FILES:-}" ] && [ -d "${PHOTOSPHERE_SMOKE_FIXTURE_5_FILES:-}/db" ] && is_local_db_path "$db_dir"; then
+        log_info "Copying the prebuilt five-file database from $PHOTOSPHERE_SMOKE_FIXTURE_5_FILES"
+        mkdir -p "$(dirname "$db_dir")"
+        cp -r "$PHOTOSPHERE_SMOKE_FIXTURE_5_FILES/db" "$db_dir"
+        mkdir -p "$TEST_TMP_DIR"
+        cp "$PHOTOSPHERE_SMOKE_FIXTURE_5_FILES/photosphere-test-uuid-counter" "$TEST_TMP_DIR/photosphere-test-uuid-counter"
+        return 0
+    fi
+
+    invoke_command "Initialize database" "$(get_cli_command) init --db $db_dir --yes"
+    populate_db_with_5_files "$db_dir"
+}
+
 # Populate a pre-initialized database with the 5 standard test files (PNG, JPG, MP4, 2 from multiple-files).
 populate_db_with_5_files() {
     local db_dir="$1"

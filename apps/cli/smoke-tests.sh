@@ -44,6 +44,14 @@ source "$_CLI_ABS_DIR/../../scripts/lib/process-control.sh"
 # The per-test timeout every suite in this repository shares, and the reporting that goes with it.
 source "$_CLI_ABS_DIR/../../scripts/lib/test-timeout.sh"
 
+# How wide the pool runs: read from the machine, or handed down by a caller that is running other
+# suites beside this one.
+source "$_CLI_ABS_DIR/../../scripts/lib/test-concurrency.sh"
+
+# The rolling pool the tests are scheduled through, shared with the desktop suite so there is one
+# scheduler rather than a copy per suite.
+source "$_CLI_ABS_DIR/../../scripts/lib/test-pool.sh"
+
 # Test configuration
 #
 # The suite root, which holds the build output and whatever the setup and reset commands work on.
@@ -69,11 +77,22 @@ export PHOTOSPHERE_VAULT_TYPE="plaintext"
 # Use built binary instead of bun run start (set by --binary)
 USE_BINARY=false
 
+# Set by --source: run against the TypeScript rather than the compiled binaries.
+#
+# A full run builds the binaries and uses them, because that is what ships and because a psi
+# invocation costs about 0.10s less from the binary than through `bun run start`, which is roughly
+# 41s of work across the suite's 412 invocations. --source is the way back to the TypeScript, so that
+# path is not left to rot.
+USE_SOURCE=false
+
 # Execution mode: "parallel" (default) or "sequential"
 EXECUTION_MODE=parallel
 
-# Batch size for parallel execution (default 5)
-PARALLEL_N=5
+# How many tests the pool keeps in flight. From the machine, or from PHOTOSPHERE_TEST_PARALLEL when a
+# caller running other suites beside this one has said what share it gets. 5 is what this suite ran at
+# before it asked, and is what a host that reports no core count still gets. An explicit --parallel N
+# beats both.
+PARALLEL_N="$(resolve_test_parallel 5)" || exit 1
 
 # Record start time for total duration reporting
 SMOKE_TESTS_START_TIME=$SECONDS
@@ -287,27 +306,15 @@ invoke_command() {
     fi
 }
 
-# Individual test functions (remain inline — not tests, just setup)
-test_setup() {
+#
+# Builds the three executables the tests run: psi, mk and bdb.
+#
+# Must be called with the CLI directory as the working directory, because each build is invoked
+# through the package it belongs to.
+#
+build_cli_binaries() {
     local platform=$(detect_platform)
     local arch=$(detect_architecture)
-    log_info "Detected platform: $platform"
-    log_info "Detected architecture: $arch"
-
-    log_info "Changing to CLI directory"
-    if ! cd "$(dirname "$0")"; then
-        log_error "Failed to change to CLI directory"
-        return 1
-    fi
-
-    local cli_command=$(get_cli_command)
-    log_info "Using CLI command: $cli_command"
-
-    log_info "Cleaning up previous test run"
-    rm -rf "$TEST_TMP_DIR"
-
-    # Ensure tmp directory exists
-    mkdir -p "$TEST_TMP_DIR"
 
     log_info "Building CLI executable for platform: $platform ($arch)"
     case "$platform" in
@@ -363,6 +370,31 @@ test_setup() {
             ;;
     esac
     cd ../cli
+}
+
+# Individual test functions (remain inline — not tests, just setup)
+test_setup() {
+    local platform=$(detect_platform)
+    local arch=$(detect_architecture)
+    log_info "Detected platform: $platform"
+    log_info "Detected architecture: $arch"
+
+    log_info "Changing to CLI directory"
+    if ! cd "$(dirname "$0")"; then
+        log_error "Failed to change to CLI directory"
+        return 1
+    fi
+
+    local cli_command=$(get_cli_command)
+    log_info "Using CLI command: $cli_command"
+
+    log_info "Cleaning up previous test run"
+    rm -rf "$TEST_TMP_DIR"
+
+    # Ensure tmp directory exists
+    mkdir -p "$TEST_TMP_DIR"
+
+    build_cli_binaries
 
     TESTS_PASSED=$((TESTS_PASSED + 1))
 }
@@ -524,115 +556,116 @@ run_sequential() {
     return $((fail > 0 ? 1 : 0))
 }
 
-# Run scripts in parallel batches of N; accumulate counts and call print_summary.
+#
+# Starts one test in the background for run_test_pool, which takes its pid from TEST_POOL_JOB_PID and
+# hands the directory the test was told to run in back to the reporter through TEST_POOL_JOB_CONTEXT.
+#
+# The directory is allocated out here rather than inside the job, because the reporter needs it to
+# find the test's log and its duration once the job has gone, and it is no longer derivable from the
+# test's name: every test gets a uniquely named directory, which is the point.
+# Usage: start_cli_pool_job <test.sh>
+#
+start_cli_pool_job() {
+    local test_sh="$1"
+    local dir num name dir_name test_dir log_file
+    dir="$(dirname "$test_sh")"
+    num="$(test_number "$test_sh")"
+    name="$(test_name "$test_sh")"
+    dir_name="$(basename "$dir")"
+    test_dir="$(allocate_isolated_test_dir "$dir_name")"
+    log_file="$test_dir/test-run.log"
+    printf "${BLUE}RUN ${NC}  %2s  %s\n" "$num" "$name"
+    # Started here in the runner's own shell, never through a command substitution: a job started
+    # inside one is the subshell's child, so this shell could not `wait` for it and would have no
+    # exit status to report.
+    (
+        local_start=$SECONDS
+        TEST_TMP_DIR="$test_dir" run_test_with_timeout "$PHOTOSPHERE_PER_TEST_TIMEOUT" bash "$test_sh" >"$log_file" 2>&1
+        local_exit=$?
+
+        # Retry once, and only when Bun itself crashed rather than a test failing an assertion.
+        #
+        # Bun 1.3.14 intermittently dies inside its own runtime while the CLI is using worker
+        # threads, printing "Bun has crashed. This indicates a bug in Bun, not your code" and a
+        # panic line, then killing the process with SIGILL or SIGSEGV. It has hit six different
+        # tests across three different commands at roughly one run in six, so it is neither any one
+        # test nor this repository's code, and there is no newer Bun to move to.
+        #
+        # The match is on that crash signature in the test's own log, not on the exit code: the
+        # crash happens to a `bun run` child inside the test, which the test catches and reports as
+        # an ordinary failure exiting 1, so an exit code cannot tell the two apart. An assertion
+        # failure leaves no panic line and is never retried, so a real regression still fails the
+        # run exactly as it did before.
+        #
+        # The retry is announced rather than silent, and the crashed run's log is kept alongside as
+        # .signal-death. A suite that quietly re-runs things until they pass is worse than one that
+        # fails, because it hides a rising failure rate.
+        if [ "$local_exit" -ne 0 ] && grep -qE "Bun has crashed|panic: |terminated by signal SIG(ILL|SEGV|BUS|ABRT)" "$log_file" 2>/dev/null; then
+            printf "${YELLOW}RETRY${NC} %2s  %s hit a Bun runtime crash (not an assertion), retrying once\n" "$num" "$name"
+            mv "$log_file" "$log_file.signal-death" 2>/dev/null || true
+            # The retry gets a freshly allocated directory rather than the crashed run's
+            # directory emptied and reused, so the crashed run's state is still there to
+            # look at and the retry cannot inherit half-written files from it.
+            retry_dir="$(allocate_isolated_test_dir "$dir_name")"
+            TEST_TMP_DIR="$retry_dir" run_test_with_timeout "$PHOTOSPHERE_PER_TEST_TIMEOUT" bash "$test_sh" >"$log_file" 2>&1
+            local_exit=$?
+        fi
+
+        echo $((SECONDS - local_start)) > "$test_dir/test-duration.txt"
+        exit $local_exit
+    ) &
+    TEST_POOL_JOB_PID="$!"
+    TEST_POOL_JOB_CONTEXT="$test_dir"
+}
+
+#
+# Reports a finished test and counts it, taking the exit status the job left behind.
+#
+# Three outcomes rather than two, which is why the pool library leaves the counting here: a skip is
+# counted and printed on its own and is never folded into the pass total. The counters are
+# run_parallel's own `pass`, `fail` and `skip`, reached the way bash reaches a caller's variables.
+# Usage: report_cli_pool_result <status> <test.sh> <test_dir>
+#
+report_cli_pool_result() {
+    local status="$1"
+    local test_sh="$2"
+    local test_dir="$3"
+    local num name log_file test_duration
+    num="$(test_number "$test_sh")"
+    name="$(test_name "$test_sh")"
+    log_file="$test_dir/test-run.log"
+    test_duration=$(format_duration "$(cat "$test_dir/test-duration.txt" 2>/dev/null || echo 0)")
+
+    if [ "$status" -eq "$TEST_SKIPPED_EXIT_CODE" ]; then
+        printf "${BLUE}SKIP${NC}  %2s  %-30s  %s  (log: %s)\n" "$num" "$name" "$test_duration" "$log_file"
+        skip=$((skip + 1))
+    elif [ "$status" -eq 0 ]; then
+        printf "${GREEN}PASS${NC}  %2s  %-30s  %s\n" "$num" "$name" "$test_duration"
+        pass=$((pass + 1))
+    elif test_timed_out "$status"; then
+        # The subshell exits with what run_test_with_timeout returned, so a test that ran out
+        # of time still arrives here carrying the timeout code and is named as one rather than
+        # being folded in with the assertion failures.
+        report_test_timeout "$name" "$PHOTOSPHERE_PER_TEST_TIMEOUT" "$log_file"
+        FAILED_TEST_LOGS+=("$log_file")
+        fail=$((fail + 1))
+    else
+        printf "${RED}FAIL${NC}  %2s  %-30s  %s  (log: %s)\n" "$num" "$name" "$test_duration" "$log_file"
+        FAILED_TEST_LOGS+=("$log_file")
+        fail=$((fail + 1))
+    fi
+    return 0
+}
+
+# Run scripts in a rolling pool of N; accumulate counts and call print_summary.
 run_parallel() {
     local parallel_n="$1"
     shift
-    local tests=("$@")
     local pass=0
     local fail=0
     local skip=0
-    local total="${#tests[@]}"
-    local i=0
 
-    while ((i < total)); do
-        local batch_tests=()
-        local batch_pids=()
-        local j=0
-        while ((j < parallel_n && i < total)); do
-            batch_tests+=("${tests[i]}")
-            i=$((i + 1))
-            j=$((j + 1))
-        done
-
-        # Where each test in this batch was told to run, so the wait loop below can find its log and
-        # its duration. The path is no longer derivable from the test's name: every test gets a
-        # uniquely named directory, which is the point.
-        local batch_test_dirs=()
-        for test_sh in "${batch_tests[@]}"; do
-            local dir log_file num name dir_name test_dir
-            dir="$(dirname "$test_sh")"
-            num="$(test_number "$test_sh")"
-            name="$(test_name "$test_sh")"
-            dir_name="$(basename "$dir")"
-            test_dir="$(allocate_isolated_test_dir "$dir_name")"
-            batch_test_dirs+=("$test_dir")
-            log_file="$test_dir/test-run.log"
-            printf "${BLUE}RUN ${NC}  %2s  %s\n" "$num" "$name"
-            (
-                local_start=$SECONDS
-                TEST_TMP_DIR="$test_dir" run_test_with_timeout "$PHOTOSPHERE_PER_TEST_TIMEOUT" bash "$test_sh" >"$log_file" 2>&1
-                local_exit=$?
-
-                # Retry once, and only when Bun itself crashed rather than a test failing an assertion.
-                #
-                # Bun 1.3.14 intermittently dies inside its own runtime while the CLI is using worker
-                # threads, printing "Bun has crashed. This indicates a bug in Bun, not your code" and a
-                # panic line, then killing the process with SIGILL or SIGSEGV. It has hit six different
-                # tests across three different commands at roughly one run in six, so it is neither any one
-                # test nor this repository's code, and there is no newer Bun to move to.
-                #
-                # The match is on that crash signature in the test's own log, not on the exit code: the
-                # crash happens to a `bun run` child inside the test, which the test catches and reports as
-                # an ordinary failure exiting 1, so an exit code cannot tell the two apart. An assertion
-                # failure leaves no panic line and is never retried, so a real regression still fails the
-                # run exactly as it did before.
-                #
-                # The retry is announced rather than silent, and the crashed run's log is kept alongside as
-                # .signal-death. A suite that quietly re-runs things until they pass is worse than one that
-                # fails, because it hides a rising failure rate.
-                if [ "$local_exit" -ne 0 ] && grep -qE "Bun has crashed|panic: |terminated by signal SIG(ILL|SEGV|BUS|ABRT)" "$log_file" 2>/dev/null; then
-                    printf "${YELLOW}RETRY${NC} %2s  %s hit a Bun runtime crash (not an assertion), retrying once\n" "$num" "$name"
-                    mv "$log_file" "$log_file.signal-death" 2>/dev/null || true
-                    # The retry gets a freshly allocated directory rather than the crashed run's
-                    # directory emptied and reused, so the crashed run's state is still there to
-                    # look at and the retry cannot inherit half-written files from it.
-                    local retry_dir
-                    retry_dir="$(allocate_isolated_test_dir "$dir_name")"
-                    TEST_TMP_DIR="$retry_dir" run_test_with_timeout "$PHOTOSPHERE_PER_TEST_TIMEOUT" bash "$test_sh" >"$log_file" 2>&1
-                    local_exit=$?
-                fi
-
-                echo $((SECONDS - local_start)) > "$test_dir/test-duration.txt"
-                exit $local_exit
-            ) &
-            batch_pids+=($!)
-        done
-
-        local k=0
-        for pid in "${batch_pids[@]}"; do
-            local test_sh num name batch_test_dir
-            test_sh="${batch_tests[$k]}"
-            num="$(test_number "$test_sh")"
-            name="$(test_name "$test_sh")"
-            batch_test_dir="${batch_test_dirs[$k]}"
-            local duration_file
-            duration_file="$batch_test_dir/test-duration.txt"
-            local test_duration
-            local wait_status=0
-            wait "$pid" || wait_status=$?
-            test_duration=$(format_duration "$(cat "$duration_file" 2>/dev/null || echo 0)")
-            if [ "$wait_status" -eq "$TEST_SKIPPED_EXIT_CODE" ]; then
-                printf "${BLUE}SKIP${NC}  %2s  %-30s  %s  (log: %s)\n" "$num" "$name" "$test_duration" "$batch_test_dir/test-run.log"
-                skip=$((skip + 1))
-            elif [ "$wait_status" -eq 0 ]; then
-                printf "${GREEN}PASS${NC}  %2s  %-30s  %s\n" "$num" "$name" "$test_duration"
-                pass=$((pass + 1))
-            elif test_timed_out "$wait_status"; then
-                # The subshell exits with what run_test_with_timeout returned, so a test that ran out
-                # of time still arrives here carrying the timeout code and is named as one rather than
-                # being folded in with the assertion failures.
-                report_test_timeout "$name" "$PHOTOSPHERE_PER_TEST_TIMEOUT" "$batch_test_dir/test-run.log"
-                FAILED_TEST_LOGS+=("$batch_test_dir/test-run.log")
-                fail=$((fail + 1))
-            else
-                printf "${RED}FAIL${NC}  %2s  %-30s  %s  (log: %s)\n" "$num" "$name" "$test_duration" "$batch_test_dir/test-run.log"
-                FAILED_TEST_LOGS+=("$batch_test_dir/test-run.log")
-                fail=$((fail + 1))
-            fi
-            k=$((k + 1))
-        done
-    done
+    run_test_pool "$parallel_n" start_cli_pool_job report_cli_pool_result "$@"
 
     print_failed_logs
     print_summary "$pass" "$fail" "$skip"
@@ -692,6 +725,40 @@ discover_tests() {
     find smoke-tests -name "test.sh" | sort -V
 }
 
+#
+# Builds the five-file database this run's tests copy, and points them at it.
+#
+# 18 tests each built the identical five-file database before they began, at about 5 seconds a time,
+# which is 90 seconds of the suite's work spent producing 18 copies of a 7.5MB directory that takes
+# under a second to copy.
+#
+# The directory comes from the allocator rather than being a path named here, because two runs out of
+# one checkout must not share it.
+#
+# A fixture that fails to build fails the run. The alternative is 18 tests quietly falling back to
+# building it themselves, which is the cost this removes, arriving as an unexplained slowdown rather
+# than as an error.
+#
+build_shared_fixtures() {
+    local fixture_dir
+    fixture_dir="$(allocate_isolated_test_dir "fixture-db-5-files")"
+    log_info "Building the shared five-file database in $fixture_dir"
+    # In a subshell with its own TEST_TMP_DIR, so the UUID counter the build leaves behind lands
+    # beside the database rather than in the suite root, and so this run's own TEST_TMP_DIR is not
+    # changed by building it.
+    if ! (
+        export TEST_TMP_DIR="$fixture_dir"
+        export PHOTOSPHERE_TMP_DIR="$fixture_dir"
+        bash "$SMOKE_TESTS_DIR/smoke-tests/lib/build-5-file-fixture.sh" > "$fixture_dir/build.log" 2>&1
+    ); then
+        log_error "Failed to build the shared five-file database. Output:"
+        cat "$fixture_dir/build.log"
+        return 1
+    fi
+    export PHOTOSPHERE_SMOKE_FIXTURE_5_FILES="$fixture_dir"
+    log_success "Built the shared five-file database"
+}
+
 # Map a test number to its individual script path.
 get_script_for_test() {
     local test_number="$1"
@@ -708,6 +775,18 @@ run_all_tests() {
 
     log_info "Changing to CLI directory"
     cd "$(dirname "$0")"
+
+    # The tests run against what ships. Building all three takes about 0.8s, and every psi invocation
+    # after that is about 0.10s cheaper than it is through `bun run start`.
+    if [ "$USE_SOURCE" = "true" ]; then
+        log_info "Running against the TypeScript sources (--source)"
+    else
+        USE_BINARY=true
+        build_cli_binaries
+    fi
+    # Exported so the test scripts see it: smoke-tests/lib/common.sh reads it to decide which command
+    # each of psi, mk and bdb is.
+    export USE_BINARY
 
     # Reset environment
     log_info "Resetting testing environment"
@@ -731,6 +810,9 @@ run_all_tests() {
     # Check tools first
     check_tools
 
+    # Built once here and copied by every test that needs it.
+    build_shared_fixtures || exit 1
+
     # Collect all scripts (excluding keychain tests)
     local all_scripts=()
     while IFS= read -r script_path; do
@@ -747,8 +829,11 @@ run_all_tests() {
         log_info "Running ${#all_scripts[@]} tests sequentially"
         run_sequential "${all_scripts[@]}"
     else
-        log_info "Running ${#all_scripts[@]} tests in parallel (batch size ${PARALLEL_N:-5})"
-        run_parallel "${PARALLEL_N:-5}" "${all_scripts[@]}"
+        # The width is said out loud because it is no longer a constant in this file: it comes from
+        # the machine, from PHOTOSPHERE_TEST_PARALLEL or from --parallel, and a run that is slower
+        # than expected should not need the source read to find out which.
+        log_info "Running ${#all_scripts[@]} tests, up to $PARALLEL_N at a time"
+        run_parallel "$PARALLEL_N" "${all_scripts[@]}"
     fi
     local exit_code=$?
 
@@ -883,11 +968,20 @@ show_usage() {
     echo "Run Photosphere CLI smoke tests"
     echo ""
     echo "Options:"
-    echo "  -b, --binary          - Run tests using the built executable (default: run from code with 'bun run start --')"
+    echo "  -b, --binary          - Run tests using the built executable. A full run does this anyway;"
+    echo "                          this is how a single test does it"
+    echo "  --source              - Run against the TypeScript sources instead of the built executables"
     echo "  -t, --tmp-dir <dir>   - Use <dir> for test databases (default: ./test/tmp)."
     echo "  --sequential          - Run independent tests sequentially instead of in parallel"
-    echo "  --parallel [N]        - Run independent tests in parallel with batch size N (default: 5)"
+    echo "  --parallel [N]        - Run independent tests in a rolling pool of N. The default comes"
+    echo "                          from the core count and is $PARALLEL_N on this machine"
     echo "  -h, --help            - Show this help message"
+    echo ""
+    echo "Environment:"
+    echo "  PHOTOSPHERE_TEST_PARALLEL - How many tests to run at once, in place of the core count."
+    echo "                          Set by scripts/test-everything-parallel.sh so the lanes of one"
+    echo "                          run share the machine. A value that is not a positive integer is"
+    echo "                          refused. --parallel N beats it."
     echo ""
     echo "Commands:"
     echo "  all                 - Run all tests (default if no command given)"
@@ -914,9 +1008,9 @@ show_usage() {
     echo "  $0                            # Run all tests in parallel (default)"
     echo "  $0 all                        # Run all tests in parallel"
     echo "  $0 --sequential               # Run all tests sequentially"
-    echo "  $0 --parallel 3              # Run in parallel with batch size 3"
-    echo "  $0 --parallel 10             # Run in parallel with batch size 10"
-    echo "  $0 --binary                  # Run all tests using built executable"
+    echo "  $0 --parallel 3              # Run 3 tests at a time"
+    echo "  $0 --parallel 10             # Run 10 tests at a time"
+    echo "  $0 --source                  # Run all tests against the TypeScript sources"
     echo "  $0 to 5                      # Run tests 1-5"
     echo "  $0 setup,all                # Build and run all tests (tools must be available)"
     echo "  $0 setup,check-tools,all    # Build, check tools, and run all tests"
@@ -937,6 +1031,11 @@ main() {
         case $1 in
             -b|--binary)
                 USE_BINARY=true
+                shift
+                ;;
+            --source)
+                USE_SOURCE=true
+                USE_BINARY=false
                 shift
                 ;;
             -t|--tmp-dir)
@@ -976,7 +1075,12 @@ main() {
         esac
     done
     set -- "${POSITIONAL[@]}"
-    
+
+    # Exported so the test scripts see it, which is what makes --binary mean anything for a single
+    # test: smoke-tests/lib/common.sh reads it to decide which command each of psi, mk and bdb is,
+    # and a variable that is only assigned here is invisible to them.
+    export USE_BINARY
+
     # Check for help request
     if [ $# -eq 1 ] && [ "$1" = "help" ]; then
         show_usage

@@ -58,8 +58,9 @@ test_s3_verify_repair() {
     local good_replica="$TEST_DIR/good-replica"
     log_info "Database path: $s3_db"
 
-    invoke_command "Initialize the S3 database" "$(get_cli_command) init --db \"$s3_db\" --yes" 0
-    populate_db_with_5_files "\"$s3_db\""
+    # Builds rather than copies, and create_db_with_5_files knows that: the database lives in a
+    # bucket, and a directory cannot be copied into one.
+    create_db_with_5_files "\"$s3_db\""
 
     # --- 1. An intact database verifies. ---
 
