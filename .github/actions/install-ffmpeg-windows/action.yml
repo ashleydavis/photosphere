@@ -1,0 +1,68 @@
+name: Install ffmpeg (Windows)
+description: >
+  Puts ffmpeg and ffprobe on PATH on a Windows runner, from a pinned GitHub release rather than the
+  Chocolatey community feed.
+
+  The feed stopped resolving the ffmpeg package from the Windows runners on 2026-08-13: ten attempts
+  across two runs, spread over twenty minutes, every one of them answering "ffmpeg not installed. The
+  package was not found with the source(s) listed", with no 503 and with imagemagick resolving
+  normally in the same command. Querying the same feed from outside Actions found ffmpeg 9.0.1 sitting
+  there, so the package exists and the runners cannot see it, which is what the feed's rate limiting
+  of CI looks like. Retrying cannot fix being refused, and the retry ladder had already been widened
+  once for this same step.
+
+  imagemagick and tree still come from Chocolatey, because they resolve.
+
+inputs:
+  release-tag:
+    description: The BtbN/FFmpeg-Builds release tag to take the build from.
+    required: false
+    default: autobuild-2026-08-13-17-03
+
+  asset:
+    description: >
+      The release asset to download. Pinned by exact name, build hash included, so a rebuild upstream
+      cannot silently change what the tests run against.
+    required: false
+    default: ffmpeg-n8.1.2-34-g9b6c8969e0-win64-gpl-8.1.zip
+
+runs:
+  using: composite
+  steps:
+    - name: Download and install ffmpeg
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        FFMPEG_RELEASE_TAG: ${{ inputs.release-tag }}
+        FFMPEG_ASSET: ${{ inputs.asset }}
+      run: |
+        set -euo pipefail
+
+        if command -v ffmpeg >/dev/null 2>&1 && command -v ffprobe >/dev/null 2>&1; then
+            echo "ffmpeg and ffprobe are already on PATH."
+            exit 0
+        fi
+
+        install_dir="$RUNNER_TEMP/ffmpeg-bin"
+        mkdir -p "$install_dir"
+
+        gh release download "$FFMPEG_RELEASE_TAG" --repo BtbN/FFmpeg-Builds \
+            --pattern "$FFMPEG_ASSET" --dir "$RUNNER_TEMP"
+        unzip -q "$RUNNER_TEMP/$FFMPEG_ASSET" -d "$RUNNER_TEMP/ffmpeg-extracted"
+
+        # The zip holds one top-level directory whose name carries the build hash, so the binaries are
+        # found rather than named.
+        ffmpegBinary="$(find "$RUNNER_TEMP/ffmpeg-extracted" -name 'ffmpeg.exe' -type f | head -1)"
+        ffprobeBinary="$(find "$RUNNER_TEMP/ffmpeg-extracted" -name 'ffprobe.exe' -type f | head -1)"
+        if [ -z "$ffmpegBinary" ] || [ -z "$ffprobeBinary" ]; then
+            echo "::error::The ffmpeg release asset $FFMPEG_ASSET did not contain ffmpeg.exe and ffprobe.exe."
+            exit 1
+        fi
+
+        cp "$ffmpegBinary" "$ffprobeBinary" "$install_dir/"
+
+        # GITHUB_PATH rather than copying into a system directory, which needs no elevation and is how
+        # install-what-changed does it.
+        echo "$install_dir" >> "$GITHUB_PATH"
+
+        "$install_dir/ffmpeg.exe" -version | head -1

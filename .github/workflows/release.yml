@@ -633,13 +633,17 @@ jobs:
         with:
           run: bun install
 
+      # ffmpeg comes from a pinned GitHub release, not Chocolatey. See the action for why.
+      - name: Install ffmpeg
+        uses: ./.github/actions/install-ffmpeg-windows
+
       - name: Install media processing tools
         uses: ./.github/actions/retry-install
         with:
           run: |
-            echo "Installing ImageMagick, ffmpeg, and tree via Chocolatey..."
-            choco install imagemagick ffmpeg tree -y
-          verify: magick|convert ffmpeg ffprobe
+            echo "Installing ImageMagick and tree via Chocolatey..."
+            choco install imagemagick tree -y
+          verify: magick|convert
 
       - name: Verify media tool versions
         run: |
@@ -1540,12 +1544,17 @@ jobs:
           run: brew install imagemagick ffmpeg
           verify: magick|convert ffmpeg ffprobe
 
+      # ffmpeg comes from a pinned GitHub release, not Chocolatey. See the action for why.
+      - name: Install ffmpeg (Windows)
+        if: runner.os == 'Windows'
+        uses: ./.github/actions/install-ffmpeg-windows
+
       - name: Install smoke-test dependencies (Windows)
         if: runner.os == 'Windows'
         uses: ./.github/actions/retry-install
         with:
-          run: choco install -y imagemagick ffmpeg
-          verify: magick|convert ffmpeg ffprobe
+          run: choco install -y imagemagick
+          verify: magick|convert
 
       # Both steps are capped well under the job's 60 minutes, and the cap is the only reason a hang
       # here is ever diagnosable. When a JOB hits its timeout GitHub hard-kills it and writes no log
