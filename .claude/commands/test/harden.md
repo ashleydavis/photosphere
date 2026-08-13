@@ -120,6 +120,17 @@ git reset --hard HEAD~1
 
 This is the one destructive git command this skill authorises, and only in the worktree, and only on a commit this skill made. Then diagnose again from scratch: the first explanation was wrong.
 
+**Every commit must fix a failure one of the scripts actually produced.** Remove any that does not, the same way, before finishing. A change that did not fix an observed failure is not a fix, however reasonable it looks, and shipping it makes things worse rather than better: it is untested behaviour that changes what the app or the harness does, and when it breaks something later there is nothing tying it to a symptom anyone saw. The bar is a failure you watched happen, a cause you established from its evidence, and a change you saw go red without it and green with it.
+
+Judge each commit against that bar and remove the ones that fail it:
+
+- **A fix for a mode you diagnosed but never watched break a run** goes. Finding a real defect while reading the code is not the same as that defect having failed anything, and this skill is for what the scripts turn red. Record it in the registry so the knowledge survives, and leave the code alone.
+- **A fix you could not prove**, where no red run was produced and no red/green pair exists, goes, unless the failure it addresses is one the scripts produced and the cause is established from that run's evidence. A number you picked rather than measured is not a fix.
+- **Diagnostics stay only when they earned it**: a logging change that named the cause of a failure the scripts produced has paid for itself and should be kept, because the next occurrence is then readable. One added on speculation has not, and goes.
+- **A fix that caused a failure of its own** goes immediately, whatever else it was for. That is the rule above, and it is not negotiable because the change was well intentioned.
+
+Say in the summary which commits were removed under this and why, so the reasoning is visible rather than silently dropped.
+
 ## A sick pool
 
 Exit 4 from either script, or a `find-flakey-tests` pause, means an emulator went bad. That is not a flaky test and must not be fixed as one.
@@ -151,10 +162,12 @@ Anything else is work to carry on with.
 
 ## Finishing
 
-Both scripts green in one pass each. Then write:
+Both scripts green in one pass each, and every remaining commit tied to a failure one of them produced. Then write:
 
 - Each fix: which test failed, what the cause was, what the change did, and why it was the smallest change that removes that one cause.
 - The evidence that proved each fix, or plainly that a red run could not be produced.
+- Any commit removed for not fixing an observed failure, and why. Removing one is a normal outcome of this skill, not an admission of having wasted the time: the knowledge goes into the registry and the code stays as it was.
+- Which fixes are proven and which are not, kept apart rather than listed together. A change whose red/green pair you watched and a change you reasoned your way to are not the same claim, and running them together in one list overstates the weaker ones.
 - Any Bun crash, sick pool or dropped suite either run reported, and what it leaves unchecked. A `test:parallel` run without `test:and` checked 10 of 15 combinations, and a run without `test:ios` on Linux always does.
 - The session directories: `tmp/parallel-check/<timestamp>` and `tmp/find-flakey-tests/<timestamp>`.
 - **The worktree path and branch the work is on**, so the human can go and look at it themselves.
