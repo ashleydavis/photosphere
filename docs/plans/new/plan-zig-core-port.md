@@ -1,5 +1,46 @@
 # Port Photosphere to Zig and Vercel Native, in a new repository
 
+## Goals
+
+What this port is for. Everything else in this document exists to serve one of these, and anything that serves none of them is out of scope.
+
+- **Port Photosphere's core from TypeScript to Zig**, every package except the user interface.
+- **Replace Electron and Capacitor with Vercel Native**: one application shell covering Windows, Linux, macOS, Android and iOS, with no bundled browser engine and no embedded JavaScript engine.
+- **Keep the React user interface**, carried across and embedded rather than rewritten.
+- **Reach parity with the old repository**: the same features, the same unit tests, the same smoke tests, on every platform. Parity is the definition of done, and it is measured against the old repository rather than judged.
+- **Write Zig that mirrors the TypeScript** file for file and function for function, so the two can be read side by side and checked against each other.
+- **Make every line of new Zig deterministic**: same inputs, same outputs, every time, on every platform, at any concurrency. Pure where possible, every effect passed in, no globals. This outranks mirroring the TypeScript when the two conflict.
+- **Zero flaky tests, from the first commit.** Every test proven to run beside another copy of itself and beside every other suite, because the port runs many agents at once and flakiness would poison every result they produce.
+- **Never lose what the old repository knows.** Its operational scripts, its test harnesses, its emulator pool machinery, its release workflow and its hard-won rules all come across.
+- **Run autonomously from beginning to end.** The system plans, implements, reviews, merges and recovers by itself, stopping only at two checkpoints, and resuming from where it left off after any crash, outage or interruption.
+- **Never get blocked.** Nothing waits on a person, nothing is parked, and a package that fails comes back having changed its approach. Everything in the old repository is proof that every part of this can be done.
+- **Make progress visible without asking.** Everything is committed and pushed as it happens, and one page says where the port stands.
+- **Record everything as it happens**: what was done, what failed, what was decided and what was reversed, in enough detail to write the story afterwards without reconstructing anything from memory.
+
+## Glossary
+
+The words this document uses in a particular way. Anything not here is used in its ordinary sense.
+
+- **Port orchestrator**, or just **the orchestrator**: the one process that drives everything. It picks work, spawns agents, runs merge trains, updates the summary and recovers whatever broke. There is one at a time, on one machine.
+- **Turn**: one unit of the orchestrator's work. It reads the queues, does what is next, records it, pushes, and ends. The port is many turns; a crash costs one.
+- **Agent**, **subagent**: a Claude session doing one job, spawned by the orchestrator. Four kinds: plan author, implementer, reviewer, merge train.
+- **Package**, or **work package**: one plan's worth of work, roughly one old package or one clearly separable half of one. The unit that moves through the queues and gets merged.
+- **Plan**: the written specification for one package, created and checked with the plan commands in `.claude/commands/port/`. Lives with the package.
+- **Queue**: a directory a package sits in. The queue it is in **is** its status: `todo`, `in-progress`, `review`, `merge-queue`, `done`, plus `conflicts`.
+- **Merge train**: the single-threaded process that merges reviewed packages into main. One worktree, packages merged one at a time, whole suite run, bisect on failure. Only one runs at once.
+- **Findings**: what a review writes when it rejects work. One file per review pass, read by the next implementer.
+- **Escalation ladder**: what happens to a package that keeps failing. Retry, then fix the findings, then re-plan, then split, then read how the old repository did it, then change route. Nothing is ever parked.
+- **Parity**: the definition of done. The new repository has the same features, tests and documentation as the old one, measured against it rather than judged.
+- **The comparison**: the five-part check a review makes against the TypeScript: behaviour, code, unit tests, smoke tests, documentation.
+- **Meta repository**: `psi-zig-port-orchestrator`, which holds the process. Distinct from `photosphere-old` (read-only source of truth) and `photosphere-zig` (the port).
+- **Prototype**: a throwaway experiment answering one question, built outside this plan and delivered to it as a finding. Referred to as P1 to P10.
+- **Runner**: a machine that builds or tests, almost always a GitHub-hosted one driven by the release workflow. Not the orchestrator.
+- **Flake**: a test that sometimes fails without the code changing. Treated as an emergency, never as bad luck.
+- **Stuck**: an agent still running but making no progress. Killed and resumed from its last checkpoint, without diagnosis.
+- **Interruption**: the run being cut off from outside, by a rate limit, a crash or a kill. Never a failure, recorded nowhere, costs one step.
+- **Agent record**: the file an agent writes saying what it is, what package and pass it is on, which step it has reached, and how to resume it. What makes a crash survivable.
+- **Evidence**: captured output proving a check ran and what it said. One directory per pass, never carried forward between passes.
+
 ## Overview
 
 Photosphere today is sixteen TypeScript packages under `packages/` plus ten apps under `apps/`, wrapped for the desktop by Electron and for the phone by Capacitor, with background work running inside an embedded JavaScript engine (QuickJS on Android, JavaScriptCore on iOS) driven by a host bridge.
@@ -8,31 +49,21 @@ This plan replaces all of that with a **new repository** containing a Zig core, 
 
 **Bun stays.** Wherever TypeScript or a script survives into the new repository, Bun is what runs it: the workspace and its dependencies, every `package.json` script, the bundling of the React frontend, the TypeScript unit tests, and the host-side pieces of the smoke test harness. The one thing that may not be Bun's to run is the Vercel Native CLI itself, which ships on npm and states Node 22.15+ as its requirement; whether it runs under Bun is a question for prototype P1 and is not assumed here.
 
-The work is cut into individually testable packages of work, each with a written specification, unit tests and (where the package can be reached from outside) smoke tests. The intended way to execute it is autonomous: an orchestrator picks the next ready package, an implementation subagent builds it in its own transient worktree and commits, a review subagent checks it against the specification and runs the tests, and the two hand back and forth until the review passes. The final section of this document tells the human how to set that up and what it cannot do without them.
+The work is cut into individually testable packages, each with a plan, unit tests and (where reachable from outside) smoke tests. Execution is autonomous: the orchestrator picks the next ready package, an implementation agent builds it in its own worktree and commits, a review agent checks it against the plan and runs the tests, and the two hand back and forth until the review passes.
 
-**Step 1 stops.** The first thing that happens in the new repository is a `CLAUDE.md`, and then nothing else until the human has read and accepted it.
+**A port that produces nothing runnable until it is two thirds finished cannot be trusted or stopped at**, and a new repository has that risk by construction, because nothing calls the new code until something is built to call it. Three constraints answer it: the walking skeleton is built before any core library, the command line tool comes online early because its eighty smoke tests are headless and run anywhere, and **every package after the skeleton must name a test that goes from red to green**. A package that cannot name one is the wrong package.
 
-### A concern worth stating before the plan starts
+**This port gets done.** Nothing here is a question about whether it happens, only about how: which route, which dependency, which platform arrives first. A negative result changes the route. Consequences: an agent that hits a wall reports it and takes the next rung of the escalation ladder rather than deciding the work is off, and never invents a workaround the rules forbid.
 
-The previous version of this plan existed because two attempts at a big-bang Zig port failed, and its central finding was that a parallel tree produces nothing testable until roughly two thirds of the way through, which is why it ported packages in place behind the existing interfaces so that the existing smoke suites were the evidence after every increment.
+## Prototypes: the ten questions to answer first
 
-A new repository throws that safety net away by construction. There is no existing application calling the new code, so the same failure is available again. The plan below answers it in a different way rather than pretending the risk is gone: the walking skeleton (a launchable window, a working control bridge and one passing smoke test) is built before any core library, the command line tool comes online early because its eighty smoke tests are headless and can run anywhere, and every work package after the skeleton has to make at least one more real test pass in a real binary. If a work package cannot state which test goes from red to green, it is the wrong package.
+**These are built in phase 2**, driven from the meta repository by the orchestrator, each in its own throwaway repository: a session does the work and a workflow runs whatever needs a platform the session does not have. Three exist already, built by hand. Phase 3 absorbs the findings.
 
-### This port gets done
+**P2 is the exception.** It asks whether the generated Xcode project builds under Xcode 14.2, which no current runner image is likely to carry, so it runs on a Mac the port can reach or is done by the human.
 
-That is the premise, not an aspiration, and it settles what everything below means. Nothing in this document is a question about whether the port happens. Every prototype, finding, risk and decision in here is about **how** it gets built: which route, which dependency, which platform arrives first, which requirement gets raised. A negative result is a change of route and never a reason to stop.
+**These briefs are copied into `docs/prototypes.md` in the meta repository during phase 0**, which is where each one's repository link and finding are added as it is built. Add the link here too as each lands, so this plan stays readable on its own.
 
-Two things follow, and they are the reason to state this up front rather than leave it implied. An agent that hits a wall reports it and waits for the route to change; it does not decide the work is off, and it does not invent a workaround the rules forbid to keep going. And a decision that has to be made is made by the human and then executed, rather than being left open as a standing doubt about the project.
-
-## Prototypes: the inputs this plan expects
-
-**These are not this plan's work.** They are built separately, each in its own repository, and what reaches the port is a link and a finding. Two exist already. The rest are briefs, written here so that what comes back answers something the port can act on.
-
-Ten questions can each change what this plan is, and every one is cheaper to answer in a throwaway prototype than to discover in the middle of the port. Phase 1 is the port reading the findings and adjusting to them, and that is the only place the port depends on this section.
-
-What makes a prototype usable here: one question, thrown away afterwards, and a written finding saying what was run, on what, and what happened. A prototype that ends in an opinion cannot be acted on.
-
-A negative result moves work: a different route, a different dependency, a platform that ships later than the others, or a requirement that gets raised. That is the value of running them first, while a decision is still cheap to act on. What a negative result must never do is get worked around quietly.
+A usable finding says what was run, on what, and what happened. A negative result moves work (different route, different dependency, a platform shipping later) and is never worked around quietly.
 
 **Built already:**
 
@@ -95,6 +126,8 @@ Build it: a thread pool running several tasks concurrently, each with an id, eac
 
 It passes when a hundred tasks run, are cancelled midway, and the page receives every event attributed to the right task with none lost and none duplicated, and when a task that ignores its cancellation token is reported as a timeout rather than hanging the shutdown. Run it under `ReleaseSafe` and under the leak-checking allocator.
 
+**It must also cover a task that fans out inside itself.** Between tasks the mapping to threads is direct: one task, one thread, and the old repository already runs its handlers in pools. Inside a task is different, and it is the case the probe does not cover. An `await` in the middle of a handler is interleaved input and output within one piece of work, and on a single thread in TypeScript a `Promise.all` over fifty uploads runs all fifty at once for nothing; in Zig that task holds one thread and does them one after another unless it fans out itself. Measure one task issuing fifty concurrent operations against the same fifty done serially and against fifty separate tasks doing one each, and find out whether a handler that fans out onto the pool it is running on can deadlock itself when the pool is full. The likely cases in the old repository are S3 multipart upload and any handler batching network requests.
+
 This is the model that packages 23, 33 and 36 are built on, and it is the one piece of the architecture that has no equivalent anywhere in the current repository, because there the concurrency came from an event loop that no longer exists.
 
 **P9. Compatibility with data and installations already in the field.** Users have databases on disk written by the TypeScript, and after this ships they will have a Zig phone talking to a TypeScript desktop over LAN sharing, because nobody upgrades everything on the same day.
@@ -113,36 +146,70 @@ It passes when a package goes from ready to merged with no human intervention, w
 
 This is the one prototype in the list with nothing to do with Zig or the SDK, so it does not need a repository of its own: running it as the orchestrator's first cycle against a throwaway package in the new repository is the same experiment.
 
-Run it in the environment the port will use, so it also answers the runner questions: whether remote Claude sessions are available and can reach the network and the repository, what `ls -l /dev/kvm` says on the droplet, and whether the application smoke suite runs under `xvfb` there.
+Run it in the environment the port will use, so it also answers the environment questions. For cloud sessions, measure rather than assume: availability on the account; whether the network allowlist reaches everything the toolchain and the C dependencies need; whether all three repositories attach at once; whether 30 GB of disk and 16 GB of RAM hold `photosphere-old`, `photosphere-zig`, worktrees, the Zig cache and a C library build together; how long a session runs before it ends; how many run concurrently; whether merging by pull request works end to end; and what a session costs. For a droplet instead: what `ls -l /dev/kvm` says, and whether the application smoke suite runs under `xvfb`.
 
 ## What the new repository contains
 
-This layout is the plan's proposal, not a settled fact. Step 1 writes it out in full as a document in the new repository, down to the file, and the human checks it before any of it is built.
+**The layout mirrors the old repository**, because that is what rule 1 is for. `packages/storage/src/file_storage.zig` sits against `packages/storage/src/lib/file-storage.ts`, and a human comparing the two does it by path rather than by translating a layout in their head. Every directory that exists in the old repository and still has a job keeps its name and its place. The only departures are where the new stack forces one, and each is marked below.
 
 ```
-docs/                     the full documentation set, written in step 1
-frontend/                 the React UI, built by Bun to a dist that app.zon embeds
-  packages/user-interface   carried over from the old repo, near unchanged
-  packages/config           carried over if still needed by the UI
-  src/platform-native.tsx   the one platform provider, over window.zero
-src/                      the Vercel Native host: bridge handlers, wake/drain, servers
-  main.zig
-  asset_server.zig        localhost HTTP with range requests, for media bytes
-  events.zig              WebSocket channel for pushed events
-lib/psi-core/src/         the port of packages/, one directory per old package
-apps/cli/                 the Zig command line tool (replaces apps/cli)
-tests/
-  unit/                   Zig test blocks live beside their source; this is the runner
-  cli/                    the eighty numbered CLI smoke tests plus the five other suites
-  app/                    the deduped UI smoke tests, run on every platform
-  lib/                    the shared shell harness: runner, control bridge, process control
-app.zon                   manifest: windows, capabilities, security, frontend
-build.zig                 owned (ejected) build, because C libraries have to be linked
-package.json              Bun workspace, Bun scripts, the pinned Vercel Native CLI
-bunfig.toml               Bun configuration, if the workspace needs any
-mise.toml                 pins Zig 0.16.0 and Bun, and Node only if the SDK CLI needs it
-automation/               the work package specifications and the orchestrator state
+photosphere-zig/
+  README.md
+  CLAUDE.md
+  package.json            Bun workspace and scripts, and the pinned Vercel Native CLI
+  bun.lock
+  mise.toml               pinned Zig, Bun, jq, what-changed
+  what-changed.yaml       which suites run for which paths
+  build.zig               owned (ejected), because C libraries have to be linked
+  build.zig.zon           C dependencies, each pinned by exact tag and content hash
+  app.zon                 the Vercel Native manifest: windows, capabilities, security, frontend
+  THIRD-PARTY-NOTICES.md
+
+  src/                    NEW. The Vercel Native host, at the root because that is where the SDK
+    main.zig              expects it. Bridge handlers, the wake and drain hand-off, entry point.
+    asset_server.zig      Replaces apps/desktop's main process and both mobile shells.
+    events.zig
+
+  packages/               one directory per old package, same names, Zig tests beside the code
+    api/src/
+    bdb/src/
+    encryption/src/
+    fuzzy-match/src/
+    lan-share-network/src/
+    merkle-tree/src/
+    node-api/src/
+    serialization/src/
+    storage/src/
+    task-queue/src/
+    tools/src/
+    utils/src/
+    vault/src/
+    user-interface/       carried across unchanged, still TypeScript, built by Bun
+    config/               carried across if the UI still needs it
+
+  apps/
+    cli/
+      src/main.zig        the Zig command line tool
+      src/cmd/            one file per command
+      src/lib/            shared code, including the port of commander
+      smoke-tests/        the eighty numbered tests, same numbers and names
+      smoke-tests-*.sh    the encrypted, LAN share, sync, write lock and hash cache suites
+    smoke-tests/          the application smoke suite, run on every platform
+      tests/              the deduplicated tests, same names as the old repository's
+      lib/                the harness: runner, control bridge, process control
+
+  scripts/                the operational scripts, carried over
+    lib/                  temp directory allocator, process control, concurrency, timeout
+
+  .githooks/pre-commit    frozen, copied unchanged
+  .github/workflows/      the old repository's release workflow, adapted
+  docs/                   the documentation set, written in phase 0
+  test/dbs/               the checked-in fixture databases, carried over
 ```
+
+**What is gone from the old layout, and why:** `apps/desktop`, `apps/desktop-frontend`, `apps/android-frontend` and `apps/ios-frontend` collapse into `src/`, because there is one application shell instead of three. `packages/mobile-worker`, `packages/mobile-frontend` and `packages/rest-api` disappear entirely. `apps/bdb-cli` and `apps/mk-cli` are decided when `packages/bdb` and `packages/merkle-tree` land.
+
+**No process artefacts live here.** The plans, queues, evidence, journals and summary are in the orchestrator repository. This one is code, tests and documentation.
 
 What is Zig: everything that was `packages/` except the user interface, everything that was `packages/node-api`, `packages/rest-api` and `packages/mobile-worker`, the command line tool, and the application host.
 
@@ -156,13 +223,13 @@ Bun's specific jobs, so that no part of this is left to preference:
 - **TypeScript tests.** `bun test` for whatever unit tests the frontend keeps, replacing Jest and `ts-jest`. Zig tests stay with `zig build test`.
 - **Typechecking.** `tsc --noEmit` under Bun, as now.
 
-What disappears with no replacement: Electron, Capacitor, the embedded JavaScript engines and their host bridge, `packages/mobile-worker` and its nineteen Node shims, `packages/rest-api` and Express, the Electron worker pool, the Node-API addon route the previous plan needed, the `@aws-sdk` packages, `bson`, and the mobile crypto polyfill set that existed only to run the AWS SDK inside a bare JavaScript engine.
+What disappears with no replacement: Electron, Capacitor, the embedded JavaScript engines and their host bridge, `packages/mobile-worker` and its nineteen Node shims, `packages/rest-api` and Express, the Electron worker pool, the `@aws-sdk` packages, `bson`, and the mobile crypto polyfill set that existed only to run the AWS SDK inside a bare JavaScript engine.
 
 ## Vercel Native: what it gives, what it costs
 
-Everything here comes from the probe repository at https://github.com/ashleydavis/electron-alternative-vercel-native and its README, which is the record of what was built and run rather than what the vendor documents claim.
+Everything here comes from the probe at https://github.com/ashleydavis/electron-alternative-vercel-native, which is a record of what was built and run rather than what the vendor documents claim.
 
-Three channels between the frontend and Zig, because they solve different problems:
+Three channels between the frontend and Zig:
 
 - **The bridge**, for control flow. `await window.zero.invoke("native.command", payload)` runs a Zig handler and resolves with a JSON value. Zig pushes the other way with `runtime.emitWindowEvent(window, "name", detail)`, received by `window.zero.on`. Events carry validated JSON and escaped names, so there is no script injection surface. This replaces every Electron IPC channel and every Capacitor plugin call.
 - **A localhost HTTP server**, for bytes. The bridge settles a promise with a JSON value, so images and video cannot go through it. The probe serves media from `127.0.0.1` on an OS-assigned port with range request support, and the page asks Zig for the port over the bridge because the page is on `zero://app` and is therefore cross-origin to the server. This is what the asset server becomes.
@@ -172,7 +239,7 @@ The threading rule that everything obeys: the WebView belongs to the UI thread. 
 
 ### Several of this port's load-bearing features are already prototyped there
 
-The probe is not only where the facts above come from. It is working code for the parts of this application that are hardest to get right against a WebView, it was built by the same author against the same eventual purpose, and it has been built and run on Linux. **Read it before writing any of these, and start from it rather than from the SDK documentation**, which the probe itself found to be wrong or silent on two of its three central APIs. The mapping onto the work packages below:
+**Read the probe before writing any of these and start from its code, not from the SDK documentation**, which it found wrong or silent on two of its three central APIs. The mapping onto the work packages:
 
 | Prototyped in the probe | Where it lands here |
 | --- | --- |
@@ -186,13 +253,17 @@ The probe is not only where the facts above come from. It is working code for th
 | The SDK's automation harness (`-Dautomation=true`): a file-based command dropbox that drives the bridge, resizes the window, takes snapshots and dumps the accessibility tree, and is how the probe was verified with nobody clicking | The test harness, package 7. Evaluate it against the existing control bridge before porting the control bridge: if it can drive the application on all five platforms it may replace the in-app test surface entirely, which would remove test-only code from the application |
 | Measured binary sizes, what is embedded, what is not, and what a copied binary still needs from the system | Packaging, package 46 |
 
-Three things in the probe are prototype quality and must not be copied as they are. It builds JSON with `bufPrint` rather than a serialiser, which is fine for integers and wrong the moment a filename or a user string goes into a payload, so this port uses `std.json` throughout. Its bridge policy allows `zero://inline` so the automation harness can dispatch, which is a security decision to make deliberately rather than inherit. And its progress path is a single monotonic counter, which the probe's own README says stops working once more than one job runs at a time: Photosphere runs many concurrent tasks, so package 23 needs task ids in every event and a real queue rather than a high-water mark. The sibling probe at https://github.com/ashleydavis/electron-alternative-zig-with-webview already has that queue as a fixed-capacity ring buffer and is worth reading for it.
+Three things in the probe must not be copied as they are:
 
-The costs, each of which the plan has to deal with:
+- It builds JSON with `bufPrint`. Use `std.json` throughout: `bufPrint` breaks the moment a filename or user string enters a payload.
+- Its bridge policy allows `zero://inline` for the automation harness. That is a security decision to take deliberately, not inherit.
+- Its progress path is one monotonic counter, which its README says stops working with more than one job. Package 23 needs task ids in every event and a real queue. The sibling probe at https://github.com/ashleydavis/electron-alternative-zig-with-webview has that queue as a fixed-capacity ring buffer.
+
+The costs:
 
 - **Zig 0.16.0 exactly**, pinned by the SDK. Zig 0.16 routes sleeping and other blocking through a `std.Io` instance rather than free functions, which changes how every blocking call in the port is written.
-- **A JavaScript runtime is a build-time dependency** for a Zig program, because the SDK ships as an npm CLI and states Node 22.15+ as its requirement. Bun installs it and Bun runs the scripts around it either way; the open question is whether the CLI's own code runs under Bun or needs Node underneath it. Step 2 answers it by running `native build`, `native check`, `native package` and both mobile targets under Bun. If any of them needs Node, Node is pinned in `mise.toml` for that one purpose and nothing else, and the port says so where a reader will find it.
-- **Build on the target operating system.** Zig cross-compiles readily on its own, but this links against platform SDKs and system libraries, so Windows, macOS and Linux each need their own runner. The previous plan's four-target cross-build story is gone for the application shell. It survives for the command line tool, which links nothing platform-specific: `what-changed` cross-compiles all four desktop targets from a single Linux runner today, and the Zig CLI here should be able to do the same. That difference is worth a lot to the autonomous lanes below.
+- **A JavaScript runtime is a build-time dependency**, because the SDK ships as an npm CLI stating Node 22.15+. Open question, answered by P1: whether the CLI runs under Bun. If it needs Node, Node is pinned in `mise.toml` for that one purpose and nothing else.
+- **The shell builds on the target operating system**, because it links platform SDKs and system libraries. The command line tool does not: it links nothing platform-specific, and `what-changed` cross-compiles all four desktop targets from one Linux machine today.
 - **Linux needs GTK4 and WebKitGTK 6.0 development packages**, and the runtime needs `libgtk-4-1` and `libwebkitgtk-6.0-4`. Ubuntu ships the GTK3-era `libwebkit2gtk-4.1` by default, so this asks more of a user's machine than Electron does and has to be declared in whatever gets shipped.
 - **Ubuntu 24.04 and friends restrict unprivileged user namespaces**, which kills WebKit's sandbox and makes the app exit at launch. The probe works around it by disabling the WebView sandbox in dev, which is not acceptable for anything shipped. The shipping answer is a decision this port has to make and record.
 - **Mobile is vendor-labelled experimental and nothing has been built for a phone.** The CLI carries a real mobile toolchain (it generates an Xcode project with pbxproj, scheme, `Info.plist` and asset catalog, and drives the NDK, writes an `AndroidManifest.xml`, assembles a debug APK, boots an emulator and installs over adb), and all of that is read from the CLI rather than run. The mobile docs page is a 404.
@@ -226,13 +297,85 @@ The correspondence itself is recorded once, in a place built for it, rather than
 ### 2. Pure and functional, with globals only at the edges
 
 - A core library function takes what it needs as parameters and returns what it produces. No process-wide state, no lazily initialised singleton, no module-level mutable variable, no hidden cache, no ambient logger, no ambient allocator.
-- `lib/psi-core/**` gets no mutable globals at all. Constants are fine. A `const` table is fine. A `var` at module scope is not, whatever it is protecting itself with.
+- `packages/**` gets no mutable globals at all. Constants are fine. A `const` table is fine. A `var` at module scope is not, whatever it is protecting itself with.
 - State that has to exist lives in a struct the caller owns and passes in, so two of them can exist at once and a test can make one.
 - Effects are parameters: the allocator, the `std.Io`, the clock, the UUID source, the network and the process spawner all arrive explicitly, which is also what makes the deterministic test implementations the smoke tests rely on possible. A struct may hold the effect it was constructed with, because a temporary directory only makes sense against the filesystem that made it, but nothing reaches for an effect it was not given.
 - The test for whether this rule is being followed: reading a function tells you which implementation a call uses, and no test can change what another test sees. If either fails, there is a hidden global whatever it is called.
 - Globals are tolerated only at the edges: `src/main.zig` and the platform host it talks to, the CLI entry point, and the process-level runtime the SDK owns. Even there, the global is a container that is constructed once at startup and passed down, never reached back up into.
 - Keep a written list of every container-level variable left in the repository, and drive it down. The last port ran that list to four and named them.
 - The old `setQueueBackend`/`getQueueBackend` process singleton is the exact pattern this rule exists to stop. It does not come across.
+
+## Determinism, and zero flaky tests from the first commit
+
+**This is the most important quality requirement in the port, and it outranks the rule that the Zig mirrors the TypeScript.** Where the two conflict, determinism wins and the divergence is recorded. A port that reproduces the old behaviour but is unreliable is worth less than the thing it replaced, and an autonomous system cannot function on top of tests that sometimes fail: every flaky test poisons the review, the merge train and the release workflow at once, and an agent cannot tell an unlucky run from a real defect.
+
+The old repository has zero tolerance for this and has paid for it in scripts, rules and hard-won knowledge. All of it comes across, and the new repository starts with it rather than acquiring it after being bitten.
+
+### The determinism rules, which go in `CLAUDE.md`
+
+**New Zig code must be deterministic. Same inputs, same outputs, every time, on every platform, in any order, at any concurrency.**
+
+- **Functions are pure where they possibly can be.** Inputs in, result out, nothing else observed and nothing else touched.
+- **Every effect arrives as a parameter**: the allocator, the `std.Io`, the clock, the random source, the UUID source, the environment, the network, the process spawner. A function that needs the time takes a clock; it does not read one.
+- **No globals**, which is already rule 2 and is restated here because a mutable global is the most common way determinism is lost.
+- **Side effects are minimised and named.** A function that writes, spawns or sends says so in its name and its comment, and everything else is free of them.
+
+**The specific sources of nondeterminism, all banned outright in core code:**
+
+- **Wall-clock time and dates.** Through the clock parameter only. No `std.time.timestamp()` buried in a library.
+- **Randomness**, including UUID generation. Through a source parameter, seeded explicitly. The deterministic test implementations that the old smoke tests rely on through `NODE_ENV=testing` come across for exactly this reason.
+- **Hash map iteration order.** Zig's hash map iteration order is not specified and shifts with capacity and insertion history. Anything whose output depends on it (a serialised document, a hash, a report, a listing) sorts explicitly first. This is the single likeliest way a port of TypeScript, whose objects preserve insertion order, becomes nondeterministic without anybody noticing.
+- **Filesystem ordering.** Directory reads come back in whatever order the filesystem gives, which differs between platforms and between runs. Sort before use, always.
+- **Uninitialised memory.** Zig's `undefined` is a recognisable pattern in debug builds and real garbage in release, so a read of uninitialised memory can pass a thousand debug runs and fail in `ReleaseFast`. That is why every test runs in `ReleaseSafe` as well.
+- **Pointer values and addresses**, which vary per run, and anything derived from them.
+- **Thread scheduling.** Results from a pool are collected into a defined order before anything looks at them. A test never depends on which thread finished first.
+- **Locale, environment and platform formatting**, including float formatting, which the port pins explicitly wherever a value is serialised.
+
+### Fuzzing, and differential fuzzing against the TypeScript
+
+Zig has a built-in fuzzer, and this port has something better than a fuzzer's usual oracle: **a working reference implementation**. Both are used.
+
+- **Fuzz every parser and every format.** The binary serialiser and deserialiser, BSON, the encryption header, storage path parsing, the storage descriptor parser, the asset server's route parameters, and the LAN share wire format. These are where malformed input meets code that assumes it is well formed.
+- **Round-trip properties**: decoding what was encoded returns the original, for every input the fuzzer can produce.
+- **Differential fuzzing is the strongest tool available here.** Feed the same generated input to the Zig and to the TypeScript, and compare the outputs byte for byte. A divergence is a defect in the port, found automatically, with a reproducing input attached. This is worth building for the formats that cross machines or persist to disk, because those are the ones where a divergence is expensive and silent.
+- **Every fuzz finding becomes a named unit test** with the failing input as a fixture, so it can never regress silently.
+
+### The two scripts, run by every review, on every package
+
+`scripts/find-flakey-tests.sh` and `scripts/check-parallel-tests.sh` come across from the old repository, and they are not optional extras. **Every review agent runs both before accepting work in a worktree**, and a package is not accepted until both pass:
+
+- **`find-flakey-tests` on the ladder, ten runs a rung.** Every suite, cheapest rung first, requiring ten consecutive green runs of each before the next rung starts. Ten rather than the default hundred because this runs on every package rather than once; the hundred-run sessions are for the periodic sweeps and for hunting a known flake.
+- **`check-parallel-tests`, with all suites included.** Every suite alone, then every combination of two, self-pairs included. Self-pairs are the cheapest way to catch a fixed port or a fixed path, and this port runs several agents at once so a suite that cannot survive beside a copy of itself is broken by definition.
+
+Both must cover **all** tests. A run that quietly leaves a suite out is worse than no run, because it reports clean.
+
+### Parallel safety is proven for every new test, not assumed
+
+**Absolute rule from the first commit: every test must run beside another copy of itself and beside every other suite.** Several agents run tests at once, on the same machine, from different worktrees, so a test that needs to be alone breaks the whole system rather than just itself.
+
+The old repository's rules come across unchanged and are enforced by review: no hardcoded port, no fixed path anywhere including under a temp directory, no fixed database, bucket, vault, config or lock name, no fixed device. Ports are allocated free, directories come from the temp directory allocator, every started process has its pid recorded at the moment it starts, and nothing is ever killed by matching a command line.
+
+New tests do not inherit the old ones' proof. Each one is shown to be parallel-safe by `check-parallel-tests` including it, and the review checks it was included rather than taking the summary line on trust.
+
+### The release workflow is never left failing
+
+- **An obvious failure is fixed immediately**, ahead of any other work. A red workflow on main is the highest priority thing in the port, because everything after it builds on a tree nobody has proven.
+- **A flaky failure stops everything.** Not the package, everything. No new work starts while a flake is loose, because every run after it produces evidence nobody can trust.
+- **A flake is only considered fixed after five complete release workflow runs pass in a row**, every job, every platform. Not a targeted rerun of the job that failed: the whole workflow, five times, sequentially.
+- **A rerun is never a fix.** A job that goes green on retry has told you it is flaky, and that is a finding to chase rather than a result to accept.
+
+### The flakiness log, and learning from every instance
+
+`docs/flakiness/` in the meta repository holds one entry per flake ever seen, and it is a deliverable rather than a diary. Each entry records:
+
+- **What flaked**: the test or the code, by name, with the run that caught it.
+- **Why**: the actual mechanism, not a guess. An entry that says "timing" has not been finished.
+- **How it was fixed**, and how that fix was proven: the ladder runs, the parallel check, the five sequential workflow runs.
+- **What rule now prevents it**, written as a rule an agent can follow before writing the code rather than after.
+
+**That last field is the point of the log.** Every rule it produces goes into the new repository's `CLAUDE.md` immediately, so every subsequent agent reads it before writing anything. The log accumulates the reasons; `CLAUDE.md` accumulates the rules. Over the port this should mean each class of flake is paid for once.
+
+`summary.md` carries the count of open and resolved flakes, because a rising count is the earliest sign the port's quality is slipping.
 
 ## The reference implementation: `what-changed`
 
@@ -255,14 +398,14 @@ The one thing not to copy from it is scale. It is a small tool with a single-fil
 
 ## The operational tooling comes across, all of it
 
-The port replaces application code. It does not replace the machinery around it, and none of that machinery is allowed to be lost, reinvented or quietly left behind because a work package did not need it that day. Years of this repository's value is in these scripts rather than in the packages, they are all shell or TypeScript so nothing about Zig makes them obsolete, and losing one is not noticed until the day it was the thing that would have caught a problem.
+The port replaces application code, not the machinery around it. These are shell and TypeScript, so nothing about Zig makes them obsolete, and losing one is not noticed until the day it would have caught something.
 
-Every item below is carried over, kept working, and covered by the step 1 documentation. Where a script names Electron, Capacitor or a package that no longer exists, it is edited to name the new equivalent; it is not dropped.
+Every item below is carried over, kept working, and covered by the phase 0 documentation. Where a script names Electron, Capacitor or a package that no longer exists, it is edited to name the new equivalent, never dropped.
 
 - **`scripts/test-everything-parallel.sh` and the whole `test:everything` arrangement.** This is how a change is tested in this repository and it is what the git hook runs. It comes across with its parallel lanes, its per-script decisions, its `--plan` and `--force`, and its serial groups.
 - **`what-changed` and `what-changed.yaml`.** The new repository uses the same tool the same way, targets and all, so a docs-only change still runs nothing and a Zig change runs what it affects. It is already a Zig program by the same author, so this is one dependency that gets simpler rather than harder.
 - **The git hooks: `.githooks/pre-commit` and `scripts/install-hooks.sh`.** Carried over and then frozen again under the same rule: never edited, never bypassed, and never given an escape hatch.
-- **`scripts/find-flakey-tests.sh`**, with its streak target, its resume, its ladder mode and its finish-time estimates. A port produces new tests at a rate nothing else in this repository ever has, so the flake hunter matters more here than it does today, not less.
+- **`scripts/find-flakey-tests.sh`**, with its streak target, resume, ladder mode, finish-time estimates, and everything it knows about telling a real failure from a runtime crash or a sick emulator pool. Every review runs it.
 - **`scripts/check-parallel-tests.sh`** (`test:parallel`), which runs each suite alone and then every pair together, self-pairs included. This is what catches a fixed port or a fixed path, and the plan's orchestrator runs several agents and worktrees at once, so it is load-bearing for the autonomy as well as for the human.
 - **The whole Android emulator pool.** `scripts/android-pool-status.sh`, `apps/android-frontend/scripts/emulator-pool-monitor.sh`, `emulator.sh`, `emulator-config.sh`, `emulator-status-lib.sh`, `android-env.sh`, `psphere-pool.slice`, the pool repair and diagnose commands, and the rolling monitor logs. This took a long time to get right, it is what makes Android testing possible at all, and it is entirely independent of what the application is written in. It comes across whole. On the port's Android runner the pool is provisioned by the setup document and kept up by the monitor, and the rules about what may start, stop and repair it come across with it.
 - **`scripts/lib/`**: the temp directory allocator, the process control library with `kill_process_tree` and `kill_process_group`, the concurrency helpers and the timeout helper. Every parallel-safety rule in this repository is enforced by these four files.
@@ -297,12 +440,15 @@ The workflow runs on every branch push, which is why the port pushes package bra
 The port runs in five phases, and the first three exist so that the system itself is proven before it is trusted with forty packages at once.
 
 - **Phase 0: setup and structure.** The meta repository, the stub new repository, the rules and the whole documentation set. No port code at all. **Ends at a human checkpoint.**
-- **Phase 1: intake of the prototype findings.** Absorb what the prototypes settled and change the plan where they changed it.
-- **Phase 2: the walking skeleton.** A launchable application, the test harness, the operational scripts and the release workflow, all working before any library is ported.
-- **Phase 3: the shakedown.** One package, end to end, through every part of the machinery, one at a time, iterating on the system until it needs no more changes. **Ends at a human checkpoint.**
-- **Phase 4: the port.** Every remaining package, several in parallel.
+- **Phase 1: stand up the port orchestrator.** Turn a bare machine into something that can take turns, and prove it can before it takes one.
+- **Phase 2: build the prototypes.** Answer the ten questions, driven from the meta repository, which is also the first real trial of the environment the port will run in.
+- **Phase 3: intake of the prototype findings.** Absorb what the prototypes settled and change the plan where they changed it.
+- **Phase 4: the walking skeleton.** A launchable application, the test harness, the operational scripts and the release workflow, all working before any library is ported.
+- **Phase 5: the shakedown.** One package, end to end, through every part of the machinery, one at a time, iterating on the system until it needs no more changes. **Ends at a human checkpoint.**
+- **Phase 6: the port.** Every remaining package, several in parallel.
+- **Phase 7: the parity audit.** Prove the new repository matches the old one. Anything it finds becomes work packages and goes back to phase 6, and phase 7 runs again. The loop ends when an audit finds nothing.
 
-Nothing about phase 4 is attempted until phase 3 has run clean, and nothing in phase 3 is attempted until phase 0 has been read and accepted.
+Nothing about phase 6 is attempted until phase 5 has run clean, and nothing in phase 5 is attempted until phase 0 has been read and accepted.
 
 ## The cold start: how this gets going at all
 
@@ -312,10 +458,10 @@ Before phase 0 there is nothing: no meta repository, no runner, no orchestrator,
 
 What the bootstrap session does, in one sitting:
 
-1. Creates `psi-zig-port`, private, and pushes it with this plan in it as `docs/plan.md`.
+1. Creates `psi-zig-port-orchestrator`, private, and pushes it with this plan in it as `docs/plan.md`.
 2. Writes the scheduled workflow whose only instruction is to take a turn, and commits it.
-3. Creates `photosphere-new`, private, with an empty main branch, and clones `photosphere-old` and `claude-config` into the meta repository.
-4. Does the rest of phase 0: bootstraps `claude-config`, writes the queues, the journal, the decisions and interventions directories, `summary.md`, the stub repository, the rules and the documentation set.
+3. Creates `photosphere-zig`, private, with an empty main branch, and clones `photosphere-old` into the meta repository.
+4. Does the rest of phase 0: writes the queues, the journal, `docs/decisions/`, `docs/lessons/`, the interventions and flakiness directories, the commit template, `summary.yaml` and the `summary.md` rendered from it, the stub repository, the rules and the documentation set. 
 5. Stops at the phase 0 checkpoint for the human to read.
 
 **The one thing only a human can do is supply the credentials**, because they cannot be minted by an agent: the Claude credentials the scheduled turns will run under, added as a repository secret. Without them the workflow exists but cannot run. Everything else, including the repositories themselves, is created by the bootstrap session.
@@ -324,31 +470,125 @@ Under the long-lived architecture there is additionally a machine, and that is a
 
 Under the long-lived architecture there is a machine, and that is a genuine cost of that option: a droplet has to be brought up and prepared before anything can run, and the setup document describing how gets written afterwards from what was done rather than being followed. That is the wrong way round, and it is another reason to prefer scheduled turns.
 
-**What has to exist beforehand either way**: the source repositories reachable on GitHub (`photosphere`, `claude-config`, and the prototype repositories), a machine with git and GitHub credentials for the bootstrap session to run from, and the Claude credentials above.
+**What has to exist beforehand either way**: the source repositories reachable on GitHub (`photosphere` and the prototype repositories), a machine with git and GitHub credentials for the bootstrap session to run from, and the Claude credentials above.
 
 **The order the bootstrap session works in**, because each step depends on the one before:
 
 1. Start the journal with an entry describing the cold start itself, before doing anything else, so that everything after it is recorded as it happens. The first journal entry being the creation of the journal is the right kind of circular.
+1b. Write the first entry of `docs/decisions/`: the decisions already taken while this plan was written, listed in the section on that file. They predate the log and are recorded as such, so the log starts from a known position rather than from nothing.
 2. **The plan is already in place** as `docs/plan.md`, put there by hand when the repository was created. From that moment it is the plan, and the copy in the old repository is a historical artefact whose first line says so. Every later amendment happens in the meta repository, with a journal entry saying what changed and why, so the plan carries the same history as the work.
-3. Clone `claude-config` into the meta repository, run its `bootstrap.sh`, and replace the stowed `settings.json` with permissions set to bypass. The plan skills are now available, which the rest of the port assumes.
 4. Clone `photosphere-old` at the `mobile` branch, read-only.
-5. Create `photosphere-new`, private, with an empty main branch.
-6. Write the runner setup document, so that anything the environment needed is captured while it is still known rather than reconstructed later. On a per-job runner this is short: what to install before a turn can work.
-7. Then the rest of phase 0: the queue directories, decisions, interventions, `summary.md`, the stub repository, the rules and the documentation set.
+5. Create `photosphere-zig`, private, with an empty main branch.
+6. Write the port orchestrator setup document, `docs/orchestrator-setup.md`, described below.
+7. Then the rest of phase 0: the queue directories, decisions, interventions, `summary.yaml` and `summary.md`, the stub repository, the rules and the documentation set.
 
-**How the orchestrator starts the first time.** Once phase 0 is accepted, the first orchestrator turn is started the same way every later one is: on the chosen architecture, either a scheduled invocation or a loop on the runner, pointed at the meta repository with the instruction to take one turn. It reads the queues, finds phase 1 outstanding, and works. There is no separate startup path and no first-run special case, because a special case is a path that is exercised once and therefore never tested.
+**How the orchestrator starts the first time.** Once phase 0 is accepted, the first orchestrator turn is started the same way every later one is: on the chosen architecture, either a scheduled invocation or a loop on the runner, pointed at the meta repository with the instruction to take one turn. It reads the queues, finds phase 3 outstanding, and works. There is no separate startup path and no first-run special case, because a special case is a path that is exercised once and therefore never tested.
 
-**How a second runner joins.** Clone the meta repository, follow the setup document, bootstrap, and start taking turns. Nothing else is needed, because all state is in the repository rather than on a machine. If that is not true when it is tried, the setup document is wrong and fixing it is the first job.
+### `prototypes.md`: the briefs, then the findings
+
+Written in phase 0 with the ten briefs copied out of this plan, then filled in as each prototype is built. It is the human's page while the prototypes are being done and the port's input afterwards, and it is the one place that answers "what did we learn before we started".
+
+One section per prototype, P1 to P10, each holding:
+
+- **The brief**, from this plan: the question, and what an answer has to include.
+- **Status**: not started, in progress, or done, with a date.
+- **The repository**, linked, once it exists.
+- **The finding**, written when the prototype finishes: what was run, on what, and what happened. What worked, what did not, and what refused to work at all.
+- **What it changed**: the versions it pinned, the decisions it forced, the work packages it moved, and where each of those was recorded. A finding that changed nothing says so.
+
+**The findings are copied into the port's own documents as well**, per phase 3, because a version pinned only here is a version nobody building the thing will read. This file is the record of how it was learned; `mise.toml`, `build.zig.zon`, `docs/architecture.md` and the rest are where it is used.
+
+Also link each finished prototype in this plan's own prototypes section, so a reader of the plan can get to it without going through another document.
+
+### `bootstrapping.md`: starting the port, and restarting it after anything
+
+Written for a human, in phase 0, and kept current. It is the document to open when something has gone wrong and nothing is running. It assumes the reader has forgotten everything and is possibly annoyed.
+
+**Part one: starting it the first time.** From an empty machine to a turning loop: the credentials needed, running `scripts/setup-orchestrator.sh`, what it verifies, the command that starts the first turn, and how to confirm it is running.
+
+**Part two: working out what state things are in**, before touching anything. Read the first line of `summary.md` for the heartbeat and what it thought it was doing. Compare it with the queues. Look at what is in `in-progress/` and `review/` and at those packages' agent records. Five minutes of this saves an hour of restarting the wrong thing.
+
+**Part three: recovery, in increasing order of severity.** Each with the symptom, the check that confirms it, and the fix:
+
+- **The orchestrator is stuck.** Heartbeat old, nothing declared. Kill it by the pid in the heartbeat line, start a turn.
+- **The orchestrator is gone.** Nothing running. Start a turn.
+- **The machine is gone.** New machine, run the setup script, start a turn. Nothing was on it that matters.
+- **Worktrees lost with the machine.** Branches are on the remote; the next turn recreates what it needs from them.
+- **A package is stranded mid-stage.** Do nothing: the next turn's reconciliation records and routes it.
+- **`summary.md` disagrees with the queues.** The queues win. Correct the summary, record it.
+- **Main is red.** Find the last green revision, work out which merge broke it, hand that package back. The workflow history is the record.
+- **Total loss: nothing survives but GitHub.** This document plus the setup script rebuilds the whole thing, because every piece of state was committed and pushed as it happened. That is what the push-immediately rule buys and this is the case it was bought for.
+
+**Part four: stopping deliberately**, and what happens to work in flight when you do (nothing bad: an interruption is recorded nowhere and costs one step).
+
+**Part five: what to check after any restart.** That the summary matches the queues, that no worktree exists without a package pointing at it, and that anything in `in-progress/` has an agent record newer than the restart.
+
+### The port orchestrator, and its setup document
+
+**The machine that runs the loop is the port orchestrator.** There is one of it at a time. It plans, spawns implementation and review agents, drives merge trains, updates the summary and keeps everything moving. Multi-platform building and testing does not happen on it: that is pushed to branches and done by the release workflow on GitHub's own runners, which is what removes the need to own a Mac, a Windows machine or an Android host.
+
+Two things: `scripts/setup-orchestrator.sh`, which does it in one shot, and `docs/orchestrator-setup.md`, which explains what the script does, what has to be true before it runs, and how to fix it when it fails.
+
+**The script is not a breach of the no-tooling rule.** That rule is about process machinery: queue movers, summary generators, ledger builders, watchdogs, things that would run forever and whose bugs would be indistinguishable from the port's. This is environment provisioning, run once per machine, in shell, exactly like `install-hooks.sh` in the old repository. It is the one script this port has.
+
+**What the script must be:**
+
+- **Shell**, per the repository rules, with no other language embedded in it.
+- **Idempotent.** Re-running it on a half-set-up machine finishes the job rather than breaking it. This matters because the first thing anyone does after a failure is run it again.
+- **Loud on failure**, stopping at the first one and saying which step failed and what to do.
+- **Verbose about what it did**, so the machine's state can be understood afterwards from the output.
+- **Silent about secrets.** No token is ever echoed, logged or written to a file.
+
+### Authenticating git and `gh` on a fresh machine
+
+This is the part that blocks everything else, so it is handled first and explicitly.
+
+- **One GitHub token does both.** The script takes it from the environment (`GH_TOKEN`), never as an argument, because arguments are visible to other processes. It runs `gh auth login --with-token` from that variable, then `gh auth setup-git`, which points git's credential helper at `gh`. After that both `gh` and plain `git push` work over HTTPS with no keys to manage and no prompts.
+- **The token needs `repo` and `workflow` scope**, since the port pushes workflow files.
+- **Git identity is set explicitly** by the script (`user.name`, `user.email`), because commits from an unconfigured machine either fail or land with a useless author.
+- **Where the token comes from** depends on where the orchestrator runs: an environment variable on a droplet, or a repository secret under the scheduled-turn architecture. The document says both.
+- **The Claude credentials are separate** and are set up the same way: read from the environment or the secret store, never written into any repository.
+- **The script verifies before continuing**: `gh auth status` and a real push to a scratch branch it then deletes. An authentication problem found at step one costs a minute; the same problem found at the first merge train costs a turn and a confusing failure.
+
+`docs/orchestrator-setup.md` covers, in order:
+
+- **What the machine must already have**: an operating system, git, network access, and credentials. Which credentials, what they need to reach, and how they are supplied.
+- **Clone the meta repository**, then the three repositories inside it, in that order, with the exact commands and the branch each is cloned at.
+- **Install the toolchain**, at the versions the prototypes pinned: mise, Zig, Bun, Node if needed, and `what-changed` on the PATH.
+- **Install the system dependencies** it needs to run the work it does locally: build tools, the C library dependencies, the S3 emulator, and GTK4, WebKitGTK 6.0 and `xvfb` if the Linux application suite is to run there rather than only in the workflow.
+- **Prove it works before taking a turn**: build the stub repository, run `test:everything`, and run one smoke suite. An orchestrator that cannot do those is not ready, and finding that out now is much cheaper than finding it out through a package that fails for reasons of its own.
+- **How to run Claude here**: the exact command that starts a turn, headless, from the meta repository root, with the orchestrator goal as its prompt. The command to start the first turn, the command to resume after any stop, and the fact that they are the same command. How the turns are scheduled under whichever architecture was chosen. How to stop everything, and how to tell whether it is running.
+
+### Goals are per role, and subagents do not get the orchestrator's
+
+**The orchestrator's goal is to drive the port to parity and keep the loop turning.** Every subagent has a narrower goal, and **none of them is told the orchestrator's**, because an agent that believes its job is to advance the port will advance it at the expense of the thing it was actually asked to do. An implementer that knows the port is behind will skip a test to make progress. A reviewer that knows a package is blocking the queue will pass it. The separation is what makes the review adversarial rather than collegial.
+
+The goals, each given to that role and no other:
+
+- **Orchestrator**: drive the port to parity. Keep the loop turning, keep the queues moving, keep `summary.md` true, recover whatever broke, and never let work come to rest.
+- **Plan author**: produce a plan for this one package that another agent could implement without asking anything, faithful to what the old repository does.
+- **Plan checker**: find everything wrong with this plan. Nothing about implementing it, nothing about schedule.
+- **Implementer**: implement this plan exactly, port faithfully from the named old files, prove it with tests you ran. Not "make progress", not "get this package merged".
+- **Reviewer**: find every way this fails the plan, the comparison with the TypeScript, and the repository rules. Reject it if it does. Nothing about how long the package has taken or what it is holding up.
+- **Merge train**: land these reviewed packages on main without breaking it, and identify precisely which one breaks it if anything does.
+
+**The shared Goals section in `CLAUDE.md` is a different thing and stays.** That is what the port is for: parity, determinism, zero flakes, mirroring the TypeScript. Every agent needs those, because they are what "done properly" means. What must not leak is the operational goal of advancing the port, which belongs to the orchestrator alone. Keep them apart: project goals in `CLAUDE.md`, role goals in the prompt each agent is spawned with.
+
+**It is kept true by being followed.** Every environment failure the port hits is a defect in this document as much as in the machine, and the fix goes here at the same time. Every new dependency a package introduces is added here in the same commit that introduces it, and the review checks that it was.
+
+**Moving the orchestrator to another machine** is cloning the meta repository and following that document. Nothing else, because all state is in the repository rather than on a machine. If that turns out not to be true, the setup document is wrong and fixing it is the first job.
 
 ## Phase 0: setup and structure
 
 Everything that has to exist before any porting starts, and nothing else. No Zig, no application code, no ported package. This phase is words, structure and scaffolding, and it ends by stopping.
 
-**0a. The meta repository.** Create `psi-zig-port`, private. Inside it: clone `claude-config`, clone `photosphere-old` at the `mobile` branch as a read-only reference, and create `photosphere-new`, private, with an empty main branch. Write the meta repository's own `CLAUDE.md`, covering the recording rules, the commit and push cadence, the concurrency rules below, and the rule that `photosphere-old` is never written to. Create the queue directories, the empty journal, the decisions directory with `docs/decisions.md` as its index, the interventions directory, and `summary.md` with every package, every release workflow job and every prototype listed and unticked. Write the runner setup document that brings a fresh machine up from nothing. No scripts: this repository holds words, structure and records, and nothing that has to be maintained as software.
+**0a. The meta repository.** Create `psi-zig-port-orchestrator`, private. Inside it: clone `photosphere-old` at the `mobile` branch as a read-only reference, and create `photosphere-zig`, private, with an empty main branch. Write the meta repository's own `CLAUDE.md`, which **opens with the Goals section from this plan, copied across as its first primary section**, before any rule, so that every agent that reads the file knows what the work is for before it is told how to do it. Then the recording rules, the commit and push cadence, the concurrency rules below, and the rule that `photosphere-old` is never written to. Write `README.md` as described below, with the ASCII tree in it. Create the queue directories, the empty journal, `docs/decisions/`, `docs/lessons/`, the interventions directory, the flakiness directory, `docs/commit-template.md`, and `summary.yaml` with every phase, every numbered step of phases 0 to 5, every package and every prototype, all unticked, plus the short `summary.md` rendered from it. Write `docs/prototypes.md` with the ten briefs copied from the plan and every finding section empty. Write `scripts/setup-orchestrator.sh`, `docs/orchestrator-setup.md` and `docs/bootstrapping.md`, which together bring a fresh machine up as the port orchestrator from nothing and say how to restart the port after any failure. That script is the only executable this repository holds; everything else here is words, structure and records.
 
-**0b. The stub new repository.** `photosphere-new` gets its skeleton and nothing more: `mise.toml`, `package.json`, `build.zig`, `app.zon`, the directory layout, a `test:everything` that runs and reports what it found while there is almost nothing to run, `what-changed` and its configuration, the git hooks installed, and the release workflow copied over with everything not yet implemented commented out. It compiles, its tests pass, and it does nothing else. The point is that the machinery around the first package exists before the first package does.
+**0b. The stub new repository.** `photosphere-zig` gets its skeleton and nothing more: `mise.toml`, `package.json`, `build.zig`, `app.zon`, the directory layout, a `test:everything` that runs and reports what it found while there is almost nothing to run, `what-changed` and its configuration, the git hooks installed, and the release workflow copied over with everything not yet implemented commented out. It compiles, its tests pass, and it does nothing else. The point is that the machinery around the first package exists before the first package does.
 
-**0c. The rules and the documentation set.** `photosphere-new`'s `CLAUDE.md` and its entire documentation set, as detailed below. This is the part that everything else inherits.
+**0c. The rules and the documentation set.** `photosphere-zig`'s `CLAUDE.md` and its entire documentation set, as detailed below. This is the part that everything else inherits.
+
+**0d. Hand over to the meta repository.** The bootstrap session's last act is to make itself unnecessary: everything is pushed, `summary.yaml` says phase 0 is complete and phase 1 is next, and `summary.md` is rendered from it, and the journal records that the port now runs from the meta repository. **From this point nothing runs in the old repository or in the bootstrap session.** Every later turn starts by cloning or opening the meta repository and reading `summary.yaml`, including the very next one.
 
 **Then stop.** The human reads the meta repository's structure, the stub repository, the rules and the documentation, and accepts or changes them. Nothing proceeds until that acceptance is recorded in the journal. This is the cheapest possible moment to find out the structure is wrong, and the most expensive thing to change once packages are built on it.
 
@@ -370,15 +610,15 @@ The rest of the set, all written in step 1 and all reviewed together:
 - `docs/zig-conventions.md`: the two writing rules in full, with worked examples of a TypeScript file and its Zig counterpart side by side, the divergence document's format, and the conventions taken from `what-changed`.
 - `docs/how-it-works.md`: the internals, in the manner of `what-changed`'s document of the same name.
 - `docs/performance.md`: what an operation costs and the budgets the performance tests enforce.
-- `docs/porting.md`: the index from old file to new file, the work package contract, and the implementation and review loop.
+- `docs/porting.md`: the work package contract, the writing rules and the implementation and review loop. It carries no file-by-file mapping: which old file became which new one is stated in each package's own plan, where it is written once by the agent that has both open, rather than in a central list that would have to be kept in step with forty packages.
 - `docs/building-and-packaging.md`: per platform requirements, the system libraries, packaging, and the release layout.
 - `docs/mobile.md`: the Android and iOS toolchains, what the SDK generates, and the pinned Apple environment.
 - `docs/git-hooks.md`: what the hook runs and why it is never bypassed.
 - `THIRD-PARTY-NOTICES.md`: started now with the SDK and the C libraries, extended as each lands.
 
-Documents written before the code they describe will contain claims that turn out to be wrong. That is acceptable and expected: they are a specification at this point, and each work package that contradicts one has to correct it as part of its own review. What is not acceptable is a document that describes something as working when nobody has run it, so every claim about behaviour in the step 1 set is written as intent rather than as fact, and the prototype findings taken in during phase 1 are what convert them.
+Documents written before the code they describe will contain claims that turn out to be wrong. That is acceptable and expected: they are a specification at this point, and each work package that contradicts one has to correct it as part of its own review. What is not acceptable is a document that describes something as working when nobody has run it, so every claim about behaviour in the step 1 set is written as intent rather than as fact, and the prototype findings taken in during phase 3 are what convert them.
 
-**The `CLAUDE.md`** starts from the existing one in this repository. Keep everything that is about how the human works and what they will not tolerate, drop everything that is about Electron, Capacitor and the embedded JavaScript engines, and add what Zig and Vercel Native need. It has to cover at least:
+**The `CLAUDE.md`** opens with the Goals section from this plan, copied across word for word as its first primary section, the same as the meta repository's does. Then it starts from the existing `CLAUDE.md` in the old repository: keep everything that is about how the human works and what they will not tolerate, drop everything that is about Electron, Capacitor and the embedded JavaScript engines, and add what Zig and Vercel Native need. It has to cover at least:
 
 - **Platforms and apps.** One application shell across Windows, Linux, macOS, Android and iOS, plus a command line tool on the three desktop platforms.
 - **Languages.** Zig, TypeScript (frontend and host-side test harness only) and shell script. Nothing else, with the same explicit ban on Python, Perl, Ruby and Go, and the same rule that a shell script contains shell and never an embedded interpreter.
@@ -388,17 +628,58 @@ Documents written before the code they describe will contain claims that turn ou
 - **The parallel-safety rules**, carried over unchanged: no fixed port, no fixed path, no machine-wide name, every started process's pid recorded at the moment it starts, never kill by matching a command line, and every suite has to survive running beside another copy of itself. The human runs several worktrees at once and the orchestrator in this plan runs several agents at once, so this matters more here than it did before.
 - **The git rules**, carried over unchanged: no destructive git without an explicit instruction, never commit with verification disabled, never modify the hook or its scripts, and never assume the working tree is as you left it.
 - **Zig specifics**: `mise exec -- zig ...` for every invocation, every allocating function takes `allocator: std.mem.Allocator` first, `std.testing.allocator` in every test so a leak fails it, a `std.testing.checkAllAllocationFailures` test for anything that can fail to allocate, `ReleaseSafe` as a second test pass, Valgrind as a third where C libraries are linked, and errors as error sets rather than exceptions.
+- **The determinism rules in full**, from the section of that name: pure where possible, every effect passed in, no globals, side effects minimised and named, and the named list of banned sources of nondeterminism. Plus the precedence rule: determinism outranks mirroring the TypeScript, and where they conflict determinism wins and the divergence is recorded.
+- **The flakiness rules**, starting empty and growing one rule per flake ever found, each one written so an agent can follow it before writing code rather than after.
+- **The parallel-safety rules**, and the requirement that every new test is proven parallel-safe rather than assumed to be.
 - **The failure rules**, carried over unchanged: all failures noisy, no stub that pretends to work, no silent no-op, and a missing capability throws and names itself.
 - **The library rules**, carried over and adjusted: no hand-written wire protocol, request signing or vendor SDK, with the Zig standard library counted as a maintained library for what ships in it (`std.http`, `std.crypto`, `std.net`, `std.compress`) and anything outside it requiring a real vendor library.
 - **The reference implementation.** `what-changed` is how Zig is written here: read it and its commit history before writing any, and follow its conventions on structure, testing against real files rather than mocks, smoke tests driving the built binary, named constants carrying their reason, and error sets split where the caller treats them differently.
-- **The autonomy contract**: what a work package is, what an implementation agent may and may not do, what a review agent checks, and the escalation rule when they cannot agree.
+- **The autonomy contract**: what a work package is, what an implementation agent may and may not do, what a review agent checks, and the escalation rule when they cannot agree. Role goals are not in here: they are given per agent at spawn, and no agent but the orchestrator is told the port's operational goal.
 - **Documentation and comment rules**, carried over unchanged, including the ban on em dashes, on `---` separators, on hard-wrapped prose, on the words this repository bans, and on machine-specific absolute paths in anything checked in.
 
-## Phase 1: intake of the prototype findings
+## Phase 1: stand up the port orchestrator
+
+Nothing here is about the port. It is about having a machine that can run it, and it is a phase of its own because everything after it assumes a working orchestrator and because the cost of discovering otherwise later is a package that fails for reasons that are not its own.
+
+**1a. Provision the environment.** Under the chosen architecture that means creating the cloud environment: attach the three repositories the port reads and writes, set the network allowlist to cover the toolchain and the C dependencies, and make `scripts/setup-orchestrator.sh` the environment's setup script so it runs once and is then snapshotted. Under the fallback it means running that same script on a droplet. Either way the script does the same work: authenticate git and `gh`, clone what is needed, install `photosphere-zig`'s git hooks, and install the pinned toolchain and system dependencies.
+
+**1b. Prove it before trusting it.** Build the stub repository, run `test:everything`, run one smoke suite, make one commit and push to a scratch branch, and open and merge a throwaway pull request, since that is how merges will land. Measure disk and peak memory while doing it, against the 30 GB and 16 GB ceilings. Every one of those has to pass. A failure here is a defect in the setup script or the environment configuration, fixed there rather than by hand, so the next session does not hit it. A resource ceiling that cannot be lived within is the trigger for the fallback.
+
+**1c. Take one turn and stop.** The first turn writes the heartbeat, reads the board, and starts phase 2 by creating the first prototype repository. That proves the loop runs end to end before anything depends on it.
+
+**1d. Record what the machine actually needed.** Anything the setup script did not cover, anything installed by hand, anything that failed first time: into `docs/orchestrator-setup.md` and the script, in the same commit. The second orchestrator machine is built from a document rather than from somebody's memory of building the first.
+
+**While the prototypes run**, the loop also writes and checks the plans for packages 10 to 20, which need no prototype result and fill the queue for when the baseline is pinned.
+
+## Phase 2: build the prototypes
+
+The prototypes are driven from the meta repository, by the orchestrator, in the same environment the port will use. That makes this phase two things at once: the answers to the ten questions, and the first real trial of cloud sessions before anything important depends on them.
+
+**Each prototype is its own repository**, created by the orchestrator, throwaway, and linked from `docs/prototypes.md`. Notes, findings and everything learned go in the meta repository, not in the prototype repositories, which are code only.
+
+**The loop for a prototype**, which is the same loop the port uses with the slow half pushed out:
+
+1. A session writes the code and runs whatever it can locally: Linux builds, Zig, headless tests.
+2. It pushes. A workflow in that prototype's repository runs the platform-specific half on `macos-latest`, `windows-latest` or `ubuntu-latest`.
+3. It reads the run result with `gh` and iterates.
+
+Commit noise does not matter here. These repositories are thrown away, so pushing fifty times to get a Windows build working is the normal way to work rather than something to avoid.
+
+**What runs where:**
+
+- **Entirely in a session**: P8 (concurrency under Zig 0.16), P9 (data and wire compatibility), P10 (the loop itself, which is this phase).
+- **Session plus a Linux workflow job**: the Linux halves of P1, P4 and P5, plus P3, P6 and P7's Android halves, since GitHub's Linux runners have KVM and can boot an emulator.
+- **Session plus a macOS workflow job**: the iOS cross-compile in P4, the iOS simulator halves of P6 and P7, and the macOS parts of P1 and P5.
+- **Session plus a Windows workflow job**: the Windows parts of P1 and P5.
+- **Needs a Mac that the port can reach**: **P2 only**. Its whole question is whether the generated Xcode project builds under Xcode 14.2, and a runner image with a newer Xcode answers a different question. Check which Xcode versions the available macOS images carry before assuming; if none has 14.2, this one is driven through Remote Control on the human's Mac, or by the human directly.
+
+**What this phase proves about the environment**, recorded as findings in their own right and feeding the architecture decision: whether sessions are available and stable enough, what the network allowlist has to contain, whether disk and memory hold a real build, how long sessions last, how many run at once, whether the push and pull request paths work, and what it costs. If cloud sessions cannot carry the prototypes, they will not carry the port, and the fallback to a droplet is taken here rather than after the port has started.
+
+## Phase 3: intake of the prototype findings
 
 The prototypes are not this plan's work. They are built separately, and what arrives here is a set of repositories and findings. This phase is what the port does with them: read them, record what they settled, and act on what they changed. It is short by design, and it is the last point at which the port is cheap to redirect.
 
-**2. Read the prototype repositories and write the findings into the new repository.** For each one: what it proved, what it refused to do, and every version, system package and command that came out of it. The destinations are the documents from step 1, not a document of its own, because a finding filed somewhere nobody reads is the same as no finding.
+**2. Read the prototype repositories, complete `docs/prototypes.md`, and write the findings into the new repository.** Each prototype's section gets its repository link and its finding: what it proved, what it refused to do, and every version, system package and command that came out of it. Then those findings are copied into the documents that will actually be read while building, because a finding filed only in `prototypes.md` is a finding nobody working on a package will see.
 
 - Toolchain and versions, into `mise.toml` and `docs/development.md`: the Zig version, the exact SDK version, the Bun version, whether Node is needed and for which commands, and the system packages each platform requires.
 - The build arrangement, into `build.zig` and `docs/building-and-packaging.md`: whether the build is ejected, how the frontend is bundled, how the development loop works, and what the packaging commands are per platform.
@@ -407,13 +688,13 @@ The prototypes are not this plan's work. They are built separately, and what arr
 - The architecture, into `docs/architecture.md` and `docs/how-it-works.md`: the threading rule, the three channels, the concurrency and cancellation model, and the media path.
 - Anything the prototypes could not do, into the plan itself: a package that cannot be built the way this plan assumes gets its entry rewritten here before it is specified, not when an agent reaches it.
 
-**3. Act on whatever the findings changed.** A prototype that came back negative moves work rather than removing it: a platform ships later, a dependency is swapped, a capability becomes a package of its own, or a requirement is raised. Make those changes to the work package list in this document, with the reason, and put the changed list in front of the human before phase 2 starts. Do not carry an assumption forward on the grounds that the plan already said it.
+**3. Act on whatever the findings changed.** A prototype that came back negative moves work rather than removing it: a platform ships later, a dependency is swapped, a capability becomes a package of its own, or a requirement is raised. Make those changes to the work package list in this document, with the reason, and put the changed list in front of the human before phase 4 starts. Do not carry an assumption forward on the grounds that the plan already said it.
 
 **4. Confirm the two writing rules survived contact with real code.** The prototypes are the first real Zig written against this SDK. If the rules made something impossible or absurd there, amend them now, in `CLAUDE.md` and `docs/zig-conventions.md`, and say what forced the change. Rules amended after forty packages are written are not rules.
 
 **5. Pin the baseline.** The versions, the system requirements and the decisions from steps 2 to 4 are the starting state of the port. Everything after this treats them as fixed, and a change to any of them is its own work package with the full suite behind it.
 
-## Phase 2: the walking skeleton
+## Phase 4: the walking skeleton
 
 **6. The repository skeleton and the toolchain.** `mise.toml` pinning Zig and Bun (and Node only if P1 found it necessary), an ejected `build.zig` on P1's, `app.zon`, the Bun workspace with `@native-sdk/cli` pinned to the exact version P1 used, the frontend directory with the carried-over React UI building to a dist through whichever bundler P1 settled on, and a `tests/` tree. One Bun script builds everything, one runs every Zig test in all three passes, one runs the TypeScript tests, and one runs a named smoke suite. The script names match the current repository's wherever the thing they do is the same. `test:everything`, `what-changed`, the git hooks and the copied release workflow are all set up here, in this step, so that the very first work package is tested the way every later one will be, on every platform, from its own branch.
 
@@ -423,11 +704,11 @@ This is also the step that reconciles the repository against `docs/project-struc
 
 **8. The walking skeleton, end to end.** The real application shell: the real React UI, loaded from the embedded dist, talking to a real Zig host over the bridge, with the control bridge attached in test mode. One smoke test launches it, waits for ready, navigates, and asserts the page reached a known state, on Linux, Android and iOS.
 
-Nothing else starts until this passes on all three. It is the equivalent of the previous plan's step 8 and it carries the same instruction: if it cannot get every platform green, the approach does not work, and that is worth knowing now rather than after fifteen packages.
+Nothing else starts until this passes on all three. If it cannot get every platform green, the approach does not work, and that is worth knowing now rather than after fifteen packages.
 
 **9. Fix the smoke test parity target.** The current repository has 34 UI smoke tests under `apps/desktop/smoke-tests/` and 43 under `apps/smoke-tests/tests/`. By name they share 27, with 7 desktop-only and 16 mobile-only, so the deduplicated union is 50. That number is arithmetic on directory names and is the starting point, not the answer: go through them pair by pair, confirm that a shared name is the same test rather than two different tests that happen to be numbered alike, and produce a written list of the deduplicated suite with, for each test, which platforms it runs on and why any platform is excluded. The command line suites do not dedupe: the eighty numbered tests plus the encrypted, LAN share, hash cache, sync and write lock suites all come across as they are.
 
-## Phase 3: the shakedown
+## Phase 5: the shakedown
 
 One package, ported end to end, by the real machinery, with nothing running beside it. The purpose is not the package. It is to find out what is wrong with the system while only one package's worth of work is at stake.
 
@@ -439,24 +720,26 @@ It goes through every part of the machinery, with none of it skipped because the
 - The package enters `todo/`, an implementation agent takes it in its own worktree, commits, pushes, and its branch is tested by the release workflow on every platform.
 - A review agent re-runs everything itself, compares against the TypeScript on all five parts, and rejects it at least once **on purpose**, so the rejection path and the second implementation pass are both exercised rather than assumed.
 - A merge train of one runs, `bun run test:everything -- --force` passes in the merge worktree, it lands on main, the worktree and branch are deleted, the parity ledger rows are updated.
-- The agent records, the journal entries, the evidence directories and the decisions file are all written and pushed as it happens.
+- The agent records, the journal entries, the evidence directories and any decision files are all written and pushed as it happens.
 - The system is deliberately interrupted mid-package and resumed, because resume is the one path that has to work and will otherwise be first exercised during a real outage.
 - An agent is deliberately wedged so the next turn notices it has stopped moving, kills it and restarts it.
 
-**Then it stops again.** The human reads what happened: the journal, the evidence, the review's findings, the ledger, and the cost. What was clumsy gets fixed in the system, not worked around, and the fix is recorded in `docs/decisions.md`.
+**Then it stops again.** The human reads what happened: the journal, the evidence, the review's findings, the ledger, and the cost. What was clumsy gets fixed in the system, not worked around, and the fix is recorded as a decision file.
 
-**Iterate one package at a time until nothing needs changing.** If the shakedown exposed problems, fix them and run a second package the same way, still alone. Repeat until a package goes from plan to merged without the system needing a change. Only then does phase 4 start. A system that needed a fix on its last single-package run is not ready to run five at once, because every problem multiplies.
+**Iterate one package at a time until nothing needs changing.** If the shakedown exposed problems, fix them and run a second package the same way, still alone. Repeat until a package goes from plan to merged without the system needing a change. Only then does phase 6 start. A system that needed a fix on its last single-package run is not ready to run five at once, because every problem multiplies.
 
-**Exit criteria for phase 3**, all of which have to hold on the same run:
+**Exit criteria for phase 5**, all of which have to hold on the same run:
 
 - A package went plan to merged with no change to the machinery and no human intervention except the checkpoint.
 - The review rejected at least once and the rejection round worked.
 - An interruption and a resume happened and cost one step.
 - A wedged agent was noticed, killed and recovered without anything being built to do it.
 - The parity ledger, journal, decisions and evidence are complete enough that the human can reconstruct the whole run without asking anything.
-- The release workflow ran green on every platform for that branch.
+- The release workflow ran green on every platform for that branch, with no job needing a rerun.
+- `find-flakey-tests` on the ladder at ten runs a rung and `check-parallel-tests` with every suite both passed, run by the review agent rather than by the implementer.
+- A flake was deliberately introduced, caught by those two, fixed, logged in `docs/flakiness/`, and the rule it produced added to `CLAUDE.md`. The flakiness machinery has to be exercised before it is depended on, exactly like the rejection path and the resume path.
 
-## Phase 4: the port, as work packages
+## Phase 6: the port, as work packages
 
 Everything from here is a work package. The list below is the division of the work; the contract that governs each one is in the next section. Dependencies are on package numbers, and the orchestrator runs a package only when its dependencies have merged.
 
@@ -505,30 +788,56 @@ Not ported, for the same reasons as before: the Model Context Protocol integrati
 
 ## The meta repository
 
-The port is three repositories and a set of skills, and none of them belongs inside the others. They sit under one meta repository:
+Two repositories under one meta repository, with the commands that drive them:
 
 ```
-psi-zig-port/
-  claude-config/      the global skills and instructions, cloned and bootstrapped into the home directory
-  photosphere-old/    the existing TypeScript repository, read-only, the source of truth for every port
-  photosphere-new/    the Zig and Vercel Native repository being built
-  docs/               everything about the port itself
-    queues/             the pipeline: todo, in-progress, review, merge-queue, done, plus conflicts, blocked, decisions
-    plans/              plans written with the plan skills, new/ then done/
-    parity/             the ledger of every old-repo artefact and its counterpart
-    journal/            what happened, dated, per session and per package
-    decisions/          each decision, its reasoning, and every reversal appended
-    interventions/      every time a human had to step in
-  CLAUDE.md           the rules for working in the meta repository, including the recording rules below
+psi-zig-port-orchestrator/
+  README.md               what this is, how it works, how to interact with it
+  CLAUDE.md               Goals first, then the rules for working in this repository
+  summary.yaml            the state of the port as data, orchestrator-written
+  summary.md              rendered from summary.yaml, never edited directly
+  .gitignore              ignores the three cloned repositories below
+  photosphere-old/        the existing TypeScript repository, cloned, gitignored, never written to
+  photosphere-zig/        the Zig and Vercel Native repository being built, cloned, gitignored
+  .claude/
+    settings.json         permissions set to bypass, so agents work without prompting
+    commands/port/        the commands that drive the loop
+  scripts/
+    setup-orchestrator.sh the one script: auth, clone, bootstrap, toolchain, verify
+  docs/
+    plan.md               this plan, the master copy
+    prototypes.md         the ten prototypes, their repos, and their findings
+    bootstrapping.md      how to start the port, and how to restart it after anything
+    orchestrator-setup.md what that script does, what it needs, how to fix it
+    commit-template.md    the one commit format, read at commit time by every agent
+    decisions/            how the porting process changed, one timestamped file each
+    lessons/              what worked and what did not, one timestamped file each
+    journal/              port-level entries, one timestamped file each
+    interventions/        every time a human had to step in
+    flakiness/            one entry per flake: what, why, the fix, the rule it produced
+    queues/               todo, in-progress, review, merge-queue, done, conflicts
+      <queue>/<package>/  status.md, plan.md, journal/, evidence/, review-N/findings.md
 ```
 
-**The meta repository does not live on any particular machine.** It is cloned onto whichever runner is executing the port, which is a droplet, a cloud session or a developer machine depending on the lane, and more than one of those at once. Everything inside it is referred to by a path relative to its root, and no absolute path to anyone's home directory appears in any file in it. A runner is set up by cloning the meta repository, cloning the three repositories inside it, and bootstrapping, in that order, from a written setup document that is itself in the meta repository.
+### `README.md`
 
-`claude-config` is https://github.com/ashleydavis/claude-config, cloned into the meta repository and bootstrapped with its `bootstrap.sh`, which uses GNU Stow to link `home/.claude` into the runner's `~/.claude`, so the global instructions and the plan skills are present for every agent on that machine. The stowed `settings.json` is replaced with permissions set to bypass, so agents on a runner work without prompting. Everything the port does with plans uses those skills rather than inventing a format. Bootstrapping changes the global Claude configuration for every session on that machine, so on a machine the human also works on it is theirs to run, not an agent's.
+Written in phase 0, kept current, and aimed at a human returning after months who will not reread the plan. It covers:
+
+- **What this repository is**: the orchestrator for an autonomous port of Photosphere from TypeScript to Zig, and what the other two repositories beside it are.
+- **The goals**, in short, and a pointer to `docs/plan.md` for the whole thing.
+- **The glossary**, copied from the plan, because the words are the first thing a returning reader has lost.
+- **How it works**, in a few paragraphs: turns, queues, plans, implementation and review agents, merge trains, and the fact that nothing waits on a person.
+- **An ASCII tree of the repository**, the one above, so the layout can be taken in at a glance rather than by listing directories.
+- **How to interact with it**: where to see what is happening (`summary.md`, first line for the heartbeat), how to tell whether it is stuck, how to stop it, how to start it again, how to reverse a decision, and where to read the story of any package.
+- **What it needs from a human**: the credentials, and the two checkpoints.
+- **How to start it, and how to restart it when it has fallen over**, pointing at `docs/bootstrapping.md`. This is the link a returning reader needs first, so it goes near the top.
+
+**The meta repository does not live on any particular machine.** It is cloned onto whichever machine is acting as the port orchestrator, which is a droplet or a cloud session, and it can move between them. Everything inside it is referred to by a path relative to its root, and no absolute path to anyone's home directory appears in any file in it. An orchestrator machine is set up by cloning the meta repository, cloning the three repositories inside it, and bootstrapping, in that order, from `docs/orchestrator-setup.md`.
+
 
 `photosphere-old` is a fresh clone of the existing repository at its `mobile` branch, and it is **never written to**. It is opened, read and diffed against, and that is all. A fresh clone rather than a link to a working checkout, so that every runner sees the same tree and no agent can reach a human's uncommitted work.
 
-Both new repositories, `psi-zig-port` and `photosphere-new`, are private.
+Both new repositories, `psi-zig-port-orchestrator` and `photosphere-zig`, are private.
 
 `docs/` in the meta repository is where the port's own history lives, and it is the reason the meta repository exists at all rather than putting everything in the new repository. Plans about porting are not documentation of the ported product, and mixing them makes both worse.
 
@@ -539,7 +848,7 @@ Every package of work is a **plan**, written with `/plan:create`, checked with `
 On top of what the skill asks for, a port plan names:
 
 - **Source of truth**: the exact files in `photosphere-old/` being ported, by path, with line counts. The implementing agent reads all of them. Where a probe repository already prototypes the feature, its files are named too and read first.
-- **Files to create** in `photosphere-new/`, by path, so that two plans can be checked for overlap before either starts.
+- **Files to create** in `photosphere-zig/`, by path, so that two plans can be checked for overlap before either starts.
 - **Public interface**: the functions, structs and vtables the package exposes, with signatures, so the next plan can be written before this one is built.
 - **Divergences allowed**: the specific places this package may depart from the TypeScript, with reasons. Anything else is a divergence to raise rather than take.
 - **Dependencies**: the packages that must have merged first.
@@ -562,10 +871,62 @@ A package that does the job differently, tests it differently, or explains it di
 
 The meta repository keeps a journal, and it is a deliverable rather than a byproduct. It is what a write-up of this work will be built from later, so it has to be detailed enough that nobody has to reconstruct anything from memory.
 
-- `docs/journal/` holds a dated entry per working session and per package: what was attempted, what happened, what failed and why, how long it took, what it cost.
-- `docs/decisions/` holds each decision with its date, its reasoning, and its alternatives. **A decision that gets reversed is not edited: the original stays and the reversal is a new entry naming what changed and why.** The reversals are the interesting part.
+**The journal lives with the package**, in a `journal/` directory inside the package's own directory, so it travels with everything else into `docs/queues/done/` and reading a package means reading one place. Entries about the port as a whole rather than about a package (the cold start, a process change, an environment repair, a turn that did nothing) go in `docs/journal/`, which is the same arrangement one level up.
+
+**Every record file in the port is named the same way**, whether it is a journal entry, a lesson, a decision, a flake or an intervention:
+
+```
+<year>-<month>-<day>-<hour>-<min>-<sec>-<agent type>-<agent id>-<short name>.md
+<package>/journal/2026-08-14-14-30-52-implement-a7f3-pass2.md
+```
+
+- **UTC, always**, and stated as UTC in the entry. Agents run in different places, and one local timestamp makes the whole listing sort wrongly.
+- **Every field fixed width and zero padded**, so a plain alphabetical listing is chronological. That is the point of the format: `ls` is the index, and nothing has to be built to read the order.
+- **Milliseconds only when needed**, as another field after the seconds. They break a tie when two files land in the same second, so most names will not carry them. A name that collides with an existing file is the signal to add them.
+- **Then the agent type**, so it is obvious at a glance whether a run was an implementation, a review, a merge or a plan.
+- **Then the agent id**, which ties the entry to that agent's record.
+- **Then a kebab-case short name**, or the pass where there is one, so the listing can be read without opening anything.
+
+An entry says what was attempted, what happened, what failed and why, how long it took and what it cost. Only the agent that created a file ever writes it.
+- `docs/decisions/` is **the log of how the porting process itself changed**, and nothing else. Every time the human gives feedback that changes how the port is run, or the system is adjusted because something did not work, an entry is appended: the date, what changed, why, what it replaced, and what prompted it. This is the record of the process evolving, which is exactly what will be impossible to reconstruct afterwards and is the most interesting part of a write-up. It is not for decisions about the code: those belong to the package that made them.
+- `docs/lessons/` is what worked and what did not, one timestamped file per lesson, written by whoever noticed it. It is for observations that are not yet decisions: a pattern seen across several packages, an approach that went better or worse than expected, something that would be done differently next time. Each entry says what was observed and over how many occasions, what it suggests, and whether it has been acted on. When a lesson causes an actual change, the `docs/decisions/` entry for that change points back at it. A directory rather than a file for the same reason the journal is one: several agents run at once, and a shared file conflicts on every push and loses entries when a conflict is resolved badly.
+- **A process change that gets reversed is not edited out.** The original entry stays and the reversal is appended, naming what changed and why. The pairs are the point: a process that was tried, found wanting and replaced is worth more than a process that appears to have been right from the start.
+
+**The first entry in `docs/decisions/` records the decisions already taken**, before the port starts, because they were made while this plan was written and would otherwise be lost. It is written at the cold start, dated to the day the port begins, and says that these predate the log:
+
+- **A new repository rather than porting in place.** The earlier version of this plan replaced packages inside the existing repository; this one does not.
+- **A meta repository over the top**, holding the process, with `photosphere-old` read-only and `photosphere-zig` for the port.
+- **Vercel Native replaces both Electron and Capacitor**, one application for all five platforms.
+- **Bun runs everything that is not Zig**: workspace, scripts, bundling, TypeScript tests, typecheck.
+- **The Zig mirrors the TypeScript file for file and function for function**, so the two can be read side by side.
+- **Determinism outranks that mirroring.** Where they conflict, determinism wins and the divergence is recorded.
+- **Pure and functional, no mutable globals in core code**, every effect passed in.
+- **No comment ever justifies anything by pointing at the TypeScript**, and the port headers are removed when parity is reached.
+- **The prototypes belong to the human and are built outside this plan.** The port takes their findings as input.
+- **Plans, not specifications**, written with the plan commands in `.claude/commands/port/`, by one agent and checked by another.
+- **Success is measured by closeness to the TypeScript** on behaviour, code, unit tests, smoke tests and documentation. Working is the floor, not the standard.
+- **Parity is counted per package**, in each package's own record, with no central ledger to maintain.
+- **The queues are the state.** No JSON state file, and the git history of the moves is the audit log.
+- **There is no blocked queue and nothing waits on a human.** A failed package goes to the back of `todo/` and comes back one rung up the escalation ladder.
+- **Decisions about code are taken autonomously and recorded**, never queued for a person.
+- **No tooling is built for the port.** Every helper script that was proposed became a rule an agent follows.
+- **`summary.yaml` is the only aggregating file**, edited surgically by the orchestrator alone, with a short `summary.md` rendered from it for a human to read.
+- **No index file aggregates anything across packages.** A package's record lives with the package.
+- **Journals are per package, one timestamped file per entry, UTC**, so a listing sorts by time and two agents cannot collide.
+- **`docs/decisions/` is for process changes only**, written by the orchestrator.
+- **One commit template**, in the meta repository, used by every agent for every commit.
+- **Review findings are one file per pass**, carrying what passed, what earlier passes tried and disproved, and the ladder rung.
+- **A single merge train at a time**, in its own worktree, running the full suite and bisecting on failure.
+- **Zero flaky tests from the first commit**: the flake hunter at ten runs a rung and the parallel check over every suite, run by every review; five sequential green release workflow runs to close a flake; a flakiness log whose every entry produces a rule in `CLAUDE.md`.
+- **The release workflow is carried over intact** and adapted minimally, with unimplemented jobs commented out rather than deleted.
+- **The operational scripts all come across**, and none may be deleted or replaced without the human saying so.
+- **Eight phases with two checkpoints**: setup, orchestrator, prototypes, intake, skeleton, shakedown, the port, then the parity audit, which loops back to the port until it finds nothing. Phase 0 and phase 5 stop for a human.
+- **The prototypes are built by the orchestrator rather than by the human**, in cloud sessions with workflows for the platforms a session lacks, which also makes them the trial of the environment before the port depends on it.
+- **The bootstrap is done by an agent.** The only human action is supplying the credentials the scheduled turns run under.
+- **The orchestrator and its agents run as Claude Code cloud sessions**, with a long-lived droplet kept as the fallback if the preview, the resource limits or the push restriction make that unworkable. GitHub Actions runs the multi-platform testing either way.
+- **Everything is committed and pushed as it happens**, never batched.
 - `docs/interventions/` records every time the human had to step in: what went wrong, what they did, and what would have had to be true for it not to happen.
-- Each plan gets a completion note when it merges: what was built, what the review caught, how many rounds it took, and anything surprising.
+- The last findings file of a package carries its wrap-up: what was built, what each review pass caught, how many rounds it took, and anything surprising. Written once, at the end, in a file that was being written anyway, rather than as a separate note somebody has to keep in step.
 
 **Every agent writes to the journal, and this goes in `CLAUDE.md`.** An implementation agent records what it built and what fought back. A review agent records what it rejected and why. The merge train records what it merged and what it bisected. An agent that finishes without recording anything has not finished. The rule to state in `CLAUDE.md` is that notes are written at the time, in the same commit as the work, never reconstructed afterwards.
 
@@ -575,23 +936,52 @@ With several agents running at once, any file more than one of them writes will 
 
 **Nothing shared is appended to. Everything shared is a directory of single-writer files.**
 
-- **The journal is a directory**, not a file. Each entry is its own file, named so two agents cannot collide: date, package, agent type and agent id. Only the agent that created an entry writes it. Nothing appends to a day's file, because there is no day's file.
+- **The journal is a directory**, not a file, both inside each package and at the top level. Each entry is its own file, named as above so two agents cannot collide and the listing sorts by time. Only the agent that created an entry writes it. Nothing appends to a day's file, because there is no day's file.
 - **Decisions are a directory too**, with one file per decision, and reversals are new files that name what they reverse rather than edits to the original.
-- **`docs/decisions.md` is an index with one line per decision, and only the orchestrator appends to it.** Agents write the decision itself as its own file in the decisions directory; the orchestrator adds the line. The same single-writer rule covers `summary.md`. Two files in the whole repository are written by more than one agent over time, and both have exactly one writer at any moment.
+- **`docs/decisions/` records changes to the porting process**, in date order, appended as they happen. It is chronological rather than an index over packages, which is why it exists where a reviews index does not: each entry is written once and never revisited.
+- **Only the orchestrator writes it**, because process changes come from the human's feedback to the orchestrator or from the orchestrator noticing the system is not working. A subagent never touches it. It, `summary.yaml` and the `summary.md` rendered from it are the only files in the repository written by more than one thing over the life of the port, and both have exactly one writer.
+- **Decisions about code go to the package that made them**, in its plan, its findings or its journal entry, never here. Mixing the two would bury the handful of entries that matter under hundreds that do not.
 - **Parity counts live per package**, in the package's own file, and are only summed into `summary.md` by the orchestrator. Two packages recording their own counts never touch the same bytes.
 - **A package directory has exactly one writer at a time**, and the agent record says who it is. The orchestrator is the only exception, and only after it has killed the owner.
-- **`index.md` and `detail.md` are written by the agent that owns the package**, in its stage. Nothing else edits another package's files.
+- **`status.md` and `plan.md` are written by the agent that owns the package**, in its stage. Nothing else edits another package's files.
 
 **Committing concurrently needs its own care**, because a git repository has one index and one lock:
 
 - Every commit to the meta repository stages **only the paths that agent owns**. Never `git add -A`, which sweeps up whatever another agent has half-written. This is the single most important rule in this section, because it is the one whose violation corrupts somebody else's work rather than your own.
 - Because every entry is a distinct new file, rebases have nothing to conflict on. That is the property the directory-of-files design buys, and it is why it is worth the extra files.
 - Agents on different runners each have their own clone, so the lock is per-clone and the remote is the meeting point. The retry on rejected push is what makes that safe.
-- `photosphere-new` has no shared-file problem at all, because each package works in its own worktree on its own branch and the only place they meet is the merge train, which is single-threaded by design.
+- `photosphere-zig` has no shared-file problem at all, because each package works in its own worktree on its own branch and the only place they meet is the merge train, which is single-threaded by design.
 
 Committing is done by hand, by the agent, following one sequence every time: pull with rebase, stage only the paths that agent owns, commit, push, and retry the pull and push if the push is rejected. There is no helper script and no lock, because the design removes the contention rather than managing it: every agent writes only files that nothing else writes, so a rebase has nothing to conflict on and a retry always succeeds.
 
-**No tooling is built for this port.** Not a queue mover, not a commit helper, not a summary generator, not a ledger builder, not a watchdog daemon. Every one of those would be another piece of software to write, test, debug and maintain, in a project whose entire purpose is porting something else, and its failures would be indistinguishable from the port's failures. Where this plan previously implied a script, it is a rule an agent follows and a file an agent edits. The only executable things in this port are the ones being ported and the ones carried over from the old repository.
+**No process tooling is built for this port.** Not a queue mover, not a commit helper, not a summary generator, not a ledger builder, not a watchdog daemon. The single exception is `scripts/setup-orchestrator.sh`, which provisions a machine once and is not part of the loop. Every one of those would be another piece of software to write, test, debug and maintain, in a project whose entire purpose is porting something else, and its failures would be indistinguishable from the port's failures. The only executable things in this port are the ones being ported and the ones carried over from the old repository.
+
+### The commit template
+
+Commits are the port's most durable record, more so than the journal, because they sit against the code forever and are what somebody reads in two years when they wonder why a line is the way it is. **`docs/commit-template.md` in the meta repository is the one format**, and the meta repository's `CLAUDE.md` says that every agent uses it for every commit in both repositories. No agent writes a commit message from its own instincts.
+
+The format follows the old repository's convention, because that is what the human already reads and writes:
+
+- **A subject line saying what was done**, in the past tense, as a sentence: "Ported the binary serialiser to Zig", "Cut the CLI smoke tests from 3m 17s to 1m 20s". Not a conventional-commits prefix, not an imperative, not a type tag. Under about seventy characters.
+- **A body of prose paragraphs**, not bullet points, explaining what changed and **why**, what was tried and rejected, and anything a reader would otherwise have to reconstruct. The old repository's commits run to several paragraphs when the change deserves it, and that is the standard rather than the exception.
+- **Measurements where a claim is made about behaviour or speed**, with the conditions they were taken under. A number with no conditions attached is not evidence.
+- **What was verified**, named: which suites ran, what they reported, whether the flake hunter and the parallel check were run and what they said.
+
+On top of that, a port commit carries trailers that tie it to the process, so any commit can be traced back to its plan and its evidence without opening the meta repository:
+
+```
+Package: 13-merkle-tree
+Plan: docs/plans/new/plan-13-merkle-tree.md
+Pass: implementation-2
+Evidence: docs/queues/review/13-merkle-tree/evidence/implementation-2/
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+```
+
+Three rules go with it, all in `CLAUDE.md`:
+
+- **The template is read at commit time**, not remembered. It is a file with the guidance in it, so the guidance is in front of the agent writing the message.
+- **A commit never claims a check passed that the agent did not run and read.** The verification paragraph is the place this rule is most often broken and it is checked at review.
+- **The subject describes what the change does, never what the plan said to do.** A commit that says "Implemented step 4" is useless to everybody who was not holding that plan at the time.
 
 ### Committing and pushing as it goes
 
@@ -602,12 +992,12 @@ Progress has to be visible without asking anyone, at any moment, from the remote
 `summary.md` is edited and pushed **every time anything it shows changes**, not once a turn. A package moving queue, a review verdict, a merged train, a parity count, a package climbing the escalation ladder: each of those is a few lines changed in place and a push. The cost is a commit; the benefit is that the remote is never out of date, so the page can be read at any moment and believed.
 
 - The meta repository is committed and pushed as plans, journal entries, decisions and notes are written. Not batched at the end of a session.
-- `photosphere-new` is committed on the package branch and pushed as the work happens, so a branch under way is visible, then merged to main and pushed.
+- `photosphere-zig` is committed on the package branch and pushed as the work happens, so a branch under way is visible, then merged to main and pushed.
 - Both use the verification hook, always. Neither is ever force pushed.
 
 ## Process machinery
 
-Two things shape all of it.
+Two things decide all of it.
 
 **Every stage is driven by the orchestrator, beginning to end.** No stage waits on a person, there is no human review step in the pipeline, and there is nowhere for work to come to rest. A human reads what happened and can reverse a decision afterwards, but nothing pauses for them.
 
@@ -615,7 +1005,7 @@ Two things shape all of it.
 
 ### Queues are the state
 
-The state lives in directories: the queue a package sits in **is** its status, and the git history of those moves is the audit log. This replaces any JSON state file, which is the thing this plan previously proposed and which is worse in every way: harder to read, easy to desynchronise, and it has no history.
+The queue a package sits in **is** its status, and the git history of those moves is the audit log. No JSON state file: harder to read, easy to desynchronise, no history.
 
 `docs/queues/` in the meta repository:
 
@@ -623,71 +1013,58 @@ The state lives in directories: the queue a package sits in **is** its status, a
 todo/ -> in-progress/ -> review/ -> merge-queue/ -> done/
 ```
 
-plus three pens beside the pipeline:
+plus one pen beside the pipeline:
 
-- **`conflicts/`**, a re-entry pen off `merge-queue/` for an approved package whose commits will not replay onto a main branch that moved under it. The orchestrator drains it first, every turn, without a human. A conflict is **not a failure** and counts toward nothing: main moving says nothing about the package.
-**There is no `blocked/` queue, and there is no queue that waits on a person.** A package that fails goes to the **back of `todo/`** and comes round again. Nothing is ever parked, nothing waits for someone to re-admit it, and no part of the loop can come to rest with work outstanding.
+- **`conflicts/`**, off `merge-queue/`, for a reviewed package whose commits will not replay onto a main branch that moved under it. Drained first, every turn. **Not a failure** and counts toward nothing: main moving says nothing about the package.
 
-That rule only works with the thing that makes it work: **coming round again means coming back differently.** A package returning to `todo/` for the third time with the same plan and the same approach is a loop, not a retry. The escalation is of approach rather than of people, and it is covered under **Failures** below.
+**There is no `blocked/` queue and no queue that waits on a person.** A package that fails goes to the **back of `todo/`**. Nothing is parked, and no part of the loop can come to rest with work outstanding.
 
-**Decisions are taken and recorded, not queued.** Where a choice arises that a human would once have made (a divergence from the TypeScript, a route that has to change, an ambiguity in the old code), the agent decides it, writes the decision, the reasoning and the alternatives it rejected into `docs/decisions/`, and carries on. The human reads decisions afterwards and can reverse any of them, which is why reversals are first-class in that directory. A decision recorded and later reversed costs one package's rework; a decision deferred costs the whole loop stopping.
+That only works because **coming round again means coming back differently**. A package returning to `todo/` a third time with the same plan and the same approach is a loop rather than a retry. See the escalation ladder under **Failures**.
 
-**The existence proof is always available.** Nothing in this port is unprecedented: every feature, every test and every platform already works in `photosphere-old`. When something looks impossible, the answer is in that repository, and reading how it was done there is the first move, not the last. "This cannot be done" is only ever a statement about the current approach.
+**Decisions are taken and recorded, not queued.** Where a choice arises that a human would once have made (a divergence from the TypeScript, a route change, an ambiguity in the old code), the agent decides it, records it with the alternatives rejected in its package's record, and carries on. A decision recorded and later reversed costs one package's rework; a decision deferred costs the whole loop stopping.
 
-Each package is a directory that moves between queues as a unit, carrying its plan and its evidence, so nothing is ever separated from its record. Split each one into an `index.md` (id, status, dependencies, failure count, one-line description) and a `detail.md` (the full plan), so a turn can read the whole board cheaply and open only what it needs.
+**The existence proof is always available.** Every feature, test and platform already works in `photosphere-old`. When something looks impossible, read how it was done there first. "This cannot be done" is only ever a statement about the current approach.
+
+Each package is a directory that moves between queues as a unit, carrying its plan and its evidence, so nothing is ever separated from its record. Split each one into a `status.md` (id, dependencies, failure count, ladder rung, one-line description) and a `plan.md` (the full plan), so a turn can read the whole board cheaply and open only what it needs. Neither is an index over anything: both describe one package.
 
 Work the queues in this priority order: **finish what is nearest to done before starting anything new.** `conflicts/` first, then `merge-queue/`, then `review/`, then `todo/`. Otherwise reviewed work piles up behind newly started work.
 
-### The parity ledger
+### Measuring parity
 
-This is the piece that answers the only question that matters at the end: **does the new repository match the old one?**
+Counting merged packages flatters: forty merged sounds finished while a hundred test cases quietly never got ported. Progress is measured against the old repository instead.
 
-Counting merged packages flatters: forty merged sounds finished while a hundred test cases quietly never got ported. So progress is measured against the old repository instead, and because nothing here is generated, it is measured at a granularity that can be maintained by hand.
+**Per package, in its own file: four counts and a list.** Source files ported against the number that package covers; unit test files and cases against the old repository's count; smoke tests by name; documents. Anything deliberately not ported is listed by name with its reason. An omission with a reason is a decision; an omission without one is a mistake.
 
-**Per package, in its own file, the parity record is four counts and a list.** The source files it was responsible for and how many are ported; the unit test files and cases, ported against the old repository's count; the smoke tests, by name; and the documents. Anything deliberately not ported is listed by name with its reason, which is the part that matters, because an omission with a reason is a decision and an omission without one is a mistake.
+The counts come from the old repository when the plan is written, by listing the files that plan covers, and go into the plan. Established once, by the agent that already has the files open. The review checks them against what was built; the orchestrator copies the totals into `summary.md`.
 
-The numbers come from the old repository at the moment the plan is written, by listing the files that plan covers, and they go into the plan. So the count is established once, by the agent that has the files open anyway, rather than maintained centrally by something that has to keep scanning. The review checks the count against what was actually built, and the orchestrator copies the totals into `summary.md`.
+The port is finished when every package's record is complete and the totals account for everything in the old repository.
 
-The port is finished when every package's record is complete and the totals across them account for everything in the old repository. That total is the number reported.
+### `summary.yaml`, and `summary.md` rendered from it
 
-### `summary.md`: the one file to read
+**`summary.yaml` is the store.** The state of the port as data: the heartbeat, the phase, the progress counts, the phases and their steps, the prototypes, the packages, what is struggling, and the decisions taken recently. It is **read, changed surgically and written back**: a status changes, a count moves, a box ticks. Never rebuilt from scratch, so an update touches a few lines and costs almost nothing.
 
-**One file, `summary.md`, edited surgically, by one writer.** There is no generator, no data file behind it and no rendering step, because this port builds no tooling for itself: what would have been a script becomes a rule an agent follows.
+**`summary.md` is the view**, rendered from it whenever it changes, and **never edited directly**. It is what a human opens. It is deliberately short: the heartbeat, the progress table, the phases, the prototypes, the packages, what is struggling, recent decisions. Nothing else. Every long list that could go on it belongs somewhere it is already recorded, and putting it here as well is two records to keep in step.
 
-- **Only the orchestrator writes it.** Subagents never touch it. They write their own files, which nothing else writes, and the orchestrator folds the outcome into the summary at step boundaries. That single-writer rule is what makes it safe while several packages are in flight, and it is the same rule everything else shared follows.
-- **Changes are surgical.** Ticking a box, moving a package's status, updating a count: a few lines changed in place, never a rebuild from scratch. That is cheap whoever does it, which is what makes the no-tooling version workable.
-- **It is markdown rather than structured data on purpose.** A hand-edited YAML file gets its indentation wrong eventually and takes the whole file with it. A hand-edited markdown line that goes wrong damages that line and nothing else, and the damage is visible on the page rather than at parse time.
-- **The queues remain the truth.** The summary is a human-readable view over them plus the things only it carries: costs, dates, and the history of what struggled. Where the two disagree, the queues win and the summary is corrected, which is a thing to check whenever a turn has been interrupted.
+The rules:
 
-For the updates to stay cheap, **every check leaves its result where it can be copied rather than worked out**: one short line beside its captured output saying what ran, the verdict and the counts. The orchestrator folds in that line. Nothing reads a test log to update the summary.
+- **Only the orchestrator writes either file.** Subagents never touch them; they write their own files and the orchestrator folds the outcome in at step boundaries. That is what makes it safe with several packages in flight.
+- **The rendering is done by the orchestrator, not by a script.** No tooling is built for this port, and that has not changed. The view is small and the mapping is obvious, so rendering it is a minute's work at a step boundary, which is the point of keeping it small.
+- **The store carries the checkboxes for phases and their steps.** That is what says where a turn resumes before any package exists: the queues track packages, and phases 0 to 5 are steps with no queue. The first unticked step is where work continues.
+- **A box is ticked only when the thing is finished.** For a package that means merged to main, parity counts accounted for, unit tests ported case for case and passing, smoke tests passing at the level the old repository had them, and the release workflow green on every platform for a revision containing it. Merged is not finished. Green on Linux is not finished.
+- **The plan carries no checkboxes and no status.** It is a specification and is not edited as work proceeds.
+- **The queues are the truth.** Where they and the store disagree, the queues win and the store is corrected. Check this after any interruption.
+- **Every check leaves a copyable result** beside its captured output: one line saying what ran, the verdict and the counts. Nothing reads a test log to update the store.
 
-Every line starts with a checkbox. **A box is only ticked when the thing is finished**, which for a package means all of: merged to main, its parity ledger rows all accounted for, its unit tests ported case for case and passing, its smoke tests passing at the level the original repository had them, and the release workflow green on every platform for a revision containing it. Merged is not finished. Green on Linux is not finished.
-
-What it lists:
-
-- **Every package**, numbered as in this plan, with its checkbox, its queue, its failure count, its branch if it has one, and one line of what it is. The packages not started are listed too, because a list of only what is underway hides the size of what is left.
-- **The release workflow**, job by job: 22 lines, each ticked when that job is restored, adapted and green in the new repository. This is the clearest single measure of how close the port is to being a real product, because the workflow is the definition of "this works".
-- **The prototypes**, P1 to P10, each ticked when its finding is recorded and absorbed.
-- **The phases and their checkpoints**, so it is obvious which one the port is in and whether it is waiting on a human.
-- **The documentation set** from phase 0, file by file, ticked when it has been reconciled against what was actually built rather than when it was first written.
-- **The operational scripts** carried over from the old repository, ticked when each one runs in the new one.
-- **The parity totals**: accounted for against total, for source files, unit tests, smoke tests and documents separately. This is the progress number that cannot flatter, and it belongs at the top.
-- **The smoke suites**: the eighty numbered CLI tests, the five other CLI suites, and the deduplicated application suite, with counts passing against counts expected, per platform.
-- **Anything struggling**: every package with two or more failures, with its rung on the escalation ladder, its attempt count and the last reason. Nothing is ever parked waiting for a person, so this is the section that replaces a blocked list: it is where a package going round and round becomes visible without anyone digging.
-- **Decisions taken recently**, so a decision made autonomously can be reversed before much is built on it.
-- **In flight right now**: which packages have agents, of what type, on what step, and since when.
-- **Cost to date**, so the number is visible rather than discovered.
-
-The **first line of the file is the orchestrator's heartbeat**: timestamp, turn number, what it is doing now, what it expects next, and its pid, process group and runner. It is first because it is the line that says whether anything else on the page is still moving, and it is what makes an orchestrator that has stopped visible in one glance rather than by inference.
+**The heartbeat is first in both files**: when, which agent, what it is doing, what it expects next, and its process id and machine. It is what says whether anything else on the page is still moving, and it is how an orchestrator that has stopped is spotted in one glance.
 
 ### Failures, and what is not one
 
-Getting this taxonomy wrong is what makes an autonomous loop thrash, so it is set out exactly:
+Getting this taxonomy wrong makes the loop thrash:
 
 - A **failure** is any setback with the work: a check fails, an agent exhausts its budget, a review rejects, a rebase cannot be resolved, post-merge checks fail on main. Record it on the package (increment the count, write a history note saying what failed and where the evidence is) and send it to the **back of `todo/`**. It always comes back; what changes is how it is approached next time.
-- An **interruption** is the run being cut off from outside: a rate limit, a killed process, a dead machine. It says nothing about the package. **Record it nowhere, count it toward nothing, and leave the queues as they are.** A package left mid-stage is re-driven from where it sits, not failed. Treating interruptions as failures marches untouched work toward the block cap, which is how an autonomous system quietly parks everything.
+- An **interruption** is the run being cut off from outside: a rate limit, a killed process, a dead machine. It says nothing about the package. **Record it nowhere, count it toward nothing, leave the queues as they are.** A package left mid-stage is re-driven from where it sits, not failed. Treating interruptions as failures walks untouched work up the escalation ladder for no reason.
 - A **merge conflict** in the train is not a failure either, and goes to `conflicts/`.
-- A **setup or environment failure** (the toolchain will not install, a runner is broken) is **fixed, not routed around**. The environment is code: it is the runner setup document and the workflow files, both of which the port owns and can change. So the response is to fix the setup, record what was wrong in the journal, and put the packages it hit back in `todo/`. What remains banned is the *fake* fix: no substitute toolchain standing in for the pinned one, no skipped install, no borrowing another worktree's state, no test made to pass without the thing it tests. Repairing the environment is required; pretending it is repaired is not allowed.
+- A **setup or environment failure** (the toolchain will not install, the orchestrator's environment is broken) is **fixed, not routed around**. The environment is code: it is `docs/orchestrator-setup.md` and the workflow files, both of which the port owns and can change. So the response is to fix the setup, record what was wrong in the journal, and put the packages it hit back in `todo/`. What remains banned is the *fake* fix: no substitute toolchain standing in for the pinned one, no skipped install, no borrowing another worktree's state, no test made to pass without the thing it tests. Repairing the environment is required; pretending it is repaired is not allowed.
 - **Two or more packages failing the same stage or check in one turn is an environmental failure.** The shared cause is the environment, not the packages, so retrying the packages is wasted. Stop launching new work, fix the shared cause first, record it, and then let the affected packages come round again. Never respond by serialising what was parallel.
 
 **The escalation ladder, since there is nowhere to park a package.** A package's failure count decides *how* it is attempted next, not whether it is. Each rung is tried before the next, and which rung a package is on is recorded on it:
@@ -701,24 +1078,22 @@ Getting this taxonomy wrong is what makes an autonomous loop thrash, so it is se
 
 A package cycling on the same rung twice has not escalated, and that is itself the failure to catch. The rung, the attempt count and the reason are all in `summary.md`, so a package quietly going round forever is visible on the front page rather than buried.
 
-**The reconciliation invariant is the single most valuable thing to copy.** At the end of every turn, `in-progress/` is empty. Any package still sitting there is by definition a failure nobody recorded, because no agent is working it now, so the orchestrator records and routes it itself. An agent that dies cannot file its own failure, so the loop can never depend on it doing so.
+**Reconciliation invariant: at the end of every turn, `in-progress/` is empty.** Any package still sitting there is a failure nobody recorded, because no agent is working it now, so the orchestrator records and routes it itself. An agent that dies cannot file its own failure, so the loop never depends on it doing so.
 
 ### Evidence, and never trusting a report
-
-Also taken whole, because it is what stops an autonomous system reporting success it did not have:
 
 - **Confidence is not evidence.** Before any claim that a check passed: identify the exact command, run it fresh, read the full output including the exit code, confirm it supports the claim, and capture it. A previous pass passing is not this pass passing. An agent's report is not a verified result.
 - **One evidence directory per pass**, numbered: `implementation-1/`, `review-1/`, `implementation-2/`, and so on, plus `merge/`. Older passes are history and are never consulted to fill a gap in a newer one.
 - **The latest pass proves the whole change on its own**, not just the part it altered, and everything in it is captured fresh from that pass's commit. Evidence carried forward from an earlier pass does not prove the current code.
-- **Evidence never enters `photosphere-new`.** It lives in the package directory in the meta repository. Nothing is ever committed to the product repository to make a capture possible: no evidence switch, no capture helper, no test that exists to produce a screenshot. A commit in `photosphere-new` contains the port and nothing else, and the review enforces that by reading the diff.
+- **Evidence never enters `photosphere-zig`.** It lives in the package directory in the meta repository. Nothing is ever committed to the product repository to make a capture possible: no evidence switch, no capture helper, no test that exists to produce a screenshot. A commit in `photosphere-zig` contains the port and nothing else, and the review enforces that by reading the diff.
 - **Every check records the same five fields**: what was verified, how, the result, the basis for it, and on failure what to change.
-- **Checks run in the foreground.** Never launch a long check in the background and end the turn waiting to be woken. A stall has to become a visible failure rather than an idle wait.
+- **Checks run in the foreground.** Never launch a local check in the background and end the turn waiting to be woken. A stall has to become a visible failure rather than an idle wait. The one exception is a release workflow run, which is durable, attributable to a commit and readable by a later turn: waiting on one is a recorded state on the package, never an agent sitting idle.
 
 Checks come in two kinds and they are interchangeable in the pipeline: **deterministic** ones where a command decides (compile, all three Zig test passes, unit, CLI smoke, application smoke), and **judgement** ones where an agent decides against a named rule (the five-part comparison with the TypeScript, the no-globals rule, the documentation rules). They differ only in what the evidence is: command output, or a written assessment naming the rule and the code.
 
 ### Stopping and resuming
 
-A port this long will be interrupted many times: a crashed process, a dead runner, an outage, a rate limit, credit running out mid-turn. **Resuming has to be a normal operation rather than a recovery**, and it has to work when every agent that knew what was happening is gone. The queues say which packages are in flight; they do not say what an agent was in the middle of. That gap is what this section closes.
+**Resuming is a normal operation, not a recovery**, and it has to work when every agent that knew what was happening is gone. The queues say which packages are in flight; they do not say what an agent was in the middle of. That gap is what this section closes.
 
 **Every agent writes an agent record before it does any work**, into its package's directory in the meta repository, committed and pushed immediately so it survives the machine that wrote it:
 
@@ -776,9 +1151,7 @@ That is the whole diagnosis, deliberately. It needs no log reading, no process i
 
 Killing it is always safe, which is the point of the resume design: it holds no state that is not already committed, so the next turn picks up from the queues and the records. The same is true if it is killed while it is not stuck.
 
-- **The invocation limit is the backstop for an orchestrator that gets stuck**, and this is the strongest argument for the scheduled-turn architecture. If a turn is a scheduled invocation with a hard time limit, a turn that never ends is impossible: it is killed by the scheduler, and the next scheduled turn reads the queues and reconciles it exactly as it would after a crash. The problem stops existing rather than needing something built to solve it.
-
-Under the long-lived architecture there is no such backstop, which is a real cost of that option: an orchestrator that gets stuck stays stuck until someone notices the summary has stopped moving.
+Neither architecture has an automatic backstop for an orchestrator that gets stuck, since both run it as a long-lived session. It stays stuck until the heartbeat is noticed, which is why the heartbeat is the first line of `summary.md` and why killing and restarting is always safe.
 
 ### The review agent edits nothing
 
@@ -790,7 +1163,7 @@ It also reviews **the diff hunk by hunk against the plan**, and any change not r
 
 One cycle per package. The orchestrator owns the loop; the agents talk only through the worktree, the plan and the notes.
 
-1. **Orchestrator** picks the next package whose dependencies have merged, creates a branch and a worktree in `photosphere-new/`, and starts an implementation agent with the plan. Worktree and branch are named for the package and numbered, `wp-13-merkle-tree-1`, with the number rising if a package needs a second attempt, so it is always obvious what a worktree is for.
+1. **Orchestrator** picks the next package whose dependencies have merged, creates a branch and a worktree in `photosphere-zig/`, and starts an implementation agent with the plan. Worktree and branch are named for the package and numbered, `wp-13-merkle-tree-1`, with the number rising if a package needs a second attempt, so it is always obvious what a worktree is for.
 2. **Implementation agent** works only inside its worktree. It reads the named files in `photosphere-old/`, writes the Zig, writes the tests, runs them, and iterates until they pass. It commits with the hook enabled and pushes its branch as it goes. It writes its journal entry and a handover note saying what it built, what it ran, what passed, and what it could not do.
 3. **Review agent** starts fresh in the same worktree with the plan and the handover note. It does not trust the note. It checks:
    - The five parts of the comparison above, with `photosphere-old/` open beside the new code. This is the main event, not a formality.
@@ -798,13 +1171,51 @@ One cycle per package. The orchestrator owns the loop; the agents talk only thro
    - No mutable global anywhere in the core, and no hidden state in a core library.
    - Every named unit test exists and would fail if the code were wrong. It breaks at least two on purpose and confirms they go red.
    - It runs the tests itself: all three Zig passes, the unit suite, and every smoke suite the plan named, on the platforms the plan named.
+   - **It runs `find-flakey-tests` on the ladder at ten runs a rung, and `check-parallel-tests` with every suite included**, and both pass. No package is accepted without them, and a reduced run of either counts as a failure rather than a pass.
+   - **It checks the determinism rules by reading the code**: no clock, random source, environment or filesystem order reached for rather than passed in, no dependence on hash map iteration order, and sorting wherever output order could otherwise vary.
+   - The release workflow ran green on the package's branch, on every platform, with no job having needed a rerun.
    - The repository rules are met, and the documentation and project map still match.
    - The journal entries exist and say something.
-4. **If the review fails**, findings go to `review-notes.md` in the worktree as a numbered list, each naming a file, a line and what has to change, and it hands back. The implementation agent fixes and commits again. Repeat.
-5. **After three rounds of the same disagreement**, the plan is what is wrong rather than the code, so the package goes to the back of `todo/` and comes back at the re-plan rung of the ladder, its worktree torn down and its history carried into the rewrite. If the disagreement is a choice rather than a defect, the reviewer decides it, records it in `docs/decisions/` with the alternatives it rejected, and the work continues under that decision.
+4. **If the review fails**, it writes its findings and hands back. How that hand-back works is set out below, because it is the join between two agents that never meet and it is where an autonomous loop most easily goes round in circles.
+5. **After three rounds of the same disagreement**, the plan is what is wrong rather than the code, so the package goes to the back of `todo/` and comes back at the re-plan rung of the ladder, its worktree torn down and its history carried into the rewrite. If the disagreement is a choice rather than a defect, the reviewer decides it, records it in the package's findings with the alternatives it rejected, and the work continues under that decision.
 6. **When the review passes**, the package moves to `merge-queue/`. It is not merged by the review agent and not by the implementation agent.
 
 Several packages may be in flight when their dependencies have merged and the file sets their plans declare are disjoint. The orchestrator works the queues in priority order every turn (`conflicts/`, `merge-queue/`, `review/`, `todo/`) and ends the turn with `in-progress/` empty, reconciling anything left there as an unrecorded failure.
+
+## How a review hands findings to the next implementer
+
+The two agents never talk. One finishes, another starts later with none of its context, possibly on a different machine, possibly days apart. Everything that passes between them is a file, and getting that file right is what stops the loop going round in circles.
+
+**Findings live in the package directory, one file per review pass**, beside that pass's evidence: `review-1/findings.md`, `review-2/findings.md`, and so on. They are never overwritten and never merged into one running document, so the full history of what was asked for and what happened is readable in order.
+
+**Each finding is numbered and self-contained**, because the agent reading it has not seen the code before:
+
+- **What is wrong**, in one sentence.
+- **Where**, by file and line, in the worktree.
+- **Why it fails**, naming the rule or the plan clause or the old-repository file it contradicts. A finding that cannot name what it violates is an opinion, and opinions are not findings.
+- **What has to be true instead**, concretely enough to be checked. Not "improve the error handling".
+- **How it was found**, so the implementer can reproduce it: the command, or the comparison against the TypeScript.
+- **Severity**: blocking, or a note. Only blocking findings prevent acceptance, and a review that marks everything blocking has not done its job.
+
+**The implementer replies in the same file rather than in a new one.** Each finding gets a resolution line written under it: fixed and how, or disputed and why. **A disputed finding is not ignored**, it is escalated in the record: the next review reads the dispute first and either accepts it, recording that in the findings, or restates the finding with better evidence.
+
+**The next implementer's starting instruction is the plan plus the latest findings file**, in that order, plus every earlier findings file for context. That ordering matters: the plan says what to build, the findings say what was wrong with the last attempt, and reading them the other way round produces an agent that fixes symptoms and loses the goal.
+
+**Three things the findings file must carry that a naive one would not:**
+
+- **What was already accepted.** A review that only lists faults invites the next implementer to rewrite things that were fine. Each findings file opens with what passed, so the next pass knows what not to touch.
+- **What was tried and rejected in earlier passes**, carried forward from the previous findings files, so pass three does not propose what pass two already disproved. This is the specific mechanism that stops the loop cycling.
+- **The pass number and the rung of the escalation ladder**, so an implementer on pass three knows it is not doing the same thing again: pass three re-plans rather than re-implements.
+
+**The review agent also writes its own journal entry**, which is a different thing and not a substitute: the findings file is instructions to one agent about one package, the journal is the record of what happened for a human reading later. Both, every time.
+
+### Reading the reviews back
+
+**A package's whole record stays with it forever, in one directory.** The package directory moves into `docs/queues/done/` as a unit, carrying its plan, every findings file and every evidence directory. Nothing is deleted on merge, and GitHub renders all of it in the browser.
+
+**There is no index over packages and no cross-package summary of any kind**, other than the global `summary.md`. An index over forty packages is a file that has to be maintained on every merge, by an agent, forever, and it will be wrong before it is useful. The single global summary is the only place anything is aggregated.
+
+**Instead, the last findings file of a package carries the wrap-up**, because it is written once at the end by an agent that has just read everything: how many passes it took, what each pass caught, what was disputed and how that resolved, and anything surprising. That costs one paragraph in a file that was being written anyway, and it means the story of a package is at the bottom of its own review rather than in a file somewhere else that has to be kept in step.
 
 ## The merge train
 
@@ -820,11 +1231,37 @@ Merging happens in one place, by one agent, one train at a time. **Only one merg
 
 For this to hold from the first day, **`test:everything` has to work in the new repository from the very first commit**, even when it runs almost nothing. A test command that arrives late is a test command that was never run on the early packages.
 
+## Phase 7: the parity audit
+
+Phase 6 ends when every planned package has merged. **That is not the same as parity**, and the difference is exactly what this phase exists to find: things nobody wrote a package for, tests that were counted as ported but were not, behaviour that differs in a way no single package's review could see, and everything that was quietly dropped with a reason that does not survive being read again.
+
+The audit is a fresh comparison of the two repositories, done by agents that did not build any of it, going back to `photosphere-old` rather than to the port's own records. **The port's records are what is being audited, so they cannot be the evidence.**
+
+What it checks:
+
+- **Every file in `photosphere-old`** is accounted for: ported, deliberately not ported with a reason that still holds, or superseded by something named. Anything not in one of those three states is a finding.
+- **Every unit test case**, counted from the old repository rather than from the parity records, against what exists and passes in the new one.
+- **Every smoke test**, by name, including the ones deduplicated between the desktop and mobile suites, confirming each survived the merge rather than being lost in it.
+- **Every command line surface**: flags, help text, error wording, exit codes, output formats, compared against the old binaries.
+- **Every on-disk and on-the-wire format**, by round trip against the old implementation, not by reading code.
+- **Every document** the old repository had, and whether the new one says the equivalent thing.
+- **The five-part comparison, sampled across packages**, to catch drift in the mirroring rule that per-package reviews let through one small improvement at a time.
+- **The whole release workflow**, job by job, against the old one, confirming the almost one-to-one mapping and that nothing is still commented out.
+- **Zero flakiness on the finished tree**: a full ladder at the hundred-run streak, the parallel check over every combination, and five sequential green release workflow runs.
+
+**Everything it finds becomes a work package**, planned and queued like any other, and the port returns to phase 6 to build them. **Then phase 7 runs again, from scratch.** A second audit is not a re-read of the first one's list: it is another full comparison, because fixing one gap routinely reveals another.
+
+**The loop ends when an audit finds nothing.** That is the only definition of done in this plan, and the criteria below are what "nothing" means.
+
+Expect this to run several times. An audit that finds nothing on its first attempt has probably not been done properly, and an audit run by an agent that also built some of the work is not an audit.
+
 ## What "complete" means
 
-Parity is not a judgement call. The port is complete when all of these are true at once, on a single revision of the main branch:
+Parity is not a judgement call. The port is complete when a phase 7 audit finds nothing, which means all of these are true at once, on a single revision of the main branch:
 
 - Every package matches its TypeScript counterpart on all five parts of the comparison above, and where it does not, the divergence document says so and the human has accepted it.
+- **Zero flaky tests.** `find-flakey-tests` completes a full ladder at the full hundred-run streak on the final tree, `check-parallel-tests` reports no interference across every combination including self-pairs, and the release workflow has run green five times in a row with no job needing a rerun.
+- Every entry in the flakiness log is resolved, and every rule it produced is in `CLAUDE.md`.
 - Every unit test from the old repository has a counterpart, and they all pass. The old repository has 164 unit test files across `packages/` and `apps/`; each one is accounted for as ported, superseded by a named Zig test, or written off with a reason.
 - All eighty numbered CLI smoke tests pass, plus the encrypted, LAN share, hash cache, sync, write lock and keychain suites.
 - The deduplicated UI smoke suite passes on Linux, Windows, macOS, Android and iOS. Where a test cannot run on a platform, the exclusion is written down with its reason and the human has accepted it.
@@ -841,7 +1278,7 @@ This section is the setup of the system that executes the port. The port itself 
 
 ### Runner classes
 
-The work divides by what a runner has to have. These are requirements, not machines, and any host that meets a class can serve it:
+Building and testing divides by what the environment has to provide. **None of these is the port orchestrator**: they are where work gets built and tested, and all but the first are GitHub-hosted runners driven by the release workflow. The orchestrator is one machine that drives the loop and pushes branches; everything below happens because a branch was pushed.
 
 - **Headless.** Linux, the pinned toolchain, the S3 emulator, network access to fetch dependencies, and credentials to push. No display, no GPU, no virtualisation. Covers Zig compilation, all three test passes, every unit test, all the CLI smoke suites, and the command line tool built for all four desktop targets from that one runner, because a pure Zig binary cross-compiles, which `what-changed` does today. This is most of the port by volume and all of packages 10 to 33, and it is the class the cloud environment and a plain droplet both satisfy.
 - **Linux desktop.** Everything above plus GTK4, WebKitGTK 6.0 and `xvfb`. Runs the application smoke suite on Linux. A droplet satisfies this once the packages are installed; a headless container may not, and whether it does is a question the setup work has to answer rather than assume.
@@ -855,39 +1292,83 @@ The work divides by what a runner has to have. These are requirements, not machi
 
 Two consequences. The port has hosted runners for all five classes without buying or hosting anything, and the pinned Xcode 14.2 environment is a constraint on local development rather than on CI, which already builds and tests iOS on a newer macOS image. That makes a negative result from prototype P2 less severe than it first looks: it costs local iOS development, not the iOS platform.
 
-### Two architectures for running it
+### The architecture: cloud sessions, with a droplet as the fallback
 
-Both do the same work and use the same queues, plans, evidence and records. They differ in what keeps the loop turning, and that difference decides what has to be hosted. **Neither is chosen here.** The choice is made once the two unknowns in architecture B have been checked, and whichever is chosen, the other stays valid as a fallback, because nothing in the process design depends on either.
+**Decided: architecture B, Claude Code cloud sessions.** Architecture A, a long-lived droplet, is kept as the fallback and is not discarded, because B rests on a research preview and on limits that have not been measured against this workload.
 
-**Architecture A: a long-lived host.**
+Both do the same work and use the same queues, plans, evidence and records. Nothing in the process design depends on either, which is what makes the fallback cheap.
 
-- A DigitalOcean droplet runs the orchestrator continuously, one turn after another.
-- The droplet serves the headless class itself and the Linux desktop class once its packages are installed.
-- The other classes are reached by pushing branches and letting the release workflow test them on GitHub-hosted runners.
-- **What it needs**: one droplet, provisioned from the setup document, with credentials to push and a schedule or loop script that keeps invoking turns.
-- **Strengths**: nothing about it is uncertain. A process that runs continuously can hold long operations, watch its own children, and keep the emulator pool up between turns. It is the architecture the rest of this plan is written against.
-- **Costs**: a machine to pay for and maintain, and no backstop for an orchestrator that wedges, since nothing is built to watch it. It stays wedged until the summary is noticed to have stopped moving.
+**Switch to A if any of these turns out to be true**, and record the switch as a process decision:
 
-**Architecture B: short scheduled turns, no long-lived host.**
+- Cloud sessions are not available on the account, or stop being.
+- The 30 GB disk or 16 GB of memory will not hold a build of this size, and neither will trimming what is on disk.
+- Sessions cannot run long enough, or concurrently enough, to be worth the difference.
+- The merge-by-pull-request path cannot be made to work.
+- The network allowlist cannot reach something the toolchain needs.
 
-- The only structural job the droplet does is being always-on. That need disappears if a turn is short, stateless and idempotent, which the resume design already requires for crash recovery.
-- Each turn becomes an externally scheduled invocation with a hard time limit. A scheduled GitHub Actions workflow starts a turn, the turn reads the queues, does one unit of work, commits, pushes and exits.
-- **The scheduler is the backstop, so nothing has to be built to be one**: an agent that wedges dies when its invocation hits the limit, and the next scheduled run reconciles it from the queues exactly as it would after a crash. That is the same path as resume, so it gets exercised constantly rather than only in emergencies. Given that no tooling is being written, this is the stronger of the two architectures.
-- GitHub Actions also brings the macOS and Windows classes with it, and the Android class through KVM on its Linux runners.
-- **What it needs**: nothing hosted at all.
-- **Two things to check before committing to it**: whether remote Claude sessions are available on the account and can reach the network to fetch Zig, the SDK and the C dependencies and push to private repositories; and whether a useful turn fits inside both Claude's limits and the runner's job limit.
-- **Costs**: a turn that cannot finish a long operation has to be able to leave it for the next turn, which puts more weight on the checkpointing than architecture A does. Long device suites are the awkward case, since they may exceed a job limit.
+**Architecture A, the fallback:**
 
-**How they combine.** The two are not exclusive: the sane end state is probably B for the loop and A for anything that has to be long-lived, if such a thing turns out to exist. Either way the release workflow does the multi-platform testing, so no architecture has to solve macOS, Windows or Android by hosting them.
+- A DigitalOcean droplet runs the orchestrator continuously.
+- It serves the headless work itself and the Linux application suite once its packages are installed.
+- Other platforms are reached the same way as under B: push a branch, let the release workflow test it.
+- **What it needs**: one droplet provisioned from `docs/orchestrator-setup.md`, with credentials to push and something that keeps the orchestrator running.
+- **What it buys over B**: no research preview, no resource ceiling but the machine's, no push restriction, so the merge train pushes main directly and the process is exactly as this plan describes it elsewhere.
+- **What it costs**: a machine to pay for and maintain.
+
+**Architecture B: Claude Code cloud sessions.**
+
+The orchestrator and every agent run as Claude Code cloud sessions rather than on a machine anybody owns. What follows is from https://code.claude.com/docs/en/cloud-environments and decides most of the design, so it is recorded here rather than assumed.
+
+**What the documentation says, and what each fact costs or buys:**
+
+- **Each session gets a fresh VM**: Ubuntu 24.04 on x86_64, the repository already cloned, common toolchains pre-installed. Sessions are independent, so several run at once. That is the parallelism the scheduled-job version could not give.
+- **4 vCPUs, 16 GB RAM, 30 GB disk**, and the VM may stop tasks that need significantly more memory. This is a real constraint for this port: `photosphere-old`, `photosphere-zig`, several worktrees, a Zig cache and the C library builds all share 30 GB, and Zig builds are memory-hungry. Measure it early; the documented answer for workloads beyond it is Remote Control on your own hardware or a self-hosted environment.
+- **A setup script runs once, then the filesystem is snapshotted and reused.** Later sessions start with the toolchain already on disk and skip the script. This removes the per-session setup tax that made the scheduled-job version slow. The cache keeps files, not running processes, so anything long-lived (the S3 emulator) starts per session. It rebuilds when the script or the allowed hosts change, and after roughly seven days.
+- **Network access is per environment**: none, a trusted allowlist covering package registries and GitHub, or a list you specify. Fetching Zig, the SDK and the C dependencies has to be checked against that allowlist rather than assumed.
+- **GitHub goes through a proxy**, and it carries a restriction this plan has to design around: **`git push` works only against the session's current working branch.** Cloning, fetching and pull request operations work normally. Two consequences: an agent can push its own package branch, which is what it needs; and **the merge train cannot push main directly**, so merges land through pull requests instead. So does anything the orchestrator writes to the meta repository, unless the orchestrator's session treats the meta repository as its working repository.
+- **API access is scoped to repositories attached to the session**, so all three repositories are attached, and a fetch from an unattached one gets a 403.
+- **`gh` is not pre-installed** and goes in the setup script. With no token set, `GH_TOKEN` reads as a placeholder and the proxy substitutes real credentials on outbound requests; a script that reads the variable directly gets the placeholder rather than a usable token. Anything the port writes that expects a real token has to account for that.
+- **There is no secrets store.** Environment variables are readable by anyone using the environment. Credentials therefore rely on the proxy rather than on variables wherever possible.
+- **Scheduling exists as routines**, which start sessions on a schedule in a chosen environment. That is the backstop wake-up, without a CI job hosting the loop.
+- **It is a research preview**, on Pro, Max, Team and some Enterprise seats. Availability is the first thing to confirm.
+
+**What this means for the design**: parallel long-lived sessions with a cached environment, merges landing by pull request rather than direct push, all three repositories attached, and disk and memory measured before it is trusted with the whole port.
+
+### What architecture B looks like in practice
+
+**The orchestrator is a long-running session.** It holds the loop: reads the queues, decides what is next, spawns agents, drives merge trains, keeps `summary.md` true. It is not restarted every few minutes and pays no setup cost between decisions.
+
+**Each agent is its own session, and they run concurrently.** An implementer for package 13, a reviewer for package 11 and a merge train can all be live at the same moment, each in its own environment with its own worktree. Concurrency is bounded by what the plan already says: dependencies satisfied, declared file sets disjoint, one merge train at a time.
+
+**GitHub Actions keeps one job and loses the other.** It is no longer the scheduler and no turn runs inside it. It still runs `release.yml` on branch pushes, because that is where macOS, Windows and Android testing lives and none of that needs owning hardware. It matters more here than under architecture A, because a cloud session has no Android emulator, no Mac and no Windows: everything platform-specific is the workflow's job by necessity rather than by preference.
+
+**Merging happens through pull requests**, because the proxy allows a session to push only its own working branch. The merge train opens a pull request from its merge worktree, the release workflow runs against it, and it is merged when green. That is a change from the direct push the merge train section describes, and it is the one place architecture B alters the process rather than just where it runs.
+
+**Where the long work goes, and why the wait is no longer serial:**
+
+- **Fast local checks run inside the agent's session**: compile, the three Zig passes, unit tests, the CLI smoke suites. These block, in the foreground, as the rules require.
+- **The slow multi-platform suites run in `release.yml`**, started by the branch push the agent makes.
+- **The agent waits for that run inside its own session** rather than ending and being picked up later. A session that can run for hours can afford to wait forty-five minutes for Android, and while it waits every other session keeps working. This is the thing the Actions version could not do, and it is why that version was slow: there, waiting meant ending the turn and paying the whole hand-off again.
+- **If a session cannot outlast a workflow run**, the fallback is the recorded-wait design: the agent writes which run it is waiting on and ends, and the orchestrator picks the result up when it lands. That path exists either way, because it is also what happens when a session dies mid-wait.
+
+**Scheduling becomes triggering.** There is no fixed cadence to tune. The orchestrator acts when something is ready: a review finishes, so the merge queue moves; a workflow goes green, so a package advances. A periodic wake-up remains only as a backstop, to catch anything that finished while nothing was listening.
+
+**What replaces the invocation limit as the backstop.** In the Actions version, a stuck agent died when its job timed out. With long-lived sessions that is gone, so it falls back to the orchestrator's own check at the top of each pass: an agent record that has stopped moving gets its session killed and restarted from its last checkpoint. A stuck orchestrator is still visible from the heartbeat in `summary.md`, and killing and restarting it is safe.
+
+**Watching it.** The heartbeat line in `summary.md`, the queues, and the agent records, exactly as everywhere else. There is no run history to read instead, which is a small loss against the Actions version.
+
+**What this costs.** Sessions that sit waiting on a workflow are consuming a slot and possibly budget while doing nothing, so the concurrency ceiling and the budget ceiling both matter more here than in the Actions version, where waiting was free because the job had ended.
+
+**Falling back to A** costs one process change, in the opposite direction to the one B introduced: the merge train pushes main directly instead of opening a pull request. Everything else, the queues, the plans, the evidence, the records and the release workflow, is unchanged, which is what makes the fallback a day's work rather than a redesign.
 
 The consequence, whichever is chosen: **the system converges to everything green except the classes it has no runner for.** Since the release workflow already covers all five, that should be nothing, and if a class does go missing the packages needing it queue up while everything else keeps moving.
 
 ### Setting it up
 
 1. **Do the cold start**, exactly as set out in the section of that name. An agent creates both repositories and everything in them; the only human action in the whole port up to this point is supplying the Claude credentials the scheduled turns run under.
-2. **Step 1 of the port runs, and then waits for a human.** An agent writes `photosphere-new`'s `CLAUDE.md` and the whole documentation set and stops. The human reads them and accepts or changes them, `docs/project-structure.md` first and hardest, because every plan is written against it. Nothing else starts until that acceptance is recorded. The unattended system inherits whatever is in these files, which is why this is the one review that cannot be delegated.
-3. **Phase 1 runs once the prototype findings exist.** The prototypes are built outside this plan; phase 1 is where the port absorbs them. Every decision that comes out of a negative result is escalated and recorded, not taken by an agent.
-4. **Provision the runners**: the droplet or the cloud sessions for the headless lane, with mise, the Zig and Bun versions the prototypes pinned (plus Node if P1 found the SDK CLI needs it), the GTK4 and WebKitGTK 6.0 development packages, `xvfb`, the C library build dependencies, GNU Stow for the bootstrap, and the S3 emulator. Confirm the pinned toolchain installs from a clean machine and write down the exact commands, because that list is also what a new developer needs.
+2. **Step 1 of the port runs, and then waits for a human.** An agent writes `photosphere-zig`'s `CLAUDE.md` and the whole documentation set and stops. The human reads them and accepts or changes them, `docs/project-structure.md` first and hardest, because every plan is written against it. Nothing else starts until that acceptance is recorded. The unattended system inherits whatever is in these files, which is why this is the one review that cannot be delegated.
+3. **Phases 2 and 3 answer the ten questions and absorb the answers.** The prototypes are built by the orchestrator from the meta repository, except P2, which needs a Mac carrying Xcode 14.2. Every decision that comes out of a negative result is recorded, and the ones that change the port's route are put in front of you.
+4. **Provision the port orchestrator**: the droplet or the cloud session it runs on, with mise, the Zig and Bun versions the prototypes pinned (plus Node if P1 found the SDK CLI needs it), the GTK4 and WebKitGTK 6.0 development packages, `xvfb`, the C library build dependencies, GNU Stow for the bootstrap, and the S3 emulator. Confirm the pinned toolchain installs from a clean machine and write down the exact commands, because that list is also what a new developer needs.
 5. **Write the plans for packages 10 to 20 before starting the loop**, and write them the same way the port will be run: a subagent per plan with `/plan:create`, then a separate subagent with `/plan:check`, then a fix pass with `/plan:fix`, repeating until the check comes back clean. Different agents for writing and checking, because an agent checking its own plan finds nothing. The loop consumes plans faster than it produces them, and a queue of clean plans is what keeps it fed.
 6. **Set up the orchestrator.** Two ways, and the second is the fallback for the first:
    - A slash command in the meta repository (`/port:next`) that performs exactly one cycle of the loop above and exits, driven on a schedule so that each tick picks up wherever the last one stopped. Scheduling can be a cron entry created from inside a session or a plain system cron calling headless mode.
@@ -908,11 +1389,13 @@ The consequence, whichever is chosen: **the system converges to everything green
 - Finish a piece of work without writing its journal entry.
 - Start, stop or repair the Android emulator pool beyond the repair commands the rules allow, or race the pool monitor by repairing an emulator it is already fixing.
 - Mark a package done on the strength of a report rather than a run. The review agent runs the tests itself, and the orchestrator runs the full suite after the merge.
-- Skip, disable or weaken a test to make a package pass. A failing test that cannot be fixed is an escalation.
+- Skip, disable or weaken a test to make a package pass. A failing test that cannot be fixed climbs the escalation ladder.
+- Retry a red job and treat the green as the answer. A job that passes on retry is flaky, which stops everything until it is fixed and proven by five sequential green workflow runs.
+- Accept a package without the flake hunter and the parallel check having been run by the reviewer, in full, over every suite.
 
 ## Risks, in the order they can bite
 
-None of these is a risk to the port happening. Each is a risk to a route, and each one's entry says what the alternative route is.
+Each is a risk to a route, not to the port. Each entry names the alternative route.
 
 1. **iOS under Xcode 14.2** (prototype P2). The generated Xcode project is the newest, least documented part of the SDK and the pinned Apple toolchain is three years older than it. This is the likeliest thing to force a decision, and the decision is about which Apple machine and which toolchain, not about whether the port happens.
 2. **The SDK's mobile support being experimental in the vendor's own words**, with a 404 for its documentation and nothing in the probe ever built for a phone. P2 and P3 are the only evidence that will exist.
@@ -928,6 +1411,6 @@ None of these is a risk to the port happening. Each is a risk to a route, and ea
 - **Known divergences from the TypeScript**, to be recorded in the port's divergence document as they land: `async` becomes blocking plus an explicit thread pool, with cooperative cancellation through an explicit token because a blocking thread cannot be interrupted from outside; interfaces become vtable structs; every allocating function threads an allocator; the queue backend stops being a process singleton and is passed explicitly; the path sandbox moves out of Java and Swift into Zig; the asset server validates its route parameters where the Express one does not; BSON, RSA, AES-CBC and PEM come from C libraries; every Electron IPC channel and every Capacitor plugin call becomes a bridge command; and Zig 0.16 routes blocking calls through a `std.Io` instance.
 - **The macOS keychain exposure comes across unchanged.** The current code passes the secret as an argument to `security add-generic-password -w <json>`, and process arguments are readable by other processes. Port it as it is so existing installations can still read their secrets back, record it, and raise it with the human when that package lands. Do not fix it in passing.
 - **`what-changed` is the written-down answer to "how is Zig done here"**, and its commit history is where the reasoning lives rather than in the code: https://github.com/ashleydavis/what-changed. The two commits worth reading before writing anything are `ef5eecb`, which removed a global `std.Io` and passed it explicitly, and `0a33bc7`, which deleted 43 comments that justified a decision by naming the TypeScript it was ported from. Both are rules in this plan and both were learned the expensive way there.
-- **The two probe repositories are the port's best reference material and are the opposite of the abandoned worktree below**: they are small, they were built and run, and they cover exactly the parts of this application that meet the WebView. https://github.com/ashleydavis/electron-alternative-vercel-native is the one this plan builds on, and https://github.com/ashleydavis/electron-alternative-zig-with-webview solves the same problem against the raw `webview` C binding, which makes its message queue and its comparison section worth reading even though the port does not use it. The probes' own conclusion is the useful one: the hard parts (the threading rule, range requests, the WebSocket lifecycle) belong to the WebView model rather than to whichever wrapper is chosen, so they carry over whatever happens to the SDK.
-- **The abandoned worktree in this repository is reference material and nothing more.** `.claude/worktrees/zig-core-port` holds roughly 27,000 lines of Zig across sixteen module directories with about 1,030 test blocks, plus seven spikes. None of it is committed, none of it has been verified to build or pass, and it was written against a superseded design that assumed a parallel tree beside the TypeScript. Read it before porting a module it already covers, particularly the `s3` and `napi` spikes, and treat nothing in it as done. Do not work in it and do not merge it.
+- **The two probes are the best reference material available.** https://github.com/ashleydavis/electron-alternative-vercel-native is the one this plan builds on. https://github.com/ashleydavis/electron-alternative-zig-with-webview solves the same problem against the raw `webview` C binding: read it for its message queue. Their shared conclusion: the hard parts (the threading rule, range requests, the WebSocket lifecycle) belong to the WebView model rather than to the wrapper, so they hold whatever happens to the SDK.
+- **There is an old worktree of unfinished Zig in the old repository, and this port does not use it.** `.claude/worktrees/zig-core-port` holds roughly 27,000 lines across sixteen module directories, uncommitted, never verified to build or pass, and written for a layout this plan does not use. **Do not read it, do not copy from it, do not merge it, and do not cite it.** Everything this port needs comes from `photosphere-old`, which is committed, tested and shipping. Anything in that worktree worth having would have to be re-derived from the TypeScript anyway, and taking a shortcut through it is how a stale assumption gets into the port without anyone noticing where it came from.
 - **This plan is transient.** Nothing that outlives the port may reference it. Anything in here worth keeping (the writing rules, the divergence list, the toolchain versions, the packaging steps) gets copied into the new repository's own permanent documents, in full, at the point it is needed.
