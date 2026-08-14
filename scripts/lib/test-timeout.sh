@@ -40,6 +40,14 @@ source "$TEST_TIMEOUT_LIB_DIR/process-control.sh"
 # one slow test does not have to edit this file, but every suite reads the same default.
 PHOTOSPHERE_PER_TEST_TIMEOUT="${PHOTOSPHERE_PER_TEST_TIMEOUT:-600}"
 
+# Seconds a whole suite of separate tests may run before it is treated as stuck, for suites that pass
+# it to start_suite_watchdog. Capping each test is not the same thing: on Git Bash there is no
+# timeout(1), so the per-test cap falls back to killing the test's process tree and waiting for it,
+# and a kill that does not take leaves that wait blocked for good. The CLI suite normally finishes in
+# 15 minutes on windows-latest and has twice run past 27 and 40, so 25 minutes is well clear of a
+# slow run and well short of the job budget that used to absorb the hang without a log.
+PHOTOSPHERE_SUITE_TIMEOUT="${PHOTOSPHERE_SUITE_TIMEOUT:-1500}"
+
 # The exit code a timed-out test reports. 124 is what GNU timeout uses, so the value is the same
 # whether the timeout came from timeout(1) or from the fallback below, and a caller can tell "this
 # test was stuck" apart from "this test failed" by the code alone. Nothing else in these suites
@@ -186,9 +194,17 @@ run_test_function_with_timeout() {
 }
 
 #
-# Holds a whole script to the per-test timeout, for the suites that are one script rather than a set
-# of separate tests (the sync, write-lock and hash-cache suites). There is no individual test in
-# those to cap, so the script itself is the unit.
+# Holds a whole script to a ceiling, for the suites that are one script rather than a set of separate
+# tests (the sync, write-lock and hash-cache suites). There is no individual test in those to cap, so
+# the script itself is the unit, and the ceiling defaults to the per-test timeout to suit them.
+#
+# A suite made of separate tests passes its own, larger ceiling. Capping each test is not enough for
+# those: the CLI suite caps every test at the per-test timeout and still ran 40 minutes past its
+# normal 15 on windows-latest, because whatever is stuck there is not inside a test. That run was
+# killed by the job timeout, and GitHub discards the log of a job it kills, so the API returns 404
+# and the hang left nothing to read at all. A ceiling here fails the suite from the inside instead,
+# which ends the step normally and keeps everything the suite had already printed, including the RUN
+# line of whichever test never reported back.
 #
 # The watchdog kills the calling script's children first, so whatever command it is blocked on lets
 # go, and then the script itself, which makes the run exit non-zero and fail the suite. It reports
@@ -197,10 +213,18 @@ run_test_function_with_timeout() {
 # Its own pid is skipped: the watchdog is a child of the script too and would otherwise be the first
 # thing it killed.
 #
-# Usage: start_suite_watchdog <suite_name>   ... then stop_suite_watchdog at the end
+# Usage: start_suite_watchdog <suite_name> [seconds]   ... then stop_suite_watchdog at the end
 #
 start_suite_watchdog() {
     local suite_name="$1"
+    local ceiling="${2:-$PHOTOSPHERE_PER_TEST_TIMEOUT}"
+    # Which variable the reader is told to change has to follow which one is in force here, or the
+    # three script-is-the-unit suites that take the default would be pointed at a variable that does
+    # not govern them.
+    local limit_variable="PHOTOSPHERE_PER_TEST_TIMEOUT"
+    if [ -n "${2:-}" ]; then
+        limit_variable="PHOTOSPHERE_SUITE_TIMEOUT"
+    fi
     local script_pid=$$
 
     (
@@ -210,7 +234,7 @@ start_suite_watchdog() {
         # a pid the kernel had given to something else. Watching for the parent to disappear means it
         # cleans itself up whatever the script does with its traps.
         local waited=0
-        while [ "$waited" -lt "$PHOTOSPHERE_PER_TEST_TIMEOUT" ]; do
+        while [ "$waited" -lt "$ceiling" ]; do
             if ! kill -0 "$script_pid" 2>/dev/null; then
                 exit 0
             fi
@@ -218,7 +242,7 @@ start_suite_watchdog() {
             waited=$((waited + 1))
         done
 
-        report_test_timeout "$suite_name" "$PHOTOSPHERE_PER_TEST_TIMEOUT" "" >&2
+        report_test_timeout "$suite_name" "$ceiling" "" "$limit_variable" >&2
         local child
         for child in $(pgrep -P "$script_pid" 2>/dev/null); do
             if [ "$child" = "$BASHPID" ]; then
@@ -255,12 +279,17 @@ stop_suite_watchdog() {
 # had managed to write before it stopped, because the last thing a stuck test printed is usually the
 # thing it was waiting for.
 #
-# Usage: report_test_timeout <test_name> <seconds> <log_file>
+# The fourth argument names the variable that raises the limit, because a suite ceiling and a test
+# ceiling are not the same knob and pointing at the wrong one sends the reader to change a number
+# that has nothing to do with what they just saw.
+#
+# Usage: report_test_timeout <test_name> <seconds> <log_file> [limit_variable_name]
 #
 report_test_timeout() {
     local test_name="$1"
     local seconds="$2"
     local log_file="$3"
+    local limit_variable="${4:-PHOTOSPHERE_PER_TEST_TIMEOUT}"
 
     # The one-line marker lives here rather than at each call site so a suite adds a timeout by
     # calling this and nothing else. Every suite used to print its own row in its own table format,
@@ -270,10 +299,10 @@ report_test_timeout() {
     echo "========================================================================"
     echo "TIMED OUT: $test_name"
     echo "========================================================================"
-    echo "This test was killed after $seconds seconds. It did not fail an assertion,"
-    echo "it stopped making progress and was still running when the suite gave up."
+    echo "This was killed after $seconds seconds. It did not fail an assertion,"
+    echo "it stopped making progress and was still running when the limit was reached."
     echo ""
-    echo "Set PHOTOSPHERE_PER_TEST_TIMEOUT to raise the limit for a genuinely slow test."
+    echo "Set $limit_variable to raise the limit for a genuinely slow run."
     echo ""
 
     if [ -n "$log_file" ] && [ -f "$log_file" ]; then

@@ -824,6 +824,15 @@ run_all_tests() {
         all_scripts+=("$script_path")
     done < <(discover_tests)
 
+    # A ceiling on the whole run, on top of the one every test already gets. The per-test cap cannot
+    # catch everything: on Git Bash there is no timeout(1), so it falls back to killing the test's
+    # process tree and waiting on it, and a kill that does not take leaves that wait blocked for good.
+    # This suite normally takes 15 minutes on windows-latest and has twice run past 27 and 40, each
+    # time until the GitHub job timeout killed the job, which discards the job's log rather than
+    # writing it. Failing from in here ends the step normally instead, so everything printed so far
+    # survives, including the RUN line of whichever test never reported back.
+    start_suite_watchdog "cli-smoke-tests" "$PHOTOSPHERE_SUITE_TIMEOUT"
+
     echo ""
     if [ "${EXECUTION_MODE:-parallel}" = "sequential" ]; then
         log_info "Running ${#all_scripts[@]} tests sequentially"
@@ -836,6 +845,7 @@ run_all_tests() {
         run_parallel "$PARALLEL_N" "${all_scripts[@]}"
     fi
     local exit_code=$?
+    stop_suite_watchdog
 
     if [ $exit_code -ne 0 ]; then
         exit $exit_code
