@@ -46,6 +46,46 @@ const LOCK_STALE_MS = 30000;
 const LOCK_WAIT_ATTEMPTS = 50;
 
 //
+// How many times a rename into place is retried when the operating system refuses it, and the base
+// wait between tries. The waits grow, so ten attempts cover a little over a second in total.
+//
+const RENAME_RETRY_ATTEMPTS = 10;
+const RENAME_RETRY_DELAY_MS = 20;
+
+//
+// Renames a freshly written temporary file over its target, retrying the refusals Windows gives while
+// something else has the target open.
+//
+// Writing to a temporary file and renaming it over the target is atomic on POSIX whatever else is
+// reading, and is how every write here is made safe. Windows does not allow it: a rename onto a path
+// another handle has open fails outright with EPERM, and virus scanners and the search indexer open
+// files behind your back, so the refusal is transient and arrives without warning.
+//
+// The desktop app hit exactly that on the windows-latest runner, failing a smoke test with
+// "EPERM: operation not permitted, rename 'databases.toml.tmp-...' -> 'databases.toml'" while opening
+// a database. The update lock beside the file does not help, because it only keeps writers apart and
+// this is a reader, or the operating system itself, holding the target.
+//
+// Only the refusals that come of contention are retried. Anything else, a missing directory or a bad
+// path, is thrown on the first attempt as it always was.
+//
+async function renameIntoPlace(tempPath: string, filePath: string): Promise<void> {
+    for (let attempt = 0; ; attempt += 1) {
+        try {
+            await fs.rename(tempPath, filePath);
+            return;
+        }
+        catch (error: any) {
+            const refusedForContention = error.code === 'EPERM' || error.code === 'EACCES' || error.code === 'EBUSY';
+            if (!refusedForContention || attempt >= RENAME_RETRY_ATTEMPTS) {
+                throw error;
+            }
+            await sleep(RENAME_RETRY_DELAY_MS * (attempt + 1));
+        }
+    }
+}
+
+//
 // Ensures that the directory exists. If the directory structure does not exist, it is created.
 // Like fs-extra's ensureDir, but using native fs.promises.
 //
@@ -121,7 +161,7 @@ export async function outputFile(filePath: string, data: string | Buffer, option
     await ensureFileDir(filePath);
     const tempPath = `${filePath}.tmp-${randomUUID()}`;
     await fs.writeFile(tempPath, data, options);
-    await fs.rename(tempPath, filePath);
+    await renameIntoPlace(tempPath, filePath);
 }
 
 //
@@ -303,7 +343,7 @@ export async function updateFileRawOptimistic(filePath: string, mutator: (curren
             // Otherwise a writer that ignored the lock won; drop the temp and start over.
             const fingerprintAfter = await fileFingerprint(filePath);
             if (fingerprintsMatch(fingerprintBefore, fingerprintAfter)) {
-                await fs.rename(tempPath, filePath);
+                await renameIntoPlace(tempPath, filePath);
                 return;
             }
             await fs.rm(tempPath, { force: true });

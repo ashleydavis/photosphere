@@ -348,3 +348,41 @@ describe('updateFileRawOptimistic', () => {
         await fsNative.unlink(filePath);
     });
 });
+
+//
+// Writing through a temporary file and renaming it into place is atomic on POSIX, and Windows
+// refuses that rename outright while anything else holds the target open. Those refusals are
+// transient, so they are retried; anything else is thrown straight away.
+//
+describe('outputFile rename refusals', () => {
+
+    test('throws a failure that is not contention straight away, without retrying', async () => {
+        // Renaming onto a path held by a non-empty directory fails for a reason that has nothing to
+        // do with anything holding the file, so it must come back at once rather than being tried ten
+        // times over a second. The elapsed time is what tells those apart.
+        //
+        // The other half, a refusal that clears so a later attempt succeeds, is not covered: it needs
+        // EPERM or EBUSY from a rename whose own directory is still writable, which is a thing
+        // Windows does and POSIX does not.
+        const tempDir = await createTestTempDir('rename-refused');
+        const occupiedPath = path.join(tempDir, 'occupied');
+        await fsNative.mkdir(occupiedPath);
+        await fsNative.writeFile(path.join(occupiedPath, 'child.txt'), 'in the way');
+
+        const startedAt = Date.now();
+        await expect(outputFile(occupiedPath, 'replacement', { encoding: 'utf8' })).rejects.toThrow();
+        expect(Date.now() - startedAt).toBeLessThan(500);
+
+        await fsNative.rm(tempDir, { recursive: true, force: true });
+    });
+
+    test('still writes normally when nothing refuses', async () => {
+        const filePath = tempFilePath('rename-ok.txt');
+
+        await outputFile(filePath, 'written', { encoding: 'utf8' });
+
+        expect((await fsNative.readFile(filePath, { encoding: 'utf8' })).toString()).toBe('written');
+
+        await fsNative.unlink(filePath);
+    });
+});
