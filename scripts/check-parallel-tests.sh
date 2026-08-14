@@ -210,10 +210,27 @@ check_devices_healthy() {
     local expected="$1"
     local attached
 
+    # Counted twice, a second apart, and only a count that is still wrong the second time is treated
+    # as the pool having changed. `adb devices` lists a device as "offline" rather than "device"
+    # while it is busy, and an emulator sharing a loaded machine goes briefly offline without having
+    # gone anywhere: it was answering again a moment later. A single sample cannot tell that from an
+    # emulator that has died, and the difference matters, because this reading stops the whole run.
+    #
+    # Measured: a run stopped here with 4 of 5 while the pool monitor, sampling every minute either
+    # side of it, recorded 5 of 5 healthy throughout and memory at 43 to 50 percent, so nothing had
+    # died and nothing was repaired. The same single-sample trap is recorded in
+    # docs/flaky-tests-registry.md as LAN-BRIDGE-PROBE-SINGLE-SAMPLE.
+    #
+    # This does not soften the check against a real loss: an emulator that is gone is still gone a
+    # second later, and every other reason the pool can be unhealthy is untouched below.
     attached="$(adb devices 2>/dev/null | grep -c "device$")"
     if [ "$attached" -ne "$expected" ]; then
-        echo "device count changed: started with $expected, now $attached" >&2
-        return 1
+        sleep 1
+        attached="$(adb devices 2>/dev/null | grep -c "device$")"
+        if [ "$attached" -ne "$expected" ]; then
+            echo "device count changed: started with $expected, now $attached (twice, a second apart)" >&2
+            return 1
+        fi
     fi
 
     check_devices_responding
