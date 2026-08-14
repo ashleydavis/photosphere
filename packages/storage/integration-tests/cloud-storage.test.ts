@@ -9,6 +9,13 @@ import { IWriteLockInfo } from '../src/lib/storage';
 // AWS_ENDPOINT=your_endpoint (optional, for S3-compatible services)
 // TEST_S3_BUCKET=your_test_bucket_name
 
+// Every test in this file runs against a real S3 server, so what each one costs is the cost of its
+// round trips, which is a property of the machine and the network rather than of the test. The
+// runner's five second default is a budget for a test that computes something, and three different
+// tests here have now been killed by it on the windows-latest runner, where round trips cost most.
+// The timeout is raised for the whole file by the test:integration script rather than test by test,
+// because there is nothing special about the three that have failed so far.
+
 describe('CloudStorage Tests', () => {
     let storage: CloudStorage;
     let bucketName: string;
