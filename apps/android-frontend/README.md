@@ -9,9 +9,9 @@ The frontend lives in `src/` and is built with [Vite](https://vitejs.dev/). The 
 ## Pre reqs
 
 - [Bun](https://bun.sh).
-- For Android: [Android Studio](https://developer.android.com/studio) (includes the Android SDK and a device emulator).
+- For Android, the Android SDK. Either install [Android Studio](https://developer.android.com/studio) (includes the SDK and a device emulator), or install just the command-line toolchain with `bun run setup` (see [Installing the Android SDK without Android Studio](#installing-the-android-sdk-without-android-studio)). The IDE is only needed to open the project in a GUI; building and deploying from the terminal does not require it.
 - JDK 17. AGP fails on JDK 21; set `JAVA_HOME` to a JDK 17 (`bun run test:and:unit` will also auto-detect one).
-- Android NDK `25.1.8937393`. Builds the native ImageMagick shim; install it from Android Studio's SDK Manager or with `sdkmanager "ndk;25.1.8937393"`.
+- Android NDK `25.1.8937393`. Builds the native ImageMagick shim; `bun run setup` installs it, or install it from Android Studio's SDK Manager or with `sdkmanager "ndk;25.1.8937393"`.
 
 ## Setup
 
@@ -30,9 +30,42 @@ bun run sync
 
 This builds the frontend and copies the latest web assets into the native `android/` project.
 
+## Installing the Android SDK without Android Studio
+
+You do not need the Android Studio IDE to build and deploy the app; you need the SDK it bundles. To
+install just the command-line toolchain (the tools, platform, build-tools, NDK and cmake this build
+needs, and nothing else), run:
+
+```bash
+bun run --filter=android-frontend setup
+```
+
+(The repo-wide `bun run setup` from the root runs this same Android step as part of setting every
+platform up at once.)
+
+This downloads Google's command-line tools and uses `sdkmanager` to fetch exactly the packages the
+Gradle build asks for. Everything lands under `$HOME/Android/Sdk` (Linux) or
+`$HOME/Library/Android/sdk` (macOS), which is where the build looks by default, so `bun run run`
+works afterwards with no further configuration. Delete that directory to undo the install.
+
+A JDK 17 is required to run `sdkmanager` itself; the setup installs one automatically (via apt on
+Debian/Ubuntu, which prompts once for sudo) when none is found. Other actions and options, passed
+through to the underlying script:
+
+- `bun run --filter=android-frontend setup --status` reports what is already installed and changes nothing.
+- `bun run --filter=android-frontend setup --emulator` also installs the emulator and a system image (only needed to run without a physical device).
+
+After it finishes, add `adb` to your PATH once so the terminal can see devices:
+
+```bash
+echo 'export PATH=$PATH:$HOME/Android/Sdk/platform-tools' >> ~/.zshrc
+```
+
 ## Android
 
-You need [Android Studio](https://developer.android.com/studio) installed for this.
+Opening the project in the Android Studio GUI (the `bun run open` step below) needs
+[Android Studio](https://developer.android.com/studio) installed. Building and deploying from the
+terminal (`bun run run`) does not; the command-line SDK above is enough.
 
 Open the project in Android Studio:
 

@@ -52,13 +52,27 @@ cd photosphere
 bun install
 ```
 
-Then install the git hooks, which stop a commit that does not compile and a push whose tests fail:
+Then run the one-time, per-platform environment setup:
+
+```bash
+bun run setup
+```
+
+This fans out to each package's own `setup` script (`bun --filter '*' setup`): it installs the Android SDK toolchain on Linux/macOS (`apps/android-frontend`) and the iOS CocoaPods on macOS (`apps/ios-frontend`), each skipping cleanly on a platform it does not apply to, so the command succeeds everywhere. The Android step installs a JDK 17 when none is found, which prompts once for sudo.
+
+Install the git hooks, which stop a commit that does not compile and a push whose tests fail:
 
 ```bash
 bash scripts/install-hooks.sh
 ```
 
 This is once per clone and nothing does it for you, because git will not run a hook out of the repository until it is told where to look. See [Git hooks](git-hooks.md) for what each hook runs, how to bypass one, and how to check they are active.
+
+Install the pinned toolchain (`bun`, `node`, `jq`, `what-changed`) with [mise](https://mise.jdx.dev/):
+
+```bash
+mise install
+```
 
 Everything below is run from the repo root.
 

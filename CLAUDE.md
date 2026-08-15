@@ -72,6 +72,7 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 
 ### Setup
 - `bun install` (from repo root) - You must do this before you can run any other scripts.
+- `bun run setup` - One-time, per-platform environment setup after `bun install`. Fans out to each package's own `setup` script via `bun --filter '*' setup`: installs the Android SDK toolchain on Linux/macOS (`apps/android-frontend`, via `scripts/install-android-sdk.sh --install`) and the iOS CocoaPods on macOS (`apps/ios-frontend`, via `scripts/setup-ios.sh`), each skipping cleanly where it does not apply. Git hooks (`bash scripts/install-hooks.sh`) and the pinned toolchain (`mise install`) are deliberately separate steps, not part of this.
 
 ### Run from repo root:
 - **`bun run test:everything` (alias `bun run tev`) IS THE CANONICAL WAY TO TEST A CHANGE.** Whenever you need to know whether a change is good, whether that is before a commit, after a rebase, at the end of a piece of work, or because you were asked to "run the tests", this is the command. Add `-- --force` to make every suite run regardless of what the change gate thinks changed, which is what to use after a rebase or whenever you want the whole set. Do not assemble your own sequence of `bun run compile`, `bun run test` and `bun run smoke` instead: that combination silently covers no mobile suite, so it passes while the mobile app is broken, and it is not what the git hook runs. The individual scripts below exist for narrowing down a failure once this one has told you there is one.

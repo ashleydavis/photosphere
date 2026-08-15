@@ -15,6 +15,7 @@
   "license": "MIT",
   "scripts": {
     "c": "bun run compile",
+    "setup": "bun --filter '*' setup",
     "compile": "bun --filter '*' compile && what-changed baseline capture compile",
     "clean": "bun --filter '*' clean",
     "test": "bun --filter '*' test && what-changed baseline capture test",

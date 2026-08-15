@@ -6,6 +6,7 @@
   "scripts": {
     "compile": "tsc --noEmit",
     "c": "bun run compile",
+    "setup": "bash ./scripts/setup-ios.sh",
     "bundle": "vite build",
     "bundle:worker": "bun --filter=mobile-worker build:bundle && bun --filter=mobile-worker copy:bundle",
     "clean": "rm -rf dist build tsconfig.tsbuildinfo && rm -f ios/App/App/worker.bundle.js",

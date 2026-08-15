@@ -6,6 +6,7 @@
   "scripts": {
     "compile": "tsc --noEmit",
     "c": "bun run compile",
+    "setup": "bash ./scripts/install-android-sdk.sh --install",
     "bundle": "vite build",
     "bundle:worker": "bun --filter=mobile-worker build:bundle && bun --filter=mobile-worker copy:bundle",
     "fetch:media": "bash -c 'source ./scripts/android-env.sh && bash ../../scripts/fetch-mobile-media-tools.sh android'",
