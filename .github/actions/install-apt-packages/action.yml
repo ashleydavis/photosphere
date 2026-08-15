@@ -1,0 +1,77 @@
+name: Install apt packages
+description: >
+  Installs apt packages, keeping the downloaded .deb files in the actions cache so the Ubuntu mirror
+  is only fetched from when the package set or its versions change.
+
+  The mirror is why this exists. Installing imagemagick, ffmpeg and tree pulls 119 MB of dependency
+  tree, and azure.archive.ubuntu.com has served that at 110 to 114 kB/s three times in one day,
+  taking 18 minutes instead of seconds. Six jobs on this workflow run the same install, each with a
+  20 minute budget, so whichever one draws the slow mirror is killed by its own timeout with the
+  smoke tests never run. The runner's network is not the problem: the metadata fetch immediately
+  before it ran at 7373 kB/s in the same job.
+
+  A cache hit installs from local files and touches the mirror not at all. A partial hit downloads
+  only what is missing. The key is a hash of apt's own install plan, so a new package or a new
+  version upstream produces a new key by itself and there is nothing to remember to bump.
+
+inputs:
+  packages:
+    description: Space-separated package names to install.
+    required: true
+
+  verify:
+    description: >
+      Passed through to the retry-install action: space-separated executables that must be on PATH
+      once the install has run, with "|" between alternatives. Left empty, only the exit code is
+      checked.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    # Refreshing the index is cheap even when the mirror is slow (11 MB, two seconds in the runs
+    # where the packages themselves took 18 minutes) and it has to happen before the plan below can
+    # be worked out, so it is not worth caching.
+    - name: Refresh the apt index
+      shell: bash
+      run: sudo apt-get update
+
+    # The cache key is a hash of what apt says it is about to install, which is a list of package
+    # names and their exact versions. That makes the key follow the thing it is caching: adding a
+    # package or an upstream version bump changes the plan, so it changes the key, and a stale cache
+    # cannot be used to install something other than what was asked for.
+    - name: Work out the cache key
+      id: plan
+      shell: bash
+      env:
+        APT_PACKAGES: ${{ inputs.packages }}
+      run: |
+        set -uo pipefail
+        # Word splitting is intended: the input is a space-separated list.
+        plan="$(apt-get install --simulate $APT_PACKAGES | grep '^Inst ' | sort)"
+        echo "key=$(printf '%s' "$plan" | sha256sum | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+    - name: Restore the downloaded packages
+      uses: actions/cache@v4
+      with:
+        path: ~/apt-debs
+        key: apt-debs-${{ runner.os }}-${{ runner.arch }}-${{ steps.plan.outputs.key }}
+
+    - name: Install
+      uses: ./.github/actions/retry-install
+      with:
+        verify: ${{ inputs.verify }}
+        run: |
+          # apt runs as root and writes here, so the directory is created first and handed back to
+          # the runner user afterwards, or the cache step that saves it cannot read what it wrote.
+          # partial/ is apt's own scratch directory inside an archives directory; it refuses to
+          # download without it.
+          mkdir -p "$HOME/apt-debs/partial"
+
+          # Downloading and installing are separate calls so that the download is the only part that
+          # can touch the mirror, and it is skipped entirely for every .deb the cache already holds.
+          sudo apt-get install -y -d -o Dir::Cache::archives="$HOME/apt-debs" ${{ inputs.packages }}
+          sudo apt-get install -y -o Dir::Cache::archives="$HOME/apt-debs" ${{ inputs.packages }}
+
+          sudo chown -R "$(id -u):$(id -g)" "$HOME/apt-debs"

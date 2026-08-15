@@ -216,12 +216,9 @@ jobs:
           run: bun install
 
       - name: Install media processing tools
-        uses: ./.github/actions/retry-install
+        uses: ./.github/actions/install-apt-packages
         with:
-          run: |
-            echo "Installing ImageMagick, ffmpeg, and tree via apt..."
-            sudo apt update
-            sudo apt install -y imagemagick ffmpeg tree
+          packages: imagemagick ffmpeg tree
           verify: magick|convert ffmpeg ffprobe
 
       - name: Run write lock smoke tests
@@ -333,12 +330,9 @@ jobs:
           run: bun install
 
       - name: Install media processing tools
-        uses: ./.github/actions/retry-install
+        uses: ./.github/actions/install-apt-packages
         with:
-          run: |
-            echo "Installing ImageMagick, ffmpeg, and tree via apt..."
-            sudo apt update
-            sudo apt install -y imagemagick ffmpeg tree
+          packages: imagemagick ffmpeg tree
           verify: magick|convert ffmpeg ffprobe
 
       - name: Run sync smoke tests
@@ -378,12 +372,9 @@ jobs:
           run: bun install
 
       - name: Install media processing tools
-        uses: ./.github/actions/retry-install
+        uses: ./.github/actions/install-apt-packages
         with:
-          run: |
-            echo "Installing ImageMagick, ffmpeg, and tree via apt..."
-            sudo apt update
-            sudo apt install -y imagemagick ffmpeg tree
+          packages: imagemagick ffmpeg tree
           verify: magick|convert ffmpeg ffprobe
 
       - name: Run encrypted smoke tests
@@ -503,12 +494,9 @@ jobs:
           run: bun install
 
       - name: Install media processing tools
-        uses: ./.github/actions/retry-install
+        uses: ./.github/actions/install-apt-packages
         with:
-          run: |
-            echo "Installing ImageMagick, ffmpeg, and tree via apt..."
-            sudo apt update
-            sudo apt install -y imagemagick ffmpeg tree
+          packages: imagemagick ffmpeg tree
           verify: magick|convert ffmpeg ffprobe
           
       - name: Verify media tool versions
@@ -1132,11 +1120,9 @@ jobs:
 
       # ImageMagick/ffmpeg are needed by the CLI that builds the per-test database fixtures.
       - name: Install media processing tools
-        uses: ./.github/actions/retry-install
+        uses: ./.github/actions/install-apt-packages
         with:
-          run: |
-            sudo apt-get update
-            sudo apt-get install -y imagemagick ffmpeg
+          packages: imagemagick ffmpeg
           verify: magick|convert ffmpeg ffprobe
 
       # The native ImageMagick build (run_magick shim via CMake) and scripts/fetch-mobile-media-tools.sh
@@ -1263,11 +1249,9 @@ jobs:
 
       # ImageMagick/ffmpeg are needed by the CLI that builds the per-test database fixtures.
       - name: Install media processing tools
-        uses: ./.github/actions/retry-install
+        uses: ./.github/actions/install-apt-packages
         with:
-          run: |
-            sudo apt-get update
-            sudo apt-get install -y imagemagick ffmpeg
+          packages: imagemagick ffmpeg
           verify: magick|convert ffmpeg ffprobe
 
       # The native ImageMagick build (run_magick shim via CMake) and scripts/fetch-mobile-media-tools.sh
@@ -1537,11 +1521,9 @@ jobs:
 
       - name: Install smoke-test dependencies (Linux)
         if: runner.os == 'Linux'
-        uses: ./.github/actions/retry-install
+        uses: ./.github/actions/install-apt-packages
         with:
-          run: |
-            sudo apt-get update
-            sudo apt-get install -y xvfb imagemagick ffmpeg
+          packages: xvfb imagemagick ffmpeg
           verify: xvfb-run magick|convert ffmpeg ffprobe
 
       - name: Install smoke-test dependencies (macOS)
