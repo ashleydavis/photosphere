@@ -1,16 +1,14 @@
 #!/usr/bin/env bash
-# Installs just the Android command-line toolchain needed to build and deploy this app to a device,
-# without the Android Studio IDE. It downloads Google's command-line tools, then uses sdkmanager to
-# fetch exactly the packages the Gradle build asks for: platform-tools (adb), the compile platform,
-# the matching build-tools, the pinned NDK, and cmake for the native ImageMagick shim.
+# Installs the Android command-line toolchain needed to build, deploy, and run this app on an emulator
+# or a device, without the Android Studio IDE. It downloads Google's command-line tools, then uses
+# sdkmanager to fetch exactly what the Gradle build and the emulator need: platform-tools (adb), the
+# compile platform, the matching build-tools, the pinned NDK, cmake for the native ImageMagick shim,
+# and the emulator plus a system image so a fresh machine can run the app without a physical device.
 #
 # Usage:
 #   bash ./scripts/install-android-sdk.sh            # print this help and change nothing
 #   bash ./scripts/install-android-sdk.sh --status   # report what is already installed, change nothing
 #   bash ./scripts/install-android-sdk.sh --install  # download and install the toolchain
-#
-# Modifiers for --install:
-#   --emulator   also install the emulator and a system image (only needed to run without a device)
 #
 # Everything lands under a single SDK directory ($HOME/Android/Sdk on Linux), which is exactly where
 # android-env.sh looks, so `bun run run` works afterwards with no extra configuration. The install is
@@ -27,14 +25,23 @@ ANDROID_BUILD_TOOLS="build-tools;33.0.2"
 ANDROID_NDK="ndk;25.1.8937393"
 ANDROID_CMAKE="cmake;3.22.1"
 
-# The packages the Gradle build reaches for when deploying to a device. Shared by --install (what it
-# fetches) and --status (what it checks for), so the two can never drift apart.
+# The emulator's system image. The API level matches what scripts/emulator.sh builds its base AVD
+# from: create_base_avd picks the highest installed system image, and the image it documents to
+# install is android-34 google_apis x86_64, so installing that is what lets `emu:and:up` create an
+# AVD. x86_64 is the emulator ABI on an x86_64 host and is one of the app's built ABIs.
+ANDROID_SYSTEM_IMAGE="system-images;android-34;google_apis;x86_64"
+
+# Everything --install fetches and --status checks for: the packages the Gradle build reaches for,
+# plus the emulator and its system image so the app can run on an emulator, not only a physical
+# device. One list, so install and status can never drift apart.
 REQUIRED_PACKAGES=(
     "platform-tools"
     "$ANDROID_PLATFORM"
     "$ANDROID_BUILD_TOOLS"
     "$ANDROID_NDK"
     "$ANDROID_CMAKE"
+    "emulator"
+    "$ANDROID_SYSTEM_IMAGE"
 )
 
 # The command-line tools build to download. Google publishes these only under a build number, with no
@@ -67,7 +74,6 @@ print_help() {
 # --install that the package's `setup` script bakes in.
 WANT_INSTALL=0
 WANT_STATUS=0
-INSTALL_EMULATOR=0
 for arg in "$@"; do
     case "$arg" in
         --install)
@@ -75,9 +81,6 @@ for arg in "$@"; do
             ;;
         --status)
             WANT_STATUS=1
-            ;;
-        --emulator)
-            INSTALL_EMULATOR=1
             ;;
         -h|--help)
             print_help
@@ -103,13 +106,6 @@ fi
 if [ -z "$MODE" ]; then
     print_help
     exit 0
-fi
-
-# The --emulator modifier is meaningless with --status; reject it rather than ignore it, so a
-# misplaced flag is a loud error instead of a silently dropped intention.
-if [ "$MODE" = "status" ] && [ "$INSTALL_EMULATOR" -eq 1 ]; then
-    echo "ERROR: --emulator applies to --install, not --status." >&2
-    exit 1
 fi
 
 # The download slug and default SDK location differ by OS, mirroring the two candidates android-env.sh
@@ -223,25 +219,10 @@ do_status() {
         STATUS_MISSING=$((STATUS_MISSING + 1))
     fi
 
-    # The build packages, counted toward readiness.
+    # The build and emulator packages, counted toward readiness.
     for package in "${REQUIRED_PACKAGES[@]}"; do
         report_package "$package"
     done
-
-    # The emulator and a system image are optional (device runs do not need them), so report them
-    # separately and do not count them as missing.
-    echo
-    echo "Optional (only needed to run on an emulator rather than a device):"
-    if [ -e "$(package_install_path "emulator")" ]; then
-        printf '  [installed]  emulator\n'
-    else
-        printf '  [ absent  ]  emulator\n'
-    fi
-    if [ -e "$(package_install_path "system-images;android-33;google_apis;x86_64")" ]; then
-        printf '  [installed]  system-images;android-33;google_apis;x86_64\n'
-    else
-        printf '  [ absent  ]  system-images;android-33;google_apis;x86_64\n'
-    fi
 
     echo
     if [ "$STATUS_MISSING" -eq 0 ]; then
@@ -318,12 +299,6 @@ do_install() {
         echo "Command-line tools already present, reusing them."
     fi
 
-    # The packages to install: the required set, plus the emulator and a system image when asked for.
-    local packages=("${REQUIRED_PACKAGES[@]}")
-    if [ "$INSTALL_EMULATOR" -eq 1 ]; then
-        packages+=("emulator" "system-images;android-33;google_apis;x86_64")
-    fi
-
     # Accept the SDK licenses non-interactively first, otherwise the install prompts and stalls.
     # `yes` is killed by SIGPIPE once sdkmanager stops reading, which under `set -o pipefail` would make
     # the pipeline fail; disable pipefail just here so the pipeline's status is sdkmanager's own exit
@@ -335,18 +310,20 @@ do_install() {
 
     echo "Installing packages:"
     local package
-    for package in "${packages[@]}"; do
+    for package in "${REQUIRED_PACKAGES[@]}"; do
         echo "  - $package"
     done
-    "$sdkmanager" --sdk_root="$ANDROID_HOME" "${packages[@]}"
+    "$sdkmanager" --sdk_root="$ANDROID_HOME" "${REQUIRED_PACKAGES[@]}"
 
     echo
-    echo "Done. The Android toolchain is installed under $ANDROID_HOME."
+    echo "Done. The Android toolchain (including the emulator) is installed under $ANDROID_HOME."
     echo
-    echo "Add adb to your PATH (once), then 'bun run run' from apps/android-frontend deploys to a device:"
+    echo "Add adb to your PATH (once):"
     echo "  echo 'export PATH=\$PATH:$ANDROID_HOME/platform-tools' >> ~/.zshrc"
     echo
-    echo "Verify a plugged-in device is seen with: adb devices"
+    echo "Run the app from apps/android-frontend with 'bun run run': it deploys to a plugged-in device"
+    echo "(verify with 'adb devices'). To run on the emulator instead, bring it up first with"
+    echo "'bun run emu:and:up' (creates the AVD and the LAN bridge; prompts for sudo)."
 }
 
 case "$MODE" in

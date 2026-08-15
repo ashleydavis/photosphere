@@ -32,9 +32,9 @@ This builds the frontend and copies the latest web assets into the native `andro
 
 ## Installing the Android SDK without Android Studio
 
-You do not need the Android Studio IDE to build and deploy the app; you need the SDK it bundles. To
-install just the command-line toolchain (the tools, platform, build-tools, NDK and cmake this build
-needs, and nothing else), run:
+You do not need the Android Studio IDE to build, deploy, and run the app; you need the SDK it bundles.
+To install just the command-line toolchain (the tools, platform, build-tools, NDK and cmake the build
+needs, plus the emulator and a system image so you can run without a physical device), run:
 
 ```bash
 bun run --filter=android-frontend setup
@@ -43,17 +43,14 @@ bun run --filter=android-frontend setup
 (The repo-wide `bun run setup` from the root runs this same Android step as part of setting every
 platform up at once.)
 
-This downloads Google's command-line tools and uses `sdkmanager` to fetch exactly the packages the
-Gradle build asks for. Everything lands under `$HOME/Android/Sdk` (Linux) or
-`$HOME/Library/Android/sdk` (macOS), which is where the build looks by default, so `bun run run`
-works afterwards with no further configuration. Delete that directory to undo the install.
+This downloads Google's command-line tools and uses `sdkmanager` to fetch exactly those packages.
+Everything lands under `$HOME/Android/Sdk` (Linux) or `$HOME/Library/Android/sdk` (macOS), which is
+where the build looks by default, so `bun run run` works afterwards with no further configuration.
+Delete that directory to undo the install.
 
 A JDK 17 is required to run `sdkmanager` itself; the setup installs one automatically (via apt on
-Debian/Ubuntu, which prompts once for sudo) when none is found. Other actions and options, passed
-through to the underlying script:
-
-- `bun run --filter=android-frontend setup --status` reports what is already installed and changes nothing.
-- `bun run --filter=android-frontend setup --emulator` also installs the emulator and a system image (only needed to run without a physical device).
+Debian/Ubuntu, which prompts once for sudo) when none is found. To check what is already present
+without changing anything, run `bun run --filter=android-frontend setup --status`.
 
 After it finishes, add `adb` to your PATH once so the terminal can see devices:
 
