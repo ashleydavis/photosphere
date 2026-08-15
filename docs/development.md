@@ -85,7 +85,7 @@ To run the CLI, the dev-server, or the dev-frontend on their own, see [apps/cli]
 
 The [stories browser](../packages/user-interface/src/stories/README.md) mounts every page, modal, dialog, and component in isolation with mock data, so you can look at a UI surface without seeding a real database.
 
-In the **web** build, run `bun run dev:web` and open `http://localhost:3000/#/stories`. Browse from the ☰ menu, or click **▶ Play on automatic** to cycle every story. In the **desktop** app, open it from the Developer menu; on **Android/iOS**, from the Developer screen.
+In the **web** build, run `bun run dev:web` and open `http://localhost:8080/#/stories`. Browse from the ☰ menu, or click **▶ Play on automatic** to cycle every story. In the **desktop** app, open it from the Developer menu; on **Android/iOS**, from the Developer screen.
 
 On Electron, Android, and iOS the story player does it from the command line: it cycles the live app through every story in light and dark, captures a screenshot of each, and fails if a story crashes while rendering:
 

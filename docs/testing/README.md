@@ -93,7 +93,7 @@ Run the mobile test harness's own tests, covering the device run lock, the work 
 bun run test:harness
 ```
 
-Run the mobile smoke tests. Each test lives at `apps/smoke-tests/tests/<n>-<name>/test.sh`, numbered 0-39, and each `test.sh` is platform-neutral: the same file runs against the Android emulator/device and the iOS simulator:
+Run the mobile smoke tests. Each test lives at `apps/smoke-tests/tests/<n>-<name>/test.sh`, and each `test.sh` is platform-neutral: the same file runs against the Android emulator/device and the iOS simulator. List the directory to see what is there; the numbers have gaps, so the highest one is not a count:
 
 ```bash
 bun run test:and   # Android emulator or attached device
@@ -108,7 +108,7 @@ bun run test:and receive-database       # by part of the name
 bun run test:and 26-receive-database    # by full directory name
 ```
 
-A number matches the number in front of the directory name exactly, so `2` runs `2-create-database` and not `12-edit-api-key` or `22-edit-database-origin`. Two tests share a number today (`9` and `17`), so those two numbers each select a pair. Anything that is not all digits is a case-insensitive substring of the directory name. The same argument works on `bun run test:ios`.
+A number matches the number in front of the directory name exactly, so `2` runs `2-create-database` and not `12-edit-api-key` or `22-edit-database-origin`. Where two tests share a number, that number selects both. Anything that is not all digits is a case-insensitive substring of the directory name. The same argument works on `bun run test:ios`.
 
 Tests are selected before the emulator check and the build, so a mistyped name fails immediately and lists the available tests instead of wasting a build. `bun run test:and -- 26` also still works, if you prefer the explicit `--`.
 
@@ -119,12 +119,15 @@ The assertion helpers the tests call (`wait_for_value`, `assert_value`, and the 
 A suite that passes once has told you very little. A mode that fails one run in two hundred passes every normal check and still breaks a build later. `find-flakey-tests` drives the full suite in a loop and only calls it clean after a long unbroken streak of green runs:
 
 ```bash
-bun run find-flakey-tests                    # until 100 consecutive green runs
+bun run find-flakey-tests                    # asks what to loop, then how long a streak
+bun run find-flakey-tests -- --script test   # loop one suite: test, test:cli, test:electron, test:and, test:ios
 bun run find-flakey-tests -- --target 500    # a longer streak
 bun run find-flakey-tests -- --resume 42     # carry on from a session that banked 42 green runs
 bun run find-flakey-tests -- --ladder        # each suite in turn, cheapest first
 bun run find-flakey-tests -- --help
 ```
+
+**Run with no arguments on a terminal and it asks** rather than assuming: which suite to loop (the five above plus `everything` and `ladder`), then, for a single suite, whether to narrow to one test by number or part of its name, then how many consecutive green runs to require. Every prompt has a default, so pressing enter three times gives you `everything` until 100 green runs, which is what it used to do without asking. Passing `--script`, `--command` or `--ladder` skips the questions, and so does a run with no terminal attached, which is why the git hook and CI never block on it.
 
 `--ladder` climbs the suites one at a time instead of looping the whole set: 100 green runs of `bun run test`, then 100 of `bun run test:cli`, then Electron, then Android, stopping at the first rung that fails. Looping everything is the slowest possible way to find a flaky unit test, and a red unit run names its test in seconds where the same failure inside a parallel run of everything has to be dug out of a lane. Each rung's run logs go in their own numbered subdirectory of the session, and a failure prints the command to carry on from that rung once it is fixed, since the rungs below it are already proven on this tree. `--target` is the streak required of every rung, and `--resume` applies to the first rung only, the one the session restarts on. Name your own rungs (from the same suites `--script` accepts) to climb something else: `--ladder "test test:cli test:ios"` is how to include the iOS suite on macOS, which the default rungs leave out because it can never pass on Linux.
 
@@ -158,7 +161,7 @@ bun run test:parallel -- --scripts "test test:cli" # just these two, for a quick
 bun run test:parallel -- --help
 ```
 
-**A default run is slow and needs the emulator pool already up.** It checks `test`, `test:cli`, `test:electron` and the mobile suites this machine can actually run, which on Linux is four scripts, four runs alone and ten combinations, with the mobile suites taking minutes each. Name `--scripts` explicitly when you want a quick answer: that gives you precisely the scripts you asked for and no mobile detection.
+**A default run is slow and needs the emulator pool already up.** It checks `test`, `test:cli`, `test:electron` and the mobile suites this machine can actually run, so each script alone and then every pair of them, with the mobile suites taking minutes each. Name `--scripts` explicitly when you want a quick answer: that gives you precisely the scripts you asked for and no mobile detection.
 
 **Everything runs once.** Each script alone once, each combination once. A conflict that only shows up on some runs will be missed, so this answers whether a conflict is there, not how often it happens. That is a deliberate trade for a run you might actually start: `bun run find-flakey-tests` is the tool for the second question.
 
@@ -179,6 +182,14 @@ Exit status is 0 when nothing was found, 1 when interference was, 2 on bad usage
 Everything is written under `tmp/parallel-check/<timestamp>/` (gitignored): one log per side, plus a `report.txt` on a finding that names the failing side, quotes the useful part of the log, and records the state of the machine. Nothing is ever deleted or overwritten, so old sessions are yours to clear.
 
 The check itself has no automated test. Like `find-flakey-tests`, it is an instrument rather than something on the commit path, and its own behaviour is verified by running it.
+
+### Running both, and fixing what they find
+
+`/test:harden` is the slash command that drives the pair in the order that costs least: it asks how many green runs a rung the ladder should require, runs `bun run test:parallel` first because it is the cheaper of the two, then `bun run find-flakey-tests -- --ladder --target <target>`, and fixes what either turns red, one minimal committed fix at a time in a worktree, until both pass.
+
+Ten runs a rung is the usual answer to its question. Below about ten the result says very little, since a mode that fails one run in fifty passes a short streak most of the time. The ladder took about three and a half hours at ten and about four and a half at twenty on this machine, though a failure stops it far sooner. The parallel check has no equivalent number: it runs each combination exactly once whatever is chosen.
+
+The command is at `.claude/commands/test/harden.md`, and everything it does can be done by hand with the two commands above.
 
 ### Running the Android tests over several emulators
 
@@ -243,7 +254,7 @@ bun run stories:and    # Android emulator or attached device
 bun run stories:ios        # iOS simulator
 ```
 
-The web build has no scripted runner: start it with `bun run dev:web`, open `http://localhost:3000/#/stories`, and click **▶ Play on automatic** to cycle the stories by hand.
+The web build has no scripted runner: start it with `bun run dev:web`, open `http://localhost:8080/#/stories`, and click **▶ Play on automatic** to cycle the stories by hand. The port is `apps/dev-frontend/vite.config.ts`, which pins 8080.
 
 Screenshots go to `stories-screenshots/<platform>/`, with an `index.html` showing each story's light and dark shots side by side. Add `-- --open` to open it when the run finishes.
 
@@ -367,4 +378,4 @@ The one exception is the news feed. `POST /seed-news` still goes through the app
 - [e2e/](e2e/) - End-to-end manual test scripts covering full user workflows
 - [screenshots.md](screenshots.md) - Capturing desktop app screenshots via the test control server
 - [stories README](../../packages/user-interface/src/stories/README.md) - The stories browser and the cross-platform story player
-- `apps/smoke-tests/tests/<n>-<name>/` - Mobile smoke tests (`bun run test:and` / `bun run test:ios`), platform-neutral and numbered 0-39
+- `apps/smoke-tests/tests/<n>-<name>/` - Mobile smoke tests (`bun run test:and` / `bun run test:ios`), platform-neutral and numbered

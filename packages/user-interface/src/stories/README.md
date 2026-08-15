@@ -14,7 +14,7 @@ Because the same stories render in the web, Electron, Android, and iOS builds, r
 
 The browser is deliberately not exposed to end users. The ways in:
 
-- **Web (dev-frontend):** type `#/stories` directly into the address bar. Default dev URL: `http://localhost:3000/#/stories`. To open a specific story, append `?id=<story-id>` after the hash route, e.g. `http://localhost:3000/#/stories?id=spinner/visible`.
+- **Web (dev-frontend):** type `#/stories` directly into the address bar. Default dev URL: `http://localhost:8080/#/stories`. To open a specific story, append `?id=<story-id>` after the hash route, e.g. `http://localhost:8080/#/stories?id=spinner/visible`.
 - **Electron desktop app:** open the **Developer** menu and click **Stories**. The Developer menu already groups developer-facing actions (Reload / Force Reload / Toggle Developer Tools); ordinary users rarely open it. There is no keyboard shortcut, no sidebar link, and no toolbar button.
 - **Android / iOS app:** open the hidden **Developer** screen and tap **Stories**. There is no other in-app affordance.
 - **Any platform, automated:** the story player drives the live app through the whole registry from the command line. See [Running the stories](#running-the-stories).
@@ -41,7 +41,7 @@ The web build has no scripted player (a plain browser has no test-mode harness f
 bun run dev:web
 ```
 
-Then open `http://localhost:3000/#/stories` and either browse the stories from the ☰ menu, or click **▶ Play on automatic** to cycle every story. To start the cycle straight from the address bar, open `http://localhost:3000/#/stories?cycle=1`.
+Then open `http://localhost:8080/#/stories` and either browse the stories from the ☰ menu, or click **▶ Play on automatic** to cycle every story. To start the cycle straight from the address bar, open `http://localhost:8080/#/stories?cycle=1`.
 
 ### Electron, Android, and iOS
 
