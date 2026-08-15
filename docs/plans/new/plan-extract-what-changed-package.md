@@ -38,17 +38,17 @@ Two hard constraints shape the plan. First, the AI agent executing it must not r
 
 14. **Rewire the root `package.json` scripts** to the installed binary instead of the source path:
     - `test:everything`: `what-changed`
-    - `everything:plan`: `what-changed --plan`
+    - `test:everything:plan`: `what-changed --plan`
     - `what-changed`: `what-changed --files`
     - `what-changed:baseline`: `what-changed --baseline`
     - `test:what-changed`: delete it. The tool's own smoke suite now lives in its own repo's CI and is not Photosphere's to run.
-    Leave `test:everything:all` pointing at `./scripts/test-everything-parallel.sh`.
+    Leave `test:everything:force` pointing at `./scripts/test-everything-parallel.sh`.
 
 15. **Update `what-changed.json`.** Remove the `test:what-changed` target entirely (its `paths` were `tools/what-changed`, which no longer exists). Leave `runnerCommand`, `alwaysPaths` and every other target unchanged. Removing a target is safe with the frozen parallel runner because its default script set never included `test:what-changed`.
 
 16. **Update the monorepo docs** that reference the tool's location or its smoke script: `CLAUDE.md` (the `test:what-changed` bullet, the `what-changed` and `what-changed:baseline` bullets, and the mention of "the what-changed smoke tests" in the `test:everything` description), `docs/git-hooks.md` (the `test:what-changed` row in the target table, the "There is also `bun run test:what-changed`" paragraph, and the closing paragraph pointing at `tools/what-changed` and its README, which should now link the GitHub repo and npm package), `docs/development.md` (the `tools/` tree entry at line ~42), and `docs/testing/README.md` if it names the tool's path. Do not touch `.githooks/pre-commit` or `scripts/test-everything-parallel.sh`.
 
-17. **Verify the monorepo still gates correctly.** Run `bun run everything:plan` and confirm it prints one line per remaining target with no error, then `bun run what-changed` and confirm it lists changed files. Then run `bun run tev -- --force` and confirm the whole suite runs and passes through the installed binary.
+17. **Verify the monorepo still gates correctly.** Run `bun run test:everything:plan` and confirm it prints one line per remaining target with no error, then `bun run what-changed` and confirm it lists changed files. Then run `bun run tev -- --force` and confirm the whole suite runs and passes through the installed binary.
 
 ## Unit Tests
 
@@ -58,7 +58,7 @@ The tool's existing unit tests (`src/test/cache-store.test.ts`, `changed-files.t
 
 - `smoke-tests.sh` in the new repo, retargeted at `node dist/cli.js` (step 11). It must still cover all nineteen existing scenarios and pass with the same counts.
 - The tarball install check in step 7: `npm pack`, install into a temp directory, run `what-changed --help`. Add this as a shell script `verify-package.sh` in the new repo so it is repeatable, and wire it into the CI workflow after `npm run compile`.
-- On the monorepo side, `bun run everything:plan` and `bun run tev -- --force` (step 17) are the end-to-end check that the published binary drives the real suite.
+- On the monorepo side, `bun run test:everything:plan` and `bun run tev -- --force` (step 17) are the end-to-end check that the published binary drives the real suite.
 
 ## Verify
 
@@ -68,7 +68,7 @@ The tool's existing unit tests (`src/test/cache-store.test.ts`, `changed-files.t
 - `./smoke-tests.sh` in the new repo passes every scenario against the built `dist/cli.js`.
 - `./verify-package.sh` installs the packed tarball into a temp directory and `what-changed --help` prints usage and exits 0.
 - `npm run perf` passes its budgets.
-- In the monorepo: `bun run compile` passes, `bun run everything:plan` prints the plan without error, and `bun run tev -- --force` runs and passes the whole suite.
+- In the monorepo: `bun run compile` passes, `bun run test:everything:plan` prints the plan without error, and `bun run tev -- --force` runs and passes the whole suite.
 - `grep -rn "tools/what-changed" --exclude-dir=node_modules .` in the monorepo returns nothing.
 
 ## Notes

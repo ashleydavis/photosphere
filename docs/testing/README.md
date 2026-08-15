@@ -20,7 +20,7 @@ bun run test:everything
 
 Or `bun run tev` for short.
 
-Runs are gated on changed paths: a script is only run when the paths it watches (listed in `what-changed.yaml`) differ from what they were at the last passing run, so a docs-only change runs nothing. Add `-- --force` to run everything regardless, or `-- --plan` to print the decision without running anything. `bun run test:everything:all` runs the whole set regardless. The gate needs the `what-changed` executable on your PATH, from [its releases page](https://github.com/ashleydavis/what-changed/releases).
+Runs are gated on changed paths: a script is only run when the paths it watches (listed in `what-changed.yaml`) differ from what they were at the last passing run, so a docs-only change runs nothing. Add `-- --force` to run everything regardless, or `-- --plan` to print the decision without running anything. `bun run test:everything:force` runs the whole set regardless. The gate needs the `what-changed` executable on your PATH, from [its releases page](https://github.com/ashleydavis/what-changed/releases).
 
 That is also what the checked-in git hooks run. They gate commits and pushes locally, and they have to be installed once per clone. See [Git hooks](../git-hooks.md).
 

@@ -24,7 +24,7 @@ The consequence that shapes everything: nothing in the new tool spawns `scripts/
 
 5. **Write `scripts/test-everything.sh`**, a new Photosphere-owned script modelled on `scripts/test-everything.sh` in the what-changed repository. It must: accept `--force` and `--plan` and pass any other arguments through as explicit target names; run `scripts/install-what-changed.sh` first so the binary is present; ask `tools/bin/what-changed targets` for the affected targets; exit 0 with a "nothing to run" message when that list is empty; otherwise invoke `bash ./scripts/test-everything-parallel.sh "${TARGETS[@]}"`; and only after that exits 0, run `tools/bin/what-changed baseline capture`. With `--force`, skip the query and pass no names to the parallel runner so it picks its own platform-appropriate default set. With `--plan`, print the target list and run nothing.
 
-6. **Rewire the root `package.json` scripts.** `test:everything` becomes `bash ./scripts/test-everything.sh`. `everything:plan` becomes `bash ./scripts/test-everything.sh --plan`. `what-changed` becomes the tool's `changes` subcommand. `what-changed:baseline` becomes `baseline capture`. Add `what-changed:targets` for the raw list and `what-changed:reset` for `baseline reset`. Delete `test:what-changed`. Leave `test:everything:all` and `tev` alone.
+6. **Rewire the root `package.json` scripts.** `test:everything` becomes `bash ./scripts/test-everything.sh`. `test:everything:plan` becomes `bash ./scripts/test-everything.sh --plan`. `what-changed` becomes the tool's `changes` subcommand. `what-changed:baseline` becomes `baseline capture`. Add `what-changed:targets` for the raw list and `what-changed:reset` for `baseline reset`. Delete `test:what-changed`. Leave `test:everything:force` and `tev` alone.
 
 7. **Delete `tools/what-changed/`.** Check whether `tools/` still holds anything other than the new `bin/`; if the workspace glob `"tools/*"` in the root `package.json` now matches nothing that is a package, remove it and run `bun install` so the lockfile drops the workspace.
 
@@ -32,7 +32,7 @@ The consequence that shapes everything: nothing in the new tool spawns `scripts/
 
 9. **Update `CLAUDE.md`.** The `test:everything` bullet must describe the new arrangement and stop listing "the what-changed smoke tests" as part of the set. Change the `what-changed` and `what-changed:baseline` bullets to the new subcommands, add one for `what-changed:targets`, and delete the `test:what-changed` bullet.
 
-10. **Update `docs/development.md`.** Remove the `tools/ - what-changed` tree entry at line ~42 and update the `test:everything` and `test:everything:all` rows in the command table.
+10. **Update `docs/development.md`.** Remove the `tools/ - what-changed` tree entry at line ~42 and update the `test:everything` and `test:everything:force` rows in the command table.
 
 11. **Check `scripts/find-flakey-tests.sh` still works.** It drives `bun run test:everything -- --force` in a loop, and the new script must accept `--force` with the same meaning. Update the two comments around lines 14 and 120 that describe `--force` as defeating "the what-changed gate". Do not change the command itself.
 
@@ -60,13 +60,13 @@ Step 1 is the only code change and it is in the what-changed repository, so its 
 - In the what-changed repository: `bun run compile` exits 0, `bun run ta` passes, `./scripts/smoke-tests.sh --binary` passes, and a release exists whose `what-changed version` reports it.
 - Photosphere: `bun run compile` exits 0.
 - `bash ./scripts/install-what-changed.sh` puts a working binary at `tools/bin/what-changed` and `tools/bin/what-changed version` prints the pinned version.
-- `bun run everything:plan` prints a target list with no error, and on Linux never names `test:ios` or `test:ios:unit`.
+- `bun run test:everything:plan` prints a target list with no error, and on Linux never names `test:ios` or `test:ios:unit`.
 - `bun run what-changed` lists changed files.
 - `bun run what-changed:targets` prints only target names, one per line, and nothing when the tree is unchanged.
 - `bun run tev -- --force` runs the whole platform set through `scripts/test-everything-parallel.sh` and passes.
 - `bun run tev` immediately afterwards reports nothing to run and exits 0.
-- Touching a file under `apps/cli/` and running `bun run everything:plan` names `test:cli` and not `test:electron`.
-- Editing only a `.md` file and running `bun run everything:plan` names no targets.
+- Touching a file under `apps/cli/` and running `bun run test:everything:plan` names `test:cli` and not `test:electron`.
+- Editing only a `.md` file and running `bun run test:everything:plan` names no targets.
 - `bash ./scripts/what-changed-smoke-tests.sh` passes.
 - `grep -rn "tools/what-changed" --exclude-dir=node_modules .` returns nothing outside `docs/plans/`.
 - `grep -rn "test:what-changed" --exclude-dir=node_modules .` returns nothing outside `docs/plans/`.
@@ -82,7 +82,7 @@ Step 1 is the only code change and it is in the what-changed repository, so its 
 
 - **Distribution is a released executable, not a package.** The what-changed project is `private: true` and publishes nothing to npm. It ships a single-file Bun executable per platform on its releases page. That rules out a dependency in `package.json` and makes the download script the integration point.
 
-- **Config format and field names changed.** TOML support was dropped: the published tool reads YAML (`.yaml`/`.yml`) and JSON only, and looks for them in that order. `alwaysPaths` is now `always` and `ignoreExtensions` is now `ignore`. Photosphere's existing `what-changed.json` uses the old names and would silently get empty lists for both, since unknown keys are not rejected and both fields are optional. That silence is the risk in step 2: check the converted config with `bun run everything:plan` and confirm an edit to `package.json` still marks every target.
+- **Config format and field names changed.** TOML support was dropped: the published tool reads YAML (`.yaml`/`.yml`) and JSON only, and looks for them in that order. `alwaysPaths` is now `always` and `ignoreExtensions` is now `ignore`. Photosphere's existing `what-changed.json` uses the old names and would silently get empty lists for both, since unknown keys are not rejected and both fields are optional. That silence is the risk in step 2: check the converted config with `bun run test:everything:plan` and confirm an edit to `package.json` still marks every target.
 
 - **All the tool's state is under one directory now.** `.what-changed/` holds `baseline.json` and `cache/`. One `.gitignore` line covers both. The two are still separate stores, and `cache reset` still cannot reach the baseline, but Photosphere only needs to ignore the one path.
 

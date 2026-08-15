@@ -61,7 +61,7 @@ The platform split is decided by `what-changed.yaml`, and matches what the paral
 ```
 bun run test:everything -- --force      # run everything, changed or not
 bun run test:everything -- --plan       # print what would run, run nothing
-bun run test:everything:all             # the same as --force
+bun run test:everything:force             # the same as --force
 ```
 
 **Only a gated or forced run records a baseline.** Naming scripts explicitly (`bun run test:everything compile test`) runs exactly those and records nothing, because a partial run is not evidence that the rest still passes.
@@ -144,7 +144,7 @@ The state lives in `.what-changed/`, which is gitignored. It holds two things th
 Three commands answer "why", and none of them records anything, so all three are free to run:
 
 ```
-bun run everything:plan       # which targets would run
+bun run test:everything:plan       # which targets would run
 what-changed summary          # the changed files, grouped under the targets they affect
 what-changed changes          # the changed files as a flat list, with their hashes
 ```

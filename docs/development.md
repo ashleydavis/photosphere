@@ -86,7 +86,7 @@ Everything below is run from the repo root.
 | `bun run test` | Unit tests. |
 | `bun run test:all` | Unit tests plus the CLI and Electron smoke tests, one after another. **Covers no mobile suite**, so it can pass while the mobile app is broken. Not the full set despite the name. |
 | `bun run test:everything` (or `bun run tev`) | The actual full set for your platform, all at once: compile, unit, every CLI suite (plain, encrypted, LAN share, sync, write lock, hash cache), Electron, the CLI to desktop LAN share suite, the mobile test harness, and both mobile suites. It stops the moment anything fails. This is what the git hooks run. It covers every Release workflow test job for this platform bar three: the stories runs, the packaging builds, and `perf-tests`. Only the scripts whose watched paths changed since they last passed actually run, so a docs-only change runs nothing; add `-- --force` to run everything, `-- --plan` to see the decision. Pass script names to consider only those, still in parallel. Needs the `what-changed` executable on your PATH, from [its releases page](https://github.com/ashleydavis/what-changed/releases). |
-| `bun run test:everything:all` | The whole set for this platform, changed or not. The same as `-- --force`. |
+| `bun run test:everything:force` | The whole set for this platform, changed or not. The same as `-- --force`. |
 | `bun run test:and` / `bun run test:ios` | Mobile smoke tests, on the Android emulator/device or iOS simulator. `bun run test:and <n>` runs a single test by number, `bun run test:and <name>` by name. |
 | `bun run build` | Production build of the Electron app for distribution. |
 | `bun run clean` | Remove build artifacts. |
