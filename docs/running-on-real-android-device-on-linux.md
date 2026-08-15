@@ -124,8 +124,9 @@ other. To load a test database at the same time, use `bun run and50`,
 | --- | --- |
 | Device missing from `lsusb` | Charge-only cable (swap it), wrong USB mode (set to File Transfer), or a flaky hub (plug in directly). |
 | `adb devices` shows `unauthorized` | The "Allow USB debugging?" prompt wasn't accepted. Unlock the device and tap **Allow**. |
-| `adb devices` shows `no permissions` | udev rule issue. Create `/etc/udev/rules.d/51-android.rules` with a rule for your vendor ID (e.g. `SUBSYSTEM=="usb", ATTR{idVendor}=="18d1", MODE="0660", GROUP="plugdev"`), then run `sudo udevadm control --reload-rules && sudo udevadm trigger`. Ensure your user is in the `plugdev` group. |
+| `adb devices` shows `no permissions` | udev rule issue. Create `/etc/udev/rules.d/51-android.rules` with a rule for your vendor ID (e.g. `SUBSYSTEM=="usb", ATTR{idVendor}=="18d1", MODE="0660", GROUP="plugdev"`), then run `sudo udevadm control --reload-rules && sudo udevadm trigger`. **Then unplug and replug the device**: reload plus trigger does not re-own an already-connected node, so the rule only takes effect on the next enumeration (check with `ls -l /dev/bus/usb/<bus>/<dev>` from `lsusb` — the group should become `plugdev`). Ensure your user is in the `plugdev` group. |
 | Nothing shows in the Studio dropdown | Refresh the dropdown, or check **Device Manager → Physical**. Run `adb kill-server && adb start-server` to reset. |
+| Device shows **"unsafe app blocked"** on install | Google Play Protect flags the debug-signed, sideloaded build. On the dialog tap **More details** → **Install anyway**, then re-run the deploy. To stop it prompting on every install, disable Play Protect's scan of adb installs with `adb shell settings put global verifier_verify_adb_installs 0` (re-enable with `1`). |
 
 ## Bonus: Deploy over Wi-Fi (no cable)
 

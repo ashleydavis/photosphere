@@ -78,6 +78,7 @@
     "open:ios": "bun run --filter=ios-frontend open",
     "run:and": "bun run --filter=android-frontend run",
     "and": "bun run run:and",
+    "and:targets": "bun run --filter=android-frontend targets",
     "run:and:50": "bun run --filter=android-frontend run 50",
     "and50": "bun run run:and:50",
     "run:and:1": "bun run --filter=android-frontend run 1",
