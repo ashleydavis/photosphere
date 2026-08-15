@@ -202,7 +202,8 @@ Two of the three are now fixed by the per-test temporary directories on the `mob
 ### SHARE-DB-REVIEW-STEP-NEVER-REACHED
 
 - [ ] Fixed and verified (10x clean)
-- Suite: Electron smoke tests (`bun run test:electron`), test 8 (share-database). The same root cause also fails the CLI LAN-share suite (`bun run test:cli:lan-share`).
+- Suite: Electron smoke tests (`bun run test:electron`), test 8 (share-database). The same root cause also fails the CLI LAN-share suite (`bun run test:cli:lan-share`). Also seen on the packaged binary in CI, `build-desktop (windows-latest)`.
+- Recurrence: 2026-08-14, Release run 31814522133, job 94812915990 on `windows-latest`. Six tests failed together on the recorded pattern and its secret-side twin (`Timed out waiting for log pattern: Secret review step`): 7, 8, 29, 30, 31 and 32, each burning its whole ~2m15s wait. The receiver's log stops at `test-click: receive-secret-start-button` then `Worker 1 spawned` and nothing further, while the sender in the same test had already published a pairing code. All six failing at once points at the runner hearing no announcement at all rather than at crosstalk between sessions, so this may be a second root cause wearing the same signature rather than a straight recurrence; it is recorded here because the pattern matches and splitting it needs a second sighting to justify. Full log kept at `evidence-lan-share-windows.log`.
 - Pattern: `Timed out waiting for log pattern: Database review step`
 - Also matches (same root cause, CLI LAN-share suite): `No-secrets DB share: sender did not report success`, accompanied by `Pairing code rejected by other device.`
 - Also matches (same root cause, CLI LAN-share suite, its rogue-process test): `Rogue test: expected 403 but got \d+`
@@ -525,3 +526,154 @@ Two of the three are now fixed by the per-test temporary directories on the `mob
 - First seen: 2026-08-14, run 4 of 20 on rung `test:electron`, session `tmp/find-flakey-tests/20260813-235950`, on test 31.
 - Root cause: **the recovery path had a bug that only ran when the recovery was needed.** `wait_for_ready` relaunches an app that binds its control server but never answers `/ready`, and the relaunch takes a new OS-assigned port. It writes that port back into the variable named by its second argument, defaulting to `APP_PORT`. Tests 7 and 8 pass their own variable's name and carry a comment saying why; tests 29 to 32, added later, do not. Their `SENDER_PORT` and `RECEIVER_PORT` therefore kept pointing at the instance that had just been killed, and every `send_command` after the relaunch posted to a dead port. Nothing about this is timing-dependent: those four tests failed every time the relaunch fired. It read as flakiness only because what triggers the relaunch, an app wedging under load, is itself rare.
 - Evidence: `/tmp/photosphere-tests/share-secret-cancel-BP9SIC/test-run.log`, holding the readiness timeout, the relaunch onto port 39279, and then `curl failed (exit 1) posting to navigate`. The kept log of the failed launch, `app-failed-attempt-1.log`, shows that instance had got as far as `Test control server listening on port 43083` and `Main window created`, so it was the `/ready` answer that never came, not the startup.
+
+### DESKTOP-REOPEN-CANCELS-ITS-OWN-LOAD
+
+- [x] Fixed and verified. Release run green 5 times consecutively on the fixed tree, and the mode was seen in roughly one run in four before it.
+- Suite: Electron smoke tests (`bun run test:electron`), tests 17 (news-notifications) and 26 (s3-database-lifecycle). Any test that opens a database the app has already restored at startup can hit it.
+- Pattern: `Timed out waiting for log pattern: Load assets task completed: \d+ assets loaded`
+- Distinguishing evidence (this mode): `app.log` holds `[loadAssets] Starting load for database` and `[Worker] Loading assets from database` for the path in question, and then no completion line for it at all. The worker was cancelled mid-read, so unlike WAIT-FOR-LOG-CURSOR-ALREADY-PAST-THE-LINE the line is genuinely absent rather than behind the cursor.
+- Fix commit: 316b1565
+- First seen: 2026-08-13, Release run on the `fix-ci-flakes` branch, `build-desktop (macos-latest)`.
+- Recurrences: several across 2026-08-13 and 2026-08-14 on both macOS runners before the cause was found. Six wrong theories were tried and disproved first, each costing a CI round.
+- Root cause: **opening a database cancelled the load of the database being opened.** `resetSyncState` in `apps/desktop/src/main.ts` cancelled every queued task tagged with `currentDatabasePath` whenever a database was opened, to stop a previous database's sync running on against the new one. It took no argument, so it could not tell a switch from a reopen. The app restores its last database at startup and starts a load; a test then opens that same database from the list; `notify-database-opened` fired, `resetSyncState` cancelled the tasks for that path, and the load it killed was the one it was about to wait for. The gallery then showed an empty database that was not empty.
+- What was changed: `resetSyncState` takes the path being opened and cancels only when it differs from the current one.
+- Evidence: the app's log for a failing run shows the load starting and the worker beginning to read, with no completion, while a CLI run against the same bucket moments earlier read the assets back without trouble.
+
+### MINIO-BINARY-CACHED-TRUNCATED
+
+- [x] Fixed and verified. The download is now checked by running it before it is cached, and an unrunnable cached copy is treated as absent.
+- Suite: every suite that starts the S3 emulator (`scripts/s3-emulator.sh`): CLI smoke tests 25, 26, 27, 28, 72, 73 and Electron smoke tests 25 to 28.
+- Pattern: `MinIO server did not become ready`
+- Distinguishing evidence (this mode): every S3 test in the job fails, not one, and the failure is immediate rather than a timeout. A cached `minio` binary exists but is shorter than a complete download.
+- Fix commit: 8fde1c47
+- First seen: 2026-08-13, Release run on the `fix-ci-flakes` branch.
+- Recurrences: none since the fix.
+- Root cause: **a cut-short download was cached and then reused forever.** `ensure_minio_binary` downloaded the binary and moved it into the cache without checking it, so a connection dropped part way through left a truncated file that every later run happily reused. One bad download therefore failed every S3 test in the job, and would have kept failing until the cache was cleared by hand.
+- What was changed: the partial file is run with `--version` before it is moved into place, the download is retried up to `MINIO_DOWNLOAD_ATTEMPTS` times, and a cached copy that will not run is discarded and re-fetched.
+- Evidence: the job log shows the emulator failing to start in every S3 test, with the same cached path named each time.
+
+### CHOCO-REFUSED-FETCHED-PACKAGE
+
+- [x] Fixed and verified. ffmpeg comes from a pinned GitHub release and `tree` is not installed at all; both Windows jobs have been green since.
+- Suite: any Windows job installing media tools: `build-windows`, `build-windows-baseline`, `build-desktop (windows-latest)`.
+- Pattern: `The package was not found with the source\(s\) listed`
+- Distinguishing evidence (this mode): Chocolatey exits reporting success for packages the runner image already has and fails only on ones it must fetch, so the failure surfaces later as a missing executable rather than at the install step.
+- Fix commit: 1c15766c (ffmpeg), f69d8337 (tree)
+- First seen: 2026-08-13, Release run on the `fix-ci-flakes` branch, `build-windows`.
+- Recurrences: the second package failed the same way immediately after the first was moved, which is what showed the feed rather than the package was the problem.
+- Root cause: **the Chocolatey feed refused to serve anything the runner image did not already have.** Five attempts in a row returned the same message. Nothing in this repository can make the feed answer, so the dependency was removed instead: ffmpeg now comes from a pinned `BtbN/FFmpeg-Builds` release fetched with `gh release download`, and `tree` was dropped altogether because `show_tree` already falls back to `ls` and Windows ships its own `tree` in cmd.
+- Evidence: the install step's log, showing ImageMagick satisfied from what was installed and every fetched package refused.
+
+### DBS-REMOVE-MATCHED-ITS-OWN-TEMP-DIR
+
+- [x] Fixed and verified. The assertions are now anchored, so the temp directory's name cannot satisfy them.
+- Suite: CLI smoke tests (`bun run test:cli`), test 48 (dbs-remove).
+- Pattern: `remove-db is absent after removal`
+- Distinguishing evidence (this mode): the test fails only when the per-test temp directory's random suffix produces a path the assertion's substring search can find, so it passes on most runs with no code change between them.
+- Fix commit: 8442e369
+- First seen: 2026-08-13, Release run on the `fix-ci-flakes` branch.
+- Recurrences: none since the fix.
+- Root cause: **the assertion searched the whole output for a bare substring, and the output contained the test's own directory path.** `expect_output_string` was given `remove-db`, which appears in every line of the listing because the temp directory is named after the test. Whether the test passed depended on nothing but where the allocator's random suffix put that text.
+- What was changed: both assertions are anchored to the start of a listing row, `^[[:space:]]*remove-db[[:space:]]`, so only a real table entry can match.
+- Evidence: the failing run's output, where the only occurrence of `remove-db` after the removal is inside the path printed in the header.
+
+### WINDOWS-RENAME-REFUSED-EPERM
+
+- [x] Fixed and verified. The retry rides out the contention; a refusal that never clears is still thrown.
+- Suite: CLI and Electron smoke tests on Windows, wherever `databases.toml` or the vault is written.
+- Pattern: `EPERM: operation not permitted, rename`
+- Also matches (same root cause): `EACCES`, `EBUSY` from the same call.
+- Distinguishing evidence (this mode): Windows only, and the file being renamed onto is one that another process in the same run has open for reading.
+- Fix commit: f4ac7580
+- First seen: 2026-08-13, Release run on the `fix-ci-flakes` branch, `build-windows`.
+- Recurrences: none since the fix.
+- Root cause: **writing through a temporary file and renaming it into place is atomic on POSIX, and Windows refuses that rename outright while anything else holds the target open.** The refusal is transient: it clears as soon as the reader closes the file. The code treated it as fatal, so a concurrent read of the config turned into a failed test.
+- What was changed: `renameIntoPlace` in `packages/node-utils/src/lib/fs.ts` retries `EPERM`, `EACCES` and `EBUSY` up to `RENAME_RETRY_ATTEMPTS` times with a growing delay, and rethrows anything else at once.
+- Evidence: the failing Windows job log, with the rename refused on a path a second process was reading.
+
+### S3-INTEGRATION-TESTS-OVER-DEFAULT-TIMEOUT
+
+- [x] Fixed and verified. The whole file now runs under a 60s timeout instead of the runner's 5s default.
+- Suite: `bun run --filter=storage test:integration`, `packages/storage/integration-tests/cloud-storage.test.ts`.
+- Pattern: `test timed out after 5000ms`
+- Distinguishing evidence (this mode): the test that times out varies between runs, and each one is doing nothing but round trips to a real S3 server.
+- Fix commit: 0723fd26
+- First seen: 2026-08-14, Release run on the `fix-ci-flakes` branch, `build-windows`.
+- Recurrences: three different tests hit it in turn, which is what showed the file rather than any one test was the problem.
+- Root cause: **the runner's five second default is a budget for a test that computes something, and every test in this file is round trips.** What each one costs is a property of the machine and the network, and `windows-latest` is where a round trip costs most. Raising the ceiling test by test was tried first and immediately failed on a third test, so the limit is set for the file by the `test:integration` script.
+- Evidence: three separate Release runs, each naming a different test in the same file.
+
+### APT-MIRROR-SLOW-EATS-THE-JOB-BUDGET
+
+- [x] Fixed and verified. Release run 31860052530: `Need to get 0 B/119 MB of archives.` and the install step down from 18m24s to 27s.
+- Suite: every Linux job that installs media tools: `write-lock-tests`, `sync-tests`, `smoke-test-encrypted`, `build-linux`, `android-unit-tests`, `android-smoke-tests`, `build-desktop (ubuntu)`.
+- Pattern: `Fetched \d+ MB in \d+min \d+s \(\d+ kB/s\)`
+- Distinguishing evidence (this mode): the job is cancelled on its own timeout with its tests never run, and the install step alone accounts for nearly the whole budget. The metadata fetch a few lines earlier in the same job runs at several MB/s, which is what rules out the runner's network.
+- Fix commit: 28e352b4
+- First seen: 2026-08-14, Release run 31821512196, `smoke-test-encrypted`, 119 MB at 114 kB/s.
+- Recurrences:
+  - 2026-08-14, run 31841726573, `smoke-test-encrypted`, 52 of about 150 packages in 16 minutes.
+  - 2026-08-15, run 31855884136, `build-linux`, `Fetched 119 MB in 18min 7s (110 kB/s)`.
+- Root cause: **installing imagemagick, ffmpeg and tree pulls 119 MB of dependency tree from `azure.archive.ubuntu.com`, and that mirror intermittently serves at around 110 kB/s.** Six jobs run the same install and each has a 20 minute budget, so whichever job draws the slow mirror spends its whole budget downloading and is killed with nothing run. Nothing in this repository can make the mirror faster.
+- What was changed: a new `install-apt-packages` composite action keeps the downloaded `.deb` files in the actions cache, keyed on a hash of apt's own install plan so a package or version change reprices the key by itself. Download and install are separate apt calls, so only the download can reach the network and it is skipped for everything the cache already holds.
+- Evidence: the three runs above, and the green run afterwards showing a cache hit and zero bytes fetched.
+
+### WINDOWS-ELECTRON-BUILD-HANGS-ON-NPM-LIST
+
+- [ ] Not fixed. Seen three times; the cause is not established.
+- Suite: `build-desktop (windows-latest)`, the `Build Electron app` step.
+- Pattern: `The action 'Build Electron app' has timed out after \d+ minutes`
+- Distinguishing evidence (this mode): the step's last line is always `note: bun does not support any CLI for dependency tree extraction, utilizing NPM node module collector instead`, and nothing follows it. Healthy runs of the same step take 1m58s to 2m31s.
+- Fix commit: none.
+- First seen: 2026-08-14, Release run 31764332178.
+- Recurrences: 2026-08-14, runs 31794000474 and one earlier sighting recorded before this registry entry was written.
+- Root cause: **not established.** What is known: electron-builder 26.4.0 has no dependency-tree reader for bun, so `BunNodeModulesCollector` delegates to `NpmNodeModulesCollector`, which spawns `npm list -a --include prod --include optional --omit dev --json --long --silent` in the repository root. That child has no timeout of its own and the retry above it only fires on a process that exits, so a stall there is unbounded. Whether the stall is npm walking a large `node_modules` on Windows, or something else, has not been measured.
+- Next step if it recurs: the step is capped at 20 minutes and fails normally, so its log survives. What is missing is any output from inside `npm list`. Running it with `--timing` or capturing the process tree at the point of the hang would say where it is stuck.
+
+### S3-LIFECYCLE-GALLERY-EMPTY-AFTER-LOAD
+
+- [ ] Not fixed. Seen twice; the cause is not established.
+- Suite: Electron smoke tests against the packaged binary, `build-desktop (windows-latest)`, test 26 (s3-database-lifecycle).
+- Pattern: `Timed out waiting for log pattern: Gallery loaded: 2 assets`
+- Distinguishing evidence (this mode): the load reports success. `app.log` holds `Load assets task completed: 2 assets loaded` and then `Gallery loaded: 0 assets`, so the assets were read and did not reach the gallery. This is what separates it from DESKTOP-REOPEN-CANCELS-ITS-OWN-LOAD, where the completion line is absent entirely.
+- Fix commit: none.
+- First seen: 2026-08-14, Release run 31766647639.
+- Recurrences: 2026-08-14, run 31788093760.
+- Root cause: **not established.** Three explanations were tested and disproved: message reordering between worker, main process and renderer (every hop invokes its callback synchronously before its first await, so order is preserved); stdout truncation on exit (5000 lines through `bun run` into a pipe arrived complete, ten times); and the gallery context not being subscribed (its `onNewItems` subscription has `[]` deps and lives for the provider's lifetime). What remains unchecked is whether the `asset-page` messages are discarded by the `databasePath` comparison in `loadAssets`, and whether `removeDeletedAssets` is filtering them.
+- Next step if it recurs: the harness prints only the last 30 lines of `app.log`, and the test restarts the app before this assertion, so those 30 lines begin after the restart and say nothing about the run that loaded the assets. Printing the whole log for this failure is what makes it readable; that was done once and then removed as diagnostics-only.
+
+### WINDOWS-CLI-SUITE-HANG
+
+- [ ] Not fixed. Seen twice; the cause is not established, because both sightings destroyed their own logs.
+- Suite: `build-windows`, the `Run smoke tests` step (`./smoke-tests.sh --binary`).
+- Pattern: the job is `cancelled` with `Run smoke tests` still `in_progress` and the log API returns `BlobNotFound` / HTTP 404 for it.
+- Distinguishing evidence (this mode): healthy runs of the step take 14 to 15 minutes; these ran 27 and 40. GitHub's step `timeout-minutes` did not fire in either case, so the job timeout killed the job, and GitHub discards the log of a job it kills.
+- Fix commit: none. `ee8c314d` gives the suite a 25 minute ceiling of its own so the next occurrence fails from inside and keeps its log, but that is diagnosability, not a fix.
+- First seen: 2026-08-14, Release run 31803430871.
+- Recurrences: 2026-08-14, run 31806443909, after the job cap was raised from 30 to 40 minutes. That change was made on the theory that the step cap could then fire first; it did not fire at 24 minutes either time, which disproved the theory, and the commit was removed.
+- Root cause: **not established.** Capping each test did not catch it: Git Bash ships no `timeout(1)`, so `run_test_with_timeout` falls back to killing the test's process tree and waiting on it, and a kill that does not take leaves that wait blocked for good. That is a candidate, not a finding.
+- Next step if it recurs: the suite ceiling now ends the step normally, so the log survives with the `RUN` line of whichever test never reported back. That names the test, which is the thing neither sighting could supply.
+
+### BUN-PANIC-ON-EXIT-AFTER-VERIFY
+
+- [ ] Not fixed. Seen once.
+- Suite: `bun run test:cli:encrypted`, `smoke-test-encrypted`, test `replicate-to-encrypted`.
+- Pattern: `panic: Unexpected JS error: JSError` accompanied by `was terminated by signal SIGILL`
+- Distinguishing evidence (this mode): the command's work has already succeeded. The full verification report is printed, ending `Database verification passed - all files are intact`, and the crash happens after it during shutdown. Exit code 132.
+- Fix commit: none.
+- First seen: 2026-08-14, Release run 31830072475.
+- Recurrences: none yet.
+- Root cause: **not established.** Bun's own message says the panic indicates a bug in Bun. The crash report line worth keeping is `workers_spawned(4) workers_terminated(2)`: the process exits with two workers still running, which is a candidate for what Bun trips over and is the repository's own doing rather than Bun's.
+- Next step if it recurs: find which two workers are not shut down by `exit()`'s termination callbacks and whether terminating them removes the panic. Evidence kept at `evidence-bun-crash-verify.log`.
+
+### GITHUB-ACTION-DOWNLOAD-429
+
+- [ ] Not fixed, and not fixable here.
+- Suite: any job, in `Set up job`, before any repository code runs.
+- Pattern: `Failed to download action .* 429 \(Too Many Requests\)`
+- Distinguishing evidence (this mode): several jobs fail at once, all in `Set up job`, none having reached `Checkout code`.
+- Fix commit: none.
+- First seen: 2026-08-14, Release run 31778283150, where it took out `compile`, `build-macos-arm64` and `build-desktop (macos-latest)` together.
+- Recurrences: none yet.
+- Root cause: **GitHub's own CDN refused to serve `actions/checkout`.** Its retry gave up after two attempts. Recorded so that a recurrence is recognised as infrastructure rather than investigated as a repository failure; the response is to re-run, and to space runs out rather than firing them back to back.
