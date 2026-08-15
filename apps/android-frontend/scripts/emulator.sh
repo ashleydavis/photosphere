@@ -1154,6 +1154,25 @@ cmd_up() {
 }
 
 #
+# Creates the hand-testing AVD (psphere-single) if it is missing, and does nothing else: no LAN
+# bridge, no sudo, no emulator started. This is the unprivileged slice of `up` (the same
+# ensure-base, clone, partition-size steps), pulled out so run-android.sh can create the AVD on a
+# fresh machine and start the app without bringing up the bridge. Deploying the app does not need the
+# bridge; only host-to-device LAN sharing does, and that stays with `up`.
+#
+cmd_ensure_single_avd() {
+    if [ "$(id -u)" -eq 0 ]; then
+        echo "ERROR: run this as your user; it needs no root." >&2
+        exit 1
+    fi
+
+    local base
+    base="$(ensure_base_avd)" || exit 1
+    clone_avd "$base" "$SINGLE_AVD_NAME" || exit 1
+    ensure_avd_data_partition_size "$SINGLE_AVD_NAME" || exit 1
+}
+
+#
 # Brings up the pool: one writable clone AVD per instance, each on its own tap, all on the same
 # bridge as the single emulator. Deliberately independent of `up`, so a pool can be started and
 # stopped while a hand-testing emulator keeps running untouched.
@@ -2160,6 +2179,9 @@ cmd_status() {
 case "${1:-}" in
     up)
         cmd_up
+        ;;
+    ensure-single-avd)
+        cmd_ensure_single_avd
         ;;
     down)
         cmd_down

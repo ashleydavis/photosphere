@@ -112,12 +112,13 @@ emulator_target() {
 }
 
 #
-# Starts an emulator and waits for it to finish booting.
-#
-# When the LAN bridge is up it attaches the emulator to it with -net-tap, which is what lets the host
-# and the emulator see each other's broadcast traffic. -wifi-tap looks like it should do this and is
-# accepted without complaint, but is silently ignored, so do not be tempted to switch to it.
-#
+# Starts the hand-testing emulator and waits for it to finish booting, creating its AVD first if a
+# fresh machine has none. Deploying the app does not need the LAN bridge, so this never brings the
+# bridge up and never runs sudo: it attaches to the bridge only when it happens to be up already, and
+# otherwise starts without it. That is what lets a plain `bun run run` work on a clean clone with no
+# separate step. Bring the bridge up with `bun run emu:and:up` when you actually need LAN sharing (the
+# host-to-device LAN-share tests); -wifi-tap looks like it would share the LAN and is accepted without
+# complaint, but is silently ignored, so the bridge attach below uses -net-tap.
 start_emulator() {
     if [ ! -x "$EMULATOR" ]; then
         echo "ERROR: emulator not found at $EMULATOR" >&2
@@ -125,23 +126,22 @@ start_emulator() {
     fi
 
     # Named outright rather than worked out from what exists, so which emulator this deploys to never
-    # depends on which other AVDs happen to be on the machine.
+    # depends on which other AVDs happen to be on the machine. Create it if a fresh machine has none,
+    # using the unprivileged slice of emu:and:up (no bridge, no sudo).
     local avd="$RUN_AVD"
     if ! "$EMULATOR" -list-avds 2>/dev/null | grep -qx "$avd"; then
-        echo "ERROR: there is no AVD named '$avd'." >&2
-        echo "Run 'bun run emu:and:up' to create it and start it on the LAN bridge." >&2
-        exit 1
+        echo "Creating the '$avd' AVD (first run; no sudo, no bridge)..."
+        bash "$SCRIPT_DIR/emulator.sh" ensure-single-avd || exit 1
     fi
 
-    # Only attach to the bridge when it is actually there. Without this check the emulator fails to
-    # start at all when the bridge is down, which would make the app impossible to run for anyone who
-    # does not care about LAN sharing.
+    # Attach to the bridge only when it is already up; never bring it up here. Without the bridge the
+    # app still installs and runs, it just cannot do host-to-device LAN sharing.
     local net_args=()
     if [ "${PHOTOSPHERE_NO_LAN_BRIDGE:-}" != "1" ] && ip link show "$NETCARD_NAME" >/dev/null 2>&1; then
         net_args=(-net-tap "$NETCARD_NAME")
         echo "Starting '$avd' on the LAN bridge ($NETCARD_NAME)..."
     else
-        echo "Starting '$avd' (no LAN bridge; run 'bun run emu:and:up' first if you want LAN sharing)..."
+        echo "Starting '$avd' (no LAN bridge; run 'bun run emu:and:up' if you want LAN sharing)..."
     fi
 
     # setsid detaches the emulator so it outlives this script: the deploy below, and everything you
