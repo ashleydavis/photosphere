@@ -516,30 +516,12 @@ jobs:
           ffprobe -version | head -1
           echo ""
           
-      - name: Build Linux executable
-        working-directory: ./apps/cli
-        run: |
-          bun run build-linux
-          chmod +x bin/x64/linux/psi
-          
-      - name: Build mk CLI executable
-        working-directory: ./apps/mk-cli
-        run: |
-          bun run build-linux
-          chmod +x bin/x64/linux/mk
-          
-      - name: Build bdb CLI executable
-        working-directory: ./apps/bdb-cli
-        run: |
-          bun run build-linux
-          chmod +x bin/x64/linux/bdb
-          
-      - name: Test version command
-        working-directory: ./apps/cli
-        run: |
-          echo "Testing version command after building..."
-          ./bin/x64/linux/psi version
-
+      # The smoke suite builds psi, mk and bdb itself (build_cli_binaries in apps/cli/smoke-tests.sh),
+      # so this job no longer builds them beforehand only for the suite to build them again seconds
+      # later. The chmod that went with each build was doing nothing: bun writes its compiled output
+      # rwxr-xr-x already. The version check runs after the suite, so nothing has executed an
+      # executable that is about to be overwritten, which is what broke build-windows in run
+      # 31911942161.
       - name: Run smoke tests
         timeout-minutes: 14
         working-directory: ./apps/cli
@@ -550,6 +532,12 @@ jobs:
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE"
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-output.log
           exit $SMOKE_TEST_EXIT_CODE
+
+      - name: Test version command
+        working-directory: ./apps/cli
+        run: |
+          echo "Testing version command after building..."
+          ./bin/x64/linux/psi version
 
       - name: Upload Linux artifact
         uses: actions/upload-artifact@v4
@@ -853,30 +841,12 @@ jobs:
           ffprobe -version | head -1
           echo ""
 
-      - name: Build macOS executable
-        working-directory: ./apps/cli
-        run: |
-          bun run build-mac-x64
-          chmod +x bin/x64/mac/psi
-          
-      - name: Build mk CLI executable
-        working-directory: ./apps/mk-cli
-        run: |
-          bun run build-mac-x64
-          chmod +x bin/x64/mac/mk
-          
-      - name: Build bdb CLI executable
-        working-directory: ./apps/bdb-cli
-        run: |
-          bun run build-mac-x64
-          chmod +x bin/x64/mac/bdb
-          
-      - name: Test built version command
-        working-directory: ./apps/cli
-        run: |
-          echo "Testing version command after building..."
-          ./bin/x64/mac/psi version
-
+      # The smoke suite builds psi, mk and bdb itself (build_cli_binaries in apps/cli/smoke-tests.sh),
+      # so this job no longer builds them beforehand only for the suite to build them again seconds
+      # later. The chmod that went with each build was doing nothing: bun writes its compiled output
+      # rwxr-xr-x already. The version check runs after the suite, so nothing has executed an
+      # executable that is about to be overwritten, which is what broke build-windows in run
+      # 31911942161.
       - name: Run smoke tests
         timeout-minutes: 24
         working-directory: ./apps/cli
@@ -887,6 +857,12 @@ jobs:
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE"
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-output.log
           exit $SMOKE_TEST_EXIT_CODE
+
+      - name: Test built version command
+        working-directory: ./apps/cli
+        run: |
+          echo "Testing version command after building..."
+          ./bin/x64/mac/psi version
 
       - name: Upload macOS x64 artifact
         uses: actions/upload-artifact@v4
@@ -989,30 +965,12 @@ jobs:
           ffprobe -version | head -1
           echo ""
 
-      - name: Build macOS ARM64 executable
-        working-directory: ./apps/cli
-        run: |
-          bun run build-mac-arm64
-          chmod +x bin/arm64/mac/psi
-          
-      - name: Build mk CLI executable
-        working-directory: ./apps/mk-cli
-        run: |
-          bun run build-mac-arm64
-          chmod +x bin/arm64/mac/mk
-          
-      - name: Build bdb CLI executable
-        working-directory: ./apps/bdb-cli
-        run: |
-          bun run build-mac-arm64
-          chmod +x bin/arm64/mac/bdb
-          
-      - name: Test version command
-        working-directory: ./apps/cli
-        run: |
-          echo "Testing version command after building..."
-          ./bin/arm64/mac/psi version
-
+      # The smoke suite builds psi, mk and bdb itself (build_cli_binaries in apps/cli/smoke-tests.sh),
+      # so this job no longer builds them beforehand only for the suite to build them again seconds
+      # later. The chmod that went with each build was doing nothing: bun writes its compiled output
+      # rwxr-xr-x already. The version check runs after the suite, so nothing has executed an
+      # executable that is about to be overwritten, which is what broke build-windows in run
+      # 31911942161.
       - name: Run smoke tests
         timeout-minutes: 14
         working-directory: ./apps/cli
@@ -1023,6 +981,12 @@ jobs:
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE"
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-output.log
           exit $SMOKE_TEST_EXIT_CODE
+
+      - name: Test version command
+        working-directory: ./apps/cli
+        run: |
+          echo "Testing version command after building..."
+          ./bin/arm64/mac/psi version
 
       - name: Upload macOS ARM64 artifact
         uses: actions/upload-artifact@v4
