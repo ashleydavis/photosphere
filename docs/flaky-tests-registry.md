@@ -677,3 +677,17 @@ Two of the three are now fixed by the per-test temporary directories on the `mob
 - First seen: 2026-08-14, Release run 31778283150, where it took out `compile`, `build-macos-arm64` and `build-desktop (macos-latest)` together.
 - Recurrences: none yet.
 - Root cause: **GitHub's own CDN refused to serve `actions/checkout`.** Its retry gave up after two attempts. Recorded so that a recurrence is recognised as infrastructure rather than investigated as a repository failure; the response is to re-run, and to space runs out rather than firing them back to back.
+
+### WINDOWS-BUN-COMPILE-MOVE-REFUSED-EPERM
+
+- [ ] Not yet proven. The fix has landed; it needs the repeated clean Release runs before the box is ticked.
+- Suite: `build-windows` in the Release workflow, in the smoke suite's own `Build Windows executable` step (`build_cli_binaries` in `apps/cli/smoke-tests.sh`).
+- Pattern: `failed to move executable to .* psi\.exe: EPERM`
+- Also matches (same root cause): the same line naming `mk.exe` or `bdb.exe`.
+- Distinguishing evidence (this mode): Windows only, and the refusal is inside `bun build --compile`'s own move rather than any call of ours, so nothing in this repository is on the stack.
+- Fix commit: 8a2e41c4 (unproven until the runs back it).
+- First seen: 2026-08-15, Release run 31911942161 on the `mobile` branch, commit 8000cb1f.
+- Recurrences: none yet.
+- Root cause: **the job ran `psi.exe` and then had the smoke suite overwrite it 1.6 seconds later, and Windows refuses a rename onto a file anything still holds open.** The job built psi, mk and bdb, ran `psi.exe version`, and then started the smoke suite, whose first act is to build those same three executables again. The second build's move onto `psi.exe` was refused. This is the same Windows refusal as `WINDOWS-RENAME-REFUSED-EPERM`, but on bun's own move rather than one of ours, so it cannot be retried from outside.
+- What was changed: the three build steps came out of `build-windows`, because the smoke suite builds all three itself, and the version check moved to after the smoke run. Each executable is built once now, with nothing having run it.
+- Evidence: the failing job log, where `psi.exe version` completes at 22:25:29.52 and the move onto that same file is refused at 22:25:31.16.
