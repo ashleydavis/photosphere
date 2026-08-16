@@ -691,3 +691,16 @@ Two of the three are now fixed by the per-test temporary directories on the `mob
 - Root cause: **the job ran `psi.exe` and then had the smoke suite overwrite it 1.6 seconds later, and Windows refuses a rename onto a file anything still holds open.** The job built psi, mk and bdb, ran `psi.exe version`, and then started the smoke suite, whose first act is to build those same three executables again. The second build's move onto `psi.exe` was refused. This is the same Windows refusal as `WINDOWS-RENAME-REFUSED-EPERM`, but on bun's own move rather than one of ours, so it cannot be retried from outside.
 - What was changed: the three build steps came out of `build-windows`, because the smoke suite builds all three itself, and the version check moved to after the smoke run. Each executable is built once now, with nothing having run it.
 - Evidence: the failing job log, where `psi.exe version` completes at 22:25:29.52 and the move onto that same file is refused at 22:25:31.16.
+
+### MACOS-DMG-EJECT-RESOURCE-BUSY
+
+- [ ] Not fixed here, and not fixable here. The build is retried once instead.
+- Suite: `build-desktop` on the macOS matrix legs, in `Build Electron app`, inside electron-builder's vendored `dmgbuild`.
+- Pattern: `Unable to detach device cleanly: hdiutil: couldn't eject "disk\d+" - Resource busy`
+- Distinguishing evidence (this mode): macOS only, the traceback is entirely inside `node_modules/dmg-builder/vendor/dmgbuild`, and the `dmg::create` step has already reported finished, so the DMG contents were written and only the eject failed.
+- Fix commit: none. The retry is a workaround, not a fix.
+- First seen: 2026-08-16, Release run 31921700592 on the `fix-ci-win-exe-lock` branch, `build-desktop (macos-15-intel)`.
+- Recurrences: none yet.
+- Root cause: **not established.** Something on the runner held the mounted volume open and `hdiutil` would not eject it. The error does not name the holder, and `dmgbuild` force-detaches the volume before raising, so nothing is left to inspect afterwards. What is known: `dmgbuild` had already flushed with `sync --file-system` and made its five detach attempts over roughly twenty seconds (`core.py`, `detach_retries` defaulting to 5), and electron-builder invokes `run_dmgbuild.py` without the `--detach-retries` flag that would raise that number, so there is no knob to turn from here.
+- Next step if it recurs: find what holds the volume before concluding the retry is enough. The eject happens inside `dmgbuild`, so naming the holder means logging from the runner while the volume is still mounted, not after the step has failed.
+- Evidence: the failing job log, where `dmg::create` reports finished and the traceback follows immediately from `dmgbuild/core.py` line 850.

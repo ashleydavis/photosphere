@@ -1468,8 +1468,28 @@ jobs:
       # seconds across the four matrix legs (see the cache note below), so 20 minutes is far more than
       # it can legitimately need.
       - name: Build Electron app
+        if: runner.os != 'macOS'
         timeout-minutes: 20
         run: bun run build
+
+      # macOS packages a DMG, and building one means mounting a volume, laying the app out on it and
+      # ejecting it again. Run 31921700592 failed build-desktop (macos-15-intel) on that eject:
+      # "dmgbuild.core.DMGError: Unable to detach device cleanly: hdiutil: couldn't eject "disk2" -
+      # Resource busy". Nothing in this repository is on that stack, dmgbuild had already made its own
+      # five detach attempts over about twenty seconds, and electron-builder does not expose the
+      # --detach-retries flag that would raise that number, so there is nothing here to fix and no
+      # knob to turn. Whatever held the volume open is not named by the error and was gone before the
+      # step ended, so the build is attempted a second time instead. A build that is genuinely broken
+      # fails both attempts and still reports; the cap is doubled because two attempts fit under it.
+      - name: Build Electron app (macOS)
+        if: runner.os == 'macOS'
+        timeout-minutes: 40
+        shell: bash
+        run: |
+          if ! bun run build; then
+              echo "Packaging failed on the first attempt. Trying once more."
+              bun run build
+          fi
 
       - name: Show release directory contents
         run: |
