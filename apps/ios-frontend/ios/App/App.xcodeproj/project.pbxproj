@@ -26,6 +26,7 @@
 		D0000000000000000000B100 /* TcpHostTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0000000000000000000A100 /* TcpHostTests.swift */; };
 		D0000000000000000000B101 /* MediaRunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0000000000000000000A101 /* MediaRunnerTests.swift */; };
 		D0000000000000000000B103 /* ImportPickerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0000000000000000000A103 /* ImportPickerTests.swift */; };
+		D0000000000000000000B104 /* MediaLibraryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0000000000000000000A104 /* MediaLibraryTests.swift */; };
 		73F80B325942FD7BAAC99376 /* NotImplementedTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07855680FE24064B7769CBB4 /* NotImplementedTests.swift */; };
 		A1B2C3D4E5F600000000FF21 /* PickFilesCopyFailureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600000000FF22 /* PickFilesCopyFailureTests.swift */; };
 		8108CF91E144FF97BA5C7390 /* EnginePoolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79D28BB3B7D9903A032E51CC /* EnginePoolTests.swift */; };
@@ -54,6 +55,9 @@
 		D000000000000000000000BA /* TcpHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000AA /* TcpHost.swift */; };
 		D000000000000000000000F3 /* run_magick.c in Sources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000E3 /* run_magick.c */; };
 		D000000000000000000000F4 /* MediaToolRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000E4 /* MediaToolRunner.swift */; };
+		D0000000000000000000B200 /* MediaLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0000000000000000000A200 /* MediaLibrary.swift */; };
+		D0000000000000000000B201 /* MediaLibraryHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0000000000000000000A201 /* MediaLibraryHost.swift */; };
+		D0000000000000000000B202 /* MediaDeleteStaging.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0000000000000000000A202 /* MediaDeleteStaging.swift */; };
 		D000000000000000000000F5 /* ImageMagickRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000E5 /* ImageMagickRunner.swift */; };
 		D000000000000000000000F6 /* FfmpegKitRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000E6 /* FfmpegKitRunner.swift */; };
 		D000000000000000000000D2 /* worker.bundle.js in Resources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000D1 /* worker.bundle.js */; };
@@ -124,6 +128,10 @@
 		D000000000000000000000AA /* TcpHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TcpHost.swift; sourceTree = "<group>"; };
 		D000000000000000000000E3 /* run_magick.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = run_magick.c; sourceTree = "<group>"; };
 		D000000000000000000000E4 /* MediaToolRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaToolRunner.swift; sourceTree = "<group>"; };
+		D0000000000000000000A200 /* MediaLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaLibrary.swift; sourceTree = "<group>"; };
+		D0000000000000000000A201 /* MediaLibraryHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaLibraryHost.swift; sourceTree = "<group>"; };
+		D0000000000000000000A202 /* MediaDeleteStaging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaDeleteStaging.swift; sourceTree = "<group>"; };
+		D0000000000000000000A104 /* MediaLibraryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaLibraryTests.swift; sourceTree = "<group>"; };
 		D000000000000000000000E5 /* ImageMagickRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageMagickRunner.swift; sourceTree = "<group>"; };
 		D000000000000000000000E6 /* FfmpegKitRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FfmpegKitRunner.swift; sourceTree = "<group>"; };
 		D000000000000000000000E7 /* run_magick.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = run_magick.h; sourceTree = "<group>"; };
@@ -239,6 +247,7 @@
 				D0000000000000000000A101 /* MediaRunnerTests.swift */,
 				D0000000000000000000A102 /* ExportTempTests.swift */,
 				D0000000000000000000A103 /* ImportPickerTests.swift */,
+				D0000000000000000000A104 /* MediaLibraryTests.swift */,
 				B36CD9CADF6F132C9A9BAAE5 /* WorkerBundleParityTests.swift */,
 			);
 			name = AppTests;
@@ -268,6 +277,9 @@
 				D000000000000000000000A9 /* TaskEngine.swift */,
 				D000000000000000000000AA /* TcpHost.swift */,
 				D000000000000000000000E4 /* MediaToolRunner.swift */,
+				D0000000000000000000A200 /* MediaLibrary.swift */,
+				D0000000000000000000A201 /* MediaLibraryHost.swift */,
+				D0000000000000000000A202 /* MediaDeleteStaging.swift */,
 				D000000000000000000000E5 /* ImageMagickRunner.swift */,
 				D000000000000000000000E6 /* FfmpegKitRunner.swift */,
 				D000000000000000000000E3 /* run_magick.c */,
@@ -459,6 +471,7 @@
 				D0000000000000000000B101 /* MediaRunnerTests.swift in Sources */,
 				D0000000000000000000B102 /* ExportTempTests.swift in Sources */,
 				D0000000000000000000B103 /* ImportPickerTests.swift in Sources */,
+				D0000000000000000000B104 /* MediaLibraryTests.swift in Sources */,
 				13E4EC3C45DA72EF0950953D /* WorkerBundleParityTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -490,6 +503,9 @@
 				D000000000000000000000BA /* TcpHost.swift in Sources */,
 				D000000000000000000000F3 /* run_magick.c in Sources */,
 				D000000000000000000000F4 /* MediaToolRunner.swift in Sources */,
+				D0000000000000000000B200 /* MediaLibrary.swift in Sources */,
+				D0000000000000000000B201 /* MediaLibraryHost.swift in Sources */,
+				D0000000000000000000B202 /* MediaDeleteStaging.swift in Sources */,
 				D000000000000000000000F5 /* ImageMagickRunner.swift in Sources */,
 				D000000000000000000000F6 /* FfmpegKitRunner.swift in Sources */,
 			);
