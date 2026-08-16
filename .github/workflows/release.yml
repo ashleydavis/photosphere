@@ -657,27 +657,14 @@ jobs:
           ffprobe -version 2>&1 | Select-Object -First 1
           echo ""
 
-      - name: Build Windows executable
-        working-directory: ./apps/cli
-        run: |
-          bun run build-win
-          
-      - name: Build mk CLI executable
-        working-directory: ./apps/mk-cli
-        run: |
-          bun run build-win
-          
-      - name: Build bdb CLI executable
-        working-directory: ./apps/bdb-cli
-        run: |
-          bun run build-win
-          
-      - name: Test version command
-        working-directory: ./apps/cli
-        run: |
-          echo "Testing version command after building..."
-          ./bin/x64/win/psi.exe version
-
+      # The smoke suite builds psi, mk and bdb itself (build_cli_binaries in apps/cli/smoke-tests.sh),
+      # so this job does not build them beforehand and does not run psi until after that build. It
+      # used to do both: build the three executables, run psi.exe to check the version command, and
+      # then have the smoke suite overwrite the same three files a second later. Windows refuses a
+      # rename onto a file anything still holds open, and run 31911942161 failed on exactly that:
+      # "failed to move executable to D:\a\photosphere\photosphere\apps\cli\bin\x64\win\psi.exe:
+      # EPERM", 1.6 seconds after the version step had executed that file. Building each executable
+      # once, with nothing having run it, leaves nothing holding it open to refuse the move.
       - name: Run smoke tests
         timeout-minutes: 24
         working-directory: ./apps/cli
@@ -689,6 +676,12 @@ jobs:
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE"
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-output.log
           exit $SMOKE_TEST_EXIT_CODE
+
+      - name: Test version command
+        working-directory: ./apps/cli
+        run: |
+          echo "Testing version command after building..."
+          ./bin/x64/win/psi.exe version
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
