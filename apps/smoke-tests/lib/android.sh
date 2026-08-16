@@ -777,7 +777,41 @@ android_seed_media() {
         return 1
     fi
 
+    # The scan returning a result is not the same as the photo being in MediaStore, and the
+    # difference is what made test 47 fail on CI for two runs while passing here. On the API 33
+    # emulator the workflow uses, scan_file answered `Result:` as it always does and then routed the
+    # insert to the internal volume, which refuses anything outside the system media directories:
+    # `Requested path /storage/emulated/0/DCIM/Camera/... doesn't appear under [/system/media, ...]`
+    # in the device log, from ModernMediaScanner. The row was never written, the app's query over the
+    # external volume found nothing, automatic import had nothing to import, and the test waited out
+    # its three minutes against a library the harness had said it had seeded. Asking the row for
+    # itself is the only answer that means what the log line claims.
+    if ! android_media_store_has "$remote_name"; then
+        # Scanning the volume rather than the file leaves no room for the path to be resolved to the
+        # wrong volume, because the volume is what is named. Only reached when the per-file scan did
+        # not take, so the usual path is unchanged and this costs nothing on an image where it works.
+        adb shell content call --uri content://media/external --method scan_volume >/dev/null 2>&1 || true
+
+        if ! android_media_store_has "$remote_name"; then
+            log_error "MediaStore did not index $remote_path, so the device photo library does not hold it. The scan said: $scan_result"
+            return 1
+        fi
+    fi
+
     log_info "Put '$remote_name' into the device photo library"
+}
+
+#
+# Whether MediaStore holds a row for a photo, by the name it was seeded under. Asked of the external
+# volume, which is the collection the app reads.
+# Usage: android_media_store_has <remote_name>
+#
+android_media_store_has() {
+    local remote_name="$1"
+    local row
+    row="$(adb shell content query --uri content://media/external/file --projection _id \
+        --where "\"_display_name='$remote_name'\"" 2>&1 | tr -d '\r')"
+    echo "$row" | grep -q "^Row:"
 }
 
 #
