@@ -793,7 +793,11 @@ android_seed_media() {
         adb shell content call --uri content://media/external --method scan_volume >/dev/null 2>&1 || true
 
         if ! android_media_store_has "$remote_name"; then
-            log_error "MediaStore did not index $remote_path, so the device photo library does not hold it. The scan said: $scan_result"
+            # The row is printed when there is one, because "not indexed" and "indexed as something
+            # the app does not read" are different faults with the same symptom, and the row is what
+            # tells them apart.
+            log_error "MediaStore does not hold $remote_path as an image or a video, so automatic import will never see it. The scan said: $scan_result"
+            log_error "MediaStore row: $(android_media_store_row "$remote_name" || echo "none")"
             return 1
         fi
     fi
@@ -802,16 +806,29 @@ android_seed_media() {
 }
 
 #
-# Whether MediaStore holds a row for a photo, by the name it was seeded under. Asked of the external
-# volume, which is the collection the app reads.
+# Prints MediaStore's row for a photo, by the name it was seeded under, or nothing when there is
+# none. Asked of the external volume, which is the collection the app reads.
+#
+# media_type is in the projection because the app does not ask for every file: it selects
+# MEDIA_TYPE IN (image, video), so a row indexed as a plain file is one the app will never see. A
+# check that only asked whether the name was present would call that seeded and be wrong in exactly
+# the way this whole helper exists to catch.
+# Usage: android_media_store_row <remote_name>
+#
+android_media_store_row() {
+    local remote_name="$1"
+    adb shell content query --uri content://media/external/file --projection _id:media_type:volume_name \
+        --where "\"_display_name='$remote_name'\"" 2>&1 | tr -d '\r' | grep "^Row:"
+}
+
+#
+# Whether MediaStore holds the photo as media the app can import: present, and typed as an image (1)
+# or a video (3) rather than as an untyped file.
 # Usage: android_media_store_has <remote_name>
 #
 android_media_store_has() {
     local remote_name="$1"
-    local row
-    row="$(adb shell content query --uri content://media/external/file --projection _id \
-        --where "\"_display_name='$remote_name'\"" 2>&1 | tr -d '\r')"
-    echo "$row" | grep -q "^Row:"
+    android_media_store_row "$remote_name" | grep -qE "media_type=(1|3)"
 }
 
 #
