@@ -153,6 +153,48 @@ public final class MediaLibraryHost {
     }
 
     //
+    // TEMPORARY, for one CI run, to be removed once it has answered.
+    //
+    // On the API 33 emulator the Release workflow runs, this class reads an empty library while the
+    // photo is provably in MediaStore: the smoke harness queries the same external volume from adb
+    // and gets a row typed as an image, and the app then reports "found 0 item(s) in the source".
+    // The same code on API 36 here reads the photo. The candidate is that the per-type permissions
+    // (READ_MEDIA_IMAGES, READ_MEDIA_VIDEO) do not cover the files collection this class queries,
+    // only the images and video collections. Counting all three from inside the app, which is the
+    // only place the permission applies, says whether that is so. Nothing else can: a query from adb
+    // runs as shell and sees everything.
+    //
+    private void logCollectionCounts() {
+        android.util.Log.i("PhotosphereMediaLibrary", "files=" + countIn(contentUri())
+            + " images=" + countIn(MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
+            + " video=" + countIn(MediaStore.Video.Media.EXTERNAL_CONTENT_URI)
+            + " sdk=" + Build.VERSION.SDK_INT);
+    }
+
+    //
+    // TEMPORARY, paired with logCollectionCounts above. Rows visible to this app in a collection, or
+    // -1 when the query itself was refused, which is a different answer from an empty collection.
+    //
+    private int countIn(Uri uri) {
+        try {
+            Cursor cursor = androidContext.getContentResolver().query(uri, new String[] { "_id" }, null, null, null);
+            if (cursor == null) {
+                return -1;
+            }
+            try {
+                return cursor.getCount();
+            }
+            finally {
+                cursor.close();
+            }
+        }
+        catch (Exception error) {
+            android.util.Log.i("PhotosphereMediaLibrary", "query refused for " + uri + ": " + error);
+            return -1;
+        }
+    }
+
+    //
     // How many images and videos the library holds. Needed so a page can say whether it was the last.
     //
     private int countItems() {
@@ -185,6 +227,10 @@ public final class MediaLibraryHost {
     public String mediaLibraryList(String cursor, int pageSize) {
         int offset = MediaLibrary.offsetFromCursor(cursor);
         int limit = pageSize > 0 ? pageSize : 50;
+
+        // TEMPORARY, see logCollectionCounts.
+        logCollectionCounts();
+
         int totalCount = countItems();
 
         List<JSONObject> items = new ArrayList<>();
