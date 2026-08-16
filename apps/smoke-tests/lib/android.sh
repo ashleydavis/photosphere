@@ -915,12 +915,32 @@ android_grant_media_permission() {
     local sdk
     sdk="$(adb shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r')"
 
+    local granted_permissions
     if [ "${sdk:-0}" -ge 33 ]; then
         adb shell pm grant "$APP_ID" android.permission.READ_MEDIA_IMAGES >/dev/null 2>&1 || true
         adb shell pm grant "$APP_ID" android.permission.READ_MEDIA_VIDEO >/dev/null 2>&1 || true
+        granted_permissions="android.permission.READ_MEDIA_IMAGES android.permission.READ_MEDIA_VIDEO"
     else
         adb shell pm grant "$APP_ID" android.permission.READ_EXTERNAL_STORAGE >/dev/null 2>&1 || true
+        granted_permissions="android.permission.READ_EXTERNAL_STORAGE"
     fi
+
+    # `pm grant` says nothing useful when it does not take, and the errors above are swallowed
+    # deliberately because the permission is often already held. That left the harness announcing a
+    # grant it had not made. It matters here more than it looks: an app with no read permission does
+    # not get an error from MediaStore, it gets an empty library, which is indistinguishable from a
+    # device with no photos on it. On the API 33 emulator the workflow runs, the app read
+    # `files=0 images=0 video=0` from inside its own process while the same volume held the seeded
+    # photo when asked from adb, and every one of those queries succeeded. So the state is read back
+    # and the test refuses to go on without it, rather than starting a run whose result cannot mean
+    # anything.
+    local permission
+    for permission in $granted_permissions; do
+        if ! adb shell dumpsys package "$APP_ID" 2>/dev/null | tr -d '\r' | grep -q "$permission: granted=true"; then
+            log_error "$permission is not granted to $APP_ID after asking for it, so the app will read an empty photo library rather than fail"
+            return 1
+        fi
+    done
 
     log_info "Granted the photo library permission from outside the app"
 }
