@@ -658,15 +658,16 @@ Two of the three are now fixed by the per-test temporary directories on the `mob
 
 ### BUN-PANIC-ON-EXIT-AFTER-VERIFY
 
-- [ ] Not fixed. Seen once.
-- Suite: `bun run test:cli:encrypted`, `smoke-test-encrypted`, test `replicate-to-encrypted`.
-- Pattern: `panic: Unexpected JS error: JSError` accompanied by `was terminated by signal SIGILL`
+- [ ] Not fixed. Seen twice.
+- Suite: `bun run test:cli:encrypted`, `smoke-test-encrypted`, tests `replicate-to-encrypted` and `replicate-decrypted-from-encrypted`. Both crash in the same place in the test, the `psi verify` of the replica, so the test is not what distinguishes them.
+- Pattern: a Bun panic during shutdown, either `panic: Unexpected JS error: JSError` with `was terminated by signal SIGILL`, or `panic: Segmentation fault at address 0x[0-9A-F]+` with exit code 132. Both carry `oh no: Bun has crashed. This indicates a bug in Bun, not your code.`
 - Distinguishing evidence (this mode): the command's work has already succeeded. The full verification report is printed, ending `Database verification passed - all files are intact`, and the crash happens after it during shutdown. Exit code 132.
 - Fix commit: none.
 - First seen: 2026-08-14, Release run 31830072475.
-- Recurrences: none yet.
-- Root cause: **not established.** Bun's own message says the panic indicates a bug in Bun. The crash report line worth keeping is `workers_spawned(4) workers_terminated(2)`: the process exits with two workers still running, which is a candidate for what Bun trips over and is the repository's own doing rather than Bun's.
-- Next step if it recurs: find which two workers are not shut down by `exit()`'s termination callbacks and whether terminating them removes the panic. Evidence kept at `evidence-bun-crash-verify.log`.
+- Recurrences:
+  - 2026-08-17, locally, `bun run test:everything -- --force` on the `auto-photo-backup` worktree straight after merging `mobile` in, 1 of 22 encrypted tests. The same suite had passed inside the pre-commit hook twenty minutes earlier on the same tree, so this is the mode's own intermittency and not something the merge introduced.
+- Root cause: **not established, and the leading candidate is now weaker rather than stronger.** Bun's own message says the panic indicates a bug in Bun. The first sighting recorded `workers_spawned(4) workers_terminated(2)` and read the two unterminated workers as what Bun trips over. The 2026-08-17 crash report says `workers_spawned(7) workers_terminated(7)`, every worker accounted for, and it panicked anyway. So a worker left running is not necessary for this crash, and anyone chasing that lead should know it has already failed once.
+- Next step if it recurs: capture the panic with `BUN_CRASH_REPORT=1` or a debug build rather than reasoning from the summary line, since the two sightings disagree on the panic text (`JSError` against `Segmentation fault`) while agreeing on everything else, and the summary does not say what was being freed. Evidence kept at `evidence-bun-crash-verify.log`.
 
 ### GITHUB-ACTION-DOWNLOAD-429
 
