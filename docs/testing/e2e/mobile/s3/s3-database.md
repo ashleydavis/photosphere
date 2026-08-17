@@ -18,7 +18,7 @@ bun run start -- init --db s3:<bucket>:/manual-test --yes
 bun run start -- add ../../test/test.jpg --db s3:<bucket>:/manual-test
 ```
 
-Send the S3 credentials to the phone as a secret, and the database entry, as in [receive-database-and-secret](../lan-share/receive-database-and-secret.md).
+Send the S3 credentials to the phone as a secret, and the database entry, as in [cli-to-mobile](../lan-share/cli-to-mobile.md).
 
 ## Steps
 

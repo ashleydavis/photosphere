@@ -208,6 +208,7 @@ Run each of these on Android and on iOS. Tick a test only when it has passed on 
 
 ### Database
 - [ ] [create-and-open-database](mobile/database/create-and-open-database.md)
+- [ ] [load-large-database](mobile/database/load-large-database.md)
 - [ ] [view-database-details](mobile/database/view-database-details.md)
 - [ ] [remove-recent-database](mobile/database/remove-recent-database.md)
 - [ ] [open-encrypted-database](mobile/database/open-encrypted-database.md)
@@ -216,8 +217,12 @@ Run each of these on Android and on iOS. Tick a test only when it has passed on 
 ### Sync
 - [ ] [sync-with-another-database](mobile/sync/sync-with-another-database.md)
 
+### Move
+- [ ] [move-file-between-databases](mobile/move/move-file-between-databases.md)
+
 ### Replication
 - [ ] [replicate-to-another-database](mobile/replication/replicate-to-another-database.md)
+- [ ] [partial-replica-and-prefetch](mobile/replication/partial-replica-and-prefetch.md)
 
 ### S3
 - [ ] [s3-database](mobile/s3/s3-database.md)
@@ -228,7 +233,9 @@ Run each of these on Android and on iOS. Tick a test only when it has passed on 
 - [ ] [add-s3-credentials](mobile/secrets/add-s3-credentials.md)
 
 ### LAN Share
-- [ ] [receive-database-and-secret](mobile/lan-share/receive-database-and-secret.md)
+- [ ] [mobile-to-mobile](mobile/lan-share/mobile-to-mobile.md)
+- [ ] [desktop-to-mobile](mobile/lan-share/desktop-to-mobile.md)
+- [ ] [cli-to-mobile](mobile/lan-share/cli-to-mobile.md)
 
 ### News
 - [ ] [news-notifications](mobile/news/news-notifications.md)

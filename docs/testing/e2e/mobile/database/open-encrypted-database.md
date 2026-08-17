@@ -18,7 +18,7 @@ bun run start -- init --db /tmp/psi-encrypted --key manual-test-key --generate-k
 bun run start -- add ../../test/test.jpg --db /tmp/psi-encrypted --key manual-test-key
 ```
 
-Then send the key and the database entry to the phone over the LAN, as in [receive-database-and-secret](../lan-share/receive-database-and-secret.md).
+Then send the key and the database entry to the phone over the LAN, as in [cli-to-mobile](../lan-share/cli-to-mobile.md).
 
 ## Steps
 
