@@ -17,8 +17,9 @@ ANDROID_APK="$ANDROID_FRONTEND_DIR/android/app/build/outputs/apk/debug/app-debug
 # by the next one.
 ANDROID_APK_STAMP="/data/local/tmp/psphere-apk.sha"
 
-# The bridge script owns the definition of "ready" (emulator started + on the LAN bridge). run.sh
-# gates on it so `status` and the test run never disagree about what ready means.
+# The bridge script owns the definition of "ready" (emulator started + on the LAN bridge), and is also
+# what brings an emulator up when there is not one. The run asks it both questions so `status`, `up`
+# and the test run can never disagree about what ready means.
 ANDROID_BRIDGE_SCRIPT="$ANDROID_FRONTEND_DIR/scripts/emulator.sh"
 
 # How long android_host_address waits for a bridge-attached emulator's wlan0 address to come back
@@ -58,21 +59,6 @@ android_hardware_devices() {
     adb devices 2>/dev/null | awk 'NR > 1 && $2 == "device" && $1 !~ /^emulator-/ { print $1 }'
 }
 
-#
-# Fails the whole run immediately unless the emulator is started AND on the LAN bridge, by delegating
-# to the bridge script's `status` (exit 0 = ready). Never boots, restarts, wipes, reboots, or changes
-# any setting on the emulator: getting it ready is the human's job, not this script's.
-#
-# Only the two host-to-device LAN transfer tests need the bridge, and they check for it themselves
-# (require_lan_bridge). A run that has declared it cannot have a bridge, and so skips those two, only
-# needs the emulator started, so that is all this requires of it. Asking for the bridge in that case
-# would gate the whole suite on something it does not use.
-#
-# A plugged-in real device is accepted before any of that is asked. The emulator LAN bridge exists to
-# give an emulated guest a route to the host it otherwise has no way to reach, and a phone on the same
-# physical LAN as the host already has one. Demanding the bridge would refuse a run on the very device
-# that needs it least.
-#
 #
 # Refuses the whole run when the machine has almost no memory left, before anything is built or
 # installed.
@@ -150,6 +136,35 @@ android_warn_degraded_pool() {
     log_info "  bun run --filter=android-frontend emu:pool:repair"
 }
 
+#
+# Makes sure the run has something to run on: the emulator started and on the LAN bridge. When it is
+# not, this starts it, by the same `emulator.sh up` that `bun run emu:and:up` runs, and waits for it.
+#
+# It used to refuse instead and tell whoever ran it to go and start the emulator themselves. That put
+# a manual step in front of the one command that is meant to say whether a change is good, and the
+# step was the same command every time, so the refusal was doing nothing but making the human type it.
+# `bun run and50` has always started the emulator it needs; this now does the same.
+#
+# `up` is safe to call when an emulator is already running: it reports the running one and starts
+# nothing. It brings the bridge up too, which needs sudo, so a run started on a machine whose bridge
+# is down will ask for a password. Nothing else here needs root, and once the bridge is up (it stays
+# up until it is taken down) no later run asks again.
+#
+# It deliberately touches nothing that is already running. `up` does not restart, wipe or reconfigure
+# an emulator, and it has nothing to do with the pool: a pool that is up is left exactly as it is, and
+# an emulator that is up but off the bridge is reported rather than killed, because -wifi-tap is fixed
+# at launch and cannot be attached afterwards.
+#
+# Only the two host-to-device LAN transfer tests need the bridge, and they check for it themselves
+# (require_lan_bridge). A run that has declared it cannot have a bridge, and so skips those two, only
+# needs the emulator started, so that is all this requires of it, and it starts nothing there: on the
+# release workflow the emulator is booted by an action and there is no sudo to bring a bridge up with.
+#
+# A plugged-in real device is accepted before any of that is asked. The emulator LAN bridge exists to
+# give an emulated guest a route to the host it otherwise has no way to reach, and a phone on the same
+# physical LAN as the host already has one. Demanding the bridge would refuse a run on the very device
+# that needs it least.
+#
 android_require_ready() {
     local hardware_devices
 
@@ -174,9 +189,13 @@ android_require_ready() {
 
     log_info "Checking the emulator is ready (started + on the LAN bridge)..."
     if ! "$ANDROID_BRIDGE_SCRIPT" status; then
-        log_error "Emulator not ready (see above). test:and needs it started and on the LAN bridge."
-        log_error "Start it and bring up the bridge yourself, then rerun. This script will not touch the emulator."
-        exit 1
+        log_info "No emulator is on the LAN bridge, so bringing one up (the same as 'bun run emu:and:up')."
+        log_info "This asks for sudo if the bridge itself is down; the emulator needs no root."
+        if ! "$ANDROID_BRIDGE_SCRIPT" up; then
+            log_error "Could not bring the emulator up on the LAN bridge (see above). test:and needs it."
+            log_error "An emulator that is up but off the bridge cannot join it: run 'bun run emu:and:restart'."
+            exit 1
+        fi
     fi
 
     android_warn_degraded_pool

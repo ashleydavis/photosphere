@@ -117,8 +117,15 @@ emulator_target() {
 # bridge up and never runs sudo: it attaches to the bridge only when it happens to be up already, and
 # otherwise starts without it. That is what lets a plain `bun run run` work on a clean clone with no
 # separate step. Bring the bridge up with `bun run emu:and:up` when you actually need LAN sharing (the
-# host-to-device LAN-share tests); -wifi-tap looks like it would share the LAN and is accepted without
-# complaint, but is silently ignored, so the bridge attach below uses -net-tap.
+# host-to-device LAN-share tests).
+#
+# The attach below uses -net-tap, which puts the guest's eth0 on the tap, rather than the -wifi-tap
+# that emulator.sh uses for wlan0. -wifi-tap attaches to the emulator's own virtio-wifi backend, and
+# on a current build that backend is not in the Wi-Fi path at all: netsim is, and it ignores the flag.
+# emulator.sh works around that with -feature -WiFiPacketStream (see emulator.md); this path does not
+# need to, because eth0 is a plain qemu NIC that netsim has nothing to do with. It does mean the two
+# put the guest on the bridge through different interfaces, which is why disable_guest_wifi below has
+# to turn the guest's wifi off here and emulator.sh has no such step.
 start_emulator() {
     if [ ! -x "$EMULATOR" ]; then
         echo "ERROR: emulator not found at $EMULATOR" >&2

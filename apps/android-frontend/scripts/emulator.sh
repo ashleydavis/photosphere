@@ -877,6 +877,28 @@ ensure_pool_slice() {
 # bypass any blocking metrics prompt during launch. No such prompt has been seen here, so this is
 # preventing rather than fixing something, but it costs nothing and the failure it would cause is
 # the one above.
+#
+# -feature -WiFiPacketStream is what makes -wifi-tap do anything at all on a current emulator build.
+#
+# The emulator has two separate implementations of guest wifi. Its own virtio-wifi backend is the one
+# -wifi-tap attaches to. The other is netsim: a separate netsimd process the emulator starts, which
+# emulates the radio itself and puts the guest behind its own libslirp NAT on 10.0.2.16. Which of the
+# two runs is decided by the WiFiPacketStream feature flag in the SDK's own
+# emulator/lib/advancedFeatures.ini, and on emulator 37.1.11 that ships as "on", so netsim wins and
+# -wifi-tap is parsed, accepted and then ignored. The emulator even opens the tap and never sends a
+# frame down it: the tap read 780 packets transmitted from the host and 0 received from the guest,
+# while the guest's wlan0 held netsim's 10.0.2.16 and the host's dnsmasq log recorded no DHCP request
+# from it at all. The emulator log says which one it picked ("Successfully initialized netsim WiFi").
+#
+# This is why the bridge worked on one machine and not the next one, with the same checkout: nothing
+# here was ever specific to a machine, but install-android-sdk.sh does not pin the emulator package,
+# so a fresh install picks up whatever build sdkmanager offers that day, and the flag's default
+# changed underneath it.
+#
+# Turning the feature off, rather than handing the tap to netsimd with -netsim-args --wifi-tap, is
+# what the pool needs. netsimd is one shared daemon for every emulator on the machine and takes a
+# single --wifi-tap, so it cannot give five pool emulators five separate taps. The emulator's own
+# backend is per-emulator, which is exactly the arrangement the pool is built on.
 # Usage: emulator_launch_argv <emulator_binary> <avd_name> <tap_name> <wipe>
 #
 emulator_launch_argv() {
@@ -895,6 +917,8 @@ emulator_launch_argv() {
     echo "-crash-report-mode"
     echo "never"
     echo "-no-metrics"
+    echo "-feature"
+    echo "-WiFiPacketStream"
     echo "-wifi-tap"
     echo "$netcard"
 
@@ -2115,7 +2139,7 @@ cmd_pool_diagnose() {
 #
 # Prints a one-word verdict on the first line -- "ready" or "not ready" -- with a short reason on
 # the next line, and sets the exit code to match (0 = ready, non-zero = not ready) so callers such
-# as `test:and` can gate on it.
+# as `test:and` can decide from it whether to bring an emulator up.
 #
 # "ready" means the emulator is started AND on the LAN bridge, i.e. its wlan0 has a 192.168.55.x
 # address. That is exactly what the smoke tests need (require_lan_bridge asserts the same thing), so
