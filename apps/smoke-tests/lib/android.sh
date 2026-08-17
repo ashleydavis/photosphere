@@ -802,6 +802,29 @@ android_seed_media() {
         fi
     fi
 
+    # A pending row belongs to whoever created it and MediaStore hides it from every other app, so
+    # the photo is in the library for adb and invisible to Photosphere. That is what failed test 47
+    # on CI: the API 33 emulator indexes a scanned file with is_pending=1, and the app read
+    # `files=0 images=0 video=0` from inside its own process while this helper found the row from the
+    # shell that owns it. The API 36 emulator here writes is_pending=0, which is why the same seed has
+    # always worked locally. Clearing it is what makes the row a photo in the library rather than one
+    # app's work in progress.
+    if android_media_store_row "$remote_name" | grep -q "is_pending=1"; then
+        # By the row's own id, against the item's URI. The collection URI refuses this outright with
+        # "Movement of content://media/external/file which isn't part of well-defined collection not
+        # allowed", and an id needs no string literal, so the --where quoting that this provider
+        # parses differently by API level does not come into it.
+        local row_id
+        row_id="$(android_media_store_row "$remote_name" | sed 's/.*_id=\([0-9]*\),.*/\1/')"
+        adb shell content update --uri "content://media/external/file/$row_id" --bind is_pending:i:0 >/dev/null 2>&1 || true
+
+        if android_media_store_row "$remote_name" | grep -q "is_pending=1"; then
+            log_error "MediaStore holds $remote_path as pending, so no app but its owner can see it, and clearing that failed"
+            log_error "MediaStore row: $(android_media_store_row "$remote_name")"
+            return 1
+        fi
+    fi
+
     # The row itself, not just that there was one. A seeding step that says only "done" is what let
     # four faults through in this helper already, and the row is two lines of output that say what
     # the app should be about to find.
@@ -834,7 +857,7 @@ android_media_store_row() {
     # while the app reads an empty library from inside its own process, so what the row says about
     # itself is the next thing worth knowing.
     adb shell content query --uri content://media/external/file \
-        --projection _display_name:media_type:volume_name:is_pending:owner_package_name \
+        --projection _id:_display_name:media_type:volume_name:is_pending:owner_package_name \
         2>&1 | tr -d '\r' | grep "^Row:" | grep "_display_name=$remote_name,"
 }
 
