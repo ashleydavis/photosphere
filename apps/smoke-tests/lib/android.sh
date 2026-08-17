@@ -802,7 +802,10 @@ android_seed_media() {
         fi
     fi
 
-    log_info "Put '$remote_name' into the device photo library"
+    # The row itself, not just that there was one. A seeding step that says only "done" is what let
+    # four faults through in this helper already, and the row is two lines of output that say what
+    # the app should be about to find.
+    log_info "Put '$remote_name' into the device photo library: $(android_media_store_row "$remote_name")"
 }
 
 #
@@ -825,7 +828,13 @@ android_media_store_row() {
     # reporting a library that held it when MediaStore had refused to index it at all, which is the
     # very fault the check exists to catch. Filtering here costs one grep and cannot be misparsed:
     # the emulator's library is a handful of rows.
-    adb shell content query --uri content://media/external/file --projection _display_name:media_type:volume_name \
+    # is_pending and owner_package_name are here because a row can be present and still invisible to
+    # every app but the one that wrote it: MediaStore hides a pending row, and a query from adb runs
+    # as shell and sees it regardless. On the API 33 emulator the workflow runs, this check passes
+    # while the app reads an empty library from inside its own process, so what the row says about
+    # itself is the next thing worth knowing.
+    adb shell content query --uri content://media/external/file \
+        --projection _display_name:media_type:volume_name:is_pending:owner_package_name \
         2>&1 | tr -d '\r' | grep "^Row:" | grep "_display_name=$remote_name,"
 }
 
