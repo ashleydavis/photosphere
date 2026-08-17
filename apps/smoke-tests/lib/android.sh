@@ -817,8 +817,16 @@ android_seed_media() {
 #
 android_media_store_row() {
     local remote_name="$1"
-    adb shell content query --uri content://media/external/file --projection _id:media_type:volume_name \
-        --where "\"_display_name='$remote_name'\"" 2>&1 | tr -d '\r' | grep "^Row:"
+
+    # No --where. Its quoting does not survive the trip through adb the same way on every API level:
+    # on the API 33 emulator the workflow runs, `content delete` with the same form logs
+    # "Invalid token psphere" from DatabaseUtils, and a where clause the provider rejects is a filter
+    # that is not applied. This check was then matching rows that were not the seeded photo and
+    # reporting a library that held it when MediaStore had refused to index it at all, which is the
+    # very fault the check exists to catch. Filtering here costs one grep and cannot be misparsed:
+    # the emulator's library is a handful of rows.
+    adb shell content query --uri content://media/external/file --projection _display_name:media_type:volume_name \
+        2>&1 | tr -d '\r' | grep "^Row:" | grep "_display_name=$remote_name,"
 }
 
 #
