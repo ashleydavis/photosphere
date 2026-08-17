@@ -199,11 +199,36 @@ Run each of these on Android and on iOS. Tick a test only when it has passed on 
 ### Import
 - [ ] [import-photo-and-video](mobile/import/import-photo-and-video.md)
 
+### Gallery
+- [ ] [view-and-edit-asset](mobile/gallery/view-and-edit-asset.md)
+- [ ] [export-asset](mobile/gallery/export-asset.md)
+
+### Download
+- [ ] [download-assets](mobile/download/download-assets.md)
+
 ### Database
 - [ ] [create-and-open-database](mobile/database/create-and-open-database.md)
+- [ ] [view-database-details](mobile/database/view-database-details.md)
+- [ ] [remove-recent-database](mobile/database/remove-recent-database.md)
+- [ ] [open-encrypted-database](mobile/database/open-encrypted-database.md)
+- [ ] [edit-database-origin](mobile/database/edit-database-origin.md)
+
+### Sync
+- [ ] [sync-with-another-database](mobile/sync/sync-with-another-database.md)
+
+### Replication
+- [ ] [replicate-to-another-database](mobile/replication/replicate-to-another-database.md)
+
+### S3
+- [ ] [s3-database](mobile/s3/s3-database.md)
 
 ### Secrets
 - [ ] [add-and-view-secret](mobile/secrets/add-and-view-secret.md)
+- [ ] [add-encryption-key](mobile/secrets/add-encryption-key.md)
+- [ ] [add-s3-credentials](mobile/secrets/add-s3-credentials.md)
 
 ### LAN Share
 - [ ] [receive-database-and-secret](mobile/lan-share/receive-database-and-secret.md)
+
+### News
+- [ ] [news-notifications](mobile/news/news-notifications.md)

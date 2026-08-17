@@ -6,9 +6,15 @@ Manual test scripts for the Photosphere mobile app on Android and iOS.
 
 - [auto-import/](auto-import/) - Tests covering automatic photo backup from the device photo library
 - [import/](import/) - Tests covering importing photos and videos chosen by hand
+- [gallery/](gallery/) - Tests covering viewing photos, editing their details and exporting them
+- [download/](download/) - Tests covering downloading assets onto the device
 - [database/](database/) - Tests covering creating, opening and inspecting databases
+- [sync/](sync/) - Tests covering syncing with another copy of a database
+- [replication/](replication/) - Tests covering replicating a database elsewhere
+- [s3/](s3/) - Tests covering databases held in an S3 bucket
 - [secrets/](secrets/) - Tests covering managing secrets in the app vault
 - [lan-share/](lan-share/) - Tests covering receiving a database or a secret over the LAN
+- [news/](news/) - Tests covering the news notifications
 
 ## Prerequisites
 
