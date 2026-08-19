@@ -117,14 +117,24 @@ Expected:
 
 ### 9. Check the photos are really there
 
-Share or replicate the database to your development machine, then from `apps/cli/`:
+First copy the database somewhere your development machine can read it. Use replication, not sharing: sharing sends the database entry and its secrets, not the photos.
+
+1. Go to the **Databases** page.
+2. Open the **⋮** menu on the database automatic import created and choose **Replicate**.
+3. Set **Destination type** to **S3** and use **Configure secrets** to give it the credentials for a bucket your development machine can also read.
+4. Enter the **Destination path** for the bucket.
+5. Choose **Full**, start it, and wait for it to report that it finished.
+
+Then from `apps/cli/`:
 
 ```bash
-bun run start -- verify --db <path to the copy>
+bun run start -- verify --db <the destination you replicated to>
 ```
 
 Expected:
 - Verification completes without errors.
 - The number of files matches what the gallery showed.
+
+Automatic import must have finished before the counts can match. While it is still catching up the gallery keeps growing, so either wait for it to finish or turn the toggle off first and note the count you are comparing against.
 
 A photo that shows in the gallery but fails verification has been recorded without its content being stored, which is the failure this step is here to catch.
