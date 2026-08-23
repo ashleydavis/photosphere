@@ -162,7 +162,9 @@ Anything else is work to carry on with.
 
 ## Finishing
 
-Both scripts green in one pass each, and every remaining commit tied to a failure one of them produced. Then write:
+Both scripts green in one pass each, and every remaining commit tied to a failure one of them produced. Then add an entry to `docs/testing/flakey-log.md`, dated today, following the entries already there: the ladder target, the result of each script with its session directory, what failed and what was done about it, and any suite left out of the run. Keep it to a few lines, because the detail of a failure mode belongs in `docs/flaky-tests-registry.md` and the entry points at it. A session that found nothing still gets an entry.
+
+Then write:
 
 - Each fix: which test failed, what the cause was, what the change did, and why it was the smallest change that removes that one cause.
 - The evidence that proved each fix, or plainly that a red run could not be produced.
