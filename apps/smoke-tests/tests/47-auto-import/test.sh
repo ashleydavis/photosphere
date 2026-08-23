@@ -86,7 +86,7 @@ wait_for_log "$TMP_DIR" "Starting automatic import into" || exit 1
 
 # The photo has to actually arrive. This is the line the engine-pool deadlock never reached: the loop
 # would report zeros forever because the import it queued could not get a slot.
-wait_for_log "$TMP_DIR" "Automatic import: 1 imported" 180 || exit 1
+wait_for_log "$TMP_DIR" "Import: 1 imported" 180 || exit 1
 
 # The photo has to be in the database the app made, not merely reported as imported. Opening it is
 # also what the Import page needs before it will run its tool check and become ready.
@@ -104,20 +104,19 @@ wait_for_log "$TMP_DIR" "Import page ready" || exit 1
 #
 # It also fills the Import page's panel, which only shows what it has been told while it is on
 # screen. The panel is the shared one the desktop uses and it reads task messages, so this is what
-# proves the progress of a loop running in the WebView still reaches the interface.
+# proves the progress of an import running in the embedded engine still reaches the interface.
 "${PLATFORM}_seed_media" "$REPO_DIR/test/multiple-files/test-2.png" "$SECOND_PHOTO_NAME" || exit 1
 
 # The panel appears on the first progress message it is told about, which is the one sent as the
 # batch is handed over, so it is waited for before the count that follows it. Waiting the other way
 # round moves the log cursor past this line and then times out on it.
-wait_for_log "$TMP_DIR" "Automatic import progress shown" 180 || exit 1
-wait_for_log "$TMP_DIR" "Automatic import: 2 imported" 180 || exit 1
+wait_for_log "$TMP_DIR" "Import progress shown" 180 || exit 1
 
-imported_chip="$(read_value "$APP_PORT" "auto-import-imported-count")"
-if [ "$imported_chip" != "Imported 2" ]; then
-    log_error "The import panel should say \"Imported 2\", but it says \"$imported_chip\""
-    exit 1
-fi
+# One imported, again, rather than two. An import reads its sources to the end and stops, and the app
+# starts another a short while later, so every run counts only what it did: the run that takes in this
+# second photo reports one, exactly as the run that took in the first one did. That both photos are in
+# the database is proven below, by the gallery holding two.
+wait_for_log "$TMP_DIR" "Import: 1 imported" 180 || exit 1
 
 # The second photo has to land in the gallery without the database being reopened, which is what the
 # arrival messages are for. A photo that only shows up after a restart is not a photo the user saw

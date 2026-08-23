@@ -38,6 +38,16 @@ export interface ITaskContext {
     // Returns true if this task has been cancelled and should stop as soon as possible.
     //
     isCancelled: () => boolean;
+
+    //
+    // How many child tasks this task may have running at once.
+    //
+    // Supplied by the platform that built this context, because only it knows: a desktop has cores
+    // and a fast disk to spare, while every engine an import fills on a phone is one a tap has to
+    // wait for. It is not the size of the worker pool, it is how much of that pool one task may take,
+    // so a second import, a sync, or anything the user does still gets a worker.
+    //
+    maxConcurrentChildTasks: number;
 }
 
 //
@@ -45,6 +55,31 @@ export interface ITaskContext {
 // Returns the result payload (can be any type)
 //
 export type TaskHandler = (data: any, context: ITaskContext) => Promise<any>;
+
+//
+// How urgent a task is, which decides the order the queue dispatches pending tasks in.
+//
+// Two levels are enough. Interactive means the user is sitting in front of the app waiting for this
+// to finish (opening a database, reading the database list); background is everything else, and is
+// what automatic import and syncing use. Within a level, arrival order is kept.
+//
+export enum TaskPriority {
+    //
+    // Something the user is waiting on. Dispatched ahead of every background task, however long
+    // those have been queued.
+    //
+    Interactive = "interactive",
+
+    //
+    // Work that happens on its own. Dispatched only when no interactive task is waiting.
+    //
+    Background = "background"
+}
+
+//
+// The priority a task runs at when nothing asked for one, and it is not a child of a running task.
+//
+export const DEFAULT_TASK_PRIORITY = TaskPriority.Background;
 
 //
 // Task status enumeration
@@ -84,6 +119,11 @@ export interface ITask<TData> {
     // Source tag used to group and cancel related tasks (e.g. a database path).
     //
     source: string;
+
+    //
+    // How urgent the task is. Decides which pending task the pool dispatches next.
+    //
+    priority: TaskPriority;
 
     //
     // When the task was created.

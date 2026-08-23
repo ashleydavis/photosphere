@@ -45,6 +45,7 @@ function makeContext(overrides: Partial<ITaskContext> = {}): ITaskContext {
         uuidGenerator: { generate: jest.fn().mockReturnValue("new-asset-id") },
         timestampProvider: { now: jest.fn().mockReturnValue(Date.now()), dateNow: jest.fn().mockReturnValue(new Date()) },
         sessionId: "test-session",
+        maxConcurrentChildTasks: 10,
         sendMessage: jest.fn(),
         isCancelled: jest.fn().mockReturnValue(false),
         taskId: "move-task-id",

@@ -51,7 +51,7 @@ public final class EnginePoolChildTaskTest {
     // Builds a task with the given id and source.
     //
     private PooledTask task(String taskId, String source) {
-        return new PooledTask(taskId, "test-type", "{}", source);
+        return new PooledTask(taskId, "test-type", "{}", source, null);
     }
 
     //
@@ -80,7 +80,7 @@ public final class EnginePoolChildTaskTest {
         assertNotNull(parentEngine);
 
         // The running parent spawns a child; it dispatches to a different, idle engine.
-        pool.queueChildTask("parent", new PooledTask("child", "hash-file", "{\"filePath\":\"a.jpg\"}", "session"));
+        pool.queueChildTask("parent", new PooledTask("child", "hash-file", "{\"filePath\":\"a.jpg\"}", "session", null));
         StubEngine childEngine = engineRunning("child");
         assertNotNull(childEngine);
         assertTrue(childEngine != parentEngine);
@@ -114,7 +114,7 @@ public final class EnginePoolChildTaskTest {
         pool.addTask(task("parent", "import"));
         StubEngine parentEngine = engineRunning("parent");
 
-        pool.queueChildTask("parent", new PooledTask("child", "hash-file", "{}", "session"));
+        pool.queueChildTask("parent", new PooledTask("child", "hash-file", "{}", "session", null));
         StubEngine childEngine = engineRunning("child");
         childEngine.fail("hashing failed");
 
@@ -138,7 +138,7 @@ public final class EnginePoolChildTaskTest {
         pool.addTask(task("parent", "import"));
         StubEngine parentEngine = engineRunning("parent");
 
-        pool.queueChildTask("parent", new PooledTask("child", "hash-file", "{}", "session"));
+        pool.queueChildTask("parent", new PooledTask("child", "hash-file", "{}", "session", null));
         StubEngine childEngine = engineRunning("child");
         childEngine.emitMessage("{\"type\":\"progress\",\"percent\":50}");
 
@@ -156,7 +156,7 @@ public final class EnginePoolChildTaskTest {
         RecordingPoolListener listener = new RecordingPoolListener();
         EnginePool pool = newPool(listener, 3);
 
-        pool.queueChildTask("ghost-parent", new PooledTask("child", "hash-file", "{}", "session"));
+        pool.queueChildTask("ghost-parent", new PooledTask("child", "hash-file", "{}", "session", null));
         assertNull(engineRunning("child"));
     }
 
@@ -172,7 +172,7 @@ public final class EnginePoolChildTaskTest {
         assertNotNull(engineRunning("parent"));
 
         pool.cancelTasks("session");
-        pool.queueChildTask("parent", new PooledTask("child", "hash-file", "{}", "session"));
+        pool.queueChildTask("parent", new PooledTask("child", "hash-file", "{}", "session", null));
         assertNull(engineRunning("child"));
     }
 }

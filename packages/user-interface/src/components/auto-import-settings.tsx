@@ -11,20 +11,43 @@ import { IAutoImportSettings, IFolderAutoImportSource } from "api/src/lib/auto-i
 import { useConfig } from "../context/config-context";
 import { usePlatform } from "../context/platform-context";
 import { log } from "utils";
-import { loadAutoImportSettings, saveAutoImportSettings } from "../lib/auto-import-config";
+import { getDefaultDatabasePath, loadAutoImportSettings, saveAutoImportSettings } from "../lib/auto-import-config";
+import { buildCleanupSourcesTaskData, describeCleanupResult, ICleanupSourcesTaskResult } from "../lib/source-cleanup-request";
+import { TaskQueue } from "task-queue";
+import { RandomUuidGenerator } from "utils";
+
+//
+// The source tag the cleanup task is queued under.
+//
+const CLEANUP_TASK_SOURCE = "source-cleanup";
 
 //
 // The "Automatic import" card on the settings page.
 //
 // Switching it on tells the app to watch the places listed below and import what turns up. The
-// places, the toggle and the cleanup setting are all this card writes: the pacing and the poll
-// interval are not settings the user is offered, so they stay at their shared defaults rather than
-// being written out here and read back as if they had been chosen.
+// places and the toggle are all this card writes: the pacing and the poll interval are not settings
+// the user is offered, so they stay at their shared defaults rather than being written out here and
+// read back as if they had been chosen.
+//
+// The card also carries the button that deletes photos this device holds that the database already
+// has. That used to be a setting, switched on and off, with automatic import doing the deleting as
+// it went: on a phone every deletion raises a system confirmation, so the user was asked once per
+// handful of photos. A button asks once, when they choose.
 //
 export function AutoImportSettings() {
     const config = useConfig();
     const platform = usePlatform();
     const [settings, setSettings] = useState<IAutoImportSettings | undefined>(undefined);
+
+    // How many photos the last counting pass found, or undefined when none has run since the last
+    // deletion. This is what turns the button from "find them" into "delete them".
+    const [cleanupCounted, setCleanupCounted] = useState<number | undefined>(undefined);
+
+    // What the last cleanup run reported, shown under the button.
+    const [cleanupMessage, setCleanupMessage] = useState<string>("");
+
+    // Set while a cleanup is running, so the button shows it is busy and cannot be pressed twice.
+    const [cleanupRunning, setCleanupRunning] = useState<boolean>(false);
 
     useEffect(() => {
         loadAutoImportSettings(config)
@@ -82,6 +105,49 @@ export function AutoImportSettings() {
             sources: settings!.sources.filter(source => source.type !== "folder" || source.path !== folderPath),
         });
         log.event("Automatic import folder removed");
+    }
+
+    //
+    // Counts the photos on this device the database already holds, then, on a second press, deletes
+    // them.
+    //
+    // Two presses rather than one because this deletes the only copy of a photo that is not in the
+    // database, and because a count the user has seen is the only honest way to ask. The counting
+    // pass and the deleting pass are the same task with a flag, so what the button offers to delete
+    // is decided by exactly the code that then deletes it.
+    //
+    async function runCleanup(): Promise<void> {
+        // Read now rather than when this card was first shown: the database is created when automatic
+        // import is switched on, which is usually after this card is on screen, so a path read at
+        // mount is empty exactly when the user first wants this button.
+        const databasePath = await getDefaultDatabasePath(config);
+        if (!databasePath) {
+            setCleanupMessage("There is no database to check against yet.");
+            return;
+        }
+
+        const dryRun = cleanupCounted === undefined;
+        setCleanupRunning(true);
+        try {
+            const queue = new TaskQueue(new RandomUuidGenerator(), CLEANUP_TASK_SOURCE);
+            try {
+                const taskId = queue.addTask("cleanup-sources", buildCleanupSourcesTaskData(databasePath, settings!, dryRun));
+                const taskResult = await queue.awaitTask(taskId);
+                const cleanupResult = taskResult?.outputs as ICleanupSourcesTaskResult | undefined;
+
+                setCleanupMessage(describeCleanupResult(cleanupResult, dryRun));
+                setCleanupCounted(dryRun && cleanupResult !== undefined && cleanupResult.deletableSourceIds.length > 0
+                    ? cleanupResult.deletableSourceIds.length
+                    : undefined);
+                log.event(dryRun ? "Source cleanup counted" : "Source cleanup ran");
+            }
+            finally {
+                queue.shutdown();
+            }
+        }
+        finally {
+            setCleanupRunning(false);
+        }
     }
 
     return (
@@ -150,24 +216,30 @@ export function AutoImportSettings() {
                 Add a folder
             </Button>
 
-            <Box
-                data-id="auto-import-cleanup-toggle"
-                sx={{ display: 'flex', alignItems: 'center', gap: 1, cursor: 'pointer' }}
+            <Typography level="title-sm">Free up space on this device</Typography>
+            <Typography level="body-sm" sx={{ color: 'text.tertiary' }}>
+                Deletes photos from this device that your database already holds. Your database
+                becomes the only copy of them, so only do this if you also keep a remote copy.
+            </Typography>
+            <Button
+                size="sm"
+                variant="outlined"
+                color={cleanupCounted === undefined ? "neutral" : "danger"}
+                loading={cleanupRunning}
+                data-id="auto-import-cleanup-button"
                 onClick={() => {
-                    const cleanupEnabled = !settings.cleanupEnabled;
-                    applySettings({ ...settings, cleanupEnabled })
-                        .then(() => log.event(`Automatic import cleanup ${cleanupEnabled ? "enabled" : "disabled"}`))
-                        .catch(error => log.exception("Failed to change the cleanup setting", error as Error));
+                    runCleanup().catch(error => log.exception("Failed to clean up source files", error as Error));
                 }}
                 >
-                <Typography level="title-sm" sx={{ flexGrow: 1 }}>Delete originals after import</Typography>
-                <Switch readOnly checked={settings.cleanupEnabled} sx={{ pointerEvents: 'none' }} />
-            </Box>
-            <Typography level="body-sm" sx={{ color: 'text.tertiary' }}>
-                Deletes each file from the watched folder once the photo is confirmed in your
-                database. Your database becomes the only copy, so leave this off unless you also keep
-                a remote copy.
-            </Typography>
+                {cleanupCounted === undefined
+                    ? "Find photos already in my database"
+                    : `Delete ${cleanupCounted} photo(s) from this device`}
+            </Button>
+            {cleanupMessage
+                && <Typography level="body-sm" sx={{ color: 'text.tertiary' }} data-id="auto-import-cleanup-message">
+                    {cleanupMessage}
+                </Typography>
+            }
         </Card>
     );
 }

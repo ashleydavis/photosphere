@@ -27,7 +27,7 @@ The TypeScript orchestration in `packages/task-queue` is reused unchanged. The t
 ```
 TaskQueue.addTask(type, data)            // shared frontend, packages/task-queue
   -> EmbeddedJsQueueBackend               // IQueueBackend implementation for mobile
-  -> native JsEngine Capacitor plugin     // pending FIFO + pool dispatcher
+  -> native JsEngine Capacitor plugin     // one pending queue + pool dispatcher
   -> embedded engine: globalThis.__photosphereWorker.runTask(...)
   -> executeTaskHandler(...)              // runs the registered handler
   -> results / messages back via notifyListeners("taskCompleted" / "taskMessage")
@@ -62,7 +62,7 @@ This is surfaced as the task's error result and logged at error level, so a miss
 
 ### Concurrency and cancellation
 
-Tasks run on a pool of engine threads. The pool size is the build constant `POOL_SIZE` (default 3). The native dispatcher keeps a FIFO of pending tasks and assigns each to an idle engine slot; a size-1 pool runs tasks serially. Cancellation is by source: cancelling a source drops its still-pending tasks from the FIFO and signals running tasks via `isCancelled()`. On `shutdown()` the engine threads are torn down and the Capacitor listeners are removed.
+Tasks run on a pool of engine threads. The pool size is the build constant `POOL_SIZE` (default 3). The native dispatcher keeps one queue of pending tasks and assigns each to an idle engine slot, always taking from the head: an interactive task joins the head of that queue and a background task joins the end. A size-1 pool runs tasks serially. Cancellation is by source: cancelling a source drops its still-pending tasks from the queue and signals running tasks via `isCancelled()`. On `shutdown()` the engine threads are torn down and the Capacitor listeners are removed.
 
 ### Security notes
 
@@ -137,7 +137,7 @@ export * from "./lib/my-task.worker";
 ## Queuing and consuming a task
 
 ```typescript
-import { TaskQueue, TaskStatus } from "task-queue";
+import { TaskQueue, TaskStatus, TaskPriority } from "task-queue";
 import { RandomUuidGenerator } from "utils";
 import type { IMyTaskData, IMyTaskResult } from "api";
 
@@ -146,6 +146,10 @@ const queue = new TaskQueue(new RandomUuidGenerator(), "my-source");
 
 // Queue the task. Returns the task ID.
 const taskId = queue.addTask("my-task", { databasePath } satisfies IMyTaskData);
+
+// A task the user is sitting there waiting for goes ahead of everything automatic import and syncing
+// have already queued. The third argument is an explicit task id; pass undefined to have one minted.
+const tapTaskId = queue.addTask("my-task", { databasePath }, undefined, TaskPriority.Interactive);
 
 // Option A: await the result directly.
 const result = await queue.awaitTask(taskId);

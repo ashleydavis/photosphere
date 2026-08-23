@@ -43,8 +43,31 @@ log_success "The manual import is recorded and badged manual"
 
 # --- 2. An automatic import is recorded too, and badged automatic. ---
 
+# Only a watch badges what it takes in as automatic, and a watch does not end by itself, so this
+# starts one, waits for the photo to land, and stops it with Ctrl-C. That is what a watch is: there
+# is no bounded version of it to run instead.
+WATCH_LOG="$TEST_DIR/watch.log"
+set -m
+env NODE_ENV=testing $CLI_COMMAND add --db "$LOCAL_DB" "$WATCH_DIR" --watch --yes > "$WATCH_LOG" 2>&1 &
+WATCH_PGID=$!
+set +m
+
 cp "$TEST_FILES_DIR/test.jpg" "$WATCH_DIR/arrived.jpg"
-invoke_command "Let automatic import take the second photo" "$CLI_COMMAND watch --db $LOCAL_DB $WATCH_DIR --once --yes"
+
+for attempt in $(seq 1 60); do
+    sleep 1
+    if grep -q '"logicalPath":"[^"]*arrived.jpg"' "$RECORD_FILE" 2>/dev/null; then
+        break
+    fi
+done
+
+kill -INT -"$WATCH_PGID" 2>/dev/null || true
+for attempt in $(seq 1 60); do
+    sleep 0.5
+    if ! kill -0 "$WATCH_PGID" 2>/dev/null; then
+        break
+    fi
+done
 
 if ! grep -q '"source":"automatic"' "$RECORD_FILE"; then
     log_error "An automatically imported photo was not badged automatic"

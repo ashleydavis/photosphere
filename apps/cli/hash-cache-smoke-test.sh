@@ -97,9 +97,13 @@ trap 'stop_writers; exit 143' TERM
 
 # Both the writers and the reads resolve the cache directory from TEST_TMP_DIR, so pointing it at
 # an isolated directory keeps this test off the developer's real hash cache. PHOTOSPHERE_TMP_DIR goes
-# with it so the CLI's own scratch files land there too rather than in the shared /tmp/photosphere,
-# which `psi hash-cache clear` deletes outright.
+# with it so the CLI's own scratch files land there too rather than in the shared /tmp/photosphere.
 photosphere_export_test_temp "$TEST_ROOT"
+
+# The database whose cache this test drives. There is one hash cache per database, so every
+# hash-cache command names one. Nothing here creates a database: the cache directory is derived from
+# the path, and these hidden commands act on the cache alone.
+TEST_DB="$TEST_ROOT/db"
 
 EXPECTED_ENTRIES=$((NUM_PROCESSES * ENTRIES_PER_PROCESS))
 
@@ -130,7 +134,7 @@ run_writer() {
         local entryPath="$writerName/file-$entryIndex.dat"
         local entryHash
         entryHash=$(printf '%s' "$entryPath" | sha256sum | cut -d' ' -f1)
-        psi_cmd hash-cache set "$entryPath" "$entryHash" "$entryIndex"
+        psi_cmd hash-cache set --db "$TEST_DB" "$entryPath" "$entryHash" "$entryIndex"
     done
 
     echo "$writerName: added $ENTRIES_PER_PROCESS entries"
@@ -179,12 +183,12 @@ echo -e "${GREEN}No warnings or errors were printed under contention${NC}"
 echo ""
 echo -e "${YELLOW}Reading the cache back...${NC}"
 
-ACTUAL_ENTRIES=$(psi_cmd hash-cache count)
+ACTUAL_ENTRIES=$(psi_cmd hash-cache count --db "$TEST_DB")
 echo "Cache holds $ACTUAL_ENTRIES entries"
 
 # Every entry every process added must be present, with the hash it was stored with.
 CACHED_PATHS="$OUTPUT_DIR/cached-paths.txt"
-psi_cmd hash-cache list > "$CACHED_PATHS"
+psi_cmd hash-cache list --db "$TEST_DB" > "$CACHED_PATHS"
 
 MISSING=0
 for ((processIndex = 1; processIndex <= NUM_PROCESSES; processIndex++)); do
@@ -204,7 +208,7 @@ fi
 # Spot check that an entry survived with its own hash, not another writer's.
 SPOT_PATH="writer1/file-0.dat"
 SPOT_EXPECTED=$(printf '%s' "$SPOT_PATH" | sha256sum | cut -d' ' -f1)
-SPOT_ACTUAL=$(psi_cmd hash-cache get "$SPOT_PATH")
+SPOT_ACTUAL=$(psi_cmd hash-cache get --db "$TEST_DB" "$SPOT_PATH")
 if [ "$SPOT_ACTUAL" != "$SPOT_EXPECTED" ]; then
     echo -e "${RED}FAIL: $SPOT_PATH has hash $SPOT_ACTUAL, expected $SPOT_EXPECTED${NC}"
     exit 1
@@ -212,13 +216,13 @@ fi
 echo -e "${GREEN}Entry contents survived intact${NC}"
 
 # Removing an entry must stick, and must not disturb the rest.
-psi_cmd hash-cache remove "$SPOT_PATH"
-if psi_cmd hash-cache get "$SPOT_PATH" > /dev/null 2>&1; then
+psi_cmd hash-cache remove --db "$TEST_DB" "$SPOT_PATH"
+if psi_cmd hash-cache get --db "$TEST_DB" "$SPOT_PATH" > /dev/null 2>&1; then
     echo -e "${RED}FAIL: $SPOT_PATH is still cached after being removed${NC}"
     exit 1
 fi
 
-AFTER_REMOVE=$(psi_cmd hash-cache count)
+AFTER_REMOVE=$(psi_cmd hash-cache count --db "$TEST_DB")
 if [ "$AFTER_REMOVE" != "$((EXPECTED_ENTRIES - 1))" ]; then
     echo -e "${RED}FAIL: after removing one entry the cache holds $AFTER_REMOVE, expected $((EXPECTED_ENTRIES - 1))${NC}"
     exit 1

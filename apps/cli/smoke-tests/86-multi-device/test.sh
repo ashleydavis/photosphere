@@ -24,7 +24,7 @@ cp "$TEST_FILES_DIR/test.jpg" "$DEVICE_B_PHOTOS/from-b.jpg"
 # --- Device A imports its photos and creates the remote. ---
 
 invoke_command "Initialize device A" "$CLI_COMMAND init --db $DEVICE_A_DB --yes"
-invoke_command "Device A imports its folder" "$CLI_COMMAND watch --db $DEVICE_A_DB $DEVICE_A_PHOTOS --once --yes"
+invoke_command "Device A imports its folder" "$CLI_COMMAND add --db $DEVICE_A_DB $DEVICE_A_PHOTOS --yes"
 invoke_command "Device A consolidates into the remote" "$CLI_COMMAND consolidate --db $DEVICE_A_DB $REMOTE_DB --yes"
 
 REMOTE_ASSETS=$(ls -1 "$REMOTE_DB/asset" 2>/dev/null | wc -l | tr -d ' ')
@@ -33,7 +33,7 @@ expect_value "$REMOTE_ASSETS" 1 "The remote holds device A's photo"
 # --- Device B imports its own photos and consolidates into the same remote. ---
 
 invoke_command "Initialize device B" "$CLI_COMMAND init --db $DEVICE_B_DB --yes"
-invoke_command "Device B imports its folder" "$CLI_COMMAND watch --db $DEVICE_B_DB $DEVICE_B_PHOTOS --once --yes"
+invoke_command "Device B imports its folder" "$CLI_COMMAND add --db $DEVICE_B_DB $DEVICE_B_PHOTOS --yes"
 
 CONNECT_OUTPUT=""
 invoke_command "Device B consolidates into the same remote" "$CLI_COMMAND consolidate --db $DEVICE_B_DB $REMOTE_DB --yes" 0 CONNECT_OUTPUT
@@ -64,7 +64,10 @@ expect_output_string "$DEVICE_A_LIST" "from-b.jpg" "Device A has device B's phot
 
 cp "$TEST_FILES_DIR/test.webp" "$DEVICE_A_PHOTOS/later-from-a.webp"
 
-invoke_command "Device A imports and syncs the new photo" "$CLI_COMMAND watch --db $DEVICE_A_DB $DEVICE_A_PHOTOS --once --yes"
+# Two commands rather than one: importing and syncing are separate now. `psi add` knows nothing
+# about the origin, and `psi sync` is what pushes to it.
+invoke_command "Device A imports the new photo" "$CLI_COMMAND add --db $DEVICE_A_DB $DEVICE_A_PHOTOS --yes"
+invoke_command "Device A syncs the new photo" "$CLI_COMMAND sync --db $DEVICE_A_DB --yes"
 
 REMOTE_ASSETS=$(ls -1 "$REMOTE_DB/asset" 2>/dev/null | wc -l | tr -d ' ')
 expect_value "$REMOTE_ASSETS" 3 "The remote holds the photo taken after connecting"

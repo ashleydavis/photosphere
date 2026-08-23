@@ -41,7 +41,8 @@ async function loadImportRecord(queue: TaskQueue, databasePath: string): Promise
 // with a mocked platform and queue backend.
 //
 export interface IImportOrchestrationDeps {
-    // Platform context, used for the open-folder and open-files pickers.
+    // Platform context, used for the open-folder and open-files pickers and for how many child tasks
+    // one import may run at once on this platform.
     platform: Pick<IPlatformContext, "pickFolder" | "pickFiles">;
 
     // Path of the currently open database; when undefined all helpers return undefined.

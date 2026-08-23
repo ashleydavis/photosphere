@@ -1,6 +1,6 @@
 import { WebSocketQueueBackend } from '../lib/websocket-queue-backend';
 import type { ITaskResult } from 'task-queue';
-import { TaskStatus, registerHandler } from 'task-queue';
+import { TaskPriority, TaskStatus, registerHandler } from 'task-queue';
 
 //
 // Builds a minimal WebSocket mock that captures the message listener so tests
@@ -38,6 +38,22 @@ describe('WebSocketQueueBackend', () => {
             taskType: 'my-type',
             data: { foo: 1 },
             source: 'my-source',
+        }));
+    });
+
+    test('addTask sends the priority so the server can put a tap at the head of the queue', () => {
+        const ws = makeWebSocket();
+        const backend = new WebSocketQueueBackend(ws as any);
+
+        backend.addTask('my-type', { foo: 1 }, 'my-source', 'my-task-id', TaskPriority.Interactive);
+
+        expect(ws.send).toHaveBeenCalledWith(JSON.stringify({
+            type: 'add-task',
+            taskId: 'my-task-id',
+            taskType: 'my-type',
+            data: { foo: 1 },
+            source: 'my-source',
+            priority: TaskPriority.Interactive,
         }));
     });
 

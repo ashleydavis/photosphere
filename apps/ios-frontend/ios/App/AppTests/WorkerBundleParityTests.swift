@@ -53,7 +53,7 @@ final class WorkerBundleParityTests: XCTestCase {
             storageRoot: FileManager.default.temporaryDirectory,
             isCancelledProvider: { _ in false },
             messageSink: { _, _ in },
-            queueTaskSink: { _, _, _, _, _ in }
+            queueTaskSink: { _, _, _, _, _, _ in }
         )
         bridge.install(into: context)
 

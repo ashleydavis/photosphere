@@ -13,7 +13,7 @@ import java.util.UUID;
 // The engine pool and dispatcher. This is the heart of the mobile background-task
 // system and is written as plain, lock-guarded Java so it can be unit-tested with stub
 // engines on a plain JVM (no QuickJS, no device). It owns:
-//   - a pending-task FIFO,
+//   - a pending-task queue, taken from the head, that an interactive task joins at the head,
 //   - a fixed set of TaskEngine slots (one per native worker thread),
 //   - the set of idle (available) engine slots,
 //   - a running-task map (taskId -> the engine running it),
@@ -67,7 +67,9 @@ public final class EnginePool {
     private final Object lock = new Object();
 
     //
-    // Pending tasks waiting for a free engine, in strict FIFO order.
+    // Tasks waiting for a free engine. The dispatcher always takes from the head. A background task
+    // joins the end, so background work keeps its arrival order; an interactive task joins the head,
+    // so a tap is dispatched before everything already waiting.
     //
     private final Deque<PooledTask> pendingQueue = new ArrayDeque<>();
 
@@ -226,8 +228,8 @@ public final class EnginePool {
             cancelledSources.remove(task.source);
 
             cancellationState.register(task.taskId, false);
-            pendingQueue.addLast(task);
-            dispatchNextLocked();
+            ensurePending(task);
+            dispatchNext();
         }
     }
 
@@ -237,6 +239,11 @@ public final class EnginePool {
     // engine. Mirrors the Electron main process handling a worker's "queue-task" message. If the
     // parent is no longer running, or the child's source was already cancelled, the child is
     // dropped. Thread-safe.
+    //
+    // A child with no priority of its own runs at its parent's, which is what stops the hash and
+    // upload tasks an import queues from overtaking something the user is waiting on. A child that
+    // asked for a priority keeps it, so long-running work an interactive task only kicks off can opt
+    // back down to background.
     //
     public void queueChildTask(String parentTaskId, PooledTask child) {
         synchronized (lock) {
@@ -257,10 +264,16 @@ public final class EnginePool {
                 return;
             }
 
-            childOriginByTaskId.put(child.taskId, origin);
-            cancellationState.register(child.taskId, false);
-            pendingQueue.addLast(child);
-            dispatchNextLocked();
+            PooledTask parent = runningTasksById.get(parentTaskId);
+            PooledTask childToQueue = child;
+            if (childToQueue.priority == null && parent != null) {
+                childToQueue = new PooledTask(child.taskId, child.type, child.dataJson, child.source, parent.priority);
+            }
+
+            childOriginByTaskId.put(childToQueue.taskId, origin);
+            cancellationState.register(childToQueue.taskId, false);
+            ensurePending(childToQueue);
+            dispatchNext();
         }
     }
 
@@ -282,16 +295,7 @@ public final class EnginePool {
             }
 
             // Drop still-pending tasks for this source so they never dispatch.
-            Iterator<PooledTask> iterator = pendingQueue.iterator();
-            while (iterator.hasNext()) {
-                PooledTask pendingTask = iterator.next();
-                if (pendingTask.source.equals(source)) {
-                    cancellationState.setCancelled(pendingTask.taskId);
-                    cancellationState.unregister(pendingTask.taskId);
-                    childOriginByTaskId.remove(pendingTask.taskId);
-                    iterator.remove();
-                }
-            }
+            dropPendingForSource(source);
         }
     }
 
@@ -335,11 +339,48 @@ public final class EnginePool {
     }
 
     //
+    // Puts a task on the pending queue: an interactive one at the head, a background one at the end.
+    // A task that named no priority runs at the default. Must be called with the lock held.
+    //
+    private void ensurePending(PooledTask task) {
+        if (effectivePriority(task) == TaskPriority.INTERACTIVE) {
+            pendingQueue.addFirst(task);
+        }
+        else {
+            pendingQueue.addLast(task);
+        }
+    }
+
+    //
+    // The priority a task actually runs at: the one it named, or the default when it named none.
+    //
+    private static TaskPriority effectivePriority(PooledTask task) {
+        return task.priority == null ? TaskPriority.DEFAULT : task.priority;
+    }
+
+    //
+    // Drops every still-pending task belonging to a cancelled source, marking each cancelled on the
+    // way out. Must be called with the lock held.
+    //
+    private void dropPendingForSource(String source) {
+        Iterator<PooledTask> iterator = pendingQueue.iterator();
+        while (iterator.hasNext()) {
+            PooledTask pendingTask = iterator.next();
+            if (pendingTask.source.equals(source)) {
+                cancellationState.setCancelled(pendingTask.taskId);
+                cancellationState.unregister(pendingTask.taskId);
+                childOriginByTaskId.remove(pendingTask.taskId);
+                iterator.remove();
+            }
+        }
+    }
+
+    //
     // Assigns the next pending task to the next idle engine, if both exist. Must be called
     // with the lock held. Loops so that as long as there is an idle engine and a pending
     // task, work is dispatched (covers the case where several engines are idle at once).
     //
-    private void dispatchNextLocked() {
+    private void dispatchNext() {
         while (!pendingQueue.isEmpty() && !idleEngines.isEmpty() && !shuttingDown) {
             PooledTask nextTask = pendingQueue.pollFirst();
 
@@ -364,7 +405,7 @@ public final class EnginePool {
     // Marks the engine that ran the given task as idle again, removes the task from the
     // running maps, and dispatches the next pending task. Must be called with the lock held.
     //
-    private void freeEngineLocked(PooledTask task) {
+    private void freeEngine(PooledTask task) {
         TaskEngine engine = runningByTaskId.remove(task.taskId);
         runningTasksById.remove(task.taskId);
         cancellationState.unregister(task.taskId);
@@ -373,7 +414,7 @@ public final class EnginePool {
             idleEngines.addLast(engine);
         }
 
-        dispatchNextLocked();
+        dispatchNext();
     }
 
     //
@@ -406,7 +447,7 @@ public final class EnginePool {
             TaskEngine origin;
             synchronized (lock) {
                 origin = childOriginByTaskId.remove(task.taskId);
-                freeEngineLocked(task);
+                freeEngine(task);
             }
 
             if (origin != null) {
@@ -426,7 +467,7 @@ public final class EnginePool {
             TaskEngine origin;
             synchronized (lock) {
                 origin = childOriginByTaskId.remove(task.taskId);
-                freeEngineLocked(task);
+                freeEngine(task);
             }
 
             if (origin != null) {
@@ -442,8 +483,8 @@ public final class EnginePool {
         // outcome routes back to the parent's engine.
         //
         @Override
-        public void queueChildTask(String parentTaskId, String childTaskId, String type, String dataJson, String source) {
-            EnginePool.this.queueChildTask(parentTaskId, new PooledTask(childTaskId, type, dataJson, source));
+        public void queueChildTask(String parentTaskId, String childTaskId, String type, String dataJson, String source, String priorityWireName) {
+            EnginePool.this.queueChildTask(parentTaskId, new PooledTask(childTaskId, type, dataJson, source, TaskPriority.fromWireName(priorityWireName)));
         }
     }
 

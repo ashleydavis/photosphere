@@ -81,7 +81,9 @@ export async function versionCommand(): Promise<void> {
     log.info(`  ${pc.bold('Config')}: ${pc.cyan(configDir)}`);
     log.info(`  ${pc.bold('Temp')}: ${pc.cyan(join(getProcessTmpDir(), 'photosphere'))}`);
     log.info(`  ${pc.bold('Log files')}: ${pc.cyan(join(getProcessTmpDir(), 'photosphere', 'logs'))}`);
-    log.info(`  ${pc.bold('Hash cache')}: ${pc.cyan(join(getProcessTmpDir(), 'photosphere', 'hash-cache-x.dat'))}`);
+    // The directory holding every database's hash cache, rather than one cache file: there is one
+    // cache per database now, and this command has no database in hand to name a single one.
+    log.info(`  ${pc.bold('Hash caches')}: ${pc.cyan(join(getProcessTmpDir(), 'photosphere', 'hash-cache'))}`);
     log.info('');
     
     // Show overall status

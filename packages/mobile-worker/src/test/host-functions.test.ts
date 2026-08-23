@@ -78,7 +78,7 @@ describe("host bridge NOT IMPLEMENTED guard", () => {
     test("buildHost gives a missing queueTask host function the NOT IMPLEMENTED thrower", () => {
         const effectiveHost = buildHost(createHostWithoutSha256());
 
-        expect(() => effectiveHost.queueTask("child-1", "hash-file", "{}", "source-1"))
+        expect(() => effectiveHost.queueTask("child-1", "hash-file", "{}", "source-1", null))
             .toThrow(notImplementedMessage("queueTask", "android"));
     });
 

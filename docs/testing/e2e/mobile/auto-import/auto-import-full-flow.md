@@ -71,7 +71,7 @@ Expected:
 
 Expected:
 - The new photo appears in the gallery without you importing it, and without reopening the database.
-- It appears within a few seconds rather than only after a restart.
+- It appears within about half a minute rather than only after a restart. Automatic import works in passes: a run reads the library, imports what is new and ends, and the app starts the next one a couple of seconds later, so a photo waits for the next pass rather than appearing the instant it is taken.
 
 This is the part users notice: a photo taken a moment ago is already backed up.
 

@@ -1,7 +1,7 @@
 import * as crypto from 'crypto';
 import * as path from 'path';
 import * as fs from 'fs/promises';
-import { HashCache, IHashCacheEntry } from '../../lib/hash-cache';
+import { getHashCacheDir, HashCache, IHashCacheEntry } from '../../lib/hash-cache';
 import { createTestTempDir } from 'node-utils';
 
 // Mock implementation of IStorage (no longer used, kept for reference)
@@ -408,10 +408,12 @@ describe('HashCache', () => {
 //
 function makeEntry(filePath: string): IHashCacheEntry {
     return {
-        filePath,
+        key: filePath,
         hash: createHash(`content of ${filePath}`),
         length: filePath.length,
         lastModified: new Date(2024, 0, 1).getTime(),
+        assetId: undefined,
+        keyedBySourceId: false,
     };
 }
 
@@ -442,7 +444,7 @@ describe('encodeEntries / decodeEntries', () => {
         expect(decoded).toBeDefined();
         expect(decoded!.length).toBe(3);
         for (let entryIndex = 0; entryIndex < entries.length; entryIndex++) {
-            expect(decoded![entryIndex].filePath).toBe(entries[entryIndex].filePath);
+            expect(decoded![entryIndex].key).toBe(entries[entryIndex].key);
             expect(decoded![entryIndex].hash.toString('hex')).toBe(entries[entryIndex].hash.toString('hex'));
             expect(decoded![entryIndex].length).toBe(entries[entryIndex].length);
             expect(decoded![entryIndex].lastModified).toBe(entries[entryIndex].lastModified);
@@ -523,11 +525,11 @@ describe('HashCache concurrent saves', () => {
         const hashCache = new HashCache(cacheDir);
         await hashCache.load();
         const added = makeEntry('c/three.txt');
-        hashCache.addHash(added.filePath, { hash: added.hash, length: added.length, lastModified: new Date(added.lastModified) });
+        hashCache.addHash(added.key, { hash: added.hash, length: added.length, lastModified: new Date(added.lastModified) });
         await hashCache.save();
 
         const onDisk = await readCacheFile();
-        expect(onDisk!.map(entry => entry.filePath)).toEqual(['a/one.txt', 'b/two.txt', 'c/three.txt']);
+        expect(onDisk!.map(entry => entry.key)).toEqual(['a/one.txt', 'b/two.txt', 'c/three.txt']);
     });
 
     test('keeps entries another instance added after this one loaded', async () => {
@@ -538,16 +540,16 @@ describe('HashCache concurrent saves', () => {
         await secondCache.load();
 
         const firstEntry = makeEntry('first/file.txt');
-        firstCache.addHash(firstEntry.filePath, { hash: firstEntry.hash, length: firstEntry.length, lastModified: new Date(firstEntry.lastModified) });
+        firstCache.addHash(firstEntry.key, { hash: firstEntry.hash, length: firstEntry.length, lastModified: new Date(firstEntry.lastModified) });
         await firstCache.save();
 
         const secondEntry = makeEntry('second/file.txt');
-        secondCache.addHash(secondEntry.filePath, { hash: secondEntry.hash, length: secondEntry.length, lastModified: new Date(secondEntry.lastModified) });
+        secondCache.addHash(secondEntry.key, { hash: secondEntry.hash, length: secondEntry.length, lastModified: new Date(secondEntry.lastModified) });
         await secondCache.save();
 
         // Before merge-on-save the second save overwrote the first instance's entry.
         const onDisk = await readCacheFile();
-        expect(onDisk!.map(entry => entry.filePath)).toEqual(['first/file.txt', 'second/file.txt']);
+        expect(onDisk!.map(entry => entry.key)).toEqual(['first/file.txt', 'second/file.txt']);
 
         // The saving instance also picks up the entry it merged in.
         expect(secondCache.getHash('first/file.txt')).toBeDefined();
@@ -567,14 +569,14 @@ describe('HashCache concurrent saves', () => {
 
         for (let writerIndex = 0; writerIndex < writerCount; writerIndex++) {
             const entry = makeEntry(`writer${writerIndex}/file.txt`);
-            caches[writerIndex].addHash(entry.filePath, { hash: entry.hash, length: entry.length, lastModified: new Date(entry.lastModified) });
+            caches[writerIndex].addHash(entry.key, { hash: entry.hash, length: entry.length, lastModified: new Date(entry.lastModified) });
             await caches[writerIndex].save();
         }
 
         const onDisk = await readCacheFile();
         expect(onDisk!.length).toBe(writerCount);
         for (let writerIndex = 0; writerIndex < writerCount; writerIndex++) {
-            expect(onDisk!.some(entry => entry.filePath === `writer${writerIndex}/file.txt`)).toBe(true);
+            expect(onDisk!.some(entry => entry.key === `writer${writerIndex}/file.txt`)).toBe(true);
         }
     });
 
@@ -587,7 +589,7 @@ describe('HashCache concurrent saves', () => {
         await hashCache.save();
 
         const onDisk = await readCacheFile();
-        expect(onDisk!.map(entry => entry.filePath)).toEqual(['b/two.txt']);
+        expect(onDisk!.map(entry => entry.key)).toEqual(['b/two.txt']);
     });
 
     test('never publishes a corrupt file when saves overlap', async () => {
@@ -600,7 +602,7 @@ describe('HashCache concurrent saves', () => {
             const cache = new HashCache(cacheDir);
             await cache.load();
             const entry = makeEntry(`overlap${writerIndex}/file.txt`);
-            cache.addHash(entry.filePath, { hash: entry.hash, length: entry.length, lastModified: new Date(entry.lastModified) });
+            cache.addHash(entry.key, { hash: entry.hash, length: entry.length, lastModified: new Date(entry.lastModified) });
             savePromises.push(cache.save());
         }
 
@@ -616,36 +618,230 @@ describe('HashCache concurrent saves', () => {
         const hashCache = new HashCache(cacheDir);
         await hashCache.load();
         const firstEntry = makeEntry('first/file.txt');
-        hashCache.addHash(firstEntry.filePath, { hash: firstEntry.hash, length: firstEntry.length, lastModified: new Date(firstEntry.lastModified) });
+        hashCache.addHash(firstEntry.key, { hash: firstEntry.hash, length: firstEntry.length, lastModified: new Date(firstEntry.lastModified) });
         await hashCache.save();
 
         // Another instance replaces the file wholesale, dropping the first entry.
         await writeCacheFile([makeEntry('other/file.txt')]);
 
         const secondEntry = makeEntry('second/file.txt');
-        hashCache.addHash(secondEntry.filePath, { hash: secondEntry.hash, length: secondEntry.length, lastModified: new Date(secondEntry.lastModified) });
+        hashCache.addHash(secondEntry.key, { hash: secondEntry.hash, length: secondEntry.length, lastModified: new Date(secondEntry.lastModified) });
         await hashCache.save();
 
         // Only the change made since the last save is applied, not the whole in-memory snapshot.
         const onDisk = await readCacheFile();
-        expect(onDisk!.map(entry => entry.filePath)).toEqual(['other/file.txt', 'second/file.txt']);
+        expect(onDisk!.map(entry => entry.key)).toEqual(['other/file.txt', 'second/file.txt']);
     });
 
     test('clears the changeset on load so pre-load changes are not re-applied', async () => {
         const hashCache = new HashCache(cacheDir);
         await hashCache.load();
         const discardedEntry = makeEntry('discarded/file.txt');
-        hashCache.addHash(discardedEntry.filePath, { hash: discardedEntry.hash, length: discardedEntry.length, lastModified: new Date(discardedEntry.lastModified) });
+        hashCache.addHash(discardedEntry.key, { hash: discardedEntry.hash, length: discardedEntry.length, lastModified: new Date(discardedEntry.lastModified) });
 
         // Reloading throws away everything that was not saved.
         await hashCache.load();
 
         const keptEntry = makeEntry('kept/file.txt');
-        hashCache.addHash(keptEntry.filePath, { hash: keptEntry.hash, length: keptEntry.length, lastModified: new Date(keptEntry.lastModified) });
+        hashCache.addHash(keptEntry.key, { hash: keptEntry.hash, length: keptEntry.length, lastModified: new Date(keptEntry.lastModified) });
         await hashCache.save();
 
         const onDisk = await readCacheFile();
-        expect(onDisk!.map(entry => entry.filePath)).toEqual(['kept/file.txt']);
+        expect(onDisk!.map(entry => entry.key)).toEqual(['kept/file.txt']);
     });
 });
 
+
+describe('getHashCacheDir', () => {
+    test('gives two databases two different cache directories', () => {
+        // An entry records the id its file has in the database, and the same photo imported into two
+        // databases has two ids, so one cache cannot serve both.
+        expect(getHashCacheDir('/photos/one')).not.toBe(getHashCacheDir('/photos/two'));
+    });
+
+    test('gives the same database the same cache directory every time', () => {
+        expect(getHashCacheDir('/photos/one')).toBe(getHashCacheDir('/photos/one'));
+    });
+
+    test('puts every database cache under one hash-cache directory', () => {
+        expect(path.dirname(getHashCacheDir('/photos/one'))).toBe(path.dirname(getHashCacheDir('/photos/two')));
+        expect(path.basename(path.dirname(getHashCacheDir('/photos/one')))).toBe('hash-cache');
+    });
+
+    test('makes a directory name out of a database path that could never be one', () => {
+        // An S3 database path has colons and slashes in it, which cannot be pasted into a directory
+        // name on any platform.
+        const cacheDir = getHashCacheDir('s3:my-bucket:/photos/db');
+        expect(path.basename(cacheDir)).toMatch(/^[0-9a-f]+$/);
+    });
+});
+
+describe('asset ids and source-keyed entries', () => {
+    let cacheDir: string;
+
+    beforeEach(() => {
+        cacheDir = createTestTempDir('hash-cache-asset-id-test');
+    });
+
+    //
+    // Reads the cache file back the way another process would.
+    //
+    async function readCacheFile(): Promise<IHashCacheEntry[] | undefined> {
+        return decodeEntries(await fs.readFile(path.join(cacheDir, 'hash-cache-x.dat')));
+    }
+
+    test('a new entry has no asset id until one is recorded', async () => {
+        const hashCache = new HashCache(cacheDir);
+        await hashCache.load();
+
+        hashCache.addHash('photos/one.jpg', { hash: createHash('one'), length: 10, lastModified: new Date(1000) });
+
+        expect(hashCache.getHash('photos/one.jpg')!.assetId).toBeUndefined();
+    });
+
+    test('records an asset id against an entry', async () => {
+        const hashCache = new HashCache(cacheDir);
+        await hashCache.load();
+        hashCache.addHash('photos/one.jpg', { hash: createHash('one'), length: 10, lastModified: new Date(1000) });
+
+        expect(hashCache.setAssetId('photos/one.jpg', '2f1c4a2e-0000-4000-8000-00000000abcd')).toBe(true);
+
+        expect(hashCache.getHash('photos/one.jpg')!.assetId).toBe('2f1c4a2e-0000-4000-8000-00000000abcd');
+    });
+
+    test('an asset id survives a save and a load, which is the whole point of recording it', async () => {
+        const hashCache = new HashCache(cacheDir);
+        await hashCache.load();
+        hashCache.addHash('photos/one.jpg', { hash: createHash('one'), length: 10, lastModified: new Date(1000) });
+        hashCache.setAssetId('photos/one.jpg', '2f1c4a2e-0000-4000-8000-00000000abcd');
+        await hashCache.save();
+
+        const reloaded = new HashCache(cacheDir);
+        await reloaded.load();
+
+        expect(reloaded.getHash('photos/one.jpg')!.assetId).toBe('2f1c4a2e-0000-4000-8000-00000000abcd');
+    });
+
+    test('reports that nothing was recorded when there is no entry to record it against', async () => {
+        const hashCache = new HashCache(cacheDir);
+        await hashCache.load();
+
+        expect(hashCache.setAssetId('photos/missing.jpg', 'some-asset-id')).toBe(false);
+    });
+
+    test('re-hashing a file clears its asset id, because the id described the old content', async () => {
+        const hashCache = new HashCache(cacheDir);
+        await hashCache.load();
+        hashCache.addHash('photos/one.jpg', { hash: createHash('one'), length: 10, lastModified: new Date(1000) });
+        hashCache.setAssetId('photos/one.jpg', '2f1c4a2e-0000-4000-8000-00000000abcd');
+
+        hashCache.addHash('photos/one.jpg', { hash: createHash('one changed'), length: 20, lastModified: new Date(2000) });
+
+        expect(hashCache.getHash('photos/one.jpg')!.assetId).toBeUndefined();
+    });
+
+    test('refuses an asset id too long to fit the space the format reserves', async () => {
+        const hashCache = new HashCache(cacheDir);
+        await hashCache.load();
+        hashCache.addHash('photos/one.jpg', { hash: createHash('one'), length: 10, lastModified: new Date(1000) });
+
+        expect(() => hashCache.setAssetId('photos/one.jpg', 'x'.repeat(37))).toThrow(/does not fit/);
+    });
+
+    test('files an item under its source id, and finds it there', async () => {
+        const hashCache = new HashCache(cacheDir);
+        await hashCache.load();
+
+        // A MediaStore id, which is what a source id looks like on Android. There is no path here at
+        // all: the photo has not been copied out of the library and never will be.
+        hashCache.addSourceHash('1000000042', { hash: createHash('library photo'), length: 4096, lastModified: new Date(1700000000000) });
+
+        const found = hashCache.getHash('1000000042');
+        expect(found).toBeDefined();
+        expect(found!.hash.toString('hex')).toBe(createHash('library photo').toString('hex'));
+    });
+
+    test('remembers which entries are keyed by a source id and which by a path', async () => {
+        const hashCache = new HashCache(cacheDir);
+        await hashCache.load();
+        hashCache.addSourceHash('1000000042', { hash: createHash('library photo'), length: 4096, lastModified: new Date(1700000000000) });
+        hashCache.addHash('photos/one.jpg', { hash: createHash('one'), length: 10, lastModified: new Date(1000) });
+        await hashCache.save();
+
+        const onDisk = await readCacheFile();
+
+        expect(onDisk!.find(entry => entry.key === '1000000042')!.keyedBySourceId).toBe(true);
+        expect(onDisk!.find(entry => entry.key === 'photos/one.jpg')!.keyedBySourceId).toBe(false);
+    });
+
+    test('drops source-keyed entries the library no longer holds', async () => {
+        const hashCache = new HashCache(cacheDir);
+        await hashCache.load();
+        hashCache.addSourceHash('still-here', { hash: createHash('a'), length: 1, lastModified: new Date(1000) });
+        hashCache.addSourceHash('deleted-from-device', { hash: createHash('b'), length: 2, lastModified: new Date(2000) });
+
+        const removed = hashCache.removeSourceEntriesNotIn(new Set(['still-here']));
+
+        expect(removed).toBe(1);
+        expect(hashCache.getHash('deleted-from-device')).toBeUndefined();
+        expect(hashCache.getHash('still-here')).toBeDefined();
+    });
+
+    test('never drops a path-keyed entry, however absent it is from the library', async () => {
+        // This is the case that would throw away the desktop's whole cache the first time automatic
+        // import walked a folder: a manual import's entries are not photo library items and cannot be
+        // judged by whether the library still lists them.
+        const hashCache = new HashCache(cacheDir);
+        await hashCache.load();
+        hashCache.addHash('photos/manual-import.jpg', { hash: createHash('a'), length: 1, lastModified: new Date(1000) });
+
+        const removed = hashCache.removeSourceEntriesNotIn(new Set(['nothing-matching']));
+
+        expect(removed).toBe(0);
+        expect(hashCache.getHash('photos/manual-import.jpg')).toBeDefined();
+    });
+
+    test('a sweep survives a save, so the dropped entries are gone for the next run too', async () => {
+        const hashCache = new HashCache(cacheDir);
+        await hashCache.load();
+        hashCache.addSourceHash('still-here', { hash: createHash('a'), length: 1, lastModified: new Date(1000) });
+        hashCache.addSourceHash('deleted-from-device', { hash: createHash('b'), length: 2, lastModified: new Date(2000) });
+        await hashCache.save();
+
+        hashCache.removeSourceEntriesNotIn(new Set(['still-here']));
+        await hashCache.save();
+
+        const onDisk = await readCacheFile();
+        expect(onDisk!.map(entry => entry.key)).toEqual(['still-here']);
+    });
+});
+
+describe('an unrecognised file format', () => {
+    let cacheDir: string;
+
+    beforeEach(() => {
+        cacheDir = createTestTempDir('hash-cache-version-test');
+    });
+
+    test('is discarded rather than read, whatever its version number says', async () => {
+        // The cache is throwaway: everything in it can be recomputed, so a file written by any other
+        // version of the format is thrown away and rebuilt rather than migrated. This is written as a
+        // higher version deliberately: the rule is "not equal", not "older than".
+        const entries = [makeEntry('a/one.txt')];
+        const fileBytes = encodeEntries(entries);
+        fileBytes.writeUInt32LE(999, 0);
+        // The checksum covers the version, so it has to be recomputed or the file is rejected for
+        // being corrupt instead, which would prove nothing about the version check.
+        const dataWithoutChecksum = fileBytes.subarray(0, fileBytes.length - 32);
+        const rewritten = Buffer.concat([dataWithoutChecksum, crypto.createHash('sha256').update(dataWithoutChecksum).digest()]);
+
+        await fs.mkdir(cacheDir, { recursive: true });
+        await fs.writeFile(path.join(cacheDir, 'hash-cache-x.dat'), rewritten);
+
+        const hashCache = new HashCache(cacheDir);
+        const loaded = await hashCache.load();
+
+        expect(loaded).toBe(false);
+        expect(hashCache.getEntryCount()).toBe(0);
+    });
+});

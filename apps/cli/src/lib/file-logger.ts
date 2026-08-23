@@ -44,12 +44,11 @@ export class FileLogger implements ILog {
         // Create logs directory in Photosphere temp.
         //
         // getProcessTmpDir rather than os.tmpdir, so the logs land wherever the rest of this process's
-        // temporary state lives. Under test that is the per-test TEST_TMP_DIR, which matters because
-        // `hash-cache clear` deletes <tmp>/photosphere outright: with os.tmpdir every CLI process in the
-        // suite shared /tmp/photosphere/logs, so one process clearing the cache pulled the log directory
-        // out from under every other one. writeLogHeader below shells out three times for tool versions
-        // between creating this directory and writing to it, which is a wide enough window that two CLI
-        // smoke tests died on ENOENT opening their own log file.
+        // temporary state lives. Under test that is the per-test TEST_TMP_DIR, which keeps one suite's
+        // logs out of another's. It used to matter more: `hash-cache clear` deleted <tmp>/photosphere
+        // outright, so with os.tmpdir every CLI process in the suite shared /tmp/photosphere/logs and one
+        // process clearing the cache pulled the log directory out from under every other one. It now
+        // deletes only the named database's cache directory, but the isolation is still worth having.
         const photosphereTempDir = path.join(getProcessTmpDir(), 'photosphere');
         const logsDir = path.join(photosphereTempDir, 'logs');
         ensureDirSync(logsDir);

@@ -1,6 +1,6 @@
 import { ElectronRendererQueueBackend } from '../lib/electron-renderer-queue-backend';
 import type { ITaskResult } from 'task-queue';
-import { TaskStatus } from 'task-queue';
+import { TaskPriority, TaskStatus } from 'task-queue';
 
 //
 // Builds a minimal IElectronAPI mock.
@@ -36,6 +36,15 @@ describe('ElectronRendererQueueBackend', () => {
         backend.addTask('my-type', { foo: 1 }, 'my-source', 'my-task-id');
 
         expect(api.send).toHaveBeenCalledWith('add-task', { taskType: 'my-type', data: { foo: 1 }, source: 'my-source', taskId: 'my-task-id' });
+    });
+
+    test('addTask sends the priority so the main process can put a tap at the head of the queue', () => {
+        const api = makeElectronAPI();
+        const backend = new ElectronRendererQueueBackend(api as any);
+
+        backend.addTask('my-type', { foo: 1 }, 'my-source', 'my-task-id', TaskPriority.Interactive);
+
+        expect(api.send).toHaveBeenCalledWith('add-task', { taskType: 'my-type', data: { foo: 1 }, source: 'my-source', taskId: 'my-task-id', priority: TaskPriority.Interactive });
     });
 
     test('incoming task-completed IPC message triggers onTaskComplete callbacks', async () => {

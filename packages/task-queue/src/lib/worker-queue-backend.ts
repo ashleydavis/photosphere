@@ -6,7 +6,7 @@
 
 import type { IUuidGenerator } from "utils";
 import type { IQueueBackend } from "./queue-backend";
-import type { ITaskResult, WorkerTaskCompletionCallback, TaskMessageCallback, UnsubscribeFn, IMessageCallbackEntry } from "./types";
+import type { ITaskResult, WorkerTaskCompletionCallback, TaskMessageCallback, UnsubscribeFn, IMessageCallbackEntry, TaskPriority } from "./types";
 
 //
 // IQueueBackend implementation for worker processes.
@@ -58,9 +58,13 @@ export class WorkerQueueBackend implements IQueueBackend {
     //
     // Sends a "queue-task" message to the main process and fires onTaskAdded callbacks.
     //
-    addTask(type: string, data: any, source: string, taskId?: string): string {
+    // The priority travels with the message but is only a request: the pool in the main process
+    // knows which task spawned this one, so an omitted priority becomes the parent's, which is what
+    // stops an import's children overtaking work the user is waiting on.
+    //
+    addTask(type: string, data: any, source: string, taskId?: string, priority?: TaskPriority): string {
         const id = taskId ?? this.uuidGenerator.generate();
-        this.postMessage({ type: "queue-task", taskId: id, taskType: type, data, source });
+        this.postMessage({ type: "queue-task", taskId: id, taskType: type, data, source, priority });
         const callbacks = this.taskAddedCallbacks.get(source);
         if (callbacks) {
             for (const callback of callbacks) {

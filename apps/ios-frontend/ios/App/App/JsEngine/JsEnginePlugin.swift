@@ -81,9 +81,11 @@ public class JsEnginePlugin: CAPPlugin, EnginePoolDelegate {
     }
 
     //
-    // addTask: receives { taskId, type, data, source }. Serialises `data` (arbitrary JSON) to a JSON
-    // string, enqueues the task, and resolves immediately. The result is delivered later via the
-    // taskCompleted event, matching the fire-and-forget Electron path.
+    // addTask: receives { taskId, type, data, source, priority }. Serialises `data` (arbitrary JSON)
+    // to a JSON string, enqueues the task, and resolves immediately. The result is delivered later via
+    // the taskCompleted event, matching the fire-and-forget Electron path. `priority` is optional and
+    // says the user is waiting on this one; an unrecognised value rejects the call rather than quietly
+    // running the task in the background.
     //
     @objc func addTask(_ call: CAPPluginCall) {
         guard let taskId = call.getString("taskId") else {
@@ -102,7 +104,20 @@ public class JsEnginePlugin: CAPPlugin, EnginePoolDelegate {
         // `data` is arbitrary JSON; serialise it to a string so it crosses into the engine unchanged.
         let dataJson = serializeData(call.getValue("data"))
 
-        let task = PooledTask(taskId: taskId, type: type, dataJson: dataJson, source: source)
+        let priority: TaskPriority?
+        do {
+            priority = try taskPriority(fromWireName: call.getString("priority"))
+        }
+        catch let error as UnknownTaskPriorityError {
+            call.reject(error.message)
+            return
+        }
+        catch {
+            call.reject("\(error)")
+            return
+        }
+
+        let task = PooledTask(taskId: taskId, type: type, dataJson: dataJson, source: source, priority: priority)
 
         lock.lock()
         let pool = ensurePool()

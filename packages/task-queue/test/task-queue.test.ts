@@ -1,5 +1,5 @@
 import { TaskQueue } from "../src/lib/task-queue";
-import { TaskStatus, ITaskResult } from "../src/lib/types";
+import { TaskPriority, TaskStatus, ITaskResult } from "../src/lib/types";
 import { registerHandler } from "../src/lib/worker";
 import { setQueueBackend } from "../src/lib/queue-backend";
 import { TestUuidGenerator, TestTimestampProvider } from "node-utils";
@@ -33,6 +33,49 @@ describe("TaskQueue", () => {
             const id1 = queue.addTask("test-task", { data: "test1" });
             const id2 = queue.addTask("test-task", { data: "test2" });
             expect(id1).not.toBe(id2);
+        });
+
+        test("hands the priority it was given to the backend", () => {
+            const addTaskSpy = jest.spyOn(mockBackend, "addTask");
+
+            queue.addTask("test-task", { data: "test" }, "task-id", TaskPriority.Interactive);
+
+            expect(addTaskSpy).toHaveBeenCalledWith("test-task", { data: "test" }, "test", "task-id", TaskPriority.Interactive);
+        });
+
+        test("hands no priority to the backend when the caller named none", () => {
+            const addTaskSpy = jest.spyOn(mockBackend, "addTask");
+
+            queue.addTask("test-task", { data: "test" }, "task-id");
+
+            expect(addTaskSpy).toHaveBeenCalledWith("test-task", { data: "test" }, "test", "task-id", undefined);
+        });
+
+        test("an interactive task is dispatched before background tasks already waiting", async () => {
+            // A pool of one, so the first task holds the only slot and the rest queue behind it.
+            const serialBackend = new MockWorkerPool(1);
+            setQueueBackend(serialBackend);
+            const serialQueue = new TaskQueue(new TestUuidGenerator(), "serial");
+
+            const order: string[] = [];
+            registerHandler("ordered-task", async (data: any) => {
+                order.push(data.name);
+                return "done";
+            });
+
+            try {
+                serialQueue.addTask("ordered-task", { name: "running" });
+                serialQueue.addTask("ordered-task", { name: "background-1" });
+                serialQueue.addTask("ordered-task", { name: "background-2" });
+                serialQueue.addTask("ordered-task", { name: "interactive" }, undefined, TaskPriority.Interactive);
+
+                await serialQueue.awaitAllTasks();
+            }
+            finally {
+                serialQueue.shutdown();
+            }
+
+            expect(order).toEqual(["running", "interactive", "background-1", "background-2"]);
         });
     });
 

@@ -1,15 +1,12 @@
-import * as fs from "fs";
 import * as fsPromises from "fs/promises";
 import * as path from "path";
 import { IFolderAutoImportSource } from "api";
-import { IUuidGenerator, log } from "utils";
+import { IUuidGenerator } from "utils";
 import { scanPaths } from "./file-scanner";
 import {
     IMediaItem,
     IMediaSource,
-    IMediaSourceChangedCallback,
     IMediaSourceListPage,
-    IMediaSourceUnsubscribe,
     MediaSourceDeleteError,
 } from "./media-source";
 
@@ -19,12 +16,6 @@ import {
 // Enumeration goes through the existing `scanPaths`, so the content-type filtering and zip handling
 // the manual import already does are reused rather than written a second time.
 //
-
-//
-// The platforms whose fs.watch supports watching a directory tree in one call. On Linux it does not,
-// which is exactly why the poll below exists rather than being a belt-and-braces extra.
-//
-const RECURSIVE_WATCH_PLATFORMS: NodeJS.Platform[] = ["win32", "darwin"];
 
 //
 // An item found by a scan, together with where it really lives on disk. A file inside a zip has no
@@ -45,9 +36,6 @@ export class FolderMediaSource implements IMediaSource {
     // The folders being watched, each with its own recurse flag.
     private readonly folders: IFolderAutoImportSource[];
 
-    // How often the folders are re-listed, in milliseconds.
-    private readonly pollIntervalMs: number;
-
     // Temporary directory the scanner extracts zip members into.
     private readonly sessionTempDir: string;
 
@@ -55,16 +43,15 @@ export class FolderMediaSource implements IMediaSource {
     private readonly uuidGenerator: IUuidGenerator;
 
     // The most recent scan, kept so paging through a large library does not rescan for every page.
-    // Dropped when the watcher reports a change, or when the cursor is not in it.
+    // Dropped when the cursor is not in it.
     private scannedItems: IScannedItem[] | undefined;
 
     // Where each scanned item really lives on disk, by source id. Populated by scanning and used by
     // deleteItems, so cleanup never guesses at a path.
     private diskPathsBySourceId = new Map<string, string>();
 
-    constructor(folders: IFolderAutoImportSource[], pollIntervalMs: number, sessionTempDir: string, uuidGenerator: IUuidGenerator) {
+    constructor(folders: IFolderAutoImportSource[], sessionTempDir: string, uuidGenerator: IUuidGenerator) {
         this.folders = folders;
-        this.pollIntervalMs = pollIntervalMs;
         this.sessionTempDir = sessionTempDir;
         this.uuidGenerator = uuidGenerator;
     }
@@ -155,49 +142,6 @@ export class FolderMediaSource implements IMediaSource {
             nextCursor: endIndex < this.scannedItems.length && page.length > 0
                 ? page[page.length - 1].item.sourceId
                 : undefined,
-        };
-    }
-
-    //
-    // Reports changes to the watched folders, both from the operating system's watcher and from a
-    // poll. The poll is not a fallback for the watcher failing to start: recursive watching is not
-    // available on Linux and is not dependable across network and removable filesystems anywhere,
-    // so the poll is what actually guarantees a new photo is noticed.
-    //
-    watch(onChanged: IMediaSourceChangedCallback): IMediaSourceUnsubscribe {
-        const watchers: fs.FSWatcher[] = [];
-        const recursive = RECURSIVE_WATCH_PLATFORMS.includes(process.platform);
-
-        const notifyChanged = (): void => {
-            this.scannedItems = undefined;
-            onChanged();
-        };
-
-        for (const folder of this.folders) {
-            const folderPath = path.resolve(folder.path);
-            try {
-                const watcher = fs.watch(folderPath, { recursive: recursive && folder.recurse }, () => {
-                    notifyChanged();
-                });
-                watcher.on("error", error => {
-                    // A watcher that dies leaves the poll doing the work, so this is worth knowing
-                    // about but is not a reason to stop importing.
-                    log.verbose(`Watcher for "${folderPath}" failed: ${error.message}. The poll will still pick up changes.`);
-                });
-                watchers.push(watcher);
-            }
-            catch (error: any) {
-                log.verbose(`Could not watch "${folderPath}": ${error.message}. The poll will still pick up changes.`);
-            }
-        }
-
-        const pollTimer = setInterval(notifyChanged, this.pollIntervalMs);
-
-        return () => {
-            clearInterval(pollTimer);
-            for (const watcher of watchers) {
-                watcher.close();
-            }
         };
     }
 

@@ -28,4 +28,19 @@ struct PooledTask {
     // The source tag grouping related tasks; cancellation is performed by source.
     //
     let source: String
+
+    //
+    // How urgent the task is, or nil when nothing named one. The pool dispatches every interactive
+    // task before any background one, so a tap the user is waiting on does not sit behind an
+    // import's backlog. Nil means the pool decides: a child runs at its parent's priority, and
+    // anything else at the default.
+    //
+    let priority: TaskPriority?
+
+    //
+    // The priority the task actually runs at once the pool has decided.
+    //
+    var effectivePriority: TaskPriority {
+        return priority ?? TaskPriority.defaultPriority
+    }
 }

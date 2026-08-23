@@ -1,65 +1,87 @@
 # Automatic photo backup
 
-Photosphere can watch where photos arrive, import them on its own, and push them to a remote copy. This describes the engine that does it, the command that drives it today, and what each platform can and cannot do.
+Photosphere can take photos in from where they arrive, on its own, and push them to a remote copy. This describes the engine that does it, the command that drives it today, and what each platform can and cannot do.
 
 ## What it does
 
 Point Photosphere at one or more places where photos turn up and it will:
 
 - import anything that is already there, slowly, so backfilling years of photos does not make the machine unusable;
-- import anything new the moment it appears;
+- import anything new on its next pass, a short while after the last one ended;
 - push what it imported to a remote database, when one is configured;
 - optionally delete the source file once the photo is confirmed in the local database;
 - optionally drop local originals the remote already holds, so the local database can stay small.
 
-Nothing about the import itself is new. Every batch the engine decides on is handed to the existing `import-assets` task, so deduplication by content hash, the write lock, derivative generation and the hash cache all behave exactly as they do for a manual `psi add`.
+Nothing about the file handling is new. Automatic import is the same `import-assets` task a manual import runs, fed by a scanner that reads the configured sources instead of a fixed list of paths, so deduplication by content hash, the write lock, derivative generation and the hash cache all behave exactly as they do for a manual `psi add`. There used to be a second task that decided what to import and started an `import-assets` for every handful it released, which paid for the scan, the write lock and the hash cache per handful.
+
+## How it avoids re-importing what it has already imported
+
+A photo library item is not a file. On a phone it has no path at all until it has been copied out of the library into the app's sandbox, and that copy is deleted again as soon as the import finishes. Copying every photo in the library on every run, only to find each one already in the database, is the most expensive thing automatic import can do, and on a device with a few thousand photos it is most of what it does.
+
+So each item is looked up before it is opened, in the hash cache:
+
+- **An asset id recorded against it** means the photo is in this database. It is skipped: no copy, no hash, no database read.
+- **A hash but no asset id** means an earlier run hashed it but did not get as far as recording where it landed. The database's hash index is asked, exactly as the import itself does, and the answer is recorded so it is not asked twice.
+- **Nothing at all** means the item is copied, hashed and imported the long way, and what that costs is recorded so the next run does not pay it again.
+
+Three things have to agree before a cache entry is believed: the item's identity, its size, and its created time. A photo library is free to hand a deleted item's identity to a new one, and a stale hit there would skip a photo that had never been imported.
+
+The identity is `IMediaItem.sourceId`, which is a different thing on each platform and does not change between listings: the file's path for a watched folder, the MediaStore id on Android, the `PHAsset` local identifier on iOS.
+
+There is one hash cache per database, because an entry now records the id its file has in that database, and the same photo imported into two databases has two ids. Clearing a cache loses nothing: everything in it can be recomputed, and the next run simply pays the full cost once. `psi hash-cache clear --db <path>` does that.
+
+Once a run has read the whole listing, entries for items the library no longer holds are dropped, so the cache does not grow forever on a device where photos come and go. Only entries filed under a photo library identity are considered: a file path that is not in the photo library is a manual import, not a dead entry.
 
 ## The command
 
 ```bash
-psi watch --db ./photos                       # watch this operating system's photo folders
-psi watch --db ./photos ~/Pictures ~/Camera   # watch specific folders
-psi watch --db ./photos --once                # import everything once, then exit
-psi watch --db ./photos --cleanup             # delete each source file once it is in the database
-psi watch --db ./photos --evict               # drop local originals the origin already holds
-psi watch --db ./photos --no-sync             # import without syncing to the origin
+psi add --db ./photos --watch                       # keep importing from this operating system's photo folders
+psi add --db ./photos --watch ~/Pictures ~/Camera   # keep importing from specific folders
+psi add --db ./photos --watch --cleanup             # delete the source files the database holds, after
+psi sync --db ./photos --watch                      # push to the origin as the database changes
 ```
 
-With no folders given it watches the operating system's own photo locations: `Pictures` and `Pictures\Camera Roll` on Windows, `Pictures` on macOS, and the XDG pictures directory (falling back to `~/Pictures`) on Linux. Only folders that actually exist are watched.
+Importing and syncing are two commands rather than one. `psi add --watch` knows nothing about the origin; `psi sync --watch` pushes what is there. Run them side by side to get both, and each half stays separately useful and separately testable.
 
-`--once` does a single pass and exits, and exits non-zero if any file failed to import or if a sync it was asked to do failed. That is what makes it usable from a scheduler: a backup that did not happen must not look like one that did.
+`psi add` without `--watch` is unchanged: it walks what it is given once and stops.
 
-Without `--once` it runs until interrupted. Ctrl-C stops it.
+With no folders given it uses the operating system's own photo locations: `Pictures` and `Pictures\Camera Roll` on Windows, `Pictures` on macOS, and the XDG pictures directory (falling back to `~/Pictures`) on Linux. Only folders that actually exist are read.
 
-## The two lanes
+`psi add` without `--watch` imports what is there now and exits, and exits non-zero if any file failed. That is what makes it usable from a scheduler: a backup that did not happen must not look like one that did. It is also the same import task and the same file handling a watch uses, so nearly all of the automatic import path is covered by testing this one command.
 
-Media is imported through two lanes, which is what keeps a photo you have just taken from queueing behind ten years of backfill.
+With `--watch` it runs the same import over and over, five seconds apart, until interrupted. Ctrl-C stops it.
 
-The **fast lane** carries items that appeared since the task started. It is released in full the moment it is asked for.
+## Passes, not watching
 
-The **backfill lane** carries the library that already existed. It is released at a fixed rate, 60 items per minute by default. The budget is capped at one minute's worth, so a task that sat idle for an hour does not then release an hour's allowance at once.
+A run reads its sources from the first page of the listing to the last, imports what is new, and ends. The app starts another a short while later: about thirty seconds on the desktop, a couple of seconds on mobile, five on the CLI's `psi add --watch`. Nothing is left watching a filesystem or a photo library in between.
 
-Where the backfill has reached is written into the database's state file, so restarting resumes rather than walking the whole library again. The position only moves once every item of a page has been imported, so a crash mid-page re-offers a handful of items rather than losing them. Re-offering is harmless: the import deduplicates by content hash.
+That is a deliberate reversal of what this used to do. The old engine held filesystem watchers, polled every source every thirty seconds, and re-walked the whole listing whenever any of them reported a change, all inside a task that never ended. The watchers were worth little: recursive directory watching is not available on Linux at all and is not dependable across network and removable filesystems anywhere, so the poll was doing the real work everywhere, and on a phone there was no change notification to hook at all. What is left is the part that was doing the work.
 
-## Watching, and why there is also a poll
+The cost of a pass is a listing plus one hash cache lookup per item, because a photo already imported is recognised before it is opened. That is what makes running it over and over cheap, and it is why nothing needs to remember where the last pass got to: every run starts at the beginning.
 
-Each source both watches and polls. The poll is not a belt-and-braces extra: recursive directory watching is not available on Linux at all, and is not dependable across network and removable filesystems anywhere. The poll is what actually guarantees a new photo is noticed. It runs every 30 seconds by default.
+The consequence to know about is latency. A photo that arrives is imported by the next pass rather than the moment it lands, so the wait is up to one interval plus however long the pass takes.
 
-On every reported change the whole source listing is walked, and anything the queue has not seen before is queued. That is deliberately thorough rather than clever: a watcher that describes what changed is not something every platform can be trusted to provide.
+## Pacing
+
+Items are released at a fixed rate, 60 per minute by default, so backfilling years of photos does not make the machine unusable. The budget is capped at one minute's worth, so a run that waited does not then release a backlog all at once.
+
+A run that is cancelled part way, by the app quitting or the setting being switched off, simply stops. Nothing is written down about where it had reached: the next run starts at the beginning of the listing again and the hash cache is what stops it re-importing anything.
 
 ## Deleting the source file
 
-`--cleanup` deletes a source file once the photo is confirmed in the local database. Confirmation means the database itself holds a file with that content hash, not that the import reported success. A file the import failed on is never deleted, and neither is one whose hash is not in the database.
+Deleting the source is its own operation rather than something the import does as it goes. On a phone every deletion raises a system confirmation, so doing it during the import asked the user once per handful of photos; done separately it asks once, at a moment they chose.
 
-A file the database already held counts as confirmed too, so a source file is not left behind and re-offered on every poll for as long as the app runs.
+It answers its own question. For each item the device still holds it asks the hash cache what that photo hashes to, and the database whether it holds that hash. Nothing is deleted because an import reported success: the database saying it holds the content is the only thing that counts. A photo imported on another device and synced in is left alone, because this device never hashed it and finding out would mean copying and hashing the whole library.
 
-This is off by default, and deliberately so: it has nothing to do with the remote. A user with cleanup on and no remote connected is trusting a single local copy.
+On mobile it is a button in the automatic import settings. It counts first and says what it found; a second press deletes. On the CLI there is no confirmation dialog to spare the user, so `psi add --watch --cleanup` runs the same walk once, after the import has finished.
+
+Either way it is off unless asked for, and deliberately so: it has nothing to do with the remote. A user who deletes their source files with no remote connected is trusting a single local copy.
 
 ## Dropping local originals
 
 Once a local database is connected to a remote it is a partial replica of it, which means it does not have to keep every original on the device: an original the remote holds can be fetched back when it is wanted.
 
-`--evict` drops those originals after each successful sync. Only the original and the transcoded display copy go; the thumbnail and the micro thumbnail stay, which is what keeps the gallery browsable with no network at all. An original the origin does not hold with a matching hash is never dropped, whatever else is going on.
+Dropping them is a setting the app turns on, not something the CLI offers: a one-shot command must never silently delete someone's local files, and it is not a use case on the desktop machines where the CLI is used. Only the original and the transcoded display copy go; the thumbnail and the micro thumbnail stay, which is what keeps the gallery browsable with no network at all. An original the origin does not hold with a matching hash is never dropped, whatever else is going on.
 
 Which originals go is decided by a retention policy. Four are implemented, exported and unit tested in `packages/api/src/lib/retention-policy.ts`:
 
@@ -72,7 +94,7 @@ Which originals go is decided by a retention policy. Four are implemented, expor
 
 The active one is `ACTIVE_RETENTION_POLICY` at the bottom of that file, set to a two gigabyte size budget. The other three are written out directly beneath it and commented out, so switching policy is uncommenting one line.
 
-`--evict-budget <bytes>` overrides the cap for one run without changing the code, which is also what lets the smoke tests exercise eviction with ordinary-sized photos rather than needing more than two gigabytes of test data.
+`localOriginalBudgetBytes` on the eviction task overrides the cap for one run without changing the code, which is what lets the unit tests exercise eviction with ordinary-sized photos rather than needing more than two gigabytes of test data.
 
 ## Connecting to a remote
 
@@ -107,18 +129,18 @@ Losing it costs nothing but the history: an unreadable record reads as empty, an
 
 | | CLI | Desktop | Mobile |
 |---|---|---|---|
-| Watch folders | Yes | Yes | Not applicable |
-| Watch the device photo library | No | No | Yes |
-| Backfill pacing, cleanup, eviction | Yes | Yes | Yes |
+| Import from folders | Yes | Yes | Not applicable |
+| Import from the device photo library | No | No | Yes |
+| Pacing, cleanup, eviction | Yes | Yes | Yes |
 | Consolidation | Yes | Yes | No |
 
-The engine is platform-neutral and lives in `packages/api`, with the Node-side parts in `packages/node-api`. The only platform-specific part is the media source: `FolderMediaSource` covers folders on a filesystem and `DeviceMediaSource` covers the device photo library. The loop itself talks only to `IMediaSource` and knows about neither.
+The engine is platform-neutral and lives in `packages/api`, with the Node-side parts in `packages/node-api`. The only platform-specific part is the media source: `FolderMediaSource` covers folders on a filesystem and `DeviceMediaSource` covers the device photo library. The scanner itself talks only to `IMediaSource` and knows about neither.
 
-On the desktop the settings live on the configuration dialog and the settings page: a toggle, the folders being watched, and whether the source file is deleted after import. Switching the toggle on creates a private photo database under the application data directory, lists it as "My Photos" and marks it as the one automatic import writes to. The main process starts and stops the task as the settings change, so nothing needs restarting.
+On the desktop the settings live on the configuration dialog and the settings page: a toggle, the folders being read, and whether the source file is deleted after import. Switching the toggle on creates a private photo database under the application data directory, lists it as "My Photos" and marks it as the one automatic import writes to. The main process starts and stops the task as the settings change, so nothing needs restarting.
 
-On mobile the same thing happens and the user does the same thing: switch the toggle on, and the app makes its private database, asks for the photo permission, walks the device photo library and imports what it finds, including photos taken while it is running. It runs the same `auto-import` task the CLI and the desktop run, reading the photo library through the same host bridge the rest of the worker code uses. The only difference is which media source is registered underneath.
+On mobile the same thing happens and the user does the same thing: switch the toggle on, and the app makes its private database, asks for the photo permission, walks the device photo library and imports what it finds, including photos taken while it is running. It runs the same `import-assets` task the CLI and the desktop run, reading the photo library through the same host bridge the rest of the worker code uses. The only difference is which media source is registered underneath.
 
-That task holds an engine slot for as long as automatic import is on, and the `import-assets` task it queues holds another, and the `hash-file` and `upload-asset` tasks that import queues in turn hold more. On a phone that chain has to fit inside `EnginePool.POOL_SIZE`, which is why the pool is five rather than three: at three it deadlocked, and the failure was silent, with the setting on, the task running and the counts at zero forever. See [Mobile background tasks](mobile-background-tasks.md) before changing anything about that.
+The `import-assets` task holds an engine slot for as long as the run lasts, and the `hash-file` and `upload-asset` tasks it queues hold more. On a phone that chain has to fit inside `EnginePool.POOL_SIZE`, which is five. It used to be worse: a separate `auto-import` task sat in a slot of its own for as long as the setting was on, and started an `import-assets` in a second slot, which is what deadlocked the pool at three, silently, with the setting on, the task running and the counts at zero forever. That task is gone and the run now ends, but the pool is still sized for the chain that remains. See [Mobile background tasks](mobile-background-tasks.md) before changing anything about that.
 
 ## Where the code is
 
@@ -127,16 +149,18 @@ That task holds an engine slot for as long as automatic import is on, and the `i
 | `packages/api/src/lib/auto-import-settings.ts` | The settings, and the normalisation that makes a hand-edited settings blob safe to read. |
 | `packages/api/src/lib/retention-policy.ts` | The four retention policies and the active one. |
 | `packages/node-utils/src/lib/photo-folders.ts` | The operating system's photo folders. |
-| `packages/api/src/lib/auto-import-loop.ts` | The loop itself, with nothing platform-specific in it. |
-| `packages/api/src/lib/media-source.ts` | The source abstraction the loop reads through. |
-| `packages/api/src/lib/auto-import-queue.ts` | The two lanes and the pacing, with no I/O in it at all. |
+| `packages/api/src/lib/media-source.ts` | The source abstraction the scanner reads through. |
+| `packages/api/src/lib/auto-import-queue.ts` | The queue and the pacing, with no I/O in it at all. |
 | `packages/api/src/lib/source-cleanup.ts` | Choosing and deleting confirmed source files. |
 | `packages/api/src/lib/import-record.ts` | What a database imported, capped and newest first. |
 | `packages/node-api/src/lib/import-record-storage.ts` | Reading and writing that record, deliberately outside the merkle tree so it never travels. |
 | `packages/node-api/src/lib/get-import-record.worker.ts` | Reading it for the interface, which cannot open the database itself. |
 | `packages/node-api/src/lib/media-source-registry.ts` | How a platform registers the source kinds it can serve. |
-| `packages/node-api/src/lib/folder-media-source.ts` | Folders on a filesystem, watched and polled. |
-| `packages/node-api/src/lib/auto-import.worker.ts` | The task every platform runs it from. |
+| `packages/node-api/src/lib/folder-media-source.ts` | Folders on a filesystem, listed a page at a time. |
+| `packages/node-api/src/lib/auto-import-scanner.ts` | The scanner that feeds one run: reads the source, paces what it releases, ends when the listing is done. |
+| `packages/node-api/src/lib/create-auto-import-scanner.ts` | Building that scanner, and everything it needs from the database. |
+| `packages/node-api/src/lib/import-scanner.ts`, `manual-import-scanner.ts` | The interface the import reads files through, and the one-shot walk a manual import uses. |
+| `packages/node-api/src/lib/cleanup-sources.worker.ts` | The task behind the "free up space" button. |
 | `packages/node-api/src/lib/evict-originals.worker.ts` | Dropping local originals the origin holds. |
 | `packages/node-api/src/lib/consolidate.ts` | Joining a standalone database to a remote that already has content. |
 | `packages/node-api/src/lib/auto-import-desktop.ts` | What the desktop app should do about automatic import, worked out from its config. |
@@ -150,7 +174,7 @@ That task holds an engine slot for as long as automatic import is on, and the `i
 | `apps/android-frontend/.../jsengine/MediaLibrary.java`, `MediaLibraryHost.java` | The Android photo library: paging, copying out and delete over `MediaStore`. |
 | `apps/android-frontend/.../jsengine/MediaPermissions.java`, `MediaDeleteBroker.java` | The per-version photo permission, and the staged delete confirmation. |
 | `apps/ios-frontend/.../MediaLibrary.swift`, `MediaLibraryHost.swift` | The same for iOS, over the Photos framework. |
-| `apps/cli/src/cmd/watch.ts`, `apps/cli/src/cmd/connect.ts` | The two commands. |
+| `apps/cli/src/cmd/add.ts`, `apps/cli/src/cmd/connect.ts` | The import command, with and without `--watch`, and joining a database to a remote. |
 
 ## Tests
 
@@ -158,10 +182,10 @@ Unit tests sit beside each of those files under `src/test/`. The end-to-end beha
 
 | Test | What it proves |
 |---|---|
-| `81-watch-once` | A pass imports what is there, and a second pass imports nothing twice. |
-| `82-watch-continuous` | A file created while the command is running is imported, and Ctrl-C stops it. |
-| `83-watch-cleanup` | A confirmed source file is deleted and one that failed to import is not. |
-| `84-watch-sync-evict` | Imports reach the origin, confirmed originals are dropped, thumbnails stay, and the dropped original is fetched back from the origin on demand. |
+| `81-watch-once` (`psi add`) | A pass imports what is there, and a second pass imports nothing twice. |
+| `82-watch-continuous` (`psi add --watch`) | A file created while the command is running is imported, and Ctrl-C stops it. |
+| `83-watch-cleanup` | A source file the database holds is deleted and one that failed to import is not. |
+| `84-watch-sync-evict` | Imports reach the origin once `psi sync` pushes them, and the local originals stay. Eviction is no longer something the CLI can turn on, so it is covered by its unit tests rather than here. |
 | `85-consolidate` | Creating a remote, consolidating into an unrelated one without duplicating shared content, and sync working afterwards where it refused before. |
 | `86-multi-device` | Two databases connected to one remote each end up with the other's photos. |
 | `87-import-record` | What a database imported is remembered across restarts, manual and automatic imports are badged apart, and the record never travels: sync, consolidation and replication all leave `.db/imports.dat` behind while the photos themselves go. |
@@ -187,5 +211,5 @@ Test 47 is the one that caught the engine-pool deadlock, and the one that would 
 Writing those two found three further defects that nothing else had:
 
 - The photo permission request never delivered its answer. It went straight to `ActivityCompat.requestPermissions`, whose result reaches the Activity, and Capacitor only forwards a result to the plugin it believes made the request, so a request it never saw was answered into nothing and the call waited forever. It now asks through Capacitor's own permission API, under an alias declared on the plugin.
-- An automatically imported photo appeared in the gallery twice, because the import task announces it as `import-success` and the automatic import loop announces it as `auto-import-item`, and the gallery appended both. The list now refuses an asset it already holds.
+- An automatically imported photo appeared in the gallery twice, because the import task announced it as `import-success` and the automatic import loop announced it as `auto-import-item`, and the gallery appended both. The two messages have since been merged into one `import-success` that both kinds of import send, so there is nothing left to announce twice. The list still refuses an asset it already holds, which covers a photo taken in before the database has finished loading.
 - An arrival landed in whatever gallery was open, not the database it went into. Automatic import writes to the default database, which is not necessarily the one on screen. Every arrival now names its database and the gallery ignores the ones that are not its own.

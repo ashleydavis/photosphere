@@ -71,8 +71,9 @@ protocol EnginePoolDelegate: AnyObject {
 }
 
 //
-// The engine pool and dispatcher. Holds N engine slots (POOL_SIZE), a shared pending-task FIFO, a
-// running-task map (via the slots), a cancelled-source set, and the single owned sessionId. All
+// The engine pool and dispatcher. Holds N engine slots (POOL_SIZE), one pending-task queue taken
+// from the head that an interactive task joins at the head, a running-task map (via the slots), a
+// cancelled-source set, and the single owned sessionId. All
 // shared state is guarded by one lock except the cancelled set, which is also mirrored into an
 // atomic-style flag read lock-free by host.isCancelled from inside running tasks. The dispatcher
 // assigns the next pending task to any idle slot and reassigns when a slot frees, giving true
@@ -95,7 +96,9 @@ final class EnginePool: EngineCallbacks {
     private let lock = NSLock()
 
     //
-    // The pending-task FIFO. New tasks append to the end; the dispatcher pulls from the front.
+    // Tasks waiting for a free slot. The dispatcher always pulls from the front. A background task
+    // appends to the end, so background work keeps its arrival order; an interactive task is inserted
+    // at the front, so a tap is dispatched before everything already waiting.
     //
     private var pending: [PooledTask] = []
 
@@ -151,10 +154,10 @@ final class EnginePool: EngineCallbacks {
                 messageSink: { [weak self] taskId, messageJson in
                     self?.handleSendMessage(taskId: taskId, messageJson: messageJson)
                 },
-                queueTaskSink: { [weak self] parentTaskId, childTaskId, type, dataJson, source in
+                queueTaskSink: { [weak self] parentTaskId, childTaskId, type, dataJson, source, priority in
                     self?.queueChildTask(
                         parentTaskId: parentTaskId,
-                        child: PooledTask(taskId: childTaskId, type: type, dataJson: dataJson, source: source)
+                        child: PooledTask(taskId: childTaskId, type: type, dataJson: dataJson, source: source, priority: priority)
                     )
                 }
             )
@@ -190,7 +193,7 @@ final class EnginePool: EngineCallbacks {
         // nothing.
         cancelledSources.remove(task.source)
 
-        pending.append(task)
+        ensurePending(task)
         lock.unlock()
 
         dispatch()
@@ -202,6 +205,11 @@ final class EnginePool: EngineCallbacks {
     // Mirrors the Android EnginePool.queueChildTask and the Electron main process handling a worker's
     // "queue-task" message. A child whose parent is no longer running, or whose source was already
     // cancelled, is dropped.
+    //
+    // A child that named no priority runs at its parent's, which is what stops the hash and upload
+    // tasks an import queues from overtaking something the user is waiting on. A child that named one
+    // keeps it, so long-running work an interactive task only kicks off can opt back down to
+    // background.
     //
     func queueChildTask(parentTaskId: String, child: PooledTask) {
         lock.lock()
@@ -218,9 +226,11 @@ final class EnginePool: EngineCallbacks {
         }
 
         var origin: TaskEngine?
+        var parentPriority: TaskPriority?
         for slot in slots {
             if let running = slot.runningTask, running.taskId == parentTaskId {
                 origin = slot.engine
+                parentPriority = running.effectivePriority
                 break
             }
         }
@@ -230,8 +240,12 @@ final class EnginePool: EngineCallbacks {
             return
         }
 
-        childOriginByTaskId[child.taskId] = originEngine
-        pending.append(child)
+        let childToQueue = child.priority == nil
+            ? PooledTask(taskId: child.taskId, type: child.type, dataJson: child.dataJson, source: child.source, priority: parentPriority)
+            : child
+
+        childOriginByTaskId[childToQueue.taskId] = originEngine
+        ensurePending(childToQueue)
         lock.unlock()
 
         dispatch()
@@ -240,7 +254,7 @@ final class EnginePool: EngineCallbacks {
     //
     // Cancels every task that shares the given source: adds the source to the cancelled set (so
     // host.isCancelled observes it for running tasks), drops all matching pending tasks from the
-    // FIFO so they never dispatch, and forgets any child-origin mappings for those dropped tasks.
+    // queue so they never dispatch, and forgets any child-origin mappings for those dropped tasks.
     //
     func cancelTasks(source: String) {
         lock.lock()
@@ -300,8 +314,7 @@ final class EnginePool: EngineCallbacks {
 
             // Pull the next pending task whose source is not cancelled, dropping cancelled ones.
             var nextTask: PooledTask?
-            while !pending.isEmpty {
-                let candidate = pending.removeFirst()
+            while let candidate = pollNextPending() {
                 if cancelledSources.contains(candidate.source) {
                     continue
                 }
@@ -321,6 +334,30 @@ final class EnginePool: EngineCallbacks {
 
             engine.runTask(task, callbacks: self)
         }
+    }
+
+    //
+    // Puts a task on the pending queue: an interactive one at the front, a background one at the end.
+    // Must be called with the lock held.
+    //
+    private func ensurePending(_ task: PooledTask) {
+        if task.effectivePriority == .interactive {
+            pending.insert(task, at: 0)
+        }
+        else {
+            pending.append(task)
+        }
+    }
+
+    //
+    // Takes the task that should run next, and nil when nothing is waiting. Must be called with the
+    // lock held.
+    //
+    private func pollNextPending() -> PooledTask? {
+        if pending.isEmpty {
+            return nil
+        }
+        return pending.removeFirst()
     }
 
     //
@@ -363,7 +400,7 @@ final class EnginePool: EngineCallbacks {
     }
 
     //
-    // Tears down the pool: stops the dispatcher, drains the pending FIFO, disposes every engine, and
+    // Tears down the pool: stops the dispatcher, drains the pending queue, disposes every engine, and
     // clears all shared state. Running engines observe shutdown via their own teardown; their late
     // terminal callbacks are ignored because the slots are cleared. Idempotent.
     //

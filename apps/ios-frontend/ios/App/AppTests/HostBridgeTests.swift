@@ -41,7 +41,7 @@ final class HostBridgeTests: XCTestCase {
             storageRoot: storageRoot,
             isCancelledProvider: { _ in false },
             messageSink: { _, _ in },
-            queueTaskSink: { _, _, _, _, _ in }
+            queueTaskSink: { _, _, _, _, _, _ in }
         )
 
         XCTAssertThrowsError(try bridge.sha256(path: "vector.txt")) { error in
@@ -64,7 +64,7 @@ final class HostBridgeTests: XCTestCase {
                 capturedTaskId = taskId
                 capturedMessage = messageJson
             },
-            queueTaskSink: { _, _, _, _, _ in }
+            queueTaskSink: { _, _, _, _, _, _ in }
         )
 
         let context = JSContext()!
@@ -84,7 +84,7 @@ final class HostBridgeTests: XCTestCase {
             storageRoot: storageRoot,
             isCancelledProvider: { taskId in taskId == "cancelled-task" },
             messageSink: { _, _ in },
-            queueTaskSink: { _, _, _, _, _ in }
+            queueTaskSink: { _, _, _, _, _, _ in }
         )
 
         let context = JSContext()!
@@ -106,7 +106,7 @@ final class HostBridgeTests: XCTestCase {
             storageRoot: storageRoot,
             isCancelledProvider: { _ in false },
             messageSink: { _, _ in },
-            queueTaskSink: { _, _, _, _, _ in }
+            queueTaskSink: { _, _, _, _, _, _ in }
         )
 
         let context = JSContext()!
@@ -128,17 +128,67 @@ final class HostBridgeTests: XCTestCase {
             storageRoot: storageRoot,
             isCancelledProvider: { _ in false },
             messageSink: { _, _ in },
-            queueTaskSink: { parentTaskId, childTaskId, type, dataJson, source in
-                captured = [parentTaskId, childTaskId, type, dataJson, source]
+            queueTaskSink: { parentTaskId, childTaskId, type, dataJson, source, priority in
+                captured = [parentTaskId, childTaskId, type, dataJson, source, priority?.rawValue ?? "none"]
             }
         )
         bridge.currentTaskId = "parent-1"
 
         let context = JSContext()!
         bridge.install(into: context)
-        context.evaluateScript("host.queueTask('child-1', 'childType', '{}', 'src')")
+        context.evaluateScript("host.queueTask('child-1', 'childType', '{}', 'src', null)")
 
-        XCTAssertEqual(captured, ["parent-1", "child-1", "childType", "{}", "src"])
+        // A null priority reaches the pool as nil, which is what makes the child run at its parent's.
+        XCTAssertEqual(captured, ["parent-1", "child-1", "childType", "{}", "src", "none"])
+    }
+
+    //
+    // A priority named by the handler crosses the bridge as itself, so a child can opt back down to
+    // the background even when the task that queued it is interactive.
+    //
+    func testQueueTaskForwardsThePriorityTheHandlerNamed() {
+        var captured: [String] = []
+
+        let bridge = HostBridge(
+            sessionId: "session-1",
+            storageRoot: storageRoot,
+            isCancelledProvider: { _ in false },
+            messageSink: { _, _ in },
+            queueTaskSink: { _, _, _, _, _, priority in
+                captured = [priority?.rawValue ?? "none"]
+            }
+        )
+        bridge.currentTaskId = "parent-1"
+
+        let context = JSContext()!
+        bridge.install(into: context)
+        context.evaluateScript("host.queueTask('child-1', 'childType', '{}', 'src', 'background')")
+
+        XCTAssertEqual(captured, ["background"])
+    }
+
+    //
+    // A priority string that is not one of the two levels raises a JS exception rather than quietly
+    // running the child in the background, so a typo is found rather than silently obeyed.
+    //
+    func testQueueTaskRejectsAnUnknownPriority() {
+        var called = false
+
+        let bridge = HostBridge(
+            sessionId: "session-1",
+            storageRoot: storageRoot,
+            isCancelledProvider: { _ in false },
+            messageSink: { _, _ in },
+            queueTaskSink: { _, _, _, _, _, _ in called = true }
+        )
+        bridge.currentTaskId = "parent-1"
+
+        let context = JSContext()!
+        bridge.install(into: context)
+        context.evaluateScript("host.queueTask('child-1', 'childType', '{}', 'src', 'urgent')")
+
+        XCTAssertFalse(called)
+        XCTAssertNotNil(context.exception)
     }
 
     //
@@ -153,12 +203,12 @@ final class HostBridgeTests: XCTestCase {
             storageRoot: storageRoot,
             isCancelledProvider: { _ in false },
             messageSink: { _, _ in },
-            queueTaskSink: { _, _, _, _, _ in called = true }
+            queueTaskSink: { _, _, _, _, _, _ in called = true }
         )
 
         let context = JSContext()!
         bridge.install(into: context)
-        context.evaluateScript("host.queueTask('child-1', 'childType', '{}', 'src')")
+        context.evaluateScript("host.queueTask('child-1', 'childType', '{}', 'src', null)")
 
         XCTAssertFalse(called)
     }

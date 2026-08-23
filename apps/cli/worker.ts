@@ -13,6 +13,15 @@ import { RandomUuidGenerator, TimestampProvider, setLog, log } from "utils";
 import { TestUuidGenerator, TestTimestampProvider } from "node-utils";
 
 //
+// How many child tasks one task may have running at once here.
+//
+// Ten, because a desktop machine has cores and a fast disk to spare, and whatever queued the work is
+// usually what the user is waiting on. It is not the size of the worker pool: it is how much of that
+// pool one task may fill, so a second import, a sync, or anything the user does still gets a worker.
+//
+const MAX_CONCURRENT_CHILD_TASKS = 10;
+
+//
 // Register all task handlers
 //
 initTaskHandlers();
@@ -139,7 +148,7 @@ function initWorker(): void {
         if (message.type === "execute") {
             const { taskId, source } = message as IWorkerMessage;
             currentTaskSource = source;
-            currentTaskContext = new TaskContext(uuidGenerator, timestampProvider, sessionId, taskId, sendMessageFn);
+            currentTaskContext = new TaskContext(uuidGenerator, timestampProvider, sessionId, taskId, sendMessageFn, MAX_CONCURRENT_CHILD_TASKS);
 
             await executeTask(message, currentTaskContext);
             currentTaskContext = null;

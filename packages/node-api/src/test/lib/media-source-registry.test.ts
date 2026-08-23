@@ -3,9 +3,7 @@ import { RandomUuidGenerator } from "utils";
 import {
     IMediaItem,
     IMediaSource,
-    IMediaSourceChangedCallback,
     IMediaSourceListPage,
-    IMediaSourceUnsubscribe,
 } from "../../lib/media-source";
 import {
     buildMediaSource,
@@ -28,9 +26,6 @@ class ListMediaSource implements IMediaSource {
 
     // The items released through this source, in order.
     readonly released: string[] = [];
-
-    // How many watchers are currently subscribed.
-    watcherCount = 0;
 
     private readonly items: IMediaItem[];
 
@@ -55,13 +50,6 @@ class ListMediaSource implements IMediaSource {
         };
     }
 
-    watch(onChanged: IMediaSourceChangedCallback): IMediaSourceUnsubscribe {
-        this.watcherCount += 1;
-        return () => {
-            this.watcherCount -= 1;
-        };
-    }
-
     async openItem(item: IMediaItem): Promise<string> {
         this.exported.push(item.sourceId);
         return item.filePath;
@@ -80,7 +68,6 @@ class ListMediaSource implements IMediaSource {
 // The options every builder is handed. Nothing here cares what they are.
 //
 const buildOptions: IMediaSourceBuildOptions = {
-    pollIntervalMs: 1000,
     sessionTempDir: "/tmp/session",
     uuidGenerator: new RandomUuidGenerator(),
 };
@@ -280,20 +267,6 @@ describe("CompositeMediaSource", () => {
         const composite = new CompositeMediaSource([new ListMediaSource("first", ["a.jpg"])]);
 
         await expect(composite.deleteItems(["7#first/a.jpg"])).rejects.toThrow(/no child at index 7/i);
-    });
-
-    test("watching subscribes to every child, and unsubscribing releases them all", () => {
-        const first = new ListMediaSource("first", ["a.jpg"]);
-        const second = new ListMediaSource("second", ["b.jpg"]);
-        const composite = new CompositeMediaSource([first, second]);
-
-        const unsubscribe = composite.watch(() => {});
-        expect(first.watcherCount).toBe(1);
-        expect(second.watcherCount).toBe(1);
-
-        unsubscribe();
-        expect(first.watcherCount).toBe(0);
-        expect(second.watcherCount).toBe(0);
     });
 
     test("a malformed cursor is refused rather than silently starting over", async () => {

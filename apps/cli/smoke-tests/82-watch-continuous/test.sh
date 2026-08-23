@@ -1,8 +1,8 @@
 #!/bin/bash
-DESCRIPTION="psi watch picks up a file created after it started, and Ctrl-C stops it"
+DESCRIPTION="psi add --watch picks up a file created after it started, and Ctrl-C stops it"
 
 # The point of watch is that it notices a photo the user has just taken, so a test that only ever
-# runs --once would never exercise the watcher or the poll at all. This one starts the real command,
+# imports once would never exercise the watcher or the poll at all. This one starts the real command,
 # drops a file in while it is running, and waits for the asset to appear in the database.
 #
 # The signal has to reach the CLI itself. `bun run start --` spawns the CLI as a grandchild and does
@@ -67,7 +67,7 @@ start_watch_command() {
     : > "$WATCH_LOG"
 
     set -m
-    env NODE_ENV=testing $CLI_COMMAND watch --db "$TEST_DB_DIR" "$WATCH_DIR" --yes > "$WATCH_LOG" 2>&1 &
+    env NODE_ENV=testing $CLI_COMMAND add --db "$TEST_DB_DIR" "$WATCH_DIR" --watch --yes > "$WATCH_LOG" 2>&1 &
     local command_pid=$!
     set +m
 
@@ -76,7 +76,7 @@ start_watch_command() {
     local attempt
     for attempt in $(seq 1 120); do
         sleep 0.5
-        if grep -q "Watching. Press Ctrl-C to stop." "$WATCH_LOG" 2>/dev/null; then
+        if grep -q "Watching for new media. Press Ctrl-C to stop." "$WATCH_LOG" 2>/dev/null; then
             return 0
         fi
         if ! kill -0 "$WATCH_PGID" 2>/dev/null; then

@@ -51,6 +51,7 @@
 		D000000000000000000000BE /* TlsHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000AE /* TlsHost.swift */; };
 		FFEE0000000000000000B001 /* FFmpegKitFullSPM in Frameworks */ = {isa = PBXBuildFile; productRef = FFEE0000000000000000A001 /* FFmpegKitFullSPM */; };
 		D000000000000000000000B8 /* PooledTask.swift in Sources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000A8 /* PooledTask.swift */; };
+		D000000000000000000000F8 /* TaskPriority.swift in Sources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000F7 /* TaskPriority.swift */; };
 		D000000000000000000000B9 /* TaskEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000A9 /* TaskEngine.swift */; };
 		D000000000000000000000BA /* TcpHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000AA /* TcpHost.swift */; };
 		D000000000000000000000F3 /* run_magick.c in Sources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000E3 /* run_magick.c */; };
@@ -124,6 +125,7 @@
 		D000000000000000000000AD /* UdpHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UdpHost.swift; sourceTree = "<group>"; };
 		D000000000000000000000AE /* TlsHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TlsHost.swift; sourceTree = "<group>"; };
 		D000000000000000000000A8 /* PooledTask.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PooledTask.swift; sourceTree = "<group>"; };
+		D000000000000000000000F7 /* TaskPriority.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskPriority.swift; sourceTree = "<group>"; };
 		D000000000000000000000A9 /* TaskEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskEngine.swift; sourceTree = "<group>"; };
 		D000000000000000000000AA /* TcpHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TcpHost.swift; sourceTree = "<group>"; };
 		D000000000000000000000E3 /* run_magick.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = run_magick.c; sourceTree = "<group>"; };
@@ -274,6 +276,7 @@
 				D000000000000000000000AD /* UdpHost.swift */,
 				D000000000000000000000AE /* TlsHost.swift */,
 				D000000000000000000000A8 /* PooledTask.swift */,
+				D000000000000000000000F7 /* TaskPriority.swift */,
 				D000000000000000000000A9 /* TaskEngine.swift */,
 				D000000000000000000000AA /* TcpHost.swift */,
 				D000000000000000000000E4 /* MediaToolRunner.swift */,
@@ -499,6 +502,7 @@
 				D000000000000000000000BD /* UdpHost.swift in Sources */,
 				D000000000000000000000BE /* TlsHost.swift in Sources */,
 				D000000000000000000000B8 /* PooledTask.swift in Sources */,
+				D000000000000000000000F8 /* TaskPriority.swift in Sources */,
 				D000000000000000000000B9 /* TaskEngine.swift in Sources */,
 				D000000000000000000000BA /* TcpHost.swift in Sources */,
 				D000000000000000000000F3 /* run_magick.c in Sources */,

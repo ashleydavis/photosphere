@@ -1,7 +1,7 @@
 import { EmbeddedJsQueueBackend } from "../lib/embedded-js-queue-backend";
 import type { IJsEnginePlugin, ITaskCompletedEvent, ITaskMessageEvent } from "../lib/js-engine-plugin";
 import type { ITaskResult } from "task-queue";
-import { TaskStatus } from "task-queue";
+import { TaskPriority, TaskStatus } from "task-queue";
 
 //
 // A deferred promise helper so tests can control when a mocked bridge call settles.
@@ -86,6 +86,30 @@ describe("EmbeddedJsQueueBackend", () => {
 
         expect(id).toBe("task-1");
         expect(plugin.addTask).toHaveBeenCalledWith({ taskId: "task-1", type: "hash-file", data: { path: "a.jpg" }, source: "db-1" });
+    });
+
+    test("addTask sends the priority across the bridge so a tap joins the head of the native queue", () => {
+        const plugin = makeMockPlugin();
+        const backend = new EmbeddedJsQueueBackend(plugin);
+
+        backend.addTask("load-assets", { databasePath: "db" }, "db-1", "task-1", TaskPriority.Interactive);
+
+        expect(plugin.addTask).toHaveBeenCalledWith({
+            taskId: "task-1",
+            type: "load-assets",
+            data: { databasePath: "db" },
+            source: "db-1",
+            priority: TaskPriority.Interactive,
+        });
+    });
+
+    test("addTask sends no priority when none was asked for, so the native pool decides", () => {
+        const plugin = makeMockPlugin();
+        const backend = new EmbeddedJsQueueBackend(plugin);
+
+        backend.addTask("hash-file", { path: "a.jpg" }, "db-1", "task-1");
+
+        expect(plugin.addTask.mock.calls[0][0].priority).toBeUndefined();
     });
 
     test("addTask generates an id when none is supplied", () => {

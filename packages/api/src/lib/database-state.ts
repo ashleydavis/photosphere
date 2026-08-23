@@ -43,12 +43,6 @@ export interface IDatabaseState {
     lastSyncedAt?: string;
     // ISO date-time when the database was last replicated (replica side).
     lastReplicatedAt?: string;
-    // Source id of the last item the automatic import backfill released, so a restart resumes there
-    // rather than walking the whole photo library again. Device-local: it names a place in this
-    // machine's photo source, which means nothing on another machine.
-    autoImportBackfillCursor?: string;
-    // True once the automatic import backfill has walked the whole photo library.
-    autoImportBackfillCompleted?: boolean;
 }
 
 //
@@ -59,8 +53,6 @@ function serializeDatabaseState(state: IDatabaseState, serializer: ISerializer):
     serializer.writeString(state.lastModifiedAt ?? "");
     serializer.writeString(state.lastSyncedAt ?? "");
     serializer.writeString(state.lastReplicatedAt ?? "");
-    serializer.writeString(state.autoImportBackfillCursor ?? "");
-    serializer.writeBoolean(state.autoImportBackfillCompleted ?? false);
 }
 
 //
@@ -90,29 +82,15 @@ function deserializeCommonDatabaseState(deserializer: IDeserializer): IDatabaseS
 }
 
 //
-// Deserializes a version 1 state file, which predates automatic import and so names no backfill.
+// Deserializes a state file of any version.
 //
-function deserializeDatabaseStateV1(deserializer: IDeserializer): IDatabaseState {
+// A file written by an older build may hold more than this reads: version 2 used to carry the
+// automatic import cursor, which is gone because every import now reads its sources from the
+// beginning. Those trailing fields are simply not read, and what such a file says about the database
+// itself, such as its content hash, is still honoured.
+//
+function deserializeAnyDatabaseState(deserializer: IDeserializer): IDatabaseState {
     return deserializeCommonDatabaseState(deserializer);
-}
-
-//
-// Deserializes a version 2 state file, which carries the automatic import backfill cursor.
-//
-function deserializeDatabaseStateV2(deserializer: IDeserializer): IDatabaseState {
-    const state = deserializeCommonDatabaseState(deserializer);
-
-    const autoImportBackfillCursor = deserializer.readString();
-    if (autoImportBackfillCursor.length > 0) {
-        state.autoImportBackfillCursor = autoImportBackfillCursor;
-    }
-
-    const autoImportBackfillCompleted = deserializer.readBoolean();
-    if (autoImportBackfillCompleted) {
-        state.autoImportBackfillCompleted = true;
-    }
-
-    return state;
 }
 
 //
@@ -126,7 +104,7 @@ export async function loadDatabaseState(rawStorage: IStorage): Promise<IDatabase
             rawStorage,
             STATE_PATH,
             STATE_TYPE_CODE,
-            { 1: deserializeDatabaseStateV1, 2: deserializeDatabaseStateV2 },
+            { 1: deserializeAnyDatabaseState, 2: deserializeAnyDatabaseState },
             undefined,
             STATE_VERSION
         );

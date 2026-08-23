@@ -1,4 +1,4 @@
-import { AutoImportQueue, createBackfillCursor } from "../../lib/auto-import-queue";
+import { AutoImportQueue } from "../../lib/auto-import-queue";
 import { IMediaItem } from "../../lib/media-source";
 
 //
@@ -28,10 +28,21 @@ function mediaItems(count: number): IMediaItem[] {
 }
 
 //
-// The source ids released by a batch, which is what every assertion here is about.
+// Takes items from the queue at one instant until it gives nothing back, and returns their ids.
 //
-function idsOf(items: IMediaItem[]): string[] {
-    return items.map(item => item.sourceId);
+// The queue hands out one item at a time, so this is what a test about how much came out at a given
+// moment asks. The limit is a backstop: a queue that never runs dry would otherwise hang the test.
+//
+function releasedAt(queue: AutoImportQueue, nowMs: number, limit: number = 10000): string[] {
+    const released: string[] = [];
+    while (released.length < limit) {
+        const item = queue.nextItem(nowMs);
+        if (item === undefined) {
+            return released;
+        }
+        released.push(item.sourceId);
+    }
+    return released;
 }
 
 describe("AutoImportQueue", () => {
@@ -39,240 +50,170 @@ describe("AutoImportQueue", () => {
     const startMs = 1000000;
 
     test("nothing is released from an empty queue", () => {
-        const queue = new AutoImportQueue(60, createBackfillCursor());
-        expect(queue.nextBatch(startMs)).toEqual([]);
-        expect(queue.nextBatch(startMs + 60000)).toEqual([]);
+        const queue = new AutoImportQueue(60);
+        expect(queue.nextItem(startMs)).toBeUndefined();
+        expect(queue.nextItem(startMs + 60000)).toBeUndefined();
     });
 
     test("fast-lane items are released immediately, before any budget has accrued", () => {
-        const queue = new AutoImportQueue(60, createBackfillCursor());
+        const queue = new AutoImportQueue(60);
         queue.addFastLaneItems([mediaItem("new-photo.jpg")]);
 
-        expect(idsOf(queue.nextBatch(startMs))).toEqual(["new-photo.jpg"]);
+        expect(queue.nextItem(startMs)!.sourceId).toBe("new-photo.jpg");
     });
 
-    test("the whole fast lane is released at once however large it is", () => {
-        const queue = new AutoImportQueue(60, createBackfillCursor());
+    test("the whole fast lane is released without waiting for any budget", () => {
+        // The pacing exists to keep a backfill of years of photos from taking the machine over. A
+        // photo the user has just taken is not that, and they are watching for it.
+        const queue = new AutoImportQueue(60);
         queue.addFastLaneItems(mediaItems(500));
 
-        expect(queue.nextBatch(startMs)).toHaveLength(500);
+        expect(releasedAt(queue, startMs)).toHaveLength(500);
         expect(queue.hasPendingFastLane()).toBe(false);
     });
 
-    test("fast-lane items are released ahead of backfill items in the same batch", () => {
-        const queue = new AutoImportQueue(60, createBackfillCursor());
+    test("the fast lane comes out before the backfill, whatever budget the backfill has", () => {
+        const queue = new AutoImportQueue(60);
 
-        // Start the clock, then let a minute of budget accrue so both lanes can release together.
-        queue.nextBatch(startMs);
-        queue.addBackfillItems([mediaItem("old-1"), mediaItem("old-2")], undefined);
+        // Start the clock, then let a minute of budget accrue so the backfill could release too.
+        queue.nextItem(startMs);
+        queue.addBackfillItems([mediaItem("old-1"), mediaItem("old-2")]);
         queue.addFastLaneItems([mediaItem("new-1")]);
 
-        const batch = queue.nextBatch(startMs + 60000);
+        expect(releasedAt(queue, startMs + 60000)).toEqual(["new-1", "old-1", "old-2"]);
+    });
 
-        expect(idsOf(batch)).toEqual(["new-1", "old-1", "old-2"]);
+    test("an arrival is never behind more than the one backfill item already released", () => {
+        // This is what handing out one item at a time buys: the lane is looked at again before every
+        // single import, so a photo taken during a backfill of ten thousand is next, not last.
+        const queue = new AutoImportQueue(6000);
+        queue.addBackfillItems(mediaItems(100));
+        queue.nextItem(startMs);
+
+        expect(queue.nextItem(startMs + 60000)!.sourceId).toBe("item-0");
+
+        queue.addFastLaneItems([mediaItem("new-photo.jpg")]);
+
+        expect(queue.nextItem(startMs + 60000)!.sourceId).toBe("new-photo.jpg");
     });
 
     test("a new arrival does not wait behind a backfill that has no budget", () => {
-        const queue = new AutoImportQueue(60, createBackfillCursor());
-        queue.addBackfillItems(mediaItems(100), undefined);
-        queue.nextBatch(startMs);
+        const queue = new AutoImportQueue(60);
+        queue.addBackfillItems(mediaItems(100));
+        queue.nextItem(startMs);
 
         // A photo is taken a tenth of a second later, long before the backfill earns its next item.
         queue.addFastLaneItems([mediaItem("new-photo.jpg")]);
 
-        expect(idsOf(queue.nextBatch(startMs + 100))).toEqual(["new-photo.jpg"]);
+        expect(queue.nextItem(startMs + 100)!.sourceId).toBe("new-photo.jpg");
     });
 
     test("no backfill item is released before the budget has earned one", () => {
-        const queue = new AutoImportQueue(60, createBackfillCursor());
-        queue.addBackfillItems(mediaItems(10), undefined);
+        const queue = new AutoImportQueue(60);
+        queue.addBackfillItems(mediaItems(10));
 
         // The first call starts the clock and earns nothing.
-        expect(queue.nextBatch(startMs)).toEqual([]);
+        expect(queue.nextItem(startMs)).toBeUndefined();
         // Half a second later, at 60 per minute, half an item is not an item.
-        expect(queue.nextBatch(startMs + 500)).toEqual([]);
+        expect(queue.nextItem(startMs + 500)).toBeUndefined();
     });
 
     test("the backfill respects the items-per-minute budget", () => {
-        const queue = new AutoImportQueue(60, createBackfillCursor());
-        queue.addBackfillItems(mediaItems(100), undefined);
+        const queue = new AutoImportQueue(60);
+        queue.addBackfillItems(mediaItems(100));
 
-        queue.nextBatch(startMs);
+        queue.nextItem(startMs);
 
-        // One second at 60 per minute is one item.
-        expect(queue.nextBatch(startMs + 1000)).toHaveLength(1);
-        // Ten more seconds is ten more items.
-        expect(queue.nextBatch(startMs + 11000)).toHaveLength(10);
-        // Nothing further until more time passes.
-        expect(queue.nextBatch(startMs + 11000)).toHaveLength(0);
+        // One second at 60 per minute is one item, and no more until more time passes.
+        expect(releasedAt(queue, startMs + 1000)).toHaveLength(1);
+        // Ten more seconds earns ten more.
+        expect(releasedAt(queue, startMs + 11000)).toHaveLength(10);
+        expect(releasedAt(queue, startMs + 11000)).toHaveLength(0);
     });
 
     test("a faster rate releases proportionally more", () => {
-        const queue = new AutoImportQueue(600, createBackfillCursor());
-        queue.addBackfillItems(mediaItems(100), undefined);
+        const queue = new AutoImportQueue(600);
+        queue.addBackfillItems(mediaItems(100));
 
-        queue.nextBatch(startMs);
-        expect(queue.nextBatch(startMs + 1000)).toHaveLength(10);
+        queue.nextItem(startMs);
+
+        // A second at 600 per minute earns ten items.
+        expect(releasedAt(queue, startMs + 1000)).toHaveLength(10);
     });
 
     test("a long idle period does not release a huge burst", () => {
-        const queue = new AutoImportQueue(60, createBackfillCursor());
-        queue.addBackfillItems(mediaItems(1000), undefined);
+        const queue = new AutoImportQueue(60);
+        queue.addBackfillItems(mediaItems(1000));
 
-        queue.nextBatch(startMs);
+        queue.nextItem(startMs);
 
-        // An hour has passed, but the budget is capped at one minute's worth.
-        expect(queue.nextBatch(startMs + 3600000)).toHaveLength(60);
+        // An hour has passed, but the budget is still capped at one minute's worth.
+        expect(releasedAt(queue, startMs + 3600000)).toHaveLength(60);
     });
 
     test("unused budget carries over rather than being lost", () => {
-        const queue = new AutoImportQueue(60, createBackfillCursor());
+        const queue = new AutoImportQueue(60);
 
-        queue.nextBatch(startMs);
+        queue.nextItem(startMs);
         // Five seconds pass with nothing to release, so five items of budget are banked.
-        expect(queue.nextBatch(startMs + 5000)).toEqual([]);
+        expect(queue.nextItem(startMs + 5000)).toBeUndefined();
 
-        queue.addBackfillItems(mediaItems(10), undefined);
-        expect(queue.nextBatch(startMs + 5000)).toHaveLength(5);
+        queue.addBackfillItems(mediaItems(10));
+        expect(releasedAt(queue, startMs + 5000)).toHaveLength(5);
     });
 
     test("an item already queued is not queued a second time", () => {
-        const queue = new AutoImportQueue(6000, createBackfillCursor());
+        const queue = new AutoImportQueue(6000);
 
-        expect(queue.addBackfillItems([mediaItem("a.jpg"), mediaItem("b.jpg")], undefined)).toBe(2);
-        expect(queue.addBackfillItems([mediaItem("a.jpg"), mediaItem("b.jpg"), mediaItem("c.jpg")], undefined)).toBe(1);
+        expect(queue.addBackfillItems([mediaItem("a.jpg"), mediaItem("b.jpg")])).toBe(2);
+        expect(queue.addBackfillItems([mediaItem("a.jpg"), mediaItem("b.jpg"), mediaItem("c.jpg")])).toBe(1);
 
-        queue.nextBatch(startMs);
-        expect(idsOf(queue.nextBatch(startMs + 60000))).toEqual(["a.jpg", "b.jpg", "c.jpg"]);
+        queue.nextItem(startMs);
+        expect(releasedAt(queue, startMs + 60000)).toEqual(["a.jpg", "b.jpg", "c.jpg"]);
     });
 
     test("an item already released is not queued again by a later listing", () => {
-        const queue = new AutoImportQueue(6000, createBackfillCursor());
-        queue.addBackfillItems([mediaItem("a.jpg")], undefined);
+        const queue = new AutoImportQueue(6000);
+        queue.addBackfillItems([mediaItem("a.jpg")]);
 
-        queue.nextBatch(startMs);
-        expect(idsOf(queue.nextBatch(startMs + 60000))).toEqual(["a.jpg"]);
+        queue.nextItem(startMs);
+        expect(releasedAt(queue, startMs + 60000)).toEqual(["a.jpg"]);
 
         // The poll re-lists the folder and offers the same file again.
-        expect(queue.addBackfillItems([mediaItem("a.jpg")], undefined)).toBe(0);
-        expect(queue.nextBatch(startMs + 120000)).toEqual([]);
+        expect(queue.addBackfillItems([mediaItem("a.jpg")])).toBe(0);
+        expect(queue.nextItem(startMs + 120000)).toBeUndefined();
     });
 
     test("an item offered to both lanes is queued once", () => {
-        const queue = new AutoImportQueue(6000, createBackfillCursor());
+        const queue = new AutoImportQueue(6000);
 
         expect(queue.addFastLaneItems([mediaItem("a.jpg")])).toBe(1);
-        expect(queue.addBackfillItems([mediaItem("a.jpg")], undefined)).toBe(0);
+        expect(queue.addBackfillItems([mediaItem("a.jpg")])).toBe(0);
 
-        expect(idsOf(queue.nextBatch(startMs))).toEqual(["a.jpg"]);
-        expect(queue.nextBatch(startMs + 60000)).toEqual([]);
+        expect(releasedAt(queue, startMs)).toEqual(["a.jpg"]);
+        expect(queue.nextItem(startMs + 60000)).toBeUndefined();
     });
 
-    test("the page cursor is not published until the page has been released in full", () => {
-        const cursor = createBackfillCursor();
-        const queue = new AutoImportQueue(60, cursor);
-        queue.addBackfillItems(mediaItems(3), "page-2");
-
-        expect(cursor.pageCursor).toBeUndefined();
-
-        queue.nextBatch(startMs);
-        queue.nextBatch(startMs + 2000);
-
-        // Two of the three have been released, so resuming here would lose the third.
-        expect(cursor.pageCursor).toBeUndefined();
-
-        queue.nextBatch(startMs + 3000);
-
-        expect(cursor.pageCursor).toBe("page-2");
-        expect(queue.getBackfillCursor()).toBe(cursor);
-    });
-
-    test("a page that adds nothing new publishes its cursor straight away", () => {
-        const cursor = createBackfillCursor();
-        const queue = new AutoImportQueue(60, cursor);
-
-        // Every item on this page has been seen already, so there is nothing to wait for.
-        queue.addBackfillItems([mediaItem("a.jpg")], "page-2");
-        queue.nextBatch(startMs);
-        queue.nextBatch(startMs + 60000);
-        expect(cursor.pageCursor).toBe("page-2");
-
-        expect(queue.addBackfillItems([mediaItem("a.jpg")], "page-3")).toBe(0);
-        expect(cursor.pageCursor).toBe("page-3");
-    });
-
-    test("the cursor is not moved by a fast-lane release", () => {
-        const cursor = createBackfillCursor();
-        const queue = new AutoImportQueue(60, cursor);
-        queue.addFastLaneItems([mediaItem("new-photo.jpg")]);
-
-        queue.nextBatch(startMs);
-
-        expect(cursor.pageCursor).toBeUndefined();
-        expect(cursor.completed).toBe(false);
-    });
-
-    test("a queue built from a saved cursor resumes mid-library", () => {
-        const savedCursor = { pageCursor: "page-4", completed: false };
-        const queue = new AutoImportQueue(6000, savedCursor);
-
-        // The task resumes by asking the source for the page named by the cursor and offering it.
-        queue.addBackfillItems([mediaItem("item-5"), mediaItem("item-6")], "page-5");
-        queue.nextBatch(startMs);
-
-        expect(idsOf(queue.nextBatch(startMs + 60000))).toEqual(["item-5", "item-6"]);
-        expect(savedCursor.pageCursor).toBe("page-5");
-        expect(savedCursor.completed).toBe(false);
-    });
-
-    test("pending backfill is reported so the task knows when to fetch the next page", () => {
-        const queue = new AutoImportQueue(60, createBackfillCursor());
+    test("pending backfill is reported so the run knows when to fetch the next page", () => {
+        const queue = new AutoImportQueue(60);
         expect(queue.hasPendingBackfill()).toBe(false);
-        expect(queue.needsBackfillPage()).toBe(true);
 
-        queue.addBackfillItems(mediaItems(2), "page-2");
+        queue.addBackfillItems(mediaItems(2));
         expect(queue.hasPendingBackfill()).toBe(true);
         expect(queue.pendingBackfillCount()).toBe(2);
-        expect(queue.needsBackfillPage()).toBe(false);
 
-        queue.nextBatch(startMs);
-        queue.nextBatch(startMs + 60000);
+        queue.nextItem(startMs);
+        releasedAt(queue, startMs + 60000);
 
         expect(queue.hasPendingBackfill()).toBe(false);
         expect(queue.pendingBackfillCount()).toBe(0);
-        expect(queue.needsBackfillPage()).toBe(true);
-    });
-
-    test("a page with no next cursor finishes the backfill once it has been released", () => {
-        const cursor = createBackfillCursor();
-        const queue = new AutoImportQueue(60, cursor);
-
-        queue.addBackfillItems(mediaItems(1), undefined);
-        expect(queue.isBackfillComplete()).toBe(false);
-
-        queue.nextBatch(startMs);
-        queue.nextBatch(startMs + 60000);
-
-        expect(queue.isBackfillComplete()).toBe(true);
-        expect(cursor.completed).toBe(true);
-        expect(queue.needsBackfillPage()).toBe(false);
-    });
-
-    test("an empty final page finishes the backfill immediately", () => {
-        const cursor = createBackfillCursor();
-        const queue = new AutoImportQueue(60, cursor);
-
-        queue.addBackfillItems([], undefined);
-
-        expect(queue.isBackfillComplete()).toBe(true);
-        expect(cursor.completed).toBe(true);
     });
 
     test("time going backwards does not create budget", () => {
-        const queue = new AutoImportQueue(60, createBackfillCursor());
-        queue.addBackfillItems(mediaItems(10), undefined);
+        const queue = new AutoImportQueue(60);
+        queue.addBackfillItems(mediaItems(10));
 
-        queue.nextBatch(startMs);
-        expect(queue.nextBatch(startMs - 60000)).toEqual([]);
+        queue.nextItem(startMs);
+        expect(queue.nextItem(startMs - 60000)).toBeUndefined();
     });
 });

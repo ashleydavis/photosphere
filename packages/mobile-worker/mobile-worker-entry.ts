@@ -27,8 +27,8 @@ import { checkDatabaseExistsHandler } from "node-api/src/lib/check-database-exis
 import { syncDatabaseHandler } from "node-api/src/lib/sync-database.worker";
 import { listS3DirsHandler } from "node-api/src/lib/list-s3-dirs.worker";
 import { readDatabasesConfigHandler, writeDatabasesConfigHandler } from "node-api/src/lib/databases-config.worker";
-import { autoImportHandler } from "node-api/src/lib/auto-import.worker";
 import { evictOriginalsHandler } from "node-api/src/lib/evict-originals.worker";
+import { cleanupSourcesHandler } from "node-api/src/lib/cleanup-sources.worker";
 import { registerMediaSourceBuilder } from "node-api/src/lib/media-source-registry";
 import { IDeviceAlbumAutoImportSource } from "api/src/lib/auto-import-settings";
 import { DeviceMediaSource } from "./src/lib/device-media-source";
@@ -119,23 +119,23 @@ registerHandler("list-s3-dirs", listS3DirsHandler);
 registerHandler("read-databases-config", readDatabasesConfigHandler);
 registerHandler("write-databases-config", writeDatabasesConfigHandler);
 
-// Register the device photo library as a media source. The auto-import task only ever talks to the
-// IMediaSource interface, so registering this here is what lets the same task that watches folders on
-// desktop watch the photo library on a phone, with nothing in the task itself knowing the difference.
+// Register the device photo library as a media source. The automatic import scanner only ever talks
+// to the IMediaSource interface, so registering this here is what lets the same import task that
+// watches folders on desktop watch the photo library on a phone, with nothing in the task itself
+// knowing the difference.
 registerMediaSourceBuilder("device-album", (sources, options) => {
-    return new DeviceMediaSource(sources as IDeviceAlbumAutoImportSource[], options.pollIntervalMs);
+    return new DeviceMediaSource(sources as IDeviceAlbumAutoImportSource[]);
 });
 
-// Register the automatic import and eviction handlers: the same tasks the desktop app runs, reading
-// the device photo library through the source registered above.
+// The eviction handler: the same task the desktop app runs.
 //
-// Automatic import holds an engine slot for as long as the setting is on, and the import task it
-// queues holds another, and the hash-file and upload-asset tasks that import queues in turn hold
-// more. EnginePool.POOL_SIZE is sized for that whole chain with one slot to spare. Shrinking it
-// deadlocks automatic import, and the failure is silent: the setting stays on, the task stays
-// running, and the counts stay at zero.
-registerHandler("auto-import", autoImportHandler);
+// Automatic import is an `import-assets` task like any other, registered above. It holds one engine
+// slot for as long as the setting is on, and the hash-file and upload-asset tasks it queues hold
+// more, capped at MOBILE_MAX_CONCURRENT_CHILD_TASKS. EnginePool.POOL_SIZE is sized for that whole
+// chain with room to spare. Shrinking it deadlocks automatic import, and the failure is silent: the
+// setting stays on, the task stays running, and the counts stay at zero.
 registerHandler("evict-originals", evictOriginalsHandler);
+registerHandler("cleanup-sources", cleanupSourcesHandler);
 
 // Expose the worker entry point (globalThis.__photosphereWorker = { runTask }).
 installWorkerGlobal();

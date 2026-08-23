@@ -208,7 +208,7 @@ wss.on("connection", (ws: WebSocket) => {
 
             if (messageData.type === "add-task") {
                 // Queue the task using the client-provided task ID and source
-                const taskId = workerPool.addTask(messageData.taskType, messageData.data, messageData.source, messageData.taskId);
+                const taskId = workerPool.addTask(messageData.taskType, messageData.data, messageData.source, messageData.taskId, messageData.priority);
                 console.log(`Queued task ${taskId} of type ${messageData.taskType}`);
             }
             else if (messageData.type === "cancel-tasks") {

@@ -60,9 +60,10 @@ source "$_CLI_ABS_DIR/../../scripts/lib/test-pool.sh"
 #
 # Exported, and this is load-bearing rather than tidiness. The CLI is a child process, so a
 # TEST_TMP_DIR that is merely assigned is invisible to it: getProcessTmpDir() then falls back to the
-# system temp dir and every CLI process on the machine shares /tmp/photosphere. This suite runs
-# `hash-cache clear` four times, which deletes that directory outright, and it took out the log
-# directory of a suite running alongside in the middle of writing to it.
+# system temp dir and every CLI process on the machine shares /tmp/photosphere, where the databases
+# and scratch files of concurrent runs land on top of each other. This suite used to run
+# `hash-cache clear` four times as well, which deleted that whole directory and once took out the
+# log directory of a suite running alongside in the middle of writing to it.
 export TEST_TMP_DIR="${TEST_TMP_DIR:-$_CLI_ABS_DIR/test/tmp}"
 TEST_DB_DIR="$TEST_TMP_DIR/shared/test-db"
 TEST_FILES_DIR="../../test"
@@ -801,11 +802,10 @@ run_all_tests() {
         rm -f "$UUID_COUNTER_FILE"
     fi
 
-    # Clear local cache
-    log_info "Clearing local cache before running tests"
-    invoke_command "Clear local cache" "$(get_cli_command) hash-cache clear" || {
-        log_warning "Failed to clear cache, continuing anyway..."
-    }
+    # There is nothing to clear. The hash cache is one per database, and its directory is derived
+    # from the database path, so every database this suite builds under its own allocated directory
+    # starts with an empty cache. This used to run `hash-cache clear` here and in three other
+    # places, back when one cache served the whole machine.
 
     # Check tools first
     check_tools
@@ -923,11 +923,6 @@ run_multiple_commands() {
     log_info "Running ${#COMMANDS[@]} commands in sequence: $commands_string"
     echo ""
     
-    # Clear local cache before running tests
-    log_info "Clearing local cache before running tests"
-    invoke_command "Clear local cache" "$(get_cli_command) hash-cache clear" || {
-        log_warning "Failed to clear cache, continuing anyway..."
-    }
     
     
     # Check tools first before running any tests
@@ -1125,10 +1120,6 @@ main() {
                 rm -f "$UUID_COUNTER_FILE"
             fi
 
-            log_info "Clearing local cache before running tests"
-            invoke_command "Clear local cache" "$(get_cli_command) hash-cache clear" || {
-                log_warning "Failed to clear cache, continuing anyway..."
-            }
 
             check_tools
 
@@ -1194,11 +1185,6 @@ main() {
     
     log_info "Running specific test: $1"
     
-    # Clear local cache before running tests
-    log_info "Clearing local cache before running tests"
-    invoke_command "Clear local cache" "$(get_cli_command) hash-cache clear" || {
-        log_warning "Failed to clear cache, continuing anyway..."
-    }
     
     
     # Check tools first before running individual test

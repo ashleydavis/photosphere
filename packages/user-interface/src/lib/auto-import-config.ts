@@ -33,18 +33,12 @@ export const DEFAULT_DATABASE_PATH_KEY = "defaultDatabasePath";
 export const AUTO_IMPORT_SOURCES_KEY = "autoImportSources";
 
 //
-// Config key holding whether source files are deleted once they are confirmed in the database.
-//
-export const AUTO_IMPORT_CLEANUP_ENABLED_KEY = "autoImportCleanupEnabled";
-
-//
 // Reads the automatic import settings, filling anything missing or malformed from the defaults.
 //
 export async function loadAutoImportSettings(config: IConfig): Promise<IAutoImportSettings> {
     const raw: IRawAutoImportSettings = {
         enabled: await config.get<boolean>(AUTO_IMPORT_ENABLED_KEY),
         sources: await config.get<IAutoImportSource[]>(AUTO_IMPORT_SOURCES_KEY),
-        cleanupEnabled: await config.get<boolean>(AUTO_IMPORT_CLEANUP_ENABLED_KEY),
     };
     return normaliseAutoImportSettings(raw);
 }
@@ -52,14 +46,13 @@ export async function loadAutoImportSettings(config: IConfig): Promise<IAutoImpo
 //
 // Writes the automatic import settings.
 //
-// Only the three the user can change are stored. The pacing and the poll interval are not settings
+// Only the two the user can change are stored. The pacing and the poll interval are not settings
 // the interface offers, so they stay at their defaults rather than being written out and then read
 // back as if the user had chosen them.
 //
 export async function saveAutoImportSettings(config: IConfig, settings: IAutoImportSettings): Promise<void> {
     await config.set(AUTO_IMPORT_ENABLED_KEY, settings.enabled);
     await config.set(AUTO_IMPORT_SOURCES_KEY, settings.sources);
-    await config.set(AUTO_IMPORT_CLEANUP_ENABLED_KEY, settings.cleanupEnabled);
 }
 
 //
@@ -88,7 +81,6 @@ export function buildInitialAutoImportSettings(sources: IAutoImportSource[]): IA
         ...DEFAULT_AUTO_IMPORT_SETTINGS,
         enabled: true,
         sources,
-        cleanupEnabled: false,
     };
 }
 

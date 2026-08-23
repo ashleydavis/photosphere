@@ -1,5 +1,5 @@
 import { registerPlugin, type PluginListenerHandle } from "@capacitor/core";
-import type { TaskStatus } from "task-queue";
+import type { TaskStatus, TaskPriority } from "task-queue";
 
 //
 // Options for dispatching a single task into the native embedded-engine pool.
@@ -25,6 +25,13 @@ export interface IAddTaskOptions {
     // Source tag grouping related tasks so they can be cancelled together.
     //
     source: string;
+
+    //
+    // How urgent the task is, which decides where the native pool puts it in the pending queue.
+    // Absent means the pool decides: at its parent's priority when a running task queued it, and at
+    // the default otherwise.
+    //
+    priority?: TaskPriority;
 }
 
 //

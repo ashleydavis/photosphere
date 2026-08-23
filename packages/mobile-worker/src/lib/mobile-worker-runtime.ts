@@ -1,7 +1,17 @@
 import { Buffer } from "buffer";
-import { ITaskContext, executeTaskHandler, ITaskResult, TaskStatus, WorkerQueueBackend, setQueueBackend } from "task-queue";
+import { ITaskContext, executeTaskHandler, ITaskResult, TaskStatus, TaskPriority, WorkerQueueBackend, setQueueBackend } from "task-queue";
 import { RandomUuidGenerator, TimestampProvider } from "utils";
 import { IHost, buildHost } from "./host-functions";
+
+//
+// How many child tasks one task may have running at once on a phone.
+//
+// Two, because the embedded engine pool is small and every engine a task fills is one a tap has to
+// wait for. Unbounded, this is what made a database take two minutes and eight seconds to open on a
+// Pixel 6 while automatic import was running: the import queued one hash task per file as fast as it
+// could scan, and everything else in the app queued up behind them.
+//
+const MOBILE_MAX_CONCURRENT_CHILD_TASKS = 2;
 
 //
 // The worker API exposed to native code as `globalThis.__photosphereWorker`.
@@ -35,6 +45,10 @@ interface ISubtaskMessage {
 
     // The source tag grouping the child task with its siblings.
     source: string;
+
+    // The priority the child asked for, or undefined to run at the priority of the task that queued
+    // it.
+    priority?: TaskPriority;
 }
 
 //
@@ -178,7 +192,7 @@ function postSubtaskMessage(message: ISubtaskMessage): void {
     }
 
     if (message.type === "queue-task") {
-        host.queueTask(message.taskId, message.taskType, JSON.stringify(message.data, bridgeReplacer), message.source);
+        host.queueTask(message.taskId, message.taskType, JSON.stringify(message.data, bridgeReplacer), message.source, message.priority ?? null);
         return;
     }
 
@@ -263,6 +277,7 @@ function createTaskContext(taskId: string, host: IHost): ITaskContext {
         isCancelled: () => {
             return host.isCancelled(taskId);
         },
+        maxConcurrentChildTasks: MOBILE_MAX_CONCURRENT_CHILD_TASKS,
     };
 
     return context;

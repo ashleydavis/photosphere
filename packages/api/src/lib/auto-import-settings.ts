@@ -58,28 +58,19 @@ export interface IAutoImportSettings {
     // The places that are watched for new media.
     sources: IAutoImportSource[];
 
-    // Whether the source file is deleted from the device once the asset is confirmed in the local
-    // database. Off by default because it leaves the user trusting a single local copy.
-    cleanupEnabled: boolean;
-
     // How many already-existing items the backfill lane is allowed to release per minute. The fast
     // lane, which carries items the watcher reported since the task started, is not paced by this.
     backfillItemsPerMinute: number;
 
-    // How often the sources are re-listed, in milliseconds. Watching alone is not dependable on
-    // every platform, so the poll is what guarantees nothing is missed.
-    pollIntervalMs: number;
 }
 
 //
-// Auto-import off, cleanup off, a backfill rate of 60 items per minute and a 30 second poll.
+// Auto-import off, and a backfill rate of 60 items per minute.
 //
 export const DEFAULT_AUTO_IMPORT_SETTINGS: IAutoImportSettings = {
     enabled: false,
     sources: [],
-    cleanupEnabled: false,
     backfillItemsPerMinute: 60,
-    pollIntervalMs: 30000,
 };
 
 //
@@ -110,14 +101,9 @@ export interface IRawAutoImportSettings {
     // The places that are watched, each still unchecked.
     sources?: IRawAutoImportSource[];
 
-    // Whether source cleanup is on.
-    cleanupEnabled?: boolean;
-
     // The backfill pacing in items per minute.
     backfillItemsPerMinute?: number;
 
-    // The poll interval in milliseconds.
-    pollIntervalMs?: number;
 }
 
 //
@@ -198,8 +184,6 @@ export function normaliseAutoImportSettings(rawSettings: IRawAutoImportSettings 
     return {
         enabled: isBoolean(rawSettings.enabled) ? rawSettings.enabled as boolean : DEFAULT_AUTO_IMPORT_SETTINGS.enabled,
         sources,
-        cleanupEnabled: isBoolean(rawSettings.cleanupEnabled) ? rawSettings.cleanupEnabled as boolean : DEFAULT_AUTO_IMPORT_SETTINGS.cleanupEnabled,
         backfillItemsPerMinute: isPositiveNumber(rawSettings.backfillItemsPerMinute) ? rawSettings.backfillItemsPerMinute as number : DEFAULT_AUTO_IMPORT_SETTINGS.backfillItemsPerMinute,
-        pollIntervalMs: isPositiveNumber(rawSettings.pollIntervalMs) ? rawSettings.pollIntervalMs as number : DEFAULT_AUTO_IMPORT_SETTINGS.pollIntervalMs,
     };
 }

@@ -204,10 +204,126 @@ final class EnginePoolTests: XCTestCase {
     }
 
     //
-    // Helper to build a task for a given id and source.
+    // Helper to build a task for a given id, source and priority. A nil priority means the task named
+    // none, so it runs at its parent's priority if it is a child and at the default otherwise.
     //
-    private func task(_ id: String, source: String = "db-1") -> PooledTask {
-        return PooledTask(taskId: id, type: "noop", dataJson: "{}", source: source)
+    private func task(_ id: String, source: String = "db-1", priority: TaskPriority? = nil) -> PooledTask {
+        return PooledTask(taskId: id, type: "noop", dataJson: "{}", source: source, priority: priority)
+    }
+
+    //
+    // Priority: an interactive task added after background tasks are already waiting is dispatched
+    // before all of them. This is the tap that must not sit behind an import's backlog.
+    //
+    func testInteractiveTaskIsDispatchedBeforeWaitingBackgroundTasks() {
+        let delegate = CapturingDelegate()
+        let coordinator = StubCoordinator()
+        let pool = makePool(size: 1, delegate: delegate, coordinator: coordinator)
+
+        pool.addTask(task("running", priority: .background))
+        pool.addTask(task("background-1", priority: .background))
+        pool.addTask(task("background-2", priority: .background))
+        pool.addTask(task("interactive", priority: .interactive))
+
+        XCTAssertEqual(coordinator.startedTaskIds(), ["running"])
+
+        // The engine the first task frees goes to the interactive one, not to the background tasks
+        // that have been waiting longer.
+        coordinator.complete(taskId: "running")
+        XCTAssertEqual(coordinator.startedTaskIds(), ["running", "interactive"])
+
+        coordinator.complete(taskId: "interactive")
+        coordinator.complete(taskId: "background-1")
+        XCTAssertEqual(coordinator.startedTaskIds(), ["running", "interactive", "background-1", "background-2"])
+    }
+
+    //
+    // Priority: there is one queue. An interactive task joins the head, so a later tap runs before an
+    // earlier one still waiting; a background task joins the end, so background work keeps its
+    // arrival order.
+    //
+    func testInteractiveTasksJoinTheHeadAndBackgroundTasksTheEnd() {
+        let delegate = CapturingDelegate()
+        let coordinator = StubCoordinator()
+        let pool = makePool(size: 1, delegate: delegate, coordinator: coordinator)
+
+        pool.addTask(task("running", priority: .background))
+        pool.addTask(task("background-1", priority: .background))
+        pool.addTask(task("interactive-1", priority: .interactive))
+        pool.addTask(task("background-2", priority: .background))
+        pool.addTask(task("interactive-2", priority: .interactive))
+
+        coordinator.complete(taskId: "running")
+        coordinator.complete(taskId: "interactive-2")
+        coordinator.complete(taskId: "interactive-1")
+        coordinator.complete(taskId: "background-1")
+
+        XCTAssertEqual(
+            coordinator.startedTaskIds(),
+            ["running", "interactive-2", "interactive-1", "background-1", "background-2"])
+    }
+
+    //
+    // Priority: a task that names no priority runs in the background, so nothing gets in front of the
+    // user by accident.
+    //
+    func testATaskThatNamesNoPriorityRunsInTheBackground() {
+        let delegate = CapturingDelegate()
+        let coordinator = StubCoordinator()
+        let pool = makePool(size: 1, delegate: delegate, coordinator: coordinator)
+
+        pool.addTask(task("running", priority: .background))
+        pool.addTask(task("unspecified"))
+        pool.addTask(task("interactive", priority: .interactive))
+
+        coordinator.complete(taskId: "running")
+        XCTAssertEqual(coordinator.startedTaskIds(), ["running", "interactive"])
+    }
+
+    //
+    // Priority: a child task that names no priority runs at its parent's, so the hash and upload
+    // tasks an import queues can never overtake a tap.
+    //
+    func testAChildInheritsItsParentsPriority() {
+        let delegate = CapturingDelegate()
+        let coordinator = StubCoordinator()
+        let pool = makePool(size: 2, delegate: delegate, coordinator: coordinator)
+
+        pool.addTask(task("background-parent", priority: .background))
+        pool.addTask(task("interactive-parent", priority: .interactive))
+
+        // Both parents queue a child that names no priority. Neither can run: both engines are held.
+        pool.queueChildTask(parentTaskId: "background-parent", child: task("background-child"))
+        pool.queueChildTask(parentTaskId: "interactive-parent", child: task("interactive-child"))
+        XCTAssertEqual(coordinator.startedTaskIds(), ["background-parent", "interactive-parent"])
+
+        // The freed engine goes to the interactive parent's child, even though the background
+        // parent's child was queued first.
+        coordinator.complete(taskId: "background-parent")
+        XCTAssertEqual(
+            coordinator.startedTaskIds(),
+            ["background-parent", "interactive-parent", "interactive-child"])
+    }
+
+    //
+    // Priority: a child that names a priority of its own keeps it, which is how long-running work an
+    // interactive task only kicks off opts back down to the background.
+    //
+    func testAChildThatNamesAPriorityKeepsIt() {
+        let delegate = CapturingDelegate()
+        let coordinator = StubCoordinator()
+        let pool = makePool(size: 2, delegate: delegate, coordinator: coordinator)
+
+        pool.addTask(task("interactive-parent", priority: .interactive))
+        pool.addTask(task("blocker", priority: .background))
+
+        pool.queueChildTask(parentTaskId: "interactive-parent", child: task("demoted-child", priority: .background))
+        pool.addTask(task("interactive", priority: .interactive))
+
+        coordinator.complete(taskId: "blocker")
+        XCTAssertEqual(
+            coordinator.startedTaskIds(),
+            ["interactive-parent", "blocker", "interactive"])
     }
 
     //
@@ -337,7 +453,7 @@ final class EnginePoolTests: XCTestCase {
         let parentEngine = engines.first { engine in engine.lastRunTask?.taskId == "parent" }
         XCTAssertNotNil(parentEngine)
 
-        pool.queueChildTask(parentTaskId: "parent", child: PooledTask(taskId: "child", type: "hash-file", dataJson: "{\"filePath\":\"a.jpg\"}", source: "session"))
+        pool.queueChildTask(parentTaskId: "parent", child: PooledTask(taskId: "child", type: "hash-file", dataJson: "{\"filePath\":\"a.jpg\"}", source: "session", priority: nil))
         XCTAssertTrue(coordinator.startedTaskIds().contains("child"))
 
         coordinator.complete(taskId: "child")
@@ -362,7 +478,7 @@ final class EnginePoolTests: XCTestCase {
         let coordinator = StubCoordinator()
         let pool = makePool(size: 3, delegate: delegate, coordinator: coordinator)
 
-        pool.queueChildTask(parentTaskId: "ghost", child: PooledTask(taskId: "child", type: "hash-file", dataJson: "{}", source: "session"))
+        pool.queueChildTask(parentTaskId: "ghost", child: PooledTask(taskId: "child", type: "hash-file", dataJson: "{}", source: "session", priority: nil))
         XCTAssertFalse(coordinator.startedTaskIds().contains("child"))
     }
 }

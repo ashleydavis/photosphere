@@ -1,4 +1,4 @@
-import type { ITaskResult, IQueueBackend, WorkerTaskCompletionCallback, TaskMessageCallback, IMessageCallbackEntry, UnsubscribeFn } from "task-queue";
+import type { ITaskResult, IQueueBackend, WorkerTaskCompletionCallback, TaskMessageCallback, IMessageCallbackEntry, UnsubscribeFn, TaskPriority } from "task-queue";
 import type { IElectronAPI } from "./electron-ipc";
 
 //
@@ -146,9 +146,9 @@ export class ElectronRendererQueueBackend implements IQueueBackend {
     //
     // Forwards a task to the Electron main process via IPC and fires onTaskAdded callbacks.
     //
-    addTask(type: string, data: any, source: string, taskId?: string): string {
+    addTask(type: string, data: any, source: string, taskId?: string, priority?: TaskPriority): string {
         const id = taskId ?? crypto.randomUUID();
-        this.electronAPI.send('add-task', { taskType: type, data, source, taskId: id });
+        this.electronAPI.send('add-task', { taskType: type, data, source, taskId: id, priority });
         const callbacks = this.taskAddedCallbacks.get(source);
         if (callbacks) {
             for (const cb of callbacks) {

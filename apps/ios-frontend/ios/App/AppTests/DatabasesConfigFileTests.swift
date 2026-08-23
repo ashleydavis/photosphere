@@ -74,7 +74,7 @@ final class DatabasesConfigFileTests: XCTestCase {
             storageRoot: storageRoot,
             isCancelledProvider: { _ in false },
             messageSink: { _, _ in },
-            queueTaskSink: { _, _, _, _, _ in }
+            queueTaskSink: { _, _, _, _, _, _ in }
         )
     }
 

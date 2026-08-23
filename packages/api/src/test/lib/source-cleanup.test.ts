@@ -6,9 +6,7 @@ import {
 import {
     IMediaItem,
     IMediaSource,
-    IMediaSourceChangedCallback,
     IMediaSourceListPage,
-    IMediaSourceUnsubscribe,
     MediaSourceDeleteError,
 } from "../../lib/media-source";
 
@@ -30,10 +28,6 @@ class RecordingMediaSource implements IMediaSource {
 
     async listPage(cursor: string | undefined, pageSize: number): Promise<IMediaSourceListPage> {
         return { items: [], nextCursor: undefined };
-    }
-
-    watch(onChanged: IMediaSourceChangedCallback): IMediaSourceUnsubscribe {
-        return () => {};
     }
 
     async openItem(item: IMediaItem): Promise<string> {

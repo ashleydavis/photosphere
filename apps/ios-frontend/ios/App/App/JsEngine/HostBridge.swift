@@ -138,7 +138,7 @@ final class HostBridge {
     // with the parent task id, so the pool queues it and later routes its outcome to this engine.
     // Mirrors the Android HostBridge forwarding to EngineCallbacks.queueChildTask.
     //
-    private let queueTaskSink: (String, String, String, String, String) -> Void
+    private let queueTaskSink: (String, String, String, String, String, TaskPriority?) -> Void
 
     //
     // Constructs a host bridge for one engine context. `sessionId` and `storageRoot` come from
@@ -149,7 +149,7 @@ final class HostBridge {
          storageRoot: URL,
          isCancelledProvider: @escaping (String) -> Bool,
          messageSink: @escaping (String, String) -> Void,
-         queueTaskSink: @escaping (String, String, String, String, String) -> Void) {
+         queueTaskSink: @escaping (String, String, String, String, String, TaskPriority?) -> Void) {
         self.sessionId = sessionId
         self.storageRoot = storageRoot
         self.isCancelledProvider = isCancelledProvider
@@ -181,14 +181,29 @@ final class HostBridge {
         }
         host.setValue(JSValue(object: isCancelled, in: context), forProperty: "isCancelled")
 
-        // queueTask(childTaskId, type, dataJson, source): synchronous; hands the child task to the pool
-        // tagged with the current (parent) task id so the child's outcome routes back to this engine.
-        // A no-op when no task is current (there is no parent to route back to).
-        let queueTask: @convention(block) (String, String, String, String) -> Void = { [weak self] childTaskId, type, dataJson, source in
+        // queueTask(childTaskId, type, dataJson, source, priority): synchronous; hands the child task
+        // to the pool tagged with the current (parent) task id so the child's outcome routes back to
+        // this engine. A no-op when no task is current (there is no parent to route back to). The
+        // priority is JS null when the handler named none, and the child then runs at its parent's; a
+        // string that is not a known priority raises a JS exception rather than quietly running the
+        // child in the background.
+        // The priority crosses as a JSValue rather than an optional String so JS null is read through
+        // documented JSValue API rather than relying on how a block parameter bridges a null.
+        let queueTask: @convention(block) (String, String, String, String, JSValue) -> Void = { [weak self] childTaskId, type, dataJson, source, priorityValue in
             guard let self = self, let parentTaskId = self.currentTaskId else {
                 return
             }
-            self.queueTaskSink(parentTaskId, childTaskId, type, dataJson, source)
+            let priorityWireName: String? = (priorityValue.isNull || priorityValue.isUndefined) ? nil : priorityValue.toString()
+            do {
+                let priority = try taskPriority(fromWireName: priorityWireName)
+                self.queueTaskSink(parentTaskId, childTaskId, type, dataJson, source, priority)
+            }
+            catch let error as UnknownTaskPriorityError {
+                context.exception = JSValue(newErrorFromMessage: error.message, in: context)
+            }
+            catch {
+                context.exception = JSValue(newErrorFromMessage: "\(error)", in: context)
+            }
         }
         host.setValue(JSValue(object: queueTask, in: context), forProperty: "queueTask")
 

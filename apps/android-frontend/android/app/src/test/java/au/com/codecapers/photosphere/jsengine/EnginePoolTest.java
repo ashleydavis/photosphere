@@ -50,10 +50,18 @@ public final class EnginePoolTest {
     }
 
     //
-    // Builds a task with the given id and source. Data is irrelevant to the dispatcher.
+    // Builds a task with the given id and source, at no particular priority (so it runs at the
+    // default). Data is irrelevant to the dispatcher.
     //
     private PooledTask task(String taskId, String source) {
-        return new PooledTask(taskId, "test-type", "{}", source);
+        return new PooledTask(taskId, "test-type", "{}", source, null);
+    }
+
+    //
+    // Builds a task with the given id, source and priority.
+    //
+    private PooledTask task(String taskId, String source, TaskPriority priority) {
+        return new PooledTask(taskId, "test-type", "{}", source, priority);
     }
 
     //
@@ -66,6 +74,133 @@ public final class EnginePoolTest {
             }
         }
         return null;
+    }
+
+    //
+    // Priority: an interactive task added after background tasks are already waiting is dispatched
+    // before all of them. This is the tap that must not sit behind an import's backlog.
+    //
+    @Test
+    public void interactiveTaskIsDispatchedBeforeWaitingBackgroundTasks() {
+        RecordingPoolListener listener = new RecordingPoolListener();
+        EnginePool pool = newPool(listener, 1);
+
+        pool.addTask(task("running", "src", TaskPriority.BACKGROUND));
+        pool.addTask(task("background-1", "src", TaskPriority.BACKGROUND));
+        pool.addTask(task("background-2", "src", TaskPriority.BACKGROUND));
+        pool.addTask(task("interactive", "src", TaskPriority.INTERACTIVE));
+
+        // The first task was already running when the interactive one arrived, so it finishes first.
+        engineRunning("running").succeed("1");
+
+        // The engine it freed goes to the interactive task, not to the background tasks that have
+        // been waiting longer.
+        assertNotNull(engineRunning("interactive"));
+        assertNull(engineRunning("background-1"));
+
+        engineRunning("interactive").succeed("2");
+        engineRunning("background-1").succeed("3");
+        engineRunning("background-2").succeed("4");
+
+        assertEquals(Arrays.asList("running", "interactive", "background-1", "background-2"), listener.succeededTaskIds);
+    }
+
+    //
+    // Priority: there is one queue. An interactive task joins the head, so a later tap runs before an
+    // earlier one still waiting; a background task joins the end, so background work keeps its
+    // arrival order.
+    //
+    @Test
+    public void interactiveTasksJoinTheHeadAndBackgroundTasksTheEnd() {
+        RecordingPoolListener listener = new RecordingPoolListener();
+        EnginePool pool = newPool(listener, 1);
+
+        pool.addTask(task("running", "src", TaskPriority.BACKGROUND));
+        pool.addTask(task("background-1", "src", TaskPriority.BACKGROUND));
+        pool.addTask(task("interactive-1", "src", TaskPriority.INTERACTIVE));
+        pool.addTask(task("background-2", "src", TaskPriority.BACKGROUND));
+        pool.addTask(task("interactive-2", "src", TaskPriority.INTERACTIVE));
+
+        engineRunning("running").succeed("1");
+        engineRunning("interactive-2").succeed("2");
+        engineRunning("interactive-1").succeed("3");
+        engineRunning("background-1").succeed("4");
+        engineRunning("background-2").succeed("5");
+
+        assertEquals(
+            Arrays.asList("running", "interactive-2", "interactive-1", "background-1", "background-2"),
+            listener.succeededTaskIds);
+    }
+
+    //
+    // Priority: a task that names no priority runs in the background, so nothing gets in front of
+    // the user by accident.
+    //
+    @Test
+    public void aTaskThatNamesNoPriorityRunsInTheBackground() {
+        RecordingPoolListener listener = new RecordingPoolListener();
+        EnginePool pool = newPool(listener, 1);
+
+        pool.addTask(task("running", "src", TaskPriority.BACKGROUND));
+        pool.addTask(task("unspecified", "src", null));
+        pool.addTask(task("interactive", "src", TaskPriority.INTERACTIVE));
+
+        engineRunning("running").succeed("1");
+
+        assertNotNull(engineRunning("interactive"));
+        assertNull(engineRunning("unspecified"));
+    }
+
+    //
+    // Priority: a child task that names no priority runs at its parent's, so the hash and upload
+    // tasks an import queues can never overtake a tap.
+    //
+    @Test
+    public void aChildInheritsItsParentsPriority() {
+        RecordingPoolListener listener = new RecordingPoolListener();
+        EnginePool pool = newPool(listener, 2);
+
+        // A background parent and an interactive parent, each holding an engine.
+        pool.addTask(task("background-parent", "src", TaskPriority.BACKGROUND));
+        pool.addTask(task("interactive-parent", "src", TaskPriority.INTERACTIVE));
+
+        // Both queue a child that names no priority. Neither can run yet: both engines are held.
+        pool.queueChildTask("background-parent", task("background-child", "src", null));
+        pool.queueChildTask("interactive-parent", task("interactive-child", "src", null));
+
+        assertNull(engineRunning("background-child"));
+        assertNull(engineRunning("interactive-child"));
+
+        // One engine frees. It must go to the interactive parent's child, even though the background
+        // parent's child was queued first.
+        engineRunning("background-parent").succeed("1");
+
+        assertNotNull(engineRunning("interactive-child"));
+        assertNull(engineRunning("background-child"));
+    }
+
+    //
+    // Priority: a child that names a priority of its own keeps it, which is how long-running work an
+    // interactive task only kicks off opts back down to the background.
+    //
+    @Test
+    public void aChildThatNamesAPriorityKeepsIt() {
+        RecordingPoolListener listener = new RecordingPoolListener();
+        EnginePool pool = newPool(listener, 2);
+
+        pool.addTask(task("interactive-parent", "src", TaskPriority.INTERACTIVE));
+        pool.addTask(task("blocker", "src", TaskPriority.BACKGROUND));
+
+        // The interactive parent queues a child that asks to be background, and a second parent's
+        // interactive task is queued behind it.
+        pool.queueChildTask("interactive-parent", task("demoted-child", "src", TaskPriority.BACKGROUND));
+        pool.addTask(task("interactive", "src", TaskPriority.INTERACTIVE));
+
+        engineRunning("blocker").succeed("1");
+
+        // The freed engine goes to the interactive task, not to the child that asked for background.
+        assertNotNull(engineRunning("interactive"));
+        assertNull(engineRunning("demoted-child"));
     }
 
     //

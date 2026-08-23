@@ -1,5 +1,5 @@
 import { IUuidGenerator, log } from "utils";
-import { ITaskResult, TaskMessageCallback, UnsubscribeFn, IMessageCallbackEntry, TaskCompletionCallback } from "./types";
+import { ITaskResult, TaskMessageCallback, UnsubscribeFn, IMessageCallbackEntry, TaskCompletionCallback, TaskPriority } from "./types";
 import { IQueueBackend, getQueueBackend } from "./queue-backend";
 
 //
@@ -10,7 +10,12 @@ export interface ITaskQueue {
     // Adds a task to the queue to be run. Returns uuid of the task.
     // If taskId is provided, it will be used instead of generating a new one.
     //
-    addTask(type: string, data: any, taskId?: string): string;
+    // Pass TaskPriority.Interactive when the user is sitting there waiting for the result, so the
+    // task is dispatched ahead of automatic work that is already queued. Leaving the priority out
+    // means the backend decides: a task queued from inside a running task runs at its parent's
+    // priority, and anything else runs in the background.
+    //
+    addTask(type: string, data: any, taskId?: string, priority?: TaskPriority): string;
 
     //
     // Resolves when all currently in-flight tasks have completed.
@@ -170,9 +175,9 @@ export class TaskQueue implements ITaskQueue {
     //
     // Adds a task to the queue to be executed. Returns the task ID (UUID).
     //
-    addTask(type: string, data: any, taskId?: string): string {
+    addTask(type: string, data: any, taskId?: string, priority?: TaskPriority): string {
         const id = taskId || this.uuidGenerator.generate();
-        this.backend.addTask(type, data, this.source, id);
+        this.backend.addTask(type, data, this.source, id, priority);
         return id;
     }
 

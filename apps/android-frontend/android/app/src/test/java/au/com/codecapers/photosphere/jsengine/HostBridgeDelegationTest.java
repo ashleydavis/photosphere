@@ -47,7 +47,7 @@ public final class HostBridgeDelegationTest {
         }
 
         @Override
-        public void queueChildTask(String parentTaskId, String childTaskId, String type, String dataJson, String source) {
+        public void queueChildTask(String parentTaskId, String childTaskId, String type, String dataJson, String source, String priorityWireName) {
         }
     }
 

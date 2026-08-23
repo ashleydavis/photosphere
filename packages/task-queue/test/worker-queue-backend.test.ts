@@ -1,5 +1,5 @@
 import { WorkerQueueBackend } from "../src/lib/worker-queue-backend";
-import { TaskStatus } from "../src/lib/types";
+import { TaskPriority, TaskStatus } from "../src/lib/types";
 import type { ITaskResult } from "../src/lib/types";
 import type { IUuidGenerator } from "utils";
 
@@ -23,6 +23,25 @@ describe("WorkerQueueBackend", () => {
             taskType: "my-type",
             data: { foo: 1 },
             source: "my-source",
+        });
+    });
+
+    test("addTask with no priority sends no priority, so the pool decides from the parent", () => {
+        backend.addTask("my-type", { foo: 1 }, "my-source", "my-task-id");
+
+        expect(postMessage.mock.calls[0][0].priority).toBeUndefined();
+    });
+
+    test("addTask sends the priority the caller asked for", () => {
+        backend.addTask("my-type", { foo: 1 }, "my-source", "my-task-id", TaskPriority.Background);
+
+        expect(postMessage).toHaveBeenCalledWith({
+            type: "queue-task",
+            taskId: "my-task-id",
+            taskType: "my-type",
+            data: { foo: 1 },
+            source: "my-source",
+            priority: TaskPriority.Background,
         });
     });
 

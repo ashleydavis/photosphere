@@ -5,6 +5,7 @@ import { IHashedData } from "merkle-tree";
 import { HashCache } from "./hash-cache";
 import { validateFile } from "./validation";
 import { log } from "utils";
+import { IFileCacheIdentity } from "api/src/lib/import-assets.types";
 
 //
 // Computes a hash from a stream.
@@ -44,12 +45,22 @@ export async function computeAssetHash(stream: NodeJS.ReadableStream, fileStat: 
 }
 
 //
-// Gets a hash from the cache if it matches the file stat.
+// Gets a hash from the cache if it matches what the file is expected to be.
 //
-export async function getHashFromCache(filePath: string, fileStat: IFileStat, hashCache: HashCache): Promise<IHashedData | undefined> {
-    const cacheEntry = hashCache.getHash(filePath);
+// With no identity the file is looked up under its own path and compared against its own stat,
+// which is what every manual import does. With one, the item is looked up under the identity the
+// caller supplied and compared against that instead: a photo library item is filed under its source
+// id, and the temporary copy it was exported to has a path and a modified time that were both
+// minted by the copy and match nothing. See IFileCacheIdentity.
+//
+export async function getHashFromCache(filePath: string, fileStat: IFileStat, hashCache: HashCache, cacheIdentity: IFileCacheIdentity | undefined): Promise<IHashedData | undefined> {
+    const key = cacheIdentity ? cacheIdentity.key : filePath;
+    const expectedLength = cacheIdentity ? cacheIdentity.length : fileStat.length;
+    const expectedLastModified = cacheIdentity ? cacheIdentity.lastModified : fileStat.lastModified.getTime();
+
+    const cacheEntry = hashCache.getHash(key);
     if (cacheEntry) {
-        if (cacheEntry.length === fileStat.length && cacheEntry.lastModified.getTime() === fileStat.lastModified.getTime()) {
+        if (cacheEntry.length === expectedLength && cacheEntry.lastModified.getTime() === expectedLastModified) {
             return {
                 hash: cacheEntry.hash,
                 lastModified: fileStat.lastModified,

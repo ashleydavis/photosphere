@@ -38,6 +38,7 @@ function makeContext(isCancelled: boolean): ITaskContext {
         uuidGenerator: { generate: jest.fn().mockReturnValue("test-uuid") },
         timestampProvider: { now: jest.fn().mockReturnValue(Date.now()), dateNow: jest.fn().mockReturnValue(new Date()) },
         sessionId: "session-1",
+        maxConcurrentChildTasks: 10,
         sendMessage: jest.fn(),
         isCancelled: jest.fn().mockReturnValue(isCancelled),
         taskId: "prefetch-task-id",

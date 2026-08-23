@@ -3,9 +3,7 @@ import { IUuidGenerator } from "utils";
 import {
     IMediaItem,
     IMediaSource,
-    IMediaSourceChangedCallback,
     IMediaSourceListPage,
-    IMediaSourceUnsubscribe,
 } from "./media-source";
 
 //
@@ -22,9 +20,6 @@ import {
 // What a builder needs besides the sources themselves.
 //
 export interface IMediaSourceBuildOptions {
-    // How often the source should re-check itself for changes, in milliseconds.
-    pollIntervalMs: number;
-
     // A directory the source may use for temporary files, such as media exported out of the device
     // photo library or extracted from a zip archive.
     sessionTempDir: string;
@@ -177,18 +172,6 @@ export class CompositeMediaSource implements IMediaSource {
         }
 
         return { items: [], nextCursor: undefined };
-    }
-
-    //
-    // Reports a change from any child source.
-    //
-    watch(onChanged: IMediaSourceChangedCallback): IMediaSourceUnsubscribe {
-        const unsubscribes = this.sources.map(source => source.watch(onChanged));
-        return () => {
-            for (const unsubscribe of unsubscribes) {
-                unsubscribe();
-            }
-        };
     }
 
     //

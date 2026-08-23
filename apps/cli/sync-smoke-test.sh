@@ -364,10 +364,24 @@ worker_process() {
             continue
         fi
         
-        # Edit the description field using bdb-cli
-        # Note: bdb command path format matches existing smoke tests
+        # Edit the description field using bdb-cli.
+        #
+        # The collection root is <database>/.db/bson, which is where the BSON database actually
+        # lives. This used to pass <database>/metadata, which is not a database at all: every edit
+        # answered "Record not found in collection metadata", the failure was tolerated by the
+        # `continue` below, and the suite then passed by comparing four databases that nothing had
+        # ever modified.
         local edit_output
-        edit_output=$($(get_bdb_command) edit "$db_path/metadata" metadata "$ASSET_ID" description string "$edit_uuid" 2>&1)
+        edit_output=$($(get_bdb_command) edit "$db_path/.db/bson" metadata "$ASSET_ID" description string "$edit_uuid" 2>&1)
+
+        # bdb writes straight into the BSON database and knows nothing about the database state file
+        # one level above it, which is where the application records the content hash. Sync reads that
+        # hash first and skips outright when both sides report the same one, so an edit made this way
+        # is invisible to it: the whole suite used to sync nothing at all. Removing the state file is
+        # how a raw edit says "what is recorded about me is no longer true"; the next write recreates
+        # it. Nothing the application itself does needs this, because every write it makes stamps the
+        # hash as it goes.
+        rm -f "$db_path/.db/state.dat"
         local edit_exit_code=$?
         
         if [ $edit_exit_code -ne 0 ]; then

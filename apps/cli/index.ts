@@ -9,7 +9,7 @@ import { verifyCommand } from './src/cmd/verify';
 import { replicateCommand } from './src/cmd/replicate';
 import { compareCommand } from './src/cmd/compare';
 import { hashCacheCommand } from './src/cmd/hash-cache';
-import { hashFileCommand, hashCacheAddCommand, hashCacheSetCommand, hashCacheGetCommand, hashCacheRemoveCommand, hashCacheListCommand, hashCacheCountCommand } from './src/cmd/hash-cache-tools';
+import { hashFileCommand, hashCacheAddCommand, hashCacheSetCommand, hashCacheSetSourceCommand, hashCacheGetCommand, hashCacheGetAssetIdCommand, hashCacheRemoveCommand, hashCacheListCommand, hashCacheCountCommand, hashCacheDirCommand } from './src/cmd/hash-cache-tools';
 import { debugMerkleTreeCommand, debugFindCollisionsCommand, debugFindDuplicatesCommand, debugRemoveDuplicatesCommand, debugBuildSortIndexCommand, debugBuildFilesTreeCommand } from './src/cmd/debug';
 import { bugReportCommand } from './src/cmd/bug';
 import { examplesCommand } from './src/cmd/examples';
@@ -28,7 +28,6 @@ import { databaseIdCommand } from './src/cmd/database-id';
 import { syncCommand } from './src/cmd/sync';
 import { originCommand } from './src/cmd/origin';
 import { setOriginCommand, ISetOriginCommandOptions } from './src/cmd/set-origin';
-import { watchCommand, IWatchCommandOptions } from './src/cmd/watch';
 import { consolidateCommand, IConsolidateCommandOptions } from './src/cmd/consolidate';
 import { encryptCommand } from './src/cmd/encrypt';
 import { decryptCommand } from './src/cmd/decrypt';
@@ -108,8 +107,8 @@ Resources:
     program
         .command("add")
         .alias("a")
-        .description("Adds files and directories to the media file database.")
-        .argument("<files...>", "The media files (or directories) to add to the database.")
+        .description("Adds files and directories to the media file database, once or by watching for more.")
+        .argument("[files...]", "The media files (or directories) to add. With --watch, the folders to watch: defaults to this operating system's photo folders.")
         .option(...dbOption)
         .option(...keyOption)
         .option(...verboseOption)
@@ -119,6 +118,8 @@ Resources:
         .option(...sessionIdOption)
         .option(...dryRunOption)
         .option(...workersOption)
+        .option("--watch", "Keep watching the named folders and import what turns up, rather than importing them once.", false)
+        .option("--cleanup", "Delete the source files the database is confirmed to hold, once the import has finished.", false)
         .addHelpText('after', getCommandExamplesHelp('add'))
         .action(initContext(addCommand));
 
@@ -215,22 +216,36 @@ Resources:
     //
     const hashCacheCmd = program
         .command("hash-cache", { hidden: true })
-        .description("Inspect and manage the local hash cache.");
+        .description("Inspect and manage a database's hash cache.");
+
+    //
+    // Every one of these names a database, because there is one hash cache per database: an entry
+    // records the id its file has in that database, and one entry cannot hold the ids of several.
+    // The two user-facing commands resolve --db the way every other command does; the development
+    // tools below take the path as given, because they act on the cache alone and a test script
+    // points them at a path rather than at a database that exists.
+    //
+    const hashCacheToolDbOption: [string, string] = ["--db <path>", "The directory that contains the media file database"];
 
     hashCacheCmd
         .command("show")
-        .description("Display information about the local hash cache.")
+        .description("Display information about a database's hash cache.")
         .option(...dbOption)
         .option(...keyOption)
         .option(...verboseOption)
         .option(...yesOption)
         .option(...cwdOption)
-        .action(hashCacheCommand);
+        .action(initContext(hashCacheCommand));
 
     hashCacheCmd
         .command("clear")
-        .description("Clear the local hash cache to force re-hashing of files.")
-        .action(clearCacheCommand);
+        .description("Clear a database's hash cache to force re-hashing of files.")
+        .option(...dbOption)
+        .option(...keyOption)
+        .option(...verboseOption)
+        .option(...yesOption)
+        .option(...cwdOption)
+        .action(initContext(clearCacheCommand));
 
     hashCacheCmd
         .command("hash-file <file>")
@@ -239,33 +254,57 @@ Resources:
 
     hashCacheCmd
         .command("add <file>")
-        .description("Hash a file and record it in the local hash cache.")
+        .description("Hash a file and record it in the hash cache.")
+        .requiredOption(...hashCacheToolDbOption)
         .action(hashCacheAddCommand);
 
     hashCacheCmd
         .command("set <path> <hash> <length>")
-        .description("Record a hash in the local hash cache against an arbitrary path.")
+        .description("Record a hash in the hash cache against an arbitrary path.")
+        .requiredOption(...hashCacheToolDbOption)
         .action(hashCacheSetCommand);
 
     hashCacheCmd
+        .command("set-source <source-id> <hash> <length>")
+        .description("Record a hash in the hash cache against a photo library source id.")
+        .requiredOption(...hashCacheToolDbOption)
+        .action(hashCacheSetSourceCommand);
+
+    hashCacheCmd
         .command("get <path>")
-        .description("Print the cached hash for a path. Exits 1 when it is not cached.")
+        .description("Print the cached hash for a key. Exits 1 when it is not cached.")
+        .requiredOption(...hashCacheToolDbOption)
         .action(hashCacheGetCommand);
 
     hashCacheCmd
+        .command("get-asset-id <path>")
+        .description("Print the asset id recorded against a key. Exits 1 when there is none.")
+        .requiredOption(...hashCacheToolDbOption)
+        .action(hashCacheGetAssetIdCommand);
+
+    hashCacheCmd
         .command("remove <path>")
-        .description("Remove a path from the local hash cache. Exits 1 when it was not cached.")
+        .description("Remove a key from the hash cache. Exits 1 when it was not cached.")
+        .requiredOption(...hashCacheToolDbOption)
         .action(hashCacheRemoveCommand);
 
     hashCacheCmd
         .command("list")
-        .description("Print the path of every entry in the local hash cache, one per line.")
+        .description("Print the key of every entry in the hash cache, one per line.")
+        .requiredOption(...hashCacheToolDbOption)
         .action(hashCacheListCommand);
 
     hashCacheCmd
         .command("count")
-        .description("Print how many entries the local hash cache holds.")
+        .description("Print how many entries the hash cache holds.")
+        .requiredOption(...hashCacheToolDbOption)
         .action(hashCacheCountCommand);
+
+    hashCacheCmd
+        .command("dir")
+        .description("Print the directory holding a database's hash cache.")
+        .requiredOption(...hashCacheToolDbOption)
+        .action(hashCacheDirCommand);
 
     const debugCommand = program
         .command("debug")
@@ -404,26 +443,6 @@ Resources:
         .action(initContext((ctx, path: string, options: ISetOriginCommandOptions) => setOriginCommand(ctx, options, path)));
 
     program
-        .command("watch")
-        .alias("w")
-        .description("Watches folders for new media and imports it automatically, syncing to the origin when one is configured.")
-        .argument("[folders...]", "The folders to watch. Defaults to this operating system's photo folders.")
-        .option(...dbOption)
-        .option(...keyOption)
-        .option("--once", "Import everything once and exit, rather than watching.", false)
-        .option("--no-sync", "Do not sync to the origin after importing.")
-        .option("--cleanup", "Delete each source file once the asset is confirmed in the local database.", false)
-        .option("--evict", "Drop local originals the origin already holds, after each successful sync.", false)
-        .option("--evict-budget <bytes>", "Keep local originals under this many bytes, instead of the built-in retention policy.")
-        .option(...verboseOption)
-        .option(...toolsOption)
-        .option(...yesOption)
-        .option(...cwdOption)
-        .option(...sessionIdOption)
-        .addHelpText('after', getCommandExamplesHelp('watch'))
-        .action(initContext((ctx, folders: string[], options: IWatchCommandOptions) => watchCommand(ctx, folders, options)));
-
-    program
         .command("consolidate")
         .description("Joins this database to a remote one so the two can sync, creating the remote when it does not exist and recording it as the origin.")
         .argument("<remote>", "Path or URI of the remote database (a directory or an s3: location).")
@@ -557,11 +576,13 @@ Resources:
 
     program
         .command("sync")
-        .description("Synchronize changes between two databases.")
+        .description("Synchronize changes between two databases, once or by watching for more.")
         .option(...dbOption)
         .option(...destDbOption)
         .option(...keyOption)
         .option(...destKeyOption)
+        .option("--watch", "Keep syncing as the database changes, rather than syncing once and exiting.", false)
+        .option("--interval <seconds>", "How long to wait between syncs when watching.")
         .option(...verboseOption)
         .option(...yesOption)
         .option(...cwdOption)

@@ -31,9 +31,11 @@ public interface EngineCallbacks {
 
     //
     // Called when a running handler enqueues a child task via host.queueTask. The pool queues
-    // the child on its pending FIFO (the mobile "main-thread queue") and, when the child finishes,
-    // routes its outcome back to the engine identified by `parentTaskId` rather than to the WebView.
-    // This mirrors Electron routing a worker's "queue-task" message to the main-process pool.
+    // the child on the pending FIFO for its priority (the mobile "main-thread queue") and, when the
+    // child finishes, routes its outcome back to the engine identified by `parentTaskId` rather than
+    // to the WebView. This mirrors Electron routing a worker's "queue-task" message to the
+    // main-process pool. `priorityWireName` is null when the child named no priority, which means it
+    // runs at its parent's.
     //
-    void queueChildTask(String parentTaskId, String childTaskId, String type, String dataJson, String source);
+    void queueChildTask(String parentTaskId, String childTaskId, String type, String dataJson, String source, String priorityWireName);
 }

@@ -341,15 +341,17 @@ public final class HostBridge {
     }
 
     //
-    // host.queueTask(childTaskId, type, dataJson, source): synchronous native callable invoked when
-    // the running handler enqueues a child task. It hands the child to the pool tagged with the
-    // currently-running (parent) task id so the pool can route the child's outcome back to this
-    // engine. Mirrors the Electron worker posting a "queue-task" message to the main process.
+    // host.queueTask(childTaskId, type, dataJson, source, priority): synchronous native callable
+    // invoked when the running handler enqueues a child task. It hands the child to the pool tagged
+    // with the currently-running (parent) task id so the pool can route the child's outcome back to
+    // this engine. Mirrors the Electron worker posting a "queue-task" message to the main process.
+    // `priorityWireName` is null when the handler named no priority, and the pool then runs the child
+    // at its parent's priority.
     //
-    public void queueChildTask(String childTaskId, String type, String dataJson, String source) {
+    public void queueChildTask(String childTaskId, String type, String dataJson, String source, String priorityWireName) {
         PooledTask parent = currentTask;
         if (parent != null) {
-            callbacks.queueChildTask(parent.taskId, childTaskId, type, dataJson, source);
+            callbacks.queueChildTask(parent.taskId, childTaskId, type, dataJson, source, priorityWireName);
         }
     }
 

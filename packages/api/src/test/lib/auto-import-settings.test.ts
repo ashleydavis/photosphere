@@ -25,9 +25,7 @@ describe("auto-import-settings", () => {
                 { type: "folder", path: "/home/someone/Pictures", recurse: false },
                 { type: "device-album", albumId: "camera-roll" },
             ],
-            cleanupEnabled: true,
             backfillItemsPerMinute: 120,
-            pollIntervalMs: 5000,
         };
 
         expect(normaliseAutoImportSettings(stored)).toEqual(stored);
@@ -39,30 +37,25 @@ describe("auto-import-settings", () => {
         expect(normalised).toEqual({
             enabled: true,
             sources: [],
-            cleanupEnabled: DEFAULT_AUTO_IMPORT_SETTINGS.cleanupEnabled,
             backfillItemsPerMinute: DEFAULT_AUTO_IMPORT_SETTINGS.backfillItemsPerMinute,
-            pollIntervalMs: DEFAULT_AUTO_IMPORT_SETTINGS.pollIntervalMs,
         });
     });
 
     test("replaces booleans that are not booleans", () => {
-        const stored = { enabled: "yes", cleanupEnabled: 1 } as any;
+        const stored = { enabled: "yes" } as any;
         const normalised = normaliseAutoImportSettings(stored);
 
         expect(normalised.enabled).toBe(false);
-        expect(normalised.cleanupEnabled).toBe(false);
     });
 
     test("replaces pacing numbers that cannot be used", () => {
         for (const badValue of [0, -30, Number.NaN, Number.POSITIVE_INFINITY, "60"]) {
             const stored = {
                 backfillItemsPerMinute: badValue,
-                pollIntervalMs: badValue,
             } as any;
             const normalised = normaliseAutoImportSettings(stored);
 
             expect(normalised.backfillItemsPerMinute).toBe(DEFAULT_AUTO_IMPORT_SETTINGS.backfillItemsPerMinute);
-            expect(normalised.pollIntervalMs).toBe(DEFAULT_AUTO_IMPORT_SETTINGS.pollIntervalMs);
         }
     });
 

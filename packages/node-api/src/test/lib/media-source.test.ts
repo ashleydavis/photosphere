@@ -74,7 +74,7 @@ describe("FolderMediaSource", () => {
         writeFile(path.join(photosDir, "a.jpg"), "first");
         writeFile(path.join(photosDir, "b.png"), "second");
 
-        const source = new FolderMediaSource([folderSource(photosDir, true)], 60000, sessionTempDir, uuidGenerator);
+        const source = new FolderMediaSource([folderSource(photosDir, true)], sessionTempDir, uuidGenerator);
         const page = await source.listPage(undefined, 10);
 
         expect(page.items.map(item => item.displayName)).toEqual(["a.jpg", "b.png"]);
@@ -85,7 +85,7 @@ describe("FolderMediaSource", () => {
         const filePath = path.join(photosDir, "a.jpg");
         writeFile(filePath, "0123456789");
 
-        const source = new FolderMediaSource([folderSource(photosDir, true)], 60000, sessionTempDir, uuidGenerator);
+        const source = new FolderMediaSource([folderSource(photosDir, true)], sessionTempDir, uuidGenerator);
         const page = await source.listPage(undefined, 10);
 
         expect(page.items).toHaveLength(1);
@@ -103,7 +103,7 @@ describe("FolderMediaSource", () => {
         writeFile(path.join(photosDir, "notes.txt"), "text");
         writeFile(path.join(photosDir, "drawing.svg"), "vector");
 
-        const source = new FolderMediaSource([folderSource(photosDir, true)], 60000, sessionTempDir, uuidGenerator);
+        const source = new FolderMediaSource([folderSource(photosDir, true)], sessionTempDir, uuidGenerator);
         const items = await listAll(source, 10);
 
         expect(items.map(item => item.displayName)).toEqual(["a.jpg"]);
@@ -114,7 +114,7 @@ describe("FolderMediaSource", () => {
             writeFile(path.join(photosDir, name), name);
         }
 
-        const source = new FolderMediaSource([folderSource(photosDir, true)], 60000, sessionTempDir, uuidGenerator);
+        const source = new FolderMediaSource([folderSource(photosDir, true)], sessionTempDir, uuidGenerator);
 
         const firstPage = await source.listPage(undefined, 2);
         expect(firstPage.items.map(item => item.displayName)).toEqual(["a.jpg", "b.jpg"]);
@@ -134,7 +134,7 @@ describe("FolderMediaSource", () => {
             writeFile(path.join(photosDir, name), name);
         }
 
-        const source = new FolderMediaSource([folderSource(photosDir, true)], 60000, sessionTempDir, uuidGenerator);
+        const source = new FolderMediaSource([folderSource(photosDir, true)], sessionTempDir, uuidGenerator);
         const items = await listAll(source, 3);
 
         expect(items.map(item => item.displayName)).toEqual(names);
@@ -145,7 +145,7 @@ describe("FolderMediaSource", () => {
             writeFile(path.join(photosDir, name), name);
         }
 
-        const source = new FolderMediaSource([folderSource(photosDir, true)], 60000, sessionTempDir, uuidGenerator);
+        const source = new FolderMediaSource([folderSource(photosDir, true)], sessionTempDir, uuidGenerator);
         const firstPage = await source.listPage(undefined, 2);
         expect(firstPage.items.map(item => item.displayName)).toEqual(["a.jpg", "b.jpg"]);
 
@@ -155,7 +155,7 @@ describe("FolderMediaSource", () => {
         // is no cached listing to find the missing item in.
         fsSync.unlinkSync(path.join(photosDir, "b.jpg"));
 
-        const resumedSource = new FolderMediaSource([folderSource(photosDir, true)], 60000, sessionTempDir, uuidGenerator);
+        const resumedSource = new FolderMediaSource([folderSource(photosDir, true)], sessionTempDir, uuidGenerator);
         const nextPage = await resumedSource.listPage(path.join(photosDir, "b.jpg"), 10);
         expect(nextPage.items.map(item => item.displayName)).toEqual(["c.jpg", "d.jpg"]);
     });
@@ -163,7 +163,7 @@ describe("FolderMediaSource", () => {
     test("a cursor past the end of the listing yields nothing", async () => {
         writeFile(path.join(photosDir, "a.jpg"), "one");
 
-        const source = new FolderMediaSource([folderSource(photosDir, true)], 60000, sessionTempDir, uuidGenerator);
+        const source = new FolderMediaSource([folderSource(photosDir, true)], sessionTempDir, uuidGenerator);
         const page = await source.listPage(path.join(photosDir, "zz.jpg"), 10);
 
         expect(page.items).toEqual([]);
@@ -174,7 +174,7 @@ describe("FolderMediaSource", () => {
         writeFile(path.join(photosDir, "a.jpg"), "top");
         writeFile(path.join(photosDir, "holiday", "b.jpg"), "nested");
 
-        const source = new FolderMediaSource([folderSource(photosDir, true)], 60000, sessionTempDir, uuidGenerator);
+        const source = new FolderMediaSource([folderSource(photosDir, true)], sessionTempDir, uuidGenerator);
         const items = await listAll(source, 10);
 
         expect(items.map(item => item.displayName).sort()).toEqual(["a.jpg", "b.jpg"]);
@@ -184,7 +184,7 @@ describe("FolderMediaSource", () => {
         writeFile(path.join(photosDir, "a.jpg"), "top");
         writeFile(path.join(photosDir, "holiday", "b.jpg"), "nested");
 
-        const source = new FolderMediaSource([folderSource(photosDir, false)], 60000, sessionTempDir, uuidGenerator);
+        const source = new FolderMediaSource([folderSource(photosDir, false)], sessionTempDir, uuidGenerator);
         const items = await listAll(source, 10);
 
         expect(items.map(item => item.displayName)).toEqual(["a.jpg"]);
@@ -197,7 +197,6 @@ describe("FolderMediaSource", () => {
 
         const source = new FolderMediaSource(
             [folderSource(photosDir, true), folderSource(otherDir, true)],
-            60000,
             sessionTempDir,
             uuidGenerator
         );
@@ -207,7 +206,7 @@ describe("FolderMediaSource", () => {
     });
 
     test("a folder that does not exist yields nothing rather than throwing", async () => {
-        const source = new FolderMediaSource([folderSource(path.join(tempDir, "absent"), true)], 60000, sessionTempDir, uuidGenerator);
+        const source = new FolderMediaSource([folderSource(path.join(tempDir, "absent"), true)], sessionTempDir, uuidGenerator);
         const page = await source.listPage(undefined, 10);
 
         expect(page.items).toEqual([]);
@@ -218,7 +217,7 @@ describe("FolderMediaSource", () => {
         const filePath = path.join(photosDir, "a.jpg");
         writeFile(filePath, "photo");
 
-        const source = new FolderMediaSource([folderSource(photosDir, true)], 60000, sessionTempDir, uuidGenerator);
+        const source = new FolderMediaSource([folderSource(photosDir, true)], sessionTempDir, uuidGenerator);
         const page = await source.listPage(undefined, 10);
 
         expect(await source.openItem(page.items[0])).toBe(filePath);
@@ -226,67 +225,20 @@ describe("FolderMediaSource", () => {
         expect(fsSync.existsSync(filePath)).toBe(true);
     });
 
-    test("the poll reports a change", async () => {
+    test("a file added later shows up in the next listing, which is how each run finds new photos", async () => {
         writeFile(path.join(photosDir, "a.jpg"), "photo");
 
-        const source = new FolderMediaSource([folderSource(photosDir, true)], 30, sessionTempDir, uuidGenerator);
-        let changes = 0;
-        const unsubscribe = source.watch(() => {
-            changes += 1;
-        });
-
-        try {
-            await waitFor(() => changes > 0, 5000);
-        }
-        finally {
-            unsubscribe();
-        }
-
-        expect(changes).toBeGreaterThan(0);
-    });
-
-    test("a new file shows up in a listing taken after a change was reported", async () => {
-        writeFile(path.join(photosDir, "a.jpg"), "photo");
-
-        const source = new FolderMediaSource([folderSource(photosDir, true)], 30, sessionTempDir, uuidGenerator);
+        const source = new FolderMediaSource([folderSource(photosDir, true)], sessionTempDir, uuidGenerator);
         expect((await source.listPage(undefined, 10)).items).toHaveLength(1);
 
-        let changes = 0;
-        const unsubscribe = source.watch(() => {
-            changes += 1;
-        });
+        writeFile(path.join(photosDir, "b.jpg"), "another");
 
-        try {
-            writeFile(path.join(photosDir, "b.jpg"), "another");
-            await waitFor(() => changes > 0, 5000);
-            const items = await listAll(source, 10);
-            expect(items.map(item => item.displayName)).toEqual(["a.jpg", "b.jpg"]);
-        }
-        finally {
-            unsubscribe();
-        }
-    });
+        // A fresh source, because a run that has ended takes its source with it: this is what the
+        // next run does, and it is the only thing that finds a photo that arrived in between.
+        const nextRun = new FolderMediaSource([folderSource(photosDir, true)], sessionTempDir, uuidGenerator);
+        const items = await listAll(nextRun, 10);
 
-    test("unsubscribing stops the change reports", async () => {
-        writeFile(path.join(photosDir, "a.jpg"), "photo");
-
-        const source = new FolderMediaSource([folderSource(photosDir, true)], 20, sessionTempDir, uuidGenerator);
-        let changes = 0;
-        const unsubscribe = source.watch(() => {
-            changes += 1;
-        });
-
-        try {
-            await waitFor(() => changes > 0, 5000);
-        }
-        finally {
-            unsubscribe();
-        }
-
-        const changesAtUnsubscribe = changes;
-        await new Promise<void>(resolve => setTimeout(resolve, 200));
-
-        expect(changes).toBe(changesAtUnsubscribe);
+        expect(items.map(item => item.displayName)).toEqual(["a.jpg", "b.jpg"]);
     });
 
     test("deleteItems removes the source files", async () => {
@@ -295,7 +247,7 @@ describe("FolderMediaSource", () => {
         writeFile(firstPath, "one");
         writeFile(secondPath, "two");
 
-        const source = new FolderMediaSource([folderSource(photosDir, true)], 60000, sessionTempDir, uuidGenerator);
+        const source = new FolderMediaSource([folderSource(photosDir, true)], sessionTempDir, uuidGenerator);
         const items = await listAll(source, 10);
 
         await source.deleteItems([items[0].sourceId]);
@@ -308,7 +260,7 @@ describe("FolderMediaSource", () => {
         const filePath = path.join(photosDir, "a.jpg");
         writeFile(filePath, "one");
 
-        const source = new FolderMediaSource([folderSource(photosDir, true)], 60000, sessionTempDir, uuidGenerator);
+        const source = new FolderMediaSource([folderSource(photosDir, true)], sessionTempDir, uuidGenerator);
         const items = await listAll(source, 10);
         fsSync.unlinkSync(filePath);
 
@@ -318,7 +270,7 @@ describe("FolderMediaSource", () => {
     test("deleting an item the source has never listed names it in the error", async () => {
         writeFile(path.join(photosDir, "a.jpg"), "one");
 
-        const source = new FolderMediaSource([folderSource(photosDir, true)], 60000, sessionTempDir, uuidGenerator);
+        const source = new FolderMediaSource([folderSource(photosDir, true)], sessionTempDir, uuidGenerator);
         await listAll(source, 10);
 
         await expect(source.deleteItems(["/somewhere/else.jpg"]))

@@ -29,6 +29,11 @@ export class TaskContext implements ITaskContext {
     readonly taskId: string;
 
     //
+    // How many child tasks this task may have running at once.
+    //
+    readonly maxConcurrentChildTasks: number;
+
+    //
     // Whether this task has been cancelled.
     //
     private _isCancelled: boolean = false;
@@ -43,13 +48,15 @@ export class TaskContext implements ITaskContext {
         timestampProvider: ITimestampProvider,
         sessionId: string,
         taskId: string,
-        sendMessageFn: (message: any) => void
+        sendMessageFn: (message: any) => void,
+        maxConcurrentChildTasks: number
     ) {
         this.uuidGenerator = uuidGenerator;
         this.timestampProvider = timestampProvider;
         this.sessionId = sessionId;
         this.taskId = taskId;
         this.sendMessageFn = sendMessageFn;
+        this.maxConcurrentChildTasks = maxConcurrentChildTasks;
     }
 
     //

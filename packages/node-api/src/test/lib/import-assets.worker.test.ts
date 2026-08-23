@@ -1,4 +1,4 @@
-import { importAssetsHandler } from '../../lib/import-assets.worker';
+import { importAssetsHandler, IMPORT_RECORD_FLUSH_SIZE } from '../../lib/import-assets.worker';
 import type { IImportAssetsData } from '../../lib/import-assets.worker';
 import type { ITaskContext, IQueueBackend, ITaskResult, WorkerTaskCompletionCallback, UnsubscribeFn } from 'task-queue';
 import { TaskStatus, setQueueBackend } from 'task-queue';
@@ -48,11 +48,22 @@ jest.mock('bdb', () => ({
     })),
 }));
 
+jest.mock('../../lib/create-auto-import-scanner', () => ({
+    createAutoImportScanner: jest.fn(),
+}));
+
+jest.mock('../../lib/import-record-storage', () => ({
+    recordImports: jest.fn().mockResolvedValue(undefined),
+}));
+
 jest.mock('../../lib/hash-cache', () => ({
+    getHashCacheDir: jest.fn().mockReturnValue('/test/hash-cache'),
     HashCache: jest.fn().mockImplementation(() => ({
         load: jest.fn().mockResolvedValue(undefined),
         save: jest.fn().mockResolvedValue(undefined),
         addHash: jest.fn(),
+        addSourceHash: jest.fn(),
+        setAssetId: jest.fn(),
     })),
 }));
 
@@ -101,6 +112,14 @@ import { scanPaths } from '../../lib/file-scanner';
 
 const mockScanPaths = scanPaths as jest.MockedFunction<typeof scanPaths>;
 
+import { createAutoImportScanner } from '../../lib/create-auto-import-scanner';
+
+const mockCreateAutoImportScanner = createAutoImportScanner as jest.MockedFunction<typeof createAutoImportScanner>;
+
+import { recordImports } from '../../lib/import-record-storage';
+
+const mockRecordImports = recordImports as jest.MockedFunction<typeof recordImports>;
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 //
@@ -113,6 +132,16 @@ class MockBackend implements IQueueBackend {
     completionCallbacks: WorkerTaskCompletionCallback[] = [];
     private resultFactories: Map<string, (data: any, taskId: string) => ITaskResult> = new Map();
 
+    // The ids of the tasks that have been added and not yet completed, and the most there have ever
+    // been at once. This is what the concurrency limit is measured against.
+    private inFlightTaskIds: Set<string> = new Set();
+    peakTasksInFlight = 0;
+
+    // When true a task completes on a timer rather than on the next microtask, which lets the scan
+    // run ahead of the completions. Without it the scan's own await lets each task finish before the
+    // next file is offered, so only one is ever in flight and a concurrency test proves nothing.
+    completeAfterTimeout = false;
+
     setTaskResult(type: string, factory: (data: any, taskId: string) => ITaskResult): void {
         this.resultFactories.set(type, factory);
     }
@@ -120,6 +149,8 @@ class MockBackend implements IQueueBackend {
     addTask(type: string, data: any, source: string, taskId?: string): string {
         const id = taskId ?? `${type}-${this.addedTasks.length}`;
         this.addedTasks.push({ type, data, source, taskId: id });
+        this.inFlightTaskIds.add(id);
+        this.peakTasksInFlight = Math.max(this.peakTasksInFlight, this.inFlightTaskIds.size);
         const cbs = this.taskAddedCallbacks.get(source);
         if (cbs) {
             for (const cb of cbs) {
@@ -129,12 +160,18 @@ class MockBackend implements IQueueBackend {
         const factory = this.resultFactories.get(type);
         if (factory) {
             const result = factory(data, id);
-            Promise.resolve().then(() => this.fireCompletion({ ...result, taskId: id }));
+            if (this.completeAfterTimeout) {
+                setTimeout(() => { void this.fireCompletion({ ...result, taskId: id }); }, 0);
+            }
+            else {
+                Promise.resolve().then(() => this.fireCompletion({ ...result, taskId: id }));
+            }
         }
         return id;
     }
 
     async fireCompletion(result: ITaskResult): Promise<void> {
+        this.inFlightTaskIds.delete(result.taskId);
         for (const cb of [...this.completionCallbacks]) {
             await cb(result);
         }
@@ -172,6 +209,7 @@ function makeContext(overrides: Partial<ITaskContext> = {}): ITaskContext {
         uuidGenerator: { generate: jest.fn().mockImplementation((() => { let n = 0; return () => `test-uuid-${n++}`; })()) },
         timestampProvider: { now: jest.fn().mockReturnValue(Date.now()), dateNow: jest.fn().mockReturnValue(new Date()) },
         sessionId: 'session-1',
+        maxConcurrentChildTasks: 10,
         sendMessage: jest.fn(),
         isCancelled: jest.fn().mockReturnValue(false),
         taskId: 'orchestrator-task-id',
@@ -213,6 +251,104 @@ describe('importAssetsHandler', () => {
             outputs: { hash: new Uint8Array(3), hashFromCache: false, filesAlreadyAdded: true } as IHashFileResult,
         }));
         setQueueBackend(mockBackend);
+    });
+
+    test('no more child tasks than the configured limit are in flight at once, and every file is still hashed', async () => {
+        const fileCount = 20;
+        const limit = 3;
+        mockBackend.completeAfterTimeout = true;
+
+        // Every file is new, so each one needs an upload after its hash: both kinds of child task
+        // count against the same limit, because both hold a worker.
+        mockBackend.setTaskResult('hash-file', (hashData: IHashFileData, taskId) => ({
+            taskId,
+            type: 'hash-file',
+            inputs: hashData,
+            status: TaskStatus.Succeeded,
+            outputs: {
+                hash: new Uint8Array(Buffer.from(hashData.logicalPath.padEnd(6, '0').slice(0, 6), 'utf8')),
+                hashFromCache: false,
+                filesAlreadyAdded: false,
+            } as IHashFileResult,
+        }));
+        mockBackend.setTaskResult('upload-asset', (uploadData: IUploadAssetData, taskId) => ({
+            taskId,
+            type: 'upload-asset',
+            inputs: uploadData,
+            status: TaskStatus.Succeeded,
+            outputs: {
+                assetData: {
+                    assetId: uploadData.assetId,
+                    assetPath: `asset/${uploadData.assetId}`,
+                    assetHash: 'aabbcc',
+                    assetLength: 1000,
+                    assetLastModified: new Date(),
+                    assetRecord: { _id: uploadData.assetId } as any,
+                } as IAssetDatabaseData,
+                totalSize: 1000,
+            } as IUploadAssetResult,
+        }));
+
+        mockScanPaths.mockImplementation(async (_paths, visitFile) => {
+            for (let fileNumber = 0; fileNumber < fileCount; fileNumber += 1) {
+                await visitFile({
+                    filePath: `/test/photos/img${fileNumber}.jpg`,
+                    fileStat: { length: 1000, lastModified: new Date() },
+                    contentType: 'image/jpeg',
+                    labels: [],
+                    logicalPath: `/test/photos/img${fileNumber}.jpg`,
+                });
+            }
+        });
+
+        await importAssetsHandler(makeData(), makeContext({ maxConcurrentChildTasks: limit }));
+
+        expect(mockBackend.peakTasksInFlight).toBeLessThanOrEqual(limit);
+        expect(mockBackend.addedTasks.filter(task => task.type === 'hash-file')).toHaveLength(fileCount);
+    });
+
+    test('the limit is read from the task data, so a different caller gets a different limit', async () => {
+        const fileCount = 20;
+        mockBackend.completeAfterTimeout = true;
+
+        mockScanPaths.mockImplementation(async (_paths, visitFile) => {
+            for (let fileNumber = 0; fileNumber < fileCount; fileNumber += 1) {
+                await visitFile({
+                    filePath: `/test/photos/img${fileNumber}.jpg`,
+                    fileStat: { length: 1000, lastModified: new Date() },
+                    contentType: 'image/jpeg',
+                    labels: [],
+                    logicalPath: `/test/photos/img${fileNumber}.jpg`,
+                });
+            }
+        });
+
+        await importAssetsHandler(makeData(), makeContext({ maxConcurrentChildTasks: 2 }));
+        expect(mockBackend.peakTasksInFlight).toBeLessThanOrEqual(2);
+
+        const secondBackend = new MockBackend();
+        secondBackend.completeAfterTimeout = true;
+        secondBackend.setTaskResult('hash-file', (hashData, taskId) => ({
+            taskId,
+            type: 'hash-file',
+            inputs: hashData,
+            status: TaskStatus.Succeeded,
+            outputs: { hash: new Uint8Array(3), hashFromCache: false, filesAlreadyAdded: true } as IHashFileResult,
+        }));
+        setQueueBackend(secondBackend);
+
+        await importAssetsHandler(makeData(), makeContext({ maxConcurrentChildTasks: 8 }));
+        expect(secondBackend.peakTasksInFlight).toBeGreaterThan(2);
+        expect(secondBackend.peakTasksInFlight).toBeLessThanOrEqual(8);
+    });
+
+    test('a missing or nonsensical concurrency limit fails loudly rather than importing unbounded', async () => {
+        mockScanPaths.mockImplementation(async () => { /* never reached. */ });
+
+        await expect(importAssetsHandler(makeData(), makeContext({ maxConcurrentChildTasks: 0 })))
+            .rejects.toThrow('maxConcurrentChildTasks');
+        await expect(importAssetsHandler(makeData(), makeContext({ maxConcurrentChildTasks: undefined as any })))
+            .rejects.toThrow('maxConcurrentChildTasks');
     });
 
     test('childQueue.shutdown is called in the finally block even when scanPaths throws', async () => {
@@ -290,6 +426,8 @@ describe('importAssetsHandler', () => {
             load: jest.fn().mockResolvedValue(undefined),
             save: mockSave,
             addHash: jest.fn(),
+            addSourceHash: jest.fn(),
+            setAssetId: jest.fn(),
         }));
 
         const context = makeContext();
@@ -508,6 +646,7 @@ describe('importAssetsHandler', () => {
             hash: new Uint8Array(hashBuffer),
             hashFromCache: false,
             filesAlreadyAdded: false,
+            existingAssetId: undefined,
         };
 
         // Both files return the same hash — second should be skipped.
@@ -586,5 +725,361 @@ describe('importAssetsHandler', () => {
         expect(context.sendMessage).toHaveBeenCalledWith(
             expect.objectContaining({ type: 'import-skipped' })
         );
+    });
+
+    //
+    // Replaces the HashCache mock with one whose calls can be read back, and returns it.
+    //
+    function watchHashCache() {
+        const { HashCache } = require('../../lib/hash-cache');
+        const watched = {
+            load: jest.fn().mockResolvedValue(undefined),
+            save: jest.fn().mockResolvedValue(undefined),
+            addHash: jest.fn(),
+            addSourceHash: jest.fn(),
+            setAssetId: jest.fn(),
+        };
+        HashCache.mockImplementation(() => watched);
+        return watched;
+    }
+
+    //
+    // A scan that finds one file at the given path.
+    //
+    function scanFindsOneFile(filePath: string): void {
+        mockScanPaths.mockImplementation(async (_paths, visitFile) => {
+            await visitFile({
+                filePath,
+                fileStat: { length: 1000, lastModified: new Date(5000) },
+                contentType: 'image/jpeg',
+                labels: [],
+                logicalPath: filePath,
+            });
+        });
+    }
+
+    //
+    // Makes hash-file report a freshly computed hash for a file that is not in the database.
+    //
+    function hashFileReportsNewFile(): void {
+        mockBackend.setTaskResult('hash-file', (hashData: IHashFileData, taskId) => ({
+            taskId,
+            type: 'hash-file',
+            inputs: hashData,
+            status: TaskStatus.Succeeded,
+            outputs: {
+                hash: new Uint8Array(Buffer.from('aabbcc', 'hex')),
+                hashFromCache: false,
+                filesAlreadyAdded: false,
+                existingAssetId: undefined,
+            } as IHashFileResult,
+        }));
+    }
+
+    //
+    // Makes upload-asset succeed, reporting the asset id it was given.
+    //
+    function uploadSucceeds(): void {
+        mockBackend.setTaskResult('upload-asset', (uploadData: IUploadAssetData, taskId) => ({
+            taskId,
+            type: 'upload-asset',
+            inputs: uploadData,
+            status: TaskStatus.Succeeded,
+            outputs: {
+                assetData: {
+                    assetId: uploadData.assetId,
+                    assetPath: `asset/${uploadData.assetId}`,
+                    assetHash: 'aabbcc',
+                    assetLength: 1000,
+                    assetLastModified: new Date(),
+                    assetRecord: { _id: uploadData.assetId } as any,
+                } as IAssetDatabaseData,
+                totalSize: 1000,
+            } as IUploadAssetResult,
+        }));
+    }
+
+    // The identity automatic import supplies for one photo library item, and the temporary path the
+    // item was copied out to.
+    const EXPORTED_PATH = '/test/exported/copy-1.jpg';
+    const SOURCE_IDENTITY = { key: '1000000042', length: 4096, lastModified: 1700000000000 };
+
+    //
+    // Makes the import build an automatic scanner that pushes one photo library item, with the
+    // identity that item is filed under. This is the path automatic import takes: the identity comes
+    // from the scanner as it pushes the file, not from the task data.
+    //
+    function autoImportScannerPushesOneItem(overrides: { caughtUp?: boolean } = {}): { release: jest.Mock } {
+        const release = jest.fn().mockResolvedValue(undefined);
+        mockCreateAutoImportScanner.mockImplementation(async (options: any) => ({
+            scan: async (visitFile: any) => {
+                // Reported exactly as the real scanner reports it, because the counters the panel
+                // shows are made by the import out of this plus what it imported itself.
+                options.onProgress({ backfillRemaining: 3, backfillComplete: false, currentItem: "a photo", skippedAsAlreadyImported: 1, caughtUp: overrides.caughtUp ?? true });
+                await visitFile({
+                    filePath: EXPORTED_PATH,
+                    fileStat: { length: 1000, lastModified: new Date(5000) },
+                    contentType: 'image/jpeg',
+                    labels: [],
+                    logicalPath: EXPORTED_PATH,
+                    cacheIdentity: SOURCE_IDENTITY,
+                });
+            },
+            release,
+        }) as any);
+        return { release };
+    }
+
+    //
+    // The task data an automatic import is started with.
+    //
+    function autoImportData() {
+        return makeData({ paths: [], options: { auto: true, sources: [{ type: "folder", path: "/photos", recurse: true }] } as any });
+    }
+
+    test('hands each hash-file task the identity supplied for its path', async () => {
+        watchHashCache();
+        hashFileReportsNewFile();
+        uploadSucceeds();
+        autoImportScannerPushesOneItem();
+
+        await importAssetsHandler(autoImportData(), makeContext());
+
+        const hashFileTask = mockBackend.addedTasks.find(task => task.type === 'hash-file');
+        expect(hashFileTask!.data.cacheIdentity).toEqual(SOURCE_IDENTITY);
+    });
+
+    test('hands an ordinary file no identity at all, which is what keeps manual import unchanged', async () => {
+        watchHashCache();
+        hashFileReportsNewFile();
+        uploadSucceeds();
+        scanFindsOneFile('/test/photos/img1.jpg');
+
+        await importAssetsHandler(makeData(), makeContext());
+
+        const hashFileTask = mockBackend.addedTasks.find(task => task.type === 'hash-file');
+        expect(hashFileTask!.data.cacheIdentity).toBeUndefined();
+    });
+
+    test('files a photo library item under its source id, against the size and time the library reported', async () => {
+        // Not under the temporary path or the copy's own modified time: the copy is deleted the moment
+        // the import finishes, so an entry describing it would never match anything again.
+        const hashCache = watchHashCache();
+        hashFileReportsNewFile();
+        uploadSucceeds();
+        autoImportScannerPushesOneItem();
+
+        await importAssetsHandler(autoImportData(), makeContext());
+
+        expect(hashCache.addSourceHash).toHaveBeenCalledWith('1000000042', {
+            hash: Buffer.from('aabbcc', 'hex'),
+            length: 4096,
+            lastModified: new Date(1700000000000),
+        });
+        expect(hashCache.addHash).not.toHaveBeenCalled();
+    });
+
+    test('files an ordinary file under its own path and its own stat', async () => {
+        const hashCache = watchHashCache();
+        hashFileReportsNewFile();
+        uploadSucceeds();
+        scanFindsOneFile('/test/photos/img1.jpg');
+
+        await importAssetsHandler(makeData(), makeContext());
+
+        expect(hashCache.addHash).toHaveBeenCalledWith('/test/photos/img1.jpg', {
+            hash: Buffer.from('aabbcc', 'hex'),
+            length: 1000,
+            lastModified: new Date(5000),
+        });
+        expect(hashCache.addSourceHash).not.toHaveBeenCalled();
+    });
+
+    test('records the asset id against the cache entry once the database write has landed', async () => {
+        const hashCache = watchHashCache();
+        hashFileReportsNewFile();
+        uploadSucceeds();
+        autoImportScannerPushesOneItem();
+
+        await importAssetsHandler(autoImportData(), makeContext());
+
+        // Under the source id, because that is what the entry is filed under, and with the id the
+        // upload reported rather than anything invented here.
+        expect(hashCache.setAssetId).toHaveBeenCalledWith('1000000042', expect.any(String));
+    });
+
+    test('records the id of an asset the database already held, so it is not looked up again', async () => {
+        const hashCache = watchHashCache();
+        mockBackend.setTaskResult('hash-file', (hashData: IHashFileData, taskId) => ({
+            taskId,
+            type: 'hash-file',
+            inputs: hashData,
+            status: TaskStatus.Succeeded,
+            outputs: {
+                hash: new Uint8Array(Buffer.from('aabbcc', 'hex')),
+                hashFromCache: false,
+                filesAlreadyAdded: true,
+                existingAssetId: 'asset-already-there',
+            } as IHashFileResult,
+        }));
+        autoImportScannerPushesOneItem();
+
+        await importAssetsHandler(autoImportData(), makeContext());
+
+        expect(hashCache.setAssetId).toHaveBeenCalledWith('1000000042', 'asset-already-there');
+    });
+
+    test("writes the import record part way through a long import, not only at the end", async () => {
+        // An import of two thousand photos that died at nineteen hundred used to write no record at
+        // all, because the record was only written in the finally at the end of the run. Automatic
+        // import made that worse: a run that goes on until the app quits never reaches the end.
+        const fileCount = IMPORT_RECORD_FLUSH_SIZE + 5;
+        watchHashCache();
+        mockScanPaths.mockImplementation(async (_paths, visitFile) => {
+            for (let fileNumber = 0; fileNumber < fileCount; fileNumber += 1) {
+                await visitFile({
+                    filePath: `/test/photos/img${fileNumber}.jpg`,
+                    fileStat: { length: 1000, lastModified: new Date(5000) },
+                    contentType: 'image/jpeg',
+                    labels: [],
+                    logicalPath: `/test/photos/img${fileNumber}.jpg`,
+                });
+            }
+        });
+
+        await importAssetsHandler(makeData(), makeContext());
+
+        // One flush at the hundred mark, and one at the end for the five that were left.
+        expect(mockRecordImports).toHaveBeenCalledTimes(2);
+        expect(mockRecordImports.mock.calls[0][1]).toHaveLength(IMPORT_RECORD_FLUSH_SIZE);
+        expect(mockRecordImports.mock.calls[1][1]).toHaveLength(5);
+    });
+
+    test("writes the import record once at the end of a short import", async () => {
+        watchHashCache();
+        scanFindsOneFile('/test/photos/img1.jpg');
+
+        await importAssetsHandler(makeData(), makeContext());
+
+        expect(mockRecordImports).toHaveBeenCalledTimes(1);
+        expect(mockRecordImports.mock.calls[0][1]).toHaveLength(1);
+    });
+
+    test("a dry run records nothing, because it changed nothing", async () => {
+        watchHashCache();
+        scanFindsOneFile('/test/photos/img1.jpg');
+
+        await importAssetsHandler(makeData({ dryRun: true }), makeContext());
+
+        expect(mockRecordImports).not.toHaveBeenCalled();
+    });
+
+    test("releases each file once the import has finished with it", async () => {
+        // On a phone this is what deletes the copy that had to be made to read the photo at all.
+        // Doing it per file rather than at the end of the run is what keeps a long automatic import
+        // from filling the sandbox with copies of every photo it has ever looked at.
+        const { release } = autoImportScannerPushesOneItem();
+        hashFileReportsNewFile();
+        uploadSucceeds();
+
+        await importAssetsHandler(autoImportData(), makeContext());
+
+        expect(release).toHaveBeenCalledWith(EXPORTED_PATH);
+    });
+
+    test("releases a file the database already held", async () => {
+        const { release } = autoImportScannerPushesOneItem();
+        mockBackend.setTaskResult('hash-file', (hashData: IHashFileData, taskId) => ({
+            taskId,
+            type: 'hash-file',
+            inputs: hashData,
+            status: TaskStatus.Succeeded,
+            outputs: {
+                hash: new Uint8Array(Buffer.from('aabbcc', 'hex')),
+                hashFromCache: false,
+                filesAlreadyAdded: true,
+                existingAssetId: 'asset-already-there',
+            } as IHashFileResult,
+        }));
+
+        await importAssetsHandler(autoImportData(), makeContext());
+
+        expect(release).toHaveBeenCalledWith(EXPORTED_PATH);
+    });
+
+    test("reports what an automatic import is doing, so the panel has something to show", async () => {
+        // The counters used to be produced by a separate loop task. Deleting that task left the panel
+        // with no producer at all, so the import itself sends them now.
+        autoImportScannerPushesOneItem();
+        hashFileReportsNewFile();
+        uploadSucceeds();
+        const context = makeContext();
+
+        await importAssetsHandler(autoImportData(), context);
+
+        expect(context.sendMessage).toHaveBeenCalledWith(
+            expect.objectContaining({ type: 'import-progress' })
+        );
+    });
+
+    test("reports what a manual import is doing, through the very same message", async () => {
+        watchHashCache();
+        hashFileReportsNewFile();
+        uploadSucceeds();
+        scanFindsOneFile('/test/photos/img1.jpg');
+        const context = makeContext();
+
+        await importAssetsHandler(makeData(), context);
+
+        // One kind of progress message, sent by both kinds of import. The panel shows either without
+        // knowing which it is watching.
+        expect(context.sendMessage).toHaveBeenCalledWith(
+            expect.objectContaining({ type: 'import-progress' })
+        );
+        // It does not badge what the user imported by hand as something that arrived on its own.
+        expect(context.sendMessage).not.toHaveBeenCalledWith(
+            expect.objectContaining({ type: 'import-success', source: 'automatic' })
+        );
+    });
+
+    test("names the database an automatic arrival landed in, which the gallery needs", async () => {
+        // Automatic import writes to the default database, which is not necessarily the one on
+        // screen. An arrival in another database is not that gallery's to show.
+        autoImportScannerPushesOneItem();
+        hashFileReportsNewFile();
+        uploadSucceeds();
+        const context = makeContext();
+
+        await importAssetsHandler(autoImportData(), context);
+
+        expect(context.sendMessage).toHaveBeenCalledWith(
+            expect.objectContaining({ type: 'import-success', databasePath: '/test/db', source: 'automatic' })
+        );
+    });
+
+    test("saves the hash cache as soon as the scanner has nothing left to import", async () => {
+        // An import that never ends has no end at which to save. Automatic import brings in a
+        // handful of photos and then waits, so without this the next run hashes and copies the same
+        // photos again, and a cleanup that reads the cache from another process sees nothing.
+        const hashCache = watchHashCache();
+        hashFileReportsNewFile();
+        uploadSucceeds();
+        autoImportScannerPushesOneItem();
+
+        await importAssetsHandler(autoImportData(), makeContext());
+
+        expect(hashCache.save).toHaveBeenCalled();
+    });
+
+    test("does not save the hash cache while the scanner still has work to hand over", async () => {
+        const hashCache = watchHashCache();
+        hashFileReportsNewFile();
+        uploadSucceeds();
+        autoImportScannerPushesOneItem({ caughtUp: false });
+
+        await importAssetsHandler(autoImportData(), makeContext());
+
+        // Only the save at the end of the run, which every import does.
+        expect(hashCache.save).toHaveBeenCalledTimes(1);
     });
 });

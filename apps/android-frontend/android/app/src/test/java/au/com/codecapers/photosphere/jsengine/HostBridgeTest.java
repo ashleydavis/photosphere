@@ -67,7 +67,7 @@ public final class HostBridgeTest {
         }
 
         @Override
-        public void queueChildTask(String parentTaskId, String childTaskId, String type, String dataJson, String source) {
+        public void queueChildTask(String parentTaskId, String childTaskId, String type, String dataJson, String source, String priorityWireName) {
             childParentIds.add(parentTaskId);
             childTaskIds.add(childTaskId);
         }
@@ -103,7 +103,7 @@ public final class HostBridgeTest {
     @Test
     public void sendMessageForwardsWhenCurrentTaskMatches() {
         HostBridge bridge = newBridge();
-        bridge.setCurrentTask(new PooledTask("task-a", "type", "{}", "src"));
+        bridge.setCurrentTask(new PooledTask("task-a", "type", "{}", "src", null));
         bridge.sendMessage("task-a", "{\"progress\":1}");
         assertEquals(1, callbacks.messages.size());
         assertEquals("task-a", callbacks.messageTaskIds.get(0));
@@ -120,7 +120,7 @@ public final class HostBridgeTest {
     @Test
     public void sendMessageIsIgnoredWhenTaskIdDoesNotMatch() {
         HostBridge bridge = newBridge();
-        bridge.setCurrentTask(new PooledTask("task-a", "type", "{}", "src"));
+        bridge.setCurrentTask(new PooledTask("task-a", "type", "{}", "src", null));
         bridge.sendMessage("task-b", "{}");
         assertTrue(callbacks.messages.isEmpty());
     }
@@ -128,8 +128,8 @@ public final class HostBridgeTest {
     @Test
     public void queueChildTaskForwardsTaggedWithTheParentTaskId() {
         HostBridge bridge = newBridge();
-        bridge.setCurrentTask(new PooledTask("parent-1", "type", "{}", "src"));
-        bridge.queueChildTask("child-1", "childType", "{}", "src");
+        bridge.setCurrentTask(new PooledTask("parent-1", "type", "{}", "src", null));
+        bridge.queueChildTask("child-1", "childType", "{}", "src", null);
         assertEquals(1, callbacks.childTaskIds.size());
         assertEquals("parent-1", callbacks.childParentIds.get(0));
         assertEquals("child-1", callbacks.childTaskIds.get(0));
@@ -138,7 +138,7 @@ public final class HostBridgeTest {
     @Test
     public void queueChildTaskIsIgnoredWithoutACurrentTask() {
         HostBridge bridge = newBridge();
-        bridge.queueChildTask("child-1", "childType", "{}", "src");
+        bridge.queueChildTask("child-1", "childType", "{}", "src", null);
         assertTrue(callbacks.childTaskIds.isEmpty());
     }
 

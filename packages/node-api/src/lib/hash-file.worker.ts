@@ -5,6 +5,7 @@ import { HashCache } from "./hash-cache";
 import { getHashFromCache, validateAndHash } from "./hash";
 import { IFileStat } from "./file-scanner";
 import { IDatabaseDescriptor } from "api";
+import { IFileCacheIdentity } from "api/src/lib/import-assets.types";
 import { resolveStorageCredentials } from "./resolve-storage-credentials";
 
 //
@@ -26,6 +27,10 @@ export interface IHashFileData {
 
     // Directory for the hash cache.
     hashCacheDir: string;
+
+    // How this file is identified in the hash cache, when it is not identified by its own path.
+    // Only automatic import from a device photo library supplies one. See IFileCacheIdentity.
+    cacheIdentity?: IFileCacheIdentity;
 
     // Path used in UI (e.g. path inside a zip).
     logicalPath: string;
@@ -58,6 +63,11 @@ export interface IHashFileResult {
 
     // True if a record with this hash already exists in the database.
     filesAlreadyAdded: boolean;
+
+    // The id of the record that already holds this hash, when there is one. Reported so the import
+    // can record it in the hash cache: the next run then knows the file is in the database without
+    // asking the database at all.
+    existingAssetId: string | undefined;
 }
 
 //
@@ -66,7 +76,7 @@ export interface IHashFileResult {
 // Does not queue any downstream tasks; the orchestrator (import-assets) handles that.
 //
 export async function hashFileHandler(data: IHashFileData, context: ITaskContext): Promise<IHashFileResult> {
-    const { filePath, fileStat, contentType, storageDescriptor, hashCacheDir, logicalPath } = data;
+    const { filePath, fileStat, contentType, storageDescriptor, hashCacheDir, logicalPath, cacheIdentity } = data;
     const { uuidGenerator, timestampProvider } = context;
 
     // Load the hash cache in read-only mode.
@@ -74,7 +84,7 @@ export async function hashFileHandler(data: IHashFileData, context: ITaskContext
     await localHashCache.load();
 
     // Try to retrieve the hash from the cache first.
-    const cachedHash = await getHashFromCache(filePath, fileStat, localHashCache);
+    const cachedHash = await getHashFromCache(filePath, fileStat, localHashCache, cacheIdentity);
     let hashFromCache: boolean;
     let hashBuffer: Buffer;
 
@@ -103,5 +113,6 @@ export async function hashFileHandler(data: IHashFileData, context: ITaskContext
         hash: new Uint8Array(hashBuffer),
         hashFromCache,
         filesAlreadyAdded: existingRecords.length > 0,
+        existingAssetId: existingRecords.length > 0 ? existingRecords[0]._id : undefined,
     };
 }

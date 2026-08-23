@@ -29,12 +29,19 @@ public final class PooledTask {
     public final String source;
 
     //
+    // How urgent the task is. The pool dispatches every interactive task before any background one,
+    // so a tap the user is waiting on does not sit behind an import's backlog.
+    //
+    public final TaskPriority priority;
+
+    //
     // Constructs a pooled task. All fields are required and final.
     //
-    public PooledTask(String taskId, String type, String dataJson, String source) {
+    public PooledTask(String taskId, String type, String dataJson, String source, TaskPriority priority) {
         this.taskId = taskId;
         this.type = type;
         this.dataJson = dataJson;
         this.source = source;
+        this.priority = priority;
     }
 }

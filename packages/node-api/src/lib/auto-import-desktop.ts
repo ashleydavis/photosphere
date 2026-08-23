@@ -77,7 +77,6 @@ export function planDesktopAutoImport(
     const settings = normaliseAutoImportSettings({
         enabled: config.autoImportEnabled,
         sources: storedSources,
-        cleanupEnabled: config.autoImportCleanupEnabled,
     });
 
     if (settings.sources.length === 0) {

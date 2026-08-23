@@ -47,7 +47,8 @@ export async function checkFileHandler(data: ICheckFileData, context: ITaskConte
     await localHashCache.load();
    
     // Check cache first
-    let hashedFile = await getHashFromCache(filePath, fileStat, localHashCache);
+    // No cache identity: checking runs over real files, which are identified by their own paths.
+    let hashedFile = await getHashFromCache(filePath, fileStat, localHashCache, undefined);
     const hashFromCache = !!hashedFile;
     
     if (!hashedFile) {

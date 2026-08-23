@@ -3,6 +3,8 @@ import { TaskQueue } from "task-queue";
 import type { ITaskMessageData } from "task-queue";
 import { IDatabaseDescriptor } from "api";
 import type { IUuidGenerator } from "utils";
+import { registerTerminationCallback } from "node-utils";
+import type { IImportOptions } from "./import-assets.worker";
 
 //
 // Progress callback invoked after each file event during import, receiving the running summary.
@@ -10,8 +12,13 @@ import type { IUuidGenerator } from "utils";
 export type AddPathsProgressCallback = (currentlyScanning: string | undefined, summary: IAddSummary) => void;
 
 //
-// Adds a list of files or directories to the media file database.
-// Dispatches a single add-paths task and waits for all downstream tasks to complete.
+// Adds media to the database and waits for the import to finish.
+//
+// One import task does the work either way. Without `options.auto` it walks `paths` once and ends,
+// which is `psi add`. With it, the same task is fed by a scanner that watches those places and
+// imports what turns up, so it runs until it is cancelled: that is `psi add --watch`. Everything
+// between the two is the same code, which is the point of it.
+//
 // Progress is reported via the optional onProgress callback.
 //
 export async function addPaths(
@@ -21,7 +28,8 @@ export async function addPaths(
     googleApiKey: string | undefined,
     sessionId: string,
     dryRun: boolean,
-    onProgress?: AddPathsProgressCallback
+    onProgress?: AddPathsProgressCallback,
+    options?: IImportOptions
 ): Promise<IAddSummary> {
     const queue = new TaskQueue(uuidGenerator, storageDescriptor.databasePath);
 
@@ -70,6 +78,14 @@ export async function addPaths(
         googleApiKey,
         sessionId,
         dryRun,
+        options,
+    });
+
+    // Ctrl-C has to reach the task, not just this process: the task is what holds the watchers and
+    // the temporary directory, and shutting the queue down is what tells it to stop. A watching
+    // import only ends this way; a one-shot import ends on its own and never needs it.
+    registerTerminationCallback(async () => {
+        queue.shutdown();
     });
 
     await queue.awaitTask(taskId);

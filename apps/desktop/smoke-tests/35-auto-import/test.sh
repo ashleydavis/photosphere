@@ -2,8 +2,8 @@
 
 # Exercises automatic import end to end in the real app: switching it on creates the default private
 # database, lists it, and marks it as the default; a file dropped into a watched folder is imported
-# without the user doing anything; and the cleanup toggle deletes the source file once the photo is
-# confirmed in the database.
+# without the user doing anything; and the cleanup button deletes the source files the database
+# already holds.
 #
 # The watched folder is set through the config file rather than through the folder picker, because a
 # native folder dialog cannot be driven from here. Everything above the picker is the real code path:
@@ -159,25 +159,63 @@ log_info "Dropped a photo into the watched folder"
 
 wait_for_asset_count 1
 
-# --- 4. The cleanup toggle deletes the source file once the photo is confirmed. ---
+# --- 4. The cleanup button deletes the source files the database already holds. ---
+
+# This used to be a toggle, with automatic import deleting each file as it confirmed it. On a phone
+# every deletion raises a system confirmation, so that asked the user once per handful of photos. It
+# is a button now: it counts what could go, and deletes it when pressed a second time.
+
+cp "$REPO_DIR/test/test.jpg" "$WATCH_DIR/cleaned-up.jpg"
+log_info "Dropped a second photo"
+
+wait_for_asset_count 2
+
 
 send_command "$APP_PORT" menu '{"itemId":"open-configuration"}'
 wait_for_value "$APP_PORT" "configuration-dialog" "Automatic import"
 
-send_command "$APP_PORT" click '{"dataId":"auto-import-cleanup-toggle"}'
+# The first press counts, and says what it found rather than deleting anything.
+#
+# Pressed until it finds something rather than once. The button can only offer what the import has
+# written to the hash cache, which it does once it has nothing left to import, and a press a
+# fraction of a second after the photo landed can beat that. A user pressing it again would see the
+# same thing; this is that, with a limit so a button that never finds anything still fails.
+COUNT_ATTEMPTS=0
+while true; do
+    send_command "$APP_PORT" click '{"dataId":"auto-import-cleanup-button"}'
+    wait_for_log "$TMP_DIR" "Source cleanup counted"
+    if read_value "$APP_PORT" "auto-import-cleanup-message" | grep -q "can be deleted"; then
+        break
+    fi
+    COUNT_ATTEMPTS=$((COUNT_ATTEMPTS + 1))
+    if [ "$COUNT_ATTEMPTS" -ge 30 ]; then
+        log_error "The cleanup button never offered anything to delete"
+        exit 1
+    fi
+    sleep 1
+done
+if [ ! -e "$WATCH_DIR/cleaned-up.jpg" ]; then
+    log_error "Counting deleted the source file, when it should only have counted it"
+    exit 1
+fi
+log_success "Counting deleted nothing"
 
-# Changing a setting restarts the task with the new one, which is what makes the change take effect
-# without a restart of the app.
-wait_for_log "$TMP_DIR" "Starting automatic import into"
-wait_for_log "$TMP_DIR" "Automatic import cleanup enabled"
-wait_for_toml "$CONFIG_TOML" "auto_import_cleanup_enabled[[:space:]]*=[[:space:]]*true"
-
-cp "$REPO_DIR/test/test.jpg" "$WATCH_DIR/cleaned-up.jpg"
-log_info "Dropped a second photo, with cleanup switched on"
-
-wait_for_asset_count 2
-wait_for_file_gone "$WATCH_DIR/cleaned-up.jpg"
-log_success "The source file was deleted once the photo was in the database"
+# The next press deletes what was counted, and each press after it deletes whatever has become
+# deletable since: a photo only becomes deletable once the import has written its hash down and the
+# database index carries it, which is a moment behind the photo landing.
+DELETE_ATTEMPTS=0
+while [ -e "$WATCH_DIR/cleaned-up.jpg" ] || [ -e "$WATCH_DIR/arrived.png" ]; do
+    send_command "$APP_PORT" click '{"dataId":"auto-import-cleanup-button"}'
+    wait_for_log "$TMP_DIR" "Source cleanup"
+    DELETE_ATTEMPTS=$((DELETE_ATTEMPTS + 1))
+    if [ "$DELETE_ATTEMPTS" -ge 40 ]; then
+        log_error "The cleanup button never deleted the photos the database holds"
+        ls -la "$WATCH_DIR"
+        exit 1
+    fi
+    sleep 1
+done
+log_success "The source files the database already held were deleted"
 
 # --- What was imported is remembered, and survives closing the app. ---
 

@@ -59,7 +59,7 @@ final class HostBridgeMediaTests: XCTestCase {
                                 storageRoot: URL(fileURLWithPath: NSTemporaryDirectory()),
                                 isCancelledProvider: { _ in false },
                                 messageSink: { _, _ in },
-                                queueTaskSink: { _, _, _, _, _ in })
+                                queueTaskSink: { _, _, _, _, _, _ in })
         bridge.install(into: context)
 
         for name in ["imageMagick", "ffmpeg", "ffprobe"] {

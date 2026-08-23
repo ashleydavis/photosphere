@@ -51,6 +51,7 @@ function makeTestContext(): ITestContext {
         uuidGenerator: { generate: jest.fn().mockReturnValue("uuid-1") },
         timestampProvider: { now: jest.fn().mockReturnValue(0), dateNow: jest.fn().mockReturnValue(new Date(0)) },
         sessionId: "test-session",
+        maxConcurrentChildTasks: 10,
         taskId: "asset-server-task",
         sendMessage: (message: any) => { messages.push(message); },
         isCancelled: () => cancelled,

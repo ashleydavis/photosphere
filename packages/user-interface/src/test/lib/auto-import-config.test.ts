@@ -1,7 +1,6 @@
 import { DEFAULT_AUTO_IMPORT_SETTINGS, IAutoImportSettings } from "api";
 import { IConfig } from "../../context/config-context";
 import {
-    AUTO_IMPORT_CLEANUP_ENABLED_KEY,
     AUTO_IMPORT_ENABLED_KEY,
     AUTO_IMPORT_SOURCES_KEY,
     DEFAULT_DATABASE_PATH_KEY,
@@ -55,7 +54,6 @@ describe("auto-import settings in the config store", () => {
             ...DEFAULT_AUTO_IMPORT_SETTINGS,
             enabled: true,
             sources: [{ type: "folder", path: "/home/someone/Pictures", recurse: true }],
-            cleanupEnabled: true,
         };
 
         await saveAutoImportSettings(config, settings);
@@ -70,11 +68,9 @@ describe("auto-import settings in the config store", () => {
             ...DEFAULT_AUTO_IMPORT_SETTINGS,
             enabled: true,
             sources: [{ type: "device-album", albumId: "camera" }],
-            cleanupEnabled: true,
         });
 
         expect(await config.get(AUTO_IMPORT_ENABLED_KEY)).toBe(true);
-        expect(await config.get(AUTO_IMPORT_CLEANUP_ENABLED_KEY)).toBe(true);
         expect(await config.get(AUTO_IMPORT_SOURCES_KEY)).toEqual([{ type: "device-album", albumId: "camera" }]);
     });
 
@@ -95,16 +91,13 @@ describe("auto-import settings in the config store", () => {
         const settings = await loadAutoImportSettings(config);
 
         expect(settings.enabled).toBe(true);
-        expect(settings.cleanupEnabled).toBe(DEFAULT_AUTO_IMPORT_SETTINGS.cleanupEnabled);
         expect(settings.backfillItemsPerMinute).toBe(DEFAULT_AUTO_IMPORT_SETTINGS.backfillItemsPerMinute);
-        expect(settings.pollIntervalMs).toBe(DEFAULT_AUTO_IMPORT_SETTINGS.pollIntervalMs);
     });
 
-    test("initial settings switch automatic import on with the given places and cleanup off", () => {
+    test("initial settings switch automatic import on with the given places", () => {
         const settings = buildInitialAutoImportSettings([{ type: "folder", path: "/photos", recurse: true }]);
 
         expect(settings.enabled).toBe(true);
-        expect(settings.cleanupEnabled).toBe(false);
         expect(settings.sources).toEqual([{ type: "folder", path: "/photos", recurse: true }]);
     });
 });

@@ -4,12 +4,12 @@ import { GallerySourceContext, IItemsUpdate, IGalleryItemMap, IGallerySource } f
 import { IAsset, IDatabaseOp } from "api";
 import type { ISaveAssetItem } from "api";
 import type { IMoveAssetsData } from "node-api";
-import { log } from "utils";
+import { log, retry } from "utils";
 import { IObservable, Observable } from "../lib/subscription";
 import { loadAssets as loadAssetsApi } from "api/src/lib/load-assets";
 import type { ILoadAssetsData, ILoadAssetsResult } from "api/src/lib/load-assets.types";
 import type { ISyncBatchMessage } from "api/src/lib/sync-database.types";
-import { TaskStatus, TaskQueue, getQueueBackend } from "task-queue";
+import { TaskStatus, TaskQueue, TaskPriority, getQueueBackend } from "task-queue";
 import type { IQueueBackend } from "task-queue";
 import { usePlatform } from "./platform-context";
 import { useApi } from "./api-context";
@@ -17,6 +17,16 @@ import type { IDownloadAssetItem } from "./platform-context";
 import { useToast } from "./toast-context";
 import { useUuidGenerator } from "./uuid-generator-context";
 import { markRecentArrival } from "../lib/recent-arrivals";
+
+//
+// How many times an asset request is attempted, and how long apart.
+//
+// Three, a quarter of a second apart, because the failure this exists for is a single request to a
+// live loopback port getting no reply at all. Something that fails three times over half a second is
+// not that, and is reported rather than waited on.
+//
+const ASSET_REQUEST_ATTEMPTS = 3;
+const ASSET_RETRY_DELAY_MS = 250;
 
 //
 // Adds "asset database" specific functionality to the gallery source.
@@ -363,7 +373,8 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
     async function createDatabaseAtPath(dbPath: string): Promise<void> {
         const queue = new TaskQueue(uuidGenerator, dbPath);
         try {
-            const taskId = queue.addTask("create-database", { databasePath: dbPath });
+            // Interactive: the user tapped to open this database and is waiting on the empty gallery.
+            const taskId = queue.addTask("create-database", { databasePath: dbPath }, undefined, TaskPriority.Interactive);
             const result = await queue.awaitTask(taskId);
             if (!result || result.status !== TaskStatus.Succeeded) {
                 throw new Error(`create-database task did not succeed: ${result?.errorMessage ?? "unknown error"}`);
@@ -415,7 +426,8 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
     async function checkDatabaseExists(dbPath: string): Promise<boolean> {
         const queue = new TaskQueue(uuidGenerator, `check-database-exists-${uuidGenerator.generate()}`);
         try {
-            const taskId = queue.addTask("check-database-exists", { databasePath: dbPath });
+            // Interactive: this runs in front of opening a database, with the user waiting on it.
+            const taskId = queue.addTask("check-database-exists", { databasePath: dbPath }, undefined, TaskPriority.Interactive);
             const result = await queue.awaitTask(taskId);
             if (!result || result.status !== TaskStatus.Succeeded) {
                 throw new Error(`check-database-exists task did not succeed: ${result?.errorMessage ?? "unknown error"}`);
@@ -611,11 +623,21 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
             throw new Error("No database path provided.");
         }
 
-        const response = await api.get<Blob>(
-            `${restApiUrl}/asset?id=${encodeURIComponent(assetId)}&type=${encodeURIComponent(assetType)}&db=${encodeURIComponent(databasePath)}`,
-            {
-                responseType: "blob",
-            }
+        // Tried again when it fails. The asset server is on loopback and up long before any of this
+        // runs, and yet a thumbnail fetch occasionally fails having got no answer at all: seen in the
+        // desktop smoke tests, where every other step passed and only the two thumbnails failed. The
+        // cause is not known, so this does not claim to fix it. What it does is stop one lost request
+        // from leaving a hole in the gallery.
+        const response = await retry(
+            () => api.get<Blob>(
+                `${restApiUrl}/asset?id=${encodeURIComponent(assetId)}&type=${encodeURIComponent(assetType)}&db=${encodeURIComponent(databasePath)}`,
+                {
+                    responseType: "blob",
+                }
+            ),
+            ASSET_REQUEST_ATTEMPTS,
+            ASSET_RETRY_DELAY_MS,
+            1
         );
         return response.data;
     }
@@ -813,8 +835,8 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
     }, [databasePath]);
 
     //
-    // Subscribe to import-success and auto-import-item task messages and add newly imported assets
-    // to the gallery immediately, so the user sees them without needing to reload.
+    // Subscribe to import-success task messages and add newly imported assets to the gallery
+    // immediately, so the user sees them without needing to reload.
     //
     // Automatic import arrivals come down the same path as manual ones. That is the point: a photo
     // that turned up on its own should land in the gallery exactly as one the user imported does,
@@ -822,7 +844,7 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
     //
     useEffect(() => {
         const unsubscribeImportSuccess = platform.onTaskMessage((_taskId, message) => {
-            if (message.type !== 'import-success' && message.type !== 'auto-import-item') {
+            if (message.type !== 'import-success') {
                 return;
             }
 
@@ -831,15 +853,15 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
                 return;
             }
 
-            if (message.type === 'auto-import-item') {
-                // Automatic import writes to the default database, which is not necessarily the one
-                // on screen. An arrival in another database is not this gallery's to show, and one
-                // taken in before this database has loaded is shown twice: once now and once by the
-                // load. Both are the same check.
-                if (!databasePath || message.databasePath !== databasePath) {
-                    return;
-                }
+            // An import writes to the database it was pointed at, which is not necessarily the one on
+            // screen: automatic import uses the default database. An arrival in another database is
+            // not this gallery's to show, and one taken in before this database has loaded is shown
+            // twice: once now and once by the load. Both are the same check.
+            if (!databasePath || message.databasePath !== databasePath) {
+                return;
+            }
 
+            if (message.source === 'automatic') {
                 // Only automatic arrivals are marked. A photo the user imported is something they
                 // are already watching happen, so animating it would be noise.
                 markRecentArrival(asset._id, Date.now());

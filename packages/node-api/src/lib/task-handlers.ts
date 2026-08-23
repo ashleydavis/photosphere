@@ -17,8 +17,8 @@ import { moveAssetsHandler } from "./move-assets.worker";
 import { assetServerHandler } from "./asset-server.worker";
 import { receiveShareHandler, findReceiverHandler, sendPayloadHandler } from "./lan-share.worker";
 import { checkDatabaseExistsHandler } from "./check-database-exists.worker";
-import { autoImportHandler } from "./auto-import.worker";
 import { evictOriginalsHandler } from "./evict-originals.worker";
+import { cleanupSourcesHandler } from "./cleanup-sources.worker";
 import { consolidateDatabaseHandler } from "./consolidate-database.worker";
 
 //
@@ -46,7 +46,7 @@ export function initTaskHandlers(): void {
     registerHandler("find-receiver", findReceiverHandler);
     registerHandler("send-payload", sendPayloadHandler);
     registerHandler("check-database-exists", checkDatabaseExistsHandler);
-    registerHandler("auto-import", autoImportHandler);
     registerHandler("evict-originals", evictOriginalsHandler);
+    registerHandler("cleanup-sources", cleanupSourcesHandler);
     registerHandler("consolidate-database", consolidateDatabaseHandler);
 }

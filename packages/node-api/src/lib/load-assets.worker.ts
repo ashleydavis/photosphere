@@ -3,7 +3,7 @@
 //
 
 import type { ITaskContext } from "task-queue";
-import { TaskQueue } from "task-queue";
+import { TaskQueue, TaskPriority } from "task-queue";
 import { createLazyDatabaseStorage, createMediaFileDatabase, isDatabasePartial } from "./media-file-database";
 import { openStorage } from "./open-storage";
 import type { ILoadAssetsData, ILoadAssetsResult } from "api";
@@ -92,9 +92,12 @@ export async function loadAssetsHandler(
     }
     
     if (isPartial) {
-        // Queue thumb prefetch only for partial databases.
+        // Queue thumb prefetch only for partial databases. Explicitly background, because it would
+        // otherwise inherit this task's interactive priority and hold an engine for as long as it
+        // takes to pull down every thumbnail, which is exactly the work interactive tasks must not
+        // wait behind.
         const queue = new TaskQueue(context.uuidGenerator, data.databasePath);
-        queue.addTask("prefetch-database", { databasePath: data.databasePath });
+        queue.addTask("prefetch-database", { databasePath: data.databasePath }, undefined, TaskPriority.Background);
     }
 
     return {

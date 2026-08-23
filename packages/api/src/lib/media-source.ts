@@ -46,18 +46,7 @@ export interface IMediaSourceListPage {
 }
 
 //
-// Called by a source when it notices its contents have changed. It carries no payload: the task
-// responds by re-listing, because a source cannot be trusted to describe every change accurately.
-//
-export type IMediaSourceChangedCallback = () => void;
-
-//
-// Stops a subscription started by IMediaSource.watch.
-//
-export type IMediaSourceUnsubscribe = () => void;
-
-//
-// Somewhere media arrives that the auto-import task can watch and import from.
+// Somewhere media arrives that automatic import lists and imports from.
 //
 export interface IMediaSource {
     //
@@ -65,11 +54,6 @@ export interface IMediaSource {
     // beginning, and the previous page's nextCursor to continue.
     //
     listPage(cursor: string | undefined, pageSize: number): Promise<IMediaSourceListPage>;
-
-    //
-    // Reports changes to the source until the returned function is called.
-    //
-    watch(onChanged: IMediaSourceChangedCallback): IMediaSourceUnsubscribe;
 
     //
     // Returns a path the importer can read the item's bytes from. A source whose items are already

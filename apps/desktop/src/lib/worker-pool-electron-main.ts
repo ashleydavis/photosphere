@@ -1,5 +1,5 @@
 import type { ITask, ITaskResult, WorkerTaskCompletionCallback, TaskMessageCallback, UnsubscribeFn, IMessageCallbackEntry, IQueueBackend } from "task-queue";
-import { TaskStatus } from "task-queue";
+import { TaskStatus, TaskPriority, insertTaskByPriority, resolveTaskPriority } from "task-queue";
 import { randomUUID } from "node:crypto";
 import { utilityProcess, type UtilityProcess } from 'electron';
 import { deserializeError } from "serialize-error";
@@ -159,6 +159,12 @@ export interface IWorkerQueueTaskMessage {
     // Source tag to associate the new task with a logical group (e.g. database path).
     //
     source: string;
+
+    //
+    // The priority the worker asked for, or undefined to run at the priority of the task that
+    // queued this one.
+    //
+    priority?: TaskPriority;
 }
 
 //
@@ -334,10 +340,20 @@ export class WorkerPoolElectronMain implements IQueueBackend {
     }
 
     //
-    //
     // Adds a task to the pending queue and attempts to dispatch it immediately.
     //
-    addTask(type: string, data: any, source: string, taskId?: string): string {
+    // An interactive task goes in ahead of every background task already waiting, because the user
+    // is sitting there looking at it.
+    //
+    addTask(type: string, data: any, source: string, taskId?: string, priority?: TaskPriority): string {
+        return this.addTaskWithParent(type, data, source, taskId, priority, undefined);
+    }
+
+    //
+    // Adds a task that a running task asked for, so it runs at that task's priority unless it asked
+    // for one of its own. This is what stops an import's hash and upload children overtaking a tap.
+    //
+    private addTaskWithParent(type: string, data: any, source: string, taskId: string | undefined, priority: TaskPriority | undefined, parentPriority: TaskPriority | undefined): string {
         const id = taskId ?? randomUUID();
         const task: ITask<any> = {
             id,
@@ -345,9 +361,10 @@ export class WorkerPoolElectronMain implements IQueueBackend {
             status: TaskStatus.Pending,
             data,
             source,
+            priority: resolveTaskPriority(priority, parentPriority),
             createdAt: new Date(),
         };
-        this.pendingTasks.push(task);
+        insertTaskByPriority(this.pendingTasks, task);
         this.taskMap.set(id, task);
 
         const callbacks = this.taskAddedCallbacks.get(source);
@@ -381,6 +398,17 @@ export class WorkerPoolElectronMain implements IQueueBackend {
                 }
             }
         };
+    }
+
+    //
+    // The priority of the task the given worker is running, so a child it queues inherits it.
+    // Undefined when the worker is between tasks, which a child task cannot be spawned from.
+    //
+    private priorityOfRunningTask(workerState: IWorkerState): TaskPriority | undefined {
+        if (workerState.currentTaskId === null) {
+            return undefined;
+        }
+        return this.taskMap.get(workerState.currentTaskId)?.priority;
     }
 
     //
@@ -661,7 +689,7 @@ export class WorkerPoolElectronMain implements IQueueBackend {
         // Handle queue-task request from worker
         if (data.type === "queue-task") {
             const msg = data as IWorkerQueueTaskMessage;
-            this.addTask(msg.taskType, msg.data, msg.source, msg.taskId);
+            this.addTaskWithParent(msg.taskType, msg.data, msg.source, msg.taskId, msg.priority, this.priorityOfRunningTask(workerState));
             return;
         }
     }

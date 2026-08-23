@@ -2,11 +2,12 @@ import { loadDatabase, IBaseCommandOptions, ICommandContext, selectEncryptionKey
 import { getDirectoryForCommand } from "../lib/directory-picker";
 import { log } from "utils";
 import pc from "picocolors";
-import { exit } from "node-utils";
+import { exit, registerTerminationCallback } from "node-utils";
 import { loadDatabaseConfig } from "api";
 import { syncDatabases, merkleTreeExists, isDatabaseEncrypted } from "node-api";
 import { loadEncryptionKeysFromPem } from "storage";
 import { createStorageForPath } from "../lib/storage-helper";
+import { parseWatchInterval, runSyncWatch } from "../lib/sync-watch";
 
 //
 // Options for the sync command.
@@ -21,6 +22,16 @@ export interface ISyncCommandOptions extends IBaseCommandOptions {
     // Path to destination encryption key file.
     //
     destKey?: string;
+
+    //
+    // Keep syncing as the database changes, rather than syncing once and exiting.
+    //
+    watch?: boolean;
+
+    //
+    // How long to wait between syncs when watching, in seconds.
+    //
+    interval?: string;
 }
 
 //
@@ -120,6 +131,23 @@ export async function syncCommand(context: ICommandContext, options: ISyncComman
         key: options.destKey  // Use destKey for target database
     };
     const { assetStorage: targetAssetStorage, rawAssetStorage: targetRawAssetStorage, bsonDatabase: targetBsonDatabase } = await loadDatabase(targetOptions.db, targetOptions, uuidGenerator, timestampProvider, sessionId);
+
+    if (options.watch) {
+        // Run the same sync over and over as the database changes, rather than once. Paired with
+        // `psi add --watch` in another process this is what `psi watch` used to be, except that each
+        // half is separately useful and separately testable, where before it was both or neither.
+        let stopped = false;
+        registerTerminationCallback(async () => {
+            stopped = true;
+        });
+
+        await runSyncWatch({
+            intervalSeconds: parseWatchInterval(options.interval),
+            syncOnce: () => syncDatabases(sourceAssetStorage, sourceRawAssetStorage, sourceBsonDatabase, targetAssetStorage, targetRawAssetStorage, targetBsonDatabase, sessionId),
+            isStopped: () => stopped,
+        });
+        return;
+    }
 
     // syncDatabases records lastSyncedAt and the content hash in both state files when it runs.
     const result = await syncDatabases(sourceAssetStorage, sourceRawAssetStorage, sourceBsonDatabase, targetAssetStorage, targetRawAssetStorage, targetBsonDatabase, sessionId);

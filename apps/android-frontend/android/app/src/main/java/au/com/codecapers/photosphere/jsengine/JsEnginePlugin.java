@@ -202,9 +202,11 @@ public final class JsEnginePlugin extends Plugin {
     }
 
     //
-    // addTask: receives { taskId, type, data, source }. Fire-and-forget: enqueue the task and
-    // resolve the call immediately. The result is delivered later via the taskCompleted event.
-    // data is an arbitrary JSON object passed to the engine as a JSON string.
+    // addTask: receives { taskId, type, data, source, priority }. Fire-and-forget: enqueue the task
+    // and resolve the call immediately. The result is delivered later via the taskCompleted event.
+    // data is an arbitrary JSON object passed to the engine as a JSON string. priority is optional
+    // and says the user is waiting on this one; an unrecognised value rejects the call rather than
+    // quietly running the task in the background.
     //
     @PluginMethod
     public void addTask(PluginCall call) {
@@ -224,7 +226,16 @@ public final class JsEnginePlugin extends Plugin {
             dataJson = data.toString();
         }
 
-        PooledTask task = new PooledTask(taskId, type, dataJson, source);
+        TaskPriority priority;
+        try {
+            priority = TaskPriority.fromWireName(call.getString("priority"));
+        }
+        catch (IllegalArgumentException error) {
+            call.reject(error.getMessage());
+            return;
+        }
+
+        PooledTask task = new PooledTask(taskId, type, dataJson, source, priority);
         ensurePool().addTask(task);
 
         call.resolve();

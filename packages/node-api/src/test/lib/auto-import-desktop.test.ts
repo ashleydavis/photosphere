@@ -97,16 +97,10 @@ describe("planDesktopAutoImport", () => {
         expect(plan.databasePath).toBe(path.join(APP_DATA_PATH, DEFAULT_DATABASE_FOLDER_NAME));
     });
 
-    test("cleanup is off unless it was switched on", () => {
-        expect(planDesktopAutoImport({ autoImportEnabled: true }, PHOTO_FOLDERS, APP_DATA_PATH).settings.cleanupEnabled).toBe(false);
-        expect(planDesktopAutoImport({ autoImportEnabled: true, autoImportCleanupEnabled: true }, PHOTO_FOLDERS, APP_DATA_PATH).settings.cleanupEnabled).toBe(true);
-    });
-
-    test("the pacing and poll interval are the shared defaults, not something the config invented", () => {
+    test("the pacing is the shared default, not something the config invented", () => {
         const plan = planDesktopAutoImport({ autoImportEnabled: true }, PHOTO_FOLDERS, APP_DATA_PATH);
 
         expect(plan.settings.backfillItemsPerMinute).toBe(60);
-        expect(plan.settings.pollIntervalMs).toBe(30000);
     });
 });
 

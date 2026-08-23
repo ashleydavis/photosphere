@@ -1,6 +1,15 @@
-import type { ITaskResult, IQueueBackend, WorkerTaskCompletionCallback, TaskMessageCallback, IMessageCallbackEntry, UnsubscribeFn, ITaskContext } from "task-queue";
+import type { ITaskResult, IQueueBackend, WorkerTaskCompletionCallback, TaskMessageCallback, IMessageCallbackEntry, UnsubscribeFn, ITaskContext, TaskPriority } from "task-queue";
 import { TaskStatus, getHandler, executeTaskHandler } from "task-queue";
 import { RandomUuidGenerator, TimestampProvider } from "utils";
+
+//
+// How many child tasks one task may have running at once here.
+//
+// Ten, because a desktop machine has cores and a fast disk to spare, and whatever queued the work is
+// usually what the user is waiting on. It is not the size of the worker pool: it is how much of that
+// pool one task may fill, so a second import, a sync, or anything the user does still gets a worker.
+//
+const MAX_CONCURRENT_CHILD_TASKS = 10;
 
 //
 // WebSocket-based queue backend.
@@ -144,7 +153,7 @@ export class WebSocketQueueBackend implements IQueueBackend {
     // to the server. The web frontend currently registers no local handlers — all tasks
     // forward to the dev-server, which runs the same node-api handlers Electron uses.
     //
-    addTask(type: string, data: any, source: string, taskId?: string): string {
+    addTask(type: string, data: any, source: string, taskId?: string, priority?: TaskPriority): string {
         const id = taskId ?? crypto.randomUUID();
         const localHandler = getHandler(type);
         if (localHandler) {
@@ -159,6 +168,7 @@ export class WebSocketQueueBackend implements IQueueBackend {
                 taskType: type,
                 data,
                 source,
+                priority,
             }));
         }
         const callbacks = this.taskAddedCallbacks.get(source);
@@ -181,6 +191,7 @@ export class WebSocketQueueBackend implements IQueueBackend {
             timestampProvider: new TimestampProvider(),
             sessionId: "web-renderer",
             taskId,
+            maxConcurrentChildTasks: MAX_CONCURRENT_CHILD_TASKS,
             sendMessage: (message: any): void => {
                 this.notifyMessageCallbacks(taskId, message).catch((error: unknown) => {
                     console.error("Error notifying message callbacks:", error);

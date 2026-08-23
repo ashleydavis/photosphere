@@ -46,6 +46,7 @@ function makeContext(overrides: Partial<ITaskContext> = {}): ITaskContext {
         uuidGenerator: { generate: jest.fn().mockReturnValue('test-uuid') },
         timestampProvider: { now: jest.fn().mockReturnValue(Date.now()), dateNow: jest.fn().mockReturnValue(new Date()) },
         sessionId: 'session-1',
+        maxConcurrentChildTasks: 10,
         sendMessage: jest.fn(),
         isCancelled: jest.fn().mockReturnValue(false),
         taskId: 'task-1',
@@ -203,6 +204,63 @@ describe('hashFileHandler', () => {
         expect(resultDryRun.hash).toEqual(resultNoDryRun.hash);
         expect(resultDryRun.filesAlreadyAdded).toEqual(resultNoDryRun.filesAlreadyAdded);
         expect(resultDryRun.hashFromCache).toEqual(resultNoDryRun.hashFromCache);
+    });
+
+    test('looks a photo library item up by the identity it was given, not by its temporary path', async () => {
+        // The temporary copy the item was exported to has a path and a modified time that were both
+        // minted by the copy, so looking it up by those would miss every time.
+        const context = makeContext();
+        const cacheIdentity = { key: '1000000042', length: 4096, lastModified: 1700000000000 };
+        const data = makeData({ cacheIdentity });
+
+        mockGetHashFromCache.mockResolvedValue(undefined);
+        mockValidateAndHash.mockResolvedValue({ hash: Buffer.from('ddeeff', 'hex'), length: 1000, lastModified: new Date('2024-01-01') } as any);
+        setupStorageMock();
+        mockCreateMediaFileDatabase.mockReturnValue({ metadataCollection: makeMockMetadataCollection([]) as any } as any);
+
+        await hashFileHandler(data, context);
+
+        expect(mockGetHashFromCache).toHaveBeenCalledWith(data.filePath, data.fileStat, expect.anything(), cacheIdentity);
+    });
+
+    test('looks an ordinary file up by nothing but its own path, which is what keeps the desktop unchanged', async () => {
+        const context = makeContext();
+        const data = makeData();
+
+        mockGetHashFromCache.mockResolvedValue(undefined);
+        mockValidateAndHash.mockResolvedValue({ hash: Buffer.from('ddeeff', 'hex'), length: 1000, lastModified: new Date('2024-01-01') } as any);
+        setupStorageMock();
+        mockCreateMediaFileDatabase.mockReturnValue({ metadataCollection: makeMockMetadataCollection([]) as any } as any);
+
+        await hashFileHandler(data, context);
+
+        expect(mockGetHashFromCache).toHaveBeenCalledWith(data.filePath, data.fileStat, expect.anything(), undefined);
+    });
+
+    test('reports the id of the record that already holds the hash, so the import can cache it', async () => {
+        const context = makeContext();
+        const data = makeData();
+
+        mockGetHashFromCache.mockResolvedValue({ hash: Buffer.from('aabbcc', 'hex'), length: 1000, lastModified: new Date('2024-01-01') } as any);
+        setupStorageMock();
+        mockCreateMediaFileDatabase.mockReturnValue({ metadataCollection: makeMockMetadataCollection([{ _id: 'existing-asset' }]) as any } as any);
+
+        const result = await hashFileHandler(data, context);
+
+        expect(result.existingAssetId).toBe('existing-asset');
+    });
+
+    test('reports no existing asset id when the database does not hold the hash', async () => {
+        const context = makeContext();
+        const data = makeData();
+
+        mockGetHashFromCache.mockResolvedValue({ hash: Buffer.from('aabbcc', 'hex'), length: 1000, lastModified: new Date('2024-01-01') } as any);
+        setupStorageMock();
+        mockCreateMediaFileDatabase.mockReturnValue({ metadataCollection: makeMockMetadataCollection([]) as any } as any);
+
+        const result = await hashFileHandler(data, context);
+
+        expect(result.existingAssetId).toBeUndefined();
     });
 
     test('does not send any messages', async () => {

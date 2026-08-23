@@ -2,9 +2,9 @@ import * as os from "os";
 import * as path from "path";
 import { ensureDir, remove, getProcessTmpDir } from "node-utils";
 import { createStorage, loadEncryptionKeysFromPem } from "storage";
-import { IDatabaseDescriptor } from "api";
+import { IAutoImportSource, IDatabaseDescriptor } from "api";
 import { resolveStorageCredentials } from "./resolve-storage-credentials";
-import type { ITaskContext } from "task-queue";
+import type { ITaskContext, ITaskResult } from "task-queue";
 import { TaskStatus, TaskQueue } from "task-queue";
 import { IAsset } from "api";
 import { log, retry, retryOrLog, sleep, swallowError } from "utils";
@@ -13,13 +13,29 @@ import { addItem, BufferSet } from "merkle-tree";
 import throttle from "lodash/throttle";
 import { acquireWriteLock, releaseWriteLock } from "api";
 import { loadMerkleTree, saveMerkleTree, stampDatabaseModified } from "./tree";
-import { HashCache } from "./hash-cache";
-import { scanPaths } from "./file-scanner";
+import { getHashCacheDir, HashCache } from "./hash-cache";
+import { IImportScanner } from "./import-scanner";
+import { ManualImportScanner } from "./manual-import-scanner";
+import { createAutoImportScanner } from "./create-auto-import-scanner";
+import { IAutoImportScannerProgress } from "./auto-import-scanner";
 import { IHashFileData, IHashFileResult } from "./hash-file.worker";
 import { IUploadAssetData, IUploadAssetResult, IAssetDatabaseData } from "./upload-asset.worker";
-import { IImportAssetsResult, IImportedAsset, ISkippedImport } from "api/src/lib/import-assets.types";
+import { IImportAssetsResult, IImportedAsset, IImportProgressMessage, IImportSuccessMessage, ISkippedImport } from "api/src/lib/import-assets.types";
 import { IImportRecordEntry, ImportSource } from "api/src/lib/import-record";
 import { recordImports } from "./import-record-storage";
+
+//
+// How many import record entries pile up before they are written out.
+//
+// One hundred, the same as the hash cache, and for the same reason: each flush is a full
+// read-modify-write of one file, so flushing per file would make a long import mostly writing.
+//
+export const IMPORT_RECORD_FLUSH_SIZE = 100;
+
+//
+// How many freshly hashed files pile up before the hash cache is written out.
+//
+export const CACHE_FLUSH_SIZE = 100;
 
 //
 // Payload for the import-assets task. Contains the paths to scan plus the configuration
@@ -41,9 +57,25 @@ export interface IImportAssetsData {
     // When true, files are scanned and hashed but not written to the database.
     dryRun: boolean;
 
-    // Who asked for this import, recorded against every file it takes in so the Import page can say
-    // which arrived on their own. Absent means the user asked, which is what a manual import is.
-    source?: ImportSource;
+    // How this import runs. Absent is the default: `paths` above is walked once and the import
+    // ends, which is what every manual import does.
+    options?: IImportOptions;
+}
+
+//
+// How an import runs, and what it watches when it is an automatic one.
+//
+export interface IImportOptions {
+    // Take photos from the sources below rather than walking `paths`. The import is then fed by a
+    // scanner that reads those sources to the end, at the pace set below, and the run ends there.
+    auto: boolean;
+
+    // The places that are watched for new media.
+    sources: IAutoImportSource[];
+
+    // How many items the run is allowed to release per minute, so taking in a whole photo library
+    // does not monopolise the phone.
+    backfillItemsPerMinute: number;
 }
 
 //
@@ -67,32 +99,88 @@ interface IPendingDatabaseUpdate {
 
     // Pre-computed hash, kept here so it can be deleted from hashesQueuedForImport after commit.
     expectedHash: ArrayBuffer;
+
+    // What this file's hash cache entry is filed under, so the asset id can be recorded against it
+    // once the database write has actually landed.
+    cacheKey: string;
 }
 
 //
-// Orchestrator handler for the import-assets task. Scans filesystem paths, queues
-// hash-file tasks for each file found, deduplicates by content hash, queues
-// upload-asset tasks for new files, and batches all database writes under a single
-// throttled write lock per batch.
+// Orchestrator handler for the import-assets task. Scans filesystem paths, hashes the files it finds
+// (no more than maxConcurrentChildTasks of them at a time), deduplicates by content hash, uploads the ones
+// that are new, and batches all database writes under a single throttled write lock per batch.
 //
 export async function importAssetsHandler(data: IImportAssetsData, context: ITaskContext): Promise<IImportAssetsResult> {
     const { paths, storageDescriptor, googleApiKey, sessionId, dryRun } = data;
-    const { uuidGenerator, timestampProvider } = context;
+    const { uuidGenerator, timestampProvider, maxConcurrentChildTasks } = context;
+
+    if (!Number.isInteger(maxConcurrentChildTasks) || maxConcurrentChildTasks < 1) {
+        throw new Error(`import-assets needs maxConcurrentChildTasks to be a whole number of at least 1, got ${maxConcurrentChildTasks}.`);
+    }
 
     // The same outcome the messages below report, gathered so a caller that cannot see the messages
     // (an orchestrator task running in a worker) can still read what happened.
     const result: IImportAssetsResult = { imported: [], skipped: [], failedCount: 0 };
 
-    // What this run did, for the database's import record. Gathered as it goes and written once at
-    // the end, so a long import is one write rather than one per file.
-    const recordEntries: IImportRecordEntry[] = [];
+    // What this run did, for the database's import record. Gathered as it goes and flushed in
+    // batches, so a long import is a handful of writes rather than one per file.
+    let recordEntries: IImportRecordEntry[] = [];
+
+    //
+    // Writes what has been gathered for the import record so far, and forgets it.
+    //
+    // Flushed part way through rather than only at the end, because the end used to be the only
+    // place it happened: an import of two thousand photos that died at nineteen hundred wrote no
+    // record at all, and an automatic import that runs until the app quits never reached the end.
+    // Each flush is a full read-modify-write of one JSON file, which is why it is every hundred
+    // rather than every file. A dry run records nothing, because it changed nothing.
+    //
+    async function flushImportRecord(): Promise<void> {
+        if (dryRun || recordEntries.length === 0) {
+            return;
+        }
+
+        const entriesToWrite = recordEntries;
+        recordEntries = [];
+        await recordImports(storage, entriesToWrite);
+    }
+
+    //
+    // Records what happened to one file, flushing when enough have piled up or enough time has
+    // passed.
+    //
+    async function recordImportOutcome(entry: IImportRecordEntry): Promise<void> {
+        recordEntries.push(entry);
+        if (recordEntries.length >= IMPORT_RECORD_FLUSH_SIZE) {
+            await swallowError(() => flushImportRecord());
+        }
+    }
+
+    //
+    // Saves the hash cache once enough files have been hashed. The timer above is what covers an
+    // import that stops short of the next hundred.
+    //
+    async function flushCacheIfDue(): Promise<void> {
+        if (filesAddedToCache % CACHE_FLUSH_SIZE !== 0) {
+            return;
+        }
+
+        await swallowError(() => localHashCache.save());
+    }
+
+    // Whether a write of the hash cache and the import record is happening right now, so two of them
+    // cannot overlap.
+    let flushing = false;
+
+    // How many files have been recorded in the hash cache since it was last written out. Only used to
+    // say so in the log, and to say nothing when there was nothing to write.
+    let pendingCacheWrites = 0;
 
     // Whether the user asked for this import or it arrived on its own. Recorded against every entry
-    // so the Import page can say which is which. Nothing passing a source is a manual import, which
-    // is what every caller but automatic import is.
-    const importSource: ImportSource = data.source ?? "manual";
+    // so the Import page can say which is which.
+    const importSource: ImportSource = data.options?.auto ? "automatic" : "manual";
 
-    const hashCacheDir = path.join(getProcessTmpDir(), "photosphere");
+    const hashCacheDir = getHashCacheDir(storageDescriptor.databasePath);
 
     const { s3Config, encryptionKeyPems } = await resolveStorageCredentials(storageDescriptor.databasePath, storageDescriptor.encryptionKey);
     const { options: storageOptions } = await loadEncryptionKeysFromPem(encryptionKeyPems);
@@ -103,6 +191,11 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
     const localHashCache = new HashCache(hashCacheDir);
     await localHashCache.load();
 
+    // What each file in flight is filed under in the hash cache, when that is not its own path.
+    // Filled in as the scanner pushes a photo library item, and dropped once the import has finished
+    // with the file, so it holds only what is actually in flight rather than the whole run.
+    const cacheKeysByPath = new Map<string, string>();
+
     // Tracks hashes already queued for import in this scan to prevent duplicate uploads.
     const hashesQueuedForImport = new BufferSet();
 
@@ -110,6 +203,76 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
     let isProcessingQueue = false;
     const queue = new TaskQueue(context.uuidGenerator, sessionId);
     let pendingDatabaseUpdates: IPendingDatabaseUpdate[] = [];
+
+    // Files the scan has found that have not been handed to a hash-file task yet. The scan runs far
+    // faster than the hashing, so without this the whole library would be queued in seconds and every
+    // other task on the machine would wait behind it.
+    const filesAwaitingHash: IHashFileData[] = [];
+
+    // Files that have been hashed and are waiting for an upload-asset task. Held here rather than
+    // queued straight away for the same reason, and drained ahead of the hash queue below.
+    const assetsAwaitingUpload: IUploadAssetData[] = [];
+
+    // How many hash-file and upload-asset tasks this import currently has in flight. Never allowed
+    // above maxConcurrentChildTasks.
+    let childTasksInFlight = 0;
+
+    //
+    // What one file's hash cache entry is filed under: the identity the scanner gave it, or its own
+    // path when it did not give one.
+    //
+    function cacheKeyOfPath(filePath: string): string {
+        return cacheKeysByPath.get(filePath) ?? filePath;
+    }
+
+    //
+    // Tells the scanner the import has finished with a file, whatever it made of it.
+    //
+    // For a photo library item this is what deletes the temporary copy that had to be made to read
+    // it. Doing it here rather than at the end of the run is what keeps a long automatic import from
+    // filling the sandbox with copies of every photo it has ever looked at.
+    //
+    function releaseFile(filePath: string): void {
+        cacheKeysByPath.delete(filePath);
+        // Started rather than waited for. This runs inside the completion callback of a child task,
+        // and anything awaited there lets the end of the run arrive before the callback has finished
+        // recording what the child did: an upload whose database write had not been queued yet was
+        // dropped on the floor. Deleting a temporary copy is not something the import waits on, and
+        // a failure to delete one must not fail the import, which is what the swallow is for.
+        void swallowError(() => scanner.release(filePath));
+    }
+
+    //
+    // Hands as many waiting files to the queue as the concurrency limit allows.
+    //
+    // Uploads go before hashes, because an upload finishes a file that has already been paid for:
+    // draining them first keeps the number of half-imported files down and gets assets into the
+    // database sooner. Called once per completion, so a slot is refilled the moment one frees.
+    //
+    function dispatchChildTasks(): void {
+        if (context.isCancelled()) {
+            // Nothing more goes to the queue once the import has been cancelled. What is already
+            // waiting is abandoned, and awaitAllTasks below stops as soon as the running ones settle.
+            return;
+        }
+
+        while (childTasksInFlight < maxConcurrentChildTasks) {
+            const uploadData = assetsAwaitingUpload.shift();
+            if (uploadData !== undefined) {
+                childTasksInFlight += 1;
+                queue.addTask("upload-asset", uploadData);
+                continue;
+            }
+
+            const hashData = filesAwaitingHash.shift();
+            if (hashData === undefined) {
+                return;
+            }
+
+            childTasksInFlight += 1;
+            queue.addTask("hash-file", hashData);
+        }
+    }
 
     //
     // Writes a batch of completed uploads to the Merkle tree and BSON database under the write lock.
@@ -164,11 +327,18 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
 
                 if (!dryRun) {
                     await metadataCollection.insertOne(assetData.assetRecord);
+
+                    // Recorded only here, on the far side of the write, so an id in the cache always
+                    // means the asset really is in the database rather than that an import once
+                    // intended to put it there. The next run reads this and skips the file without
+                    // asking the database. A dry run records nothing, because it wrote nothing: an id
+                    // from a dry run would make the next real import skip a file it never took in.
+                    localHashCache.setAssetId(item.cacheKey, assetData.assetId);
                 }
 
                 log.verbose(`Added file "${logicalPath}" to the database with ID "${assetData.assetId}".`);
                 result.imported.push({ assetId: assetData.assetId, logicalPath, asset: assetData.assetRecord });
-                recordEntries.push({
+                await recordImportOutcome({
                     assetId: assetData.assetId,
                     logicalPath,
                     outcome: "imported",
@@ -176,7 +346,21 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
                     source: importSource,
                     micro: assetData.assetRecord.micro,
                 });
-                context.sendMessage({ type: "import-success", assetId: assetData.assetId, logicalPath, micro: assetData.assetRecord.micro, asset: assetData.assetRecord });
+
+                // The database is named on every arrival, because the gallery has to know which one
+                // the photo landed in: automatic import writes to the default database, which is not
+                // necessarily the one on screen, and an arrival in another one is not that gallery's
+                // to show.
+                const arrival: IImportSuccessMessage = {
+                    type: "import-success",
+                    databasePath: storageDescriptor.databasePath,
+                    assetId: assetData.assetId,
+                    logicalPath,
+                    source: importSource,
+                    micro: assetData.assetRecord.micro,
+                    asset: assetData.assetRecord,
+                };
+                context.sendMessage(arrival);
             }
 
             if (!merkleTree.databaseMetadata) {
@@ -238,6 +422,23 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
     // processing each other's completions.
     //
     queue.onTaskComplete(async (taskResult) => { //todo: would be good to have two separate handles here for better type checking!
+        try {
+            await recordChildTaskOutcome(taskResult);
+        }
+        finally {
+            // In a finally so a slot is released even when handling the outcome threw. A slot leaked
+            // here would be leaked for the life of the import, and enough of them would stop the
+            // import dead with files still waiting and nothing running.
+            childTasksInFlight -= 1;
+            dispatchChildTasks();
+        }
+    });
+
+    //
+    // Records what one finished child task did: caches the hash, queues the upload of a file that is
+    // new, or counts the failure.
+    //
+    async function recordChildTaskOutcome(taskResult: ITaskResult): Promise<void> {
         if (context.isCancelled()) {
             return;
         }
@@ -248,15 +449,34 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
                 const hashResult = taskResult.outputs as IHashFileResult;
 
                 if (!hashResult.hashFromCache) {
-                    localHashCache.addHash(hashFileData.filePath, {
-                        hash: Buffer.from(hashResult.hash),
-                        lastModified: hashFileData.fileStat.lastModified,
-                        length: hashFileData.fileStat.length,
-                    });
-                    filesAddedToCache++;
-                    if (filesAddedToCache % 100 === 0) {
-                        await swallowError(() => localHashCache.save());
+                    const cacheIdentity = hashFileData.cacheIdentity;
+                    if (cacheIdentity !== undefined) {
+                        // Filed under the item's source id, and against the size and created time the
+                        // photo library reported, not the temporary copy's own path and modified time:
+                        // the copy is deleted the moment the import finishes and its modified time was
+                        // minted by the copy, so an entry describing it would never match anything again.
+                            localHashCache.addSourceHash(cacheIdentity.key, {
+                            hash: Buffer.from(hashResult.hash),
+                            lastModified: new Date(cacheIdentity.lastModified),
+                            length: cacheIdentity.length,
+                        });
                     }
+                    else {
+                        localHashCache.addHash(hashFileData.filePath, {
+                            hash: Buffer.from(hashResult.hash),
+                            lastModified: hashFileData.fileStat.lastModified,
+                            length: hashFileData.fileStat.length,
+                        });
+                    }
+                    filesAddedToCache++;
+                    pendingCacheWrites++;
+                    await flushCacheIfDue();
+                }
+
+                // The database already holds this file, and now the cache says so too, which is what
+                // lets the next run skip it without asking the database at all.
+                if (hashResult.existingAssetId !== undefined) {
+                    localHashCache.setAssetId(cacheKeyOfPath(hashFileData.filePath), hashResult.existingAssetId);
                 }
 
                 if (hashResult.filesAlreadyAdded) {
@@ -264,7 +484,7 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
                         logicalPath: hashFileData.logicalPath,
                         contentHash: Buffer.from(hashResult.hash).toString("hex"),
                     });
-                    recordEntries.push({
+                    await recordImportOutcome({
                         assetId: hashFileData.assetId,
                         logicalPath: hashFileData.logicalPath,
                         outcome: "skipped",
@@ -272,15 +492,18 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
                         source: importSource,
                     });
                     context.sendMessage({ type: "import-skipped", assetId: hashFileData.assetId, logicalPath: hashFileData.logicalPath });
+                    // Nothing more will read this file.
+                    releaseFile(hashFileData.filePath);
                 }
                 else {
                     const hashBuffer = Buffer.from(hashResult.hash);
                     if (hashesQueuedForImport.has(hashBuffer)) {
-                        log.verbose(`File "${hashFileData.logicalPath}" is a duplicate in this scan, skipping.`);
+                        log.verbose(`File "" is a duplicate in this scan, skipping.`);
+                        releaseFile(hashFileData.filePath);
                     }
                     else {
                         hashesQueuedForImport.add(hashBuffer);
-                        queue.addTask("upload-asset", {
+                        assetsAwaitingUpload.push({
                             filePath: hashFileData.filePath,
                             fileStat: hashFileData.fileStat,
                             contentType: hashFileData.contentType,
@@ -299,8 +522,9 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
             else if (taskResult.status === TaskStatus.Failed) {
                 log.error(`Failed to hash file "${hashFileData.logicalPath}": ${taskResult.errorMessage}`);
                 result.failedCount += 1;
-                recordEntries.push({ assetId: hashFileData.assetId, logicalPath: hashFileData.logicalPath, outcome: "failed", importedAt: new Date(timestampProvider.dateNow()).toISOString(), source: importSource });
+                await recordImportOutcome({ assetId: hashFileData.assetId, logicalPath: hashFileData.logicalPath, outcome: "failed", importedAt: new Date(timestampProvider.dateNow()).toISOString(), source: importSource });
                 context.sendMessage({ type: "import-failed", assetId: hashFileData.assetId, logicalPath: hashFileData.logicalPath });
+                releaseFile(hashFileData.filePath);
             }
         }
         else if (taskResult.type === "upload-asset") {
@@ -312,39 +536,139 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
                     logicalPath: uploadData.logicalPath,
                     totalSize: uploadResult.totalSize,
                     expectedHash: uploadData.expectedHash.slice().buffer,
+                    cacheKey: cacheKeyOfPath(uploadData.filePath),
                 });
+                // Queued and scheduled with nothing awaited in between, so the update is on the list
+                // before this callback yields. An await here would let the end of the run look at an
+                // empty list and finish without writing this asset to the database at all.
                 throttledProcessQueue();
+
+                // The upload has read the file and written what it needs into storage, and the
+                // database write works from what it returned, so the local copy is finished with
+                // even though the record has not landed yet.
+                releaseFile(uploadData.filePath);
             }
             else if (taskResult.status === TaskStatus.Failed) {
                 log.error(`Failed to upload file "${uploadData.logicalPath}": ${taskResult.errorMessage}`);
                 result.failedCount += 1;
-                recordEntries.push({ assetId: uploadData.assetId, logicalPath: uploadData.logicalPath, outcome: "failed", importedAt: new Date(timestampProvider.dateNow()).toISOString(), source: importSource });
+                await recordImportOutcome({ assetId: uploadData.assetId, logicalPath: uploadData.logicalPath, outcome: "failed", importedAt: new Date(timestampProvider.dateNow()).toISOString(), source: importSource });
                 context.sendMessage({ type: "import-failed", assetId: uploadData.assetId, logicalPath: uploadData.logicalPath });
+                releaseFile(uploadData.filePath);
             }
         }
-    });
+    }
 
     const sessionTempDir = path.join(getProcessTmpDir(), "photosphere", uuidGenerator.generate());
     await ensureDir(sessionTempDir);
+
+    // Where the files come from. The orchestrator below does not know which of the two it has: it
+    // asks for files and takes what it is given. The only difference it can see is that a manual
+    // scan returns when the paths have been walked, and an automatic one does not return until the
+    // task is cancelled.
+    const scanner: IImportScanner = data.options?.auto
+        ? await createAutoImportScanner({
+            ...data.options,
+            storage,
+            metadataCollection,
+            localHashCache,
+            sessionTempDir,
+            context,
+            onProgress: onScannerProgress,
+        })
+        : new ManualImportScanner(paths, { ignorePatterns: [/\.db/] }, sessionTempDir, uuidGenerator);
+
+    //
+    // How many items the scanner recognised as already imported without opening them. Kept so the
+    // run can report once more at the end, after the photos it pushed have finished being imported.
+    let skippedBeforeOpening = 0;
+
+    //
+    // Saves what has been learnt when the scanner says it is caught up, and reports progress.
+    //
+    function onScannerProgress(scannerProgress: IAutoImportScannerProgress): void {
+        skippedBeforeOpening = scannerProgress.skippedAsAlreadyImported;
+
+        // Save the hash cache and the import record once there is nothing left to import.
+        //
+        // Saving on a count alone only works for an import that ends, and this one may not:
+        // automatic import brings in a handful of photos and then waits, so without this a phone
+        // that imported five photos and stayed running saved none of those entries, and the next run
+        // hashed and copied the same photos again. Being caught up is the moment that matters, and
+        // the moment it costs nothing: nothing more is coming, and hours may pass before anything is.
+        //
+        // It is deliberately not a timer. This task runs inside an embedded JavaScript engine on a
+        // phone, where a timer fires outside the task's own control flow, can overlap the task's own
+        // writes, and outlives the task if a clear is ever missed. This runs on the scanner's own
+        // loop instead. Both writes cost nothing when nothing has changed, so repeating it on every
+        // idle tick is free.
+        if (scannerProgress.caughtUp && !flushing) {
+
+            flushing = true;
+            void swallowError(async () => {
+                try {
+                    const written = pendingCacheWrites;
+                    pendingCacheWrites = 0;
+                    await localHashCache.save();
+                    await flushImportRecord();
+                    if (written > 0) {
+                        // Said out loud because an entry that is only in memory does nothing for the
+                        // next run: it would hash and copy the same file again.
+                        log.info(`Import saved ${written} hash cache entries.`);
+                    }
+                }
+                finally {
+                    flushing = false;
+                }
+            });
+        }
+
+        sendImportProgress(scannerProgress.currentItem);
+    }
+
+    //
+    // Reports what the run has done so far, so the panel on the Import page can show it without
+    // waiting for the run to end. Sent by both kinds of import, because there is nothing about it
+    // that is particular to one of them.
+    //
+    // The counters come from this task, because it is the one that knows them: it is what sends
+    // import-success, import-skipped and import-failed per file.
+    //
+    function sendImportProgress(currentItem: string | undefined): void {
+        const message: IImportProgressMessage = {
+            type: "import-progress",
+            seen: result.imported.length + result.skipped.length + result.failedCount + skippedBeforeOpening,
+            imported: result.imported.length,
+            // What the import recognised, plus what the scanner recognised before it went to the
+            // trouble of copying the photo out of the library at all.
+            skipped: result.skipped.length + skippedBeforeOpening,
+            failed: result.failedCount,
+            currentItem,
+        };
+        context.sendMessage(message);
+    }
 
     try {
         // Track how many files have been reported as ignored so we can emit one
         // file-ignored message per newly ignored file (scanPaths reports a cumulative count).
         let prevIgnoredCount = 0;
 
-        await scanPaths(
-            paths,
+        await scanner.scan(
             async (result) => {
                 if (context.isCancelled()) {
                     return;
                 }
 
-                queue.addTask("hash-file", {
+                if (result.cacheIdentity !== undefined) {
+                    cacheKeysByPath.set(result.filePath, result.cacheIdentity.key);
+                }
+
+                filesAwaitingHash.push({
                     filePath: result.filePath,
                     fileStat: result.fileStat,
                     contentType: result.contentType,
                     storageDescriptor,
                     hashCacheDir,
+                    cacheIdentity: result.cacheIdentity,
                     logicalPath: result.logicalPath,
                     labels: result.labels,
                     googleApiKey,
@@ -352,6 +676,7 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
                     dryRun,
                     assetId: uuidGenerator.generate(),
                 });
+                dispatchChildTasks();
             },
             (currentlyScanning, state) => {
                 const newIgnored = state.numFilesIgnored - prevIgnoredCount;
@@ -362,10 +687,11 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
                 if (currentlyScanning) {
                     context.sendMessage({ type: "scan-progress", currentPath: currentlyScanning });
                 }
-            },
-            { ignorePatterns: [/\.db/] },
-            sessionTempDir,
-            uuidGenerator
+
+                // The same progress a watching run reports. Nothing about it is particular to one
+                // kind of import, so the panel shows either without knowing which it is watching.
+                sendImportProgress(currentlyScanning);
+            }
         );
 
         //
@@ -374,6 +700,18 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
         // will resolve this immediately rather than waiting for the backlog.
         //
         await queue.awaitAllTasks();
+
+        // The queue says its tasks are finished, which is not the same as this import having finished
+        // with them: a completion callback may still be recording what one of them did, and a hash
+        // that has just come back may still be waiting for its upload to be queued. Ending here left
+        // an uploaded asset with its database write never queued, so the file was uploaded and then
+        // not in the database.
+        while (childTasksInFlight > 0 || filesAwaitingHash.length > 0 || assetsAwaitingUpload.length > 0) {
+            if (context.isCancelled()) {
+                break;
+            }
+            await sleep(50);
+        }
 
         if (context.isCancelled()) {
             return result;
@@ -403,17 +741,24 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
         }
 
         await retryOrLog(() => localHashCache.save(), "Failed to save hash cache");
+
+        // The last word on what this run did, sent after the photos it queued have actually landed.
+        //
+        // Every other progress report goes out on a scanner tick, and the scanner stops ticking the
+        // moment it has read the source to the end, which is well before the last photo it pushed
+        // has been hashed, uploaded and written. Without this the run's final report says nothing
+        // was imported and is never corrected, which is exactly what a phone importing one photo
+        // looked like: `0 imported` repeatedly, and then the run ended.
+        sendImportProgress(undefined);
     }
     finally {
         queue.shutdown();
         await swallowError(() => remove(sessionTempDir));
 
-        // Written even when the import failed part way, because what it did take in before failing
-        // is exactly what a user asking "what happened?" wants to see. A dry run records nothing:
-        // it changed nothing.
-        if (!dryRun) {
-            await recordImports(storage, recordEntries);
-        }
+        // Whatever has not reached the flush size yet. Written even when the import failed part way,
+        // because what it did take in before failing is exactly what a user asking "what happened?"
+        // wants to see.
+        await swallowError(() => flushImportRecord());
     }
 
     return result;

@@ -1,4 +1,4 @@
-import { TaskQueue, TaskStatus } from "task-queue";
+import { TaskQueue, TaskStatus, TaskPriority } from "task-queue";
 import { RandomUuidGenerator } from "utils";
 import type { IDatabaseEntry } from "user-interface";
 import type { IDatabasesConfig, IDatabasesConfigFile } from "./mobile-config-store";
@@ -47,7 +47,9 @@ async function runConfigTask(type: string, data: object): Promise<IReadDatabases
     const uuidGenerator = new RandomUuidGenerator();
     const queue = new TaskQueue(uuidGenerator, `${CONFIG_TASK_SOURCE_PREFIX}-${uuidGenerator.generate()}`);
     try {
-        const taskId = queue.addTask(type, data);
+        // Interactive: nothing in the app can be listed or opened until this comes back, so it must
+        // not sit behind whatever automatic import has already queued.
+        const taskId = queue.addTask(type, data, undefined, TaskPriority.Interactive);
         const result = await queue.awaitTask(taskId);
         if (!result || result.status === TaskStatus.Failed) {
             throw new Error(`${type} failed: ${result?.errorMessage ?? "no result"}`);

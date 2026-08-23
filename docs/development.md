@@ -97,15 +97,16 @@ To run the CLI, the dev-server, or the dev-frontend on their own, see [apps/cli]
 
 ## Automatic import
 
-`psi watch` watches folders for new media and imports it on its own, pushing it to a remote when one is configured, and optionally deleting the source file or dropping local originals the remote already holds. `psi consolidate` joins a standalone database to a remote, creating it, consolidating into it, or simply recording it as the origin.
+`psi add --watch` watches folders for new media and imports it on its own. `psi sync --watch` pushes what is there to a remote. `psi consolidate` joins a standalone database to a remote, creating it, consolidating into it, or simply recording it as the origin.
 
 ```bash
-psi watch --db ./photos                  # watch this machine's photo folders
-psi watch --db ./photos --once           # import everything once, then exit
-psi consolidate --db ./photos ./backup       # join this database to a remote
+psi add --db ./photos --watch            # watch this machine's photo folders
+psi add --db ./photos                    # import what is there now, then exit
+psi sync --db ./photos --watch           # push to the remote as the database changes
+psi consolidate --db ./photos ./backup   # join this database to a remote
 ```
 
-The desktop and mobile apps do the same thing from a toggle in the settings, watching this machine's photo folders or the device's photo library. The loop behind all three is platform-neutral and lives in `packages/api`, driven from a worker task on the CLI and the desktop and from the WebView on mobile. See [Automatic photo backup](automatic-photo-backup.md) for the two import lanes, the retention policies and how to switch the active one, what consolidation does, why mobile drives the loop differently, and what each platform supports.
+The desktop and mobile apps do the same thing from a toggle in the settings, watching this machine's photo folders or the device's photo library. All of them run one `import-assets` task fed by a scanner that watches; only the media source underneath differs. See [Automatic photo backup](automatic-photo-backup.md) for the two import lanes, how re-importing is avoided, the retention policies and how to switch the active one, what consolidation does, and what each platform supports.
 
 ## Checking how the UI looks
 

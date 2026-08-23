@@ -1,5 +1,5 @@
 import { log, retry, tryOrLog, retryOrLog, swallowError, IUuidGenerator } from "utils";
-import { HashCache } from "./hash-cache";
+import { getHashCacheDir, HashCache } from "./hash-cache";
 import { scanPaths } from "./file-scanner";
 import { IAddSummary } from "./media-file-database";
 import { TaskStatus, TaskQueue } from "task-queue";
@@ -24,7 +24,7 @@ export async function checkPaths(
     sessionTempDir: string
 ): Promise<IAddSummary> {
     // Create hash cache for file hashing optimization
-    const hashCacheDir = path.join(getProcessTmpDir(), "photosphere");
+    const hashCacheDir = getHashCacheDir(storageDescriptor.databasePath);
     const localHashCache = new HashCache(hashCacheDir);
     await localHashCache.load();
 

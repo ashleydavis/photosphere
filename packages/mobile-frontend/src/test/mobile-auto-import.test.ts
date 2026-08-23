@@ -72,16 +72,10 @@ describe("planMobileAutoImport", () => {
         expect(plan.databasePath).toBe(DEFAULT_DATABASE_FOLDER_NAME);
     });
 
-    test("cleanup is off unless it was switched on", () => {
-        expect(planMobileAutoImport(settingsWith({}), undefined).settings.cleanupEnabled).toBe(false);
-        expect(planMobileAutoImport(settingsWith({ cleanupEnabled: true }), undefined).settings.cleanupEnabled).toBe(true);
-    });
-
-    test("the pacing and poll interval are the shared defaults, not something the settings invented", () => {
+    test("the pacing is the shared default, not something the settings invented", () => {
         const plan = planMobileAutoImport(settingsWith({}), undefined);
 
         expect(plan.settings.backfillItemsPerMinute).toBe(60);
-        expect(plan.settings.pollIntervalMs).toBe(30000);
     });
 
     test("the default database has the same name as the desktop one", () => {

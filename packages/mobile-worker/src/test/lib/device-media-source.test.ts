@@ -1,6 +1,6 @@
 import { ALL_DEVICE_MEDIA_ALBUM_ID, IDeviceAlbumAutoImportSource } from "api/src/lib/auto-import-settings";
 import { MediaSourceDeleteError } from "api/src/lib/media-source";
-import { DEFAULT_POLL_INTERVAL_MS, DeviceMediaSource } from "../../lib/device-media-source";
+import { DeviceMediaSource } from "../../lib/device-media-source";
 
 //
 // The photo library the source reads through is the native host bridge, which does not exist off a
@@ -113,7 +113,7 @@ describe("DeviceMediaSource", () => {
 
     test("maps a library page into media items", async () => {
         installHost([{ items: [makeItem("one", "camera")], nextCursor: "10" }], { deletedIds: [], failedIds: [] });
-        const source = new DeviceMediaSource(WHOLE_LIBRARY, 1000);
+        const source = new DeviceMediaSource(WHOLE_LIBRARY);
 
         const page = await source.listPage(undefined, 50);
 
@@ -130,7 +130,7 @@ describe("DeviceMediaSource", () => {
 
     test("the reserved everything album takes the whole library rather than filtering by it", async () => {
         installHost([{ items: [makeItem("one", "camera"), makeItem("two", "screenshots")] }], { deletedIds: [], failedIds: [] });
-        const source = new DeviceMediaSource(WHOLE_LIBRARY, 1000);
+        const source = new DeviceMediaSource(WHOLE_LIBRARY);
 
         const page = await source.listPage(undefined, 50);
 
@@ -139,7 +139,7 @@ describe("DeviceMediaSource", () => {
 
     test("keeps only the items in the named albums", async () => {
         installHost([{ items: [makeItem("one", "camera"), makeItem("two", "screenshots"), makeItem("three", "camera")] }], { deletedIds: [], failedIds: [] });
-        const source = new DeviceMediaSource([{ type: "device-album", albumId: "camera" }], 1000);
+        const source = new DeviceMediaSource([{ type: "device-album", albumId: "camera" }]);
 
         const page = await source.listPage(undefined, 50);
 
@@ -148,7 +148,7 @@ describe("DeviceMediaSource", () => {
 
     test("a page the album filter empties still yields its cursor so the walk carries on", async () => {
         installHost([{ items: [makeItem("one", "screenshots")], nextCursor: "10" }], { deletedIds: [], failedIds: [] });
-        const source = new DeviceMediaSource([{ type: "device-album", albumId: "camera" }], 1000);
+        const source = new DeviceMediaSource([{ type: "device-album", albumId: "camera" }]);
 
         const page = await source.listPage(undefined, 50);
 
@@ -158,7 +158,7 @@ describe("DeviceMediaSource", () => {
 
     test("a missing cursor crosses the bridge as an empty string, which starts at the beginning", async () => {
         const recorded = installHost([{ items: [] }], { deletedIds: [], failedIds: [] });
-        const source = new DeviceMediaSource(WHOLE_LIBRARY, 1000);
+        const source = new DeviceMediaSource(WHOLE_LIBRARY);
 
         await source.listPage(undefined, 50);
 
@@ -167,7 +167,7 @@ describe("DeviceMediaSource", () => {
 
     test("a cursor is passed through unchanged", async () => {
         const recorded = installHost([{ items: [] }], { deletedIds: [], failedIds: [] });
-        const source = new DeviceMediaSource(WHOLE_LIBRARY, 1000);
+        const source = new DeviceMediaSource(WHOLE_LIBRARY);
 
         await source.listPage("42", 50);
 
@@ -176,7 +176,7 @@ describe("DeviceMediaSource", () => {
 
     test("opens and closes through the library", async () => {
         const recorded = installHost([], { deletedIds: [], failedIds: [] });
-        const source = new DeviceMediaSource(WHOLE_LIBRARY, 1000);
+        const source = new DeviceMediaSource(WHOLE_LIBRARY);
 
         const openedPath = await source.openItem(ONE_ITEM);
         await source.closeItem(ONE_ITEM);
@@ -188,7 +188,7 @@ describe("DeviceMediaSource", () => {
 
     test("a delete the library completed reports no failure", async () => {
         const recorded = installHost([], { deletedIds: ["one", "two"], failedIds: [] });
-        const source = new DeviceMediaSource(WHOLE_LIBRARY, 1000);
+        const source = new DeviceMediaSource(WHOLE_LIBRARY);
 
         await source.deleteItems(["one", "two"]);
 
@@ -197,7 +197,7 @@ describe("DeviceMediaSource", () => {
 
     test("a delete the library refused names the items that are still on the device", async () => {
         installHost([], { deletedIds: ["one"], failedIds: ["two"] });
-        const source = new DeviceMediaSource(WHOLE_LIBRARY, 1000);
+        const source = new DeviceMediaSource(WHOLE_LIBRARY);
 
         await expect(source.deleteItems(["one", "two"])).rejects.toThrow(MediaSourceDeleteError);
 
@@ -209,52 +209,9 @@ describe("DeviceMediaSource", () => {
         }
     });
 
-    test("watching re-lists on the poll interval until it is unsubscribed", () => {
-        jest.useFakeTimers();
-        try {
-            installHost([], { deletedIds: [], failedIds: [] });
-            const source = new DeviceMediaSource(WHOLE_LIBRARY, 1000);
-
-            let changes = 0;
-            const unsubscribe = source.watch(() => { changes += 1; });
-
-            jest.advanceTimersByTime(3000);
-            expect(changes).toBe(3);
-
-            unsubscribe();
-            jest.advanceTimersByTime(3000);
-            expect(changes).toBe(3);
-        }
-        finally {
-            jest.useRealTimers();
-        }
-    });
-
-    test("a poll interval of zero falls back to the default rather than polling in a tight loop", () => {
-        jest.useFakeTimers();
-        try {
-            installHost([], { deletedIds: [], failedIds: [] });
-            const source = new DeviceMediaSource(WHOLE_LIBRARY, 0);
-
-            let changes = 0;
-            const unsubscribe = source.watch(() => { changes += 1; });
-
-            jest.advanceTimersByTime(DEFAULT_POLL_INTERVAL_MS - 1);
-            expect(changes).toBe(0);
-
-            jest.advanceTimersByTime(1);
-            expect(changes).toBe(1);
-
-            unsubscribe();
-        }
-        finally {
-            jest.useRealTimers();
-        }
-    });
-
     test("reaching for the library outside the worker says so, rather than looking like an empty library", async () => {
         delete (globalThis as any).host;
-        const source = new DeviceMediaSource(WHOLE_LIBRARY, 1000);
+        const source = new DeviceMediaSource(WHOLE_LIBRARY);
 
         // An empty library and a missing bridge are indistinguishable to a caller that gets an empty
         // answer, and one of them silently backs up nothing.

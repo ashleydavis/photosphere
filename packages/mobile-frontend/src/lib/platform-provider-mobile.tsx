@@ -10,7 +10,7 @@ import { cancelMobileTasks, subscribeMobileTaskMessage, subscribeMobileTaskCompl
 import { pickMobileFolder, saveMobileDownloadedFile, saveMobileDownloadedFiles, setInjectedExportOutcome, setInjectedPickFolderResult } from "./mobile-export";
 import { setInjectedDeleteOutcome } from "./mobile-media-cleanup";
 import { getDefaultDatabasePath, loadAutoImportSettings, saveAutoImportSettings, setDefaultDatabasePath } from "user-interface";
-import type { IAutoImportProgressMessage } from "api/src/lib/auto-import-loop";
+import type { IImportProgressMessage } from "api/src/lib/import-assets.types";
 import { AUTO_IMPORT_TASK_SOURCE, DEFAULT_DATABASE_DISPLAY_NAME, planMobileAutoImport } from "./mobile-auto-import";
 import { readPermissionState, resolveMediaPermission } from "./mobile-media-permission";
 import { JsEngine } from "./js-engine-plugin";
@@ -788,14 +788,33 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
 
             log.info(`Starting automatic import into "${plan.databasePath}".`);
 
+            // The import task itself, fed by a scanner that watches the photo library. There used to
+            // be a separate `auto-import` task that ran a loop and started one of these for every
+            // handful of photos it released, which held two engines instead of one and paid for the
+            // scan, the write lock and the hash cache per handful.
+            const autoImportTaskId = getQueueBackend().addTask("import-assets", {
+                paths: [],
+                storageDescriptor: { databasePath: plan.databasePath },
+                sessionId: uuidGenerator.generate(),
+                dryRun: false,
+                options: {
+                    auto: true,
+                    ...plan.settings,
+                },
+            }, AUTO_IMPORT_TASK_SOURCE);
+
             // A task queued and never awaited fails silently, and this one is meant to run for the
             // lifetime of the app: without this, automatic import quietly stopping looks exactly like
             // automatic import finding nothing to do.
+            //
+            // Matched by task id rather than by type, because automatic import is now the same kind
+            // of task as a manual import: matching on the type would have a photo the user imported
+            // by hand report that automatic import had stopped.
             const autoImportUnsubscribe = subscribeMobileTaskComplete((taskId, result) => {
-                const completed = result as unknown as ICompletedTaskResult;
-                if (completed.type !== "auto-import") {
+                if (taskId !== autoImportTaskId) {
                     return;
                 }
+                const completed = result as unknown as ICompletedTaskResult;
                 autoImportRunningRef.current = false;
                 autoImportSettingsRef.current = undefined;
                 if (completed.status !== TaskStatus.Succeeded) {
@@ -807,13 +826,6 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
                 autoImportUnsubscribe();
             });
 
-            getQueueBackend().addTask("auto-import", {
-                storageDescriptor: { databasePath: plan.databasePath },
-                settings: plan.settings,
-                sessionId: uuidGenerator.generate(),
-                once: false,
-            }, AUTO_IMPORT_TASK_SOURCE);
-
             autoImportRunningRef.current = true;
             autoImportSettingsRef.current = plannedSettingsJson;
         };
@@ -823,11 +835,11 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         // Logged rather than only shown on screen, because a phone doing nothing and a phone quietly
         // failing look the same in the interface.
         const progressUnsubscribe = subscribeMobileTaskMessage((_taskId, message) => {
-            if ((message as Record<string, unknown>).type !== "auto-import-progress") {
+            if ((message as Record<string, unknown>).type !== "import-progress") {
                 return;
             }
-            const progress = message as unknown as IAutoImportProgressMessage;
-            log.info(`Automatic import: ${progress.imported} imported, ${progress.skipped} already there, ${progress.failed} failed, ${progress.deletedFromSource} deleted from the device, ${progress.backfillRemaining} waiting.`);
+            const progress = message as unknown as IImportProgressMessage;
+            log.info(`Import: ${progress.imported} imported, ${progress.skipped} already there, ${progress.failed} failed.`);
         });
 
         ensureAutoImport().catch(error => log.exception("Failed to start automatic import", error as Error));

@@ -1,5 +1,5 @@
 import type { PluginListenerHandle } from "@capacitor/core";
-import type { ITaskResult, IQueueBackend, WorkerTaskCompletionCallback, TaskMessageCallback, IMessageCallbackEntry, UnsubscribeFn } from "task-queue";
+import type { ITaskResult, IQueueBackend, WorkerTaskCompletionCallback, TaskMessageCallback, IMessageCallbackEntry, UnsubscribeFn, TaskPriority } from "task-queue";
 import { TaskStatus } from "task-queue";
 import { JsEngine, type IJsEnginePlugin, type ITaskCompletedEvent, type ITaskCompletedResult } from "./js-engine-plugin";
 
@@ -77,10 +77,10 @@ export class EmbeddedJsQueueBackend implements IQueueBackend {
     // taskCompleted error result is emitted so the task fails loudly through the normal
     // completion path rather than hanging forever.
     //
-    addTask(type: string, data: any, source: string, taskId?: string): string {
+    addTask(type: string, data: any, source: string, taskId?: string, priority?: TaskPriority): string {
         const id = taskId ?? crypto.randomUUID();
 
-        this.plugin.addTask({ taskId: id, type, data, source })
+        this.plugin.addTask({ taskId: id, type, data, source, priority })
             .catch(error => {
                 const result: ITaskResult = {
                     taskId: id,

@@ -2,9 +2,7 @@ import { ALL_DEVICE_MEDIA_ALBUM_ID, IDeviceAlbumAutoImportSource } from "api/src
 import {
     IMediaItem,
     IMediaSource,
-    IMediaSourceChangedCallback,
     IMediaSourceListPage,
-    IMediaSourceUnsubscribe,
     MediaSourceDeleteError,
 } from "api/src/lib/media-source";
 import {
@@ -24,29 +22,19 @@ import {
 //
 
 //
-// How often the library is re-listed. A photo library gives no dependable change notification on
-// either platform, so the poll is what actually guarantees a new photo is noticed.
-//
-export const DEFAULT_POLL_INTERVAL_MS = 30000;
-
-//
 // A media source over the device photo library.
 //
 export class DeviceMediaSource implements IMediaSource {
     // The albums to take items from. An empty list means the whole library.
     private readonly albumIds: string[];
 
-    // How often the library is re-listed, in milliseconds.
-    private readonly pollIntervalMs: number;
-
-    constructor(sources: IDeviceAlbumAutoImportSource[], pollIntervalMs: number) {
+    constructor(sources: IDeviceAlbumAutoImportSource[]) {
         // The reserved "everything" id is not an album to filter by: a source list that includes it
         // covers the whole library, which is what a user gets before they choose albums.
         const watchesWholeLibrary = sources.some(source => source.albumId === ALL_DEVICE_MEDIA_ALBUM_ID);
         this.albumIds = watchesWholeLibrary
             ? []
             : sources.map(source => source.albumId).filter(albumId => albumId.length > 0);
-        this.pollIntervalMs = pollIntervalMs > 0 ? pollIntervalMs : DEFAULT_POLL_INTERVAL_MS;
     }
 
     //
@@ -83,16 +71,6 @@ export class DeviceMediaSource implements IMediaSource {
             }));
 
         return { items, nextCursor: page.nextCursor };
-    }
-
-    //
-    // Reports changes by re-listing on the poll interval.
-    //
-    watch(onChanged: IMediaSourceChangedCallback): IMediaSourceUnsubscribe {
-        const pollTimer = setInterval(onChanged, this.pollIntervalMs);
-        return () => {
-            clearInterval(pollTimer);
-        };
     }
 
     //

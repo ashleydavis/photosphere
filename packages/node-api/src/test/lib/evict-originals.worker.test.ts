@@ -98,6 +98,7 @@ describe("evictOriginalsHandler", () => {
             uuidGenerator: { generate: () => "test-uuid" },
             timestampProvider: { now: () => Date.now(), dateNow: () => new Date() },
             sessionId: "session-1",
+            maxConcurrentChildTasks: 10,
             sendMessage: jest.fn(),
             isCancelled: () => false,
             taskId: "evict-task",

@@ -4,7 +4,7 @@ import { join, dirname, basename } from 'path';
 import { randomUUID, createPrivateKey, createPublicKey } from 'crypto';
 import { cpus } from 'os';
 import { version } from 'config';
-import type { IQueueBackend, ITaskMessageData, ITaskResult } from 'task-queue';
+import type { IQueueBackend, ITaskMessageData, ITaskResult, TaskPriority } from 'task-queue';
 import { TaskStatus, setQueueBackend } from 'task-queue';
 import { WorkerPoolElectronMain } from './lib/worker-pool-electron-main';
 import { RandomUuidGenerator, TimestampProvider, logExceptions, log, noLogDetails } from 'utils';
@@ -37,6 +37,30 @@ app.disableHardwareAcceleration();
 
 // Main application window
 let mainWindow: BrowserWindow | null = null;
+
+//
+// How long the main process waits for the REST API utility process to answer that it is listening,
+// in milliseconds.
+//
+// The REST API is the asset server the app is useless without, so a slow start is waited out rather
+// than skipped. This was ten seconds, which a machine running several test suites at once misses
+// regularly: the worker binds its port and says so, and the answer simply arrives late. Missing it
+// rejects inside app.whenReady, which skips every remaining startup step, so the window never opens
+// and nothing says why. Sixty seconds is not a measurement of how slow a start can be; it is a bound
+// that sits well inside the smoke tests' own 120 second wait, so a worker that is never coming back
+// is still reported before the harness gives up.
+//
+const REST_API_START_TIMEOUT_MS = 60000;
+
+//
+// How often to check that automatic import is still running, in milliseconds.
+//
+const AUTO_IMPORT_RESTART_CHECK_MS = 30000;
+
+//
+// The timer doing that checking, so it can be stopped when the app quits.
+//
+let autoImportRestartTimer: NodeJS.Timeout | null = null;
 
 // Worker pool for background task processing
 let workerPool: IQueueBackend | null = null;
@@ -365,6 +389,14 @@ app.whenReady().then(async () => {
     // was shut down carries on without the user having to open anything.
     ensureAutoImport().catch(error => log.exception('Error starting automatic import', error as Error));
 
+    // And keeps picking up: a task that died takes automatic import with it, and until this existed
+    // it stayed dead until the app was restarted, looking exactly like a machine with nothing to
+    // import. The check costs nothing when the task is already running. Mobile has had this from the
+    // start; the desktop did not, which is the bug this closes.
+    autoImportRestartTimer = setInterval(() => {
+        ensureAutoImport().catch(error => log.exception('Error restarting automatic import', error as Error));
+    }, AUTO_IMPORT_RESTART_CHECK_MS);
+
     if (process.env.PHOTOSPHERE_TEST_MODE === '1' && mainWindow) {
         if (!workerPool) {
             throw new Error('Worker pool not initialized');
@@ -485,16 +517,19 @@ interface IAddTaskRequest {
 
     // Optional explicit task ID; a UUID is generated when absent.
     taskId?: string;
+
+    // How urgent the task is; absent means the pool decides.
+    priority?: TaskPriority;
 }
 
 // IPC handler for adding tasks
-ipcMain.on('add-task', (_event, { taskType, data, source, taskId }: IAddTaskRequest) => {
+ipcMain.on('add-task', (_event, { taskType, data, source, taskId, priority }: IAddTaskRequest) => {
     if (!workerPool) {
         console.error('Worker pool not initialized');
         return;
     }
 
-    workerPool.addTask(taskType, data, source, taskId);
+    workerPool.addTask(taskType, data, source, taskId, priority);
 });
 
 // IPC handler for cancelling tasks
@@ -1018,16 +1053,33 @@ function initWorkers() {
                 }
             }
         }
-        if (result.type === "import-assets" && mainWindow) {
-            if (result.status === TaskStatus.Succeeded) {
-                log.event('Import task completed');
+        if (result.type === "import-assets") {
+            if (result.taskId === autoImportTaskId) {
+                // Automatic import is not meant to end while the setting is on, so this is either a
+                // crash or a cancellation. Either way the app owns restarting it: a task that died
+                // silently looks exactly like automatic import finding nothing to do, and used to
+                // stay dead until the app was restarted.
+                autoImportRunning = false;
+                autoImportTaskId = null;
+                autoImportDatabasePath = null;
+                autoImportSettingsJson = null;
+                if (result.status !== TaskStatus.Succeeded) {
+                    log.error(`Automatic import stopped: ${result.errorMessage}`);
+                }
+                return;
             }
-            else {
-                mainWindow.webContents.send('show-notification', {
-                    message: `Import failed: ${result.errorMessage || 'Unknown error'}`,
-                    color: 'danger',
-                    duration: 8000,
-                });
+
+            if (mainWindow) {
+                if (result.status === TaskStatus.Succeeded) {
+                    log.event('Import task completed');
+                }
+                else {
+                    mainWindow.webContents.send('show-notification', {
+                        message: `Import failed: ${result.errorMessage || 'Unknown error'}`,
+                        color: 'danger',
+                        duration: 8000,
+                    });
+                }
             }
         }
         if (result.type === "replicate-database") {
@@ -1074,6 +1126,15 @@ function initWorkers() {
 // tag rather than a task id because that is what the worker pool cancels by.
 //
 let autoImportRunning = false;
+
+//
+// The id of the running automatic import task, or null when it is not running.
+//
+// Kept so its completion can be told from a manual import finishing: since the merge they are the
+// same kind of task, and matching on the type alone would report automatic import as stopped every
+// time the user imported something by hand.
+//
+let autoImportTaskId: string | null = null;
 
 //
 // The database automatic import is writing to, or null when it is not running.
@@ -1174,11 +1235,18 @@ async function ensureAutoImport(): Promise<void> {
         }
 
         log.info(`Starting automatic import into "${plan.databasePath}".`);
-        workerPool.addTask("auto-import", {
+        // The import task itself, fed by a scanner that watches the configured folders. There used
+        // to be a separate `auto-import` task that ran a loop and started one of these for every
+        // handful of photos it released; one task doing both is what removed that cost.
+        autoImportTaskId = workerPool.addTask("import-assets", {
+            paths: [],
             storageDescriptor: { databasePath: plan.databasePath },
-            settings: plan.settings,
             sessionId: autoImportUuidGenerator.generate(),
-            once: false,
+            dryRun: false,
+            options: {
+                auto: true,
+                ...plan.settings,
+            },
         }, AUTO_IMPORT_TASK_SOURCE);
 
         autoImportRunning = true;
@@ -1424,7 +1492,7 @@ async function initRestApi(): Promise<void> {
             restApiWorker?.off('message', messageHandler);
             restApiWorker?.off('spawn', spawnHandler);
             reject(new Error('REST API failed to start within timeout'));
-        }, 10000); // 10 second timeout
+        }, REST_API_START_TIMEOUT_MS);
 
         const messageHandler = (message: any) => {
             if (message.type === 'server-ready') {

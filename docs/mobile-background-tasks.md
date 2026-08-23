@@ -37,7 +37,28 @@ Two kinds of task, and the difference matters more than anything else here.
 | Task | Held for |
 |---|---|
 | `asset-server` | The whole time the app is open. Every thumbnail the gallery shows comes through it. |
-| `auto-import` | As long as automatic import is switched on. |
+| `import-assets` | For the length of one automatic import run, which ends when it has read its sources to the end. The app starts the next one a couple of seconds later. |
+
+## Priority: who gets the next free slot
+
+Every task carries a priority, and there is **one** queue of waiting tasks. The pool always takes from the head. An interactive task joins the head of the queue; a background task joins the end. That is the whole of the mechanism, and it works identically on Android, iOS and the desktop.
+
+Two consequences worth knowing. Background work keeps its arrival order, because it only ever joins the end. Interactive work does not: a second tap goes in front of a first one that is still waiting, so the most recent thing the user asked for is served first.
+
+- **Interactive** means the user is sitting in front of the app waiting for this: opening a database (`load-assets`, `check-database-exists`, `create-database`) and reading the database list (`read-databases-config`, `write-databases-config`).
+- **Background** is everything else, and is the default. Automatic import, syncing, and everything they queue.
+
+A task that names no priority runs in the background, so nothing gets in front of the user by accident. A task queued from inside a running task runs at that task's priority unless it names one of its own, which is what stops an import's `hash-file` and `upload-asset` children overtaking a tap. `prefetch-database` is the one task that opts back down: `load-assets` is interactive and queues it, but pulling down every thumbnail of a partial database is background work.
+
+Priority decides the order tasks are dispatched in. It does not interrupt anything: a task the user is waiting on still waits for a running background task to give its slot up, which is why the number of slots an import is allowed to fill matters as much as the ordering does.
+
+The ordering rules live in one place for the desktop pools, `packages/task-queue/src/lib/pending-task-queue.ts`, and are restated in `EnginePool.java` and `EnginePool.swift` because those cannot import it. All three do the same two things: head for interactive, end for background.
+
+## How much of the pool one task may fill
+
+An import queues a `hash-file` task for every file its scan finds, and the scan runs far faster than the hashing. Left alone that fills the pool in seconds and everything else in the app queues behind it. A task that queues work of its own is therefore held to `ITaskContext.maxConcurrentChildTasks` children in flight, queueing the next as each completes.
+
+The number comes from the platform, not the caller: whatever builds the task context fills it in. The mobile worker runtime uses 2, because every engine a task fills is one a tap has to wait for; the Electron worker, the CLI worker, the development server pool and the development frontend use 10. Each declares its own beside the code that builds the context, so nothing has to be passed down through the task that uses it.
 
 ## Why running out is a hang, not a slowdown
 
@@ -48,11 +69,12 @@ Automatic import is the deepest chain in the app:
 | | |
 |---|---|
 | Slot 1 | `asset-server`, held for the life of the app |
-| Slot 2 | `auto-import`, held while the setting is on |
-| Slot 3 | `import-assets`, queued by auto-import, which waits for it |
-| Slot 4 | `hash-file` and `upload-asset`, queued by import-assets, which waits for them |
+| Slot 2 | `import-assets`, held for the length of one run |
+| Slot 3 | `hash-file` and `upload-asset`, queued by import-assets, which waits for them |
 
 At three slots, `import-assets` took the last one and then waited forever for a `hash-file` that could never start. **This is not hypothetical: it is what the app did**, and it is why the pool is five.
+
+The chain was one deeper when that happened: a separate `auto-import` task sat in a slot of its own for as long as the setting was on, and started `import-assets` in another. That task is gone, and an import run now ends rather than lasting as long as the setting. The pool is still five: nothing has measured what a smaller one does to the chain that remains, and the cost of being wrong is a silent hang.
 
 The failure is the dangerous part. Nothing errors. Nothing times out. Nothing appears in a log. From outside, the setting is on, the task is running, and the progress counts sit at zero, which is exactly what a phone with no new photos looks like. It was found by a smoke test that waited for a photo to arrive; a test that waited for the task to *start* would have passed.
 
@@ -70,7 +92,7 @@ Nothing checks it automatically, which is why it is written down. The places tha
 
 - `EnginePool.java` and `EnginePool.swift`, where the constant is, each carrying the reasoning above.
 - `packages/mobile-worker/mobile-worker-entry.ts`, where mobile's tasks are registered.
-- `packages/node-api/src/lib/auto-import.worker.ts`, which names the chain it needs.
+- `packages/node-api/src/lib/import-assets.worker.ts`, which names the chain it needs.
 
 ## See also
 

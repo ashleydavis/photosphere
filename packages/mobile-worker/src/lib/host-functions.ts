@@ -32,8 +32,10 @@ export interface IHost {
 
     // Queues a child task back on the native engine pool (the "main-thread queue"), tagged so its
     // completion routes back to the engine that spawned it. Mirrors the Electron worker posting a
-    // "queue-task" message to the main process. dataJson is the JSON-encoded task input.
-    queueTask: (taskId: string, type: string, dataJson: string, source: string) => void;
+    // "queue-task" message to the main process. dataJson is the JSON-encoded task input. priority is
+    // null when the handler named none, and the child then runs at the priority of the task that
+    // queued it.
+    queueTask: (taskId: string, type: string, dataJson: string, source: string, priority: string | null) => void;
 
     // Hashes the file at the given storage path natively. First-slice demonstrator (real native impl lands later).
     sha256: (path: string) => string;

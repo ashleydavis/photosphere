@@ -1,10 +1,19 @@
 import type { ITask, ITaskResult, WorkerTaskCompletionCallback, TaskMessageCallback, IMessageCallbackEntry, IQueueBackend, UnsubscribeFn } from "task-queue";
-import { TaskStatus } from "task-queue";
+import { TaskStatus, TaskPriority, insertTaskByPriority, resolveTaskPriority } from "task-queue";
 import { executeTaskHandler } from "task-queue";
 import type { ITaskContext } from "task-queue";
 import type { IUuidGenerator, ITimestampProvider } from "utils";
 import { randomUUID } from "node:crypto";
 import { initTaskHandlers } from "node-api";
+
+//
+// How many child tasks one task may have running at once here.
+//
+// Ten, because a desktop machine has cores and a fast disk to spare, and whatever queued the work is
+// usually what the user is waiting on. It is not the size of the worker pool: it is how much of that
+// pool one task may fill, so a second import, a sync, or anything the user does still gets a worker.
+//
+const MAX_CONCURRENT_CHILD_TASKS = 10;
 
 interface IBaseTaskContext {
     uuidGenerator: IUuidGenerator;
@@ -67,7 +76,13 @@ export class WorkerPoolInline implements IQueueBackend {
     //
     // Adds a task to the queue. Executes immediately if a slot is available, otherwise queues it.
     //
-    addTask(type: string, data: any, source: string, taskId?: string): string {
+    // An interactive task goes in ahead of every background task already waiting. Unlike the Bun and
+    // Electron pools there is no priority inheritance here: this pool runs handlers in its own
+    // process rather than in a worker, so a task queued from inside a handler arrives through this
+    // same method with nothing saying which handler it came from. A child that does not ask for a
+    // priority therefore runs at the default rather than at its parent's.
+    //
+    addTask(type: string, data: any, source: string, taskId?: string, priority?: TaskPriority): string {
         const id = taskId ?? randomUUID();
         const task: ITask<any> = {
             id,
@@ -75,9 +90,10 @@ export class WorkerPoolInline implements IQueueBackend {
             status: TaskStatus.Pending,
             data,
             source,
+            priority: resolveTaskPriority(priority, undefined),
             createdAt: new Date(),
         };
-        this.pendingTasks.push(task);
+        insertTaskByPriority(this.pendingTasks, task);
 
         const callbacks = this.taskAddedCallbacks.get(source);
         if (callbacks) {
@@ -239,6 +255,7 @@ export class WorkerPoolInline implements IQueueBackend {
                 sendMessage: taskSpecificSendMessage,
                 isCancelled: (): boolean => this.runningTasks.get(task.id)?.cancelled ?? false,
                 taskId: task.id,
+                maxConcurrentChildTasks: MAX_CONCURRENT_CHILD_TASKS,
             };
 
             const outputs = await executeTaskHandler(task.type, task.data, taskContextWithSendMessage);

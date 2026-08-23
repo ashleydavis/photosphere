@@ -22,6 +22,7 @@ describe("check-database-exists handler", () => {
         uuidGenerator: { generate: () => "test-id" },
         timestampProvider: { now: () => 0, dateNow: () => new Date(0) },
         sessionId: "test-session",
+        maxConcurrentChildTasks: 10,
         taskId: "test-task",
         sendMessage: () => {},
         isCancelled: () => false,

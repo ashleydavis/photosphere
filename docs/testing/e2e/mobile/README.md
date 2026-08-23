@@ -34,6 +34,6 @@ Where a test needs the CLI to check what the app did, run the CLI from `apps/cli
 
 ## What is different about mobile
 
-- **The photo library is the source.** Automatic import reads the device photo library rather than watched folders, so the mobile tests seed photos with the device camera or by copying them onto the device, not by writing to a directory the app watches.
+- **The photo library is the source.** Automatic import reads the device photo library rather than folders on a filesystem, so the mobile tests seed photos with the device camera or by copying them onto the device, not by writing to a directory.
 - **Permissions are real.** The photo permission is granted or refused through the system dialog, and refusing it is a case worth testing because the app has to say so rather than sit there doing nothing.
 - **Background work runs in a fixed number of engine slots.** A task that cannot get a slot waits, and the symptom is a screen that never updates rather than an error. See [Mobile background tasks](../../../mobile-background-tasks.md) if something appears to hang.

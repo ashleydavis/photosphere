@@ -460,12 +460,13 @@ public final class QuickJsTaskEngine implements TaskEngine {
             return null;
         });
         host.setProperty("isCancelled", (JSCallFunction) args -> hostBridge.isCancelled((String) args[0]));
-        // host.queueTask(childTaskId, type, dataJson, source): enqueue a child task back on the native
-        // pool (the mobile "main-thread queue"). Increment the outstanding-children count on this
-        // worker thread only after the pool has accepted the child, so the run loop keeps the engine
-        // alive while the handler awaits its subtasks.
+        // host.queueTask(childTaskId, type, dataJson, source, priority): enqueue a child task back on
+        // the native pool (the mobile "main-thread queue"). Increment the outstanding-children count
+        // on this worker thread only after the pool has accepted the child, so the run loop keeps the
+        // engine alive while the handler awaits its subtasks. The priority argument is null when the
+        // handler named none, and the child then runs at its parent's priority.
         host.setProperty("queueTask", (JSCallFunction) args -> safeVoid(() -> {
-            hostBridge.queueChildTask((String) args[0], (String) args[1], (String) args[2], (String) args[3]);
+            hostBridge.queueChildTask((String) args[0], (String) args[1], (String) args[2], (String) args[3], args.length > 4 ? (String) args[4] : null);
             outstandingChildren++;
         }));
         // A native host function must NEVER let a Java exception escape into QuickJS: the wrapper does
