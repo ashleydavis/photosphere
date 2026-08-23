@@ -1,6 +1,15 @@
 export default {
     preset: 'ts-jest',
     testEnvironment: 'node',
+    // jest's 5s default is real time, and this package's whole jest run crawls when a second copy of
+    // the unit suite is running: `bun run test` starts a jest run per package at the same time, and
+    // each one takes a worker per core, so two copies at once put several times the machine's cores
+    // on it. Files that finish in seconds alone took 22s, 47s and 48s in that state, and
+    // `runSyncWatch keeps syncing until it
+    // is stopped`, whose own work is three iterations of a 1ms interval, was killed at 5s. The
+    // budget was measuring the process's share of the machine rather than the test. Raised
+    // package-wide, as packages/node-api and packages/encryption already do for the same reason.
+    testTimeout: 30000,
     setupFiles: ['<rootDir>/__mocks__/worker-global.js'],
     setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
     modulePathIgnorePatterns: [
