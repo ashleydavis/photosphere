@@ -6,8 +6,8 @@ description: Prove the test suites are sound alone and in company. Asks how many
 
 Two scripts, run one after the other, cheapest first. Keep going until both pass.
 
-- `bun run test:parallel` (`scripts/check-parallel-tests.sh`) proves a suite is sound in company: every suite alone, then every combination of two, self-pairs included. Four solo runs then ten pairs, about an hour.
-- `bun run find-flakey-tests -- --ladder --target <target>` (`scripts/find-flakey-tests.sh`) proves a suite is sound alone: `<target>` consecutive green runs of `test`, then `test:cli`, then `test:electron`, then `test:and`. Four times `<target>` runs, hours rather than minutes. The human chooses `<target>`, see below.
+- `bun run test:parallel` (`scripts/check-parallel-tests.sh`) proves a suite is sound in company: every suite alone, then every combination of two, self-pairs included. Both scripts cover every suite the pre-commit hook runs, so the pair count grows with the square of the number of suites.
+- `bun run find-flakey-tests -- --ladder --target <target>` (`scripts/find-flakey-tests.sh`) proves a suite is sound alone: `<target>` consecutive green runs of each suite in turn, cheapest first, stopping at the first rung that fails. The human chooses `<target>`, see below.
 
 The parallel check is the cheaper of the two, so it goes first.
 
@@ -15,7 +15,7 @@ The parallel check is the cheaper of the two, so it goes first.
 
 Before anything else, ask the human how many consecutive green runs of each suite the ladder should require, and wait for the answer. It decides how long the whole job takes and how much a green result is worth, so it is never assumed.
 
-- 10 is the usual answer. The ladder took about three and a half hours at 10 and about four and a half at 20 on this machine, though a failure stops it far sooner than that.
+- 10 is the usual answer.
 - Below about 10 the result says very little: a mode that fails one run in fifty passes a short streak most of the time.
 - The parallel check has no equivalent number. It runs each combination exactly once, whatever is chosen here.
 
@@ -51,8 +51,8 @@ bun run emu:and:pool:status -- --quiet
 
 Exit 0 means at least one pool emulator is up and on the LAN bridge, exit 1 means none is.
 
-- Pool down before `test:parallel`: say so, and say that `test:and` will be dropped from the set, which leaves 5 of the 15 combinations unchecked. Start it anyway. The run prints the same thing itself.
-- Pool down before `find-flakey-tests`: say so, and say the climb will reach `test:and` in roughly two hours and needs the pool by then. Start it anyway, because the first three rungs touch no device.
+- Pool down before `test:parallel`: say so, and say that `test:and` will be dropped from the set, so every combination it appears in goes unchecked. Start it anyway. The run prints the count itself.
+- Pool down before `find-flakey-tests`: say so, and say that `test:and` is the last rung and needs the pool by the time the climb reaches it. Start it anyway, because every rung below it touches no device.
 
 Never bring the pool up, take it down or restart it. That is the human's.
 
@@ -85,7 +85,7 @@ Read the exit status before reading anything else.
 - 3: too many Bun crashes. Report and restart the rung, using `--ladder "<remaining rungs>" --target <target> --resume <greens>` exactly as the script prints.
 - 4: the pool stopped being healthy and did not come back. See "A sick pool".
 
-On macOS the ladder is `-- --ladder "test test:cli test:electron test:and test:ios" --target <target>`.
+On macOS the iOS suites are not in the default rungs and have to be named: `-- --ladder "<the default rungs> test:ios test:ios:unit" --target <target>`, taking the default rungs from `--help`.
 
 ## Fixing a failure
 
@@ -170,7 +170,7 @@ Then write:
 - The evidence that proved each fix, or plainly that a red run could not be produced.
 - Any commit removed for not fixing an observed failure, and why. Removing one is a normal outcome of this skill, not an admission of having wasted the time: the knowledge goes into the registry and the code stays as it was.
 - Which fixes are proven and which are not, kept apart rather than listed together. A change whose red/green pair you watched and a change you reasoned your way to are not the same claim, and running them together in one list overstates the weaker ones.
-- Any Bun crash, sick pool or dropped suite either run reported, and what it leaves unchecked. A `test:parallel` run without `test:and` checked 10 of 15 combinations, and a run without `test:ios` on Linux always does.
+- Any Bun crash, sick pool or dropped suite either run reported, and what it leaves unchecked. A dropped suite takes every combination it appears in with it, and the run prints how many; a run on Linux always drops `test:ios`.
 - The session directories: `tmp/parallel-check/<timestamp>` and `tmp/find-flakey-tests/<timestamp>`.
 - **The worktree path and branch the work is on**, so the human can go and look at it themselves.
 

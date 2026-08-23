@@ -58,8 +58,12 @@
 #
 #   --help        print this usage and exit.
 #
-# The default set is test, test:cli and test:electron plus the mobile suites this machine can actually
-# run. test:ios is included only on macOS. test:and is included on any platform where the Android
+# The default set is every suite `bun run test:everything` starts in a parallel lane, plus the mobile
+# suites this machine can actually run, and minus `compile` (a build, not a suite) and the native unit
+# suites (which test:everything already keeps apart from their own smoke suites, so pairing them here
+# would report a known conflict as news). The number of combinations grows with the square of the
+# number of suites: use --scripts to check a few.
+# test:ios is included only on macOS. test:and is included on any platform where the Android
 # tooling is installed and `bun run emu:and:status` reports a ready device, and is dropped with a
 # printed reason otherwise, because a suite that cannot run would fail every combination it is in for
 # a reason that is not interference. A dropped suite is reported at the top of the run and again in
@@ -261,7 +265,18 @@ POOL_BRIDGE_COUNT_AT_START=0
 
 # The desktop-side scripts checked when none are named. The mobile suites this machine can run are
 # added to these, which is why a default run is slow.
-DEFAULT_SCRIPTS="test test:cli test:electron"
+#
+# The rule for what belongs here: every suite `bun run test:everything` starts in a parallel lane,
+# because those are exactly the suites that already run beside each other on every commit, so a pair
+# that contends refuses a commit whether or not this check ever looked at it. When a new suite is
+# added to the whole set, add it here too.
+#
+# Two things the hook runs are deliberately not here. `compile` is a build rather than a suite. The
+# native unit suites are kept out because test:everything already refuses to run each of them beside
+# its own smoke suite, for a conflict on the Gradle and Xcode project directories that is known and
+# recorded there: pairing them here would report that conflict as news on every run. Name them with
+# --scripts to check them on purpose, which is also how this script is proved to be working at all.
+DEFAULT_SCRIPTS="test test:cli test:cli:encrypted test:cli:lan-share test:cli:sync test:cli:write-lock test:cli:hash-cache test:electron test:lan-share:cli-desktop test:harness"
 
 # The scripts to check, as given by --scripts. Empty until resolved.
 REQUESTED_SCRIPTS=""

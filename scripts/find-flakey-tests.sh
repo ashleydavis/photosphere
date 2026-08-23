@@ -58,8 +58,8 @@
 #       Loop one suite instead of the whole set.
 #
 #   bun run find-flakey-tests -- --ladder
-#       Climb the suites in turn: 100 green runs of `bun run test`, then 100 of `bun run test:cli`,
-#       then Electron, then Android. The first rung to fail stops the session.
+#       Climb every suite in turn, cheapest first, requiring the full streak of each before starting
+#       the next. The first rung to fail stops the session.
 #
 #   bun run find-flakey-tests -- --ladder "test test:cli test:ios"
 #       Climb the rungs you name instead of the default ones, in the order you name them.
@@ -81,17 +81,18 @@
 #
 # Options:
 #
-#   --script NAME one of: everything (default), test, test:cli, test:electron, test:and, test:ios.
-#                 "everything" runs `bun run test:everything -- --force`, the whole set. The others
-#                 run that one suite. Looping a single suite is much faster per run, so when failures
-#                 are concentrated in one suite it surfaces them several times sooner. The cost is
-#                 coverage: a single-suite streak says nothing about the others.
+#   --script NAME "everything" (the default) runs `bun run test:everything -- --force`, the whole
+#                 set. Otherwise name any one suite that the whole set runs; give a name it does not
+#                 know and it prints the ones it does. Looping a single suite is much faster per run,
+#                 so when failures are concentrated in one suite it surfaces them several times
+#                 sooner. The cost is coverage: a single-suite streak says nothing about the others.
 #
 #   --ladder [L]  climb the suites in turn, requiring a full --target streak of each one before
 #                 starting the next, and stopping the session at the first rung that fails. With no
-#                 list it climbs: test, test:cli, test:electron, test:and. Give a list (space or
-#                 comma separated, from the same names as --script) to climb your own rungs, which is
-#                 how to include test:ios on macOS. Cannot be combined with --script, --test or
+#                 list it climbs every suite the pre-commit hook runs on this platform, cheapest
+#                 first. Give a list (space or comma separated, from the same names as --script) to
+#                 climb your own rungs, which is how to include test:ios on macOS or to climb a
+#                 handful rather than all of them. Cannot be combined with --script, --test or
 #                 --command, since each of those names a single thing to loop.
 #
 #   --test FILTER narrow to one test within the chosen suite, for example `--script test:and --test 19`.
@@ -152,7 +153,12 @@ COMMAND="bun run test:everything -- --force"
 
 # Which suite --script selects. Kept as a list so an unknown name is rejected with the valid ones
 # named, rather than failing later as a missing bun script.
-SCRIPT_CHOICES="everything test test:cli test:electron test:and test:ios"
+#
+# The rule for what belongs here: every suite `bun run test:everything -- --force` runs, so that any
+# suite the pre-commit hook can refuse a commit over is a suite this script can loop and prove sound.
+# `compile` is not here because it is a build rather than a suite, and looping it says nothing about
+# flakiness. When a new suite is added to the whole set, add it here too.
+SCRIPT_CHOICES="everything test test:cli test:cli:encrypted test:cli:lan-share test:cli:sync test:cli:write-lock test:cli:hash-cache test:electron test:lan-share:cli-desktop test:harness test:and test:and:unit test:ios test:ios:unit"
 
 # The suite chosen by --script, and a filter within it from --test. Kept separate from COMMAND
 # because the two are combined only after both have been parsed, so the order of the options on the
@@ -168,11 +174,15 @@ COMMAND_GIVEN=0
 #
 # The default rungs are the suites in increasing cost order, which is also increasing order of how
 # much a failure costs to read: a red unit run names a test in seconds, a red Android run is minutes
-# of emulator output. test:ios is not among them because most of this work happens on Linux, where
-# that rung can never pass; name it explicitly (`--ladder "test test:cli test:ios"`) on macOS.
+# of emulator output. test:ios and test:ios:unit are not among them because most of this work happens
+# on Linux, where those rungs can never pass; name them explicitly on macOS, for example
+# `--ladder "test test:cli test:ios"`.
+#
+# Every suite the pre-commit hook runs is a rung, so a green climb covers what a commit is judged
+# against. When a new suite is added to the whole set, add it here too.
 LADDER=0
 LADDER_RUNGS=""
-LADDER_DEFAULT="test test:cli test:electron test:and"
+LADDER_DEFAULT="test:cli:hash-cache test:lan-share:cli-desktop test:and:unit test:harness test:cli:write-lock test test:cli:sync test:cli:encrypted test:cli:lan-share test:cli test:electron test:and"
 
 # The rung being climbed, named in every run line and in the failure report so a log read afterwards
 # says which suite each run belonged to. Empty when a single command is being looped.
