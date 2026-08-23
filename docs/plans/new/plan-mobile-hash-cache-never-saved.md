@@ -1,0 +1,57 @@
+# The mobile hash cache is never saved
+
+## Overview
+
+On Android and iOS the hash cache has never persisted a single entry. `HashCache.save()` writes through `updateFileRawOptimistic` in `packages/node-utils/src/lib/fs.ts`, which takes an exclusive lock by calling `fs.open(lockPath, 'wx')`. The mobile `fs/promises` shim (`packages/mobile-worker/src/shims/node-fs-promises.ts`) does not export `open`, so inside the embedded JS engine that call is `undefined` and throws `TypeError: fs.open is not a function`. The error travels up out of `takeUpdateLock` and `updateFileRawOptimistic` into `HashCache.save()`, whose bare `catch` swallows every error and returns without saying anything. The cache directory is created by `ensureFileDir` and then left permanently empty. The effect is that every automatic import re-exports and re-hashes every photo it has already imported, on every run, for ever, and nothing reports it. Measured on a Pixel 6 with 2,186 photos: roughly an hour of work per run that should cost about a second. The fix is to implement `open` in the shim for the exclusive-create flags, and to stop `HashCache.save()` swallowing programming errors so the next missing shim function fails loudly instead of silently. Both are small and both are aimed at exactly this failure.
+
+## Issues
+
+## Steps
+
+1. **Reproduce it at the unit level, and watch it fail.** Add a test to `packages/mobile-worker/src/test/shims/node-fs-write.test.ts` named something like "open with 'wx' creates the file exclusively and returns a closeable handle". It imports `open` from `../../shims/node-fs-promises`, installs the file's existing `installCapturingHost(false)` mock, calls `open("db/lock", "wx")`, and asserts the host recorded one `fsWriteFile` call with `exclusive` true and an empty payload, and that the returned handle's `close()` resolves. Run `mise exec -- bun run --filter=mobile-worker test -- node-fs-write` and confirm it fails, because `open` is not exported at all. Record the failure text before going further. Do not add the implementation in this step.
+
+2. **Reproduce the EEXIST half, and watch it fail.** Add a second test to the same file asserting that `open("db/lock", "wx")` rejects with an object matching `{ code: "EEXIST" }` when the host throws an EEXIST-marked error, using the file's existing `installCapturingHost(true)`. This is the behaviour `tryTakeUpdateLock` depends on to tell "somebody else holds the lock" apart from a real fault; without the mapping the lock treats contention as a fault. Confirm it fails for the same reason as step 1.
+
+3. **Reproduce the effect end to end on a device, and watch it fail.** In `apps/smoke-tests/tests/47-auto-import/test.sh`, after the existing wait for the second `Import: 1 imported`, add an assertion that the hash cache was actually written: run `adb shell run-as "$APP_ID" sh -c 'ls files/tmp/photosphere/hash-cache/*/hash-cache-x.dat'` and fail with a clear message when no file is listed. Test 47 already performs two real imports, so it exercises the same `HashCache.save()` path automatic import uses and needs no new scaffolding. Run `PHOTOSPHERE_ANDROID_DEVICES="<serial>" mise exec -- bun run test:and -- 47-auto-import` and confirm the new assertion fails while the rest of the test still passes, which is what proves the cache is empty rather than the import being broken.
+
+4. **Implement `open` in the mobile shim.** In `packages/mobile-worker/src/shims/node-fs-promises.ts`, add an exported `open(path: string, flags: string)` returning a promise of a handle interface (name it `IMobileFileHandle`, per the repository's `I` prefix rule) whose only member is `close(): Promise<void>`. For `flags` of `"wx"` or `"wx+"` it performs an exclusive create by delegating to the file's existing `writeFile` with an empty buffer and `{ flag: "wx" }`, which already routes to `host.fsWriteFile(path, base64, exclusive)` and already maps the native EEXIST error to an `EEXIST`-coded one. For any other flag it throws an error naming the flag and saying only exclusive create is implemented, rather than returning a handle that cannot read or write. Add `open` to the `fsPromises` default-export object at the bottom of the file, because that object is what the bundle hands to code doing `import * as fs from "fs/promises"`. Comment the function to say what it fixes (the hash cache never persisting), why it was needed (`updateFileRawOptimistic` takes its lock with `fs.open(lockPath, 'wx')` and the shim had no `open`), and how it targets the problem (it supplies exactly the one call that was missing, on the native path that already exists, and nothing else). Confirm the tests from steps 1 and 2 now pass.
+
+5. **Add the guard for the "not implemented" flag path.** Add a third test to `node-fs-write.test.ts` asserting `open("db/x", "r")` rejects with a message matching `/only implemented for exclusive create/`. This exists so a later caller that needs a real read or write handle gets a loud, self-naming failure rather than a stub that appears to work, per the repository's rule against silent no-ops.
+
+6. **Stop `HashCache.save()` swallowing programming errors.** In `packages/node-api/src/lib/hash-cache.ts`, narrow the bare `catch` around `updateFileRawOptimistic` so that lock contention still returns quietly (which is correct and is what the existing comment describes) while a `TypeError` or any error that is not the contention case is rethrown. This is the reason the missing `open` went unnoticed: a loud `TypeError` was converted into silence, and the cache simply appeared to work. Keep the change to the catch clause only; do not restructure `save()`. Comment it to say what it fixes (a real fault being indistinguishable from contention), why it was needed (the missing `fs.open` was invisible for exactly this reason), and how it targets the problem (contention keeps its quiet path, everything else surfaces).
+
+7. **Add a unit test for the narrowed catch.** In `packages/node-api/src/test/lib/hash-cache.test.ts` (or a new `hash-cache-save.test.ts` if that file does not exist), add tests that `save()` still returns quietly when the update fails for contention, and that it rethrows when the update throws a `TypeError`. Watch the second one fail against the pre-step-6 code before accepting it.
+
+8. **Confirm the end-to-end repro now passes.** Re-run `PHOTOSPHERE_ANDROID_DEVICES="<serial>" mise exec -- bun run test:and -- 47-auto-import` and confirm the assertion added in step 3 now finds `hash-cache-x.dat`. This is the check that proves the fix works on a device rather than only against a mock host.
+
+9. **Run the whole set.** `mise exec -- bun run test:everything -- --force` must pass, all thirteen scripts, in one run.
+
+## Unit Tests
+
+- `packages/mobile-worker/src/test/shims/node-fs-write.test.ts`, three tests for `open`: exclusive create records one `fsWriteFile` with `exclusive` true and returns a handle whose `close()` resolves; an existing file maps to an `EEXIST`-coded rejection; any flag other than `wx`/`wx+` rejects with a message naming what is missing.
+- `packages/node-api/src/test/lib/hash-cache.test.ts`, two tests for the narrowed catch in `save()`: contention still returns without throwing, and a `TypeError` from the update path is rethrown rather than swallowed.
+- No new tests for `updateFileRawOptimistic` or `tryTakeUpdateLock` in `packages/node-utils`. Neither changes, and both already work on every platform that has a real `fs.open`. The defect is the shim's, not theirs.
+
+## Smoke Tests
+
+- `apps/smoke-tests/tests/47-auto-import/test.sh` gains one assertion, described in step 3: after the imports it has already performed, the hash cache file exists under `files/tmp/photosphere/hash-cache/<key>/hash-cache-x.dat` in the app sandbox, read through `adb shell run-as`. This is the end-to-end proof, and it is put in an existing test rather than a new one because that test already creates the exact conditions and adding a second Android test would cost a whole extra app launch for one `ls`.
+- No new iOS smoke test. The same shim backs both platforms and the iOS suite runs the same test 47, so the assertion covers iOS wherever that suite is run.
+
+## Verify
+
+- `mise exec -- bun run compile` is clean.
+- `mise exec -- bun run test` passes, including the five new unit tests.
+- Each new test has been observed failing before its fix landed, and passing after. Specifically: the three `open` tests fail with `open is not a function` against the unmodified shim, and the `TypeError` test fails by not throwing against the unmodified `save()`.
+- `PHOTOSPHERE_ANDROID_DEVICES="<serial>" mise exec -- bun run test:and -- 47-auto-import` passes, and its new assertion finds a non-empty `hash-cache-x.dat`.
+- `mise exec -- bun run test:everything -- --force` passes, all thirteen scripts.
+- Every code change carries a comment saying what it fixes, why it was needed, and how it targets this problem.
+
+## Notes
+
+- **How this was found.** A throwaway measurement of the automatic import scan reported that a warm run, immediately after a cold one, hit the cache zero times out of two hundred and did all the hashing again. Inspecting the device showed the cache directory present and empty. That measurement lived in a scratch worktree which is being discarded, which is why steps 1 to 3 rebuild a repro out of things that stay: two mock-host unit tests and one `ls` in test 47.
+- **`open` is the only gap.** `packages/node-utils/src/lib/fs.ts` calls exactly `access`, `copyFile`, `mkdir`, `open`, `readdir`, `readFile`, `rename`, `rm`, `stat`, `unlink` and `writeFile`. The shim exports all of those except `open`. `copyFile` and `appendFile` are present but deliberately throw the loud NOT IMPLEMENTED error, which is the correct treatment for a call no mobile path makes. So this is a one-function hole, and the fix is one function.
+- **Why the handle can be a no-op close.** The only caller is `tryTakeUpdateLock`, which opens the lock file purely to find out whether it could be created and closes it immediately. Nothing on the native side is held open, so there is nothing for `close()` to release. Every other flag is refused rather than faked, so this cannot quietly become a general-purpose `open` later.
+- **Why step 6 is in scope even though the fix is meant to be minimal.** The missing function is one bug; the silence is the other, and it is the reason this survived. Without step 6 the next missing shim function produces the same invisible failure, and the same hour of wasted work per run, with nothing to find. Step 6 is a change to one catch clause and adds no structure.
+- **Scale of the effect, for whoever reads this later.** Measured on a Pixel 6 (`oriole`, Android 16) against 2,186 photos totalling 2.60 GB: a cold pass extrapolates to about an hour, a warm pass to about a second. Before this fix every pass was a cold pass. See `docs/performance/mobile-auto-import-scan.md` for the measurements and the method.
+- **This is not the same as the hashing being slow.** Hashing on mobile is pure-JS SHA-256 inside QuickJS at roughly 0.75 MB/s, against 500 to 900 MB/s for the platform's own SHA-256, and that is a separate and much larger piece of work. This plan does not touch it. It only makes the cache do the job it was already written to do.
+- **`getHashCacheDir` keys the directory by a hash of the database path**, so the smoke test assertion in step 3 must glob the key rather than name it.
