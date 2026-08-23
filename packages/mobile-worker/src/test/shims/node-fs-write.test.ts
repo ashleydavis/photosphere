@@ -1,4 +1,4 @@
-import { writeFile, mkdir, rename, unlink, rm } from "../../shims/node-fs-promises";
+import { writeFile, mkdir, rename, unlink, rm, open } from "../../shims/node-fs-promises";
 import { makeHostErrorEnvelope } from "../../shims/host-access";
 
 //
@@ -98,6 +98,26 @@ describe("node-fs-promises write functions", () => {
         const captured = installCapturingHost(false);
         await rename("db/x.tmp", "db/x");
         expect(captured.renames).toEqual([{ from: "db/x.tmp", to: "db/x" }]);
+    });
+
+    test("open with 'wx' creates the file exclusively and returns a closeable handle", async () => {
+        const captured = installCapturingHost(false);
+        const handle = await open("db/lock", "wx");
+        expect(captured.writes).toHaveLength(1);
+        expect(captured.writes[0].path).toBe("db/lock");
+        expect(captured.writes[0].exclusive).toBe(true);
+        expect(captured.writes[0].base64).toBe("");
+        await expect(handle.close()).resolves.toBeUndefined();
+    });
+
+    test("open with 'wx' maps an existing file to an EEXIST-coded rejection", async () => {
+        installCapturingHost(true);
+        await expect(open("db/lock", "wx")).rejects.toMatchObject({ code: "EEXIST" });
+    });
+
+    test("open refuses any flag other than exclusive create", async () => {
+        installCapturingHost(false);
+        await expect(open("db/x", "r")).rejects.toThrow(/only implemented for exclusive create/);
     });
 
     test("unlink and rm forward to the host", async () => {

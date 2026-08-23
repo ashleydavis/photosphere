@@ -52,6 +52,26 @@ const ASSET_ID_BYTES = 36;
 const SAVE_RETRIES = 20;
 
 //
+// Recognises the two ways updateFileRawOptimistic reports that it could not get in, as opposed to
+// something being wrong.
+//
+// It gives up either because it never won the lock or because another writer kept changing the file
+// under it, and it says so in the message of a plain Error. Both are ordinary outcomes for a file
+// as contended as the hash cache, and both mean "try again later", so the save swallows them. Every
+// other error means the save itself is broken and must not be mistaken for a busy moment.
+//
+// Matching on the message is the only discriminator available, because both are plain Errors. That
+// is not fragile in the direction that matters: if those messages ever change, a contended save
+// starts throwing where it used to be quiet, which is noticed immediately, rather than a fault
+// going quiet again.
+//
+function isUpdateContentionError(error: any): boolean {
+    const message = error instanceof Error ? error.message : "";
+    return message.includes("could not take the update lock")
+        || message.includes("kept changing under concurrent writers");
+}
+
+//
 // The directory holding the hash cache of one database.
 //
 // There is one cache per database, not one per machine, because an entry now records the id the
@@ -508,7 +528,24 @@ export class HashCache {
                 return this.encodeEntries(mergedEntries);
             }, SAVE_RETRIES);
         }
-        catch {
+        catch (error: any) {
+            if (!isUpdateContentionError(error)) {
+                // Not contention, so it is a real fault and it goes up.
+                //
+                // What this fixes: a fault here used to be indistinguishable from contention, so a
+                // broken save looked exactly like a busy one and reported nothing.
+                //
+                // Why it was needed: on mobile the fs shim had no `open`, so taking the update lock
+                // threw a TypeError on every single save. This catch used to take everything and
+                // return, so the cache directory sat permanently empty, and every automatic import
+                // re-hashed every photo it had already imported, for ever, with nothing to find.
+                //
+                // How it targets the problem: contention keeps the quiet path it has always had,
+                // and everything else surfaces, so the next missing shim function fails loudly and
+                // names itself instead of costing an hour a run in silence.
+                throw error;
+            }
+
             // Too much contention to get in. Nothing is said about it, because nothing is wrong:
             // the changeset stays pending and stays dirty, so the next save carries these entries
             // along with whatever is added by then, and even if the process exits first the only

@@ -44,6 +44,27 @@ read_value() {
     echo "$response" | sed 's/.*"value":"\([^"]*\)".*/\1/'
 }
 
+# Waits for the hash cache file the imports should have written into the app's sandbox.
+#
+# The directory under hash-cache/ is named by a hash of the database path, and the app makes its own
+# database here, so the name is not known to the test and the tree is listed rather than the file
+# named. `ls -R` is used instead of a glob because the shell `adb shell` gives us runs as the shell
+# user, which cannot read the app's private storage, so a pattern would come back unexpanded.
+#
+# It is polled rather than read once because the save happens as the import finishes, which is
+# around the same moment as the line the test waited for.
+wait_for_hash_cache() {
+    local ticks=30
+    while [ "$ticks" -gt 0 ]; do
+        if adb shell run-as "$APP_ID" ls -R files/tmp/photosphere/hash-cache 2>/dev/null | tr -d '\r' | grep -q "hash-cache-x.dat"; then
+            return 0
+        fi
+        sleep 1
+        ticks=$((ticks - 1))
+    done
+    return 1
+}
+
 # Removes the photo from the device library however the test ends, so the next run starts clean and
 # a failed run does not leave a photo behind for the one after it to find.
 on_exit() {
@@ -117,6 +138,17 @@ wait_for_log "$TMP_DIR" "Import progress shown" 180 || exit 1
 # second photo reports one, exactly as the run that took in the first one did. That both photos are in
 # the database is proven below, by the gallery holding two.
 wait_for_log "$TMP_DIR" "Import: 1 imported" 180 || exit 1
+
+# Two real imports have now run, so the hash cache has to hold something. It never did on a phone:
+# the embedded engine's fs shim had no `open`, so taking the cache's update lock threw a TypeError,
+# HashCache.save() swallowed it, and the cache directory stayed permanently empty. Nothing about the
+# import looked wrong from outside, and every run re-exported and re-hashed every photo it had
+# already imported, which on 2,186 photos is about an hour of work per run instead of a second.
+if ! wait_for_hash_cache; then
+    log_error "The hash cache was never written: no hash-cache-x.dat under files/tmp/photosphere/hash-cache after two imports. Every import will re-hash every photo it has already imported."
+    exit 1
+fi
+log_info "Hash cache written to the app sandbox"
 
 # The second photo has to land in the gallery without the database being reopened, which is what the
 # arrival messages are for. A photo that only shows up after a restart is not a photo the user saw

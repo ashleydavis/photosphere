@@ -1,9 +1,9 @@
 //
 // Mobile `fs/promises` shim backing the read path on native host functions.
 //
-// The read path (`readFile`, `access`, `stat`, `readdir`) and the write path (`writeFile`, `mkdir`,
-// `rename`, `unlink`, `rm`) are both implemented, each calling a synchronous `host.fs*` function and
-// adapting the result to the Node `fs/promises` shape the storage code expects. Functions neither
+// The read path (`readFile`, `access`, `stat`, `readdir`) and the write path (`writeFile`, `open`,
+// `mkdir`, `rename`, `unlink`, `rm`) are both implemented, each calling a synchronous `host.fs*`
+// function and adapting the result to the Node `fs/promises` shape the storage code expects. Functions neither
 // path uses (`appendFile`, `copyFile`, ...) throw the loud NOT IMPLEMENTED error rather than
 // silently doing nothing, so an unaccounted-for call is obvious.
 //
@@ -227,6 +227,46 @@ export async function writeFile(path: string, data: Buffer | Uint8Array | string
 }
 
 //
+// The handle returned by `open`. Only `close` is offered, because the only caller opens a lock file
+// to find out whether it could be created and closes it immediately.
+//
+export interface IMobileFileHandle {
+    // Releases the handle. Nothing is held open on the native side, so this has nothing to release.
+    close(): Promise<void>;
+}
+
+//
+// Opens a file for exclusive create ('wx'/'wx+') and returns a handle.
+//
+// What this fixes: the hash cache never persisted a single entry on Android or iOS, so every
+// automatic import re-exported and re-hashed every photo it had already imported, on every run.
+//
+// Why it was needed: `updateFileRawOptimistic` in node-utils takes its exclusive lock by calling
+// `fs.open(lockPath, 'wx')`, and this shim exported no `open` at all, so inside the embedded engine
+// that call was `undefined` and threw a TypeError. The throw travelled up into `HashCache.save()`,
+// whose catch swallowed it, leaving the cache directory permanently empty and nothing said.
+//
+// How it targets the problem: it supplies exactly the one call that was missing, routed through the
+// `writeFile` above so it lands on the native `fsWriteFile` path that already exists and already
+// maps the native EEXIST error to an EEXIST-coded one, which is what tells the lock "somebody else
+// holds it" apart from a real fault. Every other flag is refused by name rather than handed back a
+// handle that cannot read or write, so this cannot quietly become a general-purpose `open` later.
+//
+export async function open(path: string, flags: string): Promise<IMobileFileHandle> {
+    if (flags !== "wx" && flags !== "wx+") {
+        throw new Error(`fs.open is only implemented for exclusive create ('wx'/'wx+') on ${hostPlatform()}, not for flags '${flags}'.`);
+    }
+
+    await writeFile(path, Buffer.alloc(0), { flag: "wx" });
+
+    return {
+        close: async (): Promise<void> => {
+            // Nothing is held open on the native side, so there is nothing to release.
+        },
+    };
+}
+
+//
 // Creates a directory. Only the recursive form is used by the storage layer.
 //
 export async function mkdir(path: string, options?: { recursive?: boolean }): Promise<void> {
@@ -271,6 +311,6 @@ export async function copyFile(): Promise<void> {
 //
 // The default export mirrors `import fsPromises from "fs/promises"`.
 //
-const fsPromises = { readFile, access, stat, readdir, writeFile, mkdir, rename, unlink, rm, appendFile, copyFile };
+const fsPromises = { readFile, access, stat, readdir, writeFile, open, mkdir, rename, unlink, rm, appendFile, copyFile };
 
 export default fsPromises;
