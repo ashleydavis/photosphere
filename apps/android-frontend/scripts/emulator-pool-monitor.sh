@@ -133,6 +133,23 @@ MONITOR_MAX_UPTIME_SECONDS="${MONITOR_MAX_UPTIME_SECONDS:-43200}"
 # wanted. A read-only run takes no lock, so any number of people can watch at once.
 MONITOR_LOCK_PATH="/tmp/photosphere-emulator-pool-monitor.lock"
 
+# Where a monitor replacing a stale lock holds its own lock while it does it, so two monitors started
+# at the same moment cannot both decide the lock is stale and both replace it, which would leave two
+# monitors running with a lock each and no way for either to see the other.
+MONITOR_TAKEOVER_LOCK_PATH="/tmp/photosphere-emulator-pool-monitor-takeover.lock"
+
+# How long to wait for the process holding the lock to write its pid into it before calling the lock
+# stale. A monitor records itself the instant it has the lock, so this only has to cover the gap
+# between those two steps in a monitor that started a moment ago.
+MONITOR_LOCK_STALE_WAIT_SECONDS=3
+
+# The pid of the live monitor found holding the lock, for the message that says who to stop. Empty
+# when the lock was lost to a monitor that started at the same moment and had not yet recorded itself.
+MONITOR_LOCK_HOLDER_PID=""
+
+# The descriptor this monitor holds the lock on. Set when the lock is taken.
+MONITOR_LOCK_FD=""
+
 # Whether a start has already been attempted for the current outage, so a machine with no bridge and
 # nobody at the keyboard is asked for a password once rather than once a minute for ever. Reset the
 # moment the pool is up again, so a later outage gets its own attempt.
@@ -1241,6 +1258,105 @@ line_loop() {
     done
 }
 
+#
+# True when the given pid is a live monitor.
+#
+# Reads the process's command line rather than trusting the number on its own, because a pid recorded
+# hours ago may since have been handed to something else entirely, and killing or deferring to the
+# wrong process is worse than starting a second monitor.
+# Usage: pid_is_live_monitor <pid>
+#
+pid_is_live_monitor() {
+    local pid="$1"
+    local command_line
+
+    case "$pid" in
+        ''|*[!0-9]*)
+            return 1
+            ;;
+    esac
+
+    command_line="$(ps -o args= -p "$pid" 2>/dev/null)"
+    case "$command_line" in
+        *emulator-pool-monitor.sh*)
+            return 0
+            ;;
+    esac
+    return 1
+}
+
+#
+# The pid the monitor holding the lock wrote into it, or empty when it holds nothing readable.
+# Usage: recorded_monitor_pid
+#
+recorded_monitor_pid() {
+    head -1 "$MONITOR_LOCK_PATH" 2>/dev/null | tr -d '[:space:]'
+}
+
+#
+# Takes the one monitor lock on this machine, or reports that a live monitor already holds it.
+#
+# An flock lives on the open descriptor rather than on the file, so every process that inherits that
+# descriptor holds the lock too. That is what stopped this script starting for a day: the monitor ran
+# adb, adb forked its server, that server is long-lived and inherited the descriptor, and when the
+# monitor exited the server went on holding a lock with no monitor behind it. flock alone cannot tell
+# that apart from a monitor that is running, so every later start was refused and the pool went
+# unwatched with nothing to say why.
+#
+# So the holder writes its pid into the file the moment it has the lock, and a lock whose pid is not
+# a live monitor is a leaked descriptor. Taking it over is done by replacing the file rather than by
+# killing anything: the leaked descriptor keeps its lock on the old file, which by then has no name
+# and blocks nobody, and the new file starts clean.
+# Usage: acquire_monitor_lock
+#
+acquire_monitor_lock() {
+    local waited=0
+    local holder_pid
+    local takeover_lock_fd
+
+    exec {MONITOR_LOCK_FD}<>"$MONITOR_LOCK_PATH"
+    if flock -n "$MONITOR_LOCK_FD"; then
+        printf '%s\n' "$$" > "$MONITOR_LOCK_PATH"
+        return 0
+    fi
+
+    # A monitor records itself the instant it has the lock, so a lock with no live monitor behind it
+    # is a leaked descriptor. The wait is for a monitor that took the lock a moment ago and has not
+    # written its pid yet, so two started together cannot mistake each other for dead.
+    while true; do
+        holder_pid="$(recorded_monitor_pid)"
+        if pid_is_live_monitor "$holder_pid"; then
+            MONITOR_LOCK_HOLDER_PID="$holder_pid"
+            return 1
+        fi
+        if [ "$waited" -ge "$MONITOR_LOCK_STALE_WAIT_SECONDS" ]; then
+            break
+        fi
+        sleep 1
+        waited=$(( waited + 1 ))
+    done
+
+    exec {takeover_lock_fd}<>"$MONITOR_TAKEOVER_LOCK_PATH"
+    if ! flock -n "$takeover_lock_fd"; then
+        exec {takeover_lock_fd}>&-
+        return 1
+    fi
+
+    log_only "the lock at $MONITOR_LOCK_PATH was held by a descriptor left behind by a monitor that has exited, not by a running monitor. Replacing the lock file and starting."
+    rm -f "$MONITOR_LOCK_PATH"
+    exec {MONITOR_LOCK_FD}>&-
+    exec {MONITOR_LOCK_FD}<>"$MONITOR_LOCK_PATH"
+    if ! flock -n "$MONITOR_LOCK_FD"; then
+        exec {takeover_lock_fd}>&-
+        MONITOR_LOCK_HOLDER_PID="$(recorded_monitor_pid)"
+        return 1
+    fi
+
+    printf '%s\n' "$$" > "$MONITOR_LOCK_PATH"
+    exec {takeover_lock_fd}>&-
+    return 0
+}
+
 trap restore_terminal INT TERM
 
 if ! command -v adb >/dev/null 2>&1; then
@@ -1255,10 +1371,27 @@ if ! command -v flock >/dev/null 2>&1; then
     echo "on this machine. Two monitors would fight over the same emulators, so refusing to start." >&2
     exit 1
 fi
-exec {monitor_lock_fd}<>"$MONITOR_LOCK_PATH"
-if ! flock -n "$monitor_lock_fd"; then
-    log_only "refused to start: a monitor is already running and holds $MONITOR_LOCK_PATH."
-    echo "ERROR: a monitor is already running on this machine (it holds $MONITOR_LOCK_PATH)." >&2
+
+# The adb server is started here, before the lock below is opened, so that it cannot inherit it.
+#
+# adb's server is not a child that exits: the first adb command that finds no server forks one that
+# stays up for days. A server forked after the lock is open inherits the lock descriptor and holds
+# the lock for as long as it lives, which is long after the monitor that forked it has gone. Started
+# before there is a descriptor to inherit, it is already up when the health checks run, so none of
+# them has any reason to fork another.
+if ! adb start-server >/dev/null; then
+    echo "ERROR: adb start-server failed, so emulator health cannot be read." >&2
+    exit 1
+fi
+
+if ! acquire_monitor_lock; then
+    if [ -n "$MONITOR_LOCK_HOLDER_PID" ]; then
+        log_only "refused to start: monitor pid $MONITOR_LOCK_HOLDER_PID is running and holds $MONITOR_LOCK_PATH."
+        echo "ERROR: a monitor is already running on this machine (pid $MONITOR_LOCK_HOLDER_PID, holding $MONITOR_LOCK_PATH)." >&2
+    else
+        log_only "refused to start: another monitor took $MONITOR_LOCK_PATH at the same moment."
+        echo "ERROR: another monitor started at the same moment and took $MONITOR_LOCK_PATH." >&2
+    fi
     echo "Stop that one first. To read the pool without starting a second monitor:" >&2
     echo "  bun run emu:and:pool:status" >&2
     echo "  bun run --filter=android-frontend emu:pool:diagnose" >&2
