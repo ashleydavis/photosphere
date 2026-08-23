@@ -237,32 +237,55 @@ release_device
 HELPER
 chmod +x "$ACQUIRE_HELPER"
 
-rm -f /tmp/photosphere-android-device-fakedev-*.lock
+# A claim locks /tmp/photosphere-android-device-<serial>.lock, which is a machine-wide path, so two
+# runs of this file at once claimed the same two fake devices: one run's holder occupied the device
+# the other run expected to be free, and the cleanup below deleted the other run's locks as well as
+# its own. The serials therefore carry this run's pid, which keeps the claims independent and keeps
+# the cleanup to this run's own locks.
+FAKE_DEVICE_A="fakedev-a-$$"
+FAKE_DEVICE_B="fakedev-b-$$"
+FAKE_DEVICE_CYCLE="fakedev-cycle-$$"
 
-RUNNER_SLOTS=(fakedev-a fakedev-b)
+#
+# Deletes this run's fake device locks, and only those. Each one is removed by name after it has
+# been shown to exist, so a run that left none behind passes over silently rather than asking the
+# shell to delete a pattern that matched nothing.
+#
+remove_fake_device_locks() {
+    local lock_file
+    for lock_file in "/tmp/photosphere-android-device-fakedev-"*"-$$.lock"; do
+        if [ -e "$lock_file" ]; then
+            rm "$lock_file"
+        fi
+    done
+}
+
+remove_fake_device_locks
+
+RUNNER_SLOTS=("$FAKE_DEVICE_A" "$FAKE_DEVICE_B")
 acquire_device
-check "acquire_device takes the first free device" "fakedev-a" "$ACQUIRED_DEVICE"
+check "acquire_device takes the first free device" "$FAKE_DEVICE_A" "$ACQUIRED_DEVICE"
 release_device
 check "release_device clears the held device" "" "$ACQUIRED_DEVICE"
 
 # A device held by another process is skipped, not waited for, while others are free.
-"$ACQUIRE_HELPER" 8 fakedev-a > "$WORK/acq-holder" 2>/dev/null &
+"$ACQUIRE_HELPER" 8 ${FAKE_DEVICE_A} > "$WORK/acq-holder" 2>/dev/null &
 holder_pid=$!
 for _ in $(seq 1 60); do [ -s "$WORK/acq-holder" ] && break; sleep 0.1; done
-"$ACQUIRE_HELPER" 0 fakedev-a fakedev-b > "$WORK/acq-second" 2>/dev/null
-check "a busy device is skipped for a free one" "fakedev-b" "$(cat "$WORK/acq-second")"
+"$ACQUIRE_HELPER" 0 ${FAKE_DEVICE_A} ${FAKE_DEVICE_B} > "$WORK/acq-second" 2>/dev/null
+check "a busy device is skipped for a free one" "${FAKE_DEVICE_B}" "$(cat "$WORK/acq-second")"
 
 # With every device busy, a further acquire waits and then gives up.
-"$ACQUIRE_HELPER" 8 fakedev-b > "$WORK/acq-holder2" 2>/dev/null &
+"$ACQUIRE_HELPER" 8 ${FAKE_DEVICE_B} > "$WORK/acq-holder2" 2>/dev/null &
 holder2_pid=$!
 for _ in $(seq 1 60); do [ -s "$WORK/acq-holder2" ] && break; sleep 0.1; done
-"$ACQUIRE_HELPER" 0 fakedev-a fakedev-b > "$WORK/acq-third" 2>/dev/null
+"$ACQUIRE_HELPER" 0 ${FAKE_DEVICE_A} ${FAKE_DEVICE_B} > "$WORK/acq-third" 2>/dev/null
 check "acquire_device times out when every device is busy" "TIMEOUT" "$(cat "$WORK/acq-third")"
 wait "$holder_pid" "$holder2_pid" 2>/dev/null
 
 # Devices are handed back when a holder finishes, so the next taker gets one.
-"$ACQUIRE_HELPER" 0 fakedev-a fakedev-b > "$WORK/acq-fourth" 2>/dev/null
-check "a device is free again once its holder releases it" "fakedev-a" "$(cat "$WORK/acq-fourth")"
+"$ACQUIRE_HELPER" 0 ${FAKE_DEVICE_A} ${FAKE_DEVICE_B} > "$WORK/acq-fourth" 2>/dev/null
+check "a device is free again once its holder releases it" "${FAKE_DEVICE_A}" "$(cat "$WORK/acq-fourth")"
 
 # Claiming and releasing the same single device over and over must keep working. Where there is no
 # flock the claim takes no descriptor, and releasing keyed only off that descriptor left the suite's
@@ -278,12 +301,12 @@ SAVED_CLAIM_TIMEOUT="$DEVICE_CLAIM_TIMEOUT"
 DEVICE_CLAIM_TIMEOUT=3
 CYCLE_OK="yes"
 for cycle in 1 2 3; do
-    RUNNER_SLOTS=("fakedev-cycle")
+    RUNNER_SLOTS=("${FAKE_DEVICE_CYCLE}")
     if ! acquire_device; then
         CYCLE_OK="claim failed on cycle $cycle"
         break
     fi
-    if [ "$ACQUIRED_DEVICE" != "fakedev-cycle" ]; then
+    if [ "$ACQUIRED_DEVICE" != "${FAKE_DEVICE_CYCLE}" ]; then
         CYCLE_OK="wrong device on cycle $cycle: $ACQUIRED_DEVICE"
         break
     fi
@@ -296,7 +319,7 @@ done
 DEVICE_CLAIM_TIMEOUT="$SAVED_CLAIM_TIMEOUT"
 check "repeated claim/release on one device always hands it back" "yes" "$CYCLE_OK"
 
-rm -f /tmp/photosphere-android-device-fakedev-*.lock
+remove_fake_device_locks
 unset PHOTOSPHERE_DEVICE_CLAIM_TIMEOUT
 RUNNER_SLOTS=()
 
