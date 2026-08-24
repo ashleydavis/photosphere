@@ -521,6 +521,9 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         copyToClipboard,
         backgroundImportDescription: "Runs whenever Photosphere is open, importing new photos as they appear.",
         onShowNotification,
+        // Nothing to fire: the import runs in this app's own processes, so the gallery is told about
+        // every photo as it arrives and never falls behind.
+        onDatabaseContentChanged: () => () => {},
         onDatabasesChanged,
         onUpdateAvailable,
         openFolder,

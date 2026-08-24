@@ -148,6 +148,21 @@ if [ "${FIRST_COUNT:-0}" -lt 1 ]; then
     exit 1
 fi
 
+# Open the database and leave it open for the rest of the test.
+#
+# This is what makes the last step mean something. The gallery is filled by messages announcing each
+# photo as it is imported, and those are delivered to whatever is listening at the time: while the
+# app is off screen there is nothing listening, and nothing replays them afterwards. So a gallery
+# opened after the app comes back would be right for the wrong reason, having loaded everything from
+# disk. Opened before, it has to be brought up to date on its own.
+send_command "$APP_PORT" menu '{"itemId":"open-database"}' || exit 1
+wait_for_log "$TMP_DIR" "Open database dialog opened"
+send_command "$APP_PORT" click '{"dataId":"database-list-item-0"}' || exit 1
+wait_for_log "$TMP_DIR" "Load assets task completed: 1 assets loaded" 120 || exit 1
+
+send_command "$APP_PORT" navigate '{"page":"/"}' || exit 1
+wait_for_log "$TMP_DIR" "Gallery loaded: 1 assets" 60 || exit 1
+
 # Send the app to the background. From here the WebView's timers are throttled and then stopped, and
 # its socket to the host bridge may be suspended, so nothing below reads app.log until the app is
 # back on screen.
@@ -198,12 +213,13 @@ wait_for_ready "$APP_PORT"
 # a second later.
 wait_for_log "$TMP_DIR" "Import: 0 imported, 3 already there" 180 || exit 1
 
-send_command "$APP_PORT" menu '{"itemId":"open-database"}' || exit 1
-wait_for_log "$TMP_DIR" "Open database dialog opened"
-send_command "$APP_PORT" click '{"dataId":"database-list-item-0"}' || exit 1
+# The gallery has to catch up on its own, with nobody opening the database again.
+#
+# It was open throughout, and the two photos taken in while the app was away were announced to a
+# WebView that was not running to hear it. Coming back to the screen is what reloads it. Without
+# that, the gallery goes on showing the one photo it held when the user left, however many have been
+# backed up since, and the only way to see the truth is to know to open the database again.
 wait_for_log "$TMP_DIR" "Load assets task completed: 3 assets loaded" 120 || exit 1
-
-send_command "$APP_PORT" navigate '{"page":"/"}' || exit 1
 wait_for_log "$TMP_DIR" "Gallery loaded: 3 assets" 60 || exit 1
 
 # Switching automatic import off has to leave nothing behind: no service, and with it no notification.

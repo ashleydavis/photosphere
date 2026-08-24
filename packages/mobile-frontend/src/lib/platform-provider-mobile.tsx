@@ -146,6 +146,9 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
     // Registered callbacks for show-notification events (used by the news-notification flow).
     const showNotificationCallbacksRef = useRef<Set<(data: IShowNotificationData) => void>>(new Set());
 
+    // Registered callbacks for the open database having changed while the WebView was not running.
+    const databaseContentChangedCallbacksRef = useRef<Set<() => void>>(new Set());
+
     // Registered callbacks for sync-started / sync-completed events. Fired from the worker's sync task
     // messages routed below, mirroring the desktop main process relaying sync-started/sync-completed to
     // the renderer. These drive the navbar sync spinner via the shared SyncContext.
@@ -402,6 +405,13 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         return () => {};
     }, []);
 
+    const onDatabaseContentChanged = useCallback((callback: () => void): (() => void) => {
+        databaseContentChangedCallbacksRef.current.add(callback);
+        return () => {
+            databaseContentChangedCallbacksRef.current.delete(callback);
+        };
+    }, []);
+
     const onUpdateAvailable = useCallback((_callback: (data: IUpdateAvailableData) => void): (() => void) => {
         return () => {};
     }, []);
@@ -651,6 +661,7 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         copyToClipboard,
         backgroundImportDescription: BACKGROUND_IMPORT_DESCRIPTION,
         onShowNotification,
+        onDatabaseContentChanged,
         onDatabasesChanged,
         onUpdateAvailable,
         openFolder,
@@ -722,6 +733,32 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
             configStore.setConfigValue(persistentStore, key, value);
         }
     );
+
+    // Tells the interface to reload the open database whenever the app comes back to the screen.
+    //
+    // Photos reach the gallery as task messages announcing each one, and those are delivered to
+    // whatever is listening at the time. While the app is off screen the WebView is suspended, so
+    // every photo the background import takes in is announced to nobody, and nothing replays them
+    // when it wakes. Without this the gallery goes on showing what it held when the user left,
+    // however many photos have been backed up since, until they think to open the database again.
+    //
+    // The whole database is reloaded rather than the missed photos being worked out, because there
+    // is no record of what was missed: the messages were sent while nothing was listening.
+    useEffect(() => {
+        const onVisibilityChange = () => {
+            if (document.visibilityState !== "visible") {
+                return;
+            }
+
+            databaseContentChangedCallbacksRef.current.forEach(callback => callback());
+        };
+
+        document.addEventListener("visibilitychange", onVisibilityChange);
+
+        return () => {
+            document.removeEventListener("visibilitychange", onVisibilityChange);
+        };
+    }, []);
 
     // Starts the background automatic import when it is switched on, and stops it when it is
     // switched off.

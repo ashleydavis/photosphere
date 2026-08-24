@@ -785,6 +785,25 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
     }, [platform]);
 
     //
+    // Reload the open database when the platform says its content changed underneath us.
+    //
+    // On mobile the background import runs while the WebView is suspended, so the messages that
+    // would have added each photo to the gallery were sent while nothing was listening. A reload is
+    // the only way back to the truth: there is no record of what was missed.
+    //
+    useEffect(() => {
+        return platform.onDatabaseContentChanged(() => {
+            if (!databasePath) {
+                return;
+            }
+
+            loadAssets(databasePath).catch(err => {
+                log.exception('Error reloading the database after it changed in the background:', err as Error);
+            });
+        });
+    }, [platform, databasePath]);
+
+    //
     // Subscribe to sync-started and sync-completed events from the platform.
     //
     useEffect(() => {

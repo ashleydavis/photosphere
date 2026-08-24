@@ -393,6 +393,8 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         copyToClipboard,
         backgroundImportDescription: "Runs while this page is open.",
         onShowNotification,
+        // Nothing to fire: the import runs in this page, so the gallery never falls behind it.
+        onDatabaseContentChanged: () => () => {},
         onDatabasesChanged,
         onUpdateAvailable,
         openFolder,

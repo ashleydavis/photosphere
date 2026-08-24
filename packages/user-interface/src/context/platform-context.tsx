@@ -413,6 +413,22 @@ export interface IPlatformContext {
     onShowNotification: (callback: (data: IShowNotificationData) => void) => Unsubscribe;
 
     //
+    // Subscribes to the open database's content having changed underneath the interface, so the
+    // gallery reloads it.
+    //
+    // The gallery is kept up to date by task messages as photos are imported, and that works for as
+    // long as the code listening for them is running. On mobile it is not: automatic import runs in
+    // a native service while the WebView is suspended, so every message announcing a photo is sent
+    // to nobody and nothing replays them. The gallery then understates what has been backed up until
+    // the database is opened again, which is not something a user would think to do.
+    //
+    // Fired by the platforms where that can happen. Desktop and web run the import in the same
+    // process as the interface, so nothing is missed there and nothing fires.
+    // Returns an unsubscribe function.
+    //
+    onDatabaseContentChanged: (callback: () => void) => Unsubscribe;
+
+    //
     // Subscribes to databases-changed events fired from the main process when the set of
     // configured databases changes outside of a renderer-initiated mutation (e.g. when a
     // replication completes and registers a new database). The renderer uses this to refresh
