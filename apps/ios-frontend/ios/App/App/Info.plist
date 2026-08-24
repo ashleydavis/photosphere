@@ -34,6 +34,17 @@
 	<string>Photosphere reads your photo library so it can import your photos into your own database and keep a backup copy of them.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Photosphere saves photos back to your photo library when you export them.</string>
+	<!-- Automatic import catching up while the app is not on screen. The identifier must match
+	     autoImportBackgroundTaskIdentifier in AppDelegate.swift: the system refuses to register a
+	     handler for an identifier the app has not declared here, and refuses at launch. -->
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>au.com.codecapers.photosphere.auto-import</string>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>processing</string>
+	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

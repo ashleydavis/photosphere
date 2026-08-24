@@ -383,6 +383,18 @@ export interface IPlatformContext {
     //
     copyToClipboard: (blob: Blob, contentType: string) => Promise<void>;
 
+    //
+    // One sentence saying what automatic import does while the app is not on screen, shown under the
+    // toggle on the settings card.
+    //
+    // It comes from the platform because what each one can honestly promise differs enormously:
+    // Android keeps importing in a foreground service, iOS catches up when the system allows, and a
+    // desktop is only ever running when it is running. The card must not work this out for itself,
+    // because a component that decides which platform it is on is a component that says the wrong
+    // thing on the next one.
+    //
+    backgroundImportDescription: string;
+
 
     //
     // Subscribes to sync-started events. Returns an unsubscribe function.

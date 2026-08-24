@@ -1,5 +1,6 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
 import eruda from "eruda";
+import { Capacitor } from "@capacitor/core";
 import { Network } from "@capacitor/network";
 import { PlatformContextProvider, ConfigContextProvider, createConfig, useLanShareTasks, readBrowserNetworkStatus, subscribeBrowserNetworkStatus, signalTestAppReady, TEST_MENU_EVENT, TEST_OPEN_DATABASE_EVENT, TEST_SEED_NEWS_EVENT, TEST_PICK_FILES_EVENT, TEST_STAGE_EXPORT_EVENT, TEST_STAGE_DELETE_EVENT, TEST_STAGE_PICK_FOLDER_EVENT, TEST_NOTIFY_DATABASE_EDITED_EVENT, type IPlatformContext, type IPlatformEvent, type INetworkStatus, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions, type ISaveDownloadResult, UuidGeneratorProvider } from "user-interface";
 import { TaskQueue, TaskStatus, getQueueBackend } from "task-queue";
@@ -9,20 +10,14 @@ import { log, RandomUuidGenerator, TestUuidGenerator, type IUuidGenerator } from
 import { cancelMobileTasks, subscribeMobileTaskMessage, subscribeMobileTaskComplete, pickMobileFiles, setInjectedPickedFiles } from "./mobile-platform-tasks";
 import { pickMobileFolder, saveMobileDownloadedFile, saveMobileDownloadedFiles, setInjectedExportOutcome, setInjectedPickFolderResult } from "./mobile-export";
 import { setInjectedDeleteOutcome } from "./mobile-media-cleanup";
-import { getDefaultDatabasePath, loadAutoImportSettings, saveAutoImportSettings, setDefaultDatabasePath } from "user-interface";
+import { AUTO_IMPORT_ENABLED_KEY } from "user-interface";
 import type { IImportProgressMessage } from "api/src/lib/import-assets.types";
-import { AUTO_IMPORT_TASK_SOURCE, DEFAULT_DATABASE_DISPLAY_NAME, planMobileAutoImport } from "./mobile-auto-import";
+import type { IAutoImportSource } from "api/src/lib/auto-import-settings";
+import { planMobileAutoImport } from "api/src/lib/auto-import-mobile";
+import { getAutoImportFileValue, isAutoImportFileKey, readAutoImportFile, setAutoImportFileValue } from "./mobile-auto-import-file";
+import { mobileAutoImportConfigFile } from "./mobile-auto-import-config-file";
 import { readPermissionState, resolveMediaPermission } from "./mobile-media-permission";
 import { JsEngine } from "./js-engine-plugin";
-
-//
-// How often the automatic import settings are re-read, in milliseconds.
-//
-// The settings card writes them through the config store, which has no change notification, so this
-// is how a change reaches the scheduler. A read of local storage costs almost nothing and nothing
-// happens unless something actually changed.
-//
-const AUTO_IMPORT_SETTINGS_POLL_MS = 2000;
 import * as configStore from "./mobile-config-store";
 import { MobileSecretStore } from "./mobile-secure-store";
 import { createCapacitorSecureStore } from "./secure-store-plugin";
@@ -35,6 +30,19 @@ import type { IConflictResolution } from "lan-share-core";
 // The uuid generator this platform provides to the app: deterministic under a smoke test so task ids
 // are reproducible. On mobile the native layer injects __PHOTOSPHERE_TEST__ into the WebView.
 //
+//
+// What automatic import does on this phone while the app is not on screen.
+//
+// The two platforms differ, and the difference is the platform rather than a design choice, so the
+// card says which one the user has. Android runs a foreground service and keeps importing with the
+// screen off. iOS runs a background processing task the system schedules when it chooses, typically
+// while the phone is charging and idle, so a phone in a pocket all day may import nothing until the
+// app is opened. Saying "keeps backing up" on iOS would be a promise the platform does not keep.
+//
+const BACKGROUND_IMPORT_DESCRIPTION = Capacitor.getPlatform() === "ios"
+    ? "When the app is not open, iOS decides when to catch up, usually while the phone is charging."
+    : "Keeps importing when the app is closed and the screen is off, showing a notification while it does.";
+
 const isTestMode = Boolean((globalThis as { __PHOTOSPHERE_TEST__?: boolean }).__PHOTOSPHERE_TEST__);
 const uuidGenerator: IUuidGenerator = isTestMode ? new TestUuidGenerator() : new RandomUuidGenerator();
 
@@ -146,10 +154,13 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
 
     // The mobile background-sync scheduler (debounce + periodic + gate), created once. It enqueues
     // sync-database tasks onto the embedded worker queue when the gate permits.
-    // Whether the automatic import task is running, and the settings it was started with, so a
-    // change to the settings restarts it and an unchanged read does nothing.
-    const autoImportRunningRef = useRef<boolean>(false);
-    const autoImportSettingsRef = useRef<string | undefined>(undefined);
+    // Whether this provider has told the native side to start the background import, so a settings
+    // write that changes nothing about it does not start it again.
+    const autoImportStartedRef = useRef<boolean>(false);
+
+    // Called when one of the automatic import settings is written, so the background import is told
+    // to start or stop straight away rather than finding out later.
+    const autoImportChangedRef = useRef<(() => void) | undefined>(undefined);
 
     const syncSchedulerRef = useRef<MobileSyncScheduler | null>(null);
     const getSyncScheduler = useCallback((): MobileSyncScheduler => {
@@ -638,6 +649,7 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         onSyncStarted,
         onSyncCompleted,
         copyToClipboard,
+        backgroundImportDescription: BACKGROUND_IMPORT_DESCRIPTION,
         onShowNotification,
         onDatabasesChanged,
         onUpdateAvailable,
@@ -683,34 +695,70 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
 
     // Generic config persisted to WebView localStorage so settings (developer mode, theme, etc.)
     // survive app restarts, matching how databases and secrets are persisted.
+    //
+    // The automatic import keys are the exception: they go to auto-import.toml in the storage
+    // sandbox instead. Local storage belongs to the WebView and nothing else can read it, and the
+    // background import runs while there is no WebView. The settings card is unchanged and still
+    // writes the same three keys on every platform; the routing is here because where they are kept
+    // is a platform's business.
     const config = createConfig(
-        async (key) => configStore.getConfigValue(persistentStore, key),
+        async (key) => {
+            if (isAutoImportFileKey(key)) {
+                return getAutoImportFileValue(mobileAutoImportConfigFile, key);
+            }
+            return configStore.getConfigValue(persistentStore, key);
+        },
         async (key, value) => {
+            if (isAutoImportFileKey(key)) {
+                await setAutoImportFileValue(mobileAutoImportConfigFile, key, value as boolean | string | IAutoImportSource[] | undefined);
+
+                // Tell the background import to catch up with what was just written, rather than
+                // having it find out on a timer.
+                if (autoImportChangedRef.current) {
+                    autoImportChangedRef.current();
+                }
+                return;
+            }
             configStore.setConfigValue(persistentStore, key, value);
         }
     );
 
-    // Starts automatic import when it is switched on, and stops it when it is switched off. This is
-    // the mobile counterpart of what the desktop main process does: the same auto-import task, read
-    // from the same settings the settings card writes, so switching the toggle takes effect without
-    // a restart.
+    // Starts the background automatic import when it is switched on, and stops it when it is
+    // switched off.
+    //
+    // The WebView no longer drives the import itself. It used to hold a timer that queued an
+    // import-assets task, which meant automatic import stopped the moment the app left the screen:
+    // the operating system throttles and then stops a WebView's timers. The loop lives on the native
+    // side now (a foreground service on Android, the plugin's driver on iOS), and this is reduced to
+    // telling it to start or stop and asking for the photo permission first. Nothing here queues an
+    // import on any platform, so there is never a second driver to race the native one.
     useEffect(() => {
         let cancelled = false;
 
-        // True while a settings read is part way through acting on what it found. Without it the
-        // timer below can fire again during the permission request or while the default database is
-        // being created, and both calls get past the "already running" check on their way to queueing
-        // a task each. Two automatic imports walking the same library import everything twice.
+        // True while a settings read is part way through acting on what it found. Without it a
+        // second read arriving during the permission request gets past the "already started" check
+        // on its way to starting the native driver twice.
         let acting = false;
+
+        // True when the settings changed while the read above was part way through acting. The change
+        // is acted on when that finishes rather than dropped: the permission request can sit on
+        // screen for as long as the user leaves it there, and a toggle switched off in the meantime
+        // would otherwise leave the app believing it had started something it had not.
+        let changedWhileActing = false;
 
         const ensureAutoImport = async (): Promise<void> => {
             if (acting) {
+                changedWhileActing = true;
                 return;
             }
 
             acting = true;
             try {
-                await ensureAutoImportOnce();
+                do {
+                    changedWhileActing = false;
+                    await ensureAutoImportOnce();
+                }
+                while (changedWhileActing && !cancelled);
             }
             finally {
                 acting = false;
@@ -718,26 +766,27 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         };
 
         const ensureAutoImportOnce = async (): Promise<void> => {
-            const settings = await loadAutoImportSettings(config);
-            const defaultDatabasePath = await getDefaultDatabasePath(config);
-            const plan = planMobileAutoImport(settings, defaultDatabasePath);
+            const contents = await readAutoImportFile(mobileAutoImportConfigFile);
+            const plan = planMobileAutoImport(contents.settings, contents.defaultDatabasePath);
 
             if (cancelled) {
                 return;
             }
 
             if (!plan.shouldRun) {
-                if (autoImportRunningRef.current) {
+                if (autoImportStartedRef.current) {
                     log.info("Stopping automatic import.");
-                    autoImportRunningRef.current = false;
-                    autoImportSettingsRef.current = undefined;
-                    cancelMobileTasks(AUTO_IMPORT_TASK_SOURCE);
+                    autoImportStartedRef.current = false;
                 }
+
+                // Asked for unconditionally rather than only when this provider started it: the
+                // service outlives the WebView, so a fresh WebView that finds the setting off has to
+                // be able to stop a service left running by the one before it.
+                await JsEngine.stopBackgroundImport();
                 return;
             }
 
-            const plannedSettingsJson = JSON.stringify(plan.settings);
-            if (autoImportRunningRef.current && autoImportSettingsRef.current === plannedSettingsJson) {
+            if (autoImportStartedRef.current) {
                 return;
             }
 
@@ -747,118 +796,71 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
             const permission = readPermissionState(await JsEngine.requestMediaPermission());
             const outcome = resolveMediaPermission(permission);
             if (!outcome.enabled) {
-                await saveAutoImportSettings(config, { ...plan.settings, enabled: false });
+                await setAutoImportFileValue(mobileAutoImportConfigFile, AUTO_IMPORT_ENABLED_KEY, false);
                 log.info(`Automatic import switched off: ${outcome.message}`);
                 return;
             }
 
-            if (autoImportRunningRef.current) {
-                cancelMobileTasks(AUTO_IMPORT_TASK_SOURCE);
-                autoImportRunningRef.current = false;
-            }
-
-            if (plan.isNewDefault) {
-                log.info(`Creating the default photo database at "${plan.databasePath}".`);
-                const createQueue = new TaskQueue(uuidGenerator, plan.databasePath);
-                try {
-                    const createTaskId = createQueue.addTask("create-database", { databasePath: plan.databasePath });
-                    const createResult = await createQueue.awaitTask(createTaskId);
-                    if (!createResult || createResult.status !== TaskStatus.Succeeded) {
-                        log.error(`Failed to create the default photo database: ${createResult?.errorMessage}`);
-                        return;
-                    }
-                }
-                finally {
-                    createQueue.shutdown();
-                }
-
-                await configStore.addDatabase(mobileDatabasesConfigFile, {
-                    name: DEFAULT_DATABASE_DISPLAY_NAME,
-                    description: "",
-                    path: plan.databasePath,
-                });
-                await setDefaultDatabasePath(config, plan.databasePath);
-            }
-
-            // Checked again here, not only at the top: the permission request and creating the
-            // database both take a while, and the provider can have gone away in the meantime.
+            // Checked again here, not only at the top: the permission request takes a while, and the
+            // provider can have gone away in the meantime.
             if (cancelled) {
                 return;
             }
 
-            log.info(`Starting automatic import into "${plan.databasePath}".`);
-
-            // The import task itself, fed by a scanner that watches the photo library. There used to
-            // be a separate `auto-import` task that ran a loop and started one of these for every
-            // handful of photos it released, which held two engines instead of one and paid for the
-            // scan, the write lock and the hash cache per handful.
-            const autoImportTaskId = getQueueBackend().addTask("import-assets", {
-                paths: [],
-                storageDescriptor: { databasePath: plan.databasePath },
-                sessionId: uuidGenerator.generate(),
-                dryRun: false,
-                options: {
-                    auto: true,
-                    ...plan.settings,
-                },
-            }, AUTO_IMPORT_TASK_SOURCE);
-
-            // A task queued and never awaited fails silently, and this one is meant to run for the
-            // lifetime of the app: without this, automatic import quietly stopping looks exactly like
-            // automatic import finding nothing to do.
-            //
-            // Matched by task id rather than by type, because automatic import is now the same kind
-            // of task as a manual import: matching on the type would have a photo the user imported
-            // by hand report that automatic import had stopped.
-            const autoImportUnsubscribe = subscribeMobileTaskComplete((taskId, result) => {
-                if (taskId !== autoImportTaskId) {
-                    return;
-                }
-                const completed = result as unknown as ICompletedTaskResult;
-                autoImportRunningRef.current = false;
-                autoImportSettingsRef.current = undefined;
-                if (completed.status !== TaskStatus.Succeeded) {
-                    log.error(`Automatic import stopped: ${(result as { errorMessage?: string }).errorMessage}`);
-                }
-                else {
-                    log.info("Automatic import stopped.");
-                }
-                autoImportUnsubscribe();
-            });
-
-            autoImportRunningRef.current = true;
-            autoImportSettingsRef.current = plannedSettingsJson;
+            // The native side works out the rest for itself, pass by pass, by asking the
+            // plan-auto-import task: which database to import into, whether it has to be created
+            // first, and how long to wait between passes. None of that is decided here, because none
+            // of it can be while the app is off screen.
+            await JsEngine.startBackgroundImport();
+            autoImportStartedRef.current = true;
+            log.info("Starting automatic import.");
         };
 
-        // The task's own log lines run inside the embedded engine and do not reach the app log, so
-        // what automatic import is doing is only visible through the progress it streams back.
-        // Logged rather than only shown on screen, because a phone doing nothing and a phone quietly
-        // failing look the same in the interface.
+        // The progress line last written to the log, so the same one is not written again.
+        let lastProgressLine: string | undefined = undefined;
+
+        // The import's own log lines run inside the embedded engine and do not reach the app log, so
+        // what automatic import is doing is only visible through the progress it streams back. This
+        // still arrives while the app is on screen, whoever started the import, because the plugin
+        // emits a task message for every running task. Logged rather than only shown on screen,
+        // because a phone doing nothing and a phone quietly failing look the same in the interface.
         const progressUnsubscribe = subscribeMobileTaskMessage((_taskId, message) => {
             if ((message as Record<string, unknown>).type !== "import-progress") {
                 return;
             }
             const progress = message as unknown as IImportProgressMessage;
-            log.info(`Import: ${progress.imported} imported, ${progress.skipped} already there, ${progress.failed} failed.`);
+            const line = `Import: ${progress.imported} imported, ${progress.skipped} already there, ${progress.failed} failed.`;
+
+            // Only when it says something it did not say last time. A pass reports its running totals
+            // as it goes and the next pass starts a short while later, for as long as automatic
+            // import is on, so logging every message buries everything else in the app log under the
+            // same line repeated: the counts of a failure were once thirty identical lines deep,
+            // which is exactly when the log is worth reading.
+            if (line === lastProgressLine) {
+                return;
+            }
+            lastProgressLine = line;
+            log.info(line);
         });
 
         ensureAutoImport().catch(error => log.exception("Failed to start automatic import", error as Error));
 
-        // The settings are written by the settings card through the same config store, which has no
-        // change notification, so this re-reads on a timer. It is a read of local storage and nothing
-        // happens unless something actually changed.
-        const timer = setInterval(() => {
+        // The settings card writes the toggle through the config store, and on mobile that store
+        // hands the automatic import keys to the settings file. Being told about the write is what
+        // replaced the timer that used to re-read the settings every couple of seconds: the file is
+        // read through the embedded worker now, so polling it would be a task dispatch every tick.
+        autoImportChangedRef.current = () => {
             ensureAutoImport().catch(error => log.exception("Failed to update automatic import", error as Error));
-        }, AUTO_IMPORT_SETTINGS_POLL_MS);
+        };
 
         return () => {
             cancelled = true;
-            clearInterval(timer);
+            autoImportChangedRef.current = undefined;
             progressUnsubscribe();
-            if (autoImportRunningRef.current) {
-                autoImportRunningRef.current = false;
-                cancelMobileTasks(AUTO_IMPORT_TASK_SOURCE);
-            }
+
+            // The background import is deliberately left running. It is the whole point of it: the
+            // WebView going away, which is what happens when the app leaves the screen, must not stop
+            // photos being backed up.
         };
     }, []);
 

@@ -252,6 +252,28 @@ export interface IJsEnginePlugin {
     stageMediaDeleteOutcome(options: IStageMediaDeleteOptions): Promise<void>;
 
     //
+    // Starts the background automatic import: the loop that asks the plan-auto-import task what to
+    // do, imports what it says, waits and asks again.
+    //
+    // On Android this is a foreground service, which keeps working with the app off screen and the
+    // screen off, and posts the ongoing notification the platform requires of one. On iOS it is a
+    // loop inside the plugin, which runs while the app is foregrounded, plus a background processing
+    // task the system schedules when it chooses. Calling it while it is already started does
+    // nothing.
+    //
+    startBackgroundImport(): Promise<void>;
+
+    //
+    // Stops the background automatic import and cancels the import in flight, leaving nothing
+    // behind: no service, no notification, no scheduled background task.
+    //
+    // Safe to call when nothing is running, which is what a freshly launched app does when it finds
+    // automatic import switched off: the service it is stopping may have been started by a previous
+    // life of the WebView.
+    //
+    stopBackgroundImport(): Promise<void>;
+
+    //
     // Tears down the engine pool and releases native resources.
     //
     shutdown(): Promise<void>;

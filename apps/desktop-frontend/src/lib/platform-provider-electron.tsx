@@ -519,6 +519,7 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         onSyncStarted,
         onSyncCompleted,
         copyToClipboard,
+        backgroundImportDescription: "Runs whenever Photosphere is open, importing new photos as they appear.",
         onShowNotification,
         onDatabasesChanged,
         onUpdateAvailable,

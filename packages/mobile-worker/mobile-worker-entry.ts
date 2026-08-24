@@ -27,6 +27,9 @@ import { checkDatabaseExistsHandler } from "node-api/src/lib/check-database-exis
 import { syncDatabaseHandler } from "node-api/src/lib/sync-database.worker";
 import { listS3DirsHandler } from "node-api/src/lib/list-s3-dirs.worker";
 import { readDatabasesConfigHandler, writeDatabasesConfigHandler } from "node-api/src/lib/databases-config.worker";
+import { readAutoImportConfigHandler, writeAutoImportConfigHandler } from "node-api/src/lib/auto-import-config.worker";
+import { planAutoImportHandler } from "./src/lib/plan-auto-import.worker";
+import { recordDefaultDatabaseHandler } from "./src/lib/record-default-database.worker";
 import { evictOriginalsHandler } from "node-api/src/lib/evict-originals.worker";
 import { cleanupSourcesHandler } from "node-api/src/lib/cleanup-sources.worker";
 import { registerMediaSourceBuilder } from "node-api/src/lib/media-source-registry";
@@ -118,6 +121,20 @@ registerHandler("list-s3-dirs", listS3DirsHandler);
 // the config is read and written.
 registerHandler("read-databases-config", readDatabasesConfigHandler);
 registerHandler("write-databases-config", writeDatabasesConfigHandler);
+
+// Register the auto-import.toml handlers: the automatic import settings live in a file in the
+// storage sandbox rather than in the WebView's localStorage, because the background import runs
+// while the app is off screen and has to be able to read them.
+registerHandler("read-auto-import-config", readAutoImportConfigHandler);
+registerHandler("write-auto-import-config", writeAutoImportConfigHandler);
+
+// Register the background import's two decisions. plan-auto-import says whether a pass should run,
+// what it imports into and what it watches; record-default-database records a database the pass has
+// just created, so the next pass does not create it again. Both are asked for by the native
+// background import (the Android foreground service, the iOS driver), which must not parse or write
+// these files itself: the format is defined once, here, in TypeScript.
+registerHandler("plan-auto-import", planAutoImportHandler);
+registerHandler("record-default-database", recordDefaultDatabaseHandler);
 
 // Register the device photo library as a media source. The automatic import scanner only ever talks
 // to the IMediaSource interface, so registering this here is what lets the same import task that

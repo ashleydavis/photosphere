@@ -186,6 +186,7 @@ export function mockPlatform(): IPlatformContext {
         onPlatformEvent: () => noUnsubscribe,
         notifyDatabaseEdited: () => {},
         copyToClipboard: async () => {},
+        backgroundImportDescription: "Runs whenever Photosphere is open, importing new photos as they appear.",
         onSyncStarted: () => noUnsubscribe,
         onSyncCompleted: () => noUnsubscribe,
         onShowNotification: () => noUnsubscribe,

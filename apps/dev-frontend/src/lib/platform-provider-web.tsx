@@ -391,6 +391,7 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         onSyncStarted,
         onSyncCompleted,
         copyToClipboard,
+        backgroundImportDescription: "Runs while this page is open.",
         onShowNotification,
         onDatabasesChanged,
         onUpdateAvailable,

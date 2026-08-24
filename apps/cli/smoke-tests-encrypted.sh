@@ -33,10 +33,19 @@ source "$_ENCRYPTED_SCRIPT_DIR/../../scripts/lib/test-timeout.sh"
 # The suite root, holding the shared vault and config. It is NOT where a test runs: run_single_test
 # points TEST_TMP_DIR at a uniquely named directory for the length of each test.
 #
+# Allocated per run rather than fixed. It used to default to ./test/tmp-encrypted, one path for every
+# run started from a worktree, and reset_environment removes the whole thing on the way in: a second
+# run therefore deleted the first run's vault and config while it was using them, and the first run
+# then failed reading a state file that had been unlinked and recreated underneath it. Run beside one
+# copy of itself, the suite failed 15 times in 18 runs that way. The per-test directories were already
+# allocated (see run_single_test); the vault and the config stay at the suite root deliberately,
+# because several tests read back a key an earlier test created, and it is that root which had to
+# stop being shared.
+#
 # Exported, because the CLI is a child process and cannot see a variable that is only assigned. An
 # unexported TEST_TMP_DIR sends every psi process to the shared /tmp/photosphere, which another
 # suite's `hash-cache clear` then deletes underneath it.
-export TEST_TMP_DIR="${TEST_TMP_DIR:-./test/tmp-encrypted}"
+export TEST_TMP_DIR="${TEST_TMP_DIR:-$(photosphere_test_temp_dir encrypted-suite)}"
 export PHOTOSPHERE_TMP_DIR="$TEST_TMP_DIR"
 TEST_FILES_DIR="../../test"
 
@@ -254,6 +263,11 @@ reset_environment() {
     else
         log_info "No existing tmp directory to remove"
     fi
+
+    # Put it back. The root is allocated for this run and holds the vault and config every test
+    # shares, so a run that started by deleting it and never recreating it would leave the first
+    # test to make it, and the first test to need it is not the first test to run.
+    mkdir -p "$TEST_TMP_DIR"
 }
 
 # Return one-line description for a test name (for help output).

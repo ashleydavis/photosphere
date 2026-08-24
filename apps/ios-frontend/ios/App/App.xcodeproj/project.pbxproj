@@ -59,6 +59,7 @@
 		D0000000000000000000B200 /* MediaLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0000000000000000000A200 /* MediaLibrary.swift */; };
 		D0000000000000000000B201 /* MediaLibraryHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0000000000000000000A201 /* MediaLibraryHost.swift */; };
 		D0000000000000000000B202 /* MediaDeleteStaging.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0000000000000000000A202 /* MediaDeleteStaging.swift */; };
+		D0000000000000000000B302 /* AutoImportDriver.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0000000000000000000A302 /* AutoImportDriver.swift */; };
 		D000000000000000000000F5 /* ImageMagickRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000E5 /* ImageMagickRunner.swift */; };
 		D000000000000000000000F6 /* FfmpegKitRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000E6 /* FfmpegKitRunner.swift */; };
 		D000000000000000000000D2 /* worker.bundle.js in Resources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000D1 /* worker.bundle.js */; };
@@ -133,6 +134,7 @@
 		D0000000000000000000A200 /* MediaLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaLibrary.swift; sourceTree = "<group>"; };
 		D0000000000000000000A201 /* MediaLibraryHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaLibraryHost.swift; sourceTree = "<group>"; };
 		D0000000000000000000A202 /* MediaDeleteStaging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaDeleteStaging.swift; sourceTree = "<group>"; };
+		D0000000000000000000A302 /* AutoImportDriver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoImportDriver.swift; sourceTree = "<group>"; };
 		D0000000000000000000A104 /* MediaLibraryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaLibraryTests.swift; sourceTree = "<group>"; };
 		D000000000000000000000E5 /* ImageMagickRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageMagickRunner.swift; sourceTree = "<group>"; };
 		D000000000000000000000E6 /* FfmpegKitRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FfmpegKitRunner.swift; sourceTree = "<group>"; };
@@ -283,6 +285,7 @@
 				D0000000000000000000A200 /* MediaLibrary.swift */,
 				D0000000000000000000A201 /* MediaLibraryHost.swift */,
 				D0000000000000000000A202 /* MediaDeleteStaging.swift */,
+				D0000000000000000000A302 /* AutoImportDriver.swift */,
 				D000000000000000000000E5 /* ImageMagickRunner.swift */,
 				D000000000000000000000E6 /* FfmpegKitRunner.swift */,
 				D000000000000000000000E3 /* run_magick.c */,
@@ -510,6 +513,7 @@
 				D0000000000000000000B200 /* MediaLibrary.swift in Sources */,
 				D0000000000000000000B201 /* MediaLibraryHost.swift in Sources */,
 				D0000000000000000000B202 /* MediaDeleteStaging.swift in Sources */,
+				D0000000000000000000B302 /* AutoImportDriver.swift in Sources */,
 				D000000000000000000000F5 /* ImageMagickRunner.swift in Sources */,
 				D000000000000000000000F6 /* FfmpegKitRunner.swift in Sources */,
 			);

@@ -52,13 +52,16 @@ send_command "$APP_PORT" click '{"dataId":"auto-import-toggle"}' || exit 1
 # The setting goes back off, and says why in words a user could act on.
 wait_for_log "$TMP_DIR" "Automatic import switched off: Photosphere needs permission to read your photos" 60 || exit 1
 
-# And nothing was started: no database was created and no import ran.
-if grep -q "Creating the default photo database" "$TMP_DIR/app.log"; then
-    log_error "A default photo database was created even though the photo permission was refused."
+# And nothing was started. The permission is asked for before the native loop is, so a refusal leaves
+# no service running, no database created and no import queued: everything a pass would have done
+# happens after this point, and it is never reached.
+if grep -q "Starting automatic import." "$TMP_DIR/app.log"; then
+    log_error "Automatic import was started even though the photo permission was refused."
     exit 1
 fi
-if grep -q "Starting automatic import into" "$TMP_DIR/app.log"; then
-    log_error "Automatic import was started even though the photo permission was refused."
+
+if [ "$PLATFORM" = "android" ] && adb shell dumpsys activity services "$APP_ID" 2>/dev/null | tr -d '\r' | grep -q "AutoImportService"; then
+    log_error "The background import service is running even though the photo permission was refused."
     exit 1
 fi
 

@@ -1,5 +1,6 @@
 import Foundation
 import Capacitor
+import BackgroundTasks
 import PhotosUI
 import UIKit
 import UniformTypeIdentifiers
@@ -48,6 +49,115 @@ public class JsEnginePlugin: CAPPlugin, EnginePoolDelegate {
     // Buffered taskMessage payloads in arrival order, captured before any listener was registered.
     //
     private var bufferedMessages: [[String: Any]] = []
+
+    //
+    // The source tag the background import queues its tasks under, so they can be cancelled as a
+    // group when automatic import is switched off. Matches AUTO_IMPORT_TASK_SOURCE in
+    // packages/api/src/lib/auto-import-mobile.ts.
+    //
+    static let autoImportTaskSource = "auto-import"
+
+    //
+    // The task type that says what a background import pass should do.
+    //
+    private static let planAutoImportTask = "plan-auto-import"
+
+    //
+    // The plugin instance the background import reaches the engine pool through. Set when the plugin
+    // loads: the background processing task the system schedules has no plugin call of its own.
+    //
+    private static var activeInstance: JsEnginePlugin?
+
+    //
+    // The one driver for the life of the app.
+    //
+    // One instance, one serialised entry point for running a pass, and two callers: the foreground
+    // loop and the system's background processing task. Neither knows about the other, which is what
+    // makes two imports at once unreachable rather than merely unlikely.
+    //
+    private static var autoImportDriver: AutoImportDriver?
+
+    //
+    // The thread the foreground loop runs on, so it never blocks the WebView's.
+    //
+    private static var autoImportLoopThread: Thread?
+
+    //
+    // Guards the driver and the loop thread above.
+    //
+    private static let autoImportLock = NSLock()
+
+    //
+    // True once the user has switched automatic import on, and false again as soon as they switch it
+    // off.
+    //
+    // Everything about the background import is behind this: the app delegate starts no loop and asks
+    // the system for no background pass until it is true. A phone that never opts in is
+    // indistinguishable from one running a build without any of this.
+    //
+    static var autoImportOptedIn = false
+
+    //
+    // Background tasks something is waiting on, keyed by task id.
+    //
+    // The pool reports outcomes to the WebView through an event, which is no use to a background
+    // pass: the WebView may be suspended. Each background task registers here before it is queued and
+    // is woken by the same delegate callback that emits the event.
+    //
+    private var backgroundWaitersByTaskId: [String: BackgroundTaskWaiter] = [:]
+
+    //
+    // Guards the waiter table above, which is written from the plugin's thread and read from the
+    // engine threads that report outcomes.
+    //
+    private let backgroundWaiterLock = NSLock()
+
+    //
+    // One background task something is waiting on.
+    //
+    private final class BackgroundTaskWaiter {
+
+        //
+        // Signalled when the task finishes, either way.
+        //
+        let finished = DispatchSemaphore(value: 0)
+
+        //
+        // Whether the task succeeded.
+        //
+        var succeeded = false
+
+        //
+        // The task's outputs as a JSON string, when it succeeded.
+        //
+        var outputsJson: String?
+
+        //
+        // The error text, when it failed.
+        //
+        var errorMessage: String?
+    }
+
+    //
+    // Something that went wrong while a background import pass was running.
+    //
+    enum AutoImportError: Error {
+
+        //
+        // A task the pass needed failed.
+        //
+        case taskFailed(String)
+
+        //
+        // The plan-auto-import task answered with something that is not a plan.
+        //
+        case malformedPlan
+
+        //
+        // The background import was stopped while a task was running.
+        //
+        case stopped
+    }
 
     //
     // Resolves the storage root the host functions are sandboxed to. Uses the app's Documents
@@ -208,6 +318,42 @@ public class JsEnginePlugin: CAPPlugin, EnginePoolDelegate {
     //
     override public func load() {
         ExportTemp.sweep(root: storageRoot())
+
+        // The background import reaches the engine pool through here, because the background
+        // processing task the system schedules has no plugin call of its own to be handed one.
+        JsEnginePlugin.activeInstance = self
+    }
+
+    //
+    // startBackgroundImport: starts the loop that keeps automatic import running.
+    //
+    // On iOS that loop runs while the app is foregrounded. What happens when it is not is the
+    // system's decision, through the background processing task the app delegate schedules, so this
+    // is the whole of what the app can start for itself.
+    //
+    @objc func startBackgroundImport(_ call: CAPPluginCall) {
+        JsEnginePlugin.autoImportOptedIn = true
+        JsEnginePlugin.startForegroundAutoImport()
+        call.resolve()
+    }
+
+    //
+    // stopBackgroundImport: stops the loop and cancels the import in flight.
+    //
+    // Safe to call when nothing is running, which is what a freshly launched app does when it finds
+    // automatic import switched off.
+    //
+    @objc func stopBackgroundImport(_ call: CAPPluginCall) {
+        JsEnginePlugin.autoImportOptedIn = false
+        JsEnginePlugin.stopAutoImport()
+
+        // Switching automatic import off has to leave nothing behind, so a background pass the system
+        // is still holding a request for is withdrawn as well.
+        if #available(iOS 13.0, *) {
+            BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: autoImportBackgroundTaskIdentifier)
+        }
+
+        call.resolve()
     }
 
     //
@@ -358,6 +504,164 @@ public class JsEnginePlugin: CAPPlugin, EnginePoolDelegate {
 
 
     //
+    // Returns the one driver for the life of the app, creating it on first use.
+    //
+    static func sharedAutoImportDriver() -> AutoImportDriver? {
+        autoImportLock.lock()
+        defer { autoImportLock.unlock() }
+
+        if let existing = autoImportDriver {
+            return existing
+        }
+
+        guard let plugin = activeInstance else {
+            return nil
+        }
+
+        let created = AutoImportDriver(host: plugin)
+        autoImportDriver = created
+        return created
+    }
+
+    //
+    // Starts the loop that runs passes while the app is foregrounded.
+    //
+    // Starting it again while it is running does nothing: two loops would ask for a pass each, and
+    // while the driver refuses to run them at once, they would take turns running passes back to back
+    // with no gap between them.
+    //
+    static func startForegroundAutoImport() {
+        guard let driver = sharedAutoImportDriver() else {
+            return
+        }
+
+        driver.resume()
+
+        autoImportLock.lock()
+        if let existing = autoImportLoopThread, !existing.isFinished {
+            autoImportLock.unlock()
+            return
+        }
+
+        let thread = Thread {
+            driver.runLoop()
+        }
+        thread.name = "photosphere-auto-import"
+        autoImportLoopThread = thread
+        autoImportLock.unlock()
+
+        thread.start()
+    }
+
+    //
+    // Stops the foreground loop, leaving any pass in flight to finish or be cancelled.
+    //
+    static func stopForegroundAutoImport() {
+        autoImportLock.lock()
+        let driver = autoImportDriver
+        autoImportLock.unlock()
+
+        driver?.stop()
+    }
+
+    //
+    // Stops the background import outright and cancels the import in flight.
+    //
+    static func stopAutoImport() {
+        stopForegroundAutoImport()
+
+        guard let plugin = activeInstance else {
+            return
+        }
+
+        plugin.lock.lock()
+        let currentPool = plugin.pool
+        plugin.lock.unlock()
+
+        currentPool?.cancelTasks(source: autoImportTaskSource)
+    }
+
+    //
+    // Runs exactly one pass, for the background processing task the system schedules.
+    //
+    // One pass, not a loop: the system decides when this runs and how long it may take, and a handler
+    // that tried to loop would be killed part way through.
+    //
+    // Returns false when the pass found automatic import switched off, so the caller withdraws the
+    // request it made for the next one.
+    //
+    static func runOneBackgroundImportPass() -> Bool {
+        guard let driver = sharedAutoImportDriver() else {
+            return false
+        }
+
+        driver.resume()
+        return driver.runOnePass() == .ran
+    }
+
+    //
+    // Queues one background task and blocks until it finishes.
+    //
+    // The wait ends when the task completes or when the driver is stopped, whichever comes first. A
+    // stop also cancels the task, so nothing is left running behind a wait that has been abandoned.
+    // There is deliberately no overall timeout: an import of a large photo library takes as long as it
+    // takes, and a wait that gave up part way would have the driver start a second import beside the
+    // first.
+    //
+    private func runBackgroundTask(type: String, dataJson: String) throws -> BackgroundTaskWaiter {
+        let taskId = UUID().uuidString
+        let waiter = BackgroundTaskWaiter()
+
+        backgroundWaiterLock.lock()
+        backgroundWaitersByTaskId[taskId] = waiter
+        backgroundWaiterLock.unlock()
+
+        defer {
+            backgroundWaiterLock.lock()
+            backgroundWaitersByTaskId.removeValue(forKey: taskId)
+            backgroundWaiterLock.unlock()
+        }
+
+        lock.lock()
+        let currentPool = ensurePool()
+        lock.unlock()
+
+        currentPool.addTask(PooledTask(
+            taskId: taskId,
+            type: type,
+            dataJson: dataJson,
+            source: JsEnginePlugin.autoImportTaskSource,
+            priority: TaskPriority.background))
+
+        while waiter.finished.wait(timeout: .now() + 0.5) == .timedOut {
+            if JsEnginePlugin.sharedAutoImportDriver()?.isStopped != false {
+                currentPool.cancelTasks(source: JsEnginePlugin.autoImportTaskSource)
+                throw AutoImportError.stopped
+            }
+        }
+
+        return waiter
+    }
+
+    //
+    // Wakes whatever is waiting for a background task, if anything is.
+    //
+    private func completeBackgroundTask(taskId: String, succeeded: Bool, outputsJson: String?, errorMessage: String?) {
+        backgroundWaiterLock.lock()
+        let waiter = backgroundWaitersByTaskId[taskId]
+        backgroundWaiterLock.unlock()
+
+        guard let waiter = waiter else {
+            return
+        }
+
+        waiter.succeeded = succeeded
+        waiter.outputsJson = outputsJson
+        waiter.errorMessage = errorMessage
+        waiter.finished.signal()
+    }
+
+    //
     // shutdown: tears down the pool, disposes contexts, clears the plugin's buffered state, and
     // resolves. After shutdown a later addTask lazily creates a fresh pool.
     //
@@ -494,6 +798,8 @@ public class JsEnginePlugin: CAPPlugin, EnginePoolDelegate {
     // emit it as a taskCompleted event.
     //
     func poolDidSucceed(_ task: PooledTask, outputsJson: String) {
+        completeBackgroundTask(taskId: task.taskId, succeeded: true, outputsJson: outputsJson, errorMessage: nil)
+
         let result: [String: Any] = [
             "taskId": task.taskId,
             "status": "succeeded",
@@ -509,6 +815,8 @@ public class JsEnginePlugin: CAPPlugin, EnginePoolDelegate {
     // the errorMessage and emit it as a taskCompleted event.
     //
     func poolDidFail(_ task: PooledTask, errorMessage: String) {
+        completeBackgroundTask(taskId: task.taskId, succeeded: false, outputsJson: nil, errorMessage: errorMessage)
+
         let result: [String: Any] = [
             "taskId": task.taskId,
             "status": "failed",
@@ -524,6 +832,102 @@ public class JsEnginePlugin: CAPPlugin, EnginePoolDelegate {
     //
     func poolDidEmitMessage(_ task: PooledTask, messageJson: String) {
         emitTaskMessage(taskId: task.taskId, payload: ["taskId": task.taskId, "message": parseJson(messageJson)])
+    }
+}
+
+//
+// The plugin as the background import's host: it owns the engine pool, so it is what runs the tasks
+// a pass is made of.
+//
+extension JsEnginePlugin: AutoImportDriverHost {
+
+    //
+    // Asks the plan-auto-import task what the next pass should do.
+    //
+    func readPlan() throws -> AutoImportPlan {
+        let waiter = try runBackgroundTask(type: JsEnginePlugin.planAutoImportTask, dataJson: "{}")
+        if !waiter.succeeded {
+            throw AutoImportError.taskFailed(waiter.errorMessage ?? "plan-auto-import failed")
+        }
+
+        guard let outputsJson = waiter.outputsJson else {
+            throw AutoImportError.malformedPlan
+        }
+
+        return try JsEnginePlugin.parseAutoImportPlan(outputsJson)
+    }
+
+    //
+    // Runs one of the plan's steps on the engine pool and waits for it to finish.
+    //
+    func runStep(_ step: AutoImportPlan.Step) throws -> Bool {
+        let waiter = try runBackgroundTask(type: step.type, dataJson: step.dataJson)
+        return waiter.succeeded
+    }
+
+    //
+    // Waits between passes, ending early when the driver is stopped.
+    //
+    // Woken every second rather than parked for the whole gap, so switching automatic import off, or
+    // the app leaving the foreground, is noticed within a second instead of at the end of the gap.
+    //
+    func pause(_ seconds: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(seconds)
+        while Date() < deadline {
+            if JsEnginePlugin.sharedAutoImportDriver()?.isStopped != false {
+                return false
+            }
+            Thread.sleep(forTimeInterval: min(1, deadline.timeIntervalSinceNow))
+        }
+
+        return JsEnginePlugin.sharedAutoImportDriver()?.isStopped == false
+    }
+
+    //
+    // Says what the background import is doing.
+    //
+    func report(_ message: String) {
+        print("[AutoImport] \(message)")
+    }
+
+    //
+    // Says what went wrong.
+    //
+    func reportError(_ message: String) {
+        print("[AutoImport] ERROR: \(message)")
+    }
+
+    //
+    // Turns the plan-auto-import task's outputs into the plan the driver runs.
+    //
+    private static func parseAutoImportPlan(_ outputsJson: String) throws -> AutoImportPlan {
+        guard let data = outputsJson.data(using: .utf8),
+              let outputs = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw AutoImportError.malformedPlan
+        }
+
+        var steps: [AutoImportPlan.Step] = []
+        if let stepsJson = outputs["steps"] as? [[String: Any]] {
+            for stepJson in stepsJson {
+                guard let type = stepJson["type"] as? String,
+                      let stepData = stepJson["data"],
+                      let stepDataJson = try? JSONSerialization.data(withJSONObject: stepData),
+                      let stepDataString = String(data: stepDataJson, encoding: .utf8) else {
+                    throw AutoImportError.malformedPlan
+                }
+                steps.append(AutoImportPlan.Step(type: type, dataJson: stepDataString))
+            }
+        }
+
+        // The plan carries the gap in milliseconds, because that is what the Android side takes; iOS
+        // waits in seconds.
+        let pauseMs = outputs["pauseBetweenRunsMs"] as? Double ?? 0
+
+        return AutoImportPlan(
+            shouldRun: outputs["shouldRun"] as? Bool ?? false,
+            databasePath: outputs["databasePath"] as? String ?? "",
+            pauseBetweenRuns: pauseMs / 1000,
+            steps: steps)
     }
 }
 

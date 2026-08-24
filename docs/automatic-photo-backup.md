@@ -53,7 +53,7 @@ With `--watch` it runs the same import over and over, five seconds apart, until 
 
 ## Passes, not watching
 
-A run reads its sources from the first page of the listing to the last, imports what is new, and ends. The app starts another a short while later: about thirty seconds on the desktop, a couple of seconds on mobile, five on the CLI's `psi add --watch`. Nothing is left watching a filesystem or a photo library in between.
+A run reads its sources from the first page of the listing to the last, imports what is new, and ends. The app starts another a short while later: about thirty seconds on the desktop and on mobile, five on the CLI's `psi add --watch`. Nothing is left watching a filesystem or a photo library in between.
 
 That is a deliberate reversal of what this used to do. The old engine held filesystem watchers, polled every source every thirty seconds, and re-walked the whole listing whenever any of them reported a change, all inside a task that never ended. The watchers were worth little: recursive directory watching is not available on Linux at all and is not dependable across network and removable filesystems anywhere, so the poll was doing the real work everywhere, and on a phone there was no change notification to hook at all. What is left is the part that was doing the work.
 
@@ -142,6 +142,33 @@ On mobile the same thing happens and the user does the same thing: switch the to
 
 The `import-assets` task holds an engine slot for as long as the run lasts, and the `hash-file` and `upload-asset` tasks it queues hold more. On a phone that chain has to fit inside `EnginePool.POOL_SIZE`, which is five. It used to be worse: a separate `auto-import` task sat in a slot of its own for as long as the setting was on, and started an `import-assets` in a second slot, which is what deadlocked the pool at three, silently, with the setting on, the task running and the counts at zero forever. That task is gone and the run now ends, but the pool is still sized for the chain that remains. See [Mobile background tasks](mobile-background-tasks.md) before changing anything about that.
 
+## While the app is not on screen
+
+The loop that starts one pass after another lives on the native side of the mobile apps, not in the WebView. It used to be a `setInterval` in the WebView, and that is exactly why automatic import stopped the moment the app was backgrounded: the operating system throttles and then stops a WebView's timers, and photos taken after that were backed up only when the app was next opened, with nothing anywhere saying so. Nothing in the WebView queues an import on any platform now.
+
+The settings moved for the same reason. They used to be in the WebView's `localStorage`, which nothing outside the WebView can read, so a service that woke up had no way to find out whether automatic import was switched on or what it should be reading. They live in `auto-import.toml` in the app's storage sandbox, beside `databases.toml`.
+
+The native side does not parse that file. It asks the `plan-auto-import` worker task, which reads the settings, decides whether a pass should run, and hands back the tasks the pass consists of, already built: `create-database` and `record-default-database` the first time, and `import-assets` every time. Native code forwards each one to the engine pool unchanged and never assembles a payload of its own, so what a pass does is decided once, in TypeScript, and cannot drift between the two platforms.
+
+What differs between them is only what keeps the loop alive:
+
+| | Android | iOS |
+|---|---|---|
+| While the app is on screen | Keeps importing | Keeps importing |
+| While the app is backgrounded | Keeps importing, in a foreground service | The system runs a pass when it chooses |
+| While the screen is off | Keeps importing, holding a wake lock for the length of a pass | The system runs a pass when it chooses |
+| What the user sees | An ongoing notification for as long as automatic import is on | Nothing |
+
+**On Android** it is a foreground service (`AutoImportService`). The platform requires one to post an ongoing notification, so switching automatic import on means a permanent notification while it is on: that is a visible product change and not something the app can opt out of. The service holds a `PARTIAL_WAKE_LOCK` only while a pass is actually running and releases it in between, because a foreground service keeps the process alive but does not by itself keep the CPU awake once the screen is off, and a lock held all night flattens the phone.
+
+**On iOS** the loop runs while the app is foregrounded, and what happens when it is not is the system's decision. The app registers a `BGProcessingTask` and asks for one after each pass; iOS runs it when it sees fit, typically while the phone is charging and idle, and may kill it part way. The honest description is that iOS catches up when the system allows, not that it backs up continuously, and the settings card says so. A phone in a pocket all day may import nothing until the app is opened. There is no way round that short of doing the work on a server rather than on the phone, which is a different feature.
+
+Two passes at once is unreachable rather than unlikely. There is one driver for the life of the app, with one entry point that runs a pass, and it is serialised: asked to run while a pass is in flight, it waits for that pass and returns its outcome rather than starting a second. On Android only the service's loop asks; on iOS both the foreground loop and the system's background task do, and neither knows about the other because neither has to.
+
+All of it is opt-in and stays opt-in. Until the user switches automatic import on there is no service, no background task request, no wake lock, no notification and no permission prompt, and switching it off takes all of them away again: the Android service stops and its notification goes with it, and the iOS background request is withdrawn.
+
+One more thing had to change for any of this to work: the engine pool used to be torn down when the WebView was destroyed, which is precisely when the service needs it. It is now torn down by whichever of the two goes last.
+
 ## Where the code is
 
 | File | What it holds |
@@ -164,6 +191,18 @@ The `import-assets` task holds an engine slot for as long as the run lasts, and 
 | `packages/node-api/src/lib/evict-originals.worker.ts` | Dropping local originals the origin holds. |
 | `packages/node-api/src/lib/consolidate.ts` | Joining a standalone database to a remote that already has content. |
 | `packages/node-api/src/lib/auto-import-desktop.ts` | What the desktop app should do about automatic import, worked out from its config. |
+| `packages/api/src/lib/auto-import-mobile.ts` | The same for mobile, plus what the settings file holds and the gap between background passes. |
+| `packages/api/src/lib/mobile-config-paths.ts` | Where `databases.toml` and `auto-import.toml` live in the app's storage sandbox. |
+| `packages/node-api/src/lib/auto-import-config-format.ts` | The contents of `auto-import.toml` and the conversion to and from it. |
+| `packages/node-api/src/lib/auto-import-config.worker.ts` | Reading and writing that file, for a caller with no filesystem of its own. |
+| `packages/mobile-worker/src/lib/plan-auto-import.worker.ts` | What a background pass should do, and the tasks it consists of. |
+| `packages/mobile-worker/src/lib/record-default-database.worker.ts` | Recording a database a pass has just created, so the next pass does not create it again. |
+| `packages/mobile-frontend/src/lib/mobile-auto-import-file.ts` | Reading and writing the settings from the WebView, one config key at a time. |
+| `packages/mobile-frontend/src/lib/mobile-auto-import-config-file.ts` | Reaching that file through the embedded worker. |
+| `apps/android-frontend/.../jsengine/AutoImportDriver.java`, `AutoImportPlan.java` | The loop and the single serialised pass, with no Android in them. |
+| `apps/android-frontend/.../jsengine/AutoImportService.java` | The foreground service that hosts the loop, its notification and its wake lock. |
+| `apps/ios-frontend/.../JsEngine/AutoImportDriver.swift` | The same loop and the same single pass on iOS. |
+| `apps/ios-frontend/ios/App/App/AppDelegate.swift` | Registering and asking for the background processing task. |
 | `packages/user-interface/src/lib/auto-import-config.ts` | Reading and writing the settings through the app's config store. |
 | `packages/user-interface/src/components/auto-import-settings.tsx` | The "Automatic import" card. |
 | `packages/user-interface/src/components/consolidate-database-dialog.tsx` | Joining a database to a remote so the two can sync. |
@@ -203,8 +242,9 @@ And by a mobile smoke test, which drives the real app on an Android emulator:
 |---|---|
 | `47-auto-import` | A photo put into the device photo library from outside the app is imported with nothing else done: the app makes its own default database, walks the library, and imports it. A second photo put there while the app is running is noticed and imported too, the Import page shows the count, and the photo lands in the gallery without the database being reopened. |
 | `48-auto-import-no-permission` | Switching the toggle on without the photo permission switches it back off, says why, and creates no database. The permission is refused from outside the app by revoking it and marking it user-fixed, which is what Android does when a user chooses "Don't allow" and means it, so the request is answered without a dialog a test cannot tap. |
+| `49-background-import` | A photo put into the device library while the app is backgrounded is imported, and so is one put there while the screen is off. Both are measured by counting originals in the database on disk through `run-as` rather than by anything the app says, because a backgrounded WebView may have its socket to the harness suspended, which is the exact moment the test cares about. It also checks the foreground service is running throughout and gone once the toggle is switched off. |
 
-Both are Android only. The iOS simulator has no supported way to remove a seeded photo, and a test that leaves one behind poisons every run after it.
+All three are Android only. The iOS simulator has no supported way to remove a seeded photo, and a test that leaves one behind poisons every run after it. What test 49 covers is untestable on iOS for a second reason as well: a `BGProcessingTask` is scheduled by the system and the only way to force one is an lldb command against a running app, which this harness cannot issue on Xcode 14.2. That gap is written down in `apps/smoke-tests/tests/49-background-import/IOS-NOT-COVERED.md` rather than left as an absence nobody notices.
 
 Test 47 is the one that caught the engine-pool deadlock, and the one that would catch it again. It waits for the photo to arrive rather than for the task to start, because a deadlocked import looks exactly like a working one from outside: the setting is on, the task is running, and the counts sit at zero forever.
 

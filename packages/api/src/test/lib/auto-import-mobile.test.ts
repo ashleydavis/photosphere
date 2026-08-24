@@ -1,9 +1,11 @@
-import { DEFAULT_AUTO_IMPORT_SETTINGS, IAutoImportSettings } from "api/src/lib/auto-import-settings";
+import { DEFAULT_AUTO_IMPORT_SETTINGS, IAutoImportSettings } from "../../lib/auto-import-settings";
 import {
+    DEFAULT_AUTO_IMPORT_PAUSE_MS,
     DEFAULT_DATABASE_FOLDER_NAME,
     WHOLE_LIBRARY_SOURCES,
     planMobileAutoImport,
-} from "../lib/mobile-auto-import";
+    resolveAutoImportPauseMs,
+} from "../../lib/auto-import-mobile";
 
 //
 // Settings with automatic import switched on and whatever else the test needs.
@@ -82,5 +84,33 @@ describe("planMobileAutoImport", () => {
         // A user with both should see the same database name, and a support answer about one should
         // apply to the other.
         expect(DEFAULT_DATABASE_FOLDER_NAME).toBe("photosphere-default");
+    });
+});
+
+describe("the gap between background import passes", () => {
+
+    test("a gap the file asked for is used as it is", () => {
+        expect(resolveAutoImportPauseMs(1500)).toBe(1500);
+    });
+
+    test("no gap at all means the default", () => {
+        expect(resolveAutoImportPauseMs(undefined)).toBe(DEFAULT_AUTO_IMPORT_PAUSE_MS);
+    });
+
+    test("a gap of zero falls back to the default rather than spinning", () => {
+        // Zero is a loop that starts a fresh pass the instant the last one ends, which on a phone is
+        // a flat battery rather than a fast backup.
+        expect(resolveAutoImportPauseMs(0)).toBe(DEFAULT_AUTO_IMPORT_PAUSE_MS);
+    });
+
+    test("a negative gap falls back to the default", () => {
+        expect(resolveAutoImportPauseMs(-1)).toBe(DEFAULT_AUTO_IMPORT_PAUSE_MS);
+    });
+
+    test("a gap that is not a usable number falls back to the default", () => {
+        // The value comes from a file a person may have edited, so it can be anything at all.
+        expect(resolveAutoImportPauseMs(Number.NaN)).toBe(DEFAULT_AUTO_IMPORT_PAUSE_MS);
+        expect(resolveAutoImportPauseMs(Number.POSITIVE_INFINITY)).toBe(DEFAULT_AUTO_IMPORT_PAUSE_MS);
+        expect(resolveAutoImportPauseMs("soon" as any)).toBe(DEFAULT_AUTO_IMPORT_PAUSE_MS);
     });
 });

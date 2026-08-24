@@ -1005,6 +1005,40 @@ android_grant_media_permission() {
 }
 
 #
+# Grants the notification permission from outside the app, for the tests that switch automatic import
+# on.
+#
+# Switching it on starts a foreground service, and the platform requires one to post an ongoing
+# notification. From Android 13 that needs POST_NOTIFICATIONS, so the app asks for it at that moment,
+# beside the photo permission. Neither dialog can be tapped by a test, which is why both are answered
+# from outside instead: without this the app waits on a dialog nothing will ever dismiss and the test
+# times out on a feature that works.
+#
+# Nothing to do below Android 13, where notifications need no permission at all.
+#
+android_grant_notification_permission() {
+    local sdk
+    sdk="$(adb shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r')"
+
+    if [ "${sdk:-0}" -lt 33 ]; then
+        log_info "Notifications need no permission on API ${sdk:-unknown}"
+        return 0
+    fi
+
+    adb shell pm grant "$APP_ID" android.permission.POST_NOTIFICATIONS >/dev/null 2>&1 || true
+
+    # Read back rather than trusted, for the same reason the photo permission is: `pm grant` says
+    # nothing useful when it does not take, and a test that went on without it would hang on the
+    # dialog the app then puts up.
+    if ! adb shell dumpsys package "$APP_ID" 2>/dev/null | tr -d '\r' | grep -q "android.permission.POST_NOTIFICATIONS: granted=true"; then
+        log_error "android.permission.POST_NOTIFICATIONS is not granted to $APP_ID after asking for it, so the app will wait on a permission dialog no test can tap"
+        return 1
+    fi
+
+    log_info "Granted the notification permission from outside the app"
+}
+
+#
 # Clears the app's stored data once a test has finished with the device, so nothing a test wrote is
 # still on the emulator when the next one starts.
 #

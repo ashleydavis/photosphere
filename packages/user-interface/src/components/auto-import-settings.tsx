@@ -174,6 +174,9 @@ export function AutoImportSettings() {
                 Watches the folders below and imports new photos as they appear. The first time this
                 is switched on, a private photo database is created for you.
             </Typography>
+            <Typography level="body-sm" sx={{ color: 'text.tertiary' }} data-id="auto-import-background-description">
+                {platform.backgroundImportDescription}
+            </Typography>
 
             <Typography level="title-sm">Folders watched</Typography>
             {folderSources.length === 0

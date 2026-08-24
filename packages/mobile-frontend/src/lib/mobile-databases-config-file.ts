@@ -1,6 +1,7 @@
 import { TaskQueue, TaskStatus, TaskPriority } from "task-queue";
 import { RandomUuidGenerator } from "utils";
 import type { IDatabaseEntry } from "user-interface";
+import { DATABASES_CONFIG_PATH } from "api/src/lib/mobile-config-paths";
 import type { IDatabasesConfig, IDatabasesConfigFile } from "./mobile-config-store";
 
 //
@@ -13,11 +14,11 @@ import type { IDatabasesConfig, IDatabasesConfigFile } from "./mobile-config-sto
 //
 
 //
-// Sandbox-relative path of databases.toml, the counterpart of desktop's
-// ~/.config/photosphere/databases.toml. Must match DATABASES_CONFIG in
-// apps/android-frontend/scripts/run-android.sh, which writes the same file.
+// Sandbox-relative path of databases.toml. Re-exported so the callers here keep reaching it by the
+// name they always have; it is defined in api/src/lib/mobile-config-paths.ts because the worker
+// opens the same file for the background import and cannot reach this package.
 //
-export const DATABASES_CONFIG_PATH = "databases.toml";
+export { DATABASES_CONFIG_PATH } from "api/src/lib/mobile-config-paths";
 
 //
 // Prefix of the source tag for the config tasks.

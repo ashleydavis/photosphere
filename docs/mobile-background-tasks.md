@@ -37,7 +37,17 @@ Two kinds of task, and the difference matters more than anything else here.
 | Task | Held for |
 |---|---|
 | `asset-server` | The whole time the app is open. Every thumbnail the gallery shows comes through it. |
-| `import-assets` | For the length of one automatic import run, which ends when it has read its sources to the end. The app starts the next one a couple of seconds later. |
+| `import-assets` | For the length of one automatic import run, which ends when it has read its sources to the end. The next one starts about thirty seconds later. |
+
+## The pool outlives the WebView
+
+The pool used to be torn down when the plugin was destroyed, which happens when the WebView goes away, which happens when the app leaves the screen. That is precisely when the background import needs it.
+
+`JsEnginePlugin.handleOnDestroy` now leaves the pool up while a background import is running, and the Android foreground service gives up its hold as it stops. Whichever of the two goes last does the teardown, so the engines never outlive both, and they are never taken away from a service that is still importing.
+
+The background import reaches the pool through a static reference to the plugin, on both platforms, because a foreground service and an iOS `BGProcessingTask` have no plugin call of their own to be handed one. It waits for a task the same way, and for the same reason: the pool reports an outcome to the WebView as an event, and there may be no WebView to hear it, so each background task registers a waiter before it is queued and is woken by the same callback that emits the event. There is deliberately no timeout on that wait. An import of a large photo library takes as long as it takes, and a wait that gave up part way would have the driver start a second import beside the first. Stopping the background import is what ends the wait, and it cancels the task by source on its way out.
+
+A background pass takes slots exactly as a foreground one does, so nothing about `POOL_SIZE` changes. The chain below is the same chain whether the app is on screen or not.
 
 ## Priority: who gets the next free slot
 
@@ -93,6 +103,7 @@ Nothing checks it automatically, which is why it is written down. The places tha
 - `EnginePool.java` and `EnginePool.swift`, where the constant is, each carrying the reasoning above.
 - `packages/mobile-worker/mobile-worker-entry.ts`, where mobile's tasks are registered.
 - `packages/node-api/src/lib/import-assets.worker.ts`, which names the chain it needs.
+- `AutoImportService.java` and `JsEnginePlugin.java`, which hold the pool up while a background import runs.
 
 ## See also
 

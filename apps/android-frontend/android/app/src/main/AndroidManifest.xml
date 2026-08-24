@@ -27,6 +27,20 @@
 
         </activity>
 
+        <!--
+          The foreground service that keeps automatic import working while the app is off screen and
+          the screen is off. Not exported: nothing outside the app may start it, and nothing outside
+          the app has any reason to. Declared as a dataSync service because that is what it does:
+          it copies photos from the device library into the database.
+
+          It is started only when the user switches automatic import on. A phone that never switches
+          it on never runs it, and never sees its notification.
+        -->
+        <service
+            android:name=".jsengine.AutoImportService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -52,4 +66,20 @@
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
+
+    <!--
+      The background import runs as a foreground service, which the platform requires to post an
+      ongoing notification. Android 13 will not show that notification without POST_NOTIFICATIONS,
+      and the service then runs invisibly, which is the opposite of what a foreground service is for.
+      It is declared here but asked for only when automatic import is switched on.
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!--
+      The service holds a wake lock only while a pass is actually running, so the CPU keeps working
+      with the screen off. It is released between passes: held for the life of the service it would
+      flatten a phone overnight.
+    -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 </manifest>

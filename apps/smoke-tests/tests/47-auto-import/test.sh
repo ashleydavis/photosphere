@@ -7,13 +7,15 @@
 # switched on through the settings card. Nothing else is touched: the app has to create its own
 # default database, notice the photo, and import it.
 #
-# The point of the test is the part that is different on mobile. The loop runs in the WebView rather
-# than in a worker task, because the embedded engine pool has three slots and the asset server holds
-# one for the life of the app: a long-running orchestrator task in a second slot leaves nothing for
-# the tasks the import it queues needs in turn, and the import waits for a slot that can never come
-# free. That failure looks exactly like success from outside (the setting is on, the task is
-# running), which is why this test waits for the photo to land in the gallery rather than for the
-# task to start.
+# The point of the test is the part that is different on mobile. The loop runs natively (a foreground
+# service on Android, the plugin's driver on iOS) rather than as a long-running worker task, because
+# the embedded engine pool has a handful of slots and the asset server holds one for the life of the
+# app: an orchestrator task in a second slot leaves nothing for the tasks the import it queues needs
+# in turn, and the import waits for a slot that can never come free. That failure looks exactly like
+# success from outside (the setting is on, the task is running), which is why this test waits for the
+# photo to land in the gallery rather than for the task to start.
+#
+# What happens once the app is off screen is test 49's, not this one's.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$TEST_DIR/../../lib/common.sh"
@@ -92,6 +94,11 @@ trap on_exit EXIT
 # the app's own request resolves straight away once the permission is already held.
 "${PLATFORM}_grant_media_permission" || exit 1
 
+# And the notification permission, for the same reason. Switching automatic import on starts a
+# foreground service, which the platform requires to post an ongoing notification, so the app asks
+# for this one too at that moment.
+"${PLATFORM}_grant_notification_permission" || exit 1
+
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
@@ -101,9 +108,10 @@ wait_for_log "$TMP_DIR" "Automatic import settings loaded"
 
 send_command "$APP_PORT" click '{"dataId":"auto-import-toggle"}' || exit 1
 
-# The app makes its own default database, because there was not one.
-wait_for_log "$TMP_DIR" "Creating the default photo database" || exit 1
-wait_for_log "$TMP_DIR" "Starting automatic import into" || exit 1
+# The app hands the loop to the native side, which is where automatic import runs now. The database
+# is created by the first pass rather than by the WebView, so there is no line here saying so: what
+# the app knows is that it asked for the loop to start, and the import below is the proof it did.
+wait_for_log "$TMP_DIR" "Starting automatic import." || exit 1
 
 # The photo has to actually arrive. This is the line the engine-pool deadlock never reached: the loop
 # would report zeros forever because the import it queued could not get a slot.

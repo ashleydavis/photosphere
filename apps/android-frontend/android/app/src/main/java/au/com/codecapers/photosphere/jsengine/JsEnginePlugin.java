@@ -38,6 +38,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 //
 // The Android side of the "JsEngine" Capacitor plugin. It owns the engine pool and bridges
@@ -65,6 +68,10 @@ import java.util.UUID;
         @Permission(
             alias = MediaPermissions.LEGACY_STORAGE_ALIAS,
             strings = { MediaPermissions.READ_EXTERNAL_STORAGE }
+        ),
+        @Permission(
+            alias = JsEnginePlugin.NOTIFICATIONS_ALIAS,
+            strings = { JsEnginePlugin.POST_NOTIFICATIONS }
         ),
     }
 )
@@ -96,10 +103,73 @@ public final class JsEnginePlugin extends Plugin {
     private static final String STATUS_FAILED = "failed";
 
     //
+    // The permission Android 13 and later require before a notification is shown, including the
+    // ongoing one a foreground service must post.
+    //
+    public static final String POST_NOTIFICATIONS = "android.permission.POST_NOTIFICATIONS";
+
+    //
+    // The name the notification permission is requested under.
+    //
+    public static final String NOTIFICATIONS_ALIAS = "notifications";
+
+    //
+    // The first Android version that asks the user before showing notifications.
+    //
+    private static final int FIRST_NOTIFICATION_PERMISSION_VERSION = 33;
+
+    //
+    // The source tag the background import queues its tasks under, so they can be cancelled as a
+    // group when automatic import is switched off. Matches AUTO_IMPORT_TASK_SOURCE in
+    // packages/api/src/lib/auto-import-mobile.ts.
+    //
+    private static final String AUTO_IMPORT_TASK_SOURCE = "auto-import";
+
+    //
+    // The task type that says what a background import pass should do.
+    //
+    private static final String PLAN_AUTO_IMPORT_TASK = "plan-auto-import";
+
+    //
+    // How long a wait for a background task is parked for before it checks whether the background
+    // import has been stopped, in milliseconds.
+    //
+    // There is deliberately no overall timeout: an import of a large photo library takes as long as
+    // it takes, and a wait that gave up part way would have the driver start a second import beside
+    // the first. Stopping is what ends the wait, and this is how quickly it notices.
+    //
+    private static final long BACKGROUND_TASK_POLL_MS = 500;
+
+    //
+    // The plugin instance the background import reaches the engine pool through.
+    //
+    // The foreground service runs with no Activity and no plugin call of its own, so it cannot be
+    // handed the plugin. It is set when the plugin loads and cleared only when the plugin is
+    // destroyed with no background import running.
+    //
+    private static volatile JsEnginePlugin activeInstance;
+
+    //
+    // True while the background import is running, which stops the engine pool being torn down when
+    // the WebView goes away. Without it, backgrounding the app destroys the very engines the service
+    // needs.
+    //
+    private static volatile boolean backgroundImportRunning = false;
+
+    //
     // The engine pool that runs tasks. Created lazily on first use so the Android context and
     // storage root are available.
     //
     private EnginePool enginePool;
+
+    //
+    // Background tasks the service is waiting on, keyed by task id.
+    //
+    // The pool reports outcomes to the WebView through an event, which is no use to a service: the
+    // WebView may not exist. Each background task registers here before it is queued and is woken by
+    // the same listener callback that emits the event.
+    //
+    private final Map<String, BackgroundTaskWaiter> backgroundWaitersByTaskId = new ConcurrentHashMap<>();
 
     //
     // Lock guarding the event buffer and the listener-ready flag.
@@ -116,6 +186,12 @@ public final class JsEnginePlugin extends Plugin {
     // True once a JS listener has been registered and the buffer has been flushed.
     //
     private boolean listenersReady = false;
+
+    //
+    // True once the WebView has been destroyed. The pool is then torn down as soon as the background
+    // import gives up its hold, and straight away when there is no background import.
+    //
+    private volatile boolean webViewGone = false;
 
     //
     // A buffered taskCompleted / taskMessage event awaiting a registered listener.
@@ -167,6 +243,7 @@ public final class JsEnginePlugin extends Plugin {
             //
             @Override
             public void onTaskSucceeded(PooledTask task, String outputsJson) {
+                completeBackgroundTask(task.taskId, true, outputsJson, null);
                 emitTaskCompleted(task, STATUS_SUCCEEDED, null, outputsJson);
             }
 
@@ -175,6 +252,7 @@ public final class JsEnginePlugin extends Plugin {
             //
             @Override
             public void onTaskFailed(PooledTask task, String errorMessage) {
+                completeBackgroundTask(task.taskId, false, null, errorMessage);
                 emitTaskCompleted(task, STATUS_FAILED, errorMessage, null);
             }
 
@@ -374,6 +452,11 @@ public final class JsEnginePlugin extends Plugin {
     public void load() {
         super.load();
         ExportTemp.sweep(getStorageRoot());
+
+        // The background import reaches the engine pool through here, because a service has no
+        // plugin call of its own to be handed one.
+        activeInstance = this;
+        webViewGone = false;
 
         // Registers what can present the system delete confirmation for removing photos from the
         // device library. The engines that ask for a deletion run on background threads with no
@@ -768,10 +851,230 @@ public final class JsEnginePlugin extends Plugin {
 
 
     //
-    // shutdown: tears down the pool, disposes contexts, clears the event buffer, and resolves.
+    // startBackgroundImport: starts the foreground service that keeps automatic import working while
+    // the app is off screen.
+    //
+    // The notification permission is asked for here, and nowhere else, because this is the moment the
+    // user switches automatic import on. Nothing about the background import exists before that: no
+    // service, no notification, no permission prompt and no wake lock. The service is started
+    // whatever the answer, because a foreground service without the permission still runs; it is the
+    // notification that is missing, and a background import the user cannot see is worse than one
+    // they did not agree to be told about.
     //
     @PluginMethod
-    public void shutdown(PluginCall call) {
+    public void startBackgroundImport(PluginCall call) {
+        if (android.os.Build.VERSION.SDK_INT >= FIRST_NOTIFICATION_PERMISSION_VERSION
+            && getPermissionState(NOTIFICATIONS_ALIAS) != PermissionState.GRANTED) {
+            requestPermissionForAlias(NOTIFICATIONS_ALIAS, call, "backgroundImportNotificationCallback");
+            return;
+        }
+
+        startAutoImportService();
+        call.resolve();
+    }
+
+    //
+    // Starts the background import once the notification permission has been answered, either way.
+    //
+    @PermissionCallback
+    private void backgroundImportNotificationCallback(PluginCall call) {
+        if (getPermissionState(NOTIFICATIONS_ALIAS) != PermissionState.GRANTED) {
+            Log.i(LOG_TAG, "Notifications were refused; the background import runs without its notification.");
+        }
+
+        startAutoImportService();
+        call.resolve();
+    }
+
+    //
+    // Starts the service and takes the hold that keeps the engine pool alive without the WebView.
+    //
+    private void startAutoImportService() {
+        backgroundImportRunning = true;
+
+        // Created before the service starts, on the plugin's own thread, so the service's first pass
+        // does not race the lazy creation from a thread that has no Android context of its own.
+        ensurePool();
+
+        Intent intent = new Intent(getContext(), AutoImportService.class);
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            getContext().startForegroundService(intent);
+        }
+        else {
+            getContext().startService(intent);
+        }
+
+        Log.i(LOG_TAG, "Started the background automatic import.");
+    }
+
+    //
+    // stopBackgroundImport: stops the service, cancels the import in flight, and leaves nothing
+    // behind.
+    //
+    // Safe to call when nothing is running, which is what a freshly launched app does when it finds
+    // automatic import switched off: the service it is stopping may have been started by a previous
+    // life of the WebView, or by the system restarting it.
+    //
+    @PluginMethod
+    public void stopBackgroundImport(PluginCall call) {
+        backgroundImportRunning = false;
+
+        synchronized (this) {
+            if (enginePool != null) {
+                enginePool.cancelTasks(AUTO_IMPORT_TASK_SOURCE);
+            }
+        }
+
+        getContext().stopService(new Intent(getContext(), AutoImportService.class));
+        Log.i(LOG_TAG, "Stopped the background automatic import.");
+
+        call.resolve();
+    }
+
+    //
+    // True when the plugin is loaded, so there is an engine pool for a background pass to run on.
+    //
+    // The service asks before it starts a loop: a process the system restarted on its own has no
+    // Activity in it, and therefore no plugin and no pool.
+    //
+    public static boolean isLoaded() {
+        return activeInstance != null;
+    }
+
+    //
+    // Asks the plan-auto-import task what the next background pass should do.
+    //
+    // Static because the service has no way to reach the plugin instance: it runs with no Activity
+    // and no plugin call of its own.
+    //
+    public static AutoImportPlan readBackgroundImportPlan() throws Exception {
+        JsEnginePlugin plugin = activeInstance;
+        if (plugin == null) {
+            throw new IllegalStateException("The JsEngine plugin is not loaded, so the background import cannot ask what to do.");
+        }
+
+        BackgroundTaskWaiter waiter = plugin.runBackgroundTask(PLAN_AUTO_IMPORT_TASK, "{}");
+        if (!waiter.succeeded) {
+            throw new IllegalStateException("plan-auto-import failed: " + waiter.errorMessage);
+        }
+
+        return parseAutoImportPlan(waiter.outputsJson);
+    }
+
+    //
+    // Runs one step of a background import pass and waits for it to finish, reporting whether it
+    // succeeded.
+    //
+    public static boolean runBackgroundImportStep(AutoImportPlan.Step step) throws Exception {
+        JsEnginePlugin plugin = activeInstance;
+        if (plugin == null) {
+            throw new IllegalStateException("The JsEngine plugin is not loaded, so the background import cannot run.");
+        }
+
+        BackgroundTaskWaiter waiter = plugin.runBackgroundTask(step.type, step.dataJson);
+        if (!waiter.succeeded) {
+            Log.e(LOG_TAG, "Background import task \"" + step.type + "\" failed: " + waiter.errorMessage);
+        }
+        return waiter.succeeded;
+    }
+
+    //
+    // Gives up the hold the background import has on the engine pool, and tears the pool down when
+    // the WebView has already gone.
+    //
+    // Called by the service as it stops. Without the teardown here, a service that outlived the
+    // Activity would leave the engines running with nothing left to use them.
+    //
+    public static void releaseBackgroundImportHold() {
+        backgroundImportRunning = false;
+
+        JsEnginePlugin plugin = activeInstance;
+        if (plugin == null) {
+            return;
+        }
+
+        if (plugin.webViewGone) {
+            plugin.shutdownPool();
+            activeInstance = null;
+        }
+    }
+
+    //
+    // Turns the plan-auto-import task's outputs into the plan the driver runs.
+    //
+    private static AutoImportPlan parseAutoImportPlan(String outputsJson) throws JSONException {
+        if (outputsJson == null) {
+            throw new JSONException("plan-auto-import returned nothing.");
+        }
+
+        JSONObject outputs = new JSONObject(outputsJson);
+        List<AutoImportPlan.Step> steps = new ArrayList<>();
+
+        JSONArray stepsJson = outputs.optJSONArray("steps");
+        if (stepsJson != null) {
+            for (int stepIndex = 0; stepIndex < stepsJson.length(); stepIndex++) {
+                JSONObject stepJson = stepsJson.getJSONObject(stepIndex);
+                steps.add(new AutoImportPlan.Step(
+                    stepJson.getString("type"),
+                    stepJson.getJSONObject("data").toString()));
+            }
+        }
+
+        return new AutoImportPlan(
+            outputs.optBoolean("shouldRun", false),
+            outputs.optString("databasePath", ""),
+            outputs.optLong("pauseBetweenRunsMs", 0),
+            steps);
+    }
+
+    //
+    // Queues one background task and blocks until it finishes.
+    //
+    // The wait ends when the task completes or when the background import is stopped, whichever
+    // comes first. A stop also cancels the task, so nothing is left running behind a wait that has
+    // been abandoned.
+    //
+    private BackgroundTaskWaiter runBackgroundTask(String type, String dataJson) throws Exception {
+        String taskId = UUID.randomUUID().toString();
+        BackgroundTaskWaiter waiter = new BackgroundTaskWaiter();
+        backgroundWaitersByTaskId.put(taskId, waiter);
+
+        try {
+            ensurePool().addTask(new PooledTask(taskId, type, dataJson, AUTO_IMPORT_TASK_SOURCE, TaskPriority.BACKGROUND));
+
+            while (!waiter.finished.await(BACKGROUND_TASK_POLL_MS, TimeUnit.MILLISECONDS)) {
+                if (!backgroundImportRunning) {
+                    ensurePool().cancelTasks(AUTO_IMPORT_TASK_SOURCE);
+                    throw new InterruptedException("The background import was stopped while \"" + type + "\" was running.");
+                }
+            }
+
+            return waiter;
+        }
+        finally {
+            backgroundWaitersByTaskId.remove(taskId);
+        }
+    }
+
+    //
+    // Wakes whatever is waiting for a background task, if anything is.
+    //
+    private void completeBackgroundTask(String taskId, boolean succeeded, String outputsJson, String errorMessage) {
+        BackgroundTaskWaiter waiter = backgroundWaitersByTaskId.get(taskId);
+        if (waiter == null) {
+            return;
+        }
+
+        waiter.succeeded = succeeded;
+        waiter.outputsJson = outputsJson;
+        waiter.errorMessage = errorMessage;
+        waiter.finished.countDown();
+    }
+
+    //
+    // Tears the pool down and forgets the buffered events.
+    //
+    private void shutdownPool() {
         synchronized (this) {
             if (enginePool != null) {
                 enginePool.shutdown();
@@ -783,7 +1086,40 @@ public final class JsEnginePlugin extends Plugin {
             bufferedEventsByTaskId.clear();
             listenersReady = false;
         }
+    }
 
+    //
+    // One background task the service is waiting on.
+    //
+    private static final class BackgroundTaskWaiter {
+
+        //
+        // Counted down when the task finishes, either way.
+        //
+        final CountDownLatch finished = new CountDownLatch(1);
+
+        //
+        // Whether the task succeeded.
+        //
+        volatile boolean succeeded;
+
+        //
+        // The task's outputs as a JSON string, when it succeeded.
+        //
+        volatile String outputsJson;
+
+        //
+        // The error text, when it failed.
+        //
+        volatile String errorMessage;
+    }
+
+    //
+    // shutdown: tears down the pool, disposes contexts, clears the event buffer, and resolves.
+    //
+    @PluginMethod
+    public void shutdown(PluginCall call) {
+        shutdownPool();
         call.resolve();
     }
 
@@ -913,17 +1249,25 @@ public final class JsEnginePlugin extends Plugin {
     }
 
     //
-    // Capacitor lifecycle hook: ensure the pool is torn down when the plugin is destroyed so
-    // engine threads never outlive the plugin.
+    // Capacitor lifecycle hook: tear the pool down when the plugin is destroyed, unless the
+    // background import is still using it.
+    //
+    // It used to tear down unconditionally, and that is exactly what stopped automatic import from
+    // working in the background: the WebView going away destroyed the engines the service needs. The
+    // service gives up its hold as it stops, and whichever of the two goes last does the teardown.
     //
     @Override
     protected void handleOnDestroy() {
-        synchronized (this) {
-            if (enginePool != null) {
-                enginePool.shutdown();
-                enginePool = null;
-            }
+        webViewGone = true;
+
+        if (backgroundImportRunning) {
+            Log.i(LOG_TAG, "The app is closing but the background import is still running, so the engine pool is left up.");
+            super.handleOnDestroy();
+            return;
         }
+
+        shutdownPool();
+        activeInstance = null;
         super.handleOnDestroy();
     }
 }
