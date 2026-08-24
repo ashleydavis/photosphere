@@ -474,7 +474,23 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
             return;
         }
 
-        if (databasePath) {
+        // Reopening the database already open leaves a load that is already running for it alone.
+        // closeDatabase cancels that load, and putting the same path straight back does not change
+        // databasePath, so what happens next is decided by whether React has flushed the render for
+        // the undefined it was set to in between. Neither outcome is right. If it has not, the effect
+        // that loads on a path change never re-runs and nothing replaces the load that was just
+        // cancelled, so the gallery waits for ever. If it has, a replacement load starts, and then the
+        // cancelled load's completion arrives: the completion callback tells loads apart by database
+        // path alone, so it takes that one for the replacement's, unsubscribes, and the replacement
+        // finishes with nobody listening, leaving the gallery empty.
+        //
+        // The app restores its last database at startup and starts loading it, so opening that same
+        // database from the list a moment later is exactly this case, and it is why desktop smoke test
+        // 26 fails both ways. A database whose load has already finished is still closed and reopened
+        // as before, because that reload is what several smoke tests wait to see.
+        const loadAlreadyRunningForThisDatabase = databasePath === dbPath && loadingDatabasePath.current === dbPath;
+
+        if (databasePath && !loadAlreadyRunningForThisDatabase) {
             await closeDatabase();
         }
 
