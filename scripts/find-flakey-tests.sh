@@ -403,8 +403,41 @@ command_for_script() {
     fi
 }
 
-# --command wins outright. Otherwise a chosen suite becomes the command, with any --test filter
-# appended, and with nothing chosen at all the default set in COMMAND above stands.
+#
+# Writes the command that loops one test inside a suite, given the suite's script name and the filter
+# naming the test.
+#
+# `bun run <script> <filter>` cannot do this, which is what --test used to do. Bun appends extra
+# arguments to the LAST command of the script it runs, and most suite scripts end in
+# `what-changed baseline capture <target>`, so the filter landed there instead of on the runner: the
+# capture refused it ("26" is not a target), every test in the suite ran unfiltered, and the loop
+# reported a red run that no test had failed.
+#
+# Taking the script's own command line and dropping that trailing capture puts the filter on the
+# runner, where it belongs. Dropping the capture is right in its own terms as well: one test passing
+# must never record the whole suite as having passed.
+#
+# Usage: filtered_command_for_script <script_name> <filter>
+#
+filtered_command_for_script() {
+    local script="$1"
+    local filter="$2"
+    local script_command
+    script_command="$(jq -r --arg name "$script" '.scripts[$name] // empty' "$ROOT/package.json")"
+    if [ -z "$script_command" ]; then
+        echo "find-flakey-tests: package.json has no script named '$script', so --test has nothing to filter." >&2
+        return 1
+    fi
+    # The capture is always the tail of the chain, sometimes with a `cd` back to the root in front of
+    # it that exists only to reach it. Both go.
+    script_command="${script_command%% && cd ../.. && what-changed baseline capture*}"
+    script_command="${script_command%% && what-changed baseline capture*}"
+    echo "$script_command $filter"
+}
+
+# --command wins outright. Otherwise a chosen suite becomes the command, and a --test filter replaces
+# it with the suite's own runner carrying that filter, because the filter cannot be handed to
+# `bun run`. With nothing chosen at all the default set in COMMAND above stands.
 if [ "$COMMAND_GIVEN" -eq 0 ] && [ -n "$SCRIPT" ]; then
     COMMAND="$(command_for_script "$SCRIPT")"
 fi
@@ -418,7 +451,7 @@ if [ -n "$TEST_FILTER" ]; then
         echo "find-flakey-tests: --test needs --script naming a single suite (got '${SCRIPT:-none}')." >&2
         exit 2
     fi
-    COMMAND="$COMMAND $TEST_FILTER"
+    COMMAND="$(filtered_command_for_script "$SCRIPT" "$TEST_FILTER")" || exit 2
 fi
 
 # Both numbers have to be positive integers, checked here rather than producing a confusing failure
