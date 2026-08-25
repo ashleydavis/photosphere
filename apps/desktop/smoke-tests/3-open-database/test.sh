@@ -50,4 +50,27 @@ wait_for_value "$APP_PORT" database-mode "full"
 
 check_no_errors "$TMP_DIR"
 
+# --- Restart, and the database the user was in opens again on its own. ---
+#
+# The database that was open is recorded by the shared code that opens one, so every platform gets
+# this by virtue of opening a database. It used to be written by the Electron main process alone,
+# read by the shared interface, and so worked here and nowhere else. Nothing failed where it did not
+# work: the read returned nothing and the app started with nothing open, which is why it went
+# unnoticed for months and why it is asserted now.
+stop_app "$APP_PORT" "$TMP_DIR"
+
+# The relaunched app starts a fresh app.log, so the cursor from the first run points past the end of
+# it and the wait below would time out on a line that is there.
+rm -f "$TMP_DIR/.log-cursor"
+
+start_app "$TMP_DIR"
+wait_for_ready "$APP_PORT"
+
+# No command is sent between the app starting and this line. The database opening is the app's own
+# doing, which is the whole assertion.
+wait_for_log "$TMP_DIR" "Database opened" 60
+log_success "The database opened by itself after a restart"
+
+check_no_errors "$TMP_DIR"
+
 log_success "Test 3 passed: open-database"

@@ -16,6 +16,7 @@ import { useApi } from "./api-context";
 import type { IDownloadAssetItem } from "./platform-context";
 import { useToast } from "./toast-context";
 import { useUuidGenerator } from "./uuid-generator-context";
+import { useConfig } from "./config-context";
 import { markRecentArrival } from "../lib/recent-arrivals";
 
 //
@@ -113,6 +114,7 @@ interface ICheckDatabaseExistsOutputs {
 
 export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IAssetDatabaseProviderProps) {
     const platform = usePlatform();
+    const config = useConfig();
     const api = useApi();
     const uuidGenerator = useUuidGenerator();
     const { addToast } = useToast();
@@ -477,6 +479,15 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
         }
 
         setDatabasePath(dbPath);
+
+        // Remembered here, in the one place every platform opens a database through, so the app
+        // reopens it next time it starts. main.tsx reads this key on mount.
+        //
+        // It used to be written by the Electron main process instead, which is why it only ever
+        // worked on the desktop: nothing obliged a new platform to write it and nothing noticed when
+        // it did not, so the read simply returned nothing and the app started with nothing open.
+        await config.set('lastDatabase', dbPath);
+
         await platform.notifyDatabaseOpened(dbPath);
     }
     
@@ -494,6 +505,10 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
         setDatabasePath(undefined);
         loadedAssets.current = {};
         onReset.current.invoke();
+
+        // Forgotten, so a database the user closed is not reopened for them on the next start.
+        await config.clear('lastDatabase');
+
         await platform.notifyDatabaseClosed();
     }
    

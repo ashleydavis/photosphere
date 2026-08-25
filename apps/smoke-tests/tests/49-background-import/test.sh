@@ -211,16 +211,33 @@ wait_for_ready "$APP_PORT"
 # and a pass reporting three as "already there" is exactly that: the database has three records, not
 # three files. Without this the gallery loaded two and the test failed on a photo that was imported
 # a second later.
-wait_for_log "$TMP_DIR" "Import: 0 imported, 3 already there" 180 || exit 1
-
 # The gallery has to catch up on its own, with nobody opening the database again.
 #
 # It was open throughout, and the two photos taken in while the app was away were announced to a
-# WebView that was not running to hear it. Coming back to the screen is what reloads it. Without
-# that, the gallery goes on showing the one photo it held when the user left, however many have been
-# backed up since, and the only way to see the truth is to know to open the database again.
-wait_for_log "$TMP_DIR" "Load assets task completed: 3 assets loaded" 120 || exit 1
-wait_for_log "$TMP_DIR" "Gallery loaded: 3 assets" 60 || exit 1
+# WebView that was not running to hear it. Nothing replays those, so a gallery holding all three can
+# only have reloaded: coming back to the screen is what does it. Without that the gallery goes on
+# showing the one photo it held when the user left, however many have been backed up since, and the
+# only way to see the truth is to know to open the database again.
+#
+# What is asserted is the count the gallery ends up showing, not the reload that gets it there, and
+# the difference matters. Two earlier attempts at this line were both wrong:
+#
+# Waiting for an import pass to report all three as "already there" first walked the log cursor past
+# everything below, because that line arrives after the reload, so a run where the app did everything
+# right still failed.
+#
+# Waiting for the reload itself to report three assets was wrong in a subtler way. The counting above
+# asks the filesystem, and a photo's file is written before its record is committed, so the app can
+# come back while the third photo is a file and not yet a record. The reload then correctly loads two,
+# the third is committed a moment later and arrives live, and the gallery reaches three having never
+# reloaded three. Insisting on the stricter line failed a working app.
+#
+# Three in the gallery is the whole of what this test is about, and it cannot happen without the
+# reload: the photo taken in while the app was off screen was announced to a WebView that was not
+# running to hear it, nothing replays that, and a later pass reports it as already there rather than
+# announcing it again. So a gallery that reaches three has been reloaded, which is the thing being
+# proven.
+wait_for_log "$TMP_DIR" "Gallery loaded: 3 assets" 240 || exit 1
 
 # Switching automatic import off has to leave nothing behind: no service, and with it no notification.
 #

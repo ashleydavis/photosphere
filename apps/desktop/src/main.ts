@@ -729,9 +729,6 @@ ipcMain.handle('notify-database-opened', logExceptions(async (_event, databasePa
         }
         await markDatabaseOpened(existing.name);
     }
-    await updateDesktopConfig(desktopConfig => {
-        desktopConfig.lastDatabase = databasePath;
-    });
     isDatabaseOpen = true;
     await updateMenu();
     resetSyncState(databasePath);
@@ -784,9 +781,6 @@ ipcMain.handle('list-s3-dirs', logExceptions(async (_event, { s3Key, bucket, pre
 
 // IPC handler for notifying that database was closed from frontend
 ipcMain.handle('notify-database-closed', logExceptions(async () => {
-    await updateDesktopConfig(desktopConfig => {
-        delete desktopConfig.lastDatabase;
-    });
     isDatabaseOpen = false;
     await updateMenu();
     resetSyncState();

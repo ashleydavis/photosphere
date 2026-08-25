@@ -43,4 +43,27 @@ wait_for_value "$APP_PORT" "recent-database-name-0" "^$DB_NAME\$"
 # Thumbnail fetches require the not-yet-built mobile asset-serving layer; ignore only those errors.
 check_no_errors "$TMP_DIR" 'Failed to load asset: thumb:|Network Error' || exit 1
 
+# --- Restart, and the database the user was in opens again on its own. ---
+#
+# The app records the open database and opens it again next time it starts. That is meant to work
+# the same everywhere, and for a long time it worked only on the desktop: the key was written by the
+# Electron main process and read by the shared interface, so on a phone the read found nothing and
+# the app started with nothing open, however many times the same database had been opened by hand.
+# Nothing failed when it did not work, which is why it went unnoticed, and why this asserts it.
+stop_app "$APP_PORT" "$TMP_DIR"
+
+# The relaunched app starts a fresh app.log, so the cursor from the first run points past the end of
+# it and every wait below would time out on a line that is there.
+rm -f "$TMP_DIR/.log-cursor"
+
+start_app "$TMP_DIR"
+wait_for_ready "$APP_PORT"
+
+# No command is sent between the app starting and this line. The database opening is the app's own
+# doing, which is the whole assertion.
+wait_for_log "$TMP_DIR" "Database opened: $DB_NAME" 60 || exit 1
+log_success "The database opened by itself after a restart"
+
+check_no_errors "$TMP_DIR" 'Failed to load asset: thumb:|Network Error' || exit 1
+
 log_success "Test 3 passed: open-database"
