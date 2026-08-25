@@ -4,21 +4,30 @@
 
 Automatic import on a phone spends almost all of its time hashing, and the hashing is a pure-JS SHA-256 running inside the embedded JS engine. Measured on a Pixel 6 it manages 0.75 MB/s, against 500 to 900 MB/s for `sha256sum` on the same handset: roughly 700 times slower. A first backup of a 2,186 photo library was observed importing at about 1.5 photos a minute, which is around a day of work. `CryptoHost` implements RSA and nothing else, so there is no native hash to call.
 
-This moves hashing to a native host function. **It is kept only if it measurably improves automatic import, and reverted if it does not.** The measurement is not an afterthought here: it is the reason the work is being done, so it is taken before anything is written and repeated after.
+This moves hashing to a native host function. **It is kept only if it substantially improves automatic import on a real device, and reverted if it does not.** A change that is faster on paper, faster on an emulator, or faster by a margin small enough to argue about is not kept. The measurement is not an afterthought here: it is the reason the work is being done, so it is taken before anything is written and repeated after.
+
+Both paths are measured, before and after: the **hash-computed** path, where every photo is exported and hashed because the hash cache is empty, and the **hash-cached** path, where the cache answers and no hashing happens. The first is what this change is aimed at. The second is measured because it is what a phone does on every run after the first, and because a change that speeds the first up while slowing the second down has not helped.
 
 ## Issues
 
+- [ ] The measuring harness is not in the tree. It was written in a scratch worktree, used for the numbers already in `docs/performance/mobile-auto-import-scan.md`, and discarded. Rebuilding it means adding test-only scaffolding to app code (a `perf-scan` worker task, a `perf-scan` command in the shared test driver and control bridge), which this repository requires the human to approve before any of it is written. Approve it, or say how the measurement is to be taken instead.
+- [ ] Decide whether the before and after figures cover the scan only (listing, export, hash, cache lookup) as the discarded harness did, or a full automatic import including thumbnails, display versions and database writes. Hashing is 99.1% of a scan; whether it dominates a full import has never been established, and the decision in step 5 turns on which of the two is measured.
+
 ## Steps
 
-1. **Measure the current speed, before changing anything.** Establish a repeatable figure for automatic import on a device with a known set of photos, and write the numbers and the exact method into `docs/performance/mobile-auto-import-scan.md`. Everything after this is judged against it, so a method that cannot be run again later is no use.
+1. **Measure the current speed, before changing anything.** Take both figures on the real phone: a cold pass with the hash cache deleted, and the warm pass straight after it over the same items. Write the numbers, the exact method, and the device and library they came from into the before-and-after doc (see below). Everything after this is judged against it, so a method that cannot be run again later is no use.
+
+   Write the doc as soon as there is anything in it to read, and update it as each figure arrives, rather than holding everything back until the end.
 
 2. **Add a native file-hashing host function** on Android (`CryptoHost.java`, reached through `HostBridge.java`) and iOS (`CryptoHost.swift`, `HostBridge.swift`), following `docs/adding-android-native-functions.md` and `docs/adding-ios-native-functions.md`. It takes a sandbox-relative path and returns the digest.
 
 3. **Call it from the hashing path.** `validateAndHash` in `packages/node-api/src/lib/hash.ts` already has the file's path, so the bytes never have to cross the bridge. Route the mobile case through the host function and leave every other platform on `node:crypto`.
 
-4. **Measure again, the same way.** Compare against step 1.
+4. **Measure again, the same way.** The same phone, the same library, the same harness, both the cold and the warm pass. Add the after figures to the doc beside the before ones as soon as they are taken.
 
-5. **Decide, and act on the decision.** If automatic import is measurably faster, keep it and record both figures. If it is not, revert the whole change rather than leaving it in on the argument that it ought to help.
+5. **Decide, and act on the decision.** If automatic import on the phone is substantially faster, keep it and record both figures. If it is not, revert the whole change rather than leaving it in on the argument that it ought to help. "Substantially" is not left to be argued about after the fact: the cold pass must be at least several times faster on the phone, and the warm pass must not be slower. A few per cent, or a win that only shows on an emulator, means the change goes.
+
+6. **Write the before-and-after doc.** `docs/performance/native-hashing-before-and-after.md`: the two sets of figures side by side, the method, the device, the library, and the decision that came out of them. This is not written at the end from notes; it is started at step 1 and added to as each measurement lands, so the numbers can be read while the work is still going on. It stays in the repository whichever way the decision goes, because a change that did not help is worth exactly as much to the next person as one that did.
 
 Each step is finished only when the code compiles and the tests pass.
 
@@ -39,7 +48,7 @@ Each step is finished only when the code compiles and the tests pass.
 - `mise exec -- bun run compile` is clean.
 - `mise exec -- bun run test` passes.
 - `mise exec -- bun run test:everything -- --force` passes.
-- The before and after measurements are both recorded, taken the same way, and the after is better. If it is not, the change is gone and the plan is closed as "tried, did not help", with the numbers kept so nobody tries it again on the same reasoning.
+- The before and after measurements are both recorded in `docs/performance/native-hashing-before-and-after.md`, both cover the cold and the warm pass, both were taken on the same real phone the same way, and the after is substantially better. If it is not, the change is gone and the plan is closed as "tried, did not help", with the numbers kept so nobody tries it again on the same reasoning.
 
 ## Notes
 
