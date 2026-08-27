@@ -187,3 +187,22 @@ It now reads the first 256 KB through a new ranged read (`fsReadFileRange` nativ
 | 7 | photoMetadata | 6.7% | **done** |
 
 The three derivative images together are 32.3%, which is now the largest thing on this list. Producing them from one decode instead of three is the candidate that was written into the plan before any of this was measured, dismissed at the time as worth 6.9%, and is worth five times that now that the stages above it have gone.
+
+### the derivative images, attempt 1: produce each from the one before it. KEPT.
+
+Micro, thumbnail and display each decoded the full size original again, so a phone decoded every photo three times to make three small images. Together they were 32.3% of the import.
+
+They are now produced largest first, each from the one before it: display from the original, thumbnail from the display, micro from the thumbnail. The aspect ratio is preserved by every step, so the target dimensions are still computed from the original's resolution and come out the same; what changes is how much image each decode has to read.
+
+| Per photo | Before | After |
+| --- | --- | --- |
+| micro | 244 ms | 18 ms |
+| thumbnail | 243 ms | 114 ms |
+| display | 347 ms | 322 ms |
+| All three | 834 ms | 454 ms |
+
+**Micro is 13.7 times faster and thumbnail 2.1 times.** Display is barely changed, as expected: it is the one that still decodes the original. Kept.
+
+This is the candidate the plan proposed before anything had been measured, and which the baseline dismissed as worth 6.9%. It was worth 32.3% by the time it was reached, because the stages above it had gone. A candidate rejected on an early measurement is worth re-ranking, not discarding.
+
+**`databaseWrite` came back to the top at 41%** in this pass, on 6 batches rather than the 4 of the pass before. Its cost scales with the number of batches, so that is the next thing to attack, and it is the same entry that has already had one attempt.

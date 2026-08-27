@@ -111,46 +111,6 @@ timings_field() {
 }
 
 #
-# Clicks the automatic import toggle. The settings card is opened once at the start of the test and
-# stays on screen, so this does not reopen it: the line the card logs when it loads is written once,
-# and waiting for it a second time waits for something that never comes again.
-#
-# The device is woken and the app brought back to the front first. Switching automatic import on
-# starts a foreground service, and Android refuses that from an app it considers backgrounded, which
-# is what a phone that has gone to sleep during the pass before makes this one. The refusal is not
-# survivable: it comes back as a fatal exception and kills the app.
-#
-toggle_auto_import() {
-    "${PLATFORM}_wake_device"
-
-    # Android refuses a foreground service started by an app it considers backgrounded, and an app
-    # behind a locked keyguard is backgrounded however awake the screen is. Waking is therefore not
-    # enough on a phone with a PIN, and the refusal is fatal rather than survivable.
-    #
-    # The device-idle temporary allowlist is one of the exemptions Android documents for that check.
-    # It is asked for here, right before the toggle, rather than once at the start, because it
-    # expires: a pass that begins fifteen minutes into a run needs its own.
-    #
-    # This is scoped to this app, lasts minutes, and expires by itself, so the phone is left as it
-    # was found.
-    adb shell cmd deviceidle tempwhitelist -d 600000 "$APP_ID" >/dev/null 2>&1 || true
-
-    # The configuration card is asked for and then given a moment, without waiting on a log line.
-    #
-    # Both halves of that matter, and each was learned by losing a pass. Waiting for "Automatic
-    # import settings loaded" fails when the card is already open, because the card logs that line
-    # when it mounts and an open card does not mount again. Not asking for the card at all fails
-    # when the WebView has been recreated, which Android does to an app left behind a lockscreen for
-    # a quarter of an hour: the app comes back on its default page with no toggle on it, and the
-    # click times out against a UI that is not there.
-    #
-    # Asking every time covers both. A card that is already open ignores it.
-    send_command "$APP_PORT" menu '{"itemId":"open-configuration"}' >/dev/null 2>&1 || true
-    sleep 3
-
-    send_command "$APP_PORT" click '{"dataId":"auto-import-toggle"}' || return 1
-}
-
 # The pid of the loop that keeps the device awake, recorded the moment it is started so the exit trap
 # can stop it whatever happens. A process nobody wrote down cannot be cleaned up except by guessing.
 KEEP_AWAKE_PID=""
@@ -226,6 +186,12 @@ run_one_pass() {
     local label="$1"
 
     "${PLATFORM}_wake_device"
+    # Force-stopped first, so a pass that was killed cannot leave an instance running. `am start`
+    # would then merely re-deliver the intent to it, and that instance is still holding the control
+    # bridge port of the run that died, so it never connects to this one and the run waits out its
+    # readiness timeout against an app that is right there on the screen.
+    adb shell am force-stop "$APP_ID" >/dev/null 2>&1 || true
+
     start_app "$TMP_DIR"
     wait_for_ready "$APP_PORT"
 

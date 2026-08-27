@@ -49,19 +49,24 @@ export async function getImageDetails(filePath: string, tempDir: string, content
         }
     }
 
-    // Each of these decodes the full size original again, so each is timed separately: whether that
-    // is worth collapsing into one pass is a question for the measurement rather than for a guess.
-    const microStartedAt = Date.now();
-    const microPath = await resizeImage(imagePath, tempDir, resolution, MICRO_MIN_SIZE, uuidGenerator, MICRO_QUALITY);
-    const microMs = Date.now() - microStartedAt;
-
-    const thumbnailStartedAt = Date.now();
-    const thumbnailPath = await resizeImage(imagePath, tempDir, resolution, THUMBNAIL_MIN_SIZE, uuidGenerator, THUMBNAIL_QUALITY);
-    const thumbnailMs = Date.now() - thumbnailStartedAt;
-
+    // Produced largest first, each from the one before it rather than from the full size original.
+    //
+    // All three used to decode the original again, which on a phone is the whole photo decoded three
+    // times to make three small images: micro and thumbnail together were 18.9% of an import. The
+    // aspect ratio is preserved by every step, so the target dimensions are still computed from the
+    // original's resolution and come out the same; what changes is how much image each decode has to
+    // read. Downscaling in steps is also what an image tool does internally for a large reduction.
     const displayStartedAt = Date.now();
     const displayPath = await resizeImage(imagePath, tempDir, resolution, DISPLAY_MIN_SIZE, uuidGenerator, DISPLAY_QUALITY);
     const displayMs = Date.now() - displayStartedAt;
+
+    const thumbnailStartedAt = Date.now();
+    const thumbnailPath = await resizeImage(displayPath, tempDir, resolution, THUMBNAIL_MIN_SIZE, uuidGenerator, THUMBNAIL_QUALITY);
+    const thumbnailMs = Date.now() - thumbnailStartedAt;
+
+    const microStartedAt = Date.now();
+    const microPath = await resizeImage(thumbnailPath, tempDir, resolution, MICRO_MIN_SIZE, uuidGenerator, MICRO_QUALITY);
+    const microMs = Date.now() - microStartedAt;
 
     return {
         resolution,
