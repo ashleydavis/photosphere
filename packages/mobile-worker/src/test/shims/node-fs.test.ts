@@ -111,6 +111,37 @@ describe("node-fs shim", () => {
         expect(Buffer.concat(chunks).toString("utf8")).toBe("file contents");
     });
 
+    test("createReadStream reads only the range asked for, through the ranged host call", async () => {
+        // Reading a photo's EXIF needs its first few kilobytes, and the whole photo crossing the
+        // bridge to get at them was 689 milliseconds per photo on a Pixel 6.
+        const ranges: Array<{ path: string; offset: number; length: number }> = [];
+        const files: Record<string, Buffer> = { "db/file": Buffer.from("0123456789", "utf8") };
+        (globalThis as any).host = {
+            platform: "android",
+            fsAccess: (path: string): boolean => {
+                return path in files;
+            },
+            fsReadFile: (): string | null => {
+                throw new Error("the whole file must not be read when a range was asked for");
+            },
+            fsReadFileRange: (path: string, offset: number, length: number): string | null => {
+                ranges.push({ path, offset, length });
+                return files[path].subarray(offset, offset + length).toString("base64");
+            },
+        };
+
+        const stream = createReadStream("db/file", { start: 0, end: 3 });
+        const chunks: Buffer[] = [];
+        await new Promise<void>((resolve, reject) => {
+            stream.on("data", (chunk: Buffer) => chunks.push(chunk));
+            stream.on("end", () => resolve());
+            stream.on("error", reject);
+        });
+
+        expect(ranges).toEqual([{ path: "db/file", offset: 0, length: 4 }]);
+        expect(Buffer.concat(chunks).toString("utf8")).toBe("0123");
+    });
+
     test("readFileSync returns the raw bytes, or a string when an encoding is given", () => {
         expect((readFileSync("db/file") as Buffer).toString("utf8")).toBe("file contents");
         expect(readFileSync("db/file", "utf8")).toBe("file contents");

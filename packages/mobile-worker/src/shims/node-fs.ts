@@ -20,6 +20,17 @@ export const promises = fsPromisesModule;
 // A file-backed readable stream. It carries the path it was opened from, which is what Node's
 // `ReadStream` exposes and what the AWS SDK's body-length helper reads to size a file-backed body.
 //
+//
+// Options accepted by createReadStream: a byte range to read rather than the whole file.
+//
+export interface IReadStreamOptions {
+    // First byte to read, inclusive.
+    start?: number;
+
+    // Last byte to read, inclusive, the way Node's fs.createReadStream defines it.
+    end?: number;
+}
+
 export class ReadStream extends Readable {
     //
     // The path this stream was opened from.
@@ -27,7 +38,12 @@ export class ReadStream extends Readable {
     readonly path: string;
 
     //
-    // True once the file's bytes have been read and pushed, so they are read once and only once.
+    // The byte range to read, when the caller asked for one rather than the whole file.
+    //
+    private readonly range: IReadStreamOptions;
+
+    //
+    // True once the bytes have been read and pushed, so they are read once and only once.
     //
     private hasReadFile = false;
 
@@ -41,13 +57,14 @@ export class ReadStream extends Readable {
     // natively instead of piping it, which means for every photo taken into a database those bytes
     // were being fetched and then thrown away unread.
     //
-    constructor(path: string) {
+    constructor(path: string, range: IReadStreamOptions) {
         super();
         this.path = path;
+        this.range = range;
     }
 
     //
-    // Reads the whole file and pushes it, the first time the stream is actually consumed.
+    // Reads the file, or the range of it that was asked for, the first time the stream is consumed.
     //
     protected _read(): void {
         if (this.hasReadFile) {
@@ -55,7 +72,10 @@ export class ReadStream extends Readable {
         }
         this.hasReadFile = true;
 
-        const base64 = callHost(() => getFsHost().fsReadFile(this.path));
+        const base64 = this.range.end === undefined
+            ? callHost(() => getFsHost().fsReadFile(this.path))
+            : callHost(() => getFsHost().fsReadFileRange(this.path, this.range.start ?? 0, (this.range.end as number) - (this.range.start ?? 0) + 1));
+
         if (base64 === null || base64 === undefined) {
             this.emit("error", codedError("ENOENT", `ENOENT: no such file or directory, open '${this.path}'`));
             return;
@@ -126,12 +146,12 @@ export class Stats {
 // every caller of this expects. The bytes themselves are read only if something actually consumes
 // the stream: see ReadStream.
 //
-export function createReadStream(path: string): ReadStream {
+export function createReadStream(path: string, options?: IReadStreamOptions): ReadStream {
     if (!callHost(() => getFsHost().fsAccess(path))) {
         throw codedError("ENOENT", `ENOENT: no such file or directory, open '${path}'`);
     }
 
-    return new ReadStream(path);
+    return new ReadStream(path, options ?? {});
 }
 
 //

@@ -19,6 +19,10 @@ export interface IFsHost {
     // Reads a file and returns its bytes as a base64 string, or null when the file does not exist.
     fsReadFile: (path: string) => string | null;
 
+    // Reads a byte range of a file and returns it as a base64 string, or null when the file does not
+    // exist. Reading a photo's EXIF header needs the first few kilobytes, not the whole photo.
+    fsReadFileRange: (path: string, offset: number, length: number) => string | null;
+
     // Returns true when a file or directory exists at the path.
     fsAccess: (path: string) => boolean;
 

@@ -161,6 +161,56 @@ public final class HostFunctions {
     }
 
     //
+    // host.fsReadFileRange(path, offset, length): reads a byte range of a sandboxed file and returns
+    // it as a base64 string, or null when the file does not exist.
+    //
+    // Reading a photo's EXIF needs the first few kilobytes of it, not the whole thing, and on mobile
+    // the whole thing crosses the bridge as a base64 string built natively and decoded in the engine.
+    // A five megabyte photo was costing that twice over to read a header that sits in its first page.
+    //
+    // A range that runs past the end of the file returns what is there rather than failing, the way a
+    // read of a short file does.
+    //
+    public static String fsReadFileRange(File storageRoot, String candidatePath, int offset, int length) {
+        File target = PathSandbox.resolveWithin(storageRoot, candidatePath);
+        if (!target.exists() || !target.isFile()) {
+            return null;
+        }
+
+        try (FileInputStream input = new FileInputStream(target)) {
+            long skipped = 0;
+            while (skipped < offset) {
+                long justSkipped = input.skip(offset - skipped);
+                if (justSkipped <= 0) {
+                    return base64Encode(new byte[0]);
+                }
+                skipped += justSkipped;
+            }
+
+            byte[] buffer = new byte[length];
+            int filled = 0;
+            while (filled < length) {
+                int bytesRead = input.read(buffer, filled, length - filled);
+                if (bytesRead < 0) {
+                    break;
+                }
+                filled += bytesRead;
+            }
+
+            if (filled == length) {
+                return base64Encode(buffer);
+            }
+
+            byte[] shorter = new byte[filled];
+            System.arraycopy(buffer, 0, shorter, 0, filled);
+            return base64Encode(shorter);
+        }
+        catch (IOException error) {
+            throw new RuntimeException("fsReadFileRange failed for \"" + candidatePath + "\": " + error.getMessage(), error);
+        }
+    }
+
+    //
     // host.fsAccess(path): returns true when a file or directory exists at the sandboxed path. Used
     // by node-utils pathExists, which branches on existence.
     //

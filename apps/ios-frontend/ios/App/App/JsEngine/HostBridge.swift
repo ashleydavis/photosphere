@@ -249,6 +249,23 @@ final class HostBridge {
         }
         host.setValue(JSValue(object: fsReadFile, in: context), forProperty: "fsReadFile")
 
+        // fsReadFileRange(path, offset, length): a byte range as base64, JS null when missing.
+        let fsReadFileRange: @convention(block) (String, Int, Int) -> JSValue = { [weak self] path, offset, length in
+            guard let self = self else {
+                return JSValue(undefinedIn: context)
+            }
+            do {
+                guard let base64 = try self.fsReadFileRange(path: path, offset: offset, length: length) else {
+                    return JSValue(nullIn: context)
+                }
+                return JSValue(object: base64, in: context)
+            }
+            catch {
+                return JSValue(object: HostBridge.hostErrorEnvelope(error), in: context)
+            }
+        }
+        host.setValue(JSValue(object: fsReadFileRange, in: context), forProperty: "fsReadFileRange")
+
         // fsAccess(path): whether a sandboxed file or directory exists (false on any error).
         let fsAccess: @convention(block) (String) -> Bool = { [weak self] path in
             guard let self = self else { return false }
@@ -768,6 +785,31 @@ final class HostBridge {
         }
         let data = try Data(contentsOf: url)
         return data.base64EncodedString()
+    }
+
+    //
+    // host.fsReadFileRange(path, offset, length): reads a byte range of a sandboxed file and returns
+    // it as a base64 string, or nil when the file does not exist.
+    //
+    // Reading a photo's EXIF needs the first few kilobytes of it, not the whole thing, and on mobile
+    // the whole thing crosses the bridge as a base64 string. A range that runs past the end returns
+    // what is there rather than failing, the way a read of a short file does.
+    //
+    func fsReadFileRange(path: String, offset: Int, length: Int) throws -> String? {
+        let resolved = try PathSandbox.resolveWithin(root: storageRoot, candidate: path)
+
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: resolved.path, isDirectory: &isDirectory), !isDirectory.boolValue else {
+            return nil
+        }
+
+        let handle = try FileHandle(forReadingFrom: resolved)
+        defer {
+            try? handle.close()
+        }
+
+        handle.seek(toFileOffset: UInt64(offset))
+        return handle.readData(ofLength: length).base64EncodedString()
     }
 
     //

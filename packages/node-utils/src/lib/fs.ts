@@ -511,3 +511,21 @@ export function getProcessTmpDir(): string {
     return os.tmpdir();
 }
 
+
+//
+// Reads the first `byteCount` bytes of a file, or the whole file when it is shorter.
+//
+// This exists for reading a photo's EXIF header. Reading the whole photo to get at it costs a full
+// crossing of the engine bridge, where the bytes become a base64 string built natively and decoded
+// in the engine, and on a Pixel 6 that was 689 milliseconds per photo for a header that sits in the
+// first few kilobytes of the file.
+//
+export async function readFileHead(filePath: string, byteCount: number): Promise<Buffer> {
+    return new Promise<Buffer>((resolve, reject) => {
+        const chunks: Buffer[] = [];
+        const stream = fsSync.createReadStream(filePath, { start: 0, end: byteCount - 1 });
+        stream.on("data", chunk => chunks.push(Buffer.from(chunk)));
+        stream.on("end", () => resolve(Buffer.concat(chunks)));
+        stream.on("error", reject);
+    });
+}

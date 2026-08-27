@@ -480,6 +480,8 @@ public final class QuickJsTaskEngine implements TaskEngine {
         // strings; stat/readdir results cross as JSON strings; a missing path returns null.
         host.setProperty("fsReadFile", (JSCallFunction) args -> safeString(() -> hostBridge.fsReadFile((String) args[0])));
         host.setProperty("fsAccess", (JSCallFunction) args -> safeBoolean(() -> hostBridge.fsAccess((String) args[0])));
+        host.setProperty("fsReadFileRange", (JSCallFunction) args ->
+            safeString(() -> hostBridge.fsReadFileRange((String) args[0], ((Number) args[1]).intValue(), ((Number) args[2]).intValue())));
         host.setProperty("fsStat", (JSCallFunction) args -> safeString(() -> hostBridge.fsStat((String) args[0])));
         host.setProperty("fsReaddir", (JSCallFunction) args -> safeString(() -> hostBridge.fsReaddir((String) args[0])));
 

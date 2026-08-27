@@ -148,3 +148,42 @@ The two changes are one fix and are committed together: the copy cannot pay whil
 | 7 | hash | 5.6% | done, before this document |
 | 8 | dominantColor | 1.1% | not attempted |
 | 9 | upload | 0.4% | **done** |
+
+### metadata, attempt 1: read the EXIF header, not the whole photo. KEPT.
+
+Split first, because "metadata" is two different problems: a photo pays to have its EXIF read, and a video pays to have a frame decoded out of it to make a thumbnail from. The split contradicted the expectation that videos dominated:
+
+| | Time | Per item | Share |
+| --- | --- | --- | --- |
+| photoMetadata | 64.1 s | 689 ms per photo | 21.6% |
+| videoMetadata | 23.6 s | 3,934 ms per video | 8.0% |
+
+689 milliseconds per photo, to read a header. `getImageMetadata` called `fs.readFile` on the whole photo to reach EXIF that sits in the first few kilobytes of it, and on mobile the whole photo crosses the engine bridge as a base64 string. The code carried a TODO saying exactly this.
+
+It now reads the first 256 KB through a new ranged read (`fsReadFileRange` natively on both platforms, `createReadStream(path, { start, end })` in the shim, `readFileHead` in node-utils), and falls back to a whole-file read when no EXIF tags are found, so a photo with an unusual header loses nothing and is merely slower.
+
+| | Before | After |
+| --- | --- | --- |
+| photoMetadataMs | 64.1 s | 16.3 s |
+| Per photo | 689 ms | 174 ms |
+| Share | 21.6% | 6.7% |
+| Items in a 600 s pass | 99 | 101 |
+| Wall clock per item | 6.04 s | 5.67 s |
+
+**Four times less time reading photo metadata.** Kept.
+
+**Projected for the library: about 3.4 hours.** Still over the two hour target.
+
+### The leaderboard after this
+
+| Rank | Stage | Share | Status |
+| --- | --- | --- | --- |
+| 1 | databaseWrite | 26.7% | done once, back at the top |
+| 2 | export | 16.7% | not attempted |
+| 3 | display | 13.4% | not attempted |
+| 4 | videoMetadata | 9.6% | not attempted |
+| 5 | micro | 9.5% | not attempted |
+| 6 | thumbnail | 9.4% | not attempted |
+| 7 | photoMetadata | 6.7% | **done** |
+
+The three derivative images together are 32.3%, which is now the largest thing on this list. Producing them from one decode instead of three is the candidate that was written into the plan before any of this was measured, dismissed at the time as worth 6.9%, and is worth five times that now that the stages above it have gone.

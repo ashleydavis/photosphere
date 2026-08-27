@@ -372,6 +372,15 @@ public final class HostBridge {
     }
 
     //
+    // host.fsReadFileRange(path, offset, length): reads a byte range of a sandboxed file. Backs the
+    // mobile fs shim's ranged read, which is what lets a photo's EXIF be read without the whole photo
+    // crossing the bridge.
+    //
+    public String fsReadFileRange(String path, int offset, int length) {
+        return HostFunctions.fsReadFileRange(storageRoot, path, offset, length);
+    }
+
+    //
     // host.fsAccess(path): returns whether a sandboxed file or directory exists. Backs pathExists.
     //
     public boolean fsAccess(String path) {

@@ -2,13 +2,23 @@ import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 
 dayjs.extend(utc);
-import { execLogged } from "node-utils";
+import { execLogged, readFileHead } from "node-utils";
 import { convertExifCoordinates, getImageTransformation, IImageTransformation, ILocation, isLocationInRange, IUuidGenerator, log } from "utils";
 import * as fs from "fs/promises";
 import { DISPLAY_MIN_SIZE, DISPLAY_QUALITY, IAssetDetails, MICRO_MIN_SIZE, MICRO_QUALITY, THUMBNAIL_MIN_SIZE, THUMBNAIL_QUALITY } from "./media-file-database";
 import { getFileInfo, Image } from "tools";
 const exifParser = require("exif-parser");
 import path from "path";
+
+//
+// How much of a photo is read to find its EXIF.
+//
+// EXIF sits in the APP1 segment near the start of a JPEG, and a segment is at most 64 KB, so 256 KB
+// covers the header plus any embedded thumbnail comfortably. A photo whose EXIF does not fit falls
+// back to a whole-file read, so this number decides how often that happens, not whether the metadata
+// is found.
+//
+const EXIF_HEAD_BYTES = 256 * 1024;
 
 //
 // Gets the details of an image.
@@ -79,10 +89,24 @@ export async function getImageMetadata(filePath: string, contentType: string): P
             let coordinates: ILocation | undefined = undefined;
             let photoDate: string | undefined = undefined;
 
-            const fileData = await fs.readFile(filePath); //TODO: Move exif extraction to image magick so as not to load the entire file into memory.
-            const parser = exifParser.create(fileData);
+            // Only the head of the file, not the whole photo.
+            //
+            // EXIF lives in the APP1 segment near the start of a JPEG, and reading the whole photo to
+            // get at it was 689 milliseconds per photo on a Pixel 6: on mobile every byte crosses the
+            // engine bridge as a base64 string built natively and decoded in the engine. A photo whose
+            // EXIF does not fit in the head falls back to the whole file below, so nothing is lost
+            // when this guess is wrong; it is only slower for that photo.
+            let fileData = await readFileHead(filePath, EXIF_HEAD_BYTES);
+            let parser = exifParser.create(fileData);
             parser.enableSimpleValues(false);
-            const exif = parser.parse();
+            let exif = parser.parse();
+
+            if (!exif || !exif.tags || Object.keys(exif.tags).length === 0) {
+                fileData = await fs.readFile(filePath);
+                parser = exifParser.create(fileData);
+                parser.enableSimpleValues(false);
+                exif = parser.parse();
+            }
             if (exif && exif.tags && exif.tags.GPSLatitude && exif.tags.GPSLongitude) {
                 coordinates = convertExifCoordinates(exif.tags);
                 if (!isLocationInRange(coordinates)) {
