@@ -8,6 +8,17 @@ import { IFileInfo, IListResult, IStorage, IWriteLockInfo } from "./storage";
 import { log } from "utils";
 import { ensureDir, pathExists, remove, copy } from "node-utils";
 
+//
+// A readable stream that knows the path of the file it is reading.
+//
+// Node's `fs.ReadStream` carries this, and so does the mobile worker's shim of it. It is what lets
+// storage recognise a file-to-file copy expressed as a stream and do it as a copy.
+//
+interface IPathBearingStream {
+    // The path the stream was opened from, absent on a stream that is not reading a file.
+    path?: string;
+}
+
 // Write lock timeout in milliseconds (10 seconds)
 const WRITE_LOCK_TIMEOUT_MS = 10000;
 
@@ -172,10 +183,26 @@ export class FileStorage implements IStorage {
     //
     // Writes an input stream to storage.
     //
+    // A stream that carries the path of a file it is reading is copied file to file rather than
+    // piped. Node's own ReadStream exposes `path`, and so does the mobile shim's, which is what
+    // makes this worth doing: on a phone every byte piped through the shims crosses the engine
+    // bridge as a base64 string built inside the JS engine, so importing a five megabyte photo built
+    // a seven megabyte string to read it and another to write it, to accomplish a copy the platform
+    // can do without moving anything into the engine at all. A transformed stream (an encrypting one,
+    // for instance) carries no path and still goes through the pipe.
+    //
     async writeStream(filePath: string, _contentType: string | undefined, inputStream: Readable): Promise<void> {
         const tmpPath = temporaryWritePath(filePath);
         await ensureDir(path.dirname(filePath));
-        await pipeline(inputStream, createWriteStream(tmpPath));
+
+        const sourcePath = (inputStream as IPathBearingStream).path;
+        if (typeof sourcePath === "string") {
+            await fs.copyFile(sourcePath, tmpPath);
+        }
+        else {
+            await pipeline(inputStream, createWriteStream(tmpPath));
+        }
+
         await fs.rename(tmpPath, filePath);
     }
 

@@ -138,6 +138,11 @@ export interface IImportTimings {
     exportMs: number;
 
     // Time spent reading an item's own metadata: the EXIF block on a photo, the probe on a video.
+    //
+    // Split by kind because they are different problems with different fixes: a photo pays to have
+    // its EXIF read, and a video pays to have a frame decoded out of it to make a thumbnail from.
+    photoMetadataMs: number;
+    videoMetadataMs: number;
     metadataMs: number;
 
     // Time spent producing the micro thumbnail, the thumbnail and the display version. Reported

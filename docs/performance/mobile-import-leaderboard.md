@@ -42,22 +42,7 @@ Taken 27 August 2026, with native hashing already in place.
 
 ## The leaderboard
 
-Ordered by what each stage cost, largest first. The share is of measured stage time, not of the run's wall clock, because the stages run inside child tasks that overlap.
-
-As it stands now, after the attempts below. Shares are from the most recent measurement.
-
-| Rank | Stage | Share | Status |
-| --- | --- | --- | --- |
-| 1 | upload | 53.9% | not attempted |
-| 2 | metadata | 14.9% | not attempted |
-| 3 | display | 6.9% | not attempted |
-| 4 | thumbnail | 5.7% | not attempted |
-| 5 | databaseWrite | 5.5% | **done**, was 51.0% |
-| 6 | micro | 5.3% | not attempted |
-| 7 | export | 4.2% | not attempted |
-| 8 | hash | 3.0% | done, before this document |
-| 9 | dominantColor | 0.6% | not attempted |
-| 10 | cacheLookup | 0.0% | not attempted |
+Ordered by what each stage cost, largest first. The share is of measured stage time, not of the run's wall clock, because the stages run inside child tasks that overlap. The current standings are at the end of this document, after the attempts that produced them.
 
 As it was at the baseline, before anything here was attempted:
 
@@ -117,3 +102,49 @@ Measured over the same 600 second pass:
 **A prediction made here was wrong and is worth recording.** `addItems` was expected to be per-item work that batching could not touch, since it is a loop over the batch's items. It fell 49x. So the cost was not the loop: it was something the BSON collection pays per commit rather than per record. Anyone attacking the remaining 3 seconds should start there rather than in the loop.
 
 **The warm pass reported nothing**, as it did at the baseline. A cold pass has to hash a hundred files before the hash cache is flushed, and these passes reach about thirty. The warm path is not what is being optimised here, but no warm figure in this document means anything until a pass runs long enough to flush.
+
+### upload, attempt 1: copy the file natively instead of piping it. FAILED.
+
+On mobile every byte written through the fs shim crosses the engine bridge as a base64 string built inside the JS engine, and every byte read comes back the same way. Storage puts an imported photo into the database by piping a file-backed stream into a file, so a five megabyte photo became a seven megabyte string to read it and another to write it, to accomplish a copy the platform can do without moving anything into the engine.
+
+Added `fsCopyFile` as a native host function on both platforms, and `FileStorage.writeStream` now copies file to file when the stream it is given carries a path. Node's own `ReadStream` exposes `path` too, so this is not mobile-only.
+
+| | Before | After |
+| --- | --- | --- |
+| upload per item | 3.04 s | 2.86 s |
+
+**About 6%, which is inside the run-to-run variation.** Not kept on its own.
+
+### upload, attempt 2: stop reading the file that is about to be ignored. KEPT.
+
+Attempt 1 could not pay, and the reason was upstream of it: `createReadStream` in the mobile shim pulled the **entire file** across the bridge as base64 at construction, before anything asked for a byte. So the new copy path avoided the write half while the read half still happened for every photo, and the bytes were then thrown away unread.
+
+`ReadStream` now holds only the path and reads on first consumption, through the `_read` hook the stream shim already had. The existence check stays at construction, so a missing file still fails where every caller expects it to.
+
+| | Baseline | Attempt 1 | Attempt 2 |
+| --- | --- | --- | --- |
+| uploadMs | 309.5 s | 228.8 s | **1.1 s** |
+| upload per item | 3.04 s | 2.86 s | **0.014 s** |
+| upload share | 29.0% | 47.5% | **0.4%** |
+| Items in a 600 s pass | 43 | 80 | **99** |
+| Wall clock per item | 13.6 s | 7.49 s | **6.04 s** |
+
+**210 times less time in upload, and 24% more photos taken in the same ten minutes.** Far outside any plausible variation, so it is kept.
+
+The two changes are one fix and are committed together: the copy cannot pay while the read is still fetching the file it is about to ignore, and the lazy read is pointless without something that declines to consume the stream.
+
+**Projected for the library: about 3.7 hours.** Still over the two hour target.
+
+### The leaderboard after this
+
+| Rank | Stage | Share | Status |
+| --- | --- | --- | --- |
+| 1 | metadata | 29.4% | not attempted |
+| 2 | databaseWrite | 22.6% | done once, worth attacking again |
+| 3 | export | 15.3% | not attempted |
+| 4 | display | 10.6% | not attempted |
+| 5 | micro | 7.7% | not attempted |
+| 6 | thumbnail | 7.4% | not attempted |
+| 7 | hash | 5.6% | done, before this document |
+| 8 | dominantColor | 1.1% | not attempted |
+| 9 | upload | 0.4% | **done** |

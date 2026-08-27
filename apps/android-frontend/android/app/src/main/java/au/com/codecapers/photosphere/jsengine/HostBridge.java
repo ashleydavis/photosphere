@@ -417,6 +417,15 @@ public final class HostBridge {
     }
 
     //
+    // host.fsCopyFile(srcPath, destPath): copies a sandboxed file natively. Backs the mobile fs
+    // shim's copyFile, which storage uses to put an imported photo into the database without the
+    // photo ever crossing the bridge as base64.
+    //
+    public void fsCopyFile(String srcPath, String destPath) {
+        HostFunctions.fsCopyFile(storageRoot, srcPath, destPath);
+    }
+
+    //
     // host.fsUnlink(path): deletes a sandboxed file. Backs the mobile fs shim's unlink.
     //
     public void fsUnlink(String path) {

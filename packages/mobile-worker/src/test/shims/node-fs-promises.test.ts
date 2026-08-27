@@ -41,6 +41,7 @@ function installMockHost(): void {
         fsReaddir: (path: string): string | null => {
             return dirs[path] ? JSON.stringify(dirs[path]) : null;
         },
+        fsCopyFile: jest.fn((): string | null => null),
     };
 }
 
@@ -111,7 +112,15 @@ describe("node-fs-promises shim", () => {
     test("the unimplemented entry points fail loudly rather than silently doing nothing", async () => {
         // These are not on any implemented mobile path; a call must surface, not no-op.
         await expect(appendFile()).rejects.toThrow(/NOT IMPLEMENTED.*fsAppendFile/);
-        await expect(copyFile()).rejects.toThrow(/NOT IMPLEMENTED.*fsCopyFile/);
+    });
+
+    test("copyFile copies natively rather than moving the file through the engine", async () => {
+        // The whole point of it: storage copies an imported photo into the database, and going
+        // through the stream shims instead would read the photo into the engine as a base64 string
+        // and write it back out as another one.
+        await copyFile("db/original.bin", "db/copy.bin");
+
+        expect((globalThis as any).host.fsCopyFile).toHaveBeenCalledWith("db/original.bin", "db/copy.bin");
     });
 
 });

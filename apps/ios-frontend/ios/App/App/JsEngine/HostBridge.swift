@@ -326,6 +326,22 @@ final class HostBridge {
         }
         host.setValue(JSValue(object: fsRename, in: context), forProperty: "fsRename")
 
+        // fsCopyFile(srcPath, destPath): copies a sandboxed file natively, so a photo being put into
+        // the database never crosses the bridge as a base64 string.
+        let fsCopyFile: @convention(block) (String, String) -> JSValue = { [weak self] srcPath, destPath in
+            guard let self = self else {
+                return JSValue(undefinedIn: context)
+            }
+            do {
+                try self.fsCopyFile(srcPath: srcPath, destPath: destPath)
+                return JSValue(nullIn: context)
+            }
+            catch {
+                return JSValue(object: HostBridge.hostErrorEnvelope(error), in: context)
+            }
+        }
+        host.setValue(JSValue(object: fsCopyFile, in: context), forProperty: "fsCopyFile")
+
         // fsUnlink(path): deletes a file; null on success or error envelope.
         let fsUnlink: @convention(block) (String) -> JSValue = { [weak self] path in
             guard let self = self else { return JSValue(nullIn: context) }
@@ -857,6 +873,34 @@ final class HostBridge {
     // exists, so simply dropping removeItem would break the overwrite. replaceItemAt is the atomic
     // replace and requires an existing destination, so each case takes the call that fits it.
     //
+    //
+    // host.fsCopyFile(srcPath, destPath): copies a sandboxed file natively.
+    //
+    // This exists because writing a file through the fs shim sends every byte across the bridge as a
+    // base64 string built inside the JS engine, and reading one brings it back the same way. Storage
+    // copies an imported photo into the database, so a five megabyte photo crossed the bridge as a
+    // seven megabyte string twice over to accomplish a copy the platform can do without moving
+    // anything into the engine at all.
+    //
+    func fsCopyFile(srcPath: String, destPath: String) throws {
+        let source = try PathSandbox.resolveWithin(root: storageRoot, candidate: srcPath)
+        let destination = try PathSandbox.resolveWithin(root: storageRoot, candidate: destPath)
+        let fileManager = FileManager.default
+
+        guard fileManager.fileExists(atPath: source.path) else {
+            throw HostFsError.message("ENOENT: no such file or directory, copyfile '\(srcPath)'")
+        }
+
+        let parent = destination.deletingLastPathComponent()
+        if !fileManager.fileExists(atPath: parent.path) {
+            try fileManager.createDirectory(at: parent, withIntermediateDirectories: true)
+        }
+        if fileManager.fileExists(atPath: destination.path) {
+            try fileManager.removeItem(at: destination)
+        }
+        try fileManager.copyItem(at: source, to: destination)
+    }
+
     func fsRename(srcPath: String, destPath: String) throws {
         let source = try PathSandbox.resolveWithin(root: storageRoot, candidate: srcPath)
         let destination = try PathSandbox.resolveWithin(root: storageRoot, candidate: destPath)

@@ -188,6 +188,8 @@ describe("import timings", () => {
         expect(timings.uploadMs).toBe(550);
         expect(timings.geocodeMs).toBe(66);
         expect(timings.dominantColorMs).toBe(77);
+        expect(timings.photoMetadataMs).toBe(100);
+        expect(timings.videoMetadataMs).toBe(10);
         expect(timings.photosSeen).toBe(1);
         expect(timings.videosSeen).toBe(1);
     });
@@ -225,7 +227,7 @@ describe("import timings", () => {
         const ranked = rankImportStages(timings);
 
         expect(ranked.map(stage => stage.name)).toEqual([
-            "metadata",
+            "photoMetadata",
             "thumbnail",
             "display",
             "upload",
@@ -251,7 +253,7 @@ describe("import timings", () => {
             isVideo: false,
         });
 
-        expect(rankImportStages(timings).map(stage => stage.name)).toEqual(["metadata"]);
+        expect(rankImportStages(timings).map(stage => stage.name)).toEqual(["photoMetadata"]);
     });
 
     test("ranking a run that did nothing is empty rather than a division by zero", () => {

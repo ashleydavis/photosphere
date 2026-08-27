@@ -27,11 +27,42 @@ export class ReadStream extends Readable {
     readonly path: string;
 
     //
-    // Builds a stream over the whole contents of the file at the given path.
+    // True once the file's bytes have been read and pushed, so they are read once and only once.
     //
-    constructor(path: string, contents: Buffer) {
-        super(contents);
+    private hasReadFile = false;
+
+    //
+    // Builds a stream over the file at the given path, WITHOUT reading it.
+    //
+    // The bytes are fetched on the first attempt to consume the stream, not here. That is the whole
+    // point of it: reading a file across the engine bridge brings it back as a base64 string built
+    // natively and decoded in the engine, so a five megabyte photo costs a seven megabyte string and
+    // the decode of it. Storage recognises a file-backed stream by its path and copies the file
+    // natively instead of piping it, which means for every photo taken into a database those bytes
+    // were being fetched and then thrown away unread.
+    //
+    constructor(path: string) {
+        super();
         this.path = path;
+    }
+
+    //
+    // Reads the whole file and pushes it, the first time the stream is actually consumed.
+    //
+    protected _read(): void {
+        if (this.hasReadFile) {
+            return;
+        }
+        this.hasReadFile = true;
+
+        const base64 = callHost(() => getFsHost().fsReadFile(this.path));
+        if (base64 === null || base64 === undefined) {
+            this.emit("error", codedError("ENOENT", `ENOENT: no such file or directory, open '${this.path}'`));
+            return;
+        }
+
+        this.push(base64ToBuffer(base64));
+        this.push(null);
     }
 }
 
@@ -88,13 +119,19 @@ export class Stats {
 // Creates a readable stream over a file by reading the whole file through the host bridge and
 // emitting it as a single chunk. Matches the whole-file read model used across the mobile worker.
 //
+//
+// Opens a file as a readable stream, without reading it.
+//
+// The existence check stays here so a missing file still fails at the point of the call, the way
+// every caller of this expects. The bytes themselves are read only if something actually consumes
+// the stream: see ReadStream.
+//
 export function createReadStream(path: string): ReadStream {
-    const base64 = callHost(() => getFsHost().fsReadFile(path));
-    if (base64 === null || base64 === undefined) {
+    if (!callHost(() => getFsHost().fsAccess(path))) {
         throw codedError("ENOENT", `ENOENT: no such file or directory, open '${path}'`);
     }
 
-    return new ReadStream(path, base64ToBuffer(base64));
+    return new ReadStream(path);
 }
 
 //

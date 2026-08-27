@@ -303,6 +303,43 @@ public final class HostFunctions {
     }
 
     //
+    // host.fsCopyFile(srcPath, destPath): copies a sandboxed file, streaming it rather than reading it
+    // whole. Both paths are sandbox-validated. The destination's parent is created if it is missing.
+    //
+    // This exists because writing a file through the fs shim sends every byte across the bridge as a
+    // base64 string built inside the JS engine, and reading one brings it back the same way. Importing
+    // a photo copies it into storage, so a five megabyte photo crossed the bridge as a seven megabyte
+    // string twice over, and the copy itself is the whole of what was being asked for. Copying it
+    // natively moves no bytes across the bridge at all.
+    //
+    public static void fsCopyFile(File storageRoot, String srcPath, String destPath) {
+        File source = PathSandbox.resolveWithin(storageRoot, srcPath);
+        File destination = PathSandbox.resolveWithin(storageRoot, destPath);
+
+        if (!source.exists() || !source.isFile()) {
+            throw new RuntimeException("ENOENT: no such file or directory, copyfile '" + srcPath + "'");
+        }
+
+        File parent = destination.getParentFile();
+        if (parent != null && !parent.exists()) {
+            parent.mkdirs();
+        }
+
+        try (FileInputStream input = new FileInputStream(source);
+             FileOutputStream output = new FileOutputStream(destination)) {
+            byte[] buffer = new byte[READ_BUFFER_SIZE];
+            int bytesRead = input.read(buffer);
+            while (bytesRead > 0) {
+                output.write(buffer, 0, bytesRead);
+                bytesRead = input.read(buffer);
+            }
+        }
+        catch (IOException error) {
+            throw new RuntimeException("fsCopyFile failed for \"" + srcPath + "\" -> \"" + destPath + "\": " + error.getMessage(), error);
+        }
+    }
+
+    //
     // host.fsUnlink(path): deletes a sandboxed file. Throws an ENOENT-marked error when the file does
     // not exist (callers such as the write-lock release and node-utils remove() catch ENOENT).
     //

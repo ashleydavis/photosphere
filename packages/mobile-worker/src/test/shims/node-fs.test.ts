@@ -12,6 +12,9 @@ describe("node-fs shim", () => {
         };
         (globalThis as any).host = {
             platform: "android",
+            fsAccess: (path: string): boolean => {
+                return path in files;
+            },
             fsReadFile: (path: string): string | null => {
                 return files[path] ? files[path].toString("base64") : null;
             },
@@ -58,6 +61,9 @@ describe("node-fs shim", () => {
         const writes: Record<string, Buffer> = {};
         (globalThis as any).host = {
             platform: "android",
+            fsAccess: (path: string): boolean => {
+                return path in files;
+            },
             fsReadFile: (path: string): string | null => files[path] ? files[path].toString("base64") : null,
             fsWriteFile: (path: string, base64: string) => { writes[path] = Buffer.from(base64, "base64"); },
         };
@@ -71,6 +77,38 @@ describe("node-fs shim", () => {
 
         expect(stream).toBeInstanceOf(ReadStream);
         expect(stream.path).toBe("db/file");
+    });
+
+    test("createReadStream does not read the file until something consumes the stream", async () => {
+        // The point of it. Storage recognises a file-backed stream by its path and copies the file
+        // natively rather than piping it, so for every photo taken into a database the eager read
+        // fetched the whole file across the bridge as a base64 string and then threw it away unread.
+        let readCount = 0;
+        const files: Record<string, Buffer> = { "db/file": Buffer.from("file contents", "utf8") };
+        (globalThis as any).host = {
+            platform: "android",
+            fsAccess: (path: string): boolean => {
+                return path in files;
+            },
+            fsReadFile: (path: string): string | null => {
+                readCount += 1;
+                return files[path] ? files[path].toString("base64") : null;
+            },
+        };
+
+        const stream = createReadStream("db/file");
+        expect(stream.path).toBe("db/file");
+        expect(readCount).toBe(0);
+
+        const chunks: Buffer[] = [];
+        await new Promise<void>((resolve, reject) => {
+            stream.on("data", (chunk: Buffer) => chunks.push(chunk));
+            stream.on("end", () => resolve());
+            stream.on("error", reject);
+        });
+
+        expect(readCount).toBe(1);
+        expect(Buffer.concat(chunks).toString("utf8")).toBe("file contents");
     });
 
     test("readFileSync returns the raw bytes, or a string when an encoding is given", () => {

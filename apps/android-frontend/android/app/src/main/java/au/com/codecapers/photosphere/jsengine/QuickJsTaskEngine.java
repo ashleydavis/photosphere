@@ -492,6 +492,8 @@ public final class QuickJsTaskEngine implements TaskEngine {
             hostBridge.fsMkdir((String) args[0], toBoolean(args[1]))));
         host.setProperty("fsRename", (JSCallFunction) args -> safeVoid(() ->
             hostBridge.fsRename((String) args[0], (String) args[1])));
+        host.setProperty("fsCopyFile", (JSCallFunction) args -> safeVoid(() ->
+            hostBridge.fsCopyFile((String) args[0], (String) args[1])));
         host.setProperty("fsUnlink", (JSCallFunction) args -> safeVoid(() ->
             hostBridge.fsUnlink((String) args[0])));
         host.setProperty("fsRm", (JSCallFunction) args -> safeVoid(() ->

@@ -302,10 +302,15 @@ export async function appendFile(): Promise<void> {
 }
 
 //
-// Not needed by the implemented paths yet.
+// Copies a file natively, so its bytes never cross the bridge.
 //
-export async function copyFile(): Promise<void> {
-    notImplemented("fsCopyFile");
+// This is what storage uses to put an imported photo into the database. Going through the stream
+// shims instead would read the whole photo into the engine as a base64 string and write it back out
+// as another one, which for a five megabyte photo is two seven megabyte strings built inside the JS
+// engine to accomplish a copy the platform can do without moving anything into the engine at all.
+//
+export async function copyFile(srcPath: string, destPath: string): Promise<void> {
+    callHost(() => getFsHost().fsCopyFile(srcPath, destPath));
 }
 
 //

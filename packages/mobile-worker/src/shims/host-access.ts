@@ -37,6 +37,9 @@ export interface IFsHost {
     // Renames/moves a file, overwriting an existing destination.
     fsRename: (srcPath: string, destPath: string) => string | null;
 
+    // Copies a file natively, without its bytes crossing the bridge.
+    fsCopyFile: (srcPath: string, destPath: string) => string | null;
+
     // Deletes a file.
     fsUnlink: (path: string) => string | null;
 
