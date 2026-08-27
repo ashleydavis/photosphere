@@ -7,6 +7,8 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 
 //
 // Static helpers shared by the host bridge across all engine contexts. The NOT IMPLEMENTED
@@ -73,12 +75,69 @@ public final class HostFunctions {
     }
 
     //
-    // host.sha256(path): hashing a file is a Node.js crypto capability that is not implemented
-    // natively. It reports NOT IMPLEMENTED. The arguments are accepted only so the host-bridge
-    // signature stays stable for when the real implementation lands.
+    // How many bytes are read from the file at a time while hashing it.
+    //
+    // The file is streamed rather than read whole because a photo or a video can be far larger than
+    // anything else this bridge handles, and reading one into memory to hash it would put the whole
+    // of it on the heap for no benefit: the digest is computed the same way either way.
+    //
+    private static final int SHA256_READ_BUFFER_BYTES = 1024 * 1024;
+
+    //
+    // host.sha256(path): hashes the file at the sandboxed storage path and returns the digest as
+    // lower-case hex.
+    //
+    // This exists because the embedded JS engine's pure-JS SHA-256 hashes at well under a megabyte a
+    // second on a phone, while the platform's own runs at hundreds, and automatic import is almost
+    // entirely hashing. The path is taken rather than the bytes so that nothing crosses the bridge:
+    // a streaming hash driven from JS would send every chunk over as base64 and could easily be
+    // slower than the JS it replaced.
+    //
+    // The digest must match what Node's crypto.createHash("sha256") produces byte for byte. These
+    // digests are the identity of every asset and the key of the hash cache, so a digest that
+    // differs anywhere would make every existing database look wrong, silently: photos would
+    // re-import and the cache would never hit.
+    //
+    // Returns null when the path does not exist or is not a regular file, which the shim surfaces as
+    // ENOENT, matching fsReadFile.
     //
     public static String sha256(File storageRoot, String candidatePath) {
-        throw notImplemented("sha256");
+        File target = PathSandbox.resolveWithin(storageRoot, candidatePath);
+        if (!target.exists() || !target.isFile()) {
+            return null;
+        }
+
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] buffer = new byte[SHA256_READ_BUFFER_BYTES];
+            try (FileInputStream input = new FileInputStream(target)) {
+                int bytesRead = input.read(buffer);
+                while (bytesRead > 0) {
+                    digest.update(buffer, 0, bytesRead);
+                    bytesRead = input.read(buffer);
+                }
+            }
+
+            return toHex(digest.digest());
+        }
+        catch (NoSuchAlgorithmException error) {
+            throw new RuntimeException("sha256 is unavailable on this device: " + error.getMessage(), error);
+        }
+        catch (IOException error) {
+            throw new RuntimeException("sha256 failed for \"" + candidatePath + "\": " + error.getMessage(), error);
+        }
+    }
+
+    //
+    // Renders bytes as lower-case hex, which is how every hash in this project is written down.
+    //
+    static String toHex(byte[] data) {
+        StringBuilder hex = new StringBuilder(data.length * 2);
+        for (byte oneByte : data) {
+            hex.append(Character.forDigit((oneByte >> 4) & 0xF, 16));
+            hex.append(Character.forDigit(oneByte & 0xF, 16));
+        }
+        return hex.toString();
     }
 
     //

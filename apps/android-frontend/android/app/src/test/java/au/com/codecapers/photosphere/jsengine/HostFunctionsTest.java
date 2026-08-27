@@ -294,6 +294,103 @@ public final class HostFunctionsTest {
     }
 
     //
+    // The digest of an empty file, which is the SHA-256 of no bytes at all. A hasher that never fed
+    // its digest anything returns exactly this, so it is the one case worth pinning by hand: it
+    // catches the stream loop being skipped entirely.
+    //
+    private static final String EMPTY_SHA256 =
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+
+    //
+    // The digest of the three ASCII bytes "abc", the standard SHA-256 test vector.
+    //
+    private static final String ABC_SHA256 =
+        "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+
+    //
+    // A known input hashes to its published digest. Pinned against the standard vector rather than
+    // against another run of the same code, because the whole value of this function is that it
+    // agrees with what Node's crypto produced for every asset already in every database.
+    //
+    @Test
+    public void sha256MatchesTheKnownVectorForAbc() throws Exception {
+        File root = temporaryFolder.getRoot();
+        File target = new File(root, "abc.bin");
+        try (FileOutputStream output = new FileOutputStream(target)) {
+            output.write("abc".getBytes(StandardCharsets.UTF_8));
+        }
+
+        assertEquals(ABC_SHA256, HostFunctions.sha256(root, "abc.bin"));
+    }
+
+    //
+    // An empty file hashes to the digest of no bytes, rather than to null or an error.
+    //
+    @Test
+    public void sha256HandlesAnEmptyFile() throws Exception {
+        File root = temporaryFolder.getRoot();
+        File target = new File(root, "empty.bin");
+        try (FileOutputStream output = new FileOutputStream(target)) {
+            // Deliberately writes nothing.
+        }
+
+        assertEquals(EMPTY_SHA256, HostFunctions.sha256(root, "empty.bin"));
+    }
+
+    //
+    // A file bigger than one read buffer hashes the same as the JDK's own digest over the same
+    // bytes. This is what proves the streaming loop feeds every chunk in, in order: a loop that
+    // dropped or repeated a buffer would still return a plausible-looking digest.
+    //
+    @Test
+    public void sha256StreamsAFileLargerThanItsReadBuffer() throws Exception {
+        File root = temporaryFolder.getRoot();
+        byte[] contents = new byte[(1024 * 1024 * 2) + 12345];
+        for (int index = 0; index < contents.length; index++) {
+            contents[index] = (byte) (index % 251);
+        }
+
+        File target = new File(root, "large.bin");
+        try (FileOutputStream output = new FileOutputStream(target)) {
+            output.write(contents);
+        }
+
+        String expected = HostFunctions.toHex(
+            java.security.MessageDigest.getInstance("SHA-256").digest(contents));
+        assertEquals(expected, HostFunctions.sha256(root, "large.bin"));
+    }
+
+    //
+    // A missing file answers null, the same as fsReadFile, which the shim turns into ENOENT.
+    //
+    @Test
+    public void sha256AnswersNullForAMissingFile() {
+        File root = temporaryFolder.getRoot();
+        assertNull(HostFunctions.sha256(root, "nothing-here.bin"));
+    }
+
+    //
+    // A directory is not a file and must not be hashed as one.
+    //
+    @Test
+    public void sha256AnswersNullForADirectory() {
+        File root = temporaryFolder.getRoot();
+        assertTrue(new File(root, "a-directory").mkdir());
+        assertNull(HostFunctions.sha256(root, "a-directory"));
+    }
+
+    //
+    // Hashing goes through the same sandbox as every other path-taking host function, so a path
+    // outside the storage root is refused rather than read.
+    //
+    @Test
+    public void sha256RefusesAPathOutsideTheSandbox() {
+        File root = temporaryFolder.getRoot();
+        assertRejected(() -> HostFunctions.sha256(root, "../../etc/passwd"));
+        assertRejected(() -> HostFunctions.sha256(root, "/etc/passwd"));
+    }
+
+    //
     // Asserts that running the action throws a SecurityException (the PathSandbox rejection).
     //
     private void assertRejected(Runnable action) {

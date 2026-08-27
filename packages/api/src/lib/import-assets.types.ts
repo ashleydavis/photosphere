@@ -79,6 +79,58 @@ export interface IImportAssetsResult {
 
     // How many files could not be imported.
     failedCount: number;
+
+    // Where the run's time went, so an import can be measured rather than guessed at.
+    timings: IImportTimings;
+}
+
+//
+// Where an import run's time went, and how much work it did.
+//
+// Hashing is broken out on its own because it is the stage a native hash replaces, and because the
+// question a measurement of this has to answer is not whether hashing got faster, which is easy, but
+// whether the import as a whole did. Reported for every import rather than only a measured one: an
+// import that is slow on a user's phone is worth being able to account for, and the counters cost
+// two clock reads per file against work measured in seconds per file.
+//
+export interface IImportTimings {
+    // Wall clock for the whole run, from the first file being looked at to the last database write.
+    // This is the figure a person waiting for their photos experiences, and the one a change has to
+    // move to be worth keeping.
+    totalMs: number;
+
+    // Time spent inside the hashing step, summed over every file that was hashed.
+    //
+    // Summed across child tasks that run concurrently, so it is not a slice of totalMs and must never
+    // be reported as a percentage of it. Compare it against childTaskMs, which is summed the same way.
+    hashMs: number;
+
+    // Time spent asking the hash cache about a file, summed over every file, hit or miss.
+    cacheLookupMs: number;
+
+    // Time spent in every child task the import ran, summed the same way as hashMs. This is what
+    // hashMs is a share of.
+    childTaskMs: number;
+
+    // How many files were hashed, because the cache did not already know them.
+    filesHashed: number;
+
+    // How many files the cache answered for once the import had already opened them, so no hashing
+    // was needed.
+    filesFromCache: number;
+
+    // How many items the scanner recognised before opening them at all, from what the hash cache
+    // already knew about the item's source id, size and created time.
+    //
+    // This is the whole of the work on a run over a library that has already been imported, and it
+    // is why such a run costs almost nothing: an item answered here is never copied out of the photo
+    // library and never hashed, so every other counter here stays at zero. A measurement that did
+    // not report it would show a warm run as having done nothing at all.
+    skippedBeforeOpening: number;
+
+    // How many bytes were hashed. The rate that carries across libraries is bytes per second, not
+    // files per second, because one library's photos are not another's size.
+    bytesHashed: number;
 }
 
 //
@@ -145,4 +197,21 @@ export interface IImportProgressMessage {
 
     // The item the run is working on, for the interface to name.
     currentItem: string | undefined;
+}
+
+//
+// Sent once, as an import run ends, carrying where its time went.
+//
+// A message rather than only a log line because on mobile the import runs inside the embedded JS
+// engine, whose own log output never reaches the app log. Progress reaches the WebView this way and
+// nothing else does, so a measurement that was only logged would be written where nobody can read
+// it. Sent whether the run finished, failed or was stopped part way, because a measurement of a
+// photo library too big to import in one sitting is a run that was stopped on purpose.
+//
+export interface IImportTimingsMessage {
+    // Discriminator matched by onTaskMessage("import-timings").
+    type: "import-timings";
+
+    // Where the run's time went.
+    timings: IImportTimings;
 }

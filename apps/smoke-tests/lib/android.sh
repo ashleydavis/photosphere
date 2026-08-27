@@ -226,18 +226,23 @@ android_ready_devices() {
 #
 # Prints the devices this run may use, one per line.
 #
-# A plugged-in real device wins over everything else, for the reason run-android.sh gives about
-# choosing a deploy target: the reason to have one attached is to test on it. Note what that costs. A
-# run that would have spread itself over five pool emulators becomes a run on one phone, so the whole
-# Android suite takes considerably longer while a phone is plugged in. Unplug it, or name the
-# emulators in PHOTOSPHERE_ANDROID_DEVICES, to get the pool's parallelism back.
+# The pool comes first, and a plugged-in phone is used only when there is no pool.
 #
-# With no real device attached, and when the pool is up, only the pool is used: a hand-testing
-# emulator is left alone, because tests reinstall the app and wipe its data. Only when no pool
-# emulator is running does this fall back to whatever bridge-ready device there is, which is what
-# makes a single hand-started emulator work.
+# A phone used to win over the pool, on the reasoning that the reason to have one attached is to test
+# on it. That is wrong for an ordinary run and it cost this repository the best part of an hour: a
+# phone is on the developer's own network and has no route to the emulator bridge at 192.168.55.1,
+# so the runner's health probe withdraws it, and the test it had been given then waits out the full
+# device-claim timeout and fails, with the whole pool sitting idle beside it. It also collapsed a run
+# that would have spread over five emulators onto one device.
 #
-# PHOTOSPHERE_ANDROID_DEVICES (a space-separated serial list) overrides all of it.
+# So an ordinary run uses the pool, and a run that wants the phone names it in
+# PHOTOSPHERE_ANDROID_DEVICES, which overrides all of this. That is what the performance measurement
+# under tests/manual/ does, along with PHOTOSPHERE_NO_LAN_BRIDGE=1 so the bridge probe is not applied
+# to a device that can never satisfy it.
+#
+# A hand-testing emulator is still left alone whenever the pool is up, because tests reinstall the
+# app and wipe its data. With no pool and no phone this falls back to whatever bridge-ready device
+# there is, which is what makes a single hand-started emulator work.
 #
 android_device_slots() {
     if [ -n "${PHOTOSPHERE_ANDROID_DEVICES:-}" ]; then
@@ -248,17 +253,17 @@ android_device_slots() {
         return 0
     fi
 
-    local hardware_devices
-    hardware_devices="$(android_hardware_devices)"
-    if [ -n "$hardware_devices" ]; then
-        echo "$hardware_devices"
-        return 0
-    fi
-
     local pool_devices
     pool_devices="$(android_pool_devices)"
     if [ -n "$pool_devices" ]; then
         echo "$pool_devices"
+        return 0
+    fi
+
+    local hardware_devices
+    hardware_devices="$(android_hardware_devices)"
+    if [ -n "$hardware_devices" ]; then
+        echo "$hardware_devices"
         return 0
     fi
 
@@ -650,9 +655,33 @@ android_expose_host_port() {
 # bridge binds 0.0.0.0 so either address reaches it (see control-bridge.ts). `adb reverse` is still
 # set for a physical device targeted via PHOTOSPHERE_ANDROID_TEST_HOST=127.0.0.1.
 #
+#
+# Wakes the device so the app can be brought to the foreground.
+#
+# A sleeping phone leaves the app un-resumed even while its WebView still answers the control bridge,
+# and Android refuses to start a foreground service from an app it considers backgrounded. Automatic
+# import is started by exactly such a service, so on a sleeping phone switching it on throws
+# ForegroundServiceStartNotAllowedException and takes the app down. Nothing about that is visible
+# from outside: the app log stops mid-sentence and the test waits out its timeout against a process
+# that no longer exists.
+#
+# Waking is enough on its own. The keyguard keeps window focus and is not dismissed here (it cannot
+# be, on a device with a PIN), but an activity started after a wake still becomes the resumed
+# activity, which is what Android's check actually asks about.
+#
+# An emulator is always awake, so this costs it one no-op keyevent.
+#
+android_wake_device() {
+    adb shell input keyevent KEYCODE_WAKEUP >/dev/null 2>&1 || true
+}
+
 android_launch() {
     local port="$1"
     adb reverse "tcp:$port" "tcp:$port"
+
+    # Before the start below, so the activity it launches comes up resumed rather than behind a
+    # sleeping screen.
+    android_wake_device
 
     local host
     host="$(android_host_address)"

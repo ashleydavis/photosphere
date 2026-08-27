@@ -116,6 +116,11 @@ export interface IUploadAssetResult {
 
     // Total byte size of all uploaded files (asset + thumb + display).
     totalSize: number;
+
+    // How long this task took in total, in milliseconds: the metadata, the thumbnail and display
+    // versions, and the uploads. The import sums it alongside the hashing tasks so the two can be
+    // compared, which is the whole question when hashing is made faster.
+    taskMs: number;
 }
 
 //
@@ -129,6 +134,9 @@ export async function uploadAssetHandler(data: IUploadAssetData, context: ITaskC
     }
 
     context.sendMessage({ type: "import-pending", assetId: data.assetId, logicalPath: data.logicalPath });
+
+    // When this task started, so the import can report what the work other than hashing cost.
+    const taskStartedAt = Date.now();
 
     const { filePath, fileStat, contentType, storageDescriptor, googleApiKey, dryRun } = data;
     const { uuidGenerator, timestampProvider } = context;
@@ -342,7 +350,11 @@ export async function uploadAssetHandler(data: IUploadAssetData, context: ITaskC
                 ? `[DRY RUN] Would add file "${data.logicalPath}" to the database with ID "${assetId}".`
                 : `Uploaded file "${data.logicalPath}" with ID "${assetId}".`);
 
-            return { assetData, totalSize };
+            return {
+                assetData,
+                totalSize,
+                taskMs: Date.now() - taskStartedAt,
+            };
         }
         catch (err: any) {
             log.exception(`Error importing file ${filePath} (${assetId})`, err);

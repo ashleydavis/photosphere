@@ -23,6 +23,7 @@ import { IUploadAssetData, IUploadAssetResult, IAssetDatabaseData } from "./uplo
 import { IImportAssetsResult, IImportedAsset, IImportProgressMessage, IImportSuccessMessage, ISkippedImport } from "api/src/lib/import-assets.types";
 import { IImportRecordEntry, ImportSource } from "api/src/lib/import-record";
 import { recordImports } from "./import-record-storage";
+import { addHashFileTiming, addUploadAssetTiming, createEmptyImportTimings, formatImportTimings, withSkippedBeforeOpening, withTotalMs } from "./import-timings";
 
 //
 // How many import record entries pile up before they are written out.
@@ -120,7 +121,19 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
 
     // The same outcome the messages below report, gathered so a caller that cannot see the messages
     // (an orchestrator task running in a worker) can still read what happened.
-    const result: IImportAssetsResult = { imported: [], skipped: [], failedCount: 0 };
+    const result: IImportAssetsResult = {
+        imported: [],
+        skipped: [],
+        failedCount: 0,
+        timings: createEmptyImportTimings(),
+    };
+
+    // When the run started, so its wall clock can be reported against the work its child tasks did.
+    const runStartedAt = Date.now();
+
+    // What the timings counted last time they were reported, so the same numbers are not reported
+    // again. See where it is set for why the elapsed time is not part of it.
+    let lastTimingsSignature = "";
 
     // What this run did, for the database's import record. Gathered as it goes and flushed in
     // batches, so a long import is a handful of writes rather than one per file.
@@ -448,6 +461,8 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
             if (taskResult.status === TaskStatus.Succeeded) {
                 const hashResult = taskResult.outputs as IHashFileResult;
 
+                result.timings = addHashFileTiming(result.timings, hashResult);
+
                 if (!hashResult.hashFromCache) {
                     const cacheIdentity = hashFileData.cacheIdentity;
                     if (cacheIdentity !== undefined) {
@@ -531,6 +546,9 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
             const uploadData = taskResult.inputs as IUploadAssetData;
             if (taskResult.status === TaskStatus.Succeeded) {
                 const uploadResult = taskResult.outputs as IUploadAssetResult;
+
+                result.timings = addUploadAssetTiming(result.timings, uploadResult.taskMs);
+
                 pendingDatabaseUpdates.push({
                     assetData: uploadResult.assetData,
                     logicalPath: uploadData.logicalPath,
@@ -645,6 +663,29 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
             currentItem,
         };
         context.sendMessage(message);
+
+        // Where the time has gone so far, sent as the run goes rather than only when it ends.
+        //
+        // A run over a real photo library does not end for hours, so timings that were only reported
+        // at the end could only be read by stopping the import, and stopping it means driving the
+        // app's interface. That cannot be relied on: a phone left on its lockscreen has its WebView
+        // paused by Android, so the command to stop the import goes unanswered and the measurement
+        // is lost along with the run. Reported as it goes, a measurement is whatever the last report
+        // said, and nothing has to be asked of the interface at all.
+        //
+        // Only when the work it counts has actually moved, though. Progress is reported on a timer
+        // as well as on a completion, so sending this every time put thousands of lines that
+        // differed by a millisecond into the app log of a single import and buried everything else
+        // in it. The elapsed time is deliberately not part of what counts as a change: it moves on
+        // every tick, which would defeat the whole check.
+        const timingsSignature = `${result.timings.filesHashed}/${result.timings.filesFromCache}/${skippedBeforeOpening}/${result.timings.childTaskMs}`;
+        if (timingsSignature !== lastTimingsSignature) {
+            lastTimingsSignature = timingsSignature;
+            context.sendMessage({
+                type: "import-timings",
+                timings: withTotalMs(withSkippedBeforeOpening(result.timings, skippedBeforeOpening), Date.now() - runStartedAt),
+            });
+        }
     }
 
     try {
@@ -759,6 +800,21 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
         // because what it did take in before failing is exactly what a user asking "what happened?"
         // wants to see.
         await swallowError(() => flushImportRecord());
+
+        // Where the run's time went, written here rather than beside the return so a run that was
+        // cancelled or that failed part way still reports it. A measurement of a photo library too
+        // big to import in one sitting is a run that was stopped on purpose, and a run that reported
+        // nothing because it did not reach the end would be no measurement at all.
+        result.timings = withSkippedBeforeOpening(result.timings, skippedBeforeOpening);
+        result.timings = withTotalMs(result.timings, Date.now() - runStartedAt);
+        log.info(formatImportTimings(result.timings));
+
+        // Sent as well as logged, because on mobile this task runs inside the embedded JS engine and
+        // the line above never reaches the app log. Messages are the only thing that crosses.
+        context.sendMessage({
+            type: "import-timings",
+            timings: result.timings,
+        });
     }
 
     return result;

@@ -647,6 +647,10 @@ describe('importAssetsHandler', () => {
             hashFromCache: false,
             filesAlreadyAdded: false,
             existingAssetId: undefined,
+            hashMs: 0,
+            cacheLookupMs: 0,
+            taskMs: 0,
+            bytesHashed: 0,
         };
 
         // Both files return the same hash — second should be skipped.

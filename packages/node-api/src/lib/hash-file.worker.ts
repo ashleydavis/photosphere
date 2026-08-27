@@ -68,6 +68,22 @@ export interface IHashFileResult {
     // can record it in the hash cache: the next run then knows the file is in the database without
     // asking the database at all.
     existingAssetId: string | undefined;
+
+    // How long the hashing itself took, in milliseconds. Zero when the cache answered, because then
+    // nothing was hashed. The import sums this across every file so hashing can be accounted for
+    // separately from everything else the import does.
+    hashMs: number;
+
+    // How long asking the hash cache took, in milliseconds, whether it answered or not.
+    cacheLookupMs: number;
+
+    // How long this task took in total, in milliseconds. The import sums this so hashing can be
+    // reported as a share of the work the child tasks did, rather than of the run's wall clock,
+    // which several tasks are running inside at once.
+    taskMs: number;
+
+    // How many bytes were hashed: the file's length when it was hashed, zero when the cache answered.
+    bytesHashed: number;
 }
 
 //
@@ -79,26 +95,41 @@ export async function hashFileHandler(data: IHashFileData, context: ITaskContext
     const { filePath, fileStat, contentType, storageDescriptor, hashCacheDir, logicalPath, cacheIdentity } = data;
     const { uuidGenerator, timestampProvider } = context;
 
+    // When this task started, so the whole of it can be reported alongside the part of it that was
+    // hashing. Read here rather than in the caller because the caller only sees when the task was
+    // queued, which on a busy import is a different thing entirely.
+    const taskStartedAt = Date.now();
+
     // Load the hash cache in read-only mode.
     const localHashCache = new HashCache(hashCacheDir, true);
     await localHashCache.load();
 
     // Try to retrieve the hash from the cache first.
+    const cacheLookupStartedAt = Date.now();
     const cachedHash = await getHashFromCache(filePath, fileStat, localHashCache, cacheIdentity);
+    const cacheLookupMs = Date.now() - cacheLookupStartedAt;
+
     let hashFromCache: boolean;
     let hashBuffer: Buffer;
+    let hashMs: number;
+    let bytesHashed: number;
 
     if (cachedHash) {
         hashBuffer = cachedHash.hash as Buffer;
         hashFromCache = true;
+        hashMs = 0;
+        bytesHashed = 0;
     }
     else {
+        const hashStartedAt = Date.now();
         const hashedFile = await validateAndHash(filePath, fileStat, contentType, logicalPath);
+        hashMs = Date.now() - hashStartedAt;
         if (!hashedFile) {
             throw new Error(`Failed to validate and hash file "${logicalPath}"`);
         }
         hashBuffer = hashedFile.hash as Buffer;
         hashFromCache = false;
+        bytesHashed = fileStat.length;
     }
 
     // Check whether this hash is already present in the database.
@@ -114,5 +145,9 @@ export async function hashFileHandler(data: IHashFileData, context: ITaskContext
         hashFromCache,
         filesAlreadyAdded: existingRecords.length > 0,
         existingAssetId: existingRecords.length > 0 ? existingRecords[0]._id : undefined,
+        hashMs,
+        cacheLookupMs,
+        taskMs: Date.now() - taskStartedAt,
+        bytesHashed,
     };
 }

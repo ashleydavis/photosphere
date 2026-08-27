@@ -22,12 +22,16 @@ import createHashLib from "create-hash";
 import createHmacLib from "create-hmac";
 import { createCipheriv as aesCreateCipheriv, createDecipheriv as aesCreateDecipheriv, type ICipheriv } from "browserify-aes";
 import randomBytesLib from "randombytes";
-import { callHost } from "./host-access";
+import { callHost, codedError } from "./host-access";
 
 //
 // The subset of native host functions the crypto shim calls for RSA key generation and signing.
 //
 interface ICryptoHost {
+    // Hashes the file at the sandbox-relative path with SHA-256 and returns the digest as lower-case
+    // hex, or null when there is no such file.
+    sha256: (path: string) => string | null;
+
     // Generates an RSA key pair and returns a JSON string { privateKeyPem, publicKeyPem }.
     cryptoGenerateRsaKeyPair: (modulusLength: number) => string;
 
@@ -135,6 +139,28 @@ interface IHash {
 //
 export function createHash(algorithm: string): IHash {
     return createHashLib(algorithm) as unknown as IHash;
+}
+
+//
+// Hashes a whole file with SHA-256 natively, returning the digest bytes.
+//
+// This is the one hashing path that does not go through `createHash` above, and it is the reason
+// automatic import is usable on a phone at all: the pure-JS SHA-256 the rest of the shim uses runs
+// at well under a megabyte a second inside the embedded engine, against hundreds for the platform's
+// own. Only the path crosses the bridge, so the photo's bytes never do.
+//
+// The other callers of `createHash` are deliberately left alone: the serialization checksum and the
+// encrypted-file header are small and frequent rather than large and rare, and a host call each
+// would cost more than it saved.
+//
+export function hashFileSync(filePath: string): Buffer {
+    const host = getCryptoHost();
+    const digestHex = callHost(() => host.sha256(filePath)) as string | null;
+    if (digestHex === null) {
+        throw codedError("ENOENT", `no such file to hash: "${filePath}"`);
+    }
+
+    return Buffer.from(digestHex, "hex");
 }
 
 //
@@ -457,6 +483,7 @@ const cryptoModule = {
     publicEncrypt,
     randomBytes,
     randomUUID,
+    hashFileSync,
     KeyObject,
 };
 

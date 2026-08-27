@@ -1,10 +1,11 @@
 import XCTest
 import JavaScriptCore
+import CommonCrypto
 @testable import App
 
 //
-// Tests the native host bridge directly: sha256 reporting NOT IMPLEMENTED (hashing is not
-// implemented natively), sendMessage capture through the message sink, and isCancelled reading
+// Tests the native host bridge directly: sha256 hashing real files against known digests,
+// sendMessage capture through the message sink, and isCancelled reading
 // the provider. Mirrors the Android host-bridge tests.
 //
 final class HostBridgeTests: XCTestCase {
@@ -32,21 +33,78 @@ final class HostBridgeTests: XCTestCase {
     }
 
     //
-    // sha256 is not implemented natively, so it must throw the exact NOT IMPLEMENTED error
-    // rather than computing a hash.
+    // Builds a bridge sandboxed to the test's storage root.
     //
-    func testSha256ReportsNotImplemented() {
-        let bridge = HostBridge(
+    private func makeBridge() -> HostBridge {
+        return HostBridge(
             sessionId: "session-1",
             storageRoot: storageRoot,
             isCancelledProvider: { _ in false },
             messageSink: { _, _ in },
             queueTaskSink: { _, _, _, _, _, _ in }
         )
+    }
 
-        XCTAssertThrowsError(try bridge.sha256(path: "vector.txt")) { error in
-            XCTAssertEqual("\(error)", "NOT IMPLEMENTED: native host function \"sha256\" is not implemented yet on ios. Implement it ASAP.")
+    //
+    // A known input hashes to its published digest. Pinned against the standard vector rather than
+    // against another run of the same code, because the whole value of this function is that it
+    // agrees with what Node's crypto produced for every asset already in every database.
+    //
+    func testSha256MatchesTheKnownVectorForAbc() throws {
+        try "abc".write(to: storageRoot.appendingPathComponent("abc.bin"), atomically: true, encoding: .utf8)
+
+        XCTAssertEqual(
+            try makeBridge().sha256(path: "abc.bin"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+    }
+
+    //
+    // An empty file hashes to the digest of no bytes, rather than to nil or an error. This catches
+    // the streaming loop being skipped entirely.
+    //
+    func testSha256HandlesAnEmptyFile() throws {
+        try Data().write(to: storageRoot.appendingPathComponent("empty.bin"))
+
+        XCTAssertEqual(
+            try makeBridge().sha256(path: "empty.bin"),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+    }
+
+    //
+    // A file bigger than one read buffer hashes the same as CommonCrypto's own digest over the same
+    // bytes, which is what proves the streaming loop feeds every chunk in, in order.
+    //
+    func testSha256StreamsAFileLargerThanItsReadBuffer() throws {
+        var contents = Data(count: (1024 * 1024 * 2) + 12345)
+        for index in 0..<contents.count {
+            contents[index] = UInt8(index % 251)
         }
+        try contents.write(to: storageRoot.appendingPathComponent("large.bin"))
+
+        var digest = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
+        contents.withUnsafeBytes { rawBuffer in
+            _ = CC_SHA256(rawBuffer.baseAddress, CC_LONG(rawBuffer.count), &digest)
+        }
+        let expected = digest.map { byte in
+            String(format: "%02x", byte)
+        }.joined()
+
+        XCTAssertEqual(try makeBridge().sha256(path: "large.bin"), expected)
+    }
+
+    //
+    // A missing file answers nil, the same as fsReadFile, which the shim turns into ENOENT.
+    //
+    func testSha256AnswersNilForAMissingFile() throws {
+        XCTAssertNil(try makeBridge().sha256(path: "nothing-here.bin"))
+    }
+
+    //
+    // Hashing goes through the same sandbox as every other path-taking host function, so a path
+    // outside the storage root is refused rather than read.
+    //
+    func testSha256RefusesAPathOutsideTheSandbox() {
+        XCTAssertThrowsError(try makeBridge().sha256(path: "../../etc/passwd"))
     }
 
     //

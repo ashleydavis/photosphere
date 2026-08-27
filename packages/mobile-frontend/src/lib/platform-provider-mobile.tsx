@@ -11,7 +11,8 @@ import { cancelMobileTasks, subscribeMobileTaskMessage, subscribeMobileTaskCompl
 import { pickMobileFolder, saveMobileDownloadedFile, saveMobileDownloadedFiles, setInjectedExportOutcome, setInjectedPickFolderResult } from "./mobile-export";
 import { setInjectedDeleteOutcome } from "./mobile-media-cleanup";
 import { AUTO_IMPORT_ENABLED_KEY } from "user-interface";
-import type { IImportProgressMessage } from "api/src/lib/import-assets.types";
+import type { IImportProgressMessage, IImportTimingsMessage } from "api/src/lib/import-assets.types";
+import { formatImportTimings } from "node-api/src/lib/import-timings";
 import type { IAutoImportSource } from "api/src/lib/auto-import-settings";
 import { planMobileAutoImport } from "api/src/lib/auto-import-mobile";
 import { getAutoImportFileValue, isAutoImportFileKey, readAutoImportFile, setAutoImportFileValue } from "./mobile-auto-import-file";
@@ -862,6 +863,16 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         // emits a task message for every running task. Logged rather than only shown on screen,
         // because a phone doing nothing and a phone quietly failing look the same in the interface.
         const progressUnsubscribe = subscribeMobileTaskMessage((_taskId, message) => {
+            // Where the run's time went, written out as the run ends. This is the only way the
+            // figure reaches anywhere readable: the import runs in the embedded engine, whose own
+            // log never reaches the app log. Every run writes one, so a slow import on a real phone
+            // can be accounted for rather than guessed at.
+            if ((message as Record<string, unknown>).type === "import-timings") {
+                const timingsMessage = message as unknown as IImportTimingsMessage;
+                log.info(formatImportTimings(timingsMessage.timings));
+                return;
+            }
+
             if ((message as Record<string, unknown>).type !== "import-progress") {
                 return;
             }

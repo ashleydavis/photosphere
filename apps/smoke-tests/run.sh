@@ -67,8 +67,22 @@ check_for_leaked_processes() {
 # here: no two tests share a directory whether they are in the same run or not.
 source "$SCRIPT_DIR/lib/runner.sh"
 
+# The tests an ordinary run performs: every tests/<name>/test.sh, and nothing under tests/manual/,
+# which sits one level deeper and so falls outside the depth this looks at.
 discover_tests() {
     find "$SCRIPT_DIR/tests" -maxdepth 2 -name "test.sh" 2>/dev/null | sort -V
+}
+
+# The tests a run can perform when it is asked for one by name, which is the ordinary set plus the
+# ones under tests/manual/.
+#
+# A manual test is one that cannot be part of a normal run: it measures a real device against its
+# real photo library and takes as long as it is told to, so a full run that swept it up would take
+# hours and would depend on whatever photos happen to be on the phone. It is never selected by an
+# unfiltered run, so there is no marker to keep in step with anything: where the file sits is what
+# decides, and moving it in or out of tests/manual/ is the whole of the change.
+discover_tests_including_manual() {
+    find "$SCRIPT_DIR/tests" -maxdepth 3 -name "test.sh" 2>/dev/null | sort -V
 }
 
 #
@@ -157,6 +171,7 @@ main() {
 
     # Selected up front, before the emulator check and the build, so a filter that matches nothing
     # fails in a second rather than after a full build-and-install.
+    # A named run may reach the manual tests; an unfiltered one never does.
     local tests=()
     local test_path test_name
     while IFS= read -r test_path; do
@@ -164,7 +179,7 @@ main() {
         if test_matches_filter "$test_name" "$filter"; then
             tests+=("$test_path")
         fi
-    done < <(discover_tests)
+    done < <(if [ -n "$filter" ]; then discover_tests_including_manual; else discover_tests; fi)
 
     if [ ${#tests[@]} -eq 0 ]; then
         if [ -n "$filter" ]; then
@@ -172,7 +187,7 @@ main() {
             # tests are listed because the usual cause is a mistyped name or a number that moved.
             log_error "No tests matched: $filter"
             echo "Available tests:"
-            discover_tests | while IFS= read -r test_path; do
+            discover_tests_including_manual | while IFS= read -r test_path; do
                 echo "  $(basename "$(dirname "$test_path")")"
             done
             exit 1

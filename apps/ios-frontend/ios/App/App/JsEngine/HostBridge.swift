@@ -1,5 +1,6 @@
 import Foundation
 import JavaScriptCore
+import CommonCrypto
 
 //
 // Error thrown by host functions that have not been implemented yet on iOS. It carries
@@ -207,12 +208,24 @@ final class HostBridge {
         }
         host.setValue(JSValue(object: queueTask, in: context), forProperty: "queueTask")
 
-        // sha256(path): hashing a file is a Node.js crypto capability that is not implemented
-        // natively. It raises the NOT IMPLEMENTED JS exception so the task fails loudly rather
-        // than silently producing a wrong hash.
-        let sha256: @convention(block) (String) -> JSValue = { path in
-            context.exception = JSValue(newErrorFromMessage: notImplemented("sha256").message, in: context)
-            return JSValue(undefinedIn: context)
+        // sha256(path): hashes a whole file natively and returns the digest as lower-case hex, or JS
+        // null when the file is missing (which the shim surfaces as ENOENT, matching fsReadFile).
+        // A failure raises a JS exception rather than returning a wrong hash: a hash that is fast
+        // and wrong is worse than a slow one, because every asset's identity depends on it.
+        let sha256: @convention(block) (String) -> JSValue = { [weak self] path in
+            guard let self = self else {
+                return JSValue(undefinedIn: context)
+            }
+            do {
+                guard let digest = try self.sha256(path: path) else {
+                    return JSValue(nullIn: context)
+                }
+                return JSValue(object: digest, in: context)
+            }
+            catch {
+                context.exception = JSValue(newErrorFromMessage: "\(error)", in: context)
+                return JSValue(undefinedIn: context)
+            }
         }
         host.setValue(JSValue(object: sha256, in: context), forProperty: "sha256")
 
@@ -669,12 +682,60 @@ final class HostBridge {
     }
 
     //
-    // host.sha256(path): hashing a file is a Node.js crypto capability that is not implemented
-    // natively. It reports NOT IMPLEMENTED. The path is accepted only so the signature stays
-    // stable for when the real implementation lands.
+    // How many bytes are read from the file at a time while hashing it.
     //
-    func sha256(path: String) throws -> String {
-        throw notImplemented("sha256")
+    // The file is streamed rather than read whole because a photo or a video can be far larger than
+    // anything else this bridge handles, and reading one into memory to hash it would put the whole
+    // of it in memory for no benefit: the digest is the same either way.
+    //
+    private static let sha256ReadBufferBytes = 1024 * 1024
+
+    //
+    // host.sha256(path): hashes the file at the sandboxed storage path and returns the digest as
+    // lower-case hex, or nil when there is no such file.
+    //
+    // This exists because the embedded JS engine's pure-JS SHA-256 hashes at well under a megabyte a
+    // second on a phone, while the platform's own runs at hundreds, and automatic import is almost
+    // entirely hashing on a bare scan. The path is taken rather than the bytes so that nothing
+    // crosses the bridge: a streaming hash driven from JS would send every chunk over as base64 and
+    // could easily be slower than the JS it replaced.
+    //
+    // The digest must match what Node's crypto.createHash("sha256") produces byte for byte. These
+    // digests are the identity of every asset and the key of the hash cache, so a digest that
+    // differed anywhere would make every existing database look wrong, silently.
+    //
+    func sha256(path: String) throws -> String? {
+        let resolved = try PathSandbox.resolveWithin(root: storageRoot, candidate: path)
+
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: resolved.path, isDirectory: &isDirectory), !isDirectory.boolValue else {
+            return nil
+        }
+
+        let handle = try FileHandle(forReadingFrom: resolved)
+        defer {
+            try? handle.close()
+        }
+
+        var context = CC_SHA256_CTX()
+        CC_SHA256_Init(&context)
+
+        while true {
+            let chunk = handle.readData(ofLength: HostBridge.sha256ReadBufferBytes)
+            if chunk.isEmpty {
+                break
+            }
+            chunk.withUnsafeBytes { rawBuffer in
+                _ = CC_SHA256_Update(&context, rawBuffer.baseAddress, CC_LONG(rawBuffer.count))
+            }
+        }
+
+        var digest = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
+        CC_SHA256_Final(&digest, &context)
+
+        return digest.map { byte in
+            String(format: "%02x", byte)
+        }.joined()
     }
 
     //
