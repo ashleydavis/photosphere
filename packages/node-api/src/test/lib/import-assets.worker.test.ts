@@ -1075,6 +1075,26 @@ describe('importAssetsHandler', () => {
         expect(hashCache.save).toHaveBeenCalled();
     });
 
+    test("writes fewer assets than a batch holds rather than stranding them", async () => {
+        // Assets are held back until a batch is worth committing, because every batch pays for a
+        // full database commit whatever its size. What that must never do is strand the last few:
+        // a run that took in fewer than a batch's worth has to write them anyway, and a phone
+        // taking in one photo is exactly that run.
+        //
+        // What this covers is the run ending with a part-filled batch. It does NOT cover the other
+        // way a part-filled batch goes out, which is a long-lived automatic import going idle with
+        // a few assets in hand: that needs a run that stays alive while the scanner reports itself
+        // caught up, which this harness has no way to hold open.
+        hashFileReportsNewFile();
+        uploadSucceeds();
+        autoImportScannerPushesOneItem();
+
+        const result = await importAssetsHandler(autoImportData(), makeContext());
+
+        expect(result.imported).toHaveLength(1);
+        expect(result.timings.databaseBatches).toBe(1);
+    });
+
     test("does not save the hash cache while the scanner still has work to hand over", async () => {
         const hashCache = watchHashCache();
         hashFileReportsNewFile();

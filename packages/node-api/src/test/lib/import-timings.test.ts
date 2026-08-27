@@ -1,6 +1,9 @@
 import {
     addHashFileTiming,
+    addDatabaseWriteTiming,
     addUploadAssetTiming,
+    rankImportStages,
+    withExportMs,
     createEmptyImportTimings,
     formatImportTimings,
     hashMegabytesPerSecond,
@@ -8,6 +11,7 @@ import {
     withSkippedBeforeOpening,
     withTotalMs,
     IHashFileTiming,
+    IUploadAssetTiming,
 } from "../../lib/import-timings";
 
 //
@@ -20,6 +24,24 @@ function hashedFile(hashMs: number, cacheLookupMs: number, taskMs: number, bytes
         taskMs,
         bytesHashed,
         hashFromCache: false,
+    };
+}
+
+//
+// A finished upload-asset task that took the given total time and did nothing else worth timing.
+// Stages that matter to a particular test are overridden by the test itself.
+//
+function uploadedItem(taskMs: number): IUploadAssetTiming {
+    return {
+        taskMs,
+        metadataMs: 0,
+        microMs: 0,
+        thumbnailMs: 0,
+        displayMs: 0,
+        uploadMs: 0,
+        geocodeMs: 0,
+        dominantColorMs: 0,
+        isVideo: false,
     };
 }
 
@@ -85,7 +107,7 @@ describe("import timings", () => {
 
     test("an upload adds only to the child task total", () => {
         let timings = addHashFileTiming(createEmptyImportTimings(), hashedFile(500, 3, 540, 2_000_000));
-        timings = addUploadAssetTiming(timings, 1_200);
+        timings = addUploadAssetTiming(timings, uploadedItem(1_200));
 
         expect(timings.childTaskMs).toBe(1_740);
         expect(timings.hashMs).toBe(500);
@@ -134,9 +156,111 @@ describe("import timings", () => {
         expect(accumulated.skippedBeforeOpening).toBe(0);
     });
 
+    test("an upload's stages each accumulate on their own", () => {
+        let timings = addUploadAssetTiming(createEmptyImportTimings(), {
+            taskMs: 5_000,
+            metadataMs: 100,
+            microMs: 200,
+            thumbnailMs: 300,
+            displayMs: 400,
+            uploadMs: 500,
+            geocodeMs: 60,
+            dominantColorMs: 70,
+            isVideo: false,
+        });
+        timings = addUploadAssetTiming(timings, {
+            taskMs: 1_000,
+            metadataMs: 10,
+            microMs: 20,
+            thumbnailMs: 30,
+            displayMs: 40,
+            uploadMs: 50,
+            geocodeMs: 6,
+            dominantColorMs: 7,
+            isVideo: true,
+        });
+
+        expect(timings.childTaskMs).toBe(6_000);
+        expect(timings.metadataMs).toBe(110);
+        expect(timings.microMs).toBe(220);
+        expect(timings.thumbnailMs).toBe(330);
+        expect(timings.displayMs).toBe(440);
+        expect(timings.uploadMs).toBe(550);
+        expect(timings.geocodeMs).toBe(66);
+        expect(timings.dominantColorMs).toBe(77);
+        expect(timings.photosSeen).toBe(1);
+        expect(timings.videosSeen).toBe(1);
+    });
+
+    test("the export total replaces what was recorded rather than adding to it", () => {
+        // The scanner keeps its own running total and reports it on every progress tick, so adding
+        // would count every copy again on every tick.
+        let timings = withExportMs(createEmptyImportTimings(), 4_000);
+        timings = withExportMs(timings, 9_000);
+
+        expect(timings.exportMs).toBe(9_000);
+    });
+
+    test("database write time adds up across batches", () => {
+        let timings = addDatabaseWriteTiming(createEmptyImportTimings(), 800);
+        timings = addDatabaseWriteTiming(timings, 1_200);
+
+        expect(timings.databaseWriteMs).toBe(2_000);
+    });
+
+    test("the stages are ranked by what they cost, most expensive first", () => {
+        let timings = addUploadAssetTiming(createEmptyImportTimings(), {
+            taskMs: 10_000,
+            metadataMs: 5_000,
+            microMs: 100,
+            thumbnailMs: 2_000,
+            displayMs: 900,
+            uploadMs: 300,
+            geocodeMs: 0,
+            dominantColorMs: 0,
+            isVideo: false,
+        });
+        timings = addHashFileTiming(timings, hashedFile(200, 0, 250, 1_000));
+
+        const ranked = rankImportStages(timings);
+
+        expect(ranked.map(stage => stage.name)).toEqual([
+            "metadata",
+            "thumbnail",
+            "display",
+            "upload",
+            "hash",
+            "micro",
+        ]);
+        expect(ranked[0].totalMs).toBe(5_000);
+
+        // 5,000 of 8,500 measured milliseconds.
+        expect(ranked[0].sharePercent).toBe(58.8);
+    });
+
+    test("a stage that cost nothing is left out of the ranking rather than listed at zero", () => {
+        const timings = addUploadAssetTiming(createEmptyImportTimings(), {
+            taskMs: 1_000,
+            metadataMs: 500,
+            microMs: 0,
+            thumbnailMs: 0,
+            displayMs: 0,
+            uploadMs: 0,
+            geocodeMs: 0,
+            dominantColorMs: 0,
+            isVideo: false,
+        });
+
+        expect(rankImportStages(timings).map(stage => stage.name)).toEqual(["metadata"]);
+    });
+
+    test("ranking a run that did nothing is empty rather than a division by zero", () => {
+        expect(rankImportStages(createEmptyImportTimings())).toEqual([]);
+    });
+
     test("hashing's share is taken against the child task time, not the wall clock", () => {
         let timings = addHashFileTiming(createEmptyImportTimings(), hashedFile(750, 0, 1_000, 1_000_000));
-        timings = addUploadAssetTiming(timings, 1_000);
+        timings = addUploadAssetTiming(timings, uploadedItem(1_000));
 
         // 750 of 2,000 milliseconds of child task time. The wall clock is deliberately set to
         // something the answer must ignore: tasks run concurrently, so a share of the wall clock
@@ -163,7 +287,7 @@ describe("import timings", () => {
     test("the summary line carries every figure a comparison needs, as readable JSON", () => {
         let timings = addHashFileTiming(createEmptyImportTimings(), hashedFile(2_000, 5, 2_100, 10 * 1024 * 1024));
         timings = addHashFileTiming(timings, cachedFile(1, 3));
-        timings = addUploadAssetTiming(timings, 2_000);
+        timings = addUploadAssetTiming(timings, uploadedItem(2_000));
         timings = withTotalMs(timings, 5_000);
 
         const line = formatImportTimings(timings);

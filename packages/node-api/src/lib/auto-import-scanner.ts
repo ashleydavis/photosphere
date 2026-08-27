@@ -40,6 +40,9 @@ export interface IAutoImportScannerProgress {
     // How many items the scanner recognised as already imported and did not push.
     skippedAsAlreadyImported: number;
 
+    // Total milliseconds spent copying items out of the source.
+    exportMs: number;
+
     // True when there is nothing left to push: the whole library has been walked and both lanes are
     // empty. This is when the import writes out what it has learnt, because it is the moment that
     // costs nothing and the moment after which nothing further may happen for hours.
@@ -140,6 +143,9 @@ export class AutoImportScanner implements IImportScanner {
     //
     private skippedAsAlreadyImported = 0;
 
+    // Total milliseconds spent copying items out of the source, summed over every item copied.
+    private exportMs = 0;
+
     //
     // The source item each pushed file came from, so the copy can be released once the import has
     // finished with it. Keyed by the path the import knows the file by.
@@ -216,6 +222,7 @@ export class AutoImportScanner implements IImportScanner {
         return {
             currentItem: this.currentItem,
             skippedAsAlreadyImported: this.skippedAsAlreadyImported,
+            exportMs: this.exportMs,
             caughtUp: this.hasNothingLeftToPush(),
         };
     }
@@ -237,7 +244,12 @@ export class AutoImportScanner implements IImportScanner {
             return;
         }
 
+        // Timed because on a phone this copies the whole photo out of the library into the app's
+        // sandbox before anything can read it, and how much of an import that accounts for has never
+        // been established.
+        const exportStartedAt = Date.now();
         const exportedPath = await deps.source.openItem(item);
+        this.exportMs += Date.now() - exportStartedAt;
 
         // Whether this item was already a file before the import looked at it. A folder source says
         // so by naming the file; a photo library item has no path at all until it is copied out.

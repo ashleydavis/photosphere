@@ -15,7 +15,9 @@ export async function getVideoDetails(filePath: string, tempDir: string, content
     // filePath is always a valid file (already extracted if from zip)
     const videoPath = filePath;
 
+    const metadataStartedAt = Date.now();
     const assetInfo = await getFileInfo(videoPath, contentType);
+    const metadataMs = Date.now() - metadataStartedAt;
     if (!assetInfo) {
         throw new Error(`Unsupported file type: ${contentType}`);
     }
@@ -24,9 +26,12 @@ export async function getVideoDetails(filePath: string, tempDir: string, content
     const video = new Video(videoPath);
     const screenshotPath = join(tempDir, `thumb_${uuidGenerator.generate()}.jpg`);
     const screenshotTime = Math.min(assetInfo.duration ? assetInfo.duration / 2 : 1, 300); // Max 5 minutes
+    const screenshotStartedAt = Date.now();
     await video.extractScreenshot(screenshotPath, screenshotTime);
+    const screenshotMs = Date.now() - screenshotStartedAt;
     
     let resolution = assetInfo.dimensions;
+    const thumbnailStartedAt = Date.now();
     let thumbnailPath = await resizeImage(screenshotPath, tempDir, resolution, THUMBNAIL_MIN_SIZE, uuidGenerator);
 
     const imageTransformation = await getVideoTransformation(assetInfo.metadata);
@@ -41,7 +46,11 @@ export async function getVideoDetails(filePath: string, tempDir: string, content
         }
     }
 
+    const thumbnailMs = Date.now() - thumbnailStartedAt;
+
+    const microStartedAt = Date.now();
     const microPath = await resizeImage(thumbnailPath, tempDir, resolution, MICRO_MIN_SIZE, uuidGenerator, MICRO_QUALITY);
+    const microMs = Date.now() - microStartedAt;
 
     let photoDate = assetInfo.createdAt?.toISOString();
     
@@ -79,7 +88,16 @@ export async function getVideoDetails(filePath: string, tempDir: string, content
         metadata: assetInfo.metadata,
         coordinates,
         photoDate,
-        duration: assetInfo.duration
+        duration: assetInfo.duration,
+        detailTimings: {
+            // The frame extraction is counted as metadata rather than as one of the derivative
+            // images, because it is not one: it is what a video has to do before there is any image
+            // to resize at all, and it is the expensive part of taking a video in.
+            metadataMs: metadataMs + screenshotMs,
+            microMs,
+            thumbnailMs,
+            displayMs: 0,
+        },
     };
 }
 

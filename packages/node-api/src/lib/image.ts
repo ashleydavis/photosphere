@@ -22,7 +22,9 @@ export async function getImageDetails(filePath: string, tempDir: string, content
         throw new Error(`Unsupported file type: ${contentType}`);
     }
     
+    const metadataStartedAt = Date.now();
     const assetDetails = await getImageMetadata(imagePath, contentType);
+    const metadataMs = Date.now() - metadataStartedAt;
     const imageTransformation = await getImageTransformation(assetDetails.metadata);
     let resolution = assetInfo.dimensions;
     
@@ -37,18 +39,34 @@ export async function getImageDetails(filePath: string, tempDir: string, content
         }
     }
 
+    // Each of these decodes the full size original again, so each is timed separately: whether that
+    // is worth collapsing into one pass is a question for the measurement rather than for a guess.
+    const microStartedAt = Date.now();
     const microPath = await resizeImage(imagePath, tempDir, resolution, MICRO_MIN_SIZE, uuidGenerator, MICRO_QUALITY);
-    const thumbnailPath = await resizeImage(imagePath, tempDir, resolution, THUMBNAIL_MIN_SIZE, uuidGenerator, THUMBNAIL_QUALITY);
-    const displayPath = await resizeImage(imagePath, tempDir, resolution, DISPLAY_MIN_SIZE, uuidGenerator, DISPLAY_QUALITY);
+    const microMs = Date.now() - microStartedAt;
 
-    return { 
-        resolution, 
+    const thumbnailStartedAt = Date.now();
+    const thumbnailPath = await resizeImage(imagePath, tempDir, resolution, THUMBNAIL_MIN_SIZE, uuidGenerator, THUMBNAIL_QUALITY);
+    const thumbnailMs = Date.now() - thumbnailStartedAt;
+
+    const displayStartedAt = Date.now();
+    const displayPath = await resizeImage(imagePath, tempDir, resolution, DISPLAY_MIN_SIZE, uuidGenerator, DISPLAY_QUALITY);
+    const displayMs = Date.now() - displayStartedAt;
+
+    return {
+        resolution,
         microPath,
-        thumbnailPath, 
+        thumbnailPath,
         thumbnailContentType: "image/jpeg",
         displayPath,
         displayContentType: "image/jpeg",
-        ...assetDetails 
+        detailTimings: {
+            metadataMs,
+            microMs,
+            thumbnailMs,
+            displayMs,
+        },
+        ...assetDetails
     };
 }
 

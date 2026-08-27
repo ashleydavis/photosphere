@@ -175,11 +175,33 @@ export interface IAddSummary {
 //
 // Collects the details of an asset.
 //
+//
+// How long each part of producing an asset's details took.
+//
+// Carried out with the details themselves so an import can say where its time went. The three
+// derivative images are reported apart from each other because each is a separate decode of the full
+// size original today, and whether that is worth changing is a question only the numbers answer.
+//
+export interface IAssetDetailTimings {
+    // Reading the item's own metadata: the EXIF block on a photo, the probe on a video.
+    metadataMs: number;
+
+    // Producing each of the three derivative images.
+    microMs: number;
+    thumbnailMs: number;
+    displayMs: number;
+}
+
 export interface IAssetDetails {
     //
     // The resolution of the image/video.
     //
     resolution: IResolution;
+
+    //
+    // Where the time went producing these details.
+    //
+    detailTimings: IAssetDetailTimings;
 
     //
     // The generated micro thumbnail of the image/video.

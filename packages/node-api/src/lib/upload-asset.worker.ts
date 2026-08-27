@@ -121,6 +121,27 @@ export interface IUploadAssetResult {
     // versions, and the uploads. The import sums it alongside the hashing tasks so the two can be
     // compared, which is the whole question when hashing is made faster.
     taskMs: number;
+
+    // How long reading the item's own metadata took. For a video this includes extracting the frame
+    // the thumbnail is made from, which is the expensive part of taking a video in.
+    metadataMs: number;
+
+    // How long each of the three derivative images took to produce.
+    microMs: number;
+    thumbnailMs: number;
+    displayMs: number;
+
+    // How long writing the original and its derivatives into storage took.
+    uploadMs: number;
+
+    // How long reverse geocoding took, zero when the item carried no coordinates or no key is set.
+    geocodeMs: number;
+
+    // How long working out the dominant colour took.
+    dominantColorMs: number;
+
+    // Whether this item was a video rather than a photo.
+    isVideo: boolean;
 }
 
 //
@@ -137,6 +158,11 @@ export async function uploadAssetHandler(data: IUploadAssetData, context: ITaskC
 
     // When this task started, so the import can report what the work other than hashing cost.
     const taskStartedAt = Date.now();
+
+    // Where this task's time goes, gathered as it goes so the import can rank its stages.
+    let uploadMs = 0;
+    let geocodeMs = 0;
+    let dominantColorMs = 0;
 
     const { filePath, fileStat, contentType, storageDescriptor, googleApiKey, dryRun } = data;
     const { uuidGenerator, timestampProvider } = context;
@@ -187,7 +213,9 @@ export async function uploadAssetHandler(data: IUploadAssetData, context: ITaskC
                 };
             }
             else {
+                const assetUploadStartedAt = Date.now();
                 await retry(() => storage.writeStream(assetPath, contentType, createReadStream(filePath), fileStat.length), 3, 1_000, 2, LARGE_FILE_TIMEOUT);
+                uploadMs += Date.now() - assetUploadStartedAt;
 
                 const assetInfo = await retry(() => storage.info(assetPath));
                 if (!assetInfo) {
@@ -216,7 +244,9 @@ export async function uploadAssetHandler(data: IUploadAssetData, context: ITaskC
                     thumbLastModified = fileStat.lastModified;
                 }
                 else {
+                    const thumbUploadStartedAt = Date.now();
                     await retry(() => storage.writeStream(thumbPath, assetDetails.thumbnailContentType!, createReadStream(assetDetails.thumbnailPath)), 3, 1_000, 2, LARGE_FILE_TIMEOUT);
+                    uploadMs += Date.now() - thumbUploadStartedAt;
 
                     const thumbInfo = await retry(() => storage.info(thumbPath));
                     if (!thumbInfo) {
@@ -245,7 +275,9 @@ export async function uploadAssetHandler(data: IUploadAssetData, context: ITaskC
                     displayLastModified = fileStat.lastModified;
                 }
                 else {
+                    const displayUploadStartedAt = Date.now();
                     await retry(() => storage.writeStream(displayPath, assetDetails.displayContentType, createReadStream(assetDetails.displayPath!)), 3, 1_000, 2, LARGE_FILE_TIMEOUT);
+                    uploadMs += Date.now() - displayUploadStartedAt;
 
                     const displayInfo = await retry(() => storage.info(displayPath));
                     if (!displayInfo) {
@@ -273,7 +305,9 @@ export async function uploadAssetHandler(data: IUploadAssetData, context: ITaskC
             if (assetDetails?.coordinates) {
                 coordinates = assetDetails.coordinates;
                 if (googleApiKey) {
+                    const geocodeStartedAt = Date.now();
                     const reverseGeocodingResult = await retry(() => reverseGeocode(assetDetails.coordinates!, googleApiKey), 3, 1500);
+                    geocodeMs += Date.now() - geocodeStartedAt;
                     if (reverseGeocodingResult) {
                         location = reverseGeocodingResult.location;
                         properties.reverseGeocoding = {
@@ -300,9 +334,11 @@ export async function uploadAssetHandler(data: IUploadAssetData, context: ITaskC
                 ? (await retry(() => fs.readFile(assetDetails.microPath))).toString("base64")
                 : undefined;
 
-            const color = assetDetails 
-                ? await extractDominantColorFromThumbnail(assetDetails.thumbnailPath) 
+            const dominantColorStartedAt = Date.now();
+            const color = assetDetails
+                ? await extractDominantColorFromThumbnail(assetDetails.thumbnailPath)
                 : undefined;
+            dominantColorMs = Date.now() - dominantColorStartedAt;
 
             const assetRecord: IAsset = {
                 _id: assetId,
@@ -354,6 +390,14 @@ export async function uploadAssetHandler(data: IUploadAssetData, context: ITaskC
                 assetData,
                 totalSize,
                 taskMs: Date.now() - taskStartedAt,
+                metadataMs: assetDetails?.detailTimings?.metadataMs ?? 0,
+                microMs: assetDetails?.detailTimings?.microMs ?? 0,
+                thumbnailMs: assetDetails?.detailTimings?.thumbnailMs ?? 0,
+                displayMs: assetDetails?.detailTimings?.displayMs ?? 0,
+                uploadMs,
+                geocodeMs,
+                dominantColorMs,
+                isVideo: contentType?.startsWith("video") === true,
             };
         }
         catch (err: any) {

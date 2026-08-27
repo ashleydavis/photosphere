@@ -131,6 +131,55 @@ export interface IImportTimings {
     // How many bytes were hashed. The rate that carries across libraries is bytes per second, not
     // files per second, because one library's photos are not another's size.
     bytesHashed: number;
+
+    // Time spent copying items out of the device photo library, summed over every item copied. On a
+    // phone an item has no path until it has been copied into the app's sandbox, so this is paid
+    // before anything can read it.
+    exportMs: number;
+
+    // Time spent reading an item's own metadata: the EXIF block on a photo, the probe on a video.
+    metadataMs: number;
+
+    // Time spent producing the micro thumbnail, the thumbnail and the display version. Reported
+    // apart from each other because each is a separate decode of the full size original today, so
+    // whether they are worth merging is a question the numbers have to answer.
+    microMs: number;
+    thumbnailMs: number;
+    displayMs: number;
+
+    // Time spent writing the original and its derivatives into storage.
+    uploadMs: number;
+
+    // Time spent asking a geocoding service where a photo was taken. Only photos carrying
+    // coordinates cost anything here, and only when a key is configured.
+    geocodeMs: number;
+
+    // Time spent working out an asset's dominant colour from its thumbnail.
+    dominantColorMs: number;
+
+    // Time spent writing a batch of finished assets to the database under the write lock.
+    databaseWriteMs: number;
+
+    // What that write time was spent on, and how many batches it was spread over.
+    //
+    // Broken out because the whole merkle tree is loaded and saved on every batch, so a run that
+    // writes in small batches pays for the whole tree over and over. The batch count is what makes
+    // that visible: the same total means something very different over five batches than over five
+    // hundred.
+    databaseBatches: number;
+    databaseFlushMs: number;
+    databaseLockWaitMs: number;
+    databaseTreeLoadMs: number;
+    databaseAddItemsMs: number;
+    databaseTreeSaveMs: number;
+    databaseCommitMs: number;
+    databaseStampMs: number;
+
+    // How many photos and how many videos the run dealt with. Kept apart because a stage that is
+    // slow only for video is a different problem from one that is slow for everything, and a
+    // library's mix of the two is what decides which of those matters.
+    photosSeen: number;
+    videosSeen: number;
 }
 
 //

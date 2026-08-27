@@ -23,7 +23,7 @@ import { IUploadAssetData, IUploadAssetResult, IAssetDatabaseData } from "./uplo
 import { IImportAssetsResult, IImportedAsset, IImportProgressMessage, IImportSuccessMessage, ISkippedImport } from "api/src/lib/import-assets.types";
 import { IImportRecordEntry, ImportSource } from "api/src/lib/import-record";
 import { recordImports } from "./import-record-storage";
-import { addHashFileTiming, addUploadAssetTiming, createEmptyImportTimings, formatImportTimings, withSkippedBeforeOpening, withTotalMs } from "./import-timings";
+import { addDatabaseWriteBreakdown, addDatabaseWriteTiming, withExportMs, addHashFileTiming, addUploadAssetTiming, createEmptyImportTimings, formatImportTimings, withSkippedBeforeOpening, withTotalMs } from "./import-timings";
 
 //
 // How many import record entries pile up before they are written out.
@@ -37,6 +37,16 @@ export const IMPORT_RECORD_FLUSH_SIZE = 100;
 // How many freshly hashed files pile up before the hash cache is written out.
 //
 export const CACHE_FLUSH_SIZE = 100;
+
+//
+// How many finished assets pile up before they are written to the database as one batch.
+//
+// Every batch pays for a full database commit whatever its size, and on a phone an asset takes over
+// ten seconds to become ready, so a purely time-based trigger gave every asset a batch of its own.
+// Twenty is chosen so a batch is worth committing while a photo still reaches the gallery within a
+// few minutes of being taken in.
+//
+export const DATABASE_BATCH_SIZE = 20;
 
 //
 // Payload for the import-assets task. Contains the paths to scan plus the configuration
@@ -134,6 +144,10 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
     // What the timings counted last time they were reported, so the same numbers are not reported
     // again. See where it is set for why the elapsed time is not part of it.
     let lastTimingsSignature = "";
+
+    // True once the scanner has nothing left to hand over, which is when a part-filled batch of
+    // database writes should go out rather than wait for more that are not coming.
+    let scannerHasNothingLeft = false;
 
     // What this run did, for the database's import record. Gathered as it goes and flushed in
     // batches, so a long import is a handful of writes rather than one per file.
@@ -296,11 +310,14 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
             return true;
         }
 
+        const databaseWriteStartedAt = Date.now();
         await bsonDatabase.flush();
+        const flushedAt = Date.now();
 
         if (!await acquireWriteLock(rawStorage, sessionId, 1)) {
             return false;
         }
+        const lockedAt = Date.now();
 
         log.verbose(`Have write lock, processing ${itemsToProcess.length} items.`);
 
@@ -309,6 +326,7 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
             if (!merkleTree) {
                 throw new Error(`Failed to load merkle tree.`);
             }
+            const treeLoadedAt = Date.now();
 
             for (const item of itemsToProcess) {
                 const { assetData, logicalPath } = item;
@@ -381,10 +399,30 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
             }
             merkleTree.databaseMetadata.filesImported += itemsToProcess.length;
 
+            const itemsAddedAt = Date.now();
+
             if (!dryRun) {
                 await retry(() => saveMerkleTree(merkleTree, storage));
+                const treeSavedAt = Date.now();
+
                 await bsonDatabase.commit();
+                const committedAt = Date.now();
+
                 await stampDatabaseModified(storage, rawStorage);
+
+                // What this batch cost, split by what it was doing. The batch count matters as much
+                // as the times: the merkle tree is loaded and saved whole every batch, so a run that
+                // writes in small batches pays for the whole tree over and over, and only the count
+                // beside the totals shows that.
+                result.timings = addDatabaseWriteBreakdown(result.timings, {
+                    flushMs: flushedAt - databaseWriteStartedAt,
+                    lockWaitMs: lockedAt - flushedAt,
+                    treeLoadMs: treeLoadedAt - lockedAt,
+                    addItemsMs: itemsAddedAt - treeLoadedAt,
+                    treeSaveMs: treeSavedAt - itemsAddedAt,
+                    commitMs: committedAt - treeSavedAt,
+                    stampMs: Date.now() - committedAt,
+                });
             }
 
             return true;
@@ -392,6 +430,12 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
         finally {
             await releaseWriteLock(rawStorage);
             log.verbose(`Released write lock.`);
+
+            // Counted here rather than beside the return, so a batch that failed part way still says
+            // what it cost. The write lock's own wait is inside this, deliberately: waiting for the
+            // lock is part of what a database write costs an import, and leaving it out would make
+            // the stage look cheaper than it is.
+            result.timings = addDatabaseWriteTiming(result.timings, Date.now() - databaseWriteStartedAt);
         }
     }
 
@@ -402,6 +446,22 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
     //
     const throttledProcessQueue = throttle(async () => {
         if (isProcessingQueue || pendingDatabaseUpdates.length === 0) {
+            return;
+        }
+
+        // Hold back until enough assets have piled up to be worth a batch, unless the scan has run
+        // dry, in which case what is waiting is all there is ever going to be.
+        //
+        // The throttle above coalesces completions that arrive within a second of each other, which
+        // does nothing at all on a phone: an item there takes over ten seconds to reach this point,
+        // so every item got a batch to itself. Measured on a Pixel 6, that was 37 batches for 42
+        // photos, and each batch pays for a full database commit whatever its size. Committing is
+        // 47% of the write stage and the write stage is half the import.
+        //
+        // The end of the run is covered without this: the final drain below calls
+        // processPendingDatabaseUpdates directly rather than going through here, so nothing is left
+        // stranded in a part-filled batch.
+        if (pendingDatabaseUpdates.length < DATABASE_BATCH_SIZE && !scannerHasNothingLeft) {
             return;
         }
 
@@ -547,7 +607,7 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
             if (taskResult.status === TaskStatus.Succeeded) {
                 const uploadResult = taskResult.outputs as IUploadAssetResult;
 
-                result.timings = addUploadAssetTiming(result.timings, uploadResult.taskMs);
+                result.timings = addUploadAssetTiming(result.timings, uploadResult);
 
                 pendingDatabaseUpdates.push({
                     assetData: uploadResult.assetData,
@@ -606,6 +666,10 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
     function onScannerProgress(scannerProgress: IAutoImportScannerProgress): void {
         skippedBeforeOpening = scannerProgress.skippedAsAlreadyImported;
 
+        // The scanner keeps a running total rather than reporting each copy, so this replaces what
+        // was recorded rather than adding to it.
+        result.timings = withExportMs(result.timings, scannerProgress.exportMs);
+
         // Save the hash cache and the import record once there is nothing left to import.
         //
         // Saving on a count alone only works for an import that ends, and this one may not:
@@ -619,6 +683,8 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
         // writes, and outlives the task if a clear is ever missed. This runs on the scanner's own
         // loop instead. Both writes cost nothing when nothing has changed, so repeating it on every
         // idle tick is free.
+        scannerHasNothingLeft = scannerProgress.caughtUp;
+
         if (scannerProgress.caughtUp && !flushing) {
 
             flushing = true;

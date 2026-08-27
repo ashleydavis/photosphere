@@ -12,6 +12,10 @@ import { IImportTimings } from "api/src/lib/import-assets.types";
 // would report a number that quietly depends on how many tasks the device runs in parallel, which is
 // exactly the sort of figure that looks like a measurement and is not.
 //
+// Every function here copies what it was given and overrides what it changes, rather than listing
+// every field. A stage added to IImportTimings then reaches all of them, instead of being silently
+// dropped by whichever one was not updated.
+//
 
 //
 // The timing fields an import reads off a finished hash-file task. `IHashFileResult` satisfies this,
@@ -36,6 +40,35 @@ export interface IHashFileTiming {
 }
 
 //
+// The per-stage timings an import reads off a finished upload-asset task. `IUploadAssetResult`
+// satisfies this.
+//
+export interface IUploadAssetTiming {
+    // How long the whole task took.
+    taskMs: number;
+
+    // How long reading the item's own metadata took: the EXIF block on a photo, the probe on a video.
+    metadataMs: number;
+
+    // How long each of the three derivative images took to produce.
+    microMs: number;
+    thumbnailMs: number;
+    displayMs: number;
+
+    // How long writing the original and its derivatives into storage took.
+    uploadMs: number;
+
+    // How long reverse geocoding took, zero when the item carried no coordinates.
+    geocodeMs: number;
+
+    // How long working out the dominant colour took.
+    dominantColorMs: number;
+
+    // Whether this item was a video rather than a photo.
+    isVideo: boolean;
+}
+
+//
 // A run's timings before it has done anything.
 //
 export function createEmptyImportTimings(): IImportTimings {
@@ -48,6 +81,25 @@ export function createEmptyImportTimings(): IImportTimings {
         filesFromCache: 0,
         skippedBeforeOpening: 0,
         bytesHashed: 0,
+        exportMs: 0,
+        metadataMs: 0,
+        microMs: 0,
+        thumbnailMs: 0,
+        displayMs: 0,
+        uploadMs: 0,
+        geocodeMs: 0,
+        dominantColorMs: 0,
+        databaseWriteMs: 0,
+        databaseBatches: 0,
+        databaseFlushMs: 0,
+        databaseLockWaitMs: 0,
+        databaseTreeLoadMs: 0,
+        databaseAddItemsMs: 0,
+        databaseTreeSaveMs: 0,
+        databaseCommitMs: 0,
+        databaseStampMs: 0,
+        photosSeen: 0,
+        videosSeen: 0,
     };
 }
 
@@ -60,31 +112,98 @@ export function createEmptyImportTimings(): IImportTimings {
 //
 export function addHashFileTiming(timings: IImportTimings, hashFileTiming: IHashFileTiming): IImportTimings {
     return {
-        totalMs: timings.totalMs,
+        ...timings,
         hashMs: timings.hashMs + hashFileTiming.hashMs,
         cacheLookupMs: timings.cacheLookupMs + hashFileTiming.cacheLookupMs,
         childTaskMs: timings.childTaskMs + hashFileTiming.taskMs,
         filesHashed: timings.filesHashed + (hashFileTiming.hashFromCache ? 0 : 1),
         filesFromCache: timings.filesFromCache + (hashFileTiming.hashFromCache ? 1 : 0),
-        skippedBeforeOpening: timings.skippedBeforeOpening,
         bytesHashed: timings.bytesHashed + hashFileTiming.bytesHashed,
     };
 }
 
 //
-// Folds one finished upload-asset task into a run's timings. An upload hashes nothing, so all it
-// adds is its own time to the child task total that hashing is measured against.
+// Folds one finished upload-asset task into a run's timings: its own time, and each stage inside it.
 //
-export function addUploadAssetTiming(timings: IImportTimings, taskMs: number): IImportTimings {
+export function addUploadAssetTiming(timings: IImportTimings, uploadTiming: IUploadAssetTiming): IImportTimings {
     return {
-        totalMs: timings.totalMs,
-        hashMs: timings.hashMs,
-        cacheLookupMs: timings.cacheLookupMs,
-        childTaskMs: timings.childTaskMs + taskMs,
-        filesHashed: timings.filesHashed,
-        filesFromCache: timings.filesFromCache,
-        skippedBeforeOpening: timings.skippedBeforeOpening,
-        bytesHashed: timings.bytesHashed,
+        ...timings,
+        childTaskMs: timings.childTaskMs + uploadTiming.taskMs,
+        metadataMs: timings.metadataMs + uploadTiming.metadataMs,
+        microMs: timings.microMs + uploadTiming.microMs,
+        thumbnailMs: timings.thumbnailMs + uploadTiming.thumbnailMs,
+        displayMs: timings.displayMs + uploadTiming.displayMs,
+        uploadMs: timings.uploadMs + uploadTiming.uploadMs,
+        geocodeMs: timings.geocodeMs + uploadTiming.geocodeMs,
+        dominantColorMs: timings.dominantColorMs + uploadTiming.dominantColorMs,
+        photosSeen: timings.photosSeen + (uploadTiming.isVideo ? 0 : 1),
+        videosSeen: timings.videosSeen + (uploadTiming.isVideo ? 1 : 0),
+    };
+}
+
+//
+// Records the total time spent copying items out of the source.
+//
+// The scanner keeps this as a running total of its own, so this replaces what was recorded rather
+// than adding to it. Adding would count every copy again on every progress report.
+//
+export function withExportMs(timings: IImportTimings, exportMs: number): IImportTimings {
+    return {
+        ...timings,
+        exportMs,
+    };
+}
+
+//
+// Adds the time one batch of finished assets took to write to the database.
+//
+export function addDatabaseWriteTiming(timings: IImportTimings, databaseWriteMs: number): IImportTimings {
+    return {
+        ...timings,
+        databaseWriteMs: timings.databaseWriteMs + databaseWriteMs,
+    };
+}
+
+//
+// What one batch of database writes was spent on.
+//
+export interface IDatabaseWriteBreakdown {
+    // Flushing whatever the database was holding before the lock is taken.
+    flushMs: number;
+
+    // Waiting for the write lock.
+    lockWaitMs: number;
+
+    // Loading the whole merkle tree.
+    treeLoadMs: number;
+
+    // Adding this batch's items to the tree and inserting their records.
+    addItemsMs: number;
+
+    // Saving the whole merkle tree back.
+    treeSaveMs: number;
+
+    // Committing the database.
+    commitMs: number;
+
+    // Stamping the database as modified.
+    stampMs: number;
+}
+
+//
+// Folds one batch's breakdown in, and counts the batch.
+//
+export function addDatabaseWriteBreakdown(timings: IImportTimings, breakdown: IDatabaseWriteBreakdown): IImportTimings {
+    return {
+        ...timings,
+        databaseBatches: timings.databaseBatches + 1,
+        databaseFlushMs: timings.databaseFlushMs + breakdown.flushMs,
+        databaseLockWaitMs: timings.databaseLockWaitMs + breakdown.lockWaitMs,
+        databaseTreeLoadMs: timings.databaseTreeLoadMs + breakdown.treeLoadMs,
+        databaseAddItemsMs: timings.databaseAddItemsMs + breakdown.addItemsMs,
+        databaseTreeSaveMs: timings.databaseTreeSaveMs + breakdown.treeSaveMs,
+        databaseCommitMs: timings.databaseCommitMs + breakdown.commitMs,
+        databaseStampMs: timings.databaseStampMs + breakdown.stampMs,
     };
 }
 
@@ -93,14 +212,8 @@ export function addUploadAssetTiming(timings: IImportTimings, taskMs: number): I
 //
 export function withTotalMs(timings: IImportTimings, totalMs: number): IImportTimings {
     return {
+        ...timings,
         totalMs,
-        hashMs: timings.hashMs,
-        cacheLookupMs: timings.cacheLookupMs,
-        childTaskMs: timings.childTaskMs,
-        filesHashed: timings.filesHashed,
-        filesFromCache: timings.filesFromCache,
-        skippedBeforeOpening: timings.skippedBeforeOpening,
-        bytesHashed: timings.bytesHashed,
     };
 }
 
@@ -110,14 +223,8 @@ export function withTotalMs(timings: IImportTimings, totalMs: number): IImportTi
 //
 export function withSkippedBeforeOpening(timings: IImportTimings, skippedBeforeOpening: number): IImportTimings {
     return {
-        totalMs: timings.totalMs,
-        hashMs: timings.hashMs,
-        cacheLookupMs: timings.cacheLookupMs,
-        childTaskMs: timings.childTaskMs,
-        filesHashed: timings.filesHashed,
-        filesFromCache: timings.filesFromCache,
+        ...timings,
         skippedBeforeOpening,
-        bytesHashed: timings.bytesHashed,
     };
 }
 
@@ -149,9 +256,57 @@ export function hashMegabytesPerSecond(timings: IImportTimings): number {
 }
 
 //
-// The one line an import writes when it finishes, holding everything a before-and-after comparison
-// needs. Written as JSON so a measurement can be lifted out of a device log without being re-typed,
-// and so a field added later does not break whatever is reading it.
+// One stage of an import, with what it cost, ready to be ranked against the others.
+//
+export interface IImportStageCost {
+    // What the stage is called, as it appears in the leaderboard.
+    name: string;
+
+    // Total milliseconds the run spent in this stage.
+    totalMs: number;
+
+    // That total as a percentage of every stage's total, to one decimal place.
+    sharePercent: number;
+}
+
+//
+// Every stage of an import ranked by what it cost, most expensive first.
+//
+// This is what says where the time actually goes, and it is the only honest way to choose what to
+// optimise: the same import that this ranks was once assumed to be dominated by hashing, and hashing
+// turned out to be under 2% of it. A stage that costs nothing is left out rather than listed at
+// zero, so the ranking is the work that happened rather than the work that could have.
+//
+export function rankImportStages(timings: IImportTimings): IImportStageCost[] {
+    const stages: IImportStageCost[] = [
+        { name: "export", totalMs: timings.exportMs, sharePercent: 0 },
+        { name: "hash", totalMs: timings.hashMs, sharePercent: 0 },
+        { name: "metadata", totalMs: timings.metadataMs, sharePercent: 0 },
+        { name: "micro", totalMs: timings.microMs, sharePercent: 0 },
+        { name: "thumbnail", totalMs: timings.thumbnailMs, sharePercent: 0 },
+        { name: "display", totalMs: timings.displayMs, sharePercent: 0 },
+        { name: "upload", totalMs: timings.uploadMs, sharePercent: 0 },
+        { name: "geocode", totalMs: timings.geocodeMs, sharePercent: 0 },
+        { name: "dominantColor", totalMs: timings.dominantColorMs, sharePercent: 0 },
+        { name: "databaseWrite", totalMs: timings.databaseWriteMs, sharePercent: 0 },
+        { name: "cacheLookup", totalMs: timings.cacheLookupMs, sharePercent: 0 },
+    ].filter(stage => stage.totalMs > 0);
+
+    const measuredMs = stages.reduce((runningTotal, stage) => runningTotal + stage.totalMs, 0);
+
+    return stages
+        .map(stage => ({
+            name: stage.name,
+            totalMs: stage.totalMs,
+            sharePercent: measuredMs === 0 ? 0 : Math.round((stage.totalMs / measuredMs) * 1000) / 10,
+        }))
+        .sort((left, right) => right.totalMs - left.totalMs);
+}
+
+//
+// The one line an import writes when its counts have moved, holding everything a before-and-after
+// comparison needs. Written as JSON so a measurement can be lifted out of a device log without being
+// re-typed, and so a field added later does not break whatever is reading it.
 //
 export function formatImportTimings(timings: IImportTimings): string {
     const summary = {
@@ -163,8 +318,28 @@ export function formatImportTimings(timings: IImportTimings): string {
         filesFromCache: timings.filesFromCache,
         skippedBeforeOpening: timings.skippedBeforeOpening,
         bytesHashed: timings.bytesHashed,
+        exportMs: timings.exportMs,
+        metadataMs: timings.metadataMs,
+        microMs: timings.microMs,
+        thumbnailMs: timings.thumbnailMs,
+        displayMs: timings.displayMs,
+        uploadMs: timings.uploadMs,
+        geocodeMs: timings.geocodeMs,
+        dominantColorMs: timings.dominantColorMs,
+        databaseWriteMs: timings.databaseWriteMs,
+        databaseBatches: timings.databaseBatches,
+        databaseFlushMs: timings.databaseFlushMs,
+        databaseLockWaitMs: timings.databaseLockWaitMs,
+        databaseTreeLoadMs: timings.databaseTreeLoadMs,
+        databaseAddItemsMs: timings.databaseAddItemsMs,
+        databaseTreeSaveMs: timings.databaseTreeSaveMs,
+        databaseCommitMs: timings.databaseCommitMs,
+        databaseStampMs: timings.databaseStampMs,
+        photosSeen: timings.photosSeen,
+        videosSeen: timings.videosSeen,
         hashSharePercent: hashSharePercent(timings),
         hashMbPerSecond: hashMegabytesPerSecond(timings),
+        stages: rankImportStages(timings),
     };
     return `Import timings: ${JSON.stringify(summary)}`;
 }
